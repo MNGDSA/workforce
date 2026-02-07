@@ -149,7 +149,7 @@ export default function AuthPage() {
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">Work Email</Label>
+                        <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">Email</Label>
                         <FormControl>
                           <div className="relative group">
                             <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
