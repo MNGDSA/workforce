@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -186,6 +187,22 @@ export default function AuthPage() {
                       </FormItem>
                     )}
                   />
+
+                  <div className="flex items-center justify-between p-4 bg-muted/20 border border-border rounded-sm">
+                    <div className="flex items-center space-x-3">
+                      <Checkbox id="recaptcha" className="h-6 w-6 rounded-sm border-2" />
+                      <Label htmlFor="recaptcha" className="font-normal text-sm">I'm not a robot</Label>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <img src="https://www.gstatic.com/recaptcha/api2/logo_48.png" alt="reCAPTCHA" className="h-8 w-8 opacity-50" />
+                      <span className="text-[10px] text-muted-foreground mt-1">reCAPTCHA</span>
+                      <div className="text-[8px] text-muted-foreground -mt-1 space-x-1">
+                        <span>Privacy</span>
+                        <span>-</span>
+                        <span>Terms</span>
+                      </div>
+                    </div>
+                  </div>
 
                   <Button 
                     type="submit" 
