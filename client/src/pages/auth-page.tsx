@@ -74,7 +74,7 @@ export default function AuthPage() {
                           <div className="relative group">
                             <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                             <Input 
-                              placeholder="name@company.com" 
+                              placeholder="email@email.com" 
                               className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm" 
                               {...field} 
                             />
@@ -154,7 +154,7 @@ export default function AuthPage() {
                           <div className="relative group">
                             <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                             <Input 
-                              placeholder="name@company.com" 
+                              placeholder="email@email.com" 
                               className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm" 
                               {...field} 
                             />
