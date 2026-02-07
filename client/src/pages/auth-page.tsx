@@ -58,7 +58,7 @@ export default function AuthPage() {
           <Tabs defaultValue="login" className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-8 bg-muted/50 p-1 rounded-sm">
               <TabsTrigger value="login" className="rounded-sm data-[state=active]:bg-background data-[state=active]:text-foreground font-medium">Login</TabsTrigger>
-              <TabsTrigger value="register" className="rounded-sm data-[state=active]:bg-background data-[state=active]:text-foreground font-medium">Request Access</TabsTrigger>
+              <TabsTrigger value="register" className="rounded-sm data-[state=active]:bg-background data-[state=active]:text-foreground font-medium">Sign Up</TabsTrigger>
             </TabsList>
 
             <TabsContent value="login" className="space-y-4">
@@ -124,20 +124,83 @@ export default function AuthPage() {
               </div>
             </TabsContent>
 
-            <TabsContent value="register">
-              <Card className="bg-muted/30 border-border shadow-none rounded-sm">
-                <CardHeader>
-                  <CardTitle className="text-lg font-display">Access Restricted</CardTitle>
-                  <CardDescription>
-                    This is a restricted enterprise system. Please contact your system administrator to request a new account or reset your credentials.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button variant="outline" className="w-full border-border hover:bg-muted/50 rounded-sm">
-                    Contact Support
+            <TabsContent value="register" className="space-y-4">
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                       <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">First Name</Label>
+                       <Input 
+                          placeholder="John" 
+                          className="h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm" 
+                       />
+                    </div>
+                    <div className="space-y-2">
+                       <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">Last Name</Label>
+                       <Input 
+                          placeholder="Doe" 
+                          className="h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm" 
+                       />
+                    </div>
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">Work Email</Label>
+                        <FormControl>
+                          <div className="relative group">
+                            <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                            <Input 
+                              placeholder="name@company.com" 
+                              className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm" 
+                              {...field} 
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">Choose Password</Label>
+                        <FormControl>
+                          <div className="relative group">
+                            <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                            <Input 
+                              type="password" 
+                              placeholder="••••••••" 
+                              className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm" 
+                              {...field} 
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <Button 
+                    type="submit" 
+                    className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm shadow-[0_0_20px_rgba(25,90,55,0.3)] hover:shadow-[0_0_30px_rgba(25,90,55,0.5)] transition-all duration-300 group"
+                  >
+                    Create Account
+                    <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
                   </Button>
-                </CardContent>
-              </Card>
+                </form>
+              </Form>
+              <div className="text-center mt-6">
+                <p className="text-sm text-muted-foreground">
+                  By clicking continue, you agree to our <a href="#" className="hover:text-primary transition-colors underline underline-offset-4">Terms of Service</a>
+                </p>
+              </div>
             </TabsContent>
           </Tabs>
 
