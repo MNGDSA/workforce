@@ -45,7 +45,7 @@ const candidates = [
     location: "Austin, TX",
     experience: "1 Year",
     rating: 4.5,
-    status: "Pending",
+    status: "Blocked",
     email: "m.chen@example.com",
     phone: "(555) 987-6543",
     avatar: "/avatar-2.png",
@@ -71,7 +71,7 @@ const candidates = [
     location: "Seattle, WA",
     experience: "Entry Level",
     rating: 4.2,
-    status: "Inactive",
+    status: "Blocked",
     email: "emily.j@example.com",
     phone: "(555) 234-5678",
     avatar: "/avatar-1.png",
@@ -233,7 +233,7 @@ export default function TalentPage() {
                         variant="outline" 
                         className={`font-medium border-0 ${
                           candidate.status === "Active" ? "bg-green-500/10 text-green-500" :
-                          candidate.status === "Pending" ? "bg-amber-500/10 text-amber-500" :
+                          candidate.status === "Blocked" ? "bg-destructive/10 text-destructive" :
                           "bg-muted text-muted-foreground"
                         }`}
                       >
