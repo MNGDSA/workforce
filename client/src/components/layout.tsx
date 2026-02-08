@@ -35,9 +35,9 @@ interface LayoutProps {
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/talent", icon: Users, label: "Talent" },
+  { href: "/talent", icon: Search, label: "Talent" },
   { href: "/seasons", icon: CalendarRange, label: "Seasons" },
-  { href: "/workforce", icon: Users2, label: "Workforce" },
+  { href: "/workforce", icon: Users, label: "Workforce" },
   { href: "/automation", icon: Workflow, label: "Rules & Automation" },
   { href: "/notifications", icon: Bell, label: "Notification Center" },
   { href: "/settings", icon: Settings, label: "System & Settings" },
