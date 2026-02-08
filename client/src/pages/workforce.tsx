@@ -40,7 +40,7 @@ const workforceGroups = [
     size: 120,
     role: "Driver / Logistics",
     startDate: "Nov 01, 2024",
-    status: "In Progress",
+    status: "Active",
     progress: 85,
     location: "Nationwide"
   },
@@ -70,7 +70,7 @@ const workforceGroups = [
     size: 8,
     role: "Auditor",
     startDate: "Jan 10, 2025",
-    status: "In Progress",
+    status: "Active",
     progress: 60,
     location: "Denver, CO"
   }
@@ -212,7 +212,7 @@ export default function WorkforcePage() {
                       <Badge 
                         variant="outline" 
                         className={`font-medium border-0 ${
-                          group.status === "In Progress" ? "bg-green-500/10 text-green-500" :
+                          group.status === "Active" ? "bg-green-500/10 text-green-500" :
                           group.status === "Onboarding" ? "bg-blue-500/10 text-blue-500" :
                           group.status === "Offboarded" ? "bg-muted text-muted-foreground" :
                           "bg-zinc-800 text-zinc-500"
