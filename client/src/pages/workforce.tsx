@@ -41,7 +41,7 @@ const workforceGroups = [
     role: "Driver / Logistics",
     startDate: "Nov 01, 2024",
     status: "Active",
-    progress: 85,
+    progress: 100,
     location: "Nationwide"
   },
   {
@@ -71,7 +71,7 @@ const workforceGroups = [
     role: "Auditor",
     startDate: "Jan 10, 2025",
     status: "Active",
-    progress: 60,
+    progress: 100,
     location: "Denver, CO"
   }
 ];
