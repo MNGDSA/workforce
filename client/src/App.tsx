@@ -9,6 +9,7 @@ import Dashboard from "@/pages/dashboard";
 import TalentPage from "@/pages/talent";
 import SeasonsPage from "@/pages/seasons";
 import WorkforcePage from "@/pages/workforce";
+import NotificationsPage from "@/pages/notifications";
 
 function Router() {
   return (
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/talent" component={TalentPage} />
       <Route path="/seasons" component={SeasonsPage} />
       <Route path="/workforce" component={WorkforcePage} />
+      <Route path="/notifications" component={NotificationsPage} />
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>
