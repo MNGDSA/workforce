@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import TalentPage from "@/pages/talent";
+import SeasonsPage from "@/pages/seasons";
 
 function Router() {
   return (
@@ -15,6 +16,7 @@ function Router() {
       <Route path="/auth" component={AuthPage} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/talent" component={TalentPage} />
+      <Route path="/seasons" component={SeasonsPage} />
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>
