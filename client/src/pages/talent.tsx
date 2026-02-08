@@ -183,6 +183,7 @@ export default function TalentPage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="w-[100px] text-muted-foreground">ID</TableHead>
                   <TableHead className="text-muted-foreground">Candidate</TableHead>
                   <TableHead className="text-muted-foreground hidden md:table-cell">Role & Skills</TableHead>
                   <TableHead className="text-muted-foreground hidden sm:table-cell">Status</TableHead>
@@ -193,6 +194,9 @@ export default function TalentPage() {
               <TableBody>
                 {candidates.map((candidate) => (
                   <TableRow key={candidate.id} className="border-border hover:bg-muted/20">
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {candidate.id}
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10 border border-border">
