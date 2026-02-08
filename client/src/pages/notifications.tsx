@@ -15,13 +15,19 @@ import {
   XCircle,
   Smartphone,
   Mail,
-  Zap
+  Zap,
+  Globe
 } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+
+type IntegrationType = "msegat" | "goinfinito" | "smtp" | "slack";
 
 export default function NotificationsPage() {
   const { toast } = useToast();
+  const [selectedIntegration, setSelectedIntegration] = useState<IntegrationType>("msegat");
+  
   const [msegatConfig, setMsegatConfig] = useState({
     username: "",
     apiKey: "",
@@ -29,28 +35,44 @@ export default function NotificationsPage() {
     enabled: false
   });
 
-  const handleMsegatSave = () => {
-    // Mock saving
+  const [goInfinitoConfig, setGoInfinitoConfig] = useState({
+    apiKey: "",
+    senderId: "",
+    enabled: false
+  });
+
+  const handleSave = (type: IntegrationType) => {
     toast({
       title: "Settings Saved",
-      description: "Msegat integration settings have been updated.",
+      description: `${type === 'msegat' ? 'Msegat' : 'GoInfinito'} integration settings have been updated.`,
     });
   };
 
-  const handleTestConnection = () => {
-    if (!msegatConfig.username || !msegatConfig.apiKey) {
-      toast({
-        title: "Connection Failed",
-        description: "Please enter Username and API Key first.",
-        variant: "destructive"
-      });
-      return;
+  const handleTestConnection = (type: IntegrationType) => {
+    if (type === 'msegat') {
+      if (!msegatConfig.username || !msegatConfig.apiKey) {
+        toast({
+          title: "Connection Failed",
+          description: "Please enter Username and API Key first.",
+          variant: "destructive"
+        });
+        return;
+      }
+    } else if (type === 'goinfinito') {
+      if (!goInfinitoConfig.apiKey || !goInfinitoConfig.senderId) {
+        toast({
+           title: "Connection Failed",
+           description: "Please enter API Key and Sender ID first.",
+           variant: "destructive"
+        });
+        return;
+      }
     }
     
     toast({
       title: "Connection Successful",
-      description: "Successfully connected to Msegat API.",
-      variant: "default" // success
+      description: `Successfully connected to ${type === 'msegat' ? 'Msegat' : 'GoInfinito'} API.`,
+      variant: "default"
     });
   };
 
@@ -103,16 +125,45 @@ export default function NotificationsPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Integration Sidebar / List */}
               <div className="space-y-4">
-                <Card className="bg-card border-border cursor-pointer ring-2 ring-primary">
+                <Card 
+                  className={cn(
+                    "bg-card border-border cursor-pointer hover:border-primary/50 transition-colors",
+                    selectedIntegration === "msegat" ? "ring-2 ring-primary" : ""
+                  )}
+                  onClick={() => setSelectedIntegration("msegat")}
+                >
                   <CardHeader className="p-4">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center">
-                        {/* Placeholder for Msegat Logo or Icon */}
                         <MessageSquare className="h-6 w-6 text-emerald-600" />
                       </div>
                       <div>
                         <CardTitle className="text-base text-white">Msegat SMS</CardTitle>
-                        <CardDescription className="text-xs">Active</CardDescription>
+                        <CardDescription className="text-xs">
+                           {msegatConfig.enabled ? <span className="text-green-500">Active</span> : "Disabled"}
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                </Card>
+
+                <Card 
+                  className={cn(
+                    "bg-card border-border cursor-pointer hover:border-primary/50 transition-colors",
+                    selectedIntegration === "goinfinito" ? "ring-2 ring-primary" : ""
+                  )}
+                  onClick={() => setSelectedIntegration("goinfinito")}
+                >
+                  <CardHeader className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-md bg-purple-600 flex items-center justify-center text-white">
+                        <Globe className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-base text-white">GoInfinito SMS</CardTitle>
+                        <CardDescription className="text-xs">
+                          {goInfinitoConfig.enabled ? <span className="text-green-500">Active</span> : "Disabled"}
+                        </CardDescription>
                       </div>
                     </div>
                   </CardHeader>
@@ -149,85 +200,157 @@ export default function NotificationsPage() {
 
               {/* Configuration Panel */}
               <div className="md:col-span-2">
-                <Card className="bg-card border-border">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <CardTitle className="text-xl text-white">Msegat SMS Gateway</CardTitle>
-                        <CardDescription>
-                          Configure your Msegat credentials to enable SMS notifications for workforce alerts.
-                          <br />
-                          <a href="https://msegat.docs.apiary.io/#" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-xs">
-                            View API Documentation
-                          </a>
-                        </CardDescription>
-                      </div>
-                      <Switch 
-                        checked={msegatConfig.enabled}
-                        onCheckedChange={(c) => setMsegatConfig({...msegatConfig, enabled: c})}
-                      />
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="grid gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="username" className="text-white">Msegat Username <span className="text-destructive">*</span></Label>
-                        <Input 
-                          id="username" 
-                          placeholder="Enter your Msegat username" 
-                          value={msegatConfig.username}
-                          onChange={(e) => setMsegatConfig({...msegatConfig, username: e.target.value})}
-                          className="bg-muted/30 border-border font-mono"
+                {selectedIntegration === "msegat" && (
+                  <Card className="bg-card border-border animate-in fade-in duration-300">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <CardTitle className="text-xl text-white">Msegat SMS Gateway</CardTitle>
+                          <CardDescription>
+                            Configure your Msegat credentials to enable SMS notifications.
+                            <br />
+                            <a href="https://msegat.docs.apiary.io/#" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-xs">
+                              View API Documentation
+                            </a>
+                          </CardDescription>
+                        </div>
+                        <Switch 
+                          checked={msegatConfig.enabled}
+                          onCheckedChange={(c) => setMsegatConfig({...msegatConfig, enabled: c})}
                         />
                       </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="apiKey" className="text-white">API Key <span className="text-destructive">*</span></Label>
-                        <div className="relative">
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="grid gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="username" className="text-white">Msegat Username <span className="text-destructive">*</span></Label>
                           <Input 
-                            id="apiKey" 
-                            type="password"
-                            placeholder="Msegat API Key" 
-                            value={msegatConfig.apiKey}
-                            onChange={(e) => setMsegatConfig({...msegatConfig, apiKey: e.target.value})}
-                            className="bg-muted/30 border-border font-mono pr-20"
+                            id="username" 
+                            placeholder="Enter your Msegat username" 
+                            value={msegatConfig.username}
+                            onChange={(e) => setMsegatConfig({...msegatConfig, username: e.target.value})}
+                            className="bg-muted/30 border-border font-mono"
                           />
                         </div>
-                        <p className="text-xs text-muted-foreground">Found in your Msegat dashboard settings.</p>
-                      </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="apiKey" className="text-white">API Key <span className="text-destructive">*</span></Label>
+                          <div className="relative">
+                            <Input 
+                              id="apiKey" 
+                              type="password"
+                              placeholder="Msegat API Key" 
+                              value={msegatConfig.apiKey}
+                              onChange={(e) => setMsegatConfig({...msegatConfig, apiKey: e.target.value})}
+                              className="bg-muted/30 border-border font-mono pr-20"
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground">Found in your Msegat dashboard settings.</p>
+                        </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="senderName" className="text-white">Sender Name (UserSender) <span className="text-destructive">*</span></Label>
-                        <Input 
-                          id="senderName" 
-                          placeholder="e.g. WORKFORCE" 
-                          value={msegatConfig.senderName}
-                          onChange={(e) => setMsegatConfig({...msegatConfig, senderName: e.target.value})}
-                          className="bg-muted/30 border-border"
-                        />
-                        <p className="text-xs text-muted-foreground">Must be activated in your Msegat account. Max 11 characters.</p>
-                      </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="senderName" className="text-white">Sender Name (UserSender) <span className="text-destructive">*</span></Label>
+                          <Input 
+                            id="senderName" 
+                            placeholder="e.g. WORKFORCE" 
+                            value={msegatConfig.senderName}
+                            onChange={(e) => setMsegatConfig({...msegatConfig, senderName: e.target.value})}
+                            className="bg-muted/30 border-border"
+                          />
+                          <p className="text-xs text-muted-foreground">Must be activated in your Msegat account. Max 11 characters.</p>
+                        </div>
 
-                      <div className="space-y-2">
-                        <Label className="text-white">Encoding</Label>
-                        <div className="flex items-center gap-4">
-                           <Badge variant="outline" className="bg-primary/10 text-primary border-primary">UTF-8</Badge>
-                           <span className="text-xs text-muted-foreground">Default encoding for Arabic/English support</span>
+                        <div className="space-y-2">
+                          <Label className="text-white">Encoding</Label>
+                          <div className="flex items-center gap-4">
+                             <Badge variant="outline" className="bg-primary/10 text-primary border-primary">UTF-8</Badge>
+                             <span className="text-xs text-muted-foreground">Default encoding for Arabic/English support</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-center justify-between pt-4 border-t border-border">
-                      <Button variant="outline" onClick={handleTestConnection} className="border-border text-muted-foreground hover:text-white">
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                        Test Connection
-                      </Button>
-                      <Button onClick={handleMsegatSave} className="bg-primary text-primary-foreground font-bold">
-                        Save Configuration
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                      <div className="flex items-center justify-between pt-4 border-t border-border">
+                        <Button variant="outline" onClick={() => handleTestConnection("msegat")} className="border-border text-muted-foreground hover:text-white">
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                          Test Connection
+                        </Button>
+                        <Button onClick={() => handleSave("msegat")} className="bg-primary text-primary-foreground font-bold">
+                          Save Configuration
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {selectedIntegration === "goinfinito" && (
+                  <Card className="bg-card border-border animate-in fade-in duration-300">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <CardTitle className="text-xl text-white">GoInfinito SMS</CardTitle>
+                          <CardDescription>
+                            Configure your GoInfinito (ValueFirst) API settings for global SMS delivery.
+                            <br />
+                            <a href="https://www.goinfinito.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-xs">
+                              Visit GoInfinito
+                            </a>
+                          </CardDescription>
+                        </div>
+                        <Switch 
+                          checked={goInfinitoConfig.enabled}
+                          onCheckedChange={(c) => setGoInfinitoConfig({...goInfinitoConfig, enabled: c})}
+                        />
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="grid gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="infinitoApiKey" className="text-white">API Key <span className="text-destructive">*</span></Label>
+                          <Input 
+                            id="infinitoApiKey" 
+                            type="password"
+                            placeholder="Enter your GoInfinito API Key" 
+                            value={goInfinitoConfig.apiKey}
+                            onChange={(e) => setGoInfinitoConfig({...goInfinitoConfig, apiKey: e.target.value})}
+                            className="bg-muted/30 border-border font-mono"
+                          />
+                          <p className="text-xs text-muted-foreground">Your unique API access token.</p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="infinitoSenderId" className="text-white">Sender ID <span className="text-destructive">*</span></Label>
+                          <Input 
+                            id="infinitoSenderId" 
+                            placeholder="e.g. WORKFORCE" 
+                            value={goInfinitoConfig.senderId}
+                            onChange={(e) => setGoInfinitoConfig({...goInfinitoConfig, senderId: e.target.value})}
+                            className="bg-muted/30 border-border"
+                          />
+                          <p className="text-xs text-muted-foreground">Registered Sender ID approved by DLT (if applicable).</p>
+                        </div>
+
+                         <div className="space-y-2">
+                          <Label className="text-white">Region Support</Label>
+                          <div className="flex flex-wrap gap-2">
+                             <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/20">Global</Badge>
+                             <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/20">India (DLT)</Badge>
+                             <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/20">Middle East</Badge>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-4 border-t border-border">
+                        <Button variant="outline" onClick={() => handleTestConnection("goinfinito")} className="border-border text-muted-foreground hover:text-white">
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                          Test Connection
+                        </Button>
+                        <Button onClick={() => handleSave("goinfinito")} className="bg-primary text-primary-foreground font-bold">
+                          Save Configuration
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </div>
           </TabsContent>
