@@ -321,20 +321,36 @@ export default function NotificationsPage() {
                           <Label htmlFor="infinitoSenderId" className="text-white">Sender ID <span className="text-destructive">*</span></Label>
                           <Input 
                             id="infinitoSenderId" 
-                            placeholder="e.g. WORKFORCE" 
+                            placeholder="e.g. YOUR-BRAND" 
                             value={goInfinitoConfig.senderId}
                             onChange={(e) => setGoInfinitoConfig({...goInfinitoConfig, senderId: e.target.value})}
                             className="bg-muted/30 border-border"
                           />
-                          <p className="text-xs text-muted-foreground">Registered Sender ID approved by DLT (if applicable).</p>
+                          <p className="text-xs text-muted-foreground">
+                            Must be pre-registered with CITC (CST). 
+                            Alphanumeric only. 
+                            Promotional IDs must end with "-AD".
+                          </p>
                         </div>
 
                          <div className="space-y-2">
                           <Label className="text-white">Region Support</Label>
                           <div className="flex flex-wrap gap-2">
-                             <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/20">Global</Badge>
-                             <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/20">India (DLT)</Badge>
+                             <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">Saudi Arabia (CITC Compliant)</Badge>
                              <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/20">Middle East</Badge>
+                          </div>
+                        </div>
+
+                        <div className="rounded-md bg-yellow-500/10 border border-yellow-500/20 p-4">
+                          <div className="flex gap-3">
+                            <AlertTriangle className="h-5 w-5 text-yellow-500 shrink-0" />
+                            <div className="space-y-1">
+                              <h4 className="text-sm font-medium text-yellow-500">Compliance Requirement</h4>
+                              <p className="text-xs text-muted-foreground">
+                                Sending to Saudi Arabia requires Sender ID registration with CITC (CST). 
+                                Promotional messages are restricted to 9:00 AM - 8:00 PM KSA time.
+                              </p>
+                            </div>
                           </div>
                         </div>
                       </div>
