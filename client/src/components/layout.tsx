@@ -11,7 +11,10 @@ import {
   Bell,
   Search,
   Building2,
-  Menu
+  Menu,
+  CalendarRange,
+  HardHat,
+  Workflow
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -32,10 +35,12 @@ interface LayoutProps {
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/jobs", icon: Briefcase, label: "Job Listings" },
-  { href: "/candidates", icon: Users, label: "Candidates" },
-  { href: "/schedule", icon: CalendarDays, label: "Schedule" },
-  { href: "/settings", icon: Settings, label: "Settings" },
+  { href: "/talent", icon: Users, label: "Talent" },
+  { href: "/seasons", icon: CalendarRange, label: "Seasons" },
+  { href: "/workforce", icon: HardHat, label: "Workforce" },
+  { href: "/automation", icon: Workflow, label: "Workflows & Automation" },
+  { href: "/notifications", icon: Bell, label: "Notification Center" },
+  { href: "/settings", icon: Settings, label: "System & Settings" },
 ];
 
 export default function DashboardLayout({ children }: LayoutProps) {
