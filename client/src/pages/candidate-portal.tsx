@@ -246,56 +246,6 @@ export default function CandidatePortal() {
           {/* Middle & Right: Main Content */}
           <div className="lg:col-span-2 space-y-6">
             
-            {/* Availability Calendar (Simplified) */}
-            <Card className="bg-card border-border">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <div>
-                   <CardTitle className="text-lg font-display text-white">Availability</CardTitle>
-                   <CardDescription>Mark your available dates for shifts</CardDescription>
-                </div>
-                <Badge variant="secondary" className="bg-primary/20 text-primary hover:bg-primary/30">
-                   Open for Shifts
-                </Badge>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col md:flex-row gap-6">
-                  <Calendar
-                    mode="single"
-                    selected={date}
-                    onSelect={setDate}
-                    className="rounded-md border border-border"
-                  />
-                  <div className="flex-1 space-y-4">
-                     <h4 className="font-medium text-white text-sm uppercase tracking-wider mb-2">Shift Preferences</h4>
-                     <div className="grid grid-cols-2 gap-3">
-                        <Button variant="outline" className="justify-start border-primary bg-primary/10 text-white">
-                           <Clock className="mr-2 h-4 w-4 text-primary" />
-                           Morning (6AM - 2PM)
-                        </Button>
-                        <Button variant="outline" className="justify-start border-border text-muted-foreground">
-                           <Clock className="mr-2 h-4 w-4" />
-                           Afternoon (2PM - 10PM)
-                        </Button>
-                        <Button variant="outline" className="justify-start border-border text-muted-foreground">
-                           <Clock className="mr-2 h-4 w-4" />
-                           Night (10PM - 6AM)
-                        </Button>
-                        <Button variant="outline" className="justify-start border-primary bg-primary/10 text-white">
-                           <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                           Weekends
-                        </Button>
-                     </div>
-                     
-                     <div className="pt-4 mt-4 border-t border-border">
-                        <Button className="w-full bg-white text-black font-bold hover:bg-white/90">
-                           Update Availability
-                        </Button>
-                     </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
             <Tabs defaultValue="recommended">
               <div className="flex items-center justify-between mb-4">
                  <h3 className="text-xl font-display font-bold text-white">Job Opportunities</h3>
