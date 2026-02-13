@@ -37,10 +37,10 @@ export default function CandidatePortal() {
   const recommendedJobs = [
     {
       id: 1,
-      title: "Warehouse Associate",
-      location: "Chicago, IL (Zone A)",
+      title: "Al Masjid Al Haram (Ramadan)",
+      location: "Makkah",
       type: "Seasonal Full-time",
-      pay: "$18.50/hr",
+      pay: "7000 SAR/Month",
       posted: "2 days ago",
       match: 95
     },
