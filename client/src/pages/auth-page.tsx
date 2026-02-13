@@ -31,7 +31,7 @@ export default function AuthPage() {
     console.log(values);
     
     // Mock login routing based on email
-    if (values.email.includes("candidate")) {
+    if (values.email === "candidate@getmasari.com") {
       setLocation("/candidate-portal");
     } else {
       setLocation("/dashboard"); 
@@ -222,7 +222,7 @@ export default function AuthPage() {
               <div className="mt-6 p-4 bg-muted/30 border border-primary/20 rounded-sm text-center">
                  <p className="text-xs text-muted-foreground mb-2">FOR DEMO PURPOSES ONLY</p>
                  <p className="text-sm font-medium text-white">Log in as Candidate?</p>
-                 <div className="text-xs text-muted-foreground mt-1">Use: candidate@demo.com / password</div>
+                 <div className="text-xs text-muted-foreground mt-1">Use: candidate@getmasari.com / password123</div>
               </div>
 
               <div className="text-center mt-6">
