@@ -14,7 +14,8 @@ import {
   Settings,
   Bell,
   Search,
-  FileText
+  FileText,
+  AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -23,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from "@/components/ui/calendar";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function CandidatePortal() {
   const [date, setDate] = useState<Date | undefined>(new Date());
@@ -194,10 +196,23 @@ export default function CandidatePortal() {
                       <div className="h-4 w-4 rounded-full border-2 border-muted-foreground" />
                       <span className="text-muted-foreground">IBAN Certificate</span>
                    </div>
-                   <div className="flex items-center gap-3 text-sm p-2 rounded-md bg-muted/20 opacity-60">
-                      <div className="h-4 w-4 rounded-full border-2 border-muted-foreground" />
-                      <span className="text-muted-foreground">Background Certificate</span>
-                   </div>
+                   
+                   <TooltipProvider>
+                     <Tooltip>
+                       <TooltipTrigger asChild>
+                         <div className="flex items-center gap-3 text-sm p-2 rounded-md bg-muted/20 hover:bg-muted/30 transition-colors cursor-help">
+                            <div className="relative">
+                              <div className="h-4 w-4 rounded-full border-2 border-muted-foreground" />
+                            </div>
+                            <span className="text-muted-foreground">Background Check Certificate</span>
+                            <AlertCircle className="h-4 w-4 text-amber-500 ml-auto" />
+                         </div>
+                       </TooltipTrigger>
+                       <TooltipContent side="right" className="max-w-[220px]">
+                         <p>This certificate is to be uploaded by Luxury Cart, not you.</p>
+                       </TooltipContent>
+                     </Tooltip>
+                   </TooltipProvider>
                 </div>
               </CardContent>
             </Card>
