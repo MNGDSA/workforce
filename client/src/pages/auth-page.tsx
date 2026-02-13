@@ -33,6 +33,8 @@ export default function AuthPage() {
     // Mock login routing based on email
     if (values.email === "candidate@workforce.io") {
       setLocation("/candidate-portal");
+    } else if (values.email === "admin@workforce.io") {
+      setLocation("/dashboard");
     } else {
       setLocation("/dashboard"); 
     }
@@ -223,6 +225,8 @@ export default function AuthPage() {
                  <p className="text-xs text-muted-foreground mb-2">FOR DEMO PURPOSES ONLY</p>
                  <p className="text-sm font-medium text-white">Log in as Candidate?</p>
                  <div className="text-xs text-muted-foreground mt-1">Use: candidate@workforce.io / password123</div>
+                 <p className="text-sm font-medium text-white mt-2">Log in as Admin?</p>
+                 <div className="text-xs text-muted-foreground mt-1">Use: admin@workforce.io / password123</div>
               </div>
 
               <div className="text-center mt-6">
