@@ -29,8 +29,13 @@ export default function AuthPage() {
 
   function onSubmit(values: z.infer<typeof authSchema>) {
     console.log(values);
-    // Mock login - just redirect for prototype
-    setLocation("/dashboard"); 
+    
+    // Mock login routing based on email
+    if (values.email.includes("candidate")) {
+      setLocation("/candidate-portal");
+    } else {
+      setLocation("/dashboard"); 
+    }
   }
 
   return (
@@ -213,6 +218,13 @@ export default function AuthPage() {
                   </Button>
                 </form>
               </Form>
+              
+              <div className="mt-6 p-4 bg-muted/30 border border-primary/20 rounded-sm text-center">
+                 <p className="text-xs text-muted-foreground mb-2">FOR DEMO PURPOSES ONLY</p>
+                 <p className="text-sm font-medium text-white">Log in as Candidate?</p>
+                 <div className="text-xs text-muted-foreground mt-1">Use: candidate@demo.com / password</div>
+              </div>
+
               <div className="text-center mt-6">
                 <p className="text-sm text-muted-foreground">
                   By clicking continue, you agree to our <a href="#" className="hover:text-primary transition-colors underline underline-offset-4">Terms of Service</a>
