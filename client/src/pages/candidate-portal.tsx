@@ -196,23 +196,6 @@ export default function CandidatePortal() {
                       <div className="h-4 w-4 rounded-full border-2 border-muted-foreground" />
                       <span className="text-muted-foreground">IBAN Certificate</span>
                    </div>
-                   
-                   <TooltipProvider>
-                     <Tooltip>
-                       <TooltipTrigger asChild>
-                         <div className="flex items-center gap-3 text-sm p-2 rounded-md bg-muted/20 hover:bg-muted/30 transition-colors cursor-help">
-                            <div className="relative">
-                              <div className="h-4 w-4 rounded-full border-2 border-muted-foreground" />
-                            </div>
-                            <span className="text-muted-foreground">Background Check Certificate</span>
-                            <AlertCircle className="h-4 w-4 text-amber-500 ml-auto" />
-                         </div>
-                       </TooltipTrigger>
-                       <TooltipContent side="right" className="max-w-[220px]">
-                         <p>This certificate is to be uploaded by Luxury Cart, not you.</p>
-                       </TooltipContent>
-                     </Tooltip>
-                   </TooltipProvider>
                 </div>
               </CardContent>
             </Card>
