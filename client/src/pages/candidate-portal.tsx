@@ -173,10 +173,6 @@ export default function CandidatePortal() {
                       <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                       <span className="text-muted-foreground line-through">Basic Information</span>
                    </div>
-                   <div className="flex items-center gap-3 text-sm p-2 rounded-md bg-muted/20">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                      <span className="text-muted-foreground line-through">Experience & Skills</span>
-                   </div>
                    <div className="flex items-center justify-between text-sm p-2 rounded-md bg-muted/20 border border-primary/20">
                       <div className="flex items-center gap-3">
                         <div className="h-4 w-4 rounded-full border-2 border-primary" />
@@ -188,7 +184,19 @@ export default function CandidatePortal() {
                    </div>
                    <div className="flex items-center gap-3 text-sm p-2 rounded-md bg-muted/20 opacity-60">
                       <div className="h-4 w-4 rounded-full border-2 border-muted-foreground" />
-                      <span className="text-muted-foreground">Verify ID</span>
+                      <span className="text-muted-foreground">National/Resident ID</span>
+                   </div>
+                   <div className="flex items-center gap-3 text-sm p-2 rounded-md bg-muted/20 opacity-60">
+                      <div className="h-4 w-4 rounded-full border-2 border-muted-foreground" />
+                      <span className="text-muted-foreground">Personal Photo</span>
+                   </div>
+                   <div className="flex items-center gap-3 text-sm p-2 rounded-md bg-muted/20 opacity-60">
+                      <div className="h-4 w-4 rounded-full border-2 border-muted-foreground" />
+                      <span className="text-muted-foreground">IBAN Certificate</span>
+                   </div>
+                   <div className="flex items-center gap-3 text-sm p-2 rounded-md bg-muted/20 opacity-60">
+                      <div className="h-4 w-4 rounded-full border-2 border-muted-foreground" />
+                      <span className="text-muted-foreground">Background Certificate</span>
                    </div>
                 </div>
               </CardContent>
