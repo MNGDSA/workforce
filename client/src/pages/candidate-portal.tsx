@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
+import SignatureCanvas from "react-signature-canvas";
+import jsPDF from "jspdf";
 import { 
   Building2, 
   LogOut, 
@@ -15,7 +17,8 @@ import {
   Bell,
   Search,
   FileText,
-  AlertCircle
+  AlertCircle,
+  PenTool
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -25,13 +28,64 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from "@/components/ui/calendar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export default function CandidatePortal() {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [, setLocation] = useLocation();
+  
+  const sigCanvas = useRef<SignatureCanvas>(null);
+  const [isSignModalOpen, setIsSignModalOpen] = useState(false);
+  const [isSigned, setIsSigned] = useState(false);
 
   const handleSignOut = () => {
     setLocation("/auth");
+  };
+
+  const clearSignature = () => {
+    sigCanvas.current?.clear();
+  };
+
+  const saveAndDownloadPdf = () => {
+    if (sigCanvas.current?.isEmpty()) {
+      return;
+    }
+    
+    // Generate the signature image
+    const dataURL = sigCanvas.current?.getTrimmedCanvas().toDataURL('image/png');
+    
+    // Create a simple PDF
+    const pdf = new jsPDF();
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(20);
+    pdf.text("Seasonal Employment Agreement", 20, 30);
+    
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(12);
+    pdf.text("Employer: WORKFORCE.IO", 20, 50);
+    pdf.text("Employee: Alex Candidate", 20, 60);
+    pdf.text("Role: Warehouse Specialist", 20, 70);
+    pdf.text("Start Date: " + new Date().toLocaleDateString(), 20, 80);
+    
+    pdf.text("I hereby accept the terms and conditions of this employment offer.", 20, 100);
+    
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Employee Signature:", 20, 130);
+    
+    // Add the signature image to the PDF
+    if (dataURL) {
+      pdf.addImage(dataURL, 'PNG', 20, 140, 80, 40);
+    }
+    
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+    pdf.text("Date Signed: " + new Date().toLocaleDateString(), 20, 190);
+    
+    // Download the PDF
+    pdf.save("Signed_Agreement.pdf");
+    
+    setIsSigned(true);
+    setIsSignModalOpen(false);
   };
 
   const recommendedJobs = [
@@ -205,6 +259,68 @@ export default function CandidatePortal() {
                 <CardTitle className="text-lg font-display text-white">My Documents</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                 {/* Offer Letter requiring signature */}
+                 <div className="flex items-center justify-between p-3 rounded-md bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer border border-primary/30 relative overflow-hidden group">
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
+                    <div className="flex items-center gap-3">
+                       <FileText className="h-8 w-8 text-primary" />
+                       <div>
+                          <div className="text-sm font-medium text-white flex items-center gap-2">
+                            Seasonal_Agreement.pdf
+                            {isSigned && <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-500 text-[10px] h-4 py-0 border-0">Signed</Badge>}
+                          </div>
+                          <div className="text-xs text-muted-foreground">{isSigned ? 'Signed today' : 'Requires your signature'}</div>
+                       </div>
+                    </div>
+                    
+                    {!isSigned ? (
+                      <Dialog open={isSignModalOpen} onOpenChange={setIsSignModalOpen}>
+                        <DialogTrigger asChild>
+                          <Button size="sm" className="bg-primary text-primary-foreground text-xs font-bold">
+                             <PenTool className="h-3 w-3 mr-2" />
+                             Sign Now
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-md bg-card border-border">
+                          <DialogHeader>
+                            <DialogTitle className="text-white">Sign Document</DialogTitle>
+                          </DialogHeader>
+                          <div className="py-4">
+                            <p className="text-sm text-muted-foreground mb-4">
+                              Please provide your signature below to accept the Seasonal Employment Agreement. This will generate and download a signed PDF.
+                            </p>
+                            <div className="border border-border rounded-md bg-white">
+                              <SignatureCanvas 
+                                ref={sigCanvas}
+                                penColor="black"
+                                canvasProps={{
+                                  className: "w-full h-48 rounded-md cursor-crosshair"
+                                }}
+                              />
+                            </div>
+                            <div className="flex justify-end mt-2">
+                              <Button variant="ghost" size="sm" onClick={clearSignature} className="text-xs text-muted-foreground hover:text-white">
+                                Clear Signature
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-3">
+                            <Button variant="outline" onClick={() => setIsSignModalOpen(false)} className="border-border">
+                              Cancel
+                            </Button>
+                            <Button onClick={saveAndDownloadPdf} className="bg-primary text-primary-foreground font-bold">
+                              Sign & Download PDF
+                            </Button>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    ) : (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-500">
+                         <CheckCircle2 className="h-5 w-5" />
+                      </Button>
+                    )}
+                 </div>
+
                  <div className="flex items-center justify-between p-3 rounded-md bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer border border-transparent hover:border-border/50">
                     <div className="flex items-center gap-3">
                        <FileText className="h-8 w-8 text-blue-400" />
