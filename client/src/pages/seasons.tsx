@@ -106,6 +106,11 @@ function CreateSeasonDialog({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const { data: currentUser } = useQuery<{ fullName: string }>({
+    queryKey: ["/api/me"],
+    queryFn: () => apiRequest("GET", "/api/me").then((r) => r.json()),
+  });
+
   const form = useForm<CreateSeasonForm>({
     resolver: zodResolver(createSeasonSchema),
     defaultValues: {
@@ -192,6 +197,17 @@ function CreateSeasonDialog({
                 </FormItem>
               )}
             />
+
+            {/* Created By */}
+            <div className="space-y-2">
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Created By</p>
+              <Input
+                value={currentUser?.fullName ?? "Loading..."}
+                disabled
+                className="h-10 bg-muted/10 border-border rounded-sm text-muted-foreground cursor-not-allowed"
+                data-testid="input-season-created-by"
+              />
+            </div>
 
             {/* Dates */}
             <div className="w-full h-px bg-border" />

@@ -30,6 +30,18 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
+  // ─── Current User (dev bypass) ────────────────────────────────────────────
+  app.get("/api/me", async (_req: Request, res: Response) => {
+    try {
+      const user = await storage.getUserByUsername("admin");
+      if (!user) return res.status(404).json({ message: "No user found" });
+      const { passwordHash: _, ...safe } = user;
+      return res.json(safe);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   // ─── Auth ─────────────────────────────────────────────────────────────────
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
