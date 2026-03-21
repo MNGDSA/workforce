@@ -98,7 +98,7 @@ export default function Dashboard() {
       value: dashStats ? dashStats.scheduledInterviews.toLocaleString() : "—",
       icon: Clock,
       color: "text-green-500",
-      sub: "Upcoming calls",
+      sub: "Upcoming interviews",
     },
   ];
 
