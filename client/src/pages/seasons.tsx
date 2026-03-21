@@ -171,7 +171,7 @@ export default function SeasonsPage() {
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="w-[100px] text-muted-foreground">ID</TableHead>
                   <TableHead className="text-muted-foreground">Season Name</TableHead>
-                  <TableHead className="text-muted-foreground hidden md:table-cell">Duration</TableHead>
+                  <TableHead className="text-muted-foreground hidden md:table-cell">Deadline</TableHead>
                   <TableHead className="text-muted-foreground hidden lg:table-cell">Hiring Progress</TableHead>
                   <TableHead className="text-muted-foreground">Status</TableHead>
                   <TableHead className="text-right text-muted-foreground">Actions</TableHead>
@@ -194,12 +194,9 @@ export default function SeasonsPage() {
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
-                      <div className="text-sm text-muted-foreground flex flex-col gap-1">
-                        <span className="flex items-center gap-1.5">
-                           <Calendar className="h-3 w-3" />
-                           {season.startDate}
-                        </span>
-                         <span className="text-[10px] pl-4.5">to {season.endDate}</span>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium text-white">{season.endDate}</span>
                       </div>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell w-[200px]">
