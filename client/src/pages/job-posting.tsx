@@ -508,12 +508,181 @@ function CreateJobDialog({
   );
 }
 
+// ─── Post Job Dialog (single posting) ───────────────────────────────────────
+const postJobSchema = z.object({
+  title: z.string().min(3, "Job title is required"),
+  location: z.string().optional(),
+  region: z.string().optional(),
+  openings: z.coerce.number().int().min(1, "At least 1 opening required"),
+  salaryMin: z.coerce.number().optional(),
+  salaryMax: z.coerce.number().optional(),
+  deadline: z.string().optional(),
+  description: z.string().optional(),
+  status: z.enum(["draft", "active"]),
+});
+
+type PostJobForm = z.infer<typeof postJobSchema>;
+
+function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const queryClient = useQueryClient();
+
+  const form = useForm<PostJobForm>({
+    resolver: zodResolver(postJobSchema),
+    defaultValues: { title: "", location: "", region: "", openings: 1, deadline: "", description: "", status: "active" },
+  });
+
+  const postJob = useMutation({
+    mutationFn: (data: PostJobForm) => {
+      const payload: Record<string, unknown> = { ...data, type: "seasonal" };
+      if (!payload.salaryMin) delete payload.salaryMin;
+      if (!payload.salaryMax) delete payload.salaryMax;
+      if (!payload.deadline) delete payload.deadline;
+      return apiRequest("POST", "/api/jobs", payload).then(r => r.json());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs/stats"] });
+      form.reset();
+      onOpenChange(false);
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg bg-card border-border">
+        <DialogHeader>
+          <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
+            <Briefcase className="h-5 w-5 text-amber-400" />
+            Post a Job
+          </DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            Create a single standalone job posting.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(d => postJob.mutate(d))} className="space-y-5 pt-1">
+
+            <FormField control={form.control} name="title" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                  Job Title <span className="text-primary">*</span>
+                </FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g. Security Guard" className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-title" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={form.control} name="location" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">City / Location</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. Riyadh" className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-location" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="region" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Region</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="h-10 bg-muted/30 border-border focus:ring-primary/20 rounded-sm" data-testid="select-postjob-region">
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {SAUDI_REGIONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <FormField control={form.control} name="openings" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Openings <span className="text-primary">*</span></FormLabel>
+                  <FormControl>
+                    <Input type="number" min={1} className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-openings" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="salaryMin" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Min (SAR)</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={0} placeholder="3000" className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-salary-min" {...field} value={field.value ?? ""} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="salaryMax" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Max (SAR)</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={0} placeholder="6000" className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-salary-max" {...field} value={field.value ?? ""} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
+
+            <FormField control={form.control} name="deadline" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Application Deadline</FormLabel>
+                <FormControl>
+                  <Input type="date" className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-deadline" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="description" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Description</FormLabel>
+                <FormControl>
+                  <Textarea placeholder="Describe the role and responsibilities..." rows={3} className="bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm resize-none" data-testid="textarea-postjob-description" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <DialogFooter className="pt-1 flex gap-2 sm:justify-between">
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground" data-testid="button-cancel-postjob">
+                Cancel
+              </Button>
+              <div className="flex gap-2">
+                <Button type="submit" variant="outline" disabled={postJob.isPending} onClick={() => form.setValue("status", "draft")} className="border-border bg-background hover:bg-muted" data-testid="button-postjob-draft">
+                  {postJob.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save as Draft"}
+                </Button>
+                <Button type="submit" disabled={postJob.isPending} onClick={() => form.setValue("status", "active")} className="bg-amber-500 hover:bg-amber-500/90 text-white font-bold uppercase tracking-wide text-xs rounded-sm" data-testid="button-postjob-publish">
+                  {postJob.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="mr-1.5 h-4 w-4" />Post Job</>}
+                </Button>
+              </div>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Main Page ──────────────────────────────────────────────────────────────
 export default function JobPostingPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [createOpen, setCreateOpen] = useState(false);
+  const [postJobOpen, setPostJobOpen] = useState(false);
 
   const { data: jobs = [], isLoading } = useQuery<JobPosting[]>({
     queryKey: ["/api/jobs"],
@@ -561,6 +730,7 @@ export default function JobPostingPage() {
           <div className="flex gap-2">
             <Button
               variant="outline"
+              onClick={() => setPostJobOpen(true)}
               className="h-11 border-border bg-background font-bold uppercase tracking-wide text-xs rounded-sm"
               data-testid="button-post-job"
             >
@@ -787,6 +957,8 @@ export default function JobPostingPage() {
 
       {/* Create Job Dialog */}
       <CreateJobDialog open={createOpen} onOpenChange={setCreateOpen} />
+      {/* Post Job Dialog */}
+      <PostJobDialog open={postJobOpen} onOpenChange={setPostJobOpen} />
     </DashboardLayout>
   );
 }
