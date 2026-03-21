@@ -38,6 +38,7 @@ const navItems = [
   { href: "/talent", icon: Search, label: "Talent" },
   { href: "/seasons", icon: CalendarRange, label: "Seasons" },
   { href: "/workforce", icon: Users, label: "Workforce" },
+  { href: "/interviews", icon: Users2, label: "Interview Calls" },
   { href: "/automation", icon: Workflow, label: "Rules & Automation" },
   { href: "/notifications", icon: Bell, label: "Notification Center" },
   { href: "/settings", icon: Settings, label: "System & Settings" },
