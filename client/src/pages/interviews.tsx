@@ -13,7 +13,6 @@ import {
   Video,
   Phone,
   CheckCircle2,
-  XCircle,
   AlertCircle
 } from "lucide-react";
 import {
@@ -79,7 +78,7 @@ const interviews = [
     time: "01:00 PM",
     type: "Phone Call",
     interviewer: "Alice Smith",
-    status: "No Show"
+    status: "Completed"
   }
 ];
 
@@ -141,19 +140,6 @@ export default function InterviewsPage() {
             </CardContent>
           </Card>
 
-          <Card className="bg-card border-border shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-                No Shows
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold font-display text-white text-destructive">3</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                This week
-              </p>
-            </CardContent>
-          </Card>
         </div>
 
         {/* Search Bar Area */}
@@ -246,7 +232,6 @@ export default function InterviewsPage() {
                         }`}
                       >
                         {interview.status === "Completed" && <CheckCircle2 className="mr-1 h-3 w-3" />}
-                        {interview.status === "No Show" && <XCircle className="mr-1 h-3 w-3" />}
                         {interview.status}
                       </Badge>
                     </TableCell>
