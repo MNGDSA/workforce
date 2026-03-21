@@ -495,7 +495,7 @@ function CreateJobDialog({
                   ) : (
                     <>
                       <Plus className="mr-1.5 h-4 w-4" />
-                      Publish Job
+                      Publish App
                     </>
                   )}
                 </Button>
