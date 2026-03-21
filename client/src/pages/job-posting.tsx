@@ -184,7 +184,7 @@ function CreateJobDialog({
                   render={({ field }) => (
                     <FormItem className="col-span-2">
                       <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                        Job Title <span className="text-primary">*</span>
+                        Application Title <span className="text-primary">*</span>
                       </FormLabel>
                       <FormControl>
                         <Input
