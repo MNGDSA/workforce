@@ -569,14 +569,24 @@ export default function JobPostingPage() {
             <h1 className="text-3xl font-display font-bold text-white tracking-tight">Consolidated Apps</h1>
             <p className="text-muted-foreground mt-1">Manage and publish seasonal job opportunities.</p>
           </div>
-          <Button
-            onClick={() => setCreateOpen(true)}
-            className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs rounded-sm shadow-[0_0_20px_rgba(25,90,55,0.25)] hover:shadow-[0_0_30px_rgba(25,90,55,0.45)] transition-all"
-            data-testid="button-create-job"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Post Consolidated Application
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="h-11 border-border bg-background font-bold uppercase tracking-wide text-xs rounded-sm"
+              data-testid="button-post-job"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Post Job
+            </Button>
+            <Button
+              onClick={() => setCreateOpen(true)}
+              className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs rounded-sm shadow-[0_0_20px_rgba(25,90,55,0.25)] hover:shadow-[0_0_30px_rgba(25,90,55,0.45)] transition-all"
+              data-testid="button-create-job"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Post Consolidated Application
+            </Button>
+          </div>
         </div>
 
         {/* Metrics */}
