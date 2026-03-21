@@ -14,7 +14,7 @@ import {
   Menu,
   CalendarRange,
   Workflow,
-  Users2
+  Minimize
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -38,7 +38,7 @@ const navItems = [
   { href: "/talent", icon: Search, label: "Talent" },
   { href: "/seasons", icon: CalendarRange, label: "Seasons" },
   { href: "/workforce", icon: Users, label: "Workforce" },
-  { href: "/interviews", icon: Users2, label: "Interview Calls" },
+  { href: "/interviews", icon: Minimize, label: "Interview Calls" },
   { href: "/automation", icon: Workflow, label: "Rules & Automation" },
   { href: "/notifications", icon: Bell, label: "Notification Center" },
   { href: "/settings", icon: Settings, label: "System & Settings" },
