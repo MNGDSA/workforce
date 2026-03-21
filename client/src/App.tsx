@@ -19,8 +19,10 @@ import SettingsPage from "@/pages/settings";
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={AuthPage} />
-      <Route path="/auth" component={AuthPage} />
+      {/* <Route path="/" component={AuthPage} /> */}
+      {/* <Route path="/auth" component={AuthPage} /> */}
+      <Route path="/" component={Dashboard} />
+      <Route path="/auth" component={Dashboard} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/job-posting" component={JobPostingPage} />
       <Route path="/talent" component={TalentPage} />
