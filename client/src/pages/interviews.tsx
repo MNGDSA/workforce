@@ -186,7 +186,7 @@ export default function InterviewsPage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
-                  <TableHead className="text-muted-foreground">Candidate</TableHead>
+                  <TableHead className="text-muted-foreground">Venue</TableHead>
                   <TableHead className="text-muted-foreground hidden md:table-cell">Role</TableHead>
                   <TableHead className="text-muted-foreground">Schedule</TableHead>
                   <TableHead className="text-muted-foreground hidden lg:table-cell">Type</TableHead>
