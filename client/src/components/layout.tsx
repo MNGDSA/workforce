@@ -43,8 +43,8 @@ const navItems = [
   { href: "/talent", icon: Search, label: "Talent" },
   { href: "/automation", icon: Workflow, label: "Rules & Automation" },
   { href: "/notifications", icon: Bell, label: "Notification Center" },
-  { href: "/settings", icon: Settings, label: "System & Settings" },
   { href: "/documentation", icon: BookOpen, label: "Documentation" },
+  { href: "/settings", icon: Settings, label: "System & Settings" },
 ];
 
 export default function DashboardLayout({ children }: LayoutProps) {
