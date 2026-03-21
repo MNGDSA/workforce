@@ -239,59 +239,6 @@ function CreateSeasonDialog({
               />
             </div>
 
-            {/* Region & Status */}
-            <div className="w-full h-px bg-border" />
-            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Location & Status</p>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="region"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                      Region
-                    </FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="h-10 bg-muted/30 border-border rounded-sm" data-testid="select-season-region">
-                          <SelectValue placeholder="Select region" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {SAUDI_REGIONS.map((r) => (
-                          <SelectItem key={r} value={r}>{r}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                      Status
-                    </FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="h-10 bg-muted/30 border-border rounded-sm" data-testid="select-season-status">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="upcoming">Upcoming</SelectItem>
-                        <SelectItem value="active">Active</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
             {/* Headcount & Budget */}
             <div className="w-full h-px bg-border" />
             <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Headcount & Budget</p>
