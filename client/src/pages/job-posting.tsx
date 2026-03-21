@@ -575,7 +575,7 @@ export default function JobPostingPage() {
             data-testid="button-create-job"
           >
             <Plus className="mr-2 h-4 w-4" />
-            Create Job
+            Post Consolidated Application
           </Button>
         </div>
 
@@ -647,7 +647,7 @@ export default function JobPostingPage() {
         <Card className="bg-card border-border">
           <CardHeader className="py-3 px-4">
             <CardTitle className="text-base font-display text-white">
-              Job Listings
+              Consolidated Applications
               {filtered.length > 0 && <span className="text-muted-foreground font-normal text-sm ml-2">({filtered.length})</span>}
             </CardTitle>
           </CardHeader>
@@ -660,7 +660,7 @@ export default function JobPostingPage() {
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Briefcase className="h-12 w-12 text-muted-foreground/30 mb-4" />
                 <p className="text-muted-foreground font-medium">No jobs found</p>
-                <p className="text-muted-foreground/60 text-sm mt-1">Create a job posting to attract candidates</p>
+                <p className="text-muted-foreground/60 text-sm mt-1">Post a consolidated application to attract candidates</p>
                 <Button
                   onClick={() => setCreateOpen(true)}
                   className="mt-4 h-9 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wide rounded-sm"

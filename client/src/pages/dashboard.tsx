@@ -84,7 +84,7 @@ export default function Dashboard() {
       value: dashStats ? dashStats.openPositions.toLocaleString() : "—",
       icon: Briefcase,
       color: "text-primary",
-      sub: "Active job postings",
+      sub: "Active consolidated applications",
     },
     {
       title: "Active Seasons",
@@ -116,7 +116,7 @@ export default function Dashboard() {
               {new Date().toLocaleString("en-US", { month: "short", year: "numeric" })}
             </Button>
             <Button className="h-9 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs">
-              Post New Job
+              Post Consolidated Application
             </Button>
           </div>
         </div>
@@ -258,7 +258,7 @@ export default function Dashboard() {
                 </Button>
                 <Button variant="secondary" className="h-auto py-4 flex flex-col gap-2 bg-muted hover:bg-primary/20 hover:text-primary border border-border hover:border-primary/50 transition-all" data-testid="button-create-job">
                   <Briefcase className="h-6 w-6" />
-                  <span className="text-xs">Create Job</span>
+                  <span className="text-xs">Post Application</span>
                 </Button>
                 <Button variant="secondary" className="h-auto py-4 flex flex-col gap-2 bg-muted hover:bg-primary/20 hover:text-primary border border-border hover:border-primary/50 transition-all" data-testid="button-log-hours">
                   <Clock className="h-6 w-6" />
