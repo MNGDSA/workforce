@@ -251,11 +251,6 @@ export default function InterviewsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {interview.status === "Upcoming" && (
-                        <Button variant="outline" size="sm" className="mr-2 hidden md:inline-flex h-8 text-xs border-primary/50 text-primary hover:bg-primary/10">
-                          Join Call
-                        </Button>
-                      )}
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white">
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
