@@ -3,9 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import {
   Search,
   Filter,
@@ -30,8 +34,47 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/hooks/use-toast";
 import type { Season } from "@shared/schema";
+
+const SAUDI_REGIONS = [
+  "Riyadh",
+  "Makkah",
+  "Madinah",
+  "Eastern Province",
+  "Asir",
+  "Tabuk",
+  "Qassim",
+  "Hail",
+  "Jizan",
+  "Najran",
+  "Al Bahah",
+  "Northern Borders",
+  "Jawf",
+];
 
 const statusStyles: Record<string, string> = {
   upcoming: "bg-blue-500/10 text-blue-500",
@@ -40,18 +83,310 @@ const statusStyles: Record<string, string> = {
   archived: "bg-zinc-800 text-zinc-500",
 };
 
+const createSeasonSchema = z.object({
+  name: z.string().min(3, "Season name is required"),
+  description: z.string().optional(),
+  startDate: z.string().min(1, "Start date is required"),
+  endDate: z.string().min(1, "End date is required"),
+  region: z.string().optional(),
+  targetHeadcount: z.coerce.number().int().min(0).default(0),
+  budget: z.coerce.number().optional(),
+  status: z.enum(["upcoming", "active"]),
+});
+
+type CreateSeasonForm = z.infer<typeof createSeasonSchema>;
+
+function CreateSeasonDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const form = useForm<CreateSeasonForm>({
+    resolver: zodResolver(createSeasonSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      startDate: "",
+      endDate: "",
+      region: "",
+      targetHeadcount: 0,
+      budget: undefined,
+      status: "upcoming",
+    },
+  });
+
+  const createSeason = useMutation({
+    mutationFn: (data: CreateSeasonForm) =>
+      apiRequest("POST", "/api/seasons", data).then((r) => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/seasons"] });
+      toast({ title: "Season created", description: "The season has been added successfully." });
+      form.reset();
+      onOpenChange(false);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create season.", variant: "destructive" });
+    },
+  });
+
+  function onSubmit(data: CreateSeasonForm) {
+    createSeason.mutate(data);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg bg-card border-border">
+        <DialogHeader>
+          <DialogTitle className="text-white font-display text-xl">Create Season</DialogTitle>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 pt-1">
+
+            {/* Season Name */}
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                    Season Name <span className="text-primary">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g. Hajj Season 2026"
+                      className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
+                      data-testid="input-season-name"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Description */}
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                    Description
+                  </FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Brief overview of this season's scope and goals..."
+                      rows={3}
+                      className="bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm resize-none"
+                      data-testid="textarea-season-description"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Dates */}
+            <div className="w-full h-px bg-border" />
+            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Schedule</p>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="startDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                      Start Date <span className="text-primary">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
+                        data-testid="input-season-start-date"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="endDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                      End Date <span className="text-primary">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
+                        data-testid="input-season-end-date"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Region & Status */}
+            <div className="w-full h-px bg-border" />
+            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Location & Status</p>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="region"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                      Region
+                    </FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="h-10 bg-muted/30 border-border rounded-sm" data-testid="select-season-region">
+                          <SelectValue placeholder="Select region" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {SAUDI_REGIONS.map((r) => (
+                          <SelectItem key={r} value={r}>{r}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                      Status
+                    </FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="h-10 bg-muted/30 border-border rounded-sm" data-testid="select-season-status">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="upcoming">Upcoming</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Headcount & Budget */}
+            <div className="w-full h-px bg-border" />
+            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Headcount & Budget</p>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="targetHeadcount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                      Target Headcount
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
+                        placeholder="0"
+                        className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
+                        data-testid="input-season-headcount"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="budget"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                      Budget (SAR)
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
+                        placeholder="e.g. 500000"
+                        className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
+                        data-testid="input-season-budget"
+                        {...field}
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <DialogFooter className="pt-1 flex gap-2 sm:justify-between">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => onOpenChange(false)}
+                className="text-muted-foreground"
+                data-testid="button-cancel-season"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
+                disabled={createSeason.isPending}
+                data-testid="button-submit-season"
+              >
+                {createSeason.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="mr-2 h-4 w-4" />
+                )}
+                Create Season
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function SeasonsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
 
   const { data: seasons = [], isLoading } = useQuery<Season[]>({
     queryKey: ["/api/seasons"],
-    queryFn: () => apiRequest("GET", "/api/seasons").then(r => r.json()),
+    queryFn: () => apiRequest("GET", "/api/seasons").then((r) => r.json()),
   });
 
   const updateStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
-      apiRequest("PATCH", `/api/seasons/${id}`, { status }).then(r => r.json()),
+      apiRequest("PATCH", `/api/seasons/${id}`, { status }).then((r) => r.json()),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/seasons"] }),
   });
 
@@ -60,12 +395,12 @@ export default function SeasonsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/seasons"] }),
   });
 
-  const filtered = seasons.filter(s =>
-    !search || s.name.toLowerCase().includes(search.toLowerCase())
+  const filtered = seasons.filter(
+    (s) => !search || s.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const activeCount = seasons.filter(s => s.status === "active").length;
-  const upcomingCount = seasons.filter(s => s.status === "upcoming").length;
+  const activeCount = seasons.filter((s) => s.status === "active").length;
+  const upcomingCount = seasons.filter((s) => s.status === "upcoming").length;
 
   return (
     <DashboardLayout>
@@ -75,11 +410,17 @@ export default function SeasonsPage() {
             <h1 className="text-3xl font-display font-bold text-white tracking-tight">Seasons Management</h1>
             <p className="text-muted-foreground mt-1">Plan and track your seasonal workforce requirements.</p>
           </div>
-          <Button className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs" data-testid="button-create-season">
+          <Button
+            className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
+            data-testid="button-create-season"
+            onClick={() => setCreateOpen(true)}
+          >
             <Plus className="mr-2 h-4 w-4" />
             Create Season
           </Button>
         </div>
+
+        <CreateSeasonDialog open={createOpen} onOpenChange={setCreateOpen} />
 
         {/* Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -120,7 +461,7 @@ export default function SeasonsPage() {
               placeholder="Search seasons by name or region..."
               className="pl-10 h-12 bg-muted/30 border-border focus-visible:ring-primary/20 text-base"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               data-testid="input-search-seasons"
             />
           </div>
@@ -166,9 +507,10 @@ export default function SeasonsPage() {
                 </TableHeader>
                 <TableBody>
                   {filtered.map((season) => {
-                    const pct = season.targetHeadcount > 0
-                      ? Math.round((season.filledPositions / season.targetHeadcount) * 100)
-                      : 0;
+                    const pct =
+                      season.targetHeadcount > 0
+                        ? Math.round((season.filledPositions / season.targetHeadcount) * 100)
+                        : 0;
                     return (
                       <TableRow key={season.id} className="border-border hover:bg-muted/20" data-testid={`row-season-${season.id}`}>
                         <TableCell>
