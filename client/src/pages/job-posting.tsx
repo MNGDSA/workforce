@@ -493,6 +493,7 @@ const postJobSchema = z.object({
   salaryMax: z.coerce.number().optional(),
   deadline: z.string().optional(),
   description: z.string().optional(),
+  requirements: z.string().optional(),
   status: z.enum(["draft", "active"]),
 });
 
@@ -503,7 +504,7 @@ function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
 
   const form = useForm<PostJobForm>({
     resolver: zodResolver(postJobSchema),
-    defaultValues: { title: "", location: "", region: "", deadline: "", description: "", status: "active" },
+    defaultValues: { title: "", location: "", region: "", deadline: "", description: "", requirements: "", status: "active" },
   });
 
   const postJob = useMutation({
@@ -616,6 +617,16 @@ function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
                 <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Description</FormLabel>
                 <FormControl>
                   <Textarea placeholder="Describe the role and responsibilities..." rows={3} className="bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm resize-none" data-testid="textarea-postjob-description" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="requirements" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Requirements</FormLabel>
+                <FormControl>
+                  <Textarea placeholder="List qualifications, experience, and skills required..." rows={3} className="bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm resize-none" data-testid="textarea-postjob-requirements" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
