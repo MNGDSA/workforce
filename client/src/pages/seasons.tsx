@@ -195,7 +195,7 @@ function CreateSeasonDialog({
 
             {/* Dates */}
             <div className="w-full h-px bg-border" />
-            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Schedule</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Timeline</p>
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
