@@ -82,7 +82,7 @@ const createJobSchema = z.object({
   title: z.string().min(3, "Job title is required"),
   titleAr: z.string().optional(),
   department: z.string().optional(),
-  type: z.enum(["seasonal", "full_time", "part_time", "contract"]),
+  type: z.enum(["full_time", "part_time"]),
   location: z.string().optional(),
   region: z.string().optional(),
   salaryMin: z.coerce.number().optional(),
@@ -118,7 +118,7 @@ function CreateJobDialog({
       title: "",
       titleAr: "",
       department: "",
-      type: "seasonal",
+      type: "full_time",
       location: "",
       region: "",
       salaryMin: undefined,
@@ -230,10 +230,8 @@ function CreateJobDialog({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="seasonal">Seasonal</SelectItem>
                           <SelectItem value="full_time">Full Time</SelectItem>
                           <SelectItem value="part_time">Part Time</SelectItem>
-                          <SelectItem value="contract">Contract</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -507,7 +505,7 @@ function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
 
   const postJob = useMutation({
     mutationFn: (data: PostJobForm) => {
-      const payload: Record<string, unknown> = { ...data, type: "seasonal" };
+      const payload: Record<string, unknown> = { ...data, type: "full_time" };
       if (!payload.salaryMin) delete payload.salaryMin;
       if (!payload.salaryMax) delete payload.salaryMax;
       if (!payload.deadline) delete payload.deadline;
