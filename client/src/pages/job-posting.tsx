@@ -223,28 +223,9 @@ function CreateJobDialog({
 
                 <FormField
                   control={form.control}
-                  name="department"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Department</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="e.g. Operations"
-                          className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
-                          data-testid="input-job-department"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name="type"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="col-span-2">
                       <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Job Type</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
