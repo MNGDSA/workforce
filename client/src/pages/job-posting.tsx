@@ -87,7 +87,6 @@ const createJobSchema = z.object({
   type: z.enum(["seasonal", "full_time", "part_time", "contract"]),
   location: z.string().optional(),
   region: z.string().optional(),
-  openings: z.coerce.number().int().min(1, "Must have at least 1 opening"),
   salaryMin: z.coerce.number().optional(),
   salaryMax: z.coerce.number().optional(),
   deadline: z.string().optional(),
@@ -124,7 +123,6 @@ function CreateJobDialog({
       type: "seasonal",
       location: "",
       region: "",
-      openings: 1,
       salaryMin: undefined,
       salaryMax: undefined,
       deadline: "",
@@ -342,31 +340,9 @@ function CreateJobDialog({
             {/* ── Openings & Salary ── */}
             <div className="space-y-4">
               <div className="w-full h-px bg-border" />
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Headcount & Compensation</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Compensation</p>
 
-              <div className="grid grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name="openings"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                        Openings <span className="text-primary">*</span>
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={1}
-                          className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
-                          data-testid="input-job-openings"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
+              <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="salaryMin"
@@ -513,7 +489,6 @@ const postJobSchema = z.object({
   title: z.string().min(3, "Job title is required"),
   location: z.string().optional(),
   region: z.string().optional(),
-  openings: z.coerce.number().int().min(1, "At least 1 opening required"),
   salaryMin: z.coerce.number().optional(),
   salaryMax: z.coerce.number().optional(),
   deadline: z.string().optional(),
@@ -528,7 +503,7 @@ function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
 
   const form = useForm<PostJobForm>({
     resolver: zodResolver(postJobSchema),
-    defaultValues: { title: "", location: "", region: "", openings: 1, deadline: "", description: "", status: "active" },
+    defaultValues: { title: "", location: "", region: "", deadline: "", description: "", status: "active" },
   });
 
   const postJob = useMutation({
@@ -604,17 +579,7 @@ function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
               )} />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <FormField control={form.control} name="openings" render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Openings <span className="text-primary">*</span></FormLabel>
-                  <FormControl>
-                    <Input type="number" min={1} className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-openings" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-
+            <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="salaryMin" render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Min (SAR)</FormLabel>
