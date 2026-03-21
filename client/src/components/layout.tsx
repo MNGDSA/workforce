@@ -35,10 +35,11 @@ interface LayoutProps {
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/talent", icon: Search, label: "Talent" },
+  { href: "/job-posting", icon: Briefcase, label: "Job Posting" },
   { href: "/seasons", icon: CalendarRange, label: "Seasons" },
   { href: "/interviews", icon: Minimize, label: "Interview Calls" },
   { href: "/workforce", icon: Users, label: "Workforce" },
+  { href: "/talent", icon: Search, label: "Talent" },
   { href: "/automation", icon: Workflow, label: "Rules & Automation" },
   { href: "/notifications", icon: Bell, label: "Notification Center" },
   { href: "/settings", icon: Settings, label: "System & Settings" },

@@ -12,6 +12,7 @@ import WorkforcePage from "@/pages/workforce";
 import NotificationsPage from "@/pages/notifications";
 import CandidatePortal from "@/pages/candidate-portal";
 import InterviewsPage from "@/pages/interviews";
+import JobPostingPage from "@/pages/job-posting";
 
 function Router() {
   return (
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/" component={AuthPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/dashboard" component={Dashboard} />
+      <Route path="/job-posting" component={JobPostingPage} />
       <Route path="/talent" component={TalentPage} />
       <Route path="/seasons" component={SeasonsPage} />
       <Route path="/workforce" component={WorkforcePage} />
