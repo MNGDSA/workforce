@@ -14,7 +14,8 @@ import {
   Menu,
   CalendarRange,
   Workflow,
-  Minimize
+  Minimize,
+  BookOpen,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -43,6 +44,7 @@ const navItems = [
   { href: "/automation", icon: Workflow, label: "Rules & Automation" },
   { href: "/notifications", icon: Bell, label: "Notification Center" },
   { href: "/settings", icon: Settings, label: "System & Settings" },
+  { href: "/documentation", icon: BookOpen, label: "Documentation" },
 ];
 
 export default function DashboardLayout({ children }: LayoutProps) {
