@@ -61,7 +61,6 @@ import type { JobPosting, Season } from "@shared/schema";
 const statusStyles: Record<string, string> = {
   active: "bg-green-500/10 text-green-500",
   draft: "bg-muted text-muted-foreground",
-  paused: "bg-amber-500/10 text-amber-400",
   closed: "bg-red-500/10 text-red-400",
   filled: "bg-blue-500/10 text-blue-400",
 };
@@ -69,7 +68,6 @@ const statusStyles: Record<string, string> = {
 const statusLabel: Record<string, string> = {
   active: "Active",
   draft: "Draft",
-  paused: "Paused",
   closed: "Ended",
   filled: "Filled",
 };
@@ -773,7 +771,7 @@ export default function JobPostingPage() {
             />
           </div>
           <div className="flex gap-2 flex-wrap">
-            {["all", "active", "draft", "paused", "closed"].map(s => (
+            {["all", "active", "draft", "closed"].map(s => (
               <Button
                 key={s}
                 variant={statusFilter === s ? "default" : "outline"}
@@ -900,16 +898,6 @@ export default function JobPostingPage() {
                             {job.status === "draft" && (
                               <DropdownMenuItem onClick={() => updateJob.mutate({ id: job.id, status: "active" })}>
                                 Publish
-                              </DropdownMenuItem>
-                            )}
-                            {job.status === "active" && (
-                              <DropdownMenuItem onClick={() => updateJob.mutate({ id: job.id, status: "paused" })}>
-                                Pause
-                              </DropdownMenuItem>
-                            )}
-                            {job.status === "paused" && (
-                              <DropdownMenuItem onClick={() => updateJob.mutate({ id: job.id, status: "active" })}>
-                                Resume
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuSeparator />
