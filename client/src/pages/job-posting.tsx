@@ -66,6 +66,14 @@ const statusStyles: Record<string, string> = {
   filled: "bg-blue-500/10 text-blue-400",
 };
 
+const statusLabel: Record<string, string> = {
+  active: "Active",
+  draft: "Draft",
+  paused: "Paused",
+  closed: "Ended",
+  filled: "Filled",
+};
+
 const SAUDI_REGIONS = [
   "Riyadh", "Makkah", "Eastern Province", "Madinah", "Qassim",
   "Asir", "Tabuk", "Hail", "Northern Borders", "Jazan", "Najran", "Bahah", "Jouf",
@@ -742,10 +750,10 @@ export default function JobPostingPage() {
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={`font-medium border-0 capitalize text-xs ${statusStyles[job.status] ?? "bg-muted text-muted-foreground"}`}
+                          className={`font-medium border-0 text-xs ${statusStyles[job.status] ?? "bg-muted text-muted-foreground"}`}
                           data-testid={`status-job-${job.id}`}
                         >
-                          {job.status}
+                          {statusLabel[job.status] ?? job.status}
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
