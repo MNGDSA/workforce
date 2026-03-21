@@ -686,6 +686,7 @@ export default function JobPostingPage() {
                   <TableRow className="border-border hover:bg-transparent">
                     <TableHead className="text-muted-foreground">Job Title</TableHead>
                     <TableHead className="text-muted-foreground hidden md:table-cell">Location</TableHead>
+                    <TableHead className="text-muted-foreground hidden md:table-cell">Type</TableHead>
                     <TableHead className="text-muted-foreground hidden lg:table-cell">Openings</TableHead>
                     <TableHead className="text-muted-foreground hidden lg:table-cell">Salary Range</TableHead>
                     <TableHead className="text-muted-foreground">Status</TableHead>
@@ -712,6 +713,15 @@ export default function JobPostingPage() {
                             {job.location}
                           </div>
                         )}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <Badge
+                          variant="outline"
+                          className={`border-0 text-xs font-medium ${job.seasonId ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}
+                          data-testid={`type-job-${job.id}`}
+                        >
+                          {job.seasonId ? "Consolidated" : "Single"}
+                        </Badge>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
                         <div className="flex items-center gap-1 text-sm text-white">
