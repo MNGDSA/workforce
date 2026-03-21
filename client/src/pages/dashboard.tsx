@@ -84,7 +84,7 @@ export default function Dashboard() {
       value: dashStats ? dashStats.openPositions.toLocaleString() : "—",
       icon: Briefcase,
       color: "text-primary",
-      sub: "Active consolidated applications",
+      sub: "Active postings",
     },
     {
       title: "Active Seasons",
