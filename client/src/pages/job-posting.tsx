@@ -725,7 +725,7 @@ export default function JobPostingPage() {
                       <TableCell className="hidden md:table-cell">
                         <Badge
                           variant="outline"
-                          className={`border-0 text-xs font-medium ${job.seasonId ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}
+                          className={`border-0 text-xs font-medium ${job.seasonId ? "bg-primary/10 text-primary" : "bg-amber-500/10 text-amber-400"}`}
                           data-testid={`type-job-${job.id}`}
                         >
                           {job.seasonId ? "Consolidated" : "Single"}
