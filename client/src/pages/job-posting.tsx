@@ -483,6 +483,7 @@ function CreateJobDialog({
 // ─── Post Job Dialog (single posting) ───────────────────────────────────────
 const postJobSchema = z.object({
   title: z.string().min(3, "Job title is required"),
+  type: z.enum(["full_time", "part_time"]),
   location: z.string().optional(),
   region: z.string().optional(),
   salaryMin: z.coerce.number().optional(),
@@ -500,12 +501,12 @@ function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
 
   const form = useForm<PostJobForm>({
     resolver: zodResolver(postJobSchema),
-    defaultValues: { title: "", location: "", region: "", deadline: "", description: "", requirements: "", status: "active" },
+    defaultValues: { title: "", type: "full_time", location: "", region: "", deadline: "", description: "", requirements: "", status: "active" },
   });
 
   const postJob = useMutation({
     mutationFn: (data: PostJobForm) => {
-      const payload: Record<string, unknown> = { ...data, type: "full_time" };
+      const payload: Record<string, unknown> = { ...data };
       if (!payload.salaryMin) delete payload.salaryMin;
       if (!payload.salaryMax) delete payload.salaryMax;
       if (!payload.deadline) delete payload.deadline;
@@ -535,17 +536,39 @@ function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
         <Form {...form}>
           <form onSubmit={form.handleSubmit(d => postJob.mutate(d))} className="space-y-5 pt-1">
 
-            <FormField control={form.control} name="title" render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                  Job Title <span className="text-primary">*</span>
-                </FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. Security Guard" className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-title" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )} />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={form.control} name="title" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                    Job Title <span className="text-primary">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. Security Guard" className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-title" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="type" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                    Job Type <span className="text-primary">*</span>
+                  </FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="h-10 bg-muted/30 border-border focus:ring-primary/20 rounded-sm" data-testid="select-postjob-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="full_time">Full Time</SelectItem>
+                      <SelectItem value="part_time">Part Time</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="location" render={({ field }) => (
