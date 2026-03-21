@@ -239,57 +239,6 @@ function CreateSeasonDialog({
               />
             </div>
 
-            {/* Headcount & Budget */}
-            <div className="w-full h-px bg-border" />
-            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Headcount & Budget</p>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="targetHeadcount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                      Target Headcount
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min={0}
-                        placeholder="0"
-                        className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
-                        data-testid="input-season-headcount"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                      Budget (SAR)
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min={0}
-                        placeholder="e.g. 500000"
-                        className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
-                        data-testid="input-season-budget"
-                        {...field}
-                        value={field.value ?? ""}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
             <DialogFooter className="pt-1 flex gap-2 sm:justify-between">
               <Button
                 type="button"
