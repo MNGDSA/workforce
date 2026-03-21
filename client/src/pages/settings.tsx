@@ -44,7 +44,7 @@ export default function SettingsPage() {
         </div>
 
         <Tabs defaultValue="general" className="w-full">
-          <TabsList className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 w-full h-auto gap-2 bg-transparent p-0 mb-6">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 w-full h-auto gap-2 bg-transparent p-0 mb-6">
             <TabsTrigger 
               value="general" 
               className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
@@ -62,12 +62,6 @@ export default function SettingsPage() {
               className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
             >
               Roles & Access
-            </TabsTrigger>
-            <TabsTrigger 
-              value="billing" 
-              className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
-            >
-              Billing
             </TabsTrigger>
             <TabsTrigger 
               value="integrations" 
@@ -176,15 +170,6 @@ export default function SettingsPage() {
                <h3 className="text-lg font-medium text-white mb-2">Role Management</h3>
                <p>Create and edit custom roles, permissions, and department access boundaries.</p>
                <Button variant="outline" className="mt-4 border-border text-white">Configure Roles</Button>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="billing" className="m-0 animate-in fade-in-50 duration-500">
-            <div className="p-8 text-center text-muted-foreground bg-card border border-border border-dashed rounded-md">
-               <CreditCard className="h-10 w-10 mx-auto text-muted-foreground mb-4 opacity-50" />
-               <h3 className="text-lg font-medium text-white mb-2">Subscription & Billing</h3>
-               <p>Manage your current plan, payment methods, and download invoices.</p>
-               <Button variant="outline" className="mt-4 border-border text-white">View Billing Portal</Button>
             </div>
           </TabsContent>
 
