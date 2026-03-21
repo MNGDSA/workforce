@@ -154,7 +154,7 @@ function CreateJobDialog({
         <DialogHeader>
           <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
             <Briefcase className="h-5 w-5 text-primary" />
-            Create Consolidated Application
+            Create Consolidated App
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
             Fill in the details below. Save as draft or publish immediately.
@@ -566,7 +566,7 @@ export default function JobPostingPage() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white tracking-tight">Consolidated Applications</h1>
+            <h1 className="text-3xl font-display font-bold text-white tracking-tight">Consolidated Apps</h1>
             <p className="text-muted-foreground mt-1">Manage and publish seasonal job opportunities.</p>
           </div>
           <Button
