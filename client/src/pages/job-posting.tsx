@@ -657,7 +657,7 @@ export default function JobPostingPage() {
         <Card className="bg-card border-border">
           <CardHeader className="py-3 px-4">
             <CardTitle className="text-base font-display text-white">
-              Consolidated Applications
+              Applications
               {filtered.length > 0 && <span className="text-muted-foreground font-normal text-sm ml-2">({filtered.length})</span>}
             </CardTitle>
           </CardHeader>
