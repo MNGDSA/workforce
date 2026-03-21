@@ -80,7 +80,6 @@ const SAUDI_REGIONS = [
 // ─── Create Job Form Schema ─────────────────────────────────────────────────
 const createJobSchema = z.object({
   title: z.string().min(3, "Job title is required"),
-  titleAr: z.string().optional(),
   department: z.string().optional(),
   type: z.enum(["full_time", "part_time"]),
   location: z.string().optional(),
@@ -116,7 +115,6 @@ function CreateJobDialog({
     resolver: zodResolver(createJobSchema),
     defaultValues: {
       title: "",
-      titleAr: "",
       department: "",
       type: "full_time",
       location: "",
@@ -195,27 +193,6 @@ function CreateJobDialog({
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="titleAr"
-                  render={({ field }) => (
-                    <FormItem className="col-span-2">
-                      <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                        Arabic Title <span className="text-muted-foreground/50">(اختياري)</span>
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="مثال: ضابط ضبط الحشود"
-                          dir="rtl"
-                          className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm font-sans"
-                          data-testid="input-job-title-ar"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
 
                 <FormField
                   control={form.control}
