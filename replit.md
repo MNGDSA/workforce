@@ -136,6 +136,9 @@ GET    /api/notifications/unread-count/:recipientId
 ## Navigation Order
 Dashboard → Job Posting → Seasons → Interview Calls → Workforce → Talent → Rules & Automation → Notification Center → System & Settings
 
+## Planned Features (Post-Testing)
+- **Bilingual Input (EN/AR toggle)**: PrestaShop-style inline language switcher on text fields. A single `BilingualInput` component with an `EN | AR` pill toggle. Stores both `title` (English) and `titleAr` (Arabic) values, submits both, and the candidate portal renders the correct one based on user language preference. To be implemented after unit/system/regression/UAT/security testing is complete.
+
 ## Key Features
 - **Bulk Upload**: `/api/candidates/bulk` endpoint supports up to 70,000 candidates per request, batched in groups of 1,000
 - **Paginated Search**: Talent page uses server-side pagination (50/page), debounced search, multiple sort options
