@@ -19,6 +19,8 @@ async function seed() {
         password: adminPassword,
         role: "super_admin",
         fullName: "System Administrator",
+        phone: "0500000001",
+        nationalId: "1000000001",
       },
       {
         username: "candidate",
@@ -26,6 +28,8 @@ async function seed() {
         password: candidatePassword,
         role: "candidate",
         fullName: "Test Candidate",
+        phone: "0500000002",
+        nationalId: "2000000002",
       },
       {
         username: "recruiter1",
@@ -33,6 +37,8 @@ async function seed() {
         password: adminPassword,
         role: "recruiter",
         fullName: "Ahmad Al-Rashidi",
+        phone: "0500000003",
+        nationalId: "1000000003",
       },
     ])
     .onConflictDoNothing();

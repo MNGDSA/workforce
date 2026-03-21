@@ -98,6 +98,7 @@ export const users = pgTable(
     role: userRoleEnum("role").notNull().default("recruiter"),
     fullName: text("full_name"),
     phone: text("phone"),
+    nationalId: varchar("national_id", { length: 20 }),
     avatarUrl: text("avatar_url"),
     isActive: boolean("is_active").notNull().default(true),
     lastLogin: timestamp("last_login"),
@@ -107,6 +108,8 @@ export const users = pgTable(
   (t) => ({
     emailIdx: uniqueIndex("users_email_idx").on(t.email),
     usernameIdx: uniqueIndex("users_username_idx").on(t.username),
+    phoneIdx: index("users_phone_idx").on(t.phone),
+    nationalIdIdx: index("users_national_id_idx").on(t.nationalId),
   })
 );
 

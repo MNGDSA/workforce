@@ -33,19 +33,26 @@ export async function registerRoutes(
   // ─── Auth ─────────────────────────────────────────────────────────────────
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
-      const { username, password } = req.body;
-      if (!username || !password) {
-        return res.status(400).json({ message: "Username and password are required" });
+      const { identifier, password } = req.body;
+      if (!identifier || !password) {
+        return res.status(400).json({ message: "ID Number / Phone and password are required" });
       }
 
-      // Try username first, then email
-      let user = await storage.getUserByUsername(username);
-      if (!user) {
-        user = await storage.getUserByEmail(username);
-      }
+      const clean = String(identifier).trim();
+
+      // Lookup priority: phone → national ID → email → username (fallback)
+      let user =
+        await storage.getUserByPhone(clean) ??
+        await storage.getUserByNationalId(clean) ??
+        await storage.getUserByEmail(clean) ??
+        await storage.getUserByUsername(clean);
 
       if (!user) {
         return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      if (!user.isActive) {
+        return res.status(403).json({ message: "Account is disabled. Contact support." });
       }
 
       const valid = await bcrypt.compare(password, user.password);
