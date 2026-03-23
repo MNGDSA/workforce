@@ -278,7 +278,10 @@ export async function registerRoutes(
 
   app.post("/api/jobs", async (req: Request, res: Response) => {
     try {
-      const data = insertJobPostingSchema.parse(req.body);
+      const body = { ...req.body };
+      if (typeof body.salaryMin === "number") body.salaryMin = String(body.salaryMin);
+      if (typeof body.salaryMax === "number") body.salaryMax = String(body.salaryMax);
+      const data = insertJobPostingSchema.parse(body);
       const job = await storage.createJobPosting(data);
       return res.status(201).json(job);
     } catch (err) {
@@ -288,7 +291,10 @@ export async function registerRoutes(
 
   app.patch("/api/jobs/:id", async (req: Request, res: Response) => {
     try {
-      const data = insertJobPostingSchema.partial().parse(req.body);
+      const body = { ...req.body };
+      if (typeof body.salaryMin === "number") body.salaryMin = String(body.salaryMin);
+      if (typeof body.salaryMax === "number") body.salaryMax = String(body.salaryMax);
+      const data = insertJobPostingSchema.partial().parse(body);
       const job = await storage.updateJobPosting(req.params.id, data);
       if (!job) return res.status(404).json({ message: "Job not found" });
       return res.json(job);

@@ -62,6 +62,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { formatDistanceToNow } from "date-fns";
 import type { JobPosting, Season } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
 
 // ─── Status styles ─────────────────────────────────────────────────────────
 const statusStyles: Record<string, string> = {
@@ -110,6 +111,7 @@ function CreateJobDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data: seasons = [] } = useQuery<Season[]>({
     queryKey: ["/api/seasons"],
@@ -137,18 +139,30 @@ function CreateJobDialog({
 
   const createJob = useMutation({
     mutationFn: (data: CreateJobForm) => {
-      const payload: Record<string, unknown> = { ...data };
+      const payload: Record<string, unknown> = { ...data, type: "seasonal" };
       if (!payload.seasonId) delete payload.seasonId;
-      if (!payload.salaryMin) delete payload.salaryMin;
-      if (!payload.salaryMax) delete payload.salaryMax;
       if (!payload.deadline) delete payload.deadline;
+      if (payload.salaryMin != null && payload.salaryMin !== "") {
+        payload.salaryMin = String(payload.salaryMin);
+      } else {
+        delete payload.salaryMin;
+      }
+      if (payload.salaryMax != null && payload.salaryMax !== "") {
+        payload.salaryMax = String(payload.salaryMax);
+      } else {
+        delete payload.salaryMax;
+      }
       return apiRequest("POST", "/api/jobs", payload).then(r => r.json());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs/stats"] });
+      toast({ title: "Job published successfully" });
       form.reset();
       onOpenChange(false);
+    },
+    onError: () => {
+      toast({ title: "Failed to create job", description: "Please check all required fields and try again.", variant: "destructive" });
     },
   });
 
@@ -481,6 +495,7 @@ type PostJobForm = z.infer<typeof postJobSchema>;
 
 function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const form = useForm<PostJobForm>({
     resolver: zodResolver(postJobSchema),
@@ -490,16 +505,28 @@ function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
   const postJob = useMutation({
     mutationFn: (data: PostJobForm) => {
       const payload: Record<string, unknown> = { ...data };
-      if (!payload.salaryMin) delete payload.salaryMin;
-      if (!payload.salaryMax) delete payload.salaryMax;
       if (!payload.deadline) delete payload.deadline;
+      if (payload.salaryMin != null && payload.salaryMin !== "") {
+        payload.salaryMin = String(payload.salaryMin);
+      } else {
+        delete payload.salaryMin;
+      }
+      if (payload.salaryMax != null && payload.salaryMax !== "") {
+        payload.salaryMax = String(payload.salaryMax);
+      } else {
+        delete payload.salaryMax;
+      }
       return apiRequest("POST", "/api/jobs", payload).then(r => r.json());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs/stats"] });
+      toast({ title: "Job posted successfully" });
       form.reset();
       onOpenChange(false);
+    },
+    onError: () => {
+      toast({ title: "Failed to post job", description: "Please check all required fields and try again.", variant: "destructive" });
     },
   });
 
