@@ -316,8 +316,7 @@ export const interviews = pgTable(
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
     applicationId: varchar("application_id")
-      .notNull()
-      .references(() => applications.id, { onDelete: "cascade" }),
+      .references(() => applications.id, { onDelete: "set null" }),
     candidateId: varchar("candidate_id")
       .notNull()
       .references(() => candidates.id),
@@ -440,10 +439,14 @@ export const insertApplicationSchema = createInsertSchema(applications).omit({
   updatedAt: true,
 });
 
-export const insertInterviewSchema = createInsertSchema(interviews).omit({
+export const insertInterviewSchema = createInsertSchema(interviews, {
+  scheduledAt: z.coerce.date(),
+}).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  applicationId: z.string().optional().nullable(),
 });
 
 export const insertWorkforceSchema = createInsertSchema(workforce).omit({
