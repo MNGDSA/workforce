@@ -248,7 +248,12 @@ const inviteSchema = z.object({
   username:       z.string().min(3, "ID number required"),
   role:           z.string().min(1, "Role required"),
   businessUnitId: z.string().optional(),
-  password:       z.string().min(8, "Min 8 characters"),
+  password:       z.string()
+    .min(8, "Min 8 characters")
+    .regex(/[A-Z]/, "Must contain an uppercase letter")
+    .regex(/[a-z]/, "Must contain a lowercase letter")
+    .regex(/[0-9]/, "Must contain a number")
+    .regex(/[^A-Za-z0-9]/, "Must contain a symbol"),
 });
 type InviteForm = z.infer<typeof inviteSchema>;
 
