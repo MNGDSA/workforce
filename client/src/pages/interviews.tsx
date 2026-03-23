@@ -123,8 +123,10 @@ function ScheduleInterviewDialog({
 
   const { data: allCandidates = [] } = useQuery<Candidate[]>({
     queryKey: ["/api/candidates/list"],
-    queryFn: () =>
-      apiRequest("GET", "/api/candidates?limit=100").then((r) => r.json()).then((r) => r.data ?? r),
+    queryFn: async () => {
+      const json = await apiRequest("GET", "/api/candidates?limit=100").then((r) => r.json());
+      return Array.isArray(json) ? json : Array.isArray(json?.data) ? json.data : [];
+    },
     enabled: open,
   });
 
@@ -486,11 +488,15 @@ export default function InterviewsPage() {
 
   const { data: candidates = [] } = useQuery<Candidate[]>({
     queryKey: ["/api/candidates/list"],
-    queryFn: () =>
-      apiRequest("GET", "/api/candidates?limit=100").then((r) => r.json()).then((r) => r.data ?? r),
+    queryFn: async () => {
+      const json = await apiRequest("GET", "/api/candidates?limit=100").then((r) => r.json());
+      return Array.isArray(json) ? json : Array.isArray(json?.data) ? json.data : [];
+    },
   });
 
-  const candidateMap = Object.fromEntries(candidates.map((c) => [c.id, c]));
+  const candidateMap = Object.fromEntries(
+    (Array.isArray(candidates) ? candidates : []).map((c) => [c.id, c])
+  );
 
   const updateStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
