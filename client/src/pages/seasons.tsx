@@ -328,9 +328,11 @@ type SMPForm = z.infer<typeof smpSchema>;
 function CreateSMPContractDialog({
   open,
   onOpenChange,
+  onCreated,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  onCreated?: () => void;
 }) {
   const { toast } = useToast();
 
@@ -348,8 +350,8 @@ function CreateSMPContractDialog({
   });
 
   function onSubmit(data: SMPForm) {
-    console.log("SMP Contract:", data);
     toast({ title: "SMP Contract created", description: `Contract ${data.contractNumber} has been created.` });
+    onCreated?.();
     form.reset();
     onOpenChange(false);
   }
@@ -488,6 +490,7 @@ export default function SeasonsPage() {
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [smpOpen, setSmpOpen] = useState(false);
+  const [smpCount, setSmpCount] = useState(0);
 
   const { data: seasons = [], isLoading } = useQuery<Season[]>({
     queryKey: ["/api/seasons"],
@@ -542,10 +545,19 @@ export default function SeasonsPage() {
         </div>
 
         <CreateSeasonDialog open={createOpen} onOpenChange={setCreateOpen} />
-        <CreateSMPContractDialog open={smpOpen} onOpenChange={setSmpOpen} />
+        <CreateSMPContractDialog open={smpOpen} onOpenChange={setSmpOpen} onCreated={() => setSmpCount((c) => c + 1)} />
 
         {/* Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card className="bg-card border-border shadow-sm border-l-4 border-l-amber-500">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total SMP Contracts</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-contracts">{smpCount}</div>
+              <p className="text-xs text-muted-foreground mt-1">Created this session</p>
+            </CardContent>
+          </Card>
           <Card className="bg-card border-border shadow-sm border-l-4 border-l-primary">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Seasons</CardTitle>
