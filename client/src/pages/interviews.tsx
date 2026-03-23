@@ -65,6 +65,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 type Candidate = { id: string; fullNameEn: string; candidateCode: string };
+type Job = { id: string; title: string; status: string };
+type Application = { id: string; candidateId: string; jobId: string; status: string };
 type Interview = {
   id: string;
   candidateId: string;
@@ -104,19 +106,43 @@ function ScheduleInterviewDialog({
   const queryClient = useQueryClient();
   const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
   const [candidateSearch, setCandidateSearch] = useState("");
+  const [selectedJobId, setSelectedJobId] = useState<string>("");
 
-  const { data: talentPool = [], isLoading: loadingTalent } = useQuery<Candidate[]>({
+  const { data: activeJobs = [] } = useQuery<Job[]>({
+    queryKey: ["/api/jobs", "active"],
+    queryFn: () => apiRequest("GET", "/api/jobs?status=active").then((r) => r.json()),
+    enabled: open,
+  });
+
+  const { data: jobApplications = [], isLoading: loadingApps } = useQuery<Application[]>({
+    queryKey: ["/api/applications", selectedJobId],
+    queryFn: () =>
+      apiRequest("GET", `/api/applications?jobId=${selectedJobId}`).then((r) => r.json()),
+    enabled: !!selectedJobId,
+  });
+
+  const { data: allCandidates = [] } = useQuery<Candidate[]>({
     queryKey: ["/api/candidates/list"],
     queryFn: () =>
       apiRequest("GET", "/api/candidates?limit=100").then((r) => r.json()).then((r) => r.data ?? r),
     enabled: open,
   });
 
-  const filteredTalent = talentPool.filter((c) =>
-    !candidateSearch ||
-    c.fullNameEn.toLowerCase().includes(candidateSearch.toLowerCase()) ||
-    c.candidateCode.toLowerCase().includes(candidateSearch.toLowerCase())
+  const applicantIds = new Set(jobApplications.map((a) => a.candidateId));
+  const applicants = allCandidates.filter((c) => applicantIds.has(c.id));
+
+  const filteredApplicants = applicants.filter(
+    (c) =>
+      !candidateSearch ||
+      c.fullNameEn.toLowerCase().includes(candidateSearch.toLowerCase()) ||
+      c.candidateCode.toLowerCase().includes(candidateSearch.toLowerCase())
   );
+
+  const handleJobSelect = (jobId: string) => {
+    setSelectedJobId(jobId);
+    setInvitedIds(new Set());
+    setCandidateSearch("");
+  };
 
   const toggleInvite = (id: string) =>
     setInvitedIds((prev) => {
@@ -155,7 +181,7 @@ function ScheduleInterviewDialog({
       };
       if (data.googleLocation) payload.meetingUrl = data.googleLocation;
 
-      const invitedNames = talentPool
+      const invitedNames = allCandidates
         .filter((c) => invitedIds.has(c.id))
         .map((c) => c.fullNameEn)
         .join(", ");
@@ -174,6 +200,7 @@ function ScheduleInterviewDialog({
       form.reset();
       setInvitedIds(new Set());
       setCandidateSearch("");
+      setSelectedJobId("");
       onOpenChange(false);
     },
     onError: () => {
@@ -274,10 +301,10 @@ function ScheduleInterviewDialog({
               </FormItem>
             )} />
 
-            {/* Invite from Talent Pool */}
+            {/* Candidate from Application */}
             <div className="space-y-2">
               <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                Invite from Talent Pool
+                Candidate from Application
                 {invitedIds.size > 0 && (
                   <span className="ml-2 text-primary font-bold normal-case">
                     {invitedIds.size} selected
@@ -285,10 +312,23 @@ function ScheduleInterviewDialog({
                 )}
               </p>
 
+              {/* Job selector */}
+              <Select value={selectedJobId || "none"} onValueChange={(v) => handleJobSelect(v === "none" ? "" : v)}>
+                <SelectTrigger className="bg-muted/30 border-border h-9 text-sm" data-testid="select-job-applications">
+                  <SelectValue placeholder="Select an active job…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Select an active job…</SelectItem>
+                  {activeJobs.map((job) => (
+                    <SelectItem key={job.id} value={job.id}>{job.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
               {/* Selected chips */}
               {invitedIds.size > 0 && (
                 <div className="flex flex-wrap gap-1.5 pb-1">
-                  {talentPool.filter((c) => invitedIds.has(c.id)).map((c) => (
+                  {allCandidates.filter((c) => invitedIds.has(c.id)).map((c) => (
                     <Badge
                       key={c.id}
                       variant="outline"
@@ -303,30 +343,36 @@ function ScheduleInterviewDialog({
                 </div>
               )}
 
-              {/* Search box */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
-                  placeholder="Search candidates by name or code…"
-                  className="pl-9 h-9 text-sm bg-muted/30 border-border"
-                  value={candidateSearch}
-                  onChange={(e) => setCandidateSearch(e.target.value)}
-                  data-testid="input-invite-search"
-                />
-              </div>
+              {/* Search box — only when a job is selected */}
+              {selectedJobId && (
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Search applicants by name or code…"
+                    className="pl-9 h-9 text-sm bg-muted/30 border-border"
+                    value={candidateSearch}
+                    onChange={(e) => setCandidateSearch(e.target.value)}
+                    data-testid="input-invite-search"
+                  />
+                </div>
+              )}
 
-              {/* Candidate list */}
+              {/* Applicant list */}
               <div className="max-h-44 overflow-y-auto rounded-md border border-border bg-muted/10 divide-y divide-border">
-                {loadingTalent ? (
+                {!selectedJobId ? (
+                  <p className="text-xs text-muted-foreground text-center py-6">
+                    Select a job above to see its applicants
+                  </p>
+                ) : loadingApps ? (
                   <div className="flex items-center justify-center py-6">
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   </div>
-                ) : filteredTalent.length === 0 ? (
+                ) : filteredApplicants.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-6">
-                    {talentPool.length === 0 ? "No candidates in talent pool yet" : "No matches found"}
+                    {applicants.length === 0 ? "No applicants for this job yet" : "No matches found"}
                   </p>
                 ) : (
-                  filteredTalent.map((c) => {
+                  filteredApplicants.map((c) => {
                     const selected = invitedIds.has(c.id);
                     return (
                       <div
