@@ -117,6 +117,7 @@ function ScheduleInterviewDialog({
   const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
   const [candidateSearch, setCandidateSearch] = useState("");
   const [selectedJobId, setSelectedJobId] = useState<string>("");
+  const [candidateError, setCandidateError] = useState<string | null>(null);
 
   const { data: activeJobs = [] } = useQuery<Job[]>({
     queryKey: ["/api/jobs", "active"],
@@ -154,12 +155,14 @@ function ScheduleInterviewDialog({
     setSelectedJobId(jobId);
     setInvitedIds(new Set());
     setCandidateSearch("");
+    setCandidateError(null);
   };
 
   const toggleInvite = (id: string) =>
     setInvitedIds((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
+      if (next.size > 0) setCandidateError(null);
       return next;
     });
 
@@ -213,6 +216,7 @@ function ScheduleInterviewDialog({
       setInvitedIds(new Set());
       setCandidateSearch("");
       setSelectedJobId("");
+      setCandidateError(null);
       onOpenChange(false);
     },
     onError: () => {
@@ -234,7 +238,16 @@ function ScheduleInterviewDialog({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit((d) => schedule.mutate(d))} className="space-y-4 pt-1">
+          <form
+            onSubmit={form.handleSubmit((d) => {
+              if (invitedIds.size === 0) {
+                setCandidateError("Select at least one candidate from the application list.");
+                return;
+              }
+              schedule.mutate(d);
+            })}
+            className="space-y-4 pt-1"
+          >
 
             {/* Group Name */}
             <FormField control={form.control} name="groupName" render={({ field }) => (
@@ -315,18 +328,19 @@ function ScheduleInterviewDialog({
 
             {/* Candidate from Application */}
             <div className="space-y-2">
-              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+              <p className={`text-xs uppercase tracking-wider font-semibold flex items-center gap-1 ${candidateError ? "text-destructive" : "text-muted-foreground"}`}>
                 Candidate from Application
+                <span className="text-destructive">*</span>
                 {invitedIds.size > 0 && (
-                  <span className="ml-2 text-primary font-bold normal-case">
-                    {invitedIds.size} selected
+                  <span className="ml-1 text-primary font-bold normal-case">
+                    — {invitedIds.size} selected
                   </span>
                 )}
               </p>
 
               {/* Job selector */}
               <Select value={selectedJobId || "none"} onValueChange={(v) => handleJobSelect(v === "none" ? "" : v)}>
-                <SelectTrigger className="bg-muted/30 border-border h-9 text-sm" data-testid="select-job-applications">
+                <SelectTrigger className={`bg-muted/30 h-9 text-sm ${candidateError && !selectedJobId ? "border-destructive" : "border-border"}`} data-testid="select-job-applications">
                   <SelectValue placeholder="Select an active job…" />
                 </SelectTrigger>
                 <SelectContent>
@@ -370,7 +384,7 @@ function ScheduleInterviewDialog({
               )}
 
               {/* Applicant list */}
-              <div className="max-h-44 overflow-y-auto rounded-md border border-border bg-muted/10 divide-y divide-border">
+              <div className={`max-h-44 overflow-y-auto rounded-md border bg-muted/10 divide-y divide-border ${candidateError && invitedIds.size === 0 ? "border-destructive" : "border-border"}`}>
                 {!selectedJobId ? (
                   <p className="text-xs text-muted-foreground text-center py-6">
                     Select a job above to see its applicants
@@ -407,6 +421,12 @@ function ScheduleInterviewDialog({
                   })
                 )}
               </div>
+
+              {candidateError && invitedIds.size === 0 && (
+                <p className="text-xs text-destructive flex items-center gap-1.5 pt-0.5">
+                  <span>⚠</span> {candidateError}
+                </p>
+              )}
             </div>
 
             {/* Notes */}
