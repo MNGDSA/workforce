@@ -1,20 +1,37 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import DashboardLayout from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { 
-  Search, 
-  Filter, 
-  MoreHorizontal, 
-  Calendar,
-  Clock,
-  Video,
-  Phone,
-  CheckCircle2,
-  AlertCircle
-} from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from "@/components/ui/form";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -23,66 +40,355 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Search,
+  Filter,
+  MoreHorizontal,
+  Calendar,
+  Clock,
+  Video,
+  Phone,
+  MapPin,
+  CheckCircle2,
+  Loader2,
+  Plus,
+  Users,
+} from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
-const interviews = [
-  {
-    id: "INT-1042",
-    candidateName: "Sarah Williams",
-    candidateAvatar: "SW",
-    role: "Forklift Operator",
-    date: "Today",
-    time: "10:00 AM",
-    type: "Video Call",
-    interviewer: "John Davis",
-    status: "Upcoming"
-  },
-  {
-    id: "INT-1043",
-    candidateName: "Michael Chen",
-    candidateAvatar: "MC",
-    role: "Warehouse Associate",
-    date: "Today",
-    time: "11:30 AM",
-    type: "Phone Call",
-    interviewer: "Alice Smith",
-    status: "In Progress"
-  },
-  {
-    id: "INT-1044",
-    candidateName: "David Rodriguez",
-    candidateAvatar: "DR",
-    role: "Site Supervisor",
-    date: "Today",
-    time: "02:00 PM",
-    type: "In Person",
-    interviewer: "Mark Johnson",
-    status: "Upcoming"
-  },
-  {
-    id: "INT-1041",
-    candidateName: "Emily Johnson",
-    candidateAvatar: "EJ",
-    role: "Safety Inspector",
-    date: "Yesterday",
-    time: "04:00 PM",
-    type: "Video Call",
-    interviewer: "John Davis",
-    status: "Completed"
-  },
-  {
-    id: "INT-1040",
-    candidateName: "James Wilson",
-    candidateAvatar: "JW",
-    role: "Driver",
-    date: "Yesterday",
-    time: "01:00 PM",
-    type: "Phone Call",
-    interviewer: "Alice Smith",
-    status: "Completed"
-  }
-];
+type Candidate = { id: string; fullNameEn: string; candidateCode: string };
+type Interview = {
+  id: string;
+  candidateId: string;
+  scheduledAt: string;
+  durationMinutes: number;
+  status: string;
+  type: string;
+  meetingUrl?: string;
+  notes?: string;
+};
+type InterviewStats = {
+  total: number;
+  scheduled: number;
+  completed: number;
+  cancelled: number;
+};
+
+const scheduleSchema = z.object({
+  candidateId: z.string().min(1, "Select a candidate"),
+  date: z.string().min(1, "Date is required"),
+  time: z.string().min(1, "Time is required"),
+  type: z.enum(["video", "phone", "in_person"]),
+  durationMinutes: z.coerce.number().min(15).max(180),
+  meetingUrl: z.string().optional(),
+  notes: z.string().optional(),
+});
+type ScheduleForm = z.infer<typeof scheduleSchema>;
+
+function ScheduleInterviewDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: candidates = [], isLoading: loadingCandidates } = useQuery<Candidate[]>({
+    queryKey: ["/api/candidates/list"],
+    queryFn: () =>
+      apiRequest("GET", "/api/candidates?limit=100").then((r) => r.json()).then((r) => r.data ?? r),
+    enabled: open,
+  });
+
+  const form = useForm<ScheduleForm>({
+    resolver: zodResolver(scheduleSchema),
+    defaultValues: {
+      candidateId: "",
+      date: new Date().toISOString().slice(0, 10),
+      time: "10:00",
+      type: "video",
+      durationMinutes: 30,
+      meetingUrl: "",
+      notes: "",
+    },
+  });
+
+  const watchType = form.watch("type");
+
+  const schedule = useMutation({
+    mutationFn: (data: ScheduleForm) => {
+      const scheduledAt = new Date(`${data.date}T${data.time}:00`).toISOString();
+      const payload: Record<string, unknown> = {
+        candidateId: data.candidateId,
+        scheduledAt,
+        durationMinutes: data.durationMinutes,
+        type: data.type,
+      };
+      if (data.meetingUrl) payload.meetingUrl = data.meetingUrl;
+      if (data.notes) payload.notes = data.notes;
+      return apiRequest("POST", "/api/interviews", payload).then((r) => r.json());
+    },
+    onSuccess: () => {
+      toast({ title: "Interview scheduled", description: "The interview has been added to the schedule." });
+      queryClient.invalidateQueries({ queryKey: ["/api/interviews"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/interviews/stats"] });
+      form.reset();
+      onOpenChange(false);
+    },
+    onError: () => {
+      toast({ title: "Failed to schedule", description: "Please check the details and try again.", variant: "destructive" });
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg bg-card border-border">
+        <DialogHeader>
+          <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-primary" />
+            Schedule Interview
+          </DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            Create a new interview call for a candidate.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((d) => schedule.mutate(d))} className="space-y-4 pt-1">
+
+            {/* Candidate */}
+            <FormField control={form.control} name="candidateId" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Candidate</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger className="bg-muted/30 border-border">
+                      <SelectValue placeholder={loadingCandidates ? "Loading…" : "Select candidate"} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {candidates.length === 0 && !loadingCandidates && (
+                      <SelectItem value="none" disabled>No candidates found</SelectItem>
+                    )}
+                    {candidates.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.fullNameEn}
+                        <span className="ml-2 text-xs text-muted-foreground font-mono">{c.candidateCode}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            {/* Date & Time */}
+            <div className="grid grid-cols-2 gap-3">
+              <FormField control={form.control} name="date" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Date</FormLabel>
+                  <FormControl>
+                    <Input type="date" className="bg-muted/30 border-border" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="time" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Time</FormLabel>
+                  <FormControl>
+                    <Input type="time" className="bg-muted/30 border-border" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
+
+            {/* Type & Duration */}
+            <div className="grid grid-cols-2 gap-3">
+              <FormField control={form.control} name="type" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Interview Type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="bg-muted/30 border-border">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="video">Video Call</SelectItem>
+                      <SelectItem value="phone">Phone Call</SelectItem>
+                      <SelectItem value="in_person">In Person</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="durationMinutes" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Duration (min)</FormLabel>
+                  <Select onValueChange={(v) => field.onChange(Number(v))} value={String(field.value)}>
+                    <FormControl>
+                      <SelectTrigger className="bg-muted/30 border-border">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="15">15 min</SelectItem>
+                      <SelectItem value="30">30 min</SelectItem>
+                      <SelectItem value="45">45 min</SelectItem>
+                      <SelectItem value="60">60 min</SelectItem>
+                      <SelectItem value="90">90 min</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
+
+            {/* Meeting URL (only for video) */}
+            {watchType === "video" && (
+              <FormField control={form.control} name="meetingUrl" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Meeting URL</FormLabel>
+                  <FormControl>
+                    <Input placeholder="https://meet.google.com/..." className="bg-muted/30 border-border" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            )}
+
+            {/* Notes */}
+            <FormField control={form.control} name="notes" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Notes</FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder="Interview instructions, topics to cover, etc."
+                    className="bg-muted/30 border-border resize-none"
+                    rows={3}
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button type="button" variant="outline" className="border-border" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-primary text-primary-foreground font-bold min-w-[140px]" disabled={schedule.isPending}>
+                {schedule.isPending
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <><Plus className="mr-1.5 h-4 w-4" />Schedule</>}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function typeIcon(type: string) {
+  if (type === "video") return <Video className="h-4 w-4" />;
+  if (type === "phone") return <Phone className="h-4 w-4" />;
+  return <MapPin className="h-4 w-4" />;
+}
+
+function typeLabel(type: string) {
+  if (type === "video") return "Video Call";
+  if (type === "phone") return "Phone Call";
+  if (type === "in_person") return "In Person";
+  return type;
+}
+
+function statusStyle(status: string) {
+  if (status === "scheduled") return "bg-blue-500/10 text-blue-400";
+  if (status === "in_progress") return "bg-amber-500/10 text-amber-400";
+  if (status === "completed") return "bg-emerald-500/10 text-emerald-400";
+  if (status === "cancelled") return "bg-destructive/10 text-destructive";
+  if (status === "no_show") return "bg-orange-500/10 text-orange-400";
+  return "bg-muted text-muted-foreground";
+}
+
+function statusLabel(status: string) {
+  return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatScheduled(iso: string) {
+  const d = new Date(iso);
+  return {
+    date: d.toLocaleDateString("en-SA", { weekday: "short", month: "short", day: "numeric" }),
+    time: d.toLocaleTimeString("en-SA", { hour: "2-digit", minute: "2-digit" }),
+  };
+}
+
+function initials(name: string) {
+  return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+}
 
 export default function InterviewsPage() {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: interviewList = [], isLoading } = useQuery<Interview[]>({
+    queryKey: ["/api/interviews"],
+    queryFn: () => apiRequest("GET", "/api/interviews").then((r) => r.json()),
+  });
+
+  const { data: stats } = useQuery<InterviewStats>({
+    queryKey: ["/api/interviews/stats"],
+    queryFn: () => apiRequest("GET", "/api/interviews/stats").then((r) => r.json()),
+  });
+
+  const { data: candidates = [] } = useQuery<Candidate[]>({
+    queryKey: ["/api/candidates/list"],
+    queryFn: () =>
+      apiRequest("GET", "/api/candidates?limit=100").then((r) => r.json()).then((r) => r.data ?? r),
+  });
+
+  const candidateMap = Object.fromEntries(candidates.map((c) => [c.id, c]));
+
+  const updateStatus = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      apiRequest("PATCH", `/api/interviews/${id}`, { status }).then((r) => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/interviews"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/interviews/stats"] });
+    },
+    onError: () => toast({ title: "Update failed", variant: "destructive" }),
+  });
+
+  const filtered = interviewList.filter((iv) => {
+    if (!search) return true;
+    const candidate = candidateMap[iv.candidateId];
+    const q = search.toLowerCase();
+    return (
+      candidate?.fullNameEn.toLowerCase().includes(q) ||
+      typeLabel(iv.type).toLowerCase().includes(q) ||
+      iv.status.toLowerCase().includes(q)
+    );
+  });
+
+  const scheduledCount = stats?.scheduled ?? interviewList.filter((i) => i.status === "scheduled").length;
+  const completedCount = stats?.completed ?? interviewList.filter((i) => i.status === "completed").length;
+  const totalCount = stats?.total ?? interviewList.length;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -91,64 +397,70 @@ export default function InterviewsPage() {
             <h1 className="text-3xl font-display font-bold text-white tracking-tight">Interview Calls</h1>
             <p className="text-muted-foreground mt-1">Manage and track candidate interview schedules.</p>
           </div>
-          <Button className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs">
+          <Button
+            className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
+            onClick={() => setOpen(true)}
+            data-testid="button-schedule-interview"
+          >
+            <Plus className="mr-2 h-4 w-4" />
             Schedule Interview
           </Button>
         </div>
 
-        {/* Top Metrics */}
+        <ScheduleInterviewDialog open={open} onOpenChange={setOpen} />
+
+        {/* Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="bg-card border-border shadow-sm border-l-4 border-l-primary">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-                Today's Calls
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white">12</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                4 Completed
-              </p>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-interviews-total">{totalCount}</div>
+              <p className="text-xs text-muted-foreground mt-1">All interviews</p>
             </CardContent>
           </Card>
-          
-           <Card className="bg-card border-border shadow-sm">
+          <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-                Upcoming
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Scheduled</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white">45</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Next 7 days
-              </p>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-interviews-scheduled">{scheduledCount}</div>
+              <p className="text-xs text-muted-foreground mt-1">Upcoming calls</p>
             </CardContent>
           </Card>
-
-           <Card className="bg-card border-border shadow-sm">
+          <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-                Completion Rate
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Completed</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white">92%</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                <span className="text-green-500 font-medium">+2%</span> vs last week
-              </p>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-interviews-completed">{completedCount}</div>
+              <p className="text-xs text-muted-foreground mt-1">Successfully done</p>
             </CardContent>
           </Card>
-
+          <Card className="bg-card border-border shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Completion Rate</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-4xl font-bold font-display text-white">
+                {totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0}%
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Of all interviews</p>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Search Bar Area */}
+        {/* Search */}
         <div className="flex flex-col md:flex-row gap-4 items-center bg-card p-4 rounded-sm border border-border">
           <div className="relative flex-1 w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-            <Input 
-              placeholder="Search by candidate name, role, or interviewer..." 
-              className="pl-10 h-12 bg-muted/30 border-border focus-visible:ring-primary/20 text-base" 
+            <Input
+              placeholder="Search by candidate, type, or status…"
+              className="pl-10 h-12 bg-muted/30 border-border focus-visible:ring-primary/20 text-base"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              data-testid="input-search-interviews"
             />
           </div>
           <div className="flex gap-2 w-full md:w-auto">
@@ -163,87 +475,123 @@ export default function InterviewsPage() {
           </div>
         </div>
 
-        {/* Interviews List */}
+        {/* Table */}
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-lg font-display text-white">Interview Schedule</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border hover:bg-transparent">
-                  <TableHead className="text-muted-foreground">Title</TableHead>
-                  <TableHead className="text-muted-foreground hidden md:table-cell">Venue</TableHead>
-                  <TableHead className="text-muted-foreground">Schedule</TableHead>
-                  <TableHead className="text-muted-foreground hidden lg:table-cell">Type</TableHead>
-                  <TableHead className="text-muted-foreground hidden lg:table-cell">Interviewer</TableHead>
-                  <TableHead className="text-muted-foreground">Status</TableHead>
-                  <TableHead className="text-right text-muted-foreground">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {interviews.map((interview) => (
-                  <TableRow key={interview.id} className="border-border hover:bg-muted/20">
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8 border border-border">
-                          <AvatarFallback className="bg-primary/20 text-primary text-xs">{interview.candidateAvatar}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium text-white">{interview.candidateName}</p>
-                          <p className="text-[10px] text-muted-foreground font-mono">{interview.id}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
-                      {interview.role}
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 text-sm text-white">
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          {interview.date}
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {interview.time}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                        {interview.type === "Video Call" && <Video className="h-4 w-4" />}
-                        {interview.type === "Phone Call" && <Phone className="h-4 w-4" />}
-                        {interview.type === "In Person" && <Calendar className="h-4 w-4" />}
-                        {interview.type}
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                      {interview.interviewer}
-                    </TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant="outline" 
-                        className={`font-medium border-0 ${
-                          interview.status === "Upcoming" ? "bg-blue-500/10 text-blue-500" :
-                          interview.status === "In Progress" ? "bg-amber-500/10 text-amber-500" :
-                          interview.status === "Completed" ? "bg-green-500/10 text-green-500" :
-                          "bg-destructive/10 text-destructive"
-                        }`}
-                      >
-                        {interview.status === "Completed" && <CheckCircle2 className="mr-1 h-3 w-3" />}
-                        {interview.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Users className="h-12 w-12 text-muted-foreground/30 mb-4" />
+                <p className="text-muted-foreground font-medium">No interviews scheduled</p>
+                <p className="text-muted-foreground/60 text-sm mt-1">Click "Schedule Interview" to add one</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border hover:bg-transparent">
+                    <TableHead className="text-muted-foreground">Candidate</TableHead>
+                    <TableHead className="text-muted-foreground">Schedule</TableHead>
+                    <TableHead className="text-muted-foreground hidden md:table-cell">Type</TableHead>
+                    <TableHead className="text-muted-foreground hidden lg:table-cell">Duration</TableHead>
+                    <TableHead className="text-muted-foreground">Status</TableHead>
+                    <TableHead className="text-right text-muted-foreground">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((iv) => {
+                    const candidate = candidateMap[iv.candidateId];
+                    const { date, time } = formatScheduled(iv.scheduledAt);
+                    return (
+                      <TableRow key={iv.id} className="border-border hover:bg-muted/20" data-testid={`row-interview-${iv.id}`}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8 border border-border">
+                              <AvatarFallback className="bg-primary/20 text-primary text-xs">
+                                {candidate ? initials(candidate.fullNameEn) : "??"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium text-white text-sm">
+                                {candidate?.fullNameEn ?? "Unknown Candidate"}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground font-mono">
+                                {candidate?.candidateCode ?? iv.candidateId.slice(0, 8)}
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5 text-sm text-white">
+                              <Calendar className="h-3 w-3 text-muted-foreground" />
+                              {date}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <Clock className="h-3 w-3" />
+                              {time}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                            {typeIcon(iv.type)}
+                            {typeLabel(iv.type)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+                          {iv.durationMinutes} min
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`font-medium border-0 capitalize ${statusStyle(iv.status)}`}>
+                            {iv.status === "completed" && <CheckCircle2 className="mr-1 h-3 w-3" />}
+                            {statusLabel(iv.status)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white" data-testid={`button-interview-actions-${iv.id}`}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              {iv.status === "scheduled" && (
+                                <DropdownMenuItem onClick={() => updateStatus.mutate({ id: iv.id, status: "in_progress" })}>
+                                  Mark In Progress
+                                </DropdownMenuItem>
+                              )}
+                              {(iv.status === "scheduled" || iv.status === "in_progress") && (
+                                <DropdownMenuItem onClick={() => updateStatus.mutate({ id: iv.id, status: "completed" })}>
+                                  Mark Completed
+                                </DropdownMenuItem>
+                              )}
+                              {iv.status === "scheduled" && (
+                                <DropdownMenuItem onClick={() => updateStatus.mutate({ id: iv.id, status: "no_show" })}>
+                                  Mark No-Show
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() => updateStatus.mutate({ id: iv.id, status: "cancelled" })}
+                              >
+                                Cancel Interview
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>
