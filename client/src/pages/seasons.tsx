@@ -1092,12 +1092,8 @@ export default function SeasonsPage() {
                     <TableHead className="text-muted-foreground">Contractor</TableHead>
                     <TableHead className="text-muted-foreground hidden md:table-cell">Type</TableHead>
                     <TableHead className="text-muted-foreground hidden md:table-cell">Region</TableHead>
-                    <TableHead className="text-muted-foreground hidden lg:table-cell">
-                      <span className="flex items-center">
-                        Expiry
-                        <InfoTooltip text="SMP Contracts expiry dates should be set as the project's contractual expiry date." />
-                      </span>
-                    </TableHead>
+                    <TableHead className="text-muted-foreground hidden lg:table-cell">Start Date</TableHead>
+                    <TableHead className="text-muted-foreground hidden lg:table-cell">End Date</TableHead>
                     <TableHead className="text-muted-foreground hidden lg:table-cell">Notes</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1133,7 +1129,13 @@ export default function SeasonsPage() {
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
                         <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-sm text-white">{contract.startDate || "—"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                           <span className="text-sm text-white">{contract.endDate || "—"}</span>
                         </div>
                       </TableCell>
