@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState } from "react";
@@ -38,6 +40,10 @@ import {
   Users,
   DollarSign,
   X,
+  FileDown,
+  ChevronRight,
+  Calendar,
+  UserCheck,
 } from "lucide-react";
 import {
   Table,
@@ -648,6 +654,216 @@ function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
   );
 }
 
+// ─── Applicants Sheet ────────────────────────────────────────────────────────
+type Application = {
+  id: string;
+  candidateId: string;
+  jobId: string;
+  status: string;
+  appliedAt: string;
+  notes?: string;
+};
+
+type CandidateInfo = {
+  id: string;
+  fullNameEn: string;
+  candidateCode: string;
+  phone?: string;
+  email?: string;
+  city?: string;
+  nationality?: string;
+};
+
+const appStatusStyle: Record<string, string> = {
+  new:         "bg-blue-500/10 text-blue-400",
+  reviewing:   "bg-amber-500/10 text-amber-400",
+  shortlisted: "bg-primary/10 text-primary",
+  interviewed: "bg-purple-500/10 text-purple-400",
+  offered:     "bg-cyan-500/10 text-cyan-400",
+  hired:       "bg-emerald-500/10 text-emerald-400",
+  rejected:    "bg-destructive/10 text-destructive",
+  withdrawn:   "bg-muted text-muted-foreground",
+};
+
+function initials(name: string) {
+  return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+}
+
+function exportToCSV(job: JobPosting, applications: Application[], candidates: CandidateInfo[]) {
+  const map = Object.fromEntries(candidates.map((c) => [c.id, c]));
+  const header = ["Candidate Name", "Code", "Email", "Phone", "City", "Status", "Applied At"];
+  const rows = applications.map((a) => {
+    const c = map[a.candidateId];
+    return [
+      c?.fullNameEn ?? "Unknown",
+      c?.candidateCode ?? "",
+      c?.email ?? "",
+      c?.phone ?? "",
+      c?.city ?? "",
+      a.status,
+      new Date(a.appliedAt).toLocaleDateString("en-SA"),
+    ];
+  });
+  const csv = [header, ...rows]
+    .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `applicants-${job.title.replace(/\s+/g, "-")}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function ApplicantsSheet({
+  job,
+  open,
+  onOpenChange,
+}: {
+  job: JobPosting | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const { data: applications = [], isLoading } = useQuery<Application[]>({
+    queryKey: ["/api/applications", job?.id],
+    queryFn: () => apiRequest("GET", `/api/applications?jobId=${job!.id}`).then((r) => r.json()),
+    enabled: !!job && open,
+  });
+
+  const { data: candidateResult } = useQuery({
+    queryKey: ["/api/candidates/list"],
+    queryFn: () => apiRequest("GET", "/api/candidates?limit=100").then((r) => r.json()),
+    enabled: !!job && open,
+  });
+  const candidates: CandidateInfo[] = Array.isArray(candidateResult) ? candidateResult : (candidateResult?.data ?? []);
+  const candidateMap = Object.fromEntries(candidates.map((c) => [c.id, c]));
+
+  if (!job) return null;
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full sm:max-w-2xl bg-card border-border flex flex-col p-0">
+        <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <SheetTitle className="font-display text-xl font-bold text-white">{job.title}</SheetTitle>
+              <SheetDescription className="text-muted-foreground mt-1 flex items-center gap-3 flex-wrap">
+                {job.region && <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{job.region}</span>}
+                <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" />{job.openings} openings</span>
+                <Badge variant="outline" className={`border-0 text-xs ${statusStyles[job.status] ?? "bg-muted text-muted-foreground"}`}>
+                  {statusLabel[job.status] ?? job.status}
+                </Badge>
+              </SheetDescription>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-border shrink-0 gap-1.5"
+              onClick={() => exportToCSV(job, applications, candidates)}
+              disabled={applications.length === 0}
+              data-testid="button-export-applicants"
+            >
+              <FileDown className="h-4 w-4" />
+              Export Excel
+            </Button>
+          </div>
+
+          {/* Summary bar */}
+          <div className="flex items-center gap-4 mt-3">
+            <div className="flex items-center gap-1.5 text-sm">
+              <UserCheck className="h-4 w-4 text-primary" />
+              <span className="text-white font-bold">{applications.length}</span>
+              <span className="text-muted-foreground">applicant{applications.length !== 1 ? "s" : ""}</span>
+            </div>
+            {applications.length > 0 && (
+              <div className="flex gap-1.5 flex-wrap">
+                {Object.entries(
+                  applications.reduce<Record<string, number>>((acc, a) => {
+                    acc[a.status] = (acc[a.status] ?? 0) + 1;
+                    return acc;
+                  }, {})
+                ).map(([status, count]) => (
+                  <Badge key={status} variant="outline" className={`border-0 text-xs ${appStatusStyle[status] ?? "bg-muted text-muted-foreground"}`}>
+                    {count} {status}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        </SheetHeader>
+
+        <div className="flex-1 overflow-y-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : applications.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+              <Users className="h-12 w-12 text-muted-foreground/30 mb-4" />
+              <p className="text-muted-foreground font-medium">No applicants yet</p>
+              <p className="text-muted-foreground/60 text-sm mt-1">Applications submitted via the candidate portal will appear here</p>
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border text-left">
+                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Candidate</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">Contact</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden sm:table-cell">Applied</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {applications.map((app) => {
+                  const candidate = candidateMap[app.candidateId];
+                  return (
+                    <tr key={app.id} className="hover:bg-muted/20 transition-colors" data-testid={`row-applicant-${app.id}`}>
+                      <td className="px-6 py-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8 border border-border shrink-0">
+                            <AvatarFallback className="bg-primary/20 text-primary text-xs">
+                              {candidate ? initials(candidate.fullNameEn) : "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-white truncate">
+                              {candidate?.fullNameEn ?? "Unknown Candidate"}
+                            </div>
+                            <div className="text-xs text-muted-foreground font-mono">{candidate?.candidateCode ?? "—"}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <div className="text-xs text-muted-foreground space-y-0.5">
+                          {candidate?.email && <div>{candidate.email}</div>}
+                          {candidate?.phone && <div>{candidate.phone}</div>}
+                          {!candidate?.email && !candidate?.phone && <span>—</span>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline" className={`border-0 text-xs capitalize ${appStatusStyle[app.status] ?? "bg-muted text-muted-foreground"}`}>
+                          {app.status}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 hidden sm:table-cell text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(app.appliedAt).toLocaleDateString("en-SA")}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ─── Main Page ──────────────────────────────────────────────────────────────
 export default function JobPostingPage() {
   const queryClient = useQueryClient();
@@ -655,6 +871,8 @@ export default function JobPostingPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [postJobOpen, setPostJobOpen] = useState(false);
+  const [selectedJob, setSelectedJob] = useState<JobPosting | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const { data: jobs = [], isLoading } = useQuery<JobPosting[]>({
     queryKey: ["/api/jobs"],
@@ -827,15 +1045,25 @@ export default function JobPostingPage() {
                 </TableHeader>
                 <TableBody>
                   {filtered.map((job) => (
-                    <TableRow key={job.id} className="border-border hover:bg-muted/20" data-testid={`row-job-${job.id}`}>
+                    <TableRow
+                      key={job.id}
+                      className="border-border hover:bg-muted/20 cursor-pointer"
+                      data-testid={`row-job-${job.id}`}
+                      onClick={() => { setSelectedJob(job); setSheetOpen(true); }}
+                    >
                       <TableCell>
-                        <div className="font-medium text-white">{job.title}</div>
-                        {job.department && (
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                            <Building className="h-3 w-3" />
-                            {job.department} · {job.type}
+                        <div className="flex items-center gap-2">
+                          <div className="min-w-0">
+                            <div className="font-medium text-white">{job.title}</div>
+                            {job.department && (
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                                <Building className="h-3 w-3" />
+                                {job.department} · {job.type}
+                              </div>
+                            )}
                           </div>
-                        )}
+                          <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0 ml-1" />
+                        </div>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         {job.location && (
@@ -882,7 +1110,7 @@ export default function JobPostingPage() {
                       <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
                         {formatDistanceToNow(new Date(job.createdAt), { addSuffix: true })}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white" data-testid={`button-job-actions-${job.id}`}>
@@ -890,7 +1118,9 @@ export default function JobPostingPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem>View Applicants</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setSelectedJob(job); setSheetOpen(true); }}>
+                              View Applicants
+                            </DropdownMenuItem>
                             <DropdownMenuItem>Edit Job</DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {job.status === "draft" && (
@@ -921,6 +1151,8 @@ export default function JobPostingPage() {
       <CreateJobDialog open={createOpen} onOpenChange={setCreateOpen} />
       {/* Post Job Dialog */}
       <PostJobDialog open={postJobOpen} onOpenChange={setPostJobOpen} />
+      {/* Applicants Sheet */}
+      <ApplicantsSheet job={selectedJob} open={sheetOpen} onOpenChange={setSheetOpen} />
     </DashboardLayout>
   );
 }
