@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -18,6 +18,7 @@ import {
   Users,
   Plus,
   Loader2,
+  Info,
 } from "lucide-react";
 import {
   Table,
@@ -283,6 +284,32 @@ function CreateSeasonDialog({
         </Form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function InfoTooltip({ text }: { text: string }) {
+  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+
+  return (
+    <span className="relative inline-flex items-center" ref={ref}>
+      <button
+        type="button"
+        className="h-3.5 w-3.5 rounded-full border border-muted-foreground/50 text-muted-foreground hover:border-primary hover:text-primary flex items-center justify-center transition-colors focus:outline-none ml-1.5"
+        onMouseEnter={() => setVisible(true)}
+        onMouseLeave={() => setVisible(false)}
+        onClick={() => setVisible((v) => !v)}
+        aria-label="More information"
+      >
+        <Info className="h-2.5 w-2.5" />
+      </button>
+      {visible && (
+        <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-sm bg-popover border border-border px-3 py-2 text-xs text-muted-foreground shadow-lg leading-relaxed pointer-events-none">
+          {text}
+          <span className="absolute left-1/2 -translate-x-1/2 top-full h-0 w-0 border-x-4 border-x-transparent border-t-4 border-t-border" />
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -644,7 +671,12 @@ export default function SeasonsPage() {
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
                     <TableHead className="text-muted-foreground">Season Name</TableHead>
-                    <TableHead className="text-muted-foreground hidden md:table-cell">Deadline</TableHead>
+                    <TableHead className="text-muted-foreground hidden md:table-cell">
+                      <span className="flex items-center">
+                        Expiry
+                        <InfoTooltip text="SMP Contracts expiry dates should be set as the project's contractual expiry date." />
+                      </span>
+                    </TableHead>
                     <TableHead className="text-muted-foreground hidden md:table-cell">Region</TableHead>
                     <TableHead className="text-muted-foreground hidden lg:table-cell">Hiring Progress</TableHead>
                     <TableHead className="text-muted-foreground">Status</TableHead>
