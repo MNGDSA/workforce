@@ -102,6 +102,28 @@ function ScheduleInterviewDialog({
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
+  const [candidateSearch, setCandidateSearch] = useState("");
+
+  const { data: talentPool = [], isLoading: loadingTalent } = useQuery<Candidate[]>({
+    queryKey: ["/api/candidates/list"],
+    queryFn: () =>
+      apiRequest("GET", "/api/candidates?limit=100").then((r) => r.json()).then((r) => r.data ?? r),
+    enabled: open,
+  });
+
+  const filteredTalent = talentPool.filter((c) =>
+    !candidateSearch ||
+    c.fullNameEn.toLowerCase().includes(candidateSearch.toLowerCase()) ||
+    c.candidateCode.toLowerCase().includes(candidateSearch.toLowerCase())
+  );
+
+  const toggleInvite = (id: string) =>
+    setInvitedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   const form = useForm<ScheduleForm>({
     resolver: zodResolver(scheduleSchema),
@@ -132,7 +154,17 @@ function ScheduleInterviewDialog({
         type: data.venueName,
       };
       if (data.googleLocation) payload.meetingUrl = data.googleLocation;
-      if (data.notes) payload.notes = data.notes;
+
+      const invitedNames = talentPool
+        .filter((c) => invitedIds.has(c.id))
+        .map((c) => c.fullNameEn)
+        .join(", ");
+      const notesText = [
+        data.notes,
+        invitedNames ? `Invited: ${invitedNames}` : "",
+      ].filter(Boolean).join("\n");
+      if (notesText) payload.notes = notesText;
+
       return apiRequest("POST", "/api/interviews", payload).then((r) => r.json());
     },
     onSuccess: () => {
@@ -140,6 +172,8 @@ function ScheduleInterviewDialog({
       queryClient.invalidateQueries({ queryKey: ["/api/interviews"] });
       queryClient.invalidateQueries({ queryKey: ["/api/interviews/stats"] });
       form.reset();
+      setInvitedIds(new Set());
+      setCandidateSearch("");
       onOpenChange(false);
     },
     onError: () => {
@@ -239,6 +273,83 @@ function ScheduleInterviewDialog({
                 <FormMessage />
               </FormItem>
             )} />
+
+            {/* Invite from Talent Pool */}
+            <div className="space-y-2">
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                Invite from Talent Pool
+                {invitedIds.size > 0 && (
+                  <span className="ml-2 text-primary font-bold normal-case">
+                    {invitedIds.size} selected
+                  </span>
+                )}
+              </p>
+
+              {/* Selected chips */}
+              {invitedIds.size > 0 && (
+                <div className="flex flex-wrap gap-1.5 pb-1">
+                  {talentPool.filter((c) => invitedIds.has(c.id)).map((c) => (
+                    <Badge
+                      key={c.id}
+                      variant="outline"
+                      className="bg-primary/10 text-primary border-primary/30 text-xs gap-1 pr-1 cursor-pointer hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
+                      onClick={() => toggleInvite(c.id)}
+                      data-testid={`chip-invited-${c.id}`}
+                    >
+                      {c.fullNameEn}
+                      <span className="opacity-60">×</span>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              {/* Search box */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search candidates by name or code…"
+                  className="pl-9 h-9 text-sm bg-muted/30 border-border"
+                  value={candidateSearch}
+                  onChange={(e) => setCandidateSearch(e.target.value)}
+                  data-testid="input-invite-search"
+                />
+              </div>
+
+              {/* Candidate list */}
+              <div className="max-h-44 overflow-y-auto rounded-md border border-border bg-muted/10 divide-y divide-border">
+                {loadingTalent ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : filteredTalent.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-6">
+                    {talentPool.length === 0 ? "No candidates in talent pool yet" : "No matches found"}
+                  </p>
+                ) : (
+                  filteredTalent.map((c) => {
+                    const selected = invitedIds.has(c.id);
+                    return (
+                      <div
+                        key={c.id}
+                        className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${selected ? "bg-primary/10" : "hover:bg-muted/30"}`}
+                        onClick={() => toggleInvite(c.id)}
+                        data-testid={`row-invite-${c.id}`}
+                      >
+                        <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors ${selected ? "bg-primary border-primary" : "border-muted-foreground/40"}`}>
+                          {selected && <CheckCircle2 className="h-3 w-3 text-primary-foreground" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className={`text-sm font-medium truncate block ${selected ? "text-primary" : "text-white"}`}>
+                            {c.fullNameEn}
+                          </span>
+                        </div>
+                        <code className="text-[10px] text-muted-foreground font-mono shrink-0">{c.candidateCode}</code>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
 
             {/* Notes */}
             <FormField control={form.control} name="notes" render={({ field }) => (
