@@ -1113,7 +1113,7 @@ export default function SeasonsPage() {
                           <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5">
-                          {(smpCandidates[contract.contractNumber]?.length ?? 0)} candidates
+                          {(smpCandidates[contract.contractNumber]?.length ?? 0)} employees
                         </div>
                       </TableCell>
                       <TableCell>
