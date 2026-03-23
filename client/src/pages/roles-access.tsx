@@ -565,8 +565,8 @@ function EditUserDialog({
   );
 }
 
-// ─── Main Page ─────────────────────────────────────────────────────────────────
-export default function RolesAccessPage() {
+// ─── Embeddable Content (used inside Settings) ─────────────────────────────────
+export function RolesAccessContent() {
   const [buDialogOpen, setBuDialogOpen] = useState(false);
   const [editingBu, setEditingBu] = useState<BusinessUnit | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -587,18 +587,8 @@ export default function RolesAccessPage() {
   const staffUsers = userList.filter((u) => u.role !== "candidate");
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6 max-w-6xl mx-auto">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-display font-bold text-white tracking-tight flex items-center gap-3">
-            <Shield className="h-8 w-8 text-primary" />
-            Roles & Access
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Define business units, assign roles, and control who sees which job applications.
-          </p>
-        </div>
+    <>
+      <div className="space-y-6">
 
         {/* Access model callout */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -872,6 +862,23 @@ export default function RolesAccessPage() {
         user={editingUser}
         businessUnits={businessUnits}
       />
+    </>
+  );
+}
+
+export default function RolesAccessPage() {
+  return (
+    <DashboardLayout>
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-6">
+          <h1 className="text-3xl font-display font-bold text-white tracking-tight flex items-center gap-3">
+            <Shield className="h-8 w-8 text-primary" />
+            Roles & Access
+          </h1>
+          <p className="text-muted-foreground mt-1">Define business units, assign roles, and control who sees which job applications.</p>
+        </div>
+        <RolesAccessContent />
+      </div>
     </DashboardLayout>
   );
 }

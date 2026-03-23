@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/layout";
+import { RolesAccessContent } from "@/pages/roles-access";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +32,7 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 max-w-5xl mx-auto">
+      <div className="space-y-6 max-w-6xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-display font-bold text-white tracking-tight">System & Settings</h1>
@@ -165,12 +166,7 @@ export default function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="roles" className="m-0 animate-in fade-in-50 duration-500">
-            <div className="p-8 text-center text-muted-foreground bg-card border border-border border-dashed rounded-md">
-               <Users className="h-10 w-10 mx-auto text-muted-foreground mb-4 opacity-50" />
-               <h3 className="text-lg font-medium text-white mb-2">Role Management</h3>
-               <p>Create and edit custom roles, permissions, and department access boundaries.</p>
-               <Button variant="outline" className="mt-4 border-border text-white">Configure Roles</Button>
-            </div>
+            <RolesAccessContent />
           </TabsContent>
 
           <TabsContent value="integrations" className="m-0 animate-in fade-in-50 duration-500">
