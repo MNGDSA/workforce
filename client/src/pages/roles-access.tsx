@@ -245,7 +245,7 @@ type UserEditForm = z.infer<typeof userEditSchema>;
 const inviteSchema = z.object({
   fullName:       z.string().min(2, "Full name required"),
   email:          z.string().email("Invalid email"),
-  username:       z.string().min(3, "Username required"),
+  username:       z.string().min(3, "ID number required"),
   role:           z.string().min(1, "Role required"),
   businessUnitId: z.string().optional(),
   password:       z.string().min(8, "Min 8 characters"),
@@ -318,8 +318,8 @@ function InviteUserDialog({
               )} />
               <FormField control={form.control} name="username" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Username</FormLabel>
-                  <FormControl><Input placeholder="mq.qahtani" className="bg-muted/30 border-border" {...field} data-testid="input-invite-username" /></FormControl>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">ID Number</FormLabel>
+                  <FormControl><Input placeholder="1234567890" className="bg-muted/30 border-border" {...field} data-testid="input-invite-username" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
