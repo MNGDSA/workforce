@@ -242,7 +242,7 @@ export default function CandidatePortal() {
             <Building2 className="h-5 w-5" />
           </div>
           <span className="font-display font-bold text-xl tracking-tight text-white hidden sm:inline-block">
-            WORKFORCE<span className="text-primary">.SA</span>
+            WORKFORCE
           </span>
         </div>
 
