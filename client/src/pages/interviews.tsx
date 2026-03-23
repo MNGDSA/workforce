@@ -83,12 +83,12 @@ type InterviewStats = {
 };
 
 const scheduleSchema = z.object({
-  candidateId: z.string().min(1, "Select a candidate"),
+  groupName: z.string().min(2, "Group name is required"),
   date: z.string().min(1, "Date is required"),
   time: z.string().min(1, "Time is required"),
-  type: z.enum(["video", "phone", "in_person"]),
+  venueName: z.string().min(2, "Venue name is required"),
   durationMinutes: z.coerce.number().min(15).max(180),
-  meetingUrl: z.string().optional(),
+  googleLocation: z.string().url("Must be a valid URL").optional().or(z.literal("")),
   notes: z.string().optional(),
 });
 type ScheduleForm = z.infer<typeof scheduleSchema>;
@@ -103,38 +103,35 @@ function ScheduleInterviewDialog({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: candidates = [], isLoading: loadingCandidates } = useQuery<Candidate[]>({
-    queryKey: ["/api/candidates/list"],
-    queryFn: () =>
-      apiRequest("GET", "/api/candidates?limit=100").then((r) => r.json()).then((r) => r.data ?? r),
-    enabled: open,
-  });
-
   const form = useForm<ScheduleForm>({
     resolver: zodResolver(scheduleSchema),
     defaultValues: {
-      candidateId: "",
+      groupName: "",
       date: new Date().toISOString().slice(0, 10),
       time: "10:00",
-      type: "video",
+      venueName: "",
       durationMinutes: 30,
-      meetingUrl: "",
+      googleLocation: "",
       notes: "",
     },
   });
 
-  const watchType = form.watch("type");
-
   const schedule = useMutation({
-    mutationFn: (data: ScheduleForm) => {
+    mutationFn: async (data: ScheduleForm) => {
+      const code = "GRP-" + Math.random().toString(36).substring(2, 7).toUpperCase();
+      const candidate = await apiRequest("POST", "/api/candidates", {
+        candidateCode: code,
+        fullNameEn: data.groupName,
+      }).then((r) => r.json());
+
       const scheduledAt = new Date(`${data.date}T${data.time}:00`).toISOString();
       const payload: Record<string, unknown> = {
-        candidateId: data.candidateId,
+        candidateId: candidate.id,
         scheduledAt,
         durationMinutes: data.durationMinutes,
-        type: data.type,
+        type: data.venueName,
       };
-      if (data.meetingUrl) payload.meetingUrl = data.meetingUrl;
+      if (data.googleLocation) payload.meetingUrl = data.googleLocation;
       if (data.notes) payload.notes = data.notes;
       return apiRequest("POST", "/api/interviews", payload).then((r) => r.json());
     },
@@ -159,35 +156,20 @@ function ScheduleInterviewDialog({
             Schedule Interview
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Create a new interview call for a candidate.
+            Create a new interview session for a group of candidates.
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit((d) => schedule.mutate(d))} className="space-y-4 pt-1">
 
-            {/* Candidate */}
-            <FormField control={form.control} name="candidateId" render={({ field }) => (
+            {/* Group Name */}
+            <FormField control={form.control} name="groupName" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Candidate</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger className="bg-muted/30 border-border">
-                      <SelectValue placeholder={loadingCandidates ? "Loading…" : "Select candidate"} />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {candidates.length === 0 && !loadingCandidates && (
-                      <SelectItem value="none" disabled>No candidates found</SelectItem>
-                    )}
-                    {candidates.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.fullNameEn}
-                        <span className="ml-2 text-xs text-muted-foreground font-mono">{c.candidateCode}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Group Name</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g. Batch A – Makkah Region" className="bg-muted/30 border-border" {...field} />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )} />
@@ -214,23 +196,14 @@ function ScheduleInterviewDialog({
               )} />
             </div>
 
-            {/* Type & Duration */}
+            {/* Venue Name & Duration */}
             <div className="grid grid-cols-2 gap-3">
-              <FormField control={form.control} name="type" render={({ field }) => (
+              <FormField control={form.control} name="venueName" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Interview Type</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger className="bg-muted/30 border-border">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="video">Video Call</SelectItem>
-                      <SelectItem value="phone">Phone Call</SelectItem>
-                      <SelectItem value="in_person">In Person</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Venue Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. Riyadh Main Hall" className="bg-muted/30 border-border" {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -256,18 +229,16 @@ function ScheduleInterviewDialog({
               )} />
             </div>
 
-            {/* Meeting URL (only for video) */}
-            {watchType === "video" && (
-              <FormField control={form.control} name="meetingUrl" render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Meeting URL</FormLabel>
-                  <FormControl>
-                    <Input placeholder="https://meet.google.com/..." className="bg-muted/30 border-border" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-            )}
+            {/* Google Location */}
+            <FormField control={form.control} name="googleLocation" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Google Location</FormLabel>
+                <FormControl>
+                  <Input placeholder="https://maps.google.com/..." className="bg-muted/30 border-border" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
 
             {/* Notes */}
             <FormField control={form.control} name="notes" render={({ field }) => (
