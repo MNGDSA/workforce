@@ -11,14 +11,13 @@ import {
   CheckCircle2, 
   AlertTriangle,
   Mail,
-  Zap,
   Globe
 } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-type IntegrationType = "goinfinito" | "smtp" | "slack";
+type IntegrationType = "goinfinito" | "smtp";
 
 export default function NotificationsPage() {
   const { toast } = useToast();
@@ -141,19 +140,6 @@ export default function NotificationsPage() {
                   </CardHeader>
                 </Card>
 
-                <Card className="bg-card border-border opacity-60 cursor-not-allowed hover:opacity-100 transition-opacity">
-                  <CardHeader className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-md bg-indigo-500 flex items-center justify-center text-white">
-                        <Zap className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-base text-white">Slack Webhook</CardTitle>
-                        <CardDescription className="text-xs">Not Configured</CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                </Card>
               </div>
 
               {/* Configuration Panel */}
