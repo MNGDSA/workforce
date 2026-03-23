@@ -16,6 +16,7 @@ import {
   Workflow,
   Minimize,
   BookOpen,
+  Shield,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -43,6 +44,7 @@ const navItems = [
   { href: "/talent", icon: Search, label: "Talent" },
   { href: "/automation", icon: Workflow, label: "Rules & Automation" },
   { href: "/notifications", icon: Bell, label: "Notification Center" },
+  { href: "/roles", icon: Shield, label: "Roles & Access" },
   { href: "/documentation", icon: BookOpen, label: "Documentation" },
   { href: "/settings", icon: Settings, label: "System & Settings" },
 ];

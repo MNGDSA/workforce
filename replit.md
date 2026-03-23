@@ -28,6 +28,7 @@ A full-stack seasonal job hiring management platform built for Saudi Arabia oper
 │   │   ├── talent.tsx            ← Real API + pagination (50/page)
 │   │   ├── seasons.tsx           ← Real API + CRUD actions
 │   │   ├── job-posting.tsx       ← Real API + CRUD actions
+│   │   ├── roles-access.tsx      ← Business units, users, permissions matrix
 │   │   ├── automation.tsx        ← Real API + toggle rules
 │   │   ├── interviews.tsx        ← UI prototype
 │   │   ├── workforce.tsx         ← UI prototype

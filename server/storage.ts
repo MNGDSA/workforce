@@ -9,6 +9,7 @@ import {
   workforce,
   automationRules,
   notifications,
+  businessUnits,
   type User,
   type InsertUser,
   type Candidate,
@@ -27,6 +28,8 @@ import {
   type InsertAutomationRule,
   type Notification,
   type InsertNotification,
+  type BusinessUnit,
+  type InsertBusinessUnit,
   type CandidateQuery,
 } from "@shared/schema";
 import { eq, and, or, ilike, desc, asc, count, sql, inArray } from "drizzle-orm";
@@ -95,6 +98,15 @@ export interface IStorage {
   createNotification(notification: InsertNotification): Promise<Notification>;
   markNotificationRead(id: string): Promise<boolean>;
   getUnreadCount(recipientId: string): Promise<number>;
+
+  // Business Units
+  getBusinessUnits(): Promise<BusinessUnit[]>;
+  getBusinessUnit(id: string): Promise<BusinessUnit | undefined>;
+  createBusinessUnit(data: InsertBusinessUnit): Promise<BusinessUnit>;
+  updateBusinessUnit(id: string, data: Partial<InsertBusinessUnit>): Promise<BusinessUnit | undefined>;
+
+  // Users (admin management)
+  listUsers(): Promise<User[]>;
 
   // Dashboard
   getDashboardStats(): Promise<{
@@ -538,6 +550,31 @@ export class DatabaseStorage implements IStorage {
         appliedAt: r.appliedAt,
       })),
     };
+  }
+
+  // ─── Business Units ──────────────────────────────────────────────────────────
+  async getBusinessUnits(): Promise<BusinessUnit[]> {
+    return db.select().from(businessUnits).orderBy(asc(businessUnits.name));
+  }
+
+  async getBusinessUnit(id: string): Promise<BusinessUnit | undefined> {
+    const [bu] = await db.select().from(businessUnits).where(eq(businessUnits.id, id));
+    return bu;
+  }
+
+  async createBusinessUnit(data: InsertBusinessUnit): Promise<BusinessUnit> {
+    const [bu] = await db.insert(businessUnits).values(data).returning();
+    return bu;
+  }
+
+  async updateBusinessUnit(id: string, data: Partial<InsertBusinessUnit>): Promise<BusinessUnit | undefined> {
+    const [bu] = await db.update(businessUnits).set(data).where(eq(businessUnits.id, id)).returning();
+    return bu;
+  }
+
+  // ─── Users list (for admin management) ──────────────────────────────────────
+  async listUsers(): Promise<User[]> {
+    return db.select().from(users).orderBy(asc(users.fullName));
   }
 }
 

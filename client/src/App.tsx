@@ -15,6 +15,7 @@ import InterviewsPage from "@/pages/interviews";
 import JobPostingPage from "@/pages/job-posting";
 import AutomationPage from "@/pages/automation";
 import SettingsPage from "@/pages/settings";
+import RolesAccessPage from "@/pages/roles-access";
 import DocumentationPage from "@/pages/documentation";
 
 function Router() {
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/interviews" component={InterviewsPage} />
       <Route path="/automation" component={AutomationPage} />
       <Route path="/notifications" component={NotificationsPage} />
+      <Route path="/roles" component={RolesAccessPage} />
       <Route path="/settings" component={SettingsPage} />
       <Route path="/documentation" component={DocumentationPage} />
       <Route path="/candidate-portal" component={CandidatePortal} />

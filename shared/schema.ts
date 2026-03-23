@@ -87,6 +87,23 @@ export const userRoleEnum = pgEnum("user_role", [
   "candidate",
 ]);
 
+// ─── Business Units ─────────────────────────────────────────────────────────
+export const businessUnits = pgTable(
+  "business_units",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    name: text("name").notNull(),
+    code: varchar("code", { length: 20 }).notNull().unique(),
+    description: text("description"),
+    contactEmail: text("contact_email"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    codeIdx: uniqueIndex("business_units_code_idx").on(t.code),
+  })
+);
+
 // ─── Users (auth + admin staff) ────────────────────────────────────────────
 export const users = pgTable(
   "users",
@@ -100,6 +117,7 @@ export const users = pgTable(
     phone: text("phone"),
     nationalId: varchar("national_id", { length: 20 }),
     avatarUrl: text("avatar_url"),
+    businessUnitId: varchar("business_unit_id").references(() => businessUnits.id, { onDelete: "set null" }),
     isActive: boolean("is_active").notNull().default(true),
     lastLogin: timestamp("last_login"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
@@ -224,6 +242,7 @@ export const jobPostings = pgTable(
     status: jobStatusEnum("status").notNull().default("draft"),
     seasonId: varchar("season_id").references(() => seasons.id),
     postedBy: varchar("posted_by").references(() => users.id),
+    businessUnitId: varchar("business_unit_id").references(() => businessUnits.id, { onDelete: "set null" }),
     deadline: text("deadline"),
     skills: text("skills").array(),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
@@ -421,8 +440,15 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
   createdAt: true,
 });
 
+export const insertBusinessUnitSchema = createInsertSchema(businessUnits).omit({
+  id: true,
+  createdAt: true,
+});
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type InsertBusinessUnit = z.infer<typeof insertBusinessUnitSchema>;
+export type BusinessUnit = typeof businessUnits.$inferSelect;
 export type User = typeof users.$inferSelect;
 
 export type InsertCandidate = z.infer<typeof insertCandidateSchema>;

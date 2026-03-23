@@ -12,6 +12,7 @@ import {
   insertAutomationRuleSchema,
   insertNotificationSchema,
   insertUserSchema,
+  insertBusinessUnitSchema,
   candidateQuerySchema,
 } from "@shared/schema";
 import { z } from "zod";
@@ -547,6 +548,68 @@ export async function registerRoutes(
     try {
       const pulls = await listRepoPullRequests(req.params.owner, req.params.repo);
       return res.json(pulls);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // ─── Business Units ────────────────────────────────────────────────────────
+  app.get("/api/business-units", async (_req: Request, res: Response) => {
+    try {
+      return res.json(await storage.getBusinessUnits());
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/business-units", async (req: Request, res: Response) => {
+    try {
+      const data = insertBusinessUnitSchema.parse(req.body);
+      const bu = await storage.createBusinessUnit(data);
+      return res.status(201).json(bu);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.patch("/api/business-units/:id", async (req: Request, res: Response) => {
+    try {
+      const data = insertBusinessUnitSchema.partial().parse(req.body);
+      const bu = await storage.updateBusinessUnit(req.params.id, data);
+      if (!bu) return res.status(404).json({ message: "Business unit not found" });
+      return res.json(bu);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // ─── Users management (admin) ──────────────────────────────────────────────
+  app.get("/api/users", async (_req: Request, res: Response) => {
+    try {
+      const userList = await storage.listUsers();
+      return res.json(userList.map((u) => ({ ...u, password: undefined })));
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/users", async (req: Request, res: Response) => {
+    try {
+      const data = insertUserSchema.parse(req.body);
+      const hashed = await bcrypt.hash(data.password, 10);
+      const user = await storage.createUser({ ...data, password: hashed });
+      return res.status(201).json({ ...user, password: undefined });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.patch("/api/users/:id", async (req: Request, res: Response) => {
+    try {
+      const data = insertUserSchema.partial().omit({ password: true }).parse(req.body);
+      const user = await storage.updateUser(req.params.id, data);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      return res.json({ ...user, password: undefined });
     } catch (err) {
       return handleError(res, err);
     }
