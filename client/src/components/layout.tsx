@@ -36,7 +36,7 @@ interface LayoutProps {
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/seasons", icon: CalendarRange, label: "Seasons" },
+  { href: "/seasons", icon: CalendarRange, label: "Seasons & SMP" },
   { href: "/job-posting", icon: Briefcase, label: "Job Applications" },
   { href: "/interviews", icon: Minimize, label: "Interview Calls" },
   { href: "/workforce", icon: Users, label: "Workforce" },
