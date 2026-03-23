@@ -315,14 +315,11 @@ function InfoTooltip({ text }: { text: string }) {
 
 const smpSchema = z.object({
   contractNumber: z.string().min(1, "Contract number is required"),
-  seasonId: z.string().optional(),
   contractorName: z.string().min(2, "Contractor name is required"),
   contractType: z.enum(["fixed_term", "open_ended", "project_based"]),
   region: z.string().min(1, "Region is required"),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
-  numberOfWorkers: z.coerce.number().int().min(1, "Must be at least 1"),
-  contractValue: z.coerce.number().min(0).optional(),
   notes: z.string().optional(),
 });
 
@@ -331,11 +328,9 @@ type SMPForm = z.infer<typeof smpSchema>;
 function CreateSMPContractDialog({
   open,
   onOpenChange,
-  seasons,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  seasons: Season[];
 }) {
   const { toast } = useToast();
 
@@ -343,14 +338,11 @@ function CreateSMPContractDialog({
     resolver: zodResolver(smpSchema),
     defaultValues: {
       contractNumber: `SMP-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`,
-      seasonId: "none",
       contractorName: "",
       contractType: "fixed_term",
       region: "",
       startDate: "",
       endDate: "",
-      numberOfWorkers: 1,
-      contractValue: undefined,
       notes: "",
     },
   });
@@ -406,42 +398,21 @@ function CreateSMPContractDialog({
               </div>
             </div>
 
-            {/* Contractor & Season */}
+            {/* Contractor */}
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 border-b border-border pb-2">Contractor & Season</p>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField control={form.control} name="contractorName" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-white text-sm">Contractor Name</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="e.g. Al-Rashidi Services Co." className="bg-muted/30 border-border" data-testid="input-smp-contractor" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="seasonId" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-white text-sm">Linked Season</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="bg-muted/30 border-border" data-testid="select-smp-season">
-                          <SelectValue placeholder="Select season (optional)" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {seasons.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-              </div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 border-b border-border pb-2">Contractor</p>
+              <FormField control={form.control} name="contractorName" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-white text-sm">Contractor Name</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="e.g. Al-Rashidi Services Co." className="bg-muted/30 border-border" data-testid="input-smp-contractor" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
             </div>
 
-            {/* Scope */}
+            {/* Scope & Terms */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 border-b border-border pb-2">Scope & Terms</p>
               <div className="grid grid-cols-2 gap-4">
@@ -463,15 +434,7 @@ function CreateSMPContractDialog({
                     <FormMessage />
                   </FormItem>
                 )} />
-                <FormField control={form.control} name="numberOfWorkers" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-white text-sm">Number of Workers</FormLabel>
-                    <FormControl>
-                      <Input {...field} type="number" min={1} className="bg-muted/30 border-border" data-testid="input-smp-workers" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
+                <div />
                 <FormField control={form.control} name="startDate" render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-white text-sm">Start Date</FormLabel>
@@ -491,20 +454,6 @@ function CreateSMPContractDialog({
                   </FormItem>
                 )} />
               </div>
-            </div>
-
-            {/* Financials */}
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 border-b border-border pb-2">Financials</p>
-              <FormField control={form.control} name="contractValue" render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-white text-sm">Contract Value (SAR)</FormLabel>
-                  <FormControl>
-                    <Input {...field} type="number" min={0} placeholder="0.00" className="bg-muted/30 border-border" data-testid="input-smp-value" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
             </div>
 
             {/* Notes */}
@@ -593,7 +542,7 @@ export default function SeasonsPage() {
         </div>
 
         <CreateSeasonDialog open={createOpen} onOpenChange={setCreateOpen} />
-        <CreateSMPContractDialog open={smpOpen} onOpenChange={setSmpOpen} seasons={seasons} />
+        <CreateSMPContractDialog open={smpOpen} onOpenChange={setSmpOpen} />
 
         {/* Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
