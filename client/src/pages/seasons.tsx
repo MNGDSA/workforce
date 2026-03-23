@@ -19,7 +19,16 @@ import {
   Plus,
   Loader2,
   Info,
+  FileDown,
+  Upload,
+  ChevronRight,
+  FileSpreadsheet,
+  Trash2,
+  CheckCircle2,
 } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useRef as useFileRef } from "react";
 import {
   Table,
   TableBody,
@@ -485,12 +494,304 @@ function CreateSMPContractDialog({
   );
 }
 
+// ─── SMP Contract Sheet ──────────────────────────────────────────────────────
+type CandidateRow = {
+  fullNameEn: string;
+  fullNameAr: string;
+  nationalId: string;
+  phone: string;
+  email: string;
+  city: string;
+  nationality: string;
+  jobTitle: string;
+  notes: string;
+};
+
+const TEMPLATE_HEADERS = [
+  "Full Name (EN)",
+  "Full Name (AR)",
+  "National ID",
+  "Phone",
+  "Email",
+  "City",
+  "Nationality",
+  "Job Title",
+  "Notes",
+];
+
+const TEMPLATE_ROWS: string[][] = [
+  ["Ahmed Al-Ghamdi", "أحمد الغامدي", "1012345678", "0501234567", "ahmed@example.com", "Makkah", "Saudi", "Crowd Management Officer", ""],
+  ["Sara Al-Zahrani", "سارة الزهراني", "1087654321", "0557654321", "sara@example.com", "Jeddah", "Saudi", "Medical Support Technician", "BLS certified"],
+];
+
+function parseCSV(text: string): CandidateRow[] {
+  const lines = text.trim().split("\n").filter(Boolean);
+  if (lines.length < 2) return [];
+  const rows: CandidateRow[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(",").map((c) => c.replace(/^"|"$/g, "").trim());
+    rows.push({
+      fullNameEn:  cols[0] ?? "",
+      fullNameAr:  cols[1] ?? "",
+      nationalId:  cols[2] ?? "",
+      phone:       cols[3] ?? "",
+      email:       cols[4] ?? "",
+      city:        cols[5] ?? "",
+      nationality: cols[6] ?? "",
+      jobTitle:    cols[7] ?? "",
+      notes:       cols[8] ?? "",
+    });
+  }
+  return rows.filter((r) => r.fullNameEn || r.nationalId);
+}
+
+function downloadCSV(filename: string, headers: string[], rows: string[][]) {
+  const csv = [headers, ...rows]
+    .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function SMPContractSheet({
+  contract,
+  open,
+  onOpenChange,
+  candidates,
+  onCandidatesChange,
+}: {
+  contract: SMPForm | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  candidates: CandidateRow[];
+  onCandidatesChange: (rows: CandidateRow[]) => void;
+}) {
+  const { toast } = useToast();
+  const fileInputRef = useFileRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  if (!contract) return null;
+
+  function handleDownloadTemplate() {
+    downloadCSV("smp-candidates-template.csv", TEMPLATE_HEADERS, TEMPLATE_ROWS);
+    toast({ title: "Template downloaded", description: "Fill in the template and upload it below." });
+  }
+
+  function handleExport() {
+    if (candidates.length === 0) return;
+    const rows = candidates.map((c) => [
+      c.fullNameEn, c.fullNameAr, c.nationalId, c.phone,
+      c.email, c.city, c.nationality, c.jobTitle, c.notes,
+    ]);
+    downloadCSV(`smp-candidates-${contract.contractNumber}.csv`, TEMPLATE_HEADERS, rows);
+    toast({ title: "Export ready", description: `${candidates.length} candidates exported.` });
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const parsed = parseCSV(text);
+      if (parsed.length === 0) {
+        toast({ title: "No data found", description: "Make sure the file uses the correct template format.", variant: "destructive" });
+      } else {
+        onCandidatesChange([...candidates, ...parsed]);
+        toast({ title: `${parsed.length} candidates uploaded`, description: `Added to contract ${contract.contractNumber}.` });
+      }
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+    reader.readAsText(file);
+  }
+
+  function removeCandidate(idx: number) {
+    onCandidatesChange(candidates.filter((_, i) => i !== idx));
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full sm:max-w-3xl bg-card border-border flex flex-col p-0 overflow-hidden">
+        {/* Header */}
+        <SheetHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <SheetTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
+                <code className="text-sm font-mono bg-primary/10 text-primary px-2 py-1 rounded">{contract.contractNumber}</code>
+                <span>{contract.contractorName}</span>
+              </SheetTitle>
+              <SheetDescription className="text-muted-foreground mt-1.5 flex items-center gap-3 flex-wrap text-xs">
+                <span className="capitalize">{contract.contractType.replace(/_/g, " ")}</span>
+                <span>·</span>
+                <span>{contract.region}</span>
+                <span>·</span>
+                <span>{contract.startDate} → {contract.endDate}</span>
+              </SheetDescription>
+            </div>
+          </div>
+
+          {/* Action bar */}
+          <div className="flex items-center gap-2 mt-4 flex-wrap">
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-border gap-1.5 text-xs"
+              onClick={handleDownloadTemplate}
+              data-testid="button-download-template"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-400" />
+              Download Template
+            </Button>
+
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-border gap-1.5 text-xs"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              data-testid="button-upload-candidates"
+            >
+              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              Upload Candidates
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-border gap-1.5 text-xs"
+              onClick={handleExport}
+              disabled={candidates.length === 0}
+              data-testid="button-export-candidates"
+            >
+              <FileDown className="h-3.5 w-3.5" />
+              Export Excel
+            </Button>
+
+            <div className="ml-auto flex items-center gap-1.5 text-sm">
+              <Users className="h-4 w-4 text-primary" />
+              <span className="text-white font-bold">{candidates.length}</span>
+              <span className="text-muted-foreground">candidate{candidates.length !== 1 ? "s" : ""}</span>
+            </div>
+          </div>
+        </SheetHeader>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto">
+          {candidates.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 text-center px-6">
+              <div
+                className="border-2 border-dashed border-border rounded-sm p-10 w-full max-w-sm cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+                data-testid="dropzone-upload"
+              >
+                <Upload className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
+                <p className="text-white font-medium mb-1">Upload candidate list</p>
+                <p className="text-muted-foreground text-sm mb-4">CSV format · Use the template above</p>
+                <Button size="sm" variant="outline" className="border-border text-xs gap-1.5">
+                  <Upload className="h-3.5 w-3.5" />
+                  Choose File
+                </Button>
+              </div>
+              <p className="text-muted-foreground/50 text-xs mt-4">
+                No candidates yet. Download the template, fill it in, then upload.
+              </p>
+            </div>
+          ) : (
+            <div>
+              {/* Stats strip */}
+              <div className="flex items-center gap-6 px-6 py-3 border-b border-border bg-muted/10 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                  {candidates.length} total candidates
+                </span>
+                <span>{[...new Set(candidates.map((c) => c.city))].filter(Boolean).length} cities</span>
+                <span>{[...new Set(candidates.map((c) => c.jobTitle))].filter(Boolean).length} job titles</span>
+              </div>
+
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left">
+                    <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Candidate</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">ID / Phone</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Job Title</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">City</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {candidates.map((c, idx) => (
+                    <tr key={idx} className="hover:bg-muted/20 transition-colors" data-testid={`row-smp-candidate-${idx}`}>
+                      <td className="px-6 py-2.5">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-7 w-7 border border-border shrink-0">
+                            <AvatarFallback className="bg-primary/20 text-primary text-[10px]">
+                              {c.fullNameEn.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <div className="font-medium text-white truncate text-sm">{c.fullNameEn || "—"}</div>
+                            {c.fullNameAr && <div className="text-xs text-muted-foreground truncate" dir="rtl">{c.fullNameAr}</div>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 hidden md:table-cell">
+                        <div className="text-xs text-muted-foreground space-y-0.5">
+                          {c.nationalId && <div className="font-mono">{c.nationalId}</div>}
+                          {c.phone && <div>{c.phone}</div>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 hidden lg:table-cell">
+                        <span className="text-xs text-muted-foreground">{c.jobTitle || "—"}</span>
+                      </td>
+                      <td className="px-4 py-2.5 hidden md:table-cell">
+                        <span className="text-xs text-muted-foreground">{c.city || "—"}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-red-400"
+                          onClick={() => removeCandidate(idx)}
+                          data-testid={`button-remove-candidate-${idx}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export default function SeasonsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [smpOpen, setSmpOpen] = useState(false);
   const [smpContracts, setSmpContracts] = useState<SMPForm[]>([]);
+  const [selectedSmp, setSelectedSmp] = useState<SMPForm | null>(null);
+  const [smpSheetOpen, setSmpSheetOpen] = useState(false);
+  const [smpCandidates, setSmpCandidates] = useState<Record<string, CandidateRow[]>>({});
 
   const { data: seasons = [], isLoading } = useQuery<Season[]>({
     queryKey: ["/api/seasons"],
@@ -546,6 +847,16 @@ export default function SeasonsPage() {
 
         <CreateSeasonDialog open={createOpen} onOpenChange={setCreateOpen} />
         <CreateSMPContractDialog open={smpOpen} onOpenChange={setSmpOpen} onCreated={(data) => setSmpContracts((prev) => [...prev, data])} />
+        <SMPContractSheet
+          contract={selectedSmp}
+          open={smpSheetOpen}
+          onOpenChange={setSmpSheetOpen}
+          candidates={selectedSmp ? (smpCandidates[selectedSmp.contractNumber] ?? []) : []}
+          onCandidatesChange={(rows) => {
+            if (!selectedSmp) return;
+            setSmpCandidates((prev) => ({ ...prev, [selectedSmp.contractNumber]: rows }));
+          }}
+        />
 
         {/* Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -760,11 +1071,22 @@ export default function SeasonsPage() {
                 </TableHeader>
                 <TableBody>
                   {smpContracts.map((contract, idx) => (
-                    <TableRow key={idx} className="border-border hover:bg-muted/20" data-testid={`row-smp-${idx}`}>
+                    <TableRow
+                      key={idx}
+                      className="border-border hover:bg-muted/20 cursor-pointer"
+                      data-testid={`row-smp-${idx}`}
+                      onClick={() => { setSelectedSmp(contract); setSmpSheetOpen(true); }}
+                    >
                       <TableCell>
-                        <code className="font-mono text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-                          {contract.contractNumber}
-                        </code>
+                        <div className="flex items-center gap-2">
+                          <code className="font-mono text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                            {contract.contractNumber}
+                          </code>
+                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {(smpCandidates[contract.contractNumber]?.length ?? 0)} candidates
+                        </div>
                       </TableCell>
                       <TableCell>
                         <span className="text-white font-medium text-sm">{contract.contractorName}</span>
