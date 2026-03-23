@@ -68,7 +68,7 @@ import {
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import type { Season } from "@shared/schema";
+import type { Season, SMPContract } from "@shared/schema";
 
 const SAUDI_REGIONS = [
   "Riyadh",
@@ -337,13 +337,26 @@ type SMPForm = z.infer<typeof smpSchema>;
 function CreateSMPContractDialog({
   open,
   onOpenChange,
-  onCreated,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onCreated?: (data: SMPForm) => void;
 }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const createContract = useMutation({
+    mutationFn: (data: SMPForm) =>
+      apiRequest("POST", "/api/smp-contracts", data).then((r) => r.json()),
+    onSuccess: (created: SMPContract) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/smp-contracts"] });
+      toast({ title: "SMP Contract created", description: `Contract ${created.contractNumber} has been created.` });
+      form.reset();
+      onOpenChange(false);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create contract.", variant: "destructive" });
+    },
+  });
 
   const form = useForm<SMPForm>({
     resolver: zodResolver(smpSchema),
@@ -359,10 +372,7 @@ function CreateSMPContractDialog({
   });
 
   function onSubmit(data: SMPForm) {
-    toast({ title: "SMP Contract created", description: `Contract ${data.contractNumber} has been created.` });
-    onCreated?.(data);
-    form.reset();
-    onOpenChange(false);
+    createContract.mutate(data);
   }
 
   return (
@@ -482,8 +492,8 @@ function CreateSMPContractDialog({
               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground">
                 Cancel
               </Button>
-              <Button type="submit" className="bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs" data-testid="button-submit-smp">
-                <Plus className="mr-2 h-4 w-4" />
+              <Button type="submit" disabled={createContract.isPending} className="bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs" data-testid="button-submit-smp">
+                {createContract.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
                 Create Contract
               </Button>
             </DialogFooter>
@@ -585,20 +595,26 @@ function SMPContractSheet({
   contract,
   open,
   onOpenChange,
-  candidates,
-  onCandidatesChange,
 }: {
-  contract: SMPForm | null;
+  contract: SMPContract | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  candidates: CandidateRow[];
-  onCandidatesChange: (rows: CandidateRow[]) => void;
 }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
+  const patchEmployees = useMutation({
+    mutationFn: (rows: CandidateRow[]) =>
+      apiRequest("PATCH", `/api/smp-contracts/${contract!.id}`, { employees: rows }).then((r) => r.json()),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/smp-contracts"] }),
+    onError: () => toast({ title: "Error", description: "Failed to save employees.", variant: "destructive" }),
+  });
+
   if (!contract) return null;
+
+  const candidates: CandidateRow[] = (contract.employees as CandidateRow[] | null) ?? [];
 
   function handleDownloadTemplate() {
     downloadCSV("smp-candidates-template.csv", TEMPLATE_HEADERS, TEMPLATE_ROWS);
@@ -631,7 +647,7 @@ function SMPContractSheet({
       if (parsed.length === 0) {
         toast({ title: "No data found", description: "Make sure the file matches the template format.", variant: "destructive" });
       } else {
-        onCandidatesChange([...candidates, ...parsed]);
+        patchEmployees.mutate([...candidates, ...parsed]);
         toast({ title: `${parsed.length} candidates uploaded`, description: `Added to contract ${contract.contractNumber}.` });
       }
       setUploading(false);
@@ -645,7 +661,7 @@ function SMPContractSheet({
   }
 
   function removeCandidate(idx: number) {
-    onCandidatesChange(candidates.filter((_, i) => i !== idx));
+    patchEmployees.mutate(candidates.filter((_, i) => i !== idx));
   }
 
   return (
@@ -820,14 +836,17 @@ export default function SeasonsPage() {
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [smpOpen, setSmpOpen] = useState(false);
-  const [smpContracts, setSmpContracts] = useState<SMPForm[]>([]);
-  const [selectedSmp, setSelectedSmp] = useState<SMPForm | null>(null);
+  const [selectedSmp, setSelectedSmp] = useState<SMPContract | null>(null);
   const [smpSheetOpen, setSmpSheetOpen] = useState(false);
-  const [smpCandidates, setSmpCandidates] = useState<Record<string, CandidateRow[]>>({});
 
   const { data: seasons = [], isLoading } = useQuery<Season[]>({
     queryKey: ["/api/seasons"],
     queryFn: () => apiRequest("GET", "/api/seasons").then((r) => r.json()),
+  });
+
+  const { data: smpContracts = [] } = useQuery<SMPContract[]>({
+    queryKey: ["/api/smp-contracts"],
+    queryFn: () => apiRequest("GET", "/api/smp-contracts").then((r) => r.json()),
   });
 
   const updateStatus = useMutation({
@@ -878,16 +897,11 @@ export default function SeasonsPage() {
         </div>
 
         <CreateSeasonDialog open={createOpen} onOpenChange={setCreateOpen} />
-        <CreateSMPContractDialog open={smpOpen} onOpenChange={setSmpOpen} onCreated={(data) => setSmpContracts((prev) => [...prev, data])} />
+        <CreateSMPContractDialog open={smpOpen} onOpenChange={setSmpOpen} />
         <SMPContractSheet
-          contract={selectedSmp}
+          contract={selectedSmp ? (smpContracts.find((c) => c.id === selectedSmp.id) ?? selectedSmp) : null}
           open={smpSheetOpen}
           onOpenChange={setSmpSheetOpen}
-          candidates={selectedSmp ? (smpCandidates[selectedSmp.contractNumber] ?? []) : []}
-          onCandidatesChange={(rows) => {
-            if (!selectedSmp) return;
-            setSmpCandidates((prev) => ({ ...prev, [selectedSmp.contractNumber]: rows }));
-          }}
         />
 
         {/* Metrics */}
@@ -1098,11 +1112,11 @@ export default function SeasonsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {smpContracts.map((contract, idx) => (
+                  {smpContracts.map((contract) => (
                     <TableRow
-                      key={idx}
+                      key={contract.id}
                       className="border-border hover:bg-muted/20 cursor-pointer"
-                      data-testid={`row-smp-${idx}`}
+                      data-testid={`row-smp-${contract.id}`}
                       onClick={() => { setSelectedSmp(contract); setSmpSheetOpen(true); }}
                     >
                       <TableCell>
@@ -1113,7 +1127,7 @@ export default function SeasonsPage() {
                           <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5">
-                          {(smpCandidates[contract.contractNumber]?.length ?? 0)} employees
+                          {((contract.employees as unknown[]) ?? []).length} employees
                         </div>
                       </TableCell>
                       <TableCell>

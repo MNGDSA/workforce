@@ -10,6 +10,7 @@ import {
   automationRules,
   notifications,
   businessUnits,
+  smpContracts,
   type User,
   type InsertUser,
   type Candidate,
@@ -30,6 +31,8 @@ import {
   type InsertNotification,
   type BusinessUnit,
   type InsertBusinessUnit,
+  type SMPContract,
+  type InsertSMPContract,
   type CandidateQuery,
 } from "@shared/schema";
 import { eq, and, or, ilike, desc, asc, count, sql, inArray } from "drizzle-orm";
@@ -107,6 +110,13 @@ export interface IStorage {
 
   // Users (admin management)
   listUsers(): Promise<User[]>;
+
+  // SMP Contracts
+  getSMPContracts(): Promise<SMPContract[]>;
+  getSMPContract(id: string): Promise<SMPContract | undefined>;
+  createSMPContract(data: InsertSMPContract): Promise<SMPContract>;
+  updateSMPContract(id: string, data: Partial<InsertSMPContract>): Promise<SMPContract | undefined>;
+  deleteSMPContract(id: string): Promise<boolean>;
 
   // Dashboard
   getDashboardStats(): Promise<{
@@ -575,6 +585,35 @@ export class DatabaseStorage implements IStorage {
   // ─── Users list (for admin management) ──────────────────────────────────────
   async listUsers(): Promise<User[]> {
     return db.select().from(users).orderBy(asc(users.fullName));
+  }
+
+  // ─── SMP Contracts ────────────────────────────────────────────────────────
+  async getSMPContracts(): Promise<SMPContract[]> {
+    return db.select().from(smpContracts).orderBy(desc(smpContracts.createdAt));
+  }
+
+  async getSMPContract(id: string): Promise<SMPContract | undefined> {
+    const [c] = await db.select().from(smpContracts).where(eq(smpContracts.id, id));
+    return c;
+  }
+
+  async createSMPContract(data: InsertSMPContract): Promise<SMPContract> {
+    const [c] = await db.insert(smpContracts).values(data).returning();
+    return c;
+  }
+
+  async updateSMPContract(id: string, data: Partial<InsertSMPContract>): Promise<SMPContract | undefined> {
+    const [c] = await db
+      .update(smpContracts)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(smpContracts.id, id))
+      .returning();
+    return c;
+  }
+
+  async deleteSMPContract(id: string): Promise<boolean> {
+    const result = await db.delete(smpContracts).where(eq(smpContracts.id, id)).returning();
+    return result.length > 0;
   }
 }
 

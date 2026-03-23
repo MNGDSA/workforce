@@ -13,6 +13,7 @@ import {
   insertNotificationSchema,
   insertUserSchema,
   insertBusinessUnitSchema,
+  insertSMPContractSchema,
   candidateQuerySchema,
 } from "@shared/schema";
 import { z } from "zod";
@@ -610,6 +611,57 @@ export async function registerRoutes(
       const user = await storage.updateUser(req.params.id, data);
       if (!user) return res.status(404).json({ message: "User not found" });
       return res.json({ ...user, password: undefined });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // ─── SMP Contracts ──────────────────────────────────────────────────────────
+  app.get("/api/smp-contracts", async (_req: Request, res: Response) => {
+    try {
+      const contracts = await storage.getSMPContracts();
+      return res.json(contracts);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.get("/api/smp-contracts/:id", async (req: Request, res: Response) => {
+    try {
+      const contract = await storage.getSMPContract(req.params.id);
+      if (!contract) return res.status(404).json({ message: "Contract not found" });
+      return res.json(contract);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/smp-contracts", async (req: Request, res: Response) => {
+    try {
+      const data = insertSMPContractSchema.parse(req.body);
+      const contract = await storage.createSMPContract(data);
+      return res.status(201).json(contract);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.patch("/api/smp-contracts/:id", async (req: Request, res: Response) => {
+    try {
+      const data = insertSMPContractSchema.partial().parse(req.body);
+      const contract = await storage.updateSMPContract(req.params.id, data);
+      if (!contract) return res.status(404).json({ message: "Contract not found" });
+      return res.json(contract);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.delete("/api/smp-contracts/:id", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteSMPContract(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Contract not found" });
+      return res.status(204).send();
     } catch (err) {
       return handleError(res, err);
     }

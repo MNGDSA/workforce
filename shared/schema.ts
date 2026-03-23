@@ -223,6 +223,29 @@ export const seasons = pgTable(
   })
 );
 
+// ─── SMP Contracts ──────────────────────────────────────────────────────────
+export const smpContractTypeEnum = pgEnum("smp_contract_type", ["fixed_term", "open_ended", "project_based"]);
+
+export const smpContracts = pgTable(
+  "smp_contracts",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    contractNumber: text("contract_number").notNull().unique(),
+    contractorName: text("contractor_name").notNull(),
+    contractType: smpContractTypeEnum("contract_type").notNull().default("fixed_term"),
+    region: text("region").notNull(),
+    startDate: text("start_date").notNull(),
+    endDate: text("end_date").notNull(),
+    notes: text("notes"),
+    employees: jsonb("employees").default([]),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    contractNumberIdx: uniqueIndex("smp_contracts_number_idx").on(t.contractNumber),
+  })
+);
+
 // ─── Job Postings ───────────────────────────────────────────────────────────
 export const jobPostings = pgTable(
   "job_postings",
@@ -474,6 +497,14 @@ export type AutomationRule = typeof automationRules.$inferSelect;
 
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
+
+export const insertSMPContractSchema = createInsertSchema(smpContracts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertSMPContract = z.infer<typeof insertSMPContractSchema>;
+export type SMPContract = typeof smpContracts.$inferSelect;
 
 // ─── Query Params Types ─────────────────────────────────────────────────────
 export const candidateQuerySchema = z.object({
