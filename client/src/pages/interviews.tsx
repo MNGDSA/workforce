@@ -24,6 +24,16 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Form,
   FormField,
   FormItem,
@@ -473,6 +483,7 @@ function initials(name: string) {
 export default function InterviewsPage() {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [cancelPendingId, setCancelPendingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -712,8 +723,9 @@ export default function InterviewsPage() {
                               )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                className="text-destructive"
-                                onClick={() => updateStatus.mutate({ id: iv.id, status: "cancelled" })}
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => setCancelPendingId(iv.id)}
+                                data-testid={`button-cancel-interview-${iv.id}`}
                               >
                                 Cancel Interview
                               </DropdownMenuItem>
@@ -729,6 +741,38 @@ export default function InterviewsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={!!cancelPendingId} onOpenChange={(v) => { if (!v) setCancelPendingId(null); }}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white font-display">Cancel this interview?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              This will mark the interview as cancelled. The candidate will no longer be expected to attend.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="border-border text-muted-foreground hover:text-white"
+              data-testid="button-cancel-confirm-dismiss"
+            >
+              Keep Interview
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-cancel-confirm-proceed"
+              onClick={() => {
+                if (cancelPendingId) {
+                  updateStatus.mutate({ id: cancelPendingId, status: "cancelled" });
+                  setCancelPendingId(null);
+                }
+              }}
+            >
+              Yes, Cancel Interview
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }
