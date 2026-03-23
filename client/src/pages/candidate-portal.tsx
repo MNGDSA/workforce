@@ -212,7 +212,7 @@ export default function CandidatePortal() {
 
   const saveAndDownloadPdf = () => {
     if (sigCanvas.current?.isEmpty()) return;
-    const dataURL = sigCanvas.current?.getTrimmedCanvas().toDataURL("image/png");
+    const dataURL = sigCanvas.current?.getCanvas().toDataURL("image/png");
     const pdf = new jsPDF();
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(20);
