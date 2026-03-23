@@ -933,7 +933,7 @@ export default function JobPostingPage() {
               data-testid="button-create-job"
             >
               <Plus className="mr-2 h-4 w-4" />
-              Post Consolidated Application
+              Post Consolidated Job
             </Button>
           </div>
         </div>

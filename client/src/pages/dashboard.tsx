@@ -119,7 +119,7 @@ export default function Dashboard() {
               Post Job
             </Button>
             <Button className="h-9 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs">
-              Post Consolidated Application
+              Post Consolidated Job
             </Button>
           </div>
         </div>

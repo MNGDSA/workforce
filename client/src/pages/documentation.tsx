@@ -171,7 +171,7 @@ export default function DocumentationPage() {
               <SectionHeading icon={Briefcase} title="How to Post a Job" description="Create a single job or a consolidated seasonal application." />
               <div className="space-y-4">
                 <Step number={1} title="Go to Job Applications" description="Click 'Job Applications' in the left sidebar." />
-                <Step number={2} title="Choose posting type" description="Click 'Post Job' for a single standalone position, or 'Post Consolidated Application' to link multiple roles to a season." />
+                <Step number={2} title="Choose posting type" description="Click 'Post Job' for a single standalone position, or 'Post Consolidated Job' to link multiple roles to a season." />
                 <Step number={3} title="Fill in the form" description="Enter the job title, type (Full Time / Part Time), location, region, salary range, deadline, description, and requirements." />
                 <Step number={4} title="Set status" description="Choose 'Draft' to save without publishing, or 'Active' to publish immediately and accept applications." />
                 <Step number={5} title="Submit" description="Click 'Save Draft' or 'Publish Now'. The posting appears in the table immediately." />
