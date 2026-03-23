@@ -286,10 +286,232 @@ function CreateSeasonDialog({
   );
 }
 
+const smpSchema = z.object({
+  contractNumber: z.string().min(1, "Contract number is required"),
+  seasonId: z.string().optional(),
+  contractorName: z.string().min(2, "Contractor name is required"),
+  contractType: z.enum(["fixed_term", "open_ended", "project_based"]),
+  region: z.string().min(1, "Region is required"),
+  startDate: z.string().min(1, "Start date is required"),
+  endDate: z.string().min(1, "End date is required"),
+  numberOfWorkers: z.coerce.number().int().min(1, "Must be at least 1"),
+  contractValue: z.coerce.number().min(0).optional(),
+  notes: z.string().optional(),
+});
+
+type SMPForm = z.infer<typeof smpSchema>;
+
+function CreateSMPContractDialog({
+  open,
+  onOpenChange,
+  seasons,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  seasons: Season[];
+}) {
+  const { toast } = useToast();
+
+  const form = useForm<SMPForm>({
+    resolver: zodResolver(smpSchema),
+    defaultValues: {
+      contractNumber: `SMP-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`,
+      seasonId: "",
+      contractorName: "",
+      contractType: "fixed_term",
+      region: "",
+      startDate: "",
+      endDate: "",
+      numberOfWorkers: 1,
+      contractValue: undefined,
+      notes: "",
+    },
+  });
+
+  function onSubmit(data: SMPForm) {
+    console.log("SMP Contract:", data);
+    toast({ title: "SMP Contract created", description: `Contract ${data.contractNumber} has been created.` });
+    form.reset();
+    onOpenChange(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl bg-card border-border">
+        <DialogHeader>
+          <DialogTitle className="text-white font-display text-xl">Create SMP Contract</DialogTitle>
+          <p className="text-muted-foreground text-sm">Seasonal Manpower Plan — define contractor terms and workforce allocation.</p>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+
+            {/* Contract Identity */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 border-b border-border pb-2">Contract Identity</p>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="contractNumber" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-white text-sm">Contract Number</FormLabel>
+                    <FormControl>
+                      <Input {...field} className="bg-muted/30 border-border font-mono text-xs" data-testid="input-smp-contract-number" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="contractType" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-white text-sm">Contract Type</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="bg-muted/30 border-border" data-testid="select-smp-contract-type">
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="fixed_term">Fixed Term</SelectItem>
+                        <SelectItem value="open_ended">Open Ended</SelectItem>
+                        <SelectItem value="project_based">Project Based</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+            </div>
+
+            {/* Contractor & Season */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 border-b border-border pb-2">Contractor & Season</p>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="contractorName" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-white text-sm">Contractor Name</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g. Al-Rashidi Services Co." className="bg-muted/30 border-border" data-testid="input-smp-contractor" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="seasonId" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-white text-sm">Linked Season</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="bg-muted/30 border-border" data-testid="select-smp-season">
+                          <SelectValue placeholder="Select season (optional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {seasons.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+            </div>
+
+            {/* Scope */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 border-b border-border pb-2">Scope & Terms</p>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="region" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-white text-sm">Region</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="bg-muted/30 border-border" data-testid="select-smp-region">
+                          <SelectValue placeholder="Select region" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {SAUDI_REGIONS.map((r) => (
+                          <SelectItem key={r} value={r}>{r}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="numberOfWorkers" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-white text-sm">Number of Workers</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="number" min={1} className="bg-muted/30 border-border" data-testid="input-smp-workers" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="startDate" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-white text-sm">Start Date</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="date" className="bg-muted/30 border-border" data-testid="input-smp-start-date" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="endDate" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-white text-sm">End Date</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="date" className="bg-muted/30 border-border" data-testid="input-smp-end-date" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+            </div>
+
+            {/* Financials */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 border-b border-border pb-2">Financials</p>
+              <FormField control={form.control} name="contractValue" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-white text-sm">Contract Value (SAR)</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="number" min={0} placeholder="0.00" className="bg-muted/30 border-border" data-testid="input-smp-value" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
+
+            {/* Notes */}
+            <FormField control={form.control} name="notes" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-white text-sm">Notes & Remarks</FormLabel>
+                <FormControl>
+                  <Textarea {...field} placeholder="Any special terms, conditions, or remarks..." className="bg-muted/30 border-border resize-none" rows={3} data-testid="textarea-smp-notes" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground">
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs" data-testid="button-submit-smp">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Contract
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function SeasonsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [smpOpen, setSmpOpen] = useState(false);
 
   const { data: seasons = [], isLoading } = useQuery<Season[]>({
     queryKey: ["/api/seasons"],
@@ -322,17 +544,29 @@ export default function SeasonsPage() {
             <h1 className="text-3xl font-display font-bold text-white tracking-tight">Seasons Management</h1>
             <p className="text-muted-foreground mt-1">Plan and track your seasonal workforce requirements.</p>
           </div>
-          <Button
-            className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
-            data-testid="button-create-season"
-            onClick={() => setCreateOpen(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Create Season
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="h-11 border-primary/40 text-primary hover:bg-primary/10 font-bold uppercase tracking-wide text-xs"
+              data-testid="button-create-smp"
+              onClick={() => setSmpOpen(true)}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Create SMP Contract
+            </Button>
+            <Button
+              className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
+              data-testid="button-create-season"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Create Season
+            </Button>
+          </div>
         </div>
 
         <CreateSeasonDialog open={createOpen} onOpenChange={setCreateOpen} />
+        <CreateSMPContractDialog open={smpOpen} onOpenChange={setSmpOpen} seasons={seasons} />
 
         {/* Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
