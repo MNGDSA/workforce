@@ -123,6 +123,7 @@ function ScheduleInterviewDialog({
     queryKey: ["/api/jobs", "active"],
     queryFn: () => apiRequest("GET", "/api/jobs?status=active").then((r) => r.json()),
     enabled: open,
+    staleTime: 0,
   });
 
   const { data: jobApplications = [], isLoading: loadingApps } = useQuery<Application[]>({
