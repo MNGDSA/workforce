@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import DashboardLayout from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -544,6 +545,29 @@ function parseCSV(text: string): CandidateRow[] {
   return rows.filter((r) => r.fullNameEn || r.nationalId);
 }
 
+function parseExcel(buffer: ArrayBuffer): CandidateRow[] {
+  const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rawRows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "" });
+  if (rawRows.length < 2) return [];
+  const rows: CandidateRow[] = [];
+  for (let i = 1; i < rawRows.length; i++) {
+    const cols = rawRows[i].map((v) => String(v ?? "").trim());
+    rows.push({
+      fullNameEn:  cols[0] ?? "",
+      fullNameAr:  cols[1] ?? "",
+      nationalId:  cols[2] ?? "",
+      phone:       cols[3] ?? "",
+      email:       cols[4] ?? "",
+      city:        cols[5] ?? "",
+      nationality: cols[6] ?? "",
+      jobTitle:    cols[7] ?? "",
+      notes:       cols[8] ?? "",
+    });
+  }
+  return rows.filter((r) => r.fullNameEn || r.nationalId);
+}
+
 function downloadCSV(filename: string, headers: string[], rows: string[][]) {
   const csv = [headers, ...rows]
     .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
@@ -595,12 +619,17 @@ function SMPContractSheet({
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    const isExcel = /\.(xlsx|xls)$/i.test(file.name);
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const parsed = parseCSV(text);
+      let parsed: CandidateRow[] = [];
+      if (isExcel) {
+        parsed = parseExcel(ev.target?.result as ArrayBuffer);
+      } else {
+        parsed = parseCSV(ev.target?.result as string);
+      }
       if (parsed.length === 0) {
-        toast({ title: "No data found", description: "Make sure the file uses the correct template format.", variant: "destructive" });
+        toast({ title: "No data found", description: "Make sure the file matches the template format.", variant: "destructive" });
       } else {
         onCandidatesChange([...candidates, ...parsed]);
         toast({ title: `${parsed.length} candidates uploaded`, description: `Added to contract ${contract.contractNumber}.` });
@@ -608,7 +637,11 @@ function SMPContractSheet({
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     };
-    reader.readAsText(file);
+    if (isExcel) {
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.readAsText(file);
+    }
   }
 
   function removeCandidate(idx: number) {
@@ -663,7 +696,7 @@ function SMPContractSheet({
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv"
+              accept=".csv,.xlsx,.xls"
               className="hidden"
               onChange={handleFileChange}
             />
@@ -699,7 +732,7 @@ function SMPContractSheet({
               >
                 <Upload className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
                 <p className="text-white font-medium mb-1">Upload candidate list</p>
-                <p className="text-muted-foreground text-sm mb-4">CSV format · Use the template above</p>
+                <p className="text-muted-foreground text-sm mb-4">CSV or Excel format · Use the template above</p>
                 <Button size="sm" variant="outline" className="border-border text-xs gap-1.5">
                   <Upload className="h-3.5 w-3.5" />
                   Choose File
