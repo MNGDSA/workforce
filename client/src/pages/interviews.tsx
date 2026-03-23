@@ -747,8 +747,7 @@ export default function InterviewsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white font-display">Cancel this interview?</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              This will mark the interview as cancelled. The candidate will no longer be expected to attend.
-              This action cannot be undone.
+              This will mark the interview as cancelled. Candidates will receive a cancellation SMS and will no longer be expected to attend. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
