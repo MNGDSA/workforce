@@ -152,7 +152,7 @@ export default function DocumentationPage() {
                   { icon: Users, label: "Workforce", desc: "View active workforce placements. See who is hired, their season assignment, and shift coverage." },
                   { icon: Search, label: "Talent", desc: "Full candidate database with search, filters, and pagination. Supports 70,000+ candidates with fast server-side queries." },
                   { icon: Workflow, label: "Rules & Automation", desc: "Configure automated triggers — e.g. send SMS when a candidate applies, or flag incomplete profiles." },
-                  { icon: Bell, label: "Notification Center", desc: "Manage SMS integrations (Msegat, GoInfinito). Configure credentials and test connections." },
+                  { icon: Bell, label: "Notification Center", desc: "Manage SMS integrations (GoInfinito). Configure credentials and test connections." },
                   { icon: Settings, label: "System & Settings", desc: "System-level configuration, user management, and platform preferences." },
                 ].map(({ icon: Icon, label, desc }) => (
                   <div key={label} className="flex gap-3 p-3 rounded-sm bg-muted/20 border border-border/50">
@@ -273,7 +273,7 @@ export default function DocumentationPage() {
                     { layer: "Frontend", tech: "React 19 + Vite + TypeScript", detail: "Tailwind CSS v4, Shadcn/UI, TanStack Query v5, wouter routing" },
                     { layer: "Backend", tech: "Express.js + Node.js + TypeScript", detail: "REST API, bcryptjs auth, Zod validation" },
                     { layer: "Database", tech: "PostgreSQL + Drizzle ORM", detail: "drizzle-zod for schema validation, drizzle-kit for migrations" },
-                    { layer: "SMS", tech: "Msegat / GoInfinito", detail: "Saudi CITC-compliant SMS gateways" },
+                    { layer: "SMS", tech: "GoInfinito", detail: "Saudi CITC-compliant SMS gateway" },
                     { layer: "PDF / Signature", tech: "jsPDF + react-signature-canvas", detail: "E-signature on candidate portal" },
                   ].map(({ layer, tech, detail }) => (
                     <div key={layer} className="flex gap-4 p-3 bg-muted/20 rounded-sm border border-border/50">
@@ -420,7 +420,7 @@ export default function DocumentationPage() {
                     { done: false, item: "Re-enable authentication routes in App.tsx (currently bypassed for development)" },
                     { done: false, item: "Add server-side RBAC middleware to all mutating API endpoints" },
                     { done: false, item: "Set SESSION_SECRET, DATABASE_URL as environment secrets" },
-                    { done: false, item: "Configure Msegat or GoInfinito credentials in Notification Center" },
+                    { done: false, item: "Configure GoInfinito credentials in Notification Center" },
                     { done: false, item: "Run full unit, system, regression, UAT, and security tests" },
                     { done: false, item: "Implement bilingual (EN/AR) toggle input across job posting forms" },
                     { done: false, item: "Set up BullMQ or equivalent for production automation rule execution" },
