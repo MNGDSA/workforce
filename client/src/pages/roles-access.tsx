@@ -52,9 +52,33 @@ import {
   Lock,
   Globe,
   UserCheck,
+  Info,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+
+function InfoTooltip({ text }: { text: string }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <span className="relative inline-flex items-center ml-1.5">
+      <button
+        type="button"
+        className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full border border-muted-foreground/40 text-muted-foreground/60 hover:text-primary hover:border-primary transition-colors"
+        onMouseEnter={() => setVisible(true)}
+        onMouseLeave={() => setVisible(false)}
+        aria-label="More information"
+      >
+        <Info className="h-2.5 w-2.5" />
+      </button>
+      {visible && (
+        <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-sm bg-popover border border-border px-3 py-2 text-xs text-muted-foreground shadow-lg leading-relaxed pointer-events-none">
+          {text}
+          <span className="absolute left-1/2 -translate-x-1/2 top-full h-0 w-0 border-x-4 border-x-transparent border-t-4 border-t-border" />
+        </span>
+      )}
+    </span>
+  );
+}
 
 type BusinessUnit = {
   id: string;
@@ -352,7 +376,10 @@ function InviteUserDialog({
 
               <FormField control={form.control} name="businessUnitId" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Business Unit</FormLabel>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold flex items-center">
+                    Business Unit
+                    <InfoTooltip text="Not seeing the business unit? Create it from Business Units." />
+                  </FormLabel>
                   <Select
                     onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
                     value={field.value || "none"}
@@ -477,7 +504,10 @@ function EditUserDialog({
 
             <FormField control={form.control} name="businessUnitId" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Business Unit</FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold flex items-center">
+                  Business Unit
+                  <InfoTooltip text="Not seeing the business unit? Create it from Business Units." />
+                </FormLabel>
                 <Select
                   onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
                   value={field.value || "none"}
