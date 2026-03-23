@@ -312,7 +312,7 @@ function InviteUserDialog({
               <FormField control={form.control} name="email" render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Email</FormLabel>
-                  <FormControl><Input type="email" placeholder="user@org.sa" className="bg-muted/30 border-border" {...field} data-testid="input-invite-email" /></FormControl>
+                  <FormControl><Input type="email" placeholder="email@domain.com" className="bg-muted/30 border-border" {...field} data-testid="input-invite-email" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
