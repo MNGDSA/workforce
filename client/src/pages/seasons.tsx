@@ -332,7 +332,7 @@ function CreateSMPContractDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onCreated?: () => void;
+  onCreated?: (data: SMPForm) => void;
 }) {
   const { toast } = useToast();
 
@@ -351,7 +351,7 @@ function CreateSMPContractDialog({
 
   function onSubmit(data: SMPForm) {
     toast({ title: "SMP Contract created", description: `Contract ${data.contractNumber} has been created.` });
-    onCreated?.();
+    onCreated?.(data);
     form.reset();
     onOpenChange(false);
   }
@@ -490,7 +490,7 @@ export default function SeasonsPage() {
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [smpOpen, setSmpOpen] = useState(false);
-  const [smpCount, setSmpCount] = useState(0);
+  const [smpContracts, setSmpContracts] = useState<SMPForm[]>([]);
 
   const { data: seasons = [], isLoading } = useQuery<Season[]>({
     queryKey: ["/api/seasons"],
@@ -545,7 +545,7 @@ export default function SeasonsPage() {
         </div>
 
         <CreateSeasonDialog open={createOpen} onOpenChange={setCreateOpen} />
-        <CreateSMPContractDialog open={smpOpen} onOpenChange={setSmpOpen} onCreated={() => setSmpCount((c) => c + 1)} />
+        <CreateSMPContractDialog open={smpOpen} onOpenChange={setSmpOpen} onCreated={(data) => setSmpContracts((prev) => [...prev, data])} />
 
         {/* Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -554,7 +554,7 @@ export default function SeasonsPage() {
               <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total SMP Contracts</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-contracts">{smpCount}</div>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-contracts">{smpContracts.length}</div>
               <p className="text-xs text-muted-foreground mt-1">Created this session</p>
             </CardContent>
           </Card>
@@ -611,10 +611,10 @@ export default function SeasonsPage() {
           </div>
         </div>
 
-        {/* Table */}
+        {/* Seasons Table */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-lg font-display text-white">Seasons List</CardTitle>
+            <CardTitle className="text-lg font-display text-white">Seasons</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
@@ -723,6 +723,73 @@ export default function SeasonsPage() {
                       </TableRow>
                     );
                   })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* SMP Contracts Table */}
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="text-lg font-display text-white">SMP Contracts</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {smpContracts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Calendar className="h-12 w-12 text-muted-foreground/30 mb-4" />
+                <p className="text-muted-foreground font-medium">No SMP contracts yet</p>
+                <p className="text-muted-foreground/60 text-sm mt-1">Click "Create SMP Contract" to add one</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border hover:bg-transparent">
+                    <TableHead className="text-muted-foreground">Contract No.</TableHead>
+                    <TableHead className="text-muted-foreground">Contractor</TableHead>
+                    <TableHead className="text-muted-foreground hidden md:table-cell">Type</TableHead>
+                    <TableHead className="text-muted-foreground hidden md:table-cell">Region</TableHead>
+                    <TableHead className="text-muted-foreground hidden lg:table-cell">
+                      <span className="flex items-center">
+                        Expiry
+                        <InfoTooltip text="SMP Contracts expiry dates should be set as the project's contractual expiry date." />
+                      </span>
+                    </TableHead>
+                    <TableHead className="text-muted-foreground hidden lg:table-cell">Notes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {smpContracts.map((contract, idx) => (
+                    <TableRow key={idx} className="border-border hover:bg-muted/20" data-testid={`row-smp-${idx}`}>
+                      <TableCell>
+                        <code className="font-mono text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                          {contract.contractNumber}
+                        </code>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-white font-medium text-sm">{contract.contractorName}</span>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <Badge variant="outline" className="border-border text-muted-foreground font-normal capitalize text-xs">
+                          {contract.contractType.replace(/_/g, " ")}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <span className="text-sm text-muted-foreground">{contract.region || "—"}</span>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm text-white">{contract.endDate || "—"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <span className="text-xs text-muted-foreground truncate max-w-[180px] block">
+                          {contract.notes || "—"}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             )}
