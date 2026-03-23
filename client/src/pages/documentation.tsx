@@ -88,7 +88,7 @@ export default function DocumentationPage() {
           <div>
             <h1 className="text-3xl font-display font-bold text-white tracking-tight">Documentation</h1>
             <p className="text-muted-foreground mt-1">
-              Guides, references, and system architecture for Workforce.IO.
+              Guides, references, and system architecture for Workforce.
             </p>
           </div>
           <Badge variant="outline" className="border-primary/30 text-primary bg-primary/10 font-mono text-xs">
@@ -120,9 +120,9 @@ export default function DocumentationPage() {
                   <BookOpen className="h-6 w-6 text-primary-foreground" />
                 </div>
                 <div>
-                  <h2 className="text-white font-display font-bold text-xl">Welcome to Workforce.IO</h2>
+                  <h2 className="text-white font-display font-bold text-xl">Welcome to Workforce</h2>
                   <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
-                    Workforce.IO is a seasonal hiring management system built for large-scale operations in Saudi Arabia.
+                    Workforce is a seasonal hiring management system built for large-scale operations in Saudi Arabia.
                     It covers the entire hiring lifecycle — from posting jobs and screening candidates to scheduling interviews,
                     managing workforce placements, and tracking seasonal campaign progress.
                   </p>

@@ -130,8 +130,8 @@ GET    /api/notifications/unread-count/:recipientId
 ```
 
 ## Demo Credentials
-- **Admin**: `admin@workforce.io` / `password123`
-- **Candidate**: `candidate@workforce.io` / `password123`
+- **Admin**: `admin@workforce.sa` / `password123`
+- **Candidate**: `candidate@workforce.sa` / `password123`
 
 ## Navigation Order
 Dashboard → Job Posting → Seasons → Interview Calls → Workforce → Talent → Rules & Automation → Notification Center → System & Settings
@@ -147,7 +147,7 @@ Dashboard → Job Posting → Seasons → Interview Calls → Workforce → Tale
 - **Saudi-specific**: National ID, Iqama, IBAN fields, Arabic name field, nationality (Saudi/Non-Saudi)
 
 ## Integrations
-- **GitHub** — Connected via Replit OAuth (connection: `conn_github_01KMCD4T6871ZX6CKTKY6BG2YA`). Permissions: `repo`, `read:org`, `read:project`, `read:user`, `user:email`. Service layer: `server/github.ts`. API routes under `/api/github/*`.
+- **GitHub** — Connected via Replit OAuth (connection: `conn_github_01KMCD4T6871ZX6CKTKY6BG2YA`). Repo: `https://github.com/MNGDSA/workforce`. Permissions: `repo`, `read:org`, `read:project`, `read:user`, `user:email`. Service layer: `server/github.ts`. API routes under `/api/github/*`.
 
 ## Packages Installed
 - `bcryptjs` + `@types/bcryptjs` — password hashing

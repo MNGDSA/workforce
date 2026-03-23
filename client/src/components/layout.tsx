@@ -59,7 +59,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
             <Building2 className="h-5 w-5" />
           </div>
           <span className="font-display font-bold text-xl tracking-tight text-white">
-            WORKFORCE<span className="text-primary">.IO</span>
+            WORKFORCE
           </span>
         </div>
       </div>

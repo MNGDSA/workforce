@@ -15,7 +15,7 @@ async function seed() {
     .values([
       {
         username: "admin",
-        email: "admin@workforce.io",
+        email: "admin@workforce.sa",
         password: adminPassword,
         role: "super_admin",
         fullName: "System Administrator",
@@ -24,7 +24,7 @@ async function seed() {
       },
       {
         username: "candidate",
-        email: "candidate@workforce.io",
+        email: "candidate@workforce.sa",
         password: candidatePassword,
         role: "candidate",
         fullName: "Test Candidate",
@@ -33,7 +33,7 @@ async function seed() {
       },
       {
         username: "recruiter1",
-        email: "recruiter@workforce.io",
+        email: "recruiter@workforce.sa",
         password: adminPassword,
         role: "recruiter",
         fullName: "Ahmad Al-Rashidi",

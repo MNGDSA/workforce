@@ -62,7 +62,7 @@ export default function CandidatePortal() {
     
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(12);
-    pdf.text("Employer: WORKFORCE.IO", 20, 50);
+    pdf.text("Employer: WORKFORCE", 20, 50);
     pdf.text("Employee: Alex Candidate", 20, 60);
     pdf.text("Role: Warehouse Specialist", 20, 70);
     pdf.text("Start Date: " + new Date().toLocaleDateString(), 20, 80);

@@ -90,7 +90,7 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="orgName" className="text-white">Organization Name</Label>
-                    <Input id="orgName" defaultValue="WORKFORCE.IO Operations" className="bg-muted/30 border-border" />
+                    <Input id="orgName" defaultValue="WORKFORCE Operations" className="bg-muted/30 border-border" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="industry" className="text-white">Industry</Label>
@@ -98,7 +98,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="supportEmail" className="text-white">Support Email</Label>
-                    <Input id="supportEmail" defaultValue="support@workforce.io" className="bg-muted/30 border-border" />
+                    <Input id="supportEmail" defaultValue="support@workforce.sa" className="bg-muted/30 border-border" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone" className="text-white">Phone Number</Label>
