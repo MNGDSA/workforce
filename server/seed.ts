@@ -136,10 +136,10 @@ async function seed() {
     .insert(jobPostings)
     .values([
       {
-        title: "Crowd Management Officer",
-        titleAr: "ضابط إدارة الحشود",
-        description: "Responsible for managing crowd flow and ensuring safety during Hajj operations.",
-        requirements: "Minimum 1 year experience in crowd management or security. Ability to work long hours.",
+        title: "Ramadan 2026 Seasonal Jobs",
+        titleAr: "وظائف موسم رمضان 2026",
+        description: "Seasonal positions available for Ramadan 2026 operations across various departments.",
+        requirements: "Minimum 1 year experience in the relevant field. Ability to work long hours during Ramadan.",
         location: "Makkah",
         region: "Makkah Region",
         department: "Operations",
@@ -168,10 +168,10 @@ async function seed() {
         skills: ["driving", "navigation", "customer service"],
       },
       {
-        title: "Medical Support Technician",
-        titleAr: "فني دعم طبي",
-        description: "Provide first aid and emergency medical support at Hajj sites.",
-        requirements: "Medical or paramedic certification required. BLS/ACLS preferred.",
+        title: "Hajj 2026 Seasonal Jobs",
+        titleAr: "وظائف موسم الحج 2026",
+        description: "Seasonal positions available for Hajj 2026 operations including medical, logistics, and crowd management.",
+        requirements: "Relevant certification required. BLS/ACLS preferred for medical roles.",
         location: "Mina & Arafat",
         region: "Makkah Region",
         department: "Medical",

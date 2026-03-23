@@ -520,8 +520,8 @@ const TEMPLATE_HEADERS = [
 ];
 
 const TEMPLATE_ROWS: string[][] = [
-  ["Ahmed Al-Ghamdi", "أحمد الغامدي", "1012345678", "0501234567", "ahmed@example.com", "Makkah", "Saudi", "Crowd Management Officer", ""],
-  ["Sara Al-Zahrani", "سارة الزهراني", "1087654321", "0557654321", "sara@example.com", "Jeddah", "Saudi", "Medical Support Technician", "BLS certified"],
+  ["Ahmed Al-Ghamdi", "أحمد الغامدي", "1012345678", "0501234567", "ahmed@example.com", "Makkah", "Saudi", "Ramadan 2026 Seasonal Jobs", ""],
+  ["Sara Al-Zahrani", "سارة الزهراني", "1087654321", "0557654321", "sara@example.com", "Jeddah", "Saudi", "Hajj 2026 Seasonal Jobs", "BLS certified"],
 ];
 
 function parseCSV(text: string): CandidateRow[] {
