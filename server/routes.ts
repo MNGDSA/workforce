@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { getAuthenticatedUser, listUserRepos, getRepo, listRepoIssues, listRepoPullRequests } from "./github";
 import {
   insertCandidateSchema,
   insertSeasonSchema,
@@ -500,6 +501,52 @@ export async function registerRoutes(
     try {
       const count = await storage.getUnreadCount(req.params.recipientId);
       return res.json({ count });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // ─── GitHub Integration ──────────────────────────────────────────────────
+  app.get("/api/github/user", async (_req: Request, res: Response) => {
+    try {
+      const user = await getAuthenticatedUser();
+      return res.json(user);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.get("/api/github/repos", async (_req: Request, res: Response) => {
+    try {
+      const repos = await listUserRepos();
+      return res.json(repos);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.get("/api/github/repos/:owner/:repo", async (req: Request, res: Response) => {
+    try {
+      const repo = await getRepo(req.params.owner, req.params.repo);
+      return res.json(repo);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.get("/api/github/repos/:owner/:repo/issues", async (req: Request, res: Response) => {
+    try {
+      const issues = await listRepoIssues(req.params.owner, req.params.repo);
+      return res.json(issues);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.get("/api/github/repos/:owner/:repo/pulls", async (req: Request, res: Response) => {
+    try {
+      const pulls = await listRepoPullRequests(req.params.owner, req.params.repo);
+      return res.json(pulls);
     } catch (err) {
       return handleError(res, err);
     }

@@ -146,9 +146,14 @@ Dashboard → Job Posting → Seasons → Interview Calls → Workforce → Tale
 - **Automation Rules**: Database-backed toggleable workflows
 - **Saudi-specific**: National ID, Iqama, IBAN fields, Arabic name field, nationality (Saudi/Non-Saudi)
 
+## Integrations
+- **GitHub** — Connected via Replit OAuth (connection: `conn_github_01KMCD4T6871ZX6CKTKY6BG2YA`). Permissions: `repo`, `read:org`, `read:project`, `read:user`, `user:email`. Service layer: `server/github.ts`. API routes under `/api/github/*`.
+
 ## Packages Installed
 - `bcryptjs` + `@types/bcryptjs` — password hashing
 - `drizzle-orm`, `drizzle-zod`, `drizzle-kit` — ORM
 - `react-signature-canvas` + `@types/react-signature-canvas` — e-signature
 - `jspdf` — PDF generation
 - `date-fns` — date formatting
+- `@replit/connectors-sdk` — Replit integration proxy (GitHub OAuth calls)
+- `@octokit/rest` — GitHub REST API client
