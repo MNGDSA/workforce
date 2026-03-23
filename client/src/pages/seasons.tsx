@@ -26,9 +26,8 @@ import {
   Trash2,
   CheckCircle2,
 } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useRef as useFileRef } from "react";
 import {
   Table,
   TableBody,
@@ -572,7 +571,7 @@ function SMPContractSheet({
   onCandidatesChange: (rows: CandidateRow[]) => void;
 }) {
   const { toast } = useToast();
-  const fileInputRef = useFileRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
   if (!contract) return null;
@@ -627,13 +626,13 @@ function SMPContractSheet({
                 <code className="text-sm font-mono bg-primary/10 text-primary px-2 py-1 rounded">{contract.contractNumber}</code>
                 <span>{contract.contractorName}</span>
               </SheetTitle>
-              <SheetDescription className="text-muted-foreground mt-1.5 flex items-center gap-3 flex-wrap text-xs">
+              <div className="text-muted-foreground mt-1.5 flex items-center gap-3 flex-wrap text-xs">
                 <span className="capitalize">{contract.contractType.replace(/_/g, " ")}</span>
                 <span>·</span>
                 <span>{contract.region}</span>
                 <span>·</span>
                 <span>{contract.startDate} → {contract.endDate}</span>
-              </SheetDescription>
+              </div>
             </div>
           </div>
 

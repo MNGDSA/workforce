@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -748,13 +748,13 @@ function ApplicantsSheet({
           <div className="flex items-start justify-between gap-4">
             <div>
               <SheetTitle className="font-display text-xl font-bold text-white">{job.title}</SheetTitle>
-              <SheetDescription className="text-muted-foreground mt-1 flex items-center gap-3 flex-wrap">
+              <div className="text-muted-foreground mt-1 flex items-center gap-3 flex-wrap text-sm">
                 {job.region && <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{job.region}</span>}
                 <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" />{job.openings} openings</span>
                 <Badge variant="outline" className={`border-0 text-xs ${statusStyles[job.status] ?? "bg-muted text-muted-foreground"}`}>
                   {statusLabel[job.status] ?? job.status}
                 </Badge>
-              </SheetDescription>
+              </div>
             </div>
             <Button
               size="sm"
