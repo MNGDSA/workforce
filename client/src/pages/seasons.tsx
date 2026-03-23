@@ -343,7 +343,7 @@ function CreateSMPContractDialog({
     resolver: zodResolver(smpSchema),
     defaultValues: {
       contractNumber: `SMP-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`,
-      seasonId: "",
+      seasonId: "none",
       contractorName: "",
       contractType: "fixed_term",
       region: "",
@@ -429,7 +429,7 @@ function CreateSMPContractDialog({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="none">None</SelectItem>
                         {seasons.map((s) => (
                           <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                         ))}
