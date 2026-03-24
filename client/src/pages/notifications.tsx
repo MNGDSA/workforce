@@ -92,7 +92,7 @@ const EXAMPLE_PLUGINS: Record<string, SmsPluginConfig> = {
               text: "{{message}}",
               property: 0,
               id: "{{timestamp}}",
-              coding: 1,
+              coding: "{{coding}}",
               addresses: [
                 {
                   from: "{{senderId}}",
@@ -503,6 +503,29 @@ function SmsPluginManager() {
                       {parseError}
                     </div>
                   )}
+
+                  {/* Built-in template variables reference */}
+                  <div className="rounded-md border border-border bg-muted/10 p-3 space-y-2">
+                    <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground/60">Built-in variables available in any plugin config</p>
+                    <div className="grid grid-cols-1 gap-1">
+                      {[
+                        { v: "{{to}}",       desc: "Recipient phone number" },
+                        { v: "{{message}}",  desc: "SMS message text" },
+                        { v: "{{timestamp}}",desc: "Unix timestamp (ms)" },
+                        { v: "{{uuid}}",     desc: "Random UUID per request" },
+                        { v: "{{coding}}",   desc: "8 for Arabic/Unicode, 0 for Latin/GSM-7 — use for GoInfinito coding field", highlight: true },
+                        { v: "{{unicode}}",  desc: "\"1\" for Arabic/non-Latin content, \"0\" for plain Latin", highlight: true },
+                        { v: "{{encoding}}", desc: "\"unicode\" or \"gsm7\"", highlight: true },
+                        { v: "{{charset}}",  desc: "\"UCS2\" or \"GSM7\"", highlight: true },
+                      ].map(({ v, desc, highlight }) => (
+                        <div key={v} className="flex items-start gap-2">
+                          <code className={`text-[11px] font-mono px-1.5 py-0.5 rounded shrink-0 ${highlight ? "bg-primary/15 text-primary border border-primary/30" : "bg-muted/40 text-muted-foreground border border-border"}`}>{v}</code>
+                          <span className="text-xs text-muted-foreground leading-5">{desc}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/50">Credential keys (e.g. <code className="font-mono">{"{{senderId}}"}</code>) are also available after configuration.</p>
+                  </div>
                 </div>
 
                 {/* Parsed preview + credential form */}
