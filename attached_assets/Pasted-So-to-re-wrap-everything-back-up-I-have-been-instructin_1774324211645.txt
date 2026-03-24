@@ -1,0 +1,22 @@
+So, to re wrap everything back up. I have been instructing you to design first, then convert to app, then randomly instruct you to work on many areas and do adjustments. Even through you are doing your best to keep up with me but it is obvious I'm getting you confused and not knowing the real scope/requirements. 
+
+Let me explain the full picture all over again so you could stay aligned with me. 
+
+The purpose of this app is to recruit thousands of people over a short period of time and to stay compliant with regulations. 
+
+For seasonal jobs in Makkah, thousands of people come with different backgrounds and a decision to employ them from not needs to be taken quickly. 
+
+The current manual workflow happens like this: 
+1. Create a Formstack questionnaire and share the URL over WhatsApp. 
+2. People start filling their ID and all other info into this link while answering the questions and arranging their job preference since the job posting contains multiple jobs within the same listing. 
+3. Excel list is exported from Formstack containing their info/answers. 
+4. We copy the phone numbers column and send to the selected candidates an SMS message containing their interview details, group name, time etc, venue address, etc. 
+5. We rent a hall or a venue to interview those thousands over a couple of days. 
+6. We decide whom to employ. 
+7. We prepare contracts containing job position and employee details manually and invite them to a hall once again for contract signing and basic training. 
+8. We create a digital ID for employees after they signed with the personal photo on it and then print it using a special zebra id card printer. 
+9. The whole process is chaotic. Many human errors happen and it is painful. 
+10. The goal of this app which we are building is to automate this entire process. 
+11. Do not forget that you coded two modes which are seasonal and SMP. seasonal is for employees who have no organization which we could recruit from. They are basically grabbed off personally at their own level. SMPs are different, they are employees who are managed by their manpower firm and we talk to the manpower company only. They supply us with the names, we ask their employees to sign up on our portal but they are managed under their own contract in workforce. 
+12. The SMS/notification features you coded are important to push up response behavior with candidates and to ensure they login and complete whatever details requested from them. 
+13. You have any suggestions? What you think of the design so far? any notes or feedback? 
