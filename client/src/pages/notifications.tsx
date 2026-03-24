@@ -278,7 +278,7 @@ function SmsPluginManager() {
   const [showSecret, setShowSecret] = useState<Record<string, boolean>>({});
   const [testTo, setTestTo] = useState("");
   const [testMsg, setTestMsg] = useState("Workforce SA: This is a test message.");
-  const [testResult, setTestResult] = useState<{ success: boolean; messageId?: string; error?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ success: boolean; messageId?: string; error?: string; statusCode?: number; rawResponse?: unknown } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data: plugins = [] } = useQuery<SmsPlugin[]>({
@@ -340,9 +340,11 @@ function SmsPluginManager() {
   function parseJson(raw: string) {
     setParseError(null);
     setParsedConfig(null);
-    if (!raw.trim()) return;
+    // Strip UTF-8 BOM and normalize whitespace
+    const cleaned = raw.replace(/^\uFEFF/, "").trim();
+    if (!cleaned) return;
     try {
-      const obj = JSON.parse(raw);
+      const obj = JSON.parse(cleaned);
       const missingFields = [];
       if (!obj.name) missingFields.push("name");
       if (!obj.version) missingFields.push("version");
@@ -359,7 +361,8 @@ function SmsPluginManager() {
       (obj.credentials as SmsCredentialDef[]).forEach((c) => { initCreds[c.key] = ""; });
       setCredValues(initCreds);
     } catch (e) {
-      setParseError("Invalid JSON — please check the format.");
+      const msg = e instanceof SyntaxError ? e.message : String(e);
+      setParseError(`Invalid JSON — ${msg}`);
     }
   }
 
@@ -372,7 +375,9 @@ function SmsPluginManager() {
       setJsonInput(text);
       parseJson(text);
     };
-    reader.readAsText(file);
+    reader.readAsText(file, "utf-8");
+    // Reset input value so the same file can be re-uploaded
+    e.target.value = "";
   }
 
   function resetInstall() {
@@ -380,6 +385,7 @@ function SmsPluginManager() {
     setParsedConfig(null);
     setParseError(null);
     setCredValues({});
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   function openConfigure(plugin: SmsPlugin) {
@@ -668,15 +674,34 @@ function SmsPluginManager() {
                     )}
                   </div>
                   {testResult && (
-                    <div className={cn("flex items-start gap-2 text-xs p-3 rounded-md border", testResult.success ? "bg-primary/5 border-primary/20 text-primary" : "bg-destructive/10 border-destructive/20 text-destructive")}>
-                      {testResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
-                      <div>
-                        {testResult.success ? (
-                          <span>Message sent successfully{testResult.messageId ? ` · ID: ${testResult.messageId}` : ""}.</span>
-                        ) : (
-                          <span>Failed: {testResult.error}</span>
-                        )}
+                    <div className={cn("text-xs p-3 rounded-md border space-y-2", testResult.success ? "bg-primary/5 border-primary/20" : "bg-destructive/10 border-destructive/20")}>
+                      <div className={cn("flex items-start gap-2", testResult.success ? "text-primary" : "text-destructive")}>
+                        {testResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
+                        <div className="space-y-1">
+                          {testResult.success ? (
+                            <>
+                              <p className="font-medium">Accepted by gateway — message is queued for delivery.</p>
+                              {testResult.messageId && (
+                                <p className="text-muted-foreground font-mono">Message ID: {testResult.messageId}</p>
+                              )}
+                              <p className="text-yellow-500/80">If you did not receive the SMS, verify your Sender ID is approved in GoInfinito and the recipient number is correct.</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="font-medium">Failed: {testResult.error}</p>
+                              {testResult.statusCode && <p className="text-muted-foreground">HTTP {testResult.statusCode}</p>}
+                            </>
+                          )}
+                        </div>
                       </div>
+                      {testResult.rawResponse && (
+                        <details className="text-muted-foreground">
+                          <summary className="cursor-pointer hover:text-white select-none">Raw gateway response</summary>
+                          <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-[10px] bg-muted/20 p-2 rounded">
+                            {JSON.stringify(testResult.rawResponse, null, 2)}
+                          </pre>
+                        </details>
+                      )}
                     </div>
                   )}
                 </div>
