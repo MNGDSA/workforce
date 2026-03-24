@@ -7,7 +7,6 @@ import { z } from "zod";
 import SignatureCanvas from "react-signature-canvas";
 import jsPDF from "jspdf";
 import {
-  Building2,
   LogOut,
   Briefcase,
   MapPin,
@@ -551,10 +550,8 @@ export default function CandidatePortal() {
     <div className="min-h-screen bg-background font-sans text-foreground flex flex-col">
       {/* Navbar */}
       <header className="h-16 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-50 px-4 lg:px-8 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 bg-primary rounded-sm flex items-center justify-center text-primary-foreground">
-            <Building2 className="h-5 w-5" />
-          </div>
+        <div className="flex items-center gap-2.5">
+          <img src="/workforce-logo.svg" alt="Workforce" className="h-8 w-8" />
           <span className="font-display font-bold text-xl tracking-tight text-white hidden sm:inline-block">
             WORKFORCE
           </span>

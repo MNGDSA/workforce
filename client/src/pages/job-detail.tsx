@@ -8,7 +8,6 @@ import {
   CalendarDays,
   Briefcase,
   Users,
-  Building2,
   Clock,
   CheckCircle2,
   Loader2,
@@ -285,8 +284,8 @@ export default function JobDetailPage() {
         {/* Organisation info */}
         <Card className="bg-card border-border">
           <CardContent className="p-5 flex items-center gap-4">
-            <div className="h-12 w-12 bg-primary/10 rounded-sm flex items-center justify-center shrink-0 border border-primary/20">
-              <Building2 className="h-6 w-6 text-primary" />
+            <div className="h-12 w-12 bg-sidebar rounded-sm flex items-center justify-center shrink-0 border border-border p-1.5">
+              <img src="/workforce-logo.svg" alt="Workforce" className="h-full w-full" />
             </div>
             <div>
               <p className="font-bold text-white">WORKFORCE</p>

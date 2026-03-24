@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 import { useLocation } from "wouter";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
-import { Building2, ArrowRight, Lock, CreditCard, Phone, AlertCircle, Loader2 } from "lucide-react";
+import { ArrowRight, Lock, CreditCard, Phone, AlertCircle, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -109,9 +109,7 @@ export default function AuthPage() {
           {/* Logo */}
           <div className="space-y-2">
             <div className="flex items-center gap-3 mb-6">
-              <div className="h-10 w-10 bg-primary rounded-sm flex items-center justify-center text-primary-foreground">
-                <Building2 className="h-6 w-6" />
-              </div>
+              <img src="/workforce-logo.svg" alt="Workforce" className="h-10 w-10" />
               <span className="font-display font-bold text-2xl tracking-tight text-white">
                 WORKFORCE
               </span>

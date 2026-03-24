@@ -10,7 +10,6 @@ import {
   LogOut,
   Bell,
   Search,
-  Building2,
   Menu,
   CalendarRange,
   Workflow,
@@ -56,10 +55,8 @@ export default function DashboardLayout({ children }: LayoutProps) {
   const NavContent = () => (
     <div className="flex flex-col h-full bg-sidebar border-r border-border text-sidebar-foreground">
       <div className="h-16 flex items-center px-6 border-b border-border/50">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 bg-primary rounded-sm flex items-center justify-center text-primary-foreground">
-            <Building2 className="h-5 w-5" />
-          </div>
+        <div className="flex items-center gap-2.5">
+          <img src="/workforce-logo.svg" alt="Workforce" className="h-9 w-9" />
           <span className="font-display font-bold text-xl tracking-tight text-white">
             WORKFORCE
           </span>
