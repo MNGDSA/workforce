@@ -1,0 +1,78 @@
+SMS sending with JSON payload
+POST /unified/v2/send
+
+HEADER PARAMETERS
+Send Client Id and Password information using header parameters, or Base64 encoded value using Authorization header or send Token using Authorization header.
+
+Client Id
+Basic
+API Token
+Send client id and password using x-client-id and x-client-password headers
+
+x-client-id: ABClientc6a31cf8dae
+x-client-password: vwr46h499lloeyj9873kduwq
+
+content-type
+application/json
+Request Body Schema:
+sms - object
+SMS specific data. The data will be used if the message is sent through SMS channel.
+
+ver - string
+To access this JSON payload structure, users must specify ver: 2.0. This allows the API to distinguish between different payload structures and process them accordingly.
+
+dlr - object
+url - String
+Specify the path on which Delivery report need to be returned. This is a path on your server, which shall be called in when a delivery report is received against an outgoing message.
+
+messages - array[object]
+Contains details of each individual message to be sent.
+
+udh - String
+UDH is used for sending binary messages.
+
+• For text message the value should be 0.
+• For picture message the value should be 1.
+• For ringtone message the value should be 2.
+• For business card message the value should be 4.
+• For WAP Push message the value should be 5.
+• Sending Message on Specified Port: - The UDH attribute must contain hexadecimal string as value. The length of hexadecimal string must be 14 or 24 alphanumeric characters long that also store the port number of mobile phone device and where message is to be delivered.
+
+coding - Integer
+Extended type of messages.
+
+• For text message the value should be 1.
+• For Unicode text message the value should be 2.
+• Extended type of messages the value should be 3 i.e Picture messages, Ringtones, vCards (Business Card), Wap Push and Sending Message on Specified Port.
+
+text - String
+This field describe the message text to be sent to receiver.
+
+Extended type of messages
+
+For standard Latin character set 160 characters per SMS is supported. If SMS text is longer than 160 characters, messages shall be calculated in multiples of 153 characters.
+
+For Unicode messaging (non-English) only 70 characters per SMS is supported. If Unicode SMS text is longer than 70 characters, messages shall be calculated in multiples of 67 characters.
+
+For Binary messaging 140 characters including UDH is supported. If Binary SMS is longer than 140 characters, messages shall be calculated in multiples of 134 characters.
+
+property - String
+Unique property of message. Default value is 0. For sending Flash SMS the value should be 1.
+
+id - String
+Unique ID of message. The client sends this value. In future communication, server sends this value back to the client. This value is used in future to check status of the message.
+
+address - array[object]
+Specifies recipients and routing details.
+
+from - String
+The Sender of the message.
+
+to - String
+Mobile number of the receiver, should confirm to Receiver Phone Number guidelines.
+
+seq - String
+Unique address ID. Must be an integer and must be unique to each SMS message. While checking message status you must send this value.
+
+tag - String
+An optional client-defined identifier used to tag or categorise the message.
