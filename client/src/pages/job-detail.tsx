@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   MapPin,
@@ -63,13 +63,29 @@ export default function JobDetailPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [applyOpen, setApplyOpen] = useState(false);
-  const [applied, setApplied] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Get candidate from session
+  const candidateId: string | undefined = (() => {
+    try { return JSON.parse(localStorage.getItem("workforce_candidate") || "{}").id; } catch { return undefined; }
+  })();
 
   const { data: job, isLoading, isError } = useQuery<JobPosting>({
     queryKey: ["/api/jobs", params.id],
     queryFn: () => apiRequest("GET", `/api/jobs/${params.id}`).then((r) => r.json()),
     enabled: !!params.id,
   });
+
+  // Check if candidate already applied to this job
+  const { data: myApplications = [] } = useQuery<{ jobId: string }[]>({
+    queryKey: ["/api/applications/mine", candidateId],
+    queryFn: () =>
+      apiRequest("GET", `/api/applications?candidateId=${candidateId}`).then((r) => r.json()),
+    enabled: !!candidateId,
+    staleTime: 0,
+    refetchOnMount: true,
+  });
+  const applied = myApplications.some((a) => a.jobId === params.id);
 
   function handleShare() {
     if (navigator.share && job) {
@@ -302,7 +318,10 @@ export default function JobDetailPage() {
         job={job}
         open={applyOpen}
         onOpenChange={setApplyOpen}
-        onSuccess={() => { setApplied(true); setApplyOpen(false); }}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["/api/applications/mine", candidateId] });
+          setApplyOpen(false);
+        }}
       />
     </div>
   );

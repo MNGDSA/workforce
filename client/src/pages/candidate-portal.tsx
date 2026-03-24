@@ -334,8 +334,13 @@ export default function CandidatePortal() {
   const [isSigned, setIsSigned] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<JobPosting | null>(null);
-  const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
   const [activeNav, setActiveNav] = useState<"dashboard" | "jobs" | "documents">("dashboard");
+
+  // Load the current candidate from localStorage (set at login)
+  const storedCandidate = (() => {
+    try { return JSON.parse(localStorage.getItem("workforce_candidate") || "{}"); } catch { return {}; }
+  })();
+  const candidateId: string | undefined = storedCandidate.id;
 
   // Section refs for smooth-scroll navigation
   const sectionDashboard = useRef<HTMLDivElement>(null);
@@ -373,14 +378,27 @@ export default function CandidatePortal() {
     queryFn: () => apiRequest("GET", "/api/jobs?status=active").then((r) => r.json()),
   });
 
+  // Fetch this candidate's existing applications from the DB so applied state
+  // persists across navigation (not just in-memory).
+  const { data: myApplications = [], refetch: refetchApplications } = useQuery<{ jobId: string }[]>({
+    queryKey: ["/api/applications/mine", candidateId],
+    queryFn: () =>
+      apiRequest("GET", `/api/applications?candidateId=${candidateId}`)
+        .then((r) => r.json()),
+    enabled: !!candidateId,
+    staleTime: 0,        // always re-fetch when component mounts / returns from job detail
+    refetchOnMount: true,
+  });
+
+  const appliedIds = new Set(myApplications.map((a) => a.jobId));
   const appliedJobs = jobs.filter((j) => appliedIds.has(j.id));
 
   const handleApply = (job: JobPosting) => {
     setLocation(`/jobs/${job.id}`);
   };
 
-  const handleApplySuccess = (jobId: string) => {
-    setAppliedIds((prev) => new Set([...prev, jobId]));
+  const handleApplySuccess = (_jobId: string) => {
+    refetchApplications();
   };
 
   const clearSignature = () => sigCanvas.current?.clear();
