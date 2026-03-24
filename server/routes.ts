@@ -17,6 +17,7 @@ import {
   insertQuestionSetSchema,
   candidateQuerySchema,
 } from "@shared/schema";
+import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 
@@ -833,6 +834,83 @@ export async function registerRoutes(
     try {
       const ok = await storage.deleteQuestionSet(req.params.id);
       if (!ok) return res.status(404).json({ message: "Question set not found" });
+      return res.status(204).send();
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── SMS Plugins ──────────────────────────────────────────────────────────
+  app.get("/api/sms-plugins", async (_req: Request, res: Response) => {
+    try {
+      const plugins = await storage.getSmsPlugins();
+      return res.json(plugins);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/sms-plugins", async (req: Request, res: Response) => {
+    try {
+      const { pluginConfig, credentials } = req.body as { pluginConfig: unknown; credentials?: Record<string, string> };
+      if (!pluginConfig) return res.status(400).json({ message: "pluginConfig is required" });
+
+      const validation = validatePluginConfig(pluginConfig);
+      if (!validation.valid) return res.status(400).json({ message: validation.error });
+
+      const config = validation.config;
+      const plugin = await storage.createSmsPlugin({
+        name: config.name,
+        version: config.version,
+        description: config.description ?? null,
+        pluginConfig: config as Record<string, unknown>,
+        credentials: (credentials ?? {}) as Record<string, unknown>,
+        isActive: false,
+      });
+      return res.status(201).json(plugin);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/sms-plugins/validate", async (req: Request, res: Response) => {
+    try {
+      const validation = validatePluginConfig(req.body);
+      if (!validation.valid) return res.status(400).json({ valid: false, error: validation.error });
+      return res.json({ valid: true, config: validation.config });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/sms-plugins/:id/credentials", async (req: Request, res: Response) => {
+    try {
+      const credentials = z.record(z.string()).parse(req.body);
+      const plugin = await storage.updateSmsPluginCredentials(req.params.id, credentials);
+      if (!plugin) return res.status(404).json({ message: "Plugin not found" });
+      return res.json(plugin);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/sms-plugins/:id/activate", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.activateSmsPlugin(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Plugin not found" });
+      return res.json({ success: true });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/sms-plugins/:id/test", async (req: Request, res: Response) => {
+    try {
+      const { to, message } = z.object({
+        to: z.string().min(7),
+        message: z.string().min(1),
+      }).parse(req.body);
+
+      const plugin = await storage.getSmsPlugin(req.params.id);
+      if (!plugin) return res.status(404).json({ message: "Plugin not found" });
+
+      const result = await sendSmsViaPlugin(plugin, to, message);
+      return res.json(result);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.delete("/api/sms-plugins/:id", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteSmsPlugin(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Plugin not found" });
       return res.status(204).send();
     } catch (err) { return handleError(res, err); }
   });

@@ -12,6 +12,7 @@ import {
   businessUnits,
   smpContracts,
   questionSets,
+  smsPlugins,
   type User,
   type InsertUser,
   type Candidate,
@@ -36,6 +37,8 @@ import {
   type InsertSMPContract,
   type QuestionSet,
   type InsertQuestionSet,
+  type SmsPlugin,
+  type InsertSmsPlugin,
   type CandidateQuery,
 } from "@shared/schema";
 import { eq, and, or, ilike, desc, asc, count, sql, inArray } from "drizzle-orm";
@@ -130,6 +133,15 @@ export interface IStorage {
   createQuestionSet(data: InsertQuestionSet): Promise<QuestionSet>;
   updateQuestionSet(id: string, data: Partial<InsertQuestionSet>): Promise<QuestionSet | undefined>;
   deleteQuestionSet(id: string): Promise<boolean>;
+
+  // SMS Plugins
+  getSmsPlugins(): Promise<SmsPlugin[]>;
+  getSmsPlugin(id: string): Promise<SmsPlugin | undefined>;
+  getActiveSmsPlugin(): Promise<SmsPlugin | undefined>;
+  createSmsPlugin(data: InsertSmsPlugin): Promise<SmsPlugin>;
+  updateSmsPluginCredentials(id: string, credentials: Record<string, string>): Promise<SmsPlugin | undefined>;
+  activateSmsPlugin(id: string): Promise<boolean>;
+  deleteSmsPlugin(id: string): Promise<boolean>;
 
   // Dashboard
   getDashboardStats(): Promise<{
@@ -715,6 +727,50 @@ export class DatabaseStorage implements IStorage {
 
   async deleteQuestionSet(id: string): Promise<boolean> {
     const result = await db.delete(questionSets).where(eq(questionSets.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ─── SMS Plugins ────────────────────────────────────────────────────────────
+  async getSmsPlugins(): Promise<SmsPlugin[]> {
+    return db.select().from(smsPlugins).orderBy(desc(smsPlugins.installedAt));
+  }
+
+  async getSmsPlugin(id: string): Promise<SmsPlugin | undefined> {
+    const [p] = await db.select().from(smsPlugins).where(eq(smsPlugins.id, id));
+    return p;
+  }
+
+  async getActiveSmsPlugin(): Promise<SmsPlugin | undefined> {
+    const [p] = await db.select().from(smsPlugins).where(eq(smsPlugins.isActive, true));
+    return p;
+  }
+
+  async createSmsPlugin(data: InsertSmsPlugin): Promise<SmsPlugin> {
+    const [p] = await db.insert(smsPlugins).values(data).returning();
+    return p;
+  }
+
+  async updateSmsPluginCredentials(id: string, credentials: Record<string, string>): Promise<SmsPlugin | undefined> {
+    const [p] = await db
+      .update(smsPlugins)
+      .set({ credentials, updatedAt: new Date() })
+      .where(eq(smsPlugins.id, id))
+      .returning();
+    return p;
+  }
+
+  async activateSmsPlugin(id: string): Promise<boolean> {
+    await db.update(smsPlugins).set({ isActive: false, updatedAt: new Date() });
+    const [p] = await db
+      .update(smsPlugins)
+      .set({ isActive: true, updatedAt: new Date() })
+      .where(eq(smsPlugins.id, id))
+      .returning();
+    return !!p;
+  }
+
+  async deleteSmsPlugin(id: string): Promise<boolean> {
+    const result = await db.delete(smsPlugins).where(eq(smsPlugins.id, id)).returning();
     return result.length > 0;
   }
 }

@@ -431,6 +431,19 @@ export const notifications = pgTable(
   })
 );
 
+// ─── SMS Plugins ────────────────────────────────────────────────────────────
+export const smsPlugins = pgTable("sms_plugins", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  version: text("version").notNull().default("1.0.0"),
+  description: text("description"),
+  pluginConfig: jsonb("plugin_config").notNull(),
+  credentials: jsonb("credentials").notNull().default(sql`'{}'::jsonb`),
+  isActive: boolean("is_active").notNull().default(false),
+  installedAt: timestamp("installed_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
 // ─── Insert Schemas (Zod) ───────────────────────────────────────────────────
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -543,6 +556,46 @@ export const insertSMPContractSchema = createInsertSchema(smpContracts).omit({
 });
 export type InsertSMPContract = z.infer<typeof insertSMPContractSchema>;
 export type SMPContract = typeof smpContracts.$inferSelect;
+
+export const insertSmsPluginSchema = createInsertSchema(smsPlugins).omit({
+  id: true,
+  installedAt: true,
+  updatedAt: true,
+});
+export type InsertSmsPlugin = z.infer<typeof insertSmsPluginSchema>;
+export type SmsPlugin = typeof smsPlugins.$inferSelect;
+
+// ─── SMS Plugin Config Format (the contract every plugin must satisfy) ───────
+export interface SmsCredentialDef {
+  key: string;
+  label: string;
+  type: "text" | "secret";
+  required: boolean;
+  placeholder?: string;
+  hint?: string;
+}
+
+export interface SmsPluginConfig {
+  name: string;
+  description?: string;
+  version: string;
+  author?: string;
+  credentials: SmsCredentialDef[];
+  send: {
+    endpoint: string;
+    method: "POST" | "GET" | "PUT";
+    headers?: Record<string, string>;
+    body?: Record<string, unknown>;
+    queryParams?: Record<string, string>;
+    successStatusCodes: number[];
+    responseMessageIdPath?: string;
+    responseErrorPath?: string;
+  };
+  compliance?: {
+    region?: string;
+    notes?: string;
+  };
+}
 
 // ─── Query Params Types ─────────────────────────────────────────────────────
 export const candidateQuerySchema = z.object({
