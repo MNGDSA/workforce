@@ -77,6 +77,7 @@ export interface IStorage {
 
   // Applications
   getApplications(params?: { jobId?: string; candidateId?: string; status?: string }): Promise<Application[]>;
+  getApplicantsForJob(params: { jobId: string; page: number; limit: number; search?: string }): Promise<{ data: { candidateId: string; applicationId: string; fullNameEn: string; nationalId: string | null; applicationStatus: string; appliedAt: Date }[]; total: number }>;
   getApplication(id: string): Promise<Application | undefined>;
   createApplication(app: InsertApplication): Promise<Application>;
   updateApplication(id: string, data: Partial<InsertApplication>): Promise<Application | undefined>;
@@ -384,6 +385,42 @@ export class DatabaseStorage implements IStorage {
     if (params?.status) conditions.push(eq(applications.status, params.status as any));
     const where = conditions.length > 0 ? and(...conditions) : undefined;
     return db.select().from(applications).where(where).orderBy(desc(applications.appliedAt));
+  }
+
+  async getApplicantsForJob(params: { jobId: string; page: number; limit: number; search?: string }): Promise<{ data: { candidateId: string; applicationId: string; fullNameEn: string; nationalId: string | null; applicationStatus: string; appliedAt: Date }[]; total: number }> {
+    const { jobId, page, limit, search } = params;
+    const offset = (page - 1) * limit;
+    const conditions = [eq(applications.jobId, jobId)];
+    if (search?.trim()) {
+      conditions.push(or(
+        ilike(candidates.fullNameEn, `%${search.trim()}%`),
+        ilike(candidates.nationalId, `%${search.trim()}%`),
+      )!);
+    }
+    const where = and(...conditions);
+
+    const [rows, [{ value: totalCount }]] = await Promise.all([
+      db.select({
+        candidateId: candidates.id,
+        applicationId: applications.id,
+        fullNameEn: candidates.fullNameEn,
+        nationalId: candidates.nationalId,
+        applicationStatus: applications.status,
+        appliedAt: applications.appliedAt,
+      })
+        .from(applications)
+        .innerJoin(candidates, eq(applications.candidateId, candidates.id))
+        .where(where)
+        .orderBy(desc(applications.appliedAt))
+        .limit(limit)
+        .offset(offset),
+      db.select({ value: count() })
+        .from(applications)
+        .innerJoin(candidates, eq(applications.candidateId, candidates.id))
+        .where(where),
+    ]);
+
+    return { data: rows, total: Number(totalCount) };
   }
 
   async getApplication(id: string): Promise<Application | undefined> {

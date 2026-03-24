@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -70,11 +70,16 @@ import {
   Loader2,
   Plus,
   Users,
+  ChevronLeft,
+  ChevronRight,
+  X,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 type Candidate = { id: string; fullNameEn: string; nationalId?: string };
+type Applicant = { candidateId: string; applicationId: string; fullNameEn: string; nationalId: string | null; applicationStatus: string; appliedAt: string };
+type SelectedCandidate = { fullNameEn: string; nationalId: string | null };
 type Job = { id: string; title: string; status: string };
 type Application = { id: string; candidateId: string; jobId: string; status: string };
 type Interview = {
@@ -114,10 +119,28 @@ function ScheduleInterviewDialog({
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
-  const [candidateSearch, setCandidateSearch] = useState("");
+
+  // Selection: Map<candidateId, SelectedCandidate> — persists across pages/searches
+  const [selected, setSelected] = useState<Map<string, SelectedCandidate>>(new Map());
   const [selectedJobId, setSelectedJobId] = useState<string>("");
   const [candidateError, setCandidateError] = useState<string | null>(null);
+
+  // Pagination & search
+  const PAGE_SIZE = 15;
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounce search input → reset to page 1 when search changes
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(searchInput);
+      setPage(1);
+    }, 300);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [searchInput]);
 
   const { data: activeJobs = [] } = useQuery<Job[]>({
     queryKey: ["/api/jobs", "active"],
@@ -126,46 +149,67 @@ function ScheduleInterviewDialog({
     staleTime: 0,
   });
 
-  const { data: jobApplications = [], isLoading: loadingApps } = useQuery<Application[]>({
-    queryKey: ["/api/applications", selectedJobId],
-    queryFn: () =>
-      apiRequest("GET", `/api/applications?jobId=${selectedJobId}`).then((r) => r.json()),
-    enabled: !!selectedJobId,
-  });
-
-  const { data: allCandidates = [] } = useQuery<Candidate[]>({
-    queryKey: ["/api/candidates/list"],
-    queryFn: async () => {
-      const json = await apiRequest("GET", "/api/candidates?limit=100").then((r) => r.json());
-      return Array.isArray(json) ? json : Array.isArray(json?.data) ? json.data : [];
+  // Paginated server-side applicant query — no more full candidate list load
+  const { data: applicantsResult, isLoading: loadingApps } = useQuery<{ data: Applicant[]; total: number }>({
+    queryKey: ["/api/applications/applicants", selectedJobId, page, debouncedSearch],
+    queryFn: () => {
+      const params = new URLSearchParams({ jobId: selectedJobId, page: String(page), limit: String(PAGE_SIZE) });
+      if (debouncedSearch) params.set("search", debouncedSearch);
+      return apiRequest("GET", `/api/applications/applicants?${params}`).then((r) => r.json());
     },
-    enabled: open,
+    enabled: !!selectedJobId,
+    staleTime: 0,
   });
 
-  const applicantIds = new Set(jobApplications.map((a) => a.candidateId));
-  const applicants = allCandidates.filter((c) => applicantIds.has(c.id));
-
-  const filteredApplicants = applicants.filter(
-    (c) =>
-      !candidateSearch ||
-      c.fullNameEn.toLowerCase().includes(candidateSearch.toLowerCase()) ||
-      (c.nationalId ?? "").toLowerCase().includes(candidateSearch.toLowerCase())
-  );
+  const applicants = applicantsResult?.data ?? [];
+  const total = applicantsResult?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(page * PAGE_SIZE, total);
 
   const handleJobSelect = (jobId: string) => {
     setSelectedJobId(jobId);
-    setInvitedIds(new Set());
-    setCandidateSearch("");
+    setSelected(new Map());
+    setSearchInput("");
+    setDebouncedSearch("");
+    setPage(1);
     setCandidateError(null);
   };
 
-  const toggleInvite = (id: string) =>
-    setInvitedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+  const toggleCandidate = (a: Applicant) => {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      if (next.has(a.candidateId)) {
+        next.delete(a.candidateId);
+      } else {
+        next.set(a.candidateId, { fullNameEn: a.fullNameEn, nationalId: a.nationalId });
+        setCandidateError(null);
+      }
+      return next;
+    });
+  };
+
+  const selectAllOnPage = () => {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      applicants.forEach((a) => next.set(a.candidateId, { fullNameEn: a.fullNameEn, nationalId: a.nationalId }));
       if (next.size > 0) setCandidateError(null);
       return next;
     });
+  };
+
+  const deselectAllOnPage = () => {
+    const pageIds = new Set(applicants.map((a) => a.candidateId));
+    setSelected((prev) => {
+      const next = new Map(prev);
+      pageIds.forEach((id) => next.delete(id));
+      return next;
+    });
+  };
+
+  const clearAll = () => setSelected(new Map());
+
+  const allPageSelected = applicants.length > 0 && applicants.every((a) => selected.has(a.candidateId));
 
   const form = useForm<ScheduleForm>({
     resolver: zodResolver(scheduleSchema),
@@ -197,14 +241,8 @@ function ScheduleInterviewDialog({
       };
       if (data.googleLocation) payload.meetingUrl = data.googleLocation;
 
-      const invitedNames = allCandidates
-        .filter((c) => invitedIds.has(c.id))
-        .map((c) => c.fullNameEn)
-        .join(", ");
-      const notesText = [
-        data.notes,
-        invitedNames ? `Invited: ${invitedNames}` : "",
-      ].filter(Boolean).join("\n");
+      const invitedNames = Array.from(selected.values()).map((c) => c.fullNameEn).join(", ");
+      const notesText = [data.notes, invitedNames ? `Invited: ${invitedNames}` : ""].filter(Boolean).join("\n");
       if (notesText) payload.notes = notesText;
 
       return apiRequest("POST", "/api/interviews", payload).then((r) => r.json());
@@ -214,9 +252,11 @@ function ScheduleInterviewDialog({
       queryClient.invalidateQueries({ queryKey: ["/api/interviews"] });
       queryClient.invalidateQueries({ queryKey: ["/api/interviews/stats"] });
       form.reset();
-      setInvitedIds(new Set());
-      setCandidateSearch("");
+      setSelected(new Map());
+      setSearchInput("");
+      setDebouncedSearch("");
       setSelectedJobId("");
+      setPage(1);
       setCandidateError(null);
       onOpenChange(false);
     },
@@ -241,7 +281,7 @@ function ScheduleInterviewDialog({
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit((d) => {
-              if (invitedIds.size === 0) {
+              if (selected.size === 0) {
                 setCandidateError("Select at least one candidate from the application list.");
                 return;
               }
@@ -327,103 +367,153 @@ function ScheduleInterviewDialog({
               </FormItem>
             )} />
 
-            {/* Candidate from Application */}
+            {/* Candidate Picker */}
             <div className="space-y-2">
-              <p className={`text-xs uppercase tracking-wider font-semibold flex items-center gap-1 ${candidateError ? "text-destructive" : "text-muted-foreground"}`}>
-                Candidate from Application
-                <span className="text-destructive">*</span>
-                {invitedIds.size > 0 && (
-                  <span className="ml-1 text-primary font-bold normal-case">
-                    — {invitedIds.size} selected
-                  </span>
+              {/* Header row */}
+              <div className="flex items-center justify-between">
+                <p className={`text-xs uppercase tracking-wider font-semibold flex items-center gap-1 ${candidateError ? "text-destructive" : "text-muted-foreground"}`}>
+                  Candidates
+                  <span className="text-destructive">*</span>
+                  {selected.size > 0 && (
+                    <span className="ml-1 text-primary font-bold normal-case">— {selected.size} selected</span>
+                  )}
+                </p>
+                {selected.size > 0 && (
+                  <button type="button" onClick={clearAll} className="text-[10px] text-muted-foreground hover:text-destructive transition-colors">
+                    Clear all
+                  </button>
                 )}
-              </p>
+              </div>
+
+              {/* Selected chips — scrollable horizontal strip */}
+              {selected.size > 0 && (
+                <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto">
+                  {Array.from(selected.entries()).map(([id, c]) => (
+                    <Badge
+                      key={id}
+                      variant="outline"
+                      className="bg-primary/10 text-primary border-primary/30 text-[10px] gap-0.5 pr-0.5 cursor-pointer hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
+                      onClick={() => setSelected((prev) => { const n = new Map(prev); n.delete(id); return n; })}
+                      data-testid={`chip-invited-${id}`}
+                    >
+                      {c.fullNameEn}
+                      <X className="h-2.5 w-2.5 opacity-60" />
+                    </Badge>
+                  ))}
+                </div>
+              )}
 
               {/* Job selector */}
               <Select value={selectedJobId || "none"} onValueChange={(v) => handleJobSelect(v === "none" ? "" : v)}>
                 <SelectTrigger className={`bg-muted/30 h-9 text-sm ${candidateError && !selectedJobId ? "border-destructive" : "border-border"}`} data-testid="select-job-applications">
-                  <SelectValue placeholder="Select an active job…" />
+                  <SelectValue placeholder="Select a job to browse applicants…" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Select an active job…</SelectItem>
+                  <SelectItem value="none">Select a job to browse applicants…</SelectItem>
                   {activeJobs.map((job) => (
                     <SelectItem key={job.id} value={job.id}>{job.title}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
 
-              {/* Selected chips */}
-              {invitedIds.size > 0 && (
-                <div className="flex flex-wrap gap-1.5 pb-1">
-                  {allCandidates.filter((c) => invitedIds.has(c.id)).map((c) => (
-                    <Badge
-                      key={c.id}
-                      variant="outline"
-                      className="bg-primary/10 text-primary border-primary/30 text-xs gap-1 pr-1 cursor-pointer hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
-                      onClick={() => toggleInvite(c.id)}
-                      data-testid={`chip-invited-${c.id}`}
-                    >
-                      {c.fullNameEn}
-                      <span className="opacity-60">×</span>
-                    </Badge>
-                  ))}
-                </div>
-              )}
-
-              {/* Search box — only when a job is selected */}
+              {/* Search + page actions row */}
               {selectedJobId && (
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    placeholder="Search applicants by name or code…"
-                    className="pl-9 h-9 text-sm bg-muted/30 border-border"
-                    value={candidateSearch}
-                    onChange={(e) => setCandidateSearch(e.target.value)}
-                    data-testid="input-invite-search"
-                  />
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                    <Input
+                      placeholder="Search by name or National ID…"
+                      className="pl-8 h-8 text-xs bg-muted/30 border-border"
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      data-testid="input-invite-search"
+                    />
+                  </div>
+                  {applicants.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={allPageSelected ? deselectAllOnPage : selectAllOnPage}
+                      className="shrink-0 text-[10px] font-semibold text-primary hover:text-primary/70 transition-colors whitespace-nowrap"
+                      data-testid="button-select-page"
+                    >
+                      {allPageSelected ? "Deselect page" : "Select page"}
+                    </button>
+                  )}
                 </div>
               )}
 
               {/* Applicant list */}
-              <div className={`max-h-44 overflow-y-auto rounded-md border bg-muted/10 divide-y divide-border ${candidateError && invitedIds.size === 0 ? "border-destructive" : "border-border"}`}>
+              <div className={`rounded-md border bg-muted/10 divide-y divide-border ${candidateError && selected.size === 0 ? "border-destructive" : "border-border"}`}>
                 {!selectedJobId ? (
                   <p className="text-xs text-muted-foreground text-center py-6">
-                    Select a job above to see its applicants
+                    Select a job above to browse its applicants
                   </p>
                 ) : loadingApps ? (
                   <div className="flex items-center justify-center py-6">
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   </div>
-                ) : filteredApplicants.length === 0 ? (
+                ) : applicants.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-6">
-                    {applicants.length === 0 ? "No applicants for this job yet" : "No matches found"}
+                    {total === 0 && !debouncedSearch ? "No applicants for this job yet" : "No matches found"}
                   </p>
                 ) : (
-                  filteredApplicants.map((c) => {
-                    const selected = invitedIds.has(c.id);
-                    return (
-                      <div
-                        key={c.id}
-                        className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${selected ? "bg-primary/10" : "hover:bg-muted/30"}`}
-                        onClick={() => toggleInvite(c.id)}
-                        data-testid={`row-invite-${c.id}`}
+                  <div className="max-h-40 overflow-y-auto">
+                    {applicants.map((a) => {
+                      const isSelected = selected.has(a.candidateId);
+                      return (
+                        <div
+                          key={a.candidateId}
+                          className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${isSelected ? "bg-primary/10" : "hover:bg-muted/30"}`}
+                          onClick={() => toggleCandidate(a)}
+                          data-testid={`row-invite-${a.candidateId}`}
+                        >
+                          <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors ${isSelected ? "bg-primary border-primary" : "border-muted-foreground/40"}`}>
+                            {isSelected && <CheckCircle2 className="h-3 w-3 text-primary-foreground" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className={`text-sm font-medium truncate block ${isSelected ? "text-primary" : "text-white"}`}>
+                              {a.fullNameEn}
+                            </span>
+                          </div>
+                          <code className="text-[10px] text-muted-foreground font-mono shrink-0">{a.nationalId ?? "—"}</code>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Pagination footer */}
+                {selectedJobId && total > 0 && (
+                  <div className="flex items-center justify-between px-3 py-1.5 border-t border-border bg-muted/5">
+                    <span className="text-[10px] text-muted-foreground">
+                      {from}–{to} of {total.toLocaleString()} applicants
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                        className="h-5 w-5 flex items-center justify-center rounded disabled:opacity-30 hover:bg-muted transition-colors"
+                        data-testid="button-prev-page"
                       >
-                        <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors ${selected ? "bg-primary border-primary" : "border-muted-foreground/40"}`}>
-                          {selected && <CheckCircle2 className="h-3 w-3 text-primary-foreground" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className={`text-sm font-medium truncate block ${selected ? "text-primary" : "text-white"}`}>
-                            {c.fullNameEn}
-                          </span>
-                        </div>
-                        <code className="text-[10px] text-muted-foreground font-mono shrink-0">{c.nationalId ?? "—"}</code>
-                      </div>
-                    );
-                  })
+                        <ChevronLeft className="h-3 w-3" />
+                      </button>
+                      <span className="text-[10px] text-muted-foreground min-w-8 text-center">{page}/{totalPages}</span>
+                      <button
+                        type="button"
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={page === totalPages}
+                        className="h-5 w-5 flex items-center justify-center rounded disabled:opacity-30 hover:bg-muted transition-colors"
+                        data-testid="button-next-page"
+                      >
+                        <ChevronRight className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
 
-              {candidateError && invitedIds.size === 0 && (
+              {candidateError && selected.size === 0 && (
                 <p className="text-xs text-destructive flex items-center gap-1.5 pt-0.5">
                   <span>⚠</span> {candidateError}
                 </p>

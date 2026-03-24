@@ -419,6 +419,23 @@ export async function registerRoutes(
     }
   });
 
+  // Paginated applicant list (applications joined with candidate names) for interview scheduling
+  app.get("/api/applications/applicants", async (req: Request, res: Response) => {
+    try {
+      const { jobId, page = "1", limit = "20", search } = req.query as Record<string, string>;
+      if (!jobId) return res.status(400).json({ error: "jobId is required" });
+      const result = await storage.getApplicantsForJob({
+        jobId,
+        page: Math.max(1, parseInt(page, 10) || 1),
+        limit: Math.min(100, Math.max(1, parseInt(limit, 10) || 20)),
+        search,
+      });
+      return res.json(result);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   app.get("/api/applications/stats", async (_req: Request, res: Response) => {
     try {
       const stats = await storage.getApplicationStats();
