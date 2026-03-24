@@ -3,6 +3,7 @@ import DashboardLayout from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import * as XLSX from "xlsx";
 import {
   BarChart3,
   Users,
@@ -10,7 +11,7 @@ import {
   CalendarCheck2,
   TrendingUp,
   Download,
-  RefreshCw,
+  FileSpreadsheet,
   CheckCircle2,
   XCircle,
   Clock,
@@ -187,6 +188,8 @@ export default function ReportsPage() {
 
   const totalCandidates = candidates.length;
 
+  const dateStr = new Date().toISOString().slice(0, 10);
+
   const exportCSV = () => {
     const rows = [
       ["Report", "Metric", "Value"],
@@ -213,9 +216,79 @@ export default function ReportsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `recruitment-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `recruitment-report-${dateStr}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const exportExcel = () => {
+    const wb = XLSX.utils.book_new();
+
+    const overviewData = [
+      ["Metric", "Value"],
+      ["Total Candidates",    dashStats?.totalCandidates   ?? 0],
+      ["Open Positions",      dashStats?.openPositions     ?? 0],
+      ["Active Seasons",      dashStats?.activeSeasons     ?? 0],
+      ["Scheduled Interviews",dashStats?.scheduledInterviews ?? 0],
+      ["Total Jobs",          jobsStats?.total             ?? 0],
+      ["Total Openings",      jobsStats?.totalOpenings     ?? 0],
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(overviewData), "Overview");
+
+    const pipelineData = [
+      ["Stage", "Count", "% of Total"],
+      ["New",         appsByStatus.new,         totalApps > 0 ? +(appsByStatus.new / totalApps * 100).toFixed(1) : 0],
+      ["Shortlisted", appsByStatus.shortlisted, totalApps > 0 ? +(appsByStatus.shortlisted / totalApps * 100).toFixed(1) : 0],
+      ["Interviewed", appsByStatus.interviewed, totalApps > 0 ? +(appsByStatus.interviewed / totalApps * 100).toFixed(1) : 0],
+      ["Hired",       appsByStatus.hired,       totalApps > 0 ? +(appsByStatus.hired / totalApps * 100).toFixed(1) : 0],
+      ["Rejected",    appsByStatus.rejected,    totalApps > 0 ? +(appsByStatus.rejected / totalApps * 100).toFixed(1) : 0],
+      ["Total",       totalApps,                100],
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pipelineData), "Application Pipeline");
+
+    const interviewData = [
+      ["Metric", "Count"],
+      ["Total",     interviewStats?.total     ?? 0],
+      ["Scheduled", interviewStats?.scheduled ?? 0],
+      ["Completed", interviewStats?.completed ?? 0],
+      ["Cancelled", interviewStats?.cancelled ?? 0],
+      ["Completion Rate %",
+        interviewStats?.total
+          ? +((interviewStats.completed / interviewStats.total) * 100).toFixed(1)
+          : 0],
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(interviewData), "Interviews");
+
+    const jobsData = [
+      ["Metric", "Count"],
+      ["Total Jobs",    jobsStats?.total         ?? 0],
+      ["Active",        jobsStats?.active        ?? 0],
+      ["Draft",         jobsStats?.draft         ?? 0],
+      ["Filled",        jobsStats?.filled        ?? 0],
+      ["Total Openings",jobsStats?.totalOpenings ?? 0],
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(jobsData), "Jobs");
+
+    const genderRows = Object.entries(byGender).sort(([, a], [, b]) => b - a)
+      .map(([k, v]) => [k, v, totalCandidates > 0 ? +(v / totalCandidates * 100).toFixed(1) : 0]);
+    const nationalityRows = Object.entries(byNationality).sort(([, a], [, b]) => b - a)
+      .map(([k, v]) => [k, v, totalCandidates > 0 ? +(v / totalCandidates * 100).toFixed(1) : 0]);
+    const regionRows = Object.entries(byRegion).sort(([, a], [, b]) => b - a)
+      .map(([k, v]) => [k, v, totalCandidates > 0 ? +(v / totalCandidates * 100).toFixed(1) : 0]);
+
+    const candidatesSheet = XLSX.utils.aoa_to_sheet([
+      ["Gender", "Count", "% of Total"],
+      ...genderRows,
+      [],
+      ["Nationality", "Count", "% of Total"],
+      ...nationalityRows,
+      [],
+      ["Region / City", "Count", "% of Total"],
+      ...regionRows,
+    ]);
+    XLSX.utils.book_append_sheet(wb, candidatesSheet, "Candidates");
+
+    XLSX.writeFile(wb, `recruitment-report-${dateStr}.xlsx`);
   };
 
   return (
@@ -232,14 +305,25 @@ export default function ReportsPage() {
               Recruitment performance metrics across candidates, applications, interviews, and jobs.
             </p>
           </div>
-          <Button
-            onClick={exportCSV}
-            className="bg-primary text-primary-foreground font-bold shrink-0"
-            data-testid="button-export-csv"
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Export CSV
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              onClick={exportCSV}
+              variant="outline"
+              className="border-border font-semibold"
+              data-testid="button-export-csv"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
+            </Button>
+            <Button
+              onClick={exportExcel}
+              className="bg-primary text-primary-foreground font-bold"
+              data-testid="button-export-excel"
+            >
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Export Excel
+            </Button>
+          </div>
         </div>
 
         {/* ── Top KPI Cards ──────────────────────────────────────────── */}
