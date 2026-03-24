@@ -36,13 +36,14 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
-const recruitmentPaths = ["/seasons", "/job-posting", "/interviews", "/talent"];
+const recruitmentPaths = ["/seasons", "/question-sets", "/job-posting", "/interviews", "/talent"];
 
 const recruitmentItems = [
-  { href: "/seasons",     icon: CalendarRange, label: "Seasons & SMP" },
-  { href: "/job-posting", icon: Briefcase,     label: "Job Applications" },
-  { href: "/interviews",  icon: Minimize,      label: "Interview Calls" },
-  { href: "/talent",      icon: Search,        label: "Talent" },
+  { href: "/seasons",       icon: CalendarRange, label: "Seasons & SMP" },
+  { href: "/question-sets", icon: ClipboardList, label: "Question Sets" },
+  { href: "/job-posting",   icon: Briefcase,     label: "Job Applications" },
+  { href: "/interviews",    icon: Minimize,      label: "Interview Calls" },
+  { href: "/talent",        icon: Search,        label: "Talent" },
 ];
 
 const topNavItems = [
@@ -51,10 +52,9 @@ const topNavItems = [
 ];
 
 const bottomNavItems = [
-  { href: "/automation",   icon: Workflow,     label: "Rules & Automation" },
-  { href: "/question-sets",icon: ClipboardList,label: "Question Sets" },
-  { href: "/documentation",icon: BookOpen,     label: "Documentation" },
-  { href: "/settings",     icon: Settings,     label: "System & Settings" },
+  { href: "/automation",   icon: Workflow,  label: "Rules & Automation" },
+  { href: "/documentation",icon: BookOpen,  label: "Documentation" },
+  { href: "/settings",     icon: Settings,  label: "System & Settings" },
 ];
 
 export default function DashboardLayout({ children }: LayoutProps) {
