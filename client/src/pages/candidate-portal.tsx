@@ -198,6 +198,27 @@ function typeLabel(type: string) {
   return type === "full_time" ? "Full Time" : type === "part_time" ? "Part Time" : type;
 }
 
+function getApplicationBadge(deadline: string | undefined, status: string) {
+  const isBeforeDeadline = deadline ? new Date() < new Date(deadline) : true;
+  if (isBeforeDeadline) {
+    return { label: "Under Review", className: "bg-amber-500/15 text-amber-400 border-amber-500/30 border" };
+  }
+  switch (status) {
+    case "hired":
+      return { label: "Hired", className: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 border" };
+    case "shortlisted":
+      return { label: "Shortlisted", className: "bg-blue-500/15 text-blue-400 border-blue-500/30 border" };
+    case "interviewed":
+      return { label: "Interviewed", className: "bg-violet-500/15 text-violet-400 border-violet-500/30 border" };
+    case "rejected":
+      return { label: "Not Shortlisted", className: "bg-muted/60 text-muted-foreground border-border border" };
+    case "screened":
+      return { label: "Screened", className: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30 border" };
+    default:
+      return { label: "Under Review", className: "bg-amber-500/15 text-amber-400 border-amber-500/30 border" };
+  }
+}
+
 // ─── Profile Completion Card ──────────────────────────────────────────────────
 type DocKey = "resume" | "nationalId" | "photo" | "iban";
 
@@ -399,7 +420,7 @@ export default function CandidatePortal() {
 
   // Fetch this candidate's existing applications from the DB so applied state
   // persists across navigation (not just in-memory).
-  const { data: myApplications = [], refetch: refetchApplications } = useQuery<{ jobId: string }[]>({
+  const { data: myApplications = [], refetch: refetchApplications } = useQuery<{ jobId: string; status: string }[]>({
     queryKey: ["/api/applications/mine", candidateId],
     queryFn: () =>
       apiRequest("GET", `/api/applications?candidateId=${candidateId}`)
@@ -410,6 +431,7 @@ export default function CandidatePortal() {
   });
 
   const appliedIds = new Set(myApplications.map((a) => a.jobId));
+  const appStatusByJob = Object.fromEntries(myApplications.map((a) => [a.jobId, a.status]));
   const appliedJobs = jobs.filter((j) => appliedIds.has(j.id));
 
   // Fetch interviews for this candidate
@@ -831,9 +853,14 @@ export default function CandidatePortal() {
                               <span className="flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" />{typeLabel(job.type)}</span>
                             </div>
                           </div>
-                          <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 border font-medium shrink-0">
-                            Under Review
-                          </Badge>
+                          {(() => {
+                            const badge = getApplicationBadge(job.deadline, appStatusByJob[job.id] ?? "new");
+                            return (
+                              <Badge className={`${badge.className} font-medium shrink-0`}>
+                                {badge.label}
+                              </Badge>
+                            );
+                          })()}
                         </div>
                       </CardContent>
                     </Card>
