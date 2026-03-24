@@ -31,8 +31,8 @@ const registerSchema = z.object({
     .refine((v) => /^[0-9]+$/.test(v.trim()), "Numbers only"),
   nationalId: z
     .string()
-    .min(10, "Enter a valid National / Resident ID")
-    .refine((v) => /^[0-9]+$/.test(v.trim()), "Numbers only"),
+    .min(8, "Enter a valid National ID or Iqama number")
+    .refine((v) => /^[0-9]+$/.test(v.trim()), "Numbers only — no letters or spaces"),
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
@@ -280,13 +280,13 @@ export default function AuthPage() {
                     render={({ field }) => (
                       <FormItem>
                         <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">
-                          National / Resident ID Number
+                          National ID or Iqama Number
                         </Label>
                         <FormControl>
                           <div className="relative group">
                             <CreditCard className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                             <Input
-                              placeholder="1012345678"
+                              placeholder="National ID (1xxxxxxxxx) or Iqama (2xxxxxxxxx)"
                               className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm font-mono tracking-wide"
                               inputMode="numeric"
                               data-testid="input-national-id"
