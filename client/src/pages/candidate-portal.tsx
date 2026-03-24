@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -11,20 +11,19 @@ import {
   LogOut,
   Briefcase,
   MapPin,
-  Clock,
   CheckCircle2,
   UploadCloud,
-  ChevronRight,
-  User,
-  Settings,
   Bell,
-  Search,
   FileText,
   PenTool,
   Loader2,
   CalendarDays,
   Banknote,
   AlertCircle,
+  X,
+  ImageIcon,
+  CreditCard,
+  Landmark,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -182,6 +181,151 @@ function typeLabel(type: string) {
   return type === "full_time" ? "Full Time" : type === "part_time" ? "Part Time" : type;
 }
 
+// ─── Profile Completion Card ──────────────────────────────────────────────────
+type DocKey = "resume" | "nationalId" | "photo" | "iban";
+
+const DOC_ITEMS: {
+  key: DocKey;
+  label: string;
+  hint: string;
+  accept: string;
+  icon: React.ReactNode;
+}[] = [
+  { key: "resume",     label: "Resume / CV",            hint: "PDF, DOC up to 5 MB",  accept: ".pdf,.doc,.docx",        icon: <FileText className="h-4 w-4" /> },
+  { key: "nationalId", label: "National / Resident ID", hint: "PDF, JPG, PNG up to 5 MB", accept: ".pdf,.jpg,.jpeg,.png", icon: <CreditCard className="h-4 w-4" /> },
+  { key: "photo",      label: "Personal Photo",         hint: "JPG or PNG up to 3 MB",   accept: ".jpg,.jpeg,.png",      icon: <ImageIcon className="h-4 w-4" /> },
+  { key: "iban",       label: "IBAN Certificate",       hint: "PDF, JPG, PNG up to 5 MB", accept: ".pdf,.jpg,.jpeg,.png", icon: <Landmark className="h-4 w-4" /> },
+];
+
+function ProfileCompletionCard({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
+  const [files, setFiles] = useState<Record<DocKey, File | null>>({ resume: null, nationalId: null, photo: null, iban: null });
+  const [uploading, setUploading] = useState<Record<DocKey, boolean>>({ resume: false, nationalId: false, photo: false, iban: false });
+  const inputRefs = {
+    resume:     useRef<HTMLInputElement>(null),
+    nationalId: useRef<HTMLInputElement>(null),
+    photo:      useRef<HTMLInputElement>(null),
+    iban:       useRef<HTMLInputElement>(null),
+  };
+
+  const doneCount = Object.values(files).filter(Boolean).length;
+  const pct = Math.round((doneCount / DOC_ITEMS.length) * 100);
+
+  const handleClick = useCallback((key: DocKey) => {
+    inputRefs[key].current?.click();
+  }, []);
+
+  const handleFile = useCallback((key: DocKey, file: File | null) => {
+    if (!file) return;
+    const maxMb = key === "photo" ? 3 : 5;
+    if (file.size > maxMb * 1024 * 1024) {
+      toast({ title: "File too large", description: `Maximum size is ${maxMb} MB.`, variant: "destructive" });
+      return;
+    }
+    setUploading((p) => ({ ...p, [key]: true }));
+    // Simulate a brief upload
+    setTimeout(() => {
+      setFiles((p) => ({ ...p, [key]: file }));
+      setUploading((p) => ({ ...p, [key]: false }));
+      toast({ title: "File uploaded", description: `"${file.name}" saved successfully.` });
+    }, 900);
+  }, [toast]);
+
+  const handleRemove = useCallback((key: DocKey) => {
+    setFiles((p) => ({ ...p, [key]: null }));
+    if (inputRefs[key].current) inputRefs[key].current!.value = "";
+  }, []);
+
+  return (
+    <Card className="bg-card border-border">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-display text-white">Profile Completion</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Progress */}
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Overall Strength</span>
+            <span className={`font-bold ${pct === 100 ? "text-emerald-500" : "text-primary"}`}>{pct}%</span>
+          </div>
+          <Progress value={pct} className="h-2" />
+          {pct === 100 && (
+            <p className="text-xs text-emerald-500 font-medium flex items-center gap-1">
+              <CheckCircle2 className="h-3 w-3" /> Profile complete — your application stands out!
+            </p>
+          )}
+        </div>
+
+        {/* Document items */}
+        <div className="space-y-2">
+          {DOC_ITEMS.map(({ key, label, hint, accept, icon }) => {
+            const file = files[key];
+            const busy = uploading[key];
+            const done = !!file && !busy;
+
+            return (
+              <div key={key}>
+                {/* Hidden file input */}
+                <input
+                  ref={inputRefs[key]}
+                  type="file"
+                  accept={accept}
+                  className="hidden"
+                  data-testid={`input-file-${key}`}
+                  onChange={(e) => handleFile(key, e.target.files?.[0] ?? null)}
+                />
+
+                <div
+                  className={`flex items-center gap-3 p-2.5 rounded-md transition-all cursor-pointer select-none
+                    ${done   ? "bg-emerald-500/10 border border-emerald-500/25 cursor-default" : ""}
+                    ${busy   ? "bg-muted/20 border border-border opacity-70 cursor-wait" : ""}
+                    ${!done && !busy ? "bg-muted/20 border border-border hover:border-primary/40 hover:bg-primary/5 group" : ""}
+                  `}
+                  onClick={() => !done && !busy && handleClick(key)}
+                  data-testid={`row-doc-${key}`}
+                >
+                  {/* Status icon */}
+                  <div className={`shrink-0 rounded-full p-1.5 
+                    ${done ? "bg-emerald-500/20 text-emerald-500" : busy ? "bg-muted text-muted-foreground" : "bg-muted/30 text-muted-foreground group-hover:text-primary group-hover:bg-primary/10"}`}>
+                    {busy
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : done
+                      ? <CheckCircle2 className="h-3.5 w-3.5" />
+                      : icon}
+                  </div>
+
+                  {/* Label + filename */}
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium leading-tight ${done ? "text-emerald-400" : "text-white"}`}>{label}</p>
+                    {done
+                      ? <p className="text-[11px] text-emerald-600 truncate">{file!.name}</p>
+                      : <p className="text-[11px] text-muted-foreground/70">{hint}</p>}
+                  </div>
+
+                  {/* Right action */}
+                  {busy && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0" />}
+                  {done && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleRemove(key); }}
+                      className="shrink-0 text-muted-foreground hover:text-destructive transition-colors rounded-sm p-0.5"
+                      data-testid={`button-remove-${key}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {!done && !busy && (
+                    <UploadCloud className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function CandidatePortal() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -308,36 +452,7 @@ export default function CandidatePortal() {
               </CardContent>
             </Card>
 
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle className="text-base font-display text-white">Profile Completion</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-muted-foreground">Overall Strength</span>
-                  <span className="text-primary font-bold">25%</span>
-                </div>
-                <Progress value={25} className="h-2" />
-                <div className="space-y-2 mt-3">
-                  {[
-                    { label: "Upload Resume", done: false, active: true },
-                    { label: "National / Resident ID", done: false, active: false },
-                    { label: "Personal Photo", done: false, active: false },
-                    { label: "IBAN Certificate", done: false, active: false },
-                  ].map(({ label, done, active }) => (
-                    <div key={label} className={`flex items-center justify-between text-sm p-2 rounded-md bg-muted/20 ${active ? "border border-primary/20" : "opacity-60"}`}>
-                      <div className="flex items-center gap-3">
-                        {done
-                          ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                          : <div className={`h-4 w-4 rounded-full border-2 ${active ? "border-primary" : "border-muted-foreground"}`} />}
-                        <span className={done ? "text-muted-foreground line-through" : "text-white"}>{label}</span>
-                      </div>
-                      {active && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <ProfileCompletionCard toast={toast} />
 
             <Card className="bg-card border-border">
               <CardHeader>
