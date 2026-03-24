@@ -47,20 +47,22 @@ import {
   Hash,
   ToggleLeft,
   ListChecks,
+  ListOrdered,
   Save,
+  ArrowUpDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type QuestionType = "yes_no" | "multiple_choice" | "text" | "number";
+export type QuestionType = "yes_no" | "multiple_choice" | "text" | "number" | "job_ranking";
 
 export type Question = {
   id: string;
   text: string;
   type: QuestionType;
   required: boolean;
-  options?: string[];
+  options?: string[];   // for multiple_choice: answer choices; for job_ranking: job titles to rank
 };
 
 type QuestionSet = {
@@ -79,6 +81,7 @@ const TYPE_META: Record<QuestionType, { label: string; Icon: React.FC<{ classNam
   multiple_choice: { label: "Multiple Choice",    Icon: ListChecks },
   text:            { label: "Short Text",         Icon: AlignLeft },
   number:          { label: "Number",             Icon: Hash },
+  job_ranking:     { label: "Job Ranking",        Icon: ListOrdered },
 };
 
 function newQuestion(): Question {
@@ -144,7 +147,13 @@ function QuestionRow({
 
           <div className="flex items-center gap-3 flex-wrap">
             {/* Type */}
-            <Select value={q.type} onValueChange={(v) => onChange({ ...q, type: v as QuestionType, options: v === "multiple_choice" ? (q.options ?? []) : [] })}>
+            <Select
+              value={q.type}
+              onValueChange={(v) => {
+                const usesOptions = v === "multiple_choice" || v === "job_ranking";
+                onChange({ ...q, type: v as QuestionType, options: usesOptions ? (q.options ?? []) : [] });
+              }}
+            >
               <SelectTrigger className="w-44 h-8 bg-muted/20 border-border text-xs" data-testid={`select-question-type-${idx}`}>
                 <SelectValue />
               </SelectTrigger>
@@ -205,6 +214,81 @@ function QuestionRow({
               </div>
             </div>
           )}
+
+          {/* Job Ranking — ordered list of jobs the candidate will rank */}
+          {q.type === "job_ranking" && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-xs text-amber-400/80 bg-amber-400/5 border border-amber-400/20 rounded-sm px-2.5 py-1.5">
+                <ArrowUpDown className="h-3.5 w-3.5 shrink-0" />
+                Candidates will drag these jobs into their preferred order (1 = top choice).
+              </div>
+              {/* Ranked job list */}
+              {(q.options ?? []).length > 0 && (
+                <div className="space-y-1">
+                  {(q.options ?? []).map((job, ji) => (
+                    <div key={ji} className="flex items-center gap-2 bg-muted/20 border border-border rounded-sm px-2 py-1.5">
+                      {/* rank number */}
+                      <span className="h-5 w-5 rounded-full bg-primary/20 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
+                        {ji + 1}
+                      </span>
+                      {/* reorder buttons */}
+                      <div className="flex flex-col gap-px shrink-0">
+                        <button
+                          type="button"
+                          disabled={ji === 0}
+                          onClick={() => {
+                            const next = [...(q.options ?? [])];
+                            [next[ji - 1], next[ji]] = [next[ji], next[ji - 1]];
+                            onChange({ ...q, options: next });
+                          }}
+                          className="p-0.5 text-muted-foreground hover:text-white disabled:opacity-30"
+                        >
+                          <ChevronUp className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={ji === (q.options ?? []).length - 1}
+                          onClick={() => {
+                            const next = [...(q.options ?? [])];
+                            [next[ji], next[ji + 1]] = [next[ji + 1], next[ji]];
+                            onChange({ ...q, options: next });
+                          }}
+                          className="p-0.5 text-muted-foreground hover:text-white disabled:opacity-30"
+                        >
+                          <ChevronDown className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <span className="flex-1 text-xs text-white truncate">{job}</span>
+                      <button
+                        type="button"
+                        onClick={() => onChange({ ...q, options: q.options!.filter((_, i) => i !== ji) })}
+                        className="text-muted-foreground hover:text-red-400 shrink-0"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Add job input */}
+              <div className="flex gap-2">
+                <Input
+                  value={optionText}
+                  onChange={(e) => setOptionText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addOption())}
+                  placeholder="Add job title, press Enter..."
+                  className="h-8 bg-muted/20 border-border text-xs flex-1"
+                  data-testid={`input-ranking-job-${idx}`}
+                />
+                <Button type="button" size="sm" variant="outline" className="border-border h-8 text-xs" onClick={addOption}>
+                  Add Job
+                </Button>
+              </div>
+              {(q.options ?? []).length < 2 && (
+                <p className="text-xs text-muted-foreground">Add at least 2 jobs for ranking to be meaningful.</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Remove */}
@@ -262,7 +346,12 @@ function QuestionSetEditor({
     setQuestions(next);
   }
 
-  const isValid = name.trim().length > 0 && questions.every(q => q.text.trim().length > 0);
+  const isValid = name.trim().length > 0 && questions.every(q => {
+    if (!q.text.trim()) return false;
+    if (q.type === "multiple_choice" && (q.options ?? []).length < 1) return false;
+    if (q.type === "job_ranking"     && (q.options ?? []).length < 2) return false;
+    return true;
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -456,11 +545,14 @@ export default function QuestionSetsPage() {
                         {questions.length > 0 && (
                           <div className="mt-3 space-y-1.5">
                             {questions.slice(0, 4).map((q, i) => {
-                              const meta = TYPE_META[q.type];
+                              const meta = TYPE_META[q.type] ?? { label: q.type, Icon: AlignLeft };
                               return (
                                 <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
                                   <meta.Icon className="h-3.5 w-3.5 text-primary/60 mt-0.5 shrink-0" />
-                                  <span className="truncate">{q.text}</span>
+                                  <span className="truncate flex-1">{q.text}</span>
+                                  {q.type === "job_ranking" && (q.options ?? []).length > 0 && (
+                                    <span className="text-primary/60 shrink-0">{q.options!.length} jobs</span>
+                                  )}
                                   {q.required && <span className="text-red-400 shrink-0">*</span>}
                                 </div>
                               );
