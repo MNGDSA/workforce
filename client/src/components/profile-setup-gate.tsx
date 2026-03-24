@@ -79,7 +79,6 @@ const NATIONALITIES = [
 const GENDER_OPTIONS = [
   { label: "Male",   value: "male" },
   { label: "Female", value: "female" },
-  { label: "Prefer not to say", value: "prefer_not_to_say" },
 ];
 
 const KSA_CITIES = [
@@ -241,7 +240,7 @@ function Step1Form({
 
       <FieldWrapper label="Gender" required error={errors.gender?.message}>
         <Controller control={control} name="gender" render={({ field }) => (
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {GENDER_OPTIONS.map((opt) => (
               <button
                 key={opt.value} type="button"
