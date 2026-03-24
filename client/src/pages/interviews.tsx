@@ -74,7 +74,7 @@ import {
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
-type Candidate = { id: string; fullNameEn: string; candidateCode: string };
+type Candidate = { id: string; fullNameEn: string; nationalId?: string };
 type Job = { id: string; title: string; status: string };
 type Application = { id: string; candidateId: string; jobId: string; status: string };
 type Interview = {
@@ -149,7 +149,7 @@ function ScheduleInterviewDialog({
     (c) =>
       !candidateSearch ||
       c.fullNameEn.toLowerCase().includes(candidateSearch.toLowerCase()) ||
-      c.candidateCode.toLowerCase().includes(candidateSearch.toLowerCase())
+      (c.nationalId ?? "").toLowerCase().includes(candidateSearch.toLowerCase())
   );
 
   const handleJobSelect = (jobId: string) => {
@@ -416,7 +416,7 @@ function ScheduleInterviewDialog({
                             {c.fullNameEn}
                           </span>
                         </div>
-                        <code className="text-[10px] text-muted-foreground font-mono shrink-0">{c.candidateCode}</code>
+                        <code className="text-[10px] text-muted-foreground font-mono shrink-0">{c.nationalId ?? "—"}</code>
                       </div>
                     );
                   })
@@ -687,7 +687,7 @@ export default function InterviewsPage() {
                                 {candidate?.fullNameEn ?? "Unknown Candidate"}
                               </p>
                               <p className="text-[10px] text-muted-foreground font-mono">
-                                {candidate?.candidateCode ?? iv.candidateId.slice(0, 8)}
+                                {candidate?.nationalId ?? iv.candidateId.slice(0, 8)}
                               </p>
                             </div>
                           </div>

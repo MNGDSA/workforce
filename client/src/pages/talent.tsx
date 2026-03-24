@@ -258,7 +258,7 @@ export default function TalentPage() {
                   {candidates.map((candidate) => (
                     <TableRow key={candidate.id} className="border-border hover:bg-muted/20" data-testid={`row-candidate-${candidate.id}`}>
                       <TableCell className="font-mono text-xs text-muted-foreground">
-                        {candidate.candidateCode}
+                        {candidate.nationalId ?? "—"}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">

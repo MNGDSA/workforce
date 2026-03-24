@@ -757,7 +757,6 @@ type Application = {
 type CandidateInfo = {
   id: string;
   fullNameEn: string;
-  candidateCode: string;
   nationalId?: string;
   phone?: string;
   email?: string;
@@ -792,7 +791,7 @@ function exportToExcel(
 
   // Build header row
   const fixedHeaders = [
-    "Candidate Name", "Candidate Code", "National ID",
+    "Candidate Name", "National ID",
     "Email", "Phone", "City", "Nationality", "Status", "Applied At",
   ];
   const questionHeaders = questions.map((q, i) => `Q${i + 1}: ${q.text}`);
@@ -804,7 +803,6 @@ function exportToExcel(
     const answers = app.questionSetAnswers?.answers ?? {};
     return [
       c?.fullNameEn ?? "Unknown",
-      c?.candidateCode ?? "",
       c?.nationalId ?? "",
       c?.email ?? "",
       c?.phone ?? "",
@@ -960,7 +958,7 @@ function ApplicantsSheet({
                               <div className="text-sm font-medium text-white truncate">
                                 {candidate?.fullNameEn ?? "Unknown Candidate"}
                               </div>
-                              <div className="text-xs text-muted-foreground font-mono">{candidate?.candidateCode ?? "—"}</div>
+                              <div className="text-xs text-muted-foreground font-mono">{candidate?.nationalId ?? "—"}</div>
                             </div>
                           </div>
                         </td>

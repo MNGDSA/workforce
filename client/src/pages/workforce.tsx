@@ -59,7 +59,7 @@ import { useToast } from "@/hooks/use-toast";
 type Season = { id: string; name: string; status: string };
 type Job = { id: string; title: string; status: string };
 type Application = { id: string; candidateId: string; jobId: string; status: string };
-type Candidate = { id: string; fullNameEn: string; candidateCode: string; status: string };
+type Candidate = { id: string; fullNameEn: string; nationalId?: string; status: string };
 
 type WorkforceGroup = {
   id: string;
@@ -245,7 +245,7 @@ function CreateGroupDialog({
     (c) =>
       !memberSearch ||
       c.fullNameEn.toLowerCase().includes(memberSearch.toLowerCase()) ||
-      c.candidateCode.toLowerCase().includes(memberSearch.toLowerCase())
+      (c.nationalId ?? "").toLowerCase().includes(memberSearch.toLowerCase())
   );
 
   function toggleMember(id: string) {
@@ -592,7 +592,7 @@ function CreateGroupDialog({
                               {selected && <CheckCircle2 className="h-3 w-3 text-primary-foreground" />}
                             </div>
                             <span className={`text-sm font-medium flex-1 truncate ${selected ? "text-primary" : "text-white"}`}>{c.fullNameEn}</span>
-                            <code className="text-[10px] text-muted-foreground font-mono shrink-0">{c.candidateCode}</code>
+                            <code className="text-[10px] text-muted-foreground font-mono shrink-0">{c.nationalId ?? "—"}</code>
                           </div>
                         );
                       })
@@ -634,7 +634,7 @@ function CreateGroupDialog({
                               {selected && <CheckCircle2 className="h-3 w-3 text-primary-foreground" />}
                             </div>
                             <span className={`text-sm font-medium flex-1 truncate ${selected ? "text-primary" : "text-white"}`}>{c.fullNameEn}</span>
-                            <code className="text-[10px] text-muted-foreground font-mono shrink-0">{c.candidateCode}</code>
+                            <code className="text-[10px] text-muted-foreground font-mono shrink-0">{c.nationalId ?? "—"}</code>
                           </div>
                         );
                       })
