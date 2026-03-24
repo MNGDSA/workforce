@@ -207,25 +207,6 @@ export default function DashboardLayout({ children }: LayoutProps) {
         })()}
       </div>
 
-      <div className="p-4 border-t border-border/50">
-        <div className="bg-muted/30 p-4 rounded-sm border border-border">
-          <h4 className="font-display font-bold text-sm text-white mb-1">Seasonal Status</h4>
-          <div className="w-full bg-muted/50 h-2 rounded-full mt-2 overflow-hidden">
-            <div className="bg-primary h-full w-[75%]" />
-          </div>
-          <div className="flex justify-between text-xs text-muted-foreground mt-2">
-            <span>Hiring Goal</span>
-            <span className="text-white">75%</span>
-          </div>
-        </div>
-        
-        <Link href="/">
-          <Button variant="ghost" className="w-full mt-4 justify-start text-muted-foreground hover:text-destructive hover:bg-destructive/10">
-            <LogOut className="mr-2 h-4 w-4" />
-            Sign Out
-          </Button>
-        </Link>
-      </div>
     </div>
   );
 
