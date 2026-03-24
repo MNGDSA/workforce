@@ -115,18 +115,33 @@ export async function sendSmsViaPlugin(
       defaultHeaders["Content-Type"] = "application/json";
     }
 
+    const finalHeaders = { ...defaultHeaders, ...headers };
     const fetchOptions: RequestInit = {
       method: sendConfig.method,
-      headers: { ...defaultHeaders, ...headers },
+      headers: finalHeaders,
     };
     if (sendConfig.method !== "GET") {
       fetchOptions.body = JSON.stringify(resolvedBody);
+    }
+
+    const safeHeaders = Object.fromEntries(
+      Object.entries(finalHeaders).map(([k, v]) =>
+        k.toLowerCase().includes("password") || k.toLowerCase().includes("auth") || k.toLowerCase().includes("token")
+          ? [k, "***"]
+          : [k, v]
+      )
+    );
+    console.log(`[SMS Sender] ${sendConfig.method} ${url}`);
+    console.log(`[SMS Sender] Headers:`, JSON.stringify(safeHeaders));
+    if (sendConfig.method !== "GET") {
+      console.log(`[SMS Sender] Body:`, JSON.stringify(resolvedBody));
     }
 
     const response = await fetch(url, fetchOptions);
     const successCodes = sendConfig.successStatusCodes ?? [200, 201];
 
     const rawText = await response.text();
+    console.log(`[SMS Sender] HTTP ${response.status} — raw response: ${rawText}`);
     let responseData: unknown;
 
     const ct = response.headers.get("content-type") ?? "";

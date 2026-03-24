@@ -902,7 +902,9 @@ export async function registerRoutes(
       const plugin = await storage.getSmsPlugin(req.params.id);
       if (!plugin) return res.status(404).json({ message: "Plugin not found" });
 
+      console.log(`[SMS Test] Sending to="${to}" message="${message}" via plugin="${plugin.name}"`);
       const result = await sendSmsViaPlugin(plugin, to, message);
+      console.log(`[SMS Test] Result:`, JSON.stringify(result));
       return res.json(result);
     } catch (err) { return handleError(res, err); }
   });
