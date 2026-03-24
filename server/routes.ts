@@ -611,7 +611,46 @@ export async function registerRoutes(
       const data = insertInterviewSchema.partial().parse(req.body);
       const interview = await storage.updateInterview(req.params.id, data);
       if (!interview) return res.status(404).json({ message: "Interview not found" });
+
+      // Auto-cascade: completed interview → advance application to "interviewed"
+      if (data.status === "completed" && interview.applicationId) {
+        const app_ = await storage.getApplications({ });
+        const linked = app_.find((a) => a.id === interview.applicationId);
+        if (linked && !["hired", "rejected"].includes(linked.status)) {
+          await storage.updateApplication(interview.applicationId, { status: "interviewed" });
+          console.log(`[cascade] Interview ${interview.id} completed → application ${interview.applicationId} → interviewed`);
+        }
+      }
+
       return res.json(interview);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // ─── Bulk application status update ────────────────────────────────────────
+  app.post("/api/applications/bulk-status", async (req: Request, res: Response) => {
+    try {
+      const { updates } = z.object({
+        updates: z.array(z.object({
+          id: z.string(),
+          status: z.enum(["new", "shortlisted", "interviewed", "hired", "rejected"]),
+        })).min(1),
+      }).parse(req.body);
+
+      const results: { id: string; success: boolean; error?: string }[] = [];
+      for (const u of updates) {
+        try {
+          const updated = await storage.updateApplication(u.id, { status: u.status });
+          results.push({ id: u.id, success: !!updated });
+        } catch {
+          results.push({ id: u.id, success: false, error: "Update failed" });
+        }
+      }
+
+      const succeeded = results.filter((r) => r.success).length;
+      const failed = results.filter((r) => !r.success).length;
+      return res.json({ succeeded, failed, results });
     } catch (err) {
       return handleError(res, err);
     }

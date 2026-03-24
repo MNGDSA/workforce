@@ -42,11 +42,17 @@ import {
   DollarSign,
   X,
   FileDown,
+  FileUp,
   ChevronRight,
   Calendar,
   UserCheck,
   Save,
+  CheckCircle2,
+  XCircle,
+  Star,
+  AlertTriangle,
 } from "lucide-react";
+import { useRef } from "react";
 import {
   Table,
   TableBody,
@@ -817,6 +823,9 @@ function initials(name: string) {
   return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
 
+const VALID_STATUSES = ["new", "shortlisted", "interviewed", "hired", "rejected"] as const;
+const BULK_FIXED_COLS = ["__app_id", "Candidate Name", "National ID", "Email", "Phone", "Current Status", "New Status"];
+
 function exportToExcel(
   job: JobPosting,
   applications: Application[],
@@ -825,42 +834,44 @@ function exportToExcel(
 ) {
   const candidateMap = Object.fromEntries(candidates.map((c) => [c.id, c]));
 
-  // Build header row
-  const fixedHeaders = [
-    "Candidate Name", "National ID",
-    "Email", "Phone", "City", "Nationality", "Status", "Applied At",
-  ];
   const questionHeaders = questions.map((q, i) => `Q${i + 1}: ${q.text}`);
-  const headers = [...fixedHeaders, ...questionHeaders];
+  const headers = [...BULK_FIXED_COLS, ...questionHeaders];
 
-  // Build data rows
   const rows = applications.map((app) => {
     const c = candidateMap[app.candidateId];
     const answers = app.questionSetAnswers?.answers ?? {};
     return [
+      app.id,                                                                   // __app_id
       c?.fullNameEn ?? "Unknown",
       c?.nationalId ?? "",
       c?.email ?? "",
       c?.phone ?? "",
-      c?.city ?? "",
-      c?.nationality ?? "",
-      app.status,
-      app.appliedAt ? new Date(app.appliedAt).toLocaleDateString("en-SA") : "",
+      app.status,                                                               // Current Status (read-only)
+      app.status,                                                               // New Status (editable)
       ...questions.map((q) => answers[q.id] ?? ""),
     ];
   });
 
-  // Style header row bold
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+  // Lock all columns except New Status (col index 6) by styling
   const colWidths = headers.map((h, i) => ({
-    wch: Math.max(h.length, ...rows.map((r) => String(r[i] ?? "").length), 12),
+    wch: Math.max(h.length, ...rows.map((r) => String(r[i] ?? "").length), 14),
   }));
   ws["!cols"] = colWidths;
+
+  // Add a note row at top explaining the format
+  XLSX.utils.sheet_add_aoa(ws, [
+    [`# BULK STATUS UPDATE — Job: ${job.title} | Only edit the "New Status" column | Valid values: ${VALID_STATUSES.join(", ")} | Do NOT add/remove/reorder rows or columns`],
+  ], { origin: "A1", sheetRows: 1 });
+  ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }];
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Applicants");
   XLSX.writeFile(wb, `applicants-${job.title.replace(/\s+/g, "-")}.xlsx`);
 }
+
+type ImportResult = { succeeded: number; failed: number; errors: string[] };
 
 function ApplicantsSheet({
   job,
@@ -872,6 +883,10 @@ function ApplicantsSheet({
   onOpenChange: (v: boolean) => void;
 }) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: applications = [], isLoading } = useQuery<Application[]>({
     queryKey: ["/api/applications", job?.id],
@@ -897,6 +912,84 @@ function ApplicantsSheet({
   });
   const questions: ExportQuestion[] = (questionSet?.questions ?? []) as ExportQuestion[];
   const hasQuestions = questions.length > 0;
+
+  // ── Single-row status mutation ────────────────────────────────────────────
+  const updateStatus = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      apiRequest("PATCH", `/api/applications/${id}`, { status }).then((r) => r.json()),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/applications", job?.id] }),
+    onError: () => toast({ title: "Update failed", variant: "destructive" }),
+  });
+
+  // ── Bulk status mutation ──────────────────────────────────────────────────
+  const bulkUpdate = useMutation({
+    mutationFn: (updates: { id: string; status: string }[]) =>
+      apiRequest("POST", "/api/applications/bulk-status", { updates }).then((r) => r.json()),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/applications", job?.id] });
+      setImportResult({ succeeded: data.succeeded, failed: data.failed, errors: data.results.filter((r: { success: boolean }) => !r.success).map((r: { id: string }) => r.id) });
+    },
+    onError: () => toast({ title: "Bulk update failed", variant: "destructive" }),
+  });
+
+  // ── Excel import handler ──────────────────────────────────────────────────
+  function handleImport(file: File) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(e.target?.result, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "" });
+
+        // Validate columns
+        const missing = BULK_FIXED_COLS.filter((col) => !(col in (rows[0] ?? {})));
+        if (missing.length) {
+          toast({ title: "Format error", description: `Missing columns: ${missing.join(", ")}`, variant: "destructive" });
+          return;
+        }
+
+        // Validate row count matches current applications
+        if (rows.length !== applications.length) {
+          toast({ title: "Row count mismatch", description: `File has ${rows.length} data rows but job has ${applications.length} applications. Do not add or remove rows.`, variant: "destructive" });
+          return;
+        }
+
+        // Validate app IDs all exist
+        const knownIds = new Set(applications.map((a) => a.id));
+        const unknownIds = rows.filter((r) => !knownIds.has(r["__app_id"])).map((r) => r["__app_id"]);
+        if (unknownIds.length) {
+          toast({ title: "Unknown Application IDs", description: `${unknownIds.length} row(s) have IDs not found in this job. Do not edit the __app_id column.`, variant: "destructive" });
+          return;
+        }
+
+        // Validate status values and collect changes
+        const invalid: string[] = [];
+        const updates: { id: string; status: string }[] = [];
+        for (const row of rows) {
+          const newStatus = row["New Status"].trim().toLowerCase();
+          if (!(VALID_STATUSES as readonly string[]).includes(newStatus)) {
+            invalid.push(`"${row["Candidate Name"]}" → "${row["New Status"]}"`);
+          } else if (newStatus !== row["Current Status"].trim().toLowerCase()) {
+            updates.push({ id: row["__app_id"], status: newStatus });
+          }
+        }
+        if (invalid.length) {
+          toast({ title: "Invalid status values", description: `${invalid.slice(0, 3).join("; ")}${invalid.length > 3 ? ` (+${invalid.length - 3} more)` : ""}. Valid: ${VALID_STATUSES.join(", ")}`, variant: "destructive" });
+          return;
+        }
+        if (updates.length === 0) {
+          toast({ title: "No changes detected", description: "The New Status column matches Current Status for all rows." });
+          return;
+        }
+
+        bulkUpdate.mutate(updates);
+      } catch {
+        toast({ title: "Failed to parse file", description: "Ensure the file is a valid .xlsx exported from this system.", variant: "destructive" });
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   if (!job) return null;
 
@@ -938,19 +1031,51 @@ function ApplicantsSheet({
                 </div>
               )}
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-border shrink-0 gap-1.5"
-              onClick={() => exportToExcel(job, applications, candidates, questions)}
-              disabled={applications.length === 0}
-              data-testid="button-export-applicants"
-            >
-              <FileDown className="h-4 w-4" />
-              Export Excel
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-border gap-1.5"
+                onClick={() => exportToExcel(job, applications, candidates, questions)}
+                disabled={applications.length === 0}
+                data-testid="button-export-applicants"
+              >
+                <FileDown className="h-4 w-4" />
+                Export
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-primary/40 text-primary gap-1.5 hover:bg-primary/10"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={applications.length === 0 || bulkUpdate.isPending}
+                data-testid="button-import-applicants"
+              >
+                {bulkUpdate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
+                Import
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImport(f); e.target.value = ""; }}
+              />
+            </div>
           </div>
         </SheetHeader>
+
+        {/* Import result banner */}
+        {importResult && (
+          <div className={`mx-6 mt-4 p-3 rounded-sm border flex items-start gap-3 text-sm ${importResult.failed === 0 ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-amber-500/10 border-amber-500/30 text-amber-400"}`}>
+            {importResult.failed === 0 ? <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" /> : <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />}
+            <div className="flex-1">
+              <span className="font-medium">{importResult.succeeded} status{importResult.succeeded !== 1 ? "es" : ""} updated successfully</span>
+              {importResult.failed > 0 && <span className="ml-2 text-destructive">{importResult.failed} failed</span>}
+            </div>
+            <button onClick={() => setImportResult(null)} className="hover:opacity-70"><X className="h-4 w-4" /></button>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
@@ -971,6 +1096,7 @@ function ApplicantsSheet({
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">Contact</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden sm:table-cell">Applied</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Actions</th>
                   {hasQuestions && (
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Answers</th>
                   )}
@@ -1016,6 +1142,46 @@ function ApplicantsSheet({
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
                             {new Date(app.appliedAt).toLocaleDateString("en-SA")}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1">
+                            {app.status !== "shortlisted" && app.status !== "hired" && app.status !== "rejected" && (
+                              <button
+                                onClick={() => updateStatus.mutate({ id: app.id, status: "shortlisted" })}
+                                disabled={updateStatus.isPending}
+                                title="Shortlist"
+                                className="p-1.5 rounded-sm text-blue-400 hover:bg-blue-500/15 transition-colors"
+                                data-testid={`button-shortlist-${app.id}`}
+                              >
+                                <Star className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            {(app.status === "shortlisted" || app.status === "interviewed") && (
+                              <button
+                                onClick={() => updateStatus.mutate({ id: app.id, status: "hired" })}
+                                disabled={updateStatus.isPending}
+                                title="Mark as Hired"
+                                className="p-1.5 rounded-sm text-emerald-400 hover:bg-emerald-500/15 transition-colors"
+                                data-testid={`button-hire-${app.id}`}
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            {app.status !== "rejected" && app.status !== "hired" && (
+                              <button
+                                onClick={() => updateStatus.mutate({ id: app.id, status: "rejected" })}
+                                disabled={updateStatus.isPending}
+                                title="Not Shortlisted"
+                                className="p-1.5 rounded-sm text-muted-foreground hover:bg-destructive/15 hover:text-destructive transition-colors"
+                                data-testid={`button-reject-${app.id}`}
+                              >
+                                <XCircle className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            {(app.status === "hired" || app.status === "rejected") && (
+                              <span className="text-xs text-muted-foreground/40 italic">Final</span>
+                            )}
                           </div>
                         </td>
                         {hasQuestions && (
