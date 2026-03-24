@@ -37,10 +37,49 @@ type StoredCandidate = {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const NATIONALITIES = [
-  "Saudi Arabian", "Egyptian", "Indian", "Pakistani", "Bangladeshi",
-  "Yemeni", "Filipino", "Indonesian", "Sudanese", "Ethiopian", "Nigerian",
-  "Turkish", "Somali", "Burmese / Myanmar", "Moroccan", "Jordanian",
-  "Syrian", "Iraqi", "Emirati", "Omani", "Kuwaiti", "Other",
+  "Afghan", "Albanian", "Algerian", "American", "Andorran", "Angolan",
+  "Antiguan and Barbudan", "Argentine", "Armenian", "Australian", "Austrian",
+  "Azerbaijani", "Bahamian", "Bahraini", "Bangladeshi", "Barbadian",
+  "Belarusian", "Belgian", "Belizean", "Beninese", "Bhutanese", "Bolivian",
+  "Bosnian and Herzegovinian", "Botswanan", "Brazilian", "Bruneian",
+  "Bulgarian", "Burkinabé", "Burmese", "Burundian", "Cabo Verdean",
+  "Cambodian", "Cameroonian", "Canadian", "Central African", "Chadian",
+  "Chilean", "Chinese", "Colombian", "Comorian", "Congolese (DRC)",
+  "Congolese (Republic)", "Costa Rican", "Croatian", "Cuban", "Cypriot",
+  "Czech", "Danish", "Djiboutian", "Dominican", "Dominican (Republic)",
+  "Dutch", "East Timorese", "Ecuadorian", "Egyptian", "Emirati",
+  "Equatorial Guinean", "Eritrean", "Estonian", "Eswatini", "Ethiopian",
+  "Fijian", "Finnish", "French", "Gabonese", "Gambian", "Georgian",
+  "German", "Ghanaian", "Greek", "Grenadian", "Guatemalan", "Guinean",
+  "Guinea-Bissauan", "Guyanese", "Haitian", "Honduran", "Hungarian",
+  "I-Kiribati", "Indian", "Indonesian", "Iranian", "Iraqi", "Irish",
+  "Israeli", "Italian", "Ivorian", "Jamaican", "Japanese", "Jordanian",
+  "Kazakhstani", "Kenyan", "Korean (North)", "Korean (South)", "Kuwaiti",
+  "Kyrgyzstani", "Laotian", "Latvian", "Lebanese", "Lesothan", "Liberian",
+  "Libyan", "Liechtenstein", "Lithuanian", "Luxembourgish", "Malagasy",
+  "Malawian", "Malaysian", "Maldivian", "Malian", "Maltese", "Marshallese",
+  "Mauritanian", "Mauritian", "Mexican", "Micronesian", "Moldovan",
+  "Monacan", "Mongolian", "Montenegrin", "Moroccan", "Mozambican",
+  "Namibian", "Nauruan", "Nepalese", "New Zealander", "Nicaraguan",
+  "Nigerian", "Nigerien", "Norwegian", "Omani", "Pakistani", "Palauan",
+  "Palestinian", "Panamanian", "Papua New Guinean", "Paraguayan", "Peruvian",
+  "Filipino", "Polish", "Portuguese", "Qatari", "Romanian", "Russian",
+  "Rwandan", "Saint Kittian and Nevisian", "Saint Lucian",
+  "Saint Vincentian", "Samoan", "San Marinese", "São Toméan", "Saudi Arabian",
+  "Senegalese", "Serbian", "Seychellois", "Sierra Leonean", "Singaporean",
+  "Slovak", "Slovenian", "Solomon Islander", "Somali", "South African",
+  "South Sudanese", "Spanish", "Sri Lankan", "Sudanese", "Surinamese",
+  "Swedish", "Swiss", "Syrian", "Taiwanese", "Tajikistani", "Tanzanian",
+  "Thai", "Togolese", "Tongan", "Trinidadian and Tobagonian", "Tunisian",
+  "Turkish", "Turkmenistani", "Tuvaluan", "Ugandan", "Ukrainian",
+  "Uruguayan", "Uzbekistani", "Vanuatuan", "Venezuelan", "Vietnamese",
+  "Yemeni", "Zambian", "Zimbabwean", "Other",
+];
+
+const GENDER_OPTIONS = [
+  { label: "Male",   value: "male" },
+  { label: "Female", value: "female" },
+  { label: "Prefer not to say", value: "prefer_not_to_say" },
 ];
 
 const KSA_CITIES = [
@@ -60,13 +99,14 @@ const LANGUAGE_OPTIONS = [
 // ─── Zod Schema ──────────────────────────────────────────────────────────────
 
 const step1Schema = z.object({
-  firstName:     z.string().min(2, "First name is required"),
-  lastName:      z.string().min(2, "Last name is required"),
+  firstName:       z.string().min(2, "First name is required"),
+  lastName:        z.string().min(2, "Last name is required"),
+  gender:          z.string().min(1, "Gender is required"),
   nationalityText: z.string().min(1, "Nationality is required"),
-  dateOfBirth:   z.string().min(8, "Date of birth is required"),
-  city:          z.string().min(1, "City is required"),
-  email:         z.string().email("Enter a valid email").optional().or(z.literal("")),
-  maritalStatus: z.string().min(1, "Marital status is required"),
+  dateOfBirth:     z.string().min(8, "Date of birth is required"),
+  city:            z.string().min(1, "City is required"),
+  email:           z.string().email("Enter a valid email").optional().or(z.literal("")),
+  maritalStatus:   z.string().min(1, "Marital status is required"),
 });
 
 const step2Schema = z.object({
@@ -177,8 +217,9 @@ function Step1Form({
   const { register, handleSubmit, control, formState: { errors } } = useForm<Step1>({
     resolver: zodResolver(step1Schema),
     defaultValues: {
-      firstName: defaults.firstName ?? (candidate.fullNameEn?.split(" ")[0] ?? ""),
-      lastName:  defaults.lastName  ?? (candidate.fullNameEn?.split(" ").slice(1).join(" ") ?? ""),
+      firstName:       defaults.firstName ?? (candidate.fullNameEn?.split(" ")[0] ?? ""),
+      lastName:        defaults.lastName  ?? (candidate.fullNameEn?.split(" ").slice(1).join(" ") ?? ""),
+      gender:          defaults.gender ?? "",
       nationalityText: defaults.nationalityText ?? "",
       dateOfBirth:     defaults.dateOfBirth ?? "",
       city:            defaults.city ?? "",
@@ -197,6 +238,27 @@ function Step1Form({
           <Input {...register("lastName")} placeholder="Al-Harbi" className="bg-muted/30 border-border" data-testid="input-lastName" />
         </FieldWrapper>
       </div>
+
+      <FieldWrapper label="Gender" required error={errors.gender?.message}>
+        <Controller control={control} name="gender" render={({ field }) => (
+          <div className="grid grid-cols-3 gap-2">
+            {GENDER_OPTIONS.map((opt) => (
+              <button
+                key={opt.value} type="button"
+                onClick={() => field.onChange(opt.value)}
+                data-testid={`button-gender-${opt.value}`}
+                className={`h-10 rounded-sm border text-sm font-medium transition-colors ${
+                  field.value === opt.value
+                    ? "bg-primary border-primary text-primary-foreground"
+                    : "bg-muted/20 border-border text-muted-foreground hover:border-primary/50"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )} />
+      </FieldWrapper>
 
       <FieldWrapper label="Nationality" required error={errors.nationalityText?.message}>
         <Controller control={control} name="nationalityText" render={({ field }) => (
@@ -516,6 +578,7 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
 
     updateCandidate.mutate({
       fullNameEn,
+      gender:              (s1data.gender as "male" | "female" | "prefer_not_to_say") || undefined,
       nationalityText:     s1data.nationalityText,
       nationality:         isNonSaudi ? "non_saudi" : "saudi",
       dateOfBirth:         s1data.dateOfBirth,
