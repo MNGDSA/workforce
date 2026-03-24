@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocation } from "wouter";
@@ -81,6 +81,37 @@ export default function ScheduleInterviewPage() {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const smsTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const watchedGroupName = useWatch({ control: form.control, name: "groupName" });
+  const watchedDate      = useWatch({ control: form.control, name: "date" });
+  const watchedTime      = useWatch({ control: form.control, name: "time" });
+  const watchedVenue     = useWatch({ control: form.control, name: "venueName" });
+  const watchedLocation  = useWatch({ control: form.control, name: "googleLocation" });
+  const watchedNotes     = useWatch({ control: form.control, name: "notes" });
+
+  const resolveTemplate = (template: string) =>
+    template
+      .replace(/\{\{batch\}\}/g, watchedGroupName || "{{batch}}")
+      .replace(/\{\{date\}\}/g, watchedDate || "{{date}}")
+      .replace(/\{\{time\}\}/g, watchedTime || "{{time}}")
+      .replace(/\{\{venue\}\}/g, watchedVenue || "{{venue}}")
+      .replace(/\{\{location\}\}/g, watchedLocation || "{{location}}");
+
+  const insertVariable = (variable: string) => {
+    const el = smsTextareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? el.value.length;
+    const end   = el.selectionEnd   ?? el.value.length;
+    const current = form.getValues("notes");
+    const next = current.slice(0, start) + variable + current.slice(end);
+    form.setValue("notes", next, { shouldValidate: true });
+    requestAnimationFrame(() => {
+      el.focus();
+      const cursor = start + variable.length;
+      el.setSelectionRange(cursor, cursor);
+    });
+  };
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -207,6 +238,7 @@ export default function ScheduleInterviewPage() {
         scheduledAt,
         durationMinutes: data.durationMinutes,
         type: data.venueName,
+        groupName: data.groupName,
         invitedCandidateIds,
         createdByName,
       };
@@ -395,17 +427,58 @@ export default function ScheduleInterviewPage() {
                         <FormLabel className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
                           SMS Content
                         </FormLabel>
+
+                        {/* Variable chips */}
+                        <div className="flex flex-wrap gap-1.5 mb-1">
+                          {[
+                            { label: "{{batch}}", title: "Batch / Group Name" },
+                            { label: "{{date}}",  title: "Interview Date" },
+                            { label: "{{time}}",  title: "Interview Time" },
+                            { label: "{{venue}}", title: "Venue Name" },
+                            { label: "{{location}}", title: "Google Maps Link" },
+                          ].map(({ label, title }) => (
+                            <button
+                              key={label}
+                              type="button"
+                              title={title}
+                              onClick={() => insertVariable(label)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-colors"
+                              data-testid={`chip-var-${label.replace(/\{|\}/g, "")}`}
+                            >
+                              <Plus className="h-2.5 w-2.5" />
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+
                         <FormControl>
                           <Textarea
-                            placeholder="e.g. Please arrive at Gate 3, Al-Noor Tower, Makkah by 08:00 AM. Bring your National ID and a copy of your application. Dress code: formal."
-                            className="bg-muted/30 border-border resize-none"
+                            placeholder={`e.g. Dear candidate, you are invited to interview for {{batch}}.\nVenue: {{venue}}\nDate: {{date}} at {{time}}\nLocation: {{location}}\nPlease bring your National ID.`}
+                            className="bg-muted/30 border-border resize-none font-mono text-sm"
                             rows={5}
                             data-testid="input-sms-content"
                             {...field}
+                            ref={(el) => {
+                              field.ref(el);
+                              smsTextareaRef.current = el;
+                            }}
                           />
                         </FormControl>
+
+                        {/* Live preview */}
+                        {watchedNotes && (
+                          <div className="mt-2 rounded-md border border-border bg-muted/20 p-3 space-y-1">
+                            <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground/60">
+                              Preview — resolved message
+                            </p>
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-relaxed">
+                              {resolveTemplate(watchedNotes)}
+                            </p>
+                          </div>
+                        )}
+
                         <p className="text-xs text-muted-foreground/70 mt-1">
-                          This message will be sent via SMS to all invited candidates to notify them of the venue and interview instructions.
+                          Click a variable chip to insert it at the cursor. The message is sent via SMS to all invited candidates.
                         </p>
                         <FormMessage />
                       </FormItem>

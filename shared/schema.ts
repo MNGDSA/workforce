@@ -350,6 +350,7 @@ export const interviews = pgTable(
     type: text("type").notNull().default("video"),
     meetingUrl: text("meeting_url"),
     notes: text("notes"),
+    groupName: text("group_name"),
     invitedCandidateIds: text("invited_candidate_ids").array(),
     createdByName: text("created_by_name"),
     rating: integer("rating"),

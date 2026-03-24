@@ -600,6 +600,42 @@ export async function registerRoutes(
     try {
       const data = insertInterviewSchema.parse(req.body);
       const interview = await storage.createInterview(data);
+
+      // ── Fire SMS to invited candidates ────────────────────────────────────
+      if (interview.notes && interview.invitedCandidateIds?.length) {
+        setImmediate(async () => {
+          try {
+            const smsPlugin = await storage.getActiveSmsPlugin();
+            if (!smsPlugin) { console.warn("[SMS] No active plugin — skipping interview SMS"); return; }
+
+            // Resolve template variables from interview record
+            const at   = new Date(interview.scheduledAt);
+            const date = at.toLocaleDateString("en-SA", { day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Riyadh" });
+            const time = at.toLocaleTimeString("en-SA", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Riyadh" });
+
+            const resolved = interview.notes
+              .replace(/\{\{batch\}\}/g,    interview.groupName   ?? "")
+              .replace(/\{\{date\}\}/g,     date)
+              .replace(/\{\{time\}\}/g,     time)
+              .replace(/\{\{venue\}\}/g,    interview.type        ?? "")
+              .replace(/\{\{location\}\}/g, interview.meetingUrl  ?? "");
+
+            for (const candidateId of interview.invitedCandidateIds) {
+              const candidate = await storage.getCandidate(candidateId);
+              if (!candidate?.phone) { console.warn(`[SMS] Candidate ${candidateId} has no phone — skipped`); continue; }
+              const result = await sendSmsViaPlugin(smsPlugin, candidate.phone, resolved);
+              if (result.success) {
+                console.log(`[SMS] Interview notification sent to ${candidateId} (${candidate.phone})`);
+              } else {
+                console.error(`[SMS] Failed to send to ${candidateId}: ${result.error}`);
+              }
+            }
+          } catch (e) {
+            console.error("[SMS] Interview notification error:", e);
+          }
+        });
+      }
+
       return res.status(201).json(interview);
     } catch (err) {
       return handleError(res, err);
