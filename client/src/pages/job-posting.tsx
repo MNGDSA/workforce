@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import DashboardLayout from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -750,17 +751,21 @@ type Application = {
   status: string;
   appliedAt: string;
   notes?: string;
+  questionSetAnswers?: { questionSetId?: string; answers?: Record<string, string> } | null;
 };
 
 type CandidateInfo = {
   id: string;
   fullNameEn: string;
   candidateCode: string;
+  nationalId?: string;
   phone?: string;
   email?: string;
   city?: string;
   nationality?: string;
 };
+
+type ExportQuestion = { id: string; text: string };
 
 const appStatusStyle: Record<string, string> = {
   new:         "bg-blue-500/10 text-blue-400",
@@ -777,31 +782,50 @@ function initials(name: string) {
   return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
 
-function exportToCSV(job: JobPosting, applications: Application[], candidates: CandidateInfo[]) {
-  const map = Object.fromEntries(candidates.map((c) => [c.id, c]));
-  const header = ["Candidate Name", "Code", "Email", "Phone", "City", "Status", "Applied At"];
-  const rows = applications.map((a) => {
-    const c = map[a.candidateId];
+function exportToExcel(
+  job: JobPosting,
+  applications: Application[],
+  candidates: CandidateInfo[],
+  questions: ExportQuestion[] = [],
+) {
+  const candidateMap = Object.fromEntries(candidates.map((c) => [c.id, c]));
+
+  // Build header row
+  const fixedHeaders = [
+    "Candidate Name", "Candidate Code", "National ID",
+    "Email", "Phone", "City", "Nationality", "Status", "Applied At",
+  ];
+  const questionHeaders = questions.map((q, i) => `Q${i + 1}: ${q.text}`);
+  const headers = [...fixedHeaders, ...questionHeaders];
+
+  // Build data rows
+  const rows = applications.map((app) => {
+    const c = candidateMap[app.candidateId];
+    const answers = app.questionSetAnswers?.answers ?? {};
     return [
       c?.fullNameEn ?? "Unknown",
       c?.candidateCode ?? "",
+      c?.nationalId ?? "",
       c?.email ?? "",
       c?.phone ?? "",
       c?.city ?? "",
-      a.status,
-      new Date(a.appliedAt).toLocaleDateString("en-SA"),
+      c?.nationality ?? "",
+      app.status,
+      app.appliedAt ? new Date(app.appliedAt).toLocaleDateString("en-SA") : "",
+      ...questions.map((q) => answers[q.id] ?? ""),
     ];
   });
-  const csv = [header, ...rows]
-    .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
-    .join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `applicants-${job.title.replace(/\s+/g, "-")}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+
+  // Style header row bold
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const colWidths = headers.map((h, i) => ({
+    wch: Math.max(h.length, ...rows.map((r) => String(r[i] ?? "").length), 12),
+  }));
+  ws["!cols"] = colWidths;
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Applicants");
+  XLSX.writeFile(wb, `applicants-${job.title.replace(/\s+/g, "-")}.xlsx`);
 }
 
 function ApplicantsSheet({
@@ -813,6 +837,8 @@ function ApplicantsSheet({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+
   const { data: applications = [], isLoading } = useQuery<Application[]>({
     queryKey: ["/api/applications", job?.id],
     queryFn: () => apiRequest("GET", `/api/applications?jobId=${job!.id}`).then((r) => r.json()),
@@ -826,6 +852,15 @@ function ApplicantsSheet({
   });
   const candidates: CandidateInfo[] = Array.isArray(candidateResult) ? candidateResult : (candidateResult?.data ?? []);
   const candidateMap = Object.fromEntries(candidates.map((c) => [c.id, c]));
+
+  // Fetch question set for this job (to get question texts for export + display)
+  const { data: questionSet } = useQuery<{ id: string; name: string; questions: ExportQuestion[] }>({
+    queryKey: ["/api/question-sets", job?.questionSetId],
+    queryFn: () => apiRequest("GET", `/api/question-sets/${job!.questionSetId}`).then((r) => r.json()),
+    enabled: !!job?.questionSetId && open,
+  });
+  const questions: ExportQuestion[] = (questionSet?.questions ?? []) as ExportQuestion[];
+  const hasQuestions = questions.length > 0;
 
   if (!job) return null;
 
@@ -848,7 +883,7 @@ function ApplicantsSheet({
               size="sm"
               variant="outline"
               className="border-border shrink-0 gap-1.5"
-              onClick={() => exportToCSV(job, applications, candidates)}
+              onClick={() => exportToExcel(job, applications, candidates, questions)}
               disabled={applications.length === 0}
               data-testid="button-export-applicants"
             >
@@ -900,47 +935,100 @@ function ApplicantsSheet({
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">Contact</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden sm:table-cell">Applied</th>
+                  {hasQuestions && (
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Answers</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {applications.map((app) => {
                   const candidate = candidateMap[app.candidateId];
+                  const answers = app.questionSetAnswers?.answers ?? {};
+                  const hasAnswers = Object.keys(answers).length > 0;
+                  const isExpanded = expandedRow === app.id;
                   return (
-                    <tr key={app.id} className="hover:bg-muted/20 transition-colors" data-testid={`row-applicant-${app.id}`}>
-                      <td className="px-6 py-3">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8 border border-border shrink-0">
-                            <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                              {candidate ? initials(candidate.fullNameEn) : "?"}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0">
-                            <div className="text-sm font-medium text-white truncate">
-                              {candidate?.fullNameEn ?? "Unknown Candidate"}
+                    <>
+                      <tr key={app.id} className="hover:bg-muted/20 transition-colors" data-testid={`row-applicant-${app.id}`}>
+                        <td className="px-6 py-3">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8 border border-border shrink-0">
+                              <AvatarFallback className="bg-primary/20 text-primary text-xs">
+                                {candidate ? initials(candidate.fullNameEn) : "?"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-white truncate">
+                                {candidate?.fullNameEn ?? "Unknown Candidate"}
+                              </div>
+                              <div className="text-xs text-muted-foreground font-mono">{candidate?.candidateCode ?? "—"}</div>
                             </div>
-                            <div className="text-xs text-muted-foreground font-mono">{candidate?.candidateCode ?? "—"}</div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 hidden md:table-cell">
-                        <div className="text-xs text-muted-foreground space-y-0.5">
-                          {candidate?.email && <div>{candidate.email}</div>}
-                          {candidate?.phone && <div>{candidate.phone}</div>}
-                          {!candidate?.email && !candidate?.phone && <span>—</span>}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant="outline" className={`border-0 text-xs capitalize ${appStatusStyle[app.status] ?? "bg-muted text-muted-foreground"}`}>
-                          {app.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 hidden sm:table-cell text-xs text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(app.appliedAt).toLocaleDateString("en-SA")}
-                        </div>
-                      </td>
-                    </tr>
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          <div className="text-xs text-muted-foreground space-y-0.5">
+                            {candidate?.email && <div>{candidate.email}</div>}
+                            {candidate?.phone && <div>{candidate.phone}</div>}
+                            {!candidate?.email && !candidate?.phone && <span>—</span>}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge variant="outline" className={`border-0 text-xs capitalize ${appStatusStyle[app.status] ?? "bg-muted text-muted-foreground"}`}>
+                            {app.status}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 hidden sm:table-cell text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(app.appliedAt).toLocaleDateString("en-SA")}
+                          </div>
+                        </td>
+                        {hasQuestions && (
+                          <td className="px-4 py-3">
+                            {hasAnswers ? (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedRow(isExpanded ? null : app.id)}
+                                className={`flex items-center gap-1 text-xs font-medium transition-colors px-2 py-1 rounded-sm border ${
+                                  isExpanded
+                                    ? "bg-primary/10 border-primary/40 text-primary"
+                                    : "bg-muted/20 border-border text-muted-foreground hover:border-primary/40 hover:text-primary"
+                                }`}
+                                data-testid={`button-view-answers-${app.id}`}
+                              >
+                                <ChevronRight className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                                {isExpanded ? "Hide" : "View"}
+                              </button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground/40">—</span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                      {isExpanded && hasAnswers && (
+                        <tr key={`${app.id}-answers`} className="bg-muted/5">
+                          <td colSpan={hasQuestions ? 5 : 4} className="px-6 pb-4 pt-2">
+                            <div className="border border-border rounded-md p-4 space-y-3 bg-muted/10">
+                              <p className="text-xs text-primary font-semibold uppercase tracking-wider">
+                                Screening Answers — {questionSet?.name}
+                              </p>
+                              <div className="space-y-2">
+                                {questions.map((q, idx) => (
+                                  <div key={q.id} className="flex items-start gap-3 text-sm">
+                                    <span className="text-xs font-bold text-primary/60 mt-0.5 shrink-0 w-5 text-right">{idx + 1}.</span>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-muted-foreground text-xs">{q.text}</p>
+                                      <p className={`font-medium mt-0.5 ${answers[q.id] ? "text-white" : "text-muted-foreground/40 italic"}`}>
+                                        {answers[q.id] || "No answer"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   );
                 })}
               </tbody>
