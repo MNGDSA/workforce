@@ -1,8 +1,19 @@
 import type { SmsPlugin, SmsPluginConfig } from "@shared/schema";
 
-function resolvePlaceholders(template: unknown, vars: Record<string, string>): unknown {
+type VarMap = Record<string, string | number>;
+
+function resolvePlaceholders(template: unknown, vars: VarMap): unknown {
   if (typeof template === "string") {
-    return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
+    // If the entire string is a single {{variable}} reference, return the
+    // variable's native type (number or string) so JSON fields stay typed.
+    const singleRef = template.match(/^\{\{(\w+)\}\}$/);
+    if (singleRef) {
+      const val = vars[singleRef[1]];
+      return val !== undefined ? val : template;
+    }
+    return template.replace(/\{\{(\w+)\}\}/g, (_, key) =>
+      vars[key] !== undefined ? String(vars[key]) : `{{${key}}}`
+    );
   }
   if (Array.isArray(template)) {
     return template.map((v) => resolvePlaceholders(v, vars));
@@ -81,6 +92,18 @@ export function validatePluginConfig(raw: unknown): { valid: true; config: SmsPl
   return { valid: true, config: raw as SmsPluginConfig };
 }
 
+/**
+ * Returns true if the message contains characters outside the GSM-7 basic
+ * character set. Arabic, emoji, and most non-Latin scripts trigger this.
+ */
+function requiresUnicode(text: string): boolean {
+  // GSM-7 basic charset + extension table (common characters only)
+  const gsm7 = new Set([
+    ...'@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1BÆæßÉ !"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ`¿abcdefghijklmnopqrstuvwxyzäöñüà',
+  ]);
+  return [...text].some((ch) => !gsm7.has(ch));
+}
+
 export async function sendSmsViaPlugin(
   plugin: SmsPlugin,
   to: string,
@@ -89,13 +112,28 @@ export async function sendSmsViaPlugin(
   const config = plugin.pluginConfig as SmsPluginConfig;
   const credentials = (plugin.credentials ?? {}) as Record<string, string>;
 
-  const vars: Record<string, string> = {
+  const isUnicode = requiresUnicode(message);
+
+  const vars: VarMap = {
     ...credentials,
     to,
     message,
     timestamp: Date.now().toString(),
     uuid: crypto.randomUUID(),
+    // Encoding helpers — reference these in your plugin config body:
+    //   {{unicode}}   → "1" for Arabic/non-Latin, "0" for plain text
+    //   {{encoding}}  → "unicode" | "gsm7"
+    //   {{charset}}   → "UCS2" | "GSM7"
+    //   {{coding}}    → 8 (UCS-2) | 0 (GSM-7) — use for GoInfinito "coding" field
+    unicode:  isUnicode ? "1" : "0",
+    encoding: isUnicode ? "unicode" : "gsm7",
+    charset:  isUnicode ? "UCS2" : "GSM7",
+    coding:   isUnicode ? 8 : 0,
   };
+
+  if (isUnicode) {
+    console.log("[SMS Sender] Non-GSM-7 characters detected — using Unicode encoding");
+  }
 
   const sendConfig = config.send;
   const endpoint = (sendConfig.endpoint ?? "").replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? "");
