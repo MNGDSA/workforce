@@ -94,26 +94,121 @@ export async function registerRoutes(
     }
   });
 
+  // ─── OTP: Request code ─────────────────────────────────────────────────────
+  app.post("/api/auth/otp/request", async (req: Request, res: Response) => {
+    try {
+      const { phone } = z.object({ phone: z.string().min(9) }).parse(req.body);
+      const normalizedPhone = phone.trim().replace(/\s+/g, "");
+
+      // Rate limit: max 3 OTP requests per phone per 10 minutes
+      const recentCount = await storage.countRecentOtpRequests(normalizedPhone, 10 * 60 * 1000);
+      if (recentCount >= 3) {
+        return res.status(429).json({ message: "Too many OTP requests. Please wait 10 minutes before trying again." });
+      }
+
+      // Check if active SMS plugin exists
+      const smsPlugin = await storage.getActiveSmsPlugin();
+      if (!smsPlugin) {
+        return res.status(503).json({ message: "SMS service is not configured. Contact support." });
+      }
+
+      // Generate 6-digit code
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+      await storage.createOtpVerification(normalizedPhone, code, expiresAt);
+
+      const message = `Workforce SA: Your verification code is ${code}. Valid for 5 minutes. Do not share this code.`;
+      const result = await sendSmsViaPlugin(smsPlugin, normalizedPhone, message);
+
+      if (!result.success) {
+        console.error("[OTP] SMS delivery failed:", result.error);
+        return res.status(502).json({ message: "Failed to send OTP. Please try again." });
+      }
+
+      console.log(`[OTP] Sent to ${normalizedPhone}, expires ${expiresAt.toISOString()}`);
+      return res.json({ success: true, expiresAt });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── OTP: Verify code ──────────────────────────────────────────────────────
+  app.post("/api/auth/otp/verify", async (req: Request, res: Response) => {
+    try {
+      const { phone, code } = z.object({
+        phone: z.string().min(9),
+        code: z.string().length(6),
+      }).parse(req.body);
+      const normalizedPhone = phone.trim().replace(/\s+/g, "");
+
+      const otp = await storage.getLatestOtpVerification(normalizedPhone);
+      if (!otp) {
+        return res.status(404).json({ message: "No OTP found for this phone number. Request a new code." });
+      }
+      if (otp.verifiedAt) {
+        return res.status(400).json({ message: "This OTP has already been verified." });
+      }
+      if (new Date() > otp.expiresAt) {
+        return res.status(400).json({ message: "OTP has expired. Please request a new code." });
+      }
+      if (otp.attempts >= 5) {
+        return res.status(400).json({ message: "Too many incorrect attempts. Please request a new OTP." });
+      }
+      if (otp.code !== code.trim()) {
+        await storage.incrementOtpAttempts(otp.id);
+        const remaining = 4 - otp.attempts;
+        return res.status(400).json({ message: `Incorrect code. ${remaining} attempt${remaining !== 1 ? "s" : ""} remaining.` });
+      }
+
+      await storage.markOtpVerified(otp.id);
+      return res.json({ success: true, otpId: otp.id });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Registration (requires verified OTP) ──────────────────────────────────
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
-      const { fullName, phone, nationalId, password } = req.body as {
+      const { fullName, phone, nationalId, password, otpId } = req.body as {
         fullName?: string;
         phone?: string;
         nationalId?: string;
         password?: string;
+        otpId?: string;
       };
 
-      if (!fullName || !phone || !nationalId || !password) {
-        return res.status(400).json({ message: "Full name, phone, national ID and password are required" });
+      if (!fullName || !phone || !nationalId || !password || !otpId) {
+        return res.status(400).json({ message: "All fields including OTP verification are required" });
       }
       if (password.length < 8) {
         return res.status(400).json({ message: "Password must be at least 8 characters" });
+      }
+
+      // Validate OTP
+      const normalizedPhone = phone.trim().replace(/\s+/g, "");
+      const otp = await storage.getLatestOtpVerification(normalizedPhone);
+      if (!otp || otp.id !== otpId) {
+        return res.status(400).json({ message: "Invalid OTP session. Please verify your phone again." });
+      }
+      if (!otp.verifiedAt) {
+        return res.status(400).json({ message: "Phone number has not been verified. Please complete OTP verification." });
+      }
+      if (otp.usedForRegistration) {
+        return res.status(400).json({ message: "This OTP has already been used. Please request a new code." });
+      }
+      if (new Date() > new Date(otp.expiresAt.getTime() + 30 * 60 * 1000)) {
+        return res.status(400).json({ message: "OTP session expired. Please verify your phone again." });
       }
 
       // Duplicate checks
       const existingByNationalId = await storage.getUserByNationalId(nationalId.trim());
       if (existingByNationalId) {
         return res.status(409).json({ message: "An account with this National ID already exists" });
+      }
+
+      // Phone transfer check: if phone was previously assigned, flag old record
+      const existingByPhone = await storage.getCandidateByPhone(normalizedPhone);
+      if (existingByPhone) {
+        console.log(`[Register] Phone ${normalizedPhone} previously belonged to candidate ${existingByPhone.id}. Flagging as transferred.`);
+        await storage.flagPhoneTransferred(existingByPhone.id);
       }
 
       const syntheticEmail = `${nationalId.trim()}@candidate.workforce.sa`;
@@ -125,7 +220,7 @@ export async function registerRoutes(
         email: syntheticEmail,
         password: hashed,
         fullName: fullName.trim(),
-        phone: phone.trim(),
+        phone: normalizedPhone,
         nationalId: nationalId.trim(),
         role: "candidate",
         isActive: true,
@@ -139,13 +234,16 @@ export async function registerRoutes(
       const candidate = await storage.createCandidate({
         candidateCode,
         fullNameEn: fullName.trim(),
-        phone: phone.trim(),
+        phone: normalizedPhone,
         nationalId: nationalId.trim(),
         email: syntheticEmail,
         status: "active",
         experienceYears: 0,
         country: "SA",
       });
+
+      // Consume the OTP so it cannot be reused
+      await storage.markOtpUsedForRegistration(otpId);
 
       const { password: _, ...safeUser } = user;
       return res.status(201).json({ user: safeUser, candidate });

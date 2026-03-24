@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -8,8 +7,8 @@ import { useForm } from "react-hook-form";
 import { useLocation } from "wouter";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
-import { ArrowRight, Lock, CreditCard, Phone, AlertCircle, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, Lock, CreditCard, Phone, AlertCircle, Loader2, CheckCircle2, RefreshCw, ShieldCheck } from "lucide-react";
+import { useState, useRef } from "react";
 import { apiRequest } from "@/lib/queryClient";
 
 const loginSchema = z.object({
@@ -25,10 +24,6 @@ const loginSchema = z.object({
 
 const registerSchema = z.object({
   fullName: z.string().min(2, "Full name is required"),
-  phone: z
-    .string()
-    .min(10, "Enter a valid phone number")
-    .refine((v) => /^[0-9]+$/.test(v.trim()), "Numbers only"),
   nationalId: z
     .string()
     .min(8, "Enter a valid National ID or Iqama number")
@@ -36,11 +31,23 @@ const registerSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
+type RegStep = "phone" | "otp" | "details";
+
 export default function AuthPage() {
   const [, setLocation] = useLocation();
   const [loginError, setLoginError] = useState("");
-  const [registerError, setRegisterError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // OTP registration flow state
+  const [regStep, setRegStep] = useState<RegStep>("phone");
+  const [regPhone, setRegPhone] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpId, setOtpId] = useState("");
+  const [otpExpiresAt, setOtpExpiresAt] = useState<Date | null>(null);
+  const [countdown, setCountdown] = useState(0);
+  const [registerError, setRegisterError] = useState("");
+  const otpInputRef = useRef<HTMLInputElement>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -49,7 +56,7 @@ export default function AuthPage() {
 
   const registerForm = useForm<z.infer<typeof registerSchema>>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { fullName: "", phone: "", nationalId: "", password: "" },
+    defaultValues: { fullName: "", nationalId: "", password: "" },
   });
 
   async function onLogin(values: z.infer<typeof loginSchema>) {
@@ -77,15 +84,65 @@ export default function AuthPage() {
     }
   }
 
+  function startCountdown(expiresAt: Date) {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    const tick = () => {
+      const secs = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
+      setCountdown(secs);
+      if (secs === 0 && countdownRef.current) clearInterval(countdownRef.current);
+    };
+    tick();
+    countdownRef.current = setInterval(tick, 1000);
+  }
+
+  async function sendOtp(phone: string) {
+    setRegisterError("");
+    setIsLoading(true);
+    try {
+      const res = await apiRequest("POST", "/api/auth/otp/request", { phone: phone.trim() });
+      const data = await res.json();
+      const expiresAt = new Date(data.expiresAt);
+      setOtpExpiresAt(expiresAt);
+      setRegPhone(phone.trim());
+      setOtpCode("");
+      setRegStep("otp");
+      startCountdown(expiresAt);
+      setTimeout(() => otpInputRef.current?.focus(), 100);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to send OTP";
+      setRegisterError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function verifyOtp() {
+    setRegisterError("");
+    setIsLoading(true);
+    try {
+      const res = await apiRequest("POST", "/api/auth/otp/verify", { phone: regPhone, code: otpCode.trim() });
+      const data = await res.json();
+      setOtpId(data.otpId);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      setRegStep("details");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Verification failed";
+      setRegisterError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   async function onRegister(values: z.infer<typeof registerSchema>) {
     setRegisterError("");
     setIsLoading(true);
     try {
       const res = await apiRequest("POST", "/api/auth/register", {
         fullName: values.fullName.trim(),
-        phone: values.phone.trim(),
+        phone: regPhone,
         nationalId: values.nationalId.trim(),
         password: values.password,
+        otpId,
       });
       const data = await res.json();
       if (data.candidate) {
@@ -250,128 +307,164 @@ export default function AuthPage() {
 
             {/* ── REGISTER TAB ── */}
             <TabsContent value="register" className="space-y-4">
-              <Form {...registerForm}>
-                <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-5">
 
-                  <FormField
-                    control={registerForm.control}
-                    name="fullName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">Full Name</Label>
-                        <FormControl>
-                          <Input
-                            placeholder="Ahmed Al-Mansouri"
-                            className="h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm"
-                            data-testid="input-full-name"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+              {/* Step indicator */}
+              <div className="flex items-center gap-2 mb-2">
+                {(["phone", "otp", "details"] as RegStep[]).map((step, i) => (
+                  <div key={step} className="flex items-center gap-2">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${regStep === step ? "bg-primary text-primary-foreground" : i < ["phone","otp","details"].indexOf(regStep) ? "bg-primary/20 text-primary" : "bg-muted/40 text-muted-foreground"}`}>
+                      {i < ["phone","otp","details"].indexOf(regStep) ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
+                    </div>
+                    <span className={`text-xs font-medium hidden sm:inline ${regStep === step ? "text-white" : "text-muted-foreground"}`}>
+                      {step === "phone" ? "Phone" : step === "otp" ? "Verify" : "Details"}
+                    </span>
+                    {i < 2 && <div className="flex-1 h-px bg-border w-4 mx-1" />}
+                  </div>
+                ))}
+              </div>
 
-                  <FormField
-                    control={registerForm.control}
-                    name="nationalId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">
-                          National ID or Iqama Number
-                        </Label>
-                        <FormControl>
-                          <div className="relative group">
-                            <CreditCard className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                            <Input
-                              placeholder="National ID (1xxxxxxxxx) or Iqama (2xxxxxxxxx)"
-                              className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm font-mono tracking-wide"
-                              inputMode="numeric"
-                              data-testid="input-national-id"
-                              {...field}
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={registerForm.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">
-                          Phone Number
-                        </Label>
-                        <FormControl>
-                          <div className="relative group">
-                            <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                            <Input
-                              placeholder="0501234567"
-                              className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm font-mono tracking-wide"
-                              inputMode="tel"
-                              data-testid="input-phone"
-                              {...field}
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={registerForm.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">Password</Label>
-                        <FormControl>
-                          <div className="relative group">
-                            <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                            <Input
-                              type="password"
-                              placeholder="Minimum 8 characters"
-                              className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm"
-                              data-testid="input-register-password"
-                              {...field}
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Register error banner */}
+              {/* ── Step 1: Phone ── */}
+              {regStep === "phone" && (
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">Phone Number</Label>
+                    <div className="relative group">
+                      <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                      <Input
+                        placeholder="0501234567"
+                        value={regPhone}
+                        onChange={(e) => { setRegPhone(e.target.value); setRegisterError(""); }}
+                        className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm font-mono tracking-wide"
+                        inputMode="tel"
+                        data-testid="input-phone"
+                        onKeyDown={(e) => e.key === "Enter" && regPhone.length >= 9 && sendOtp(regPhone)}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">A 6-digit verification code will be sent to this number.</p>
+                  </div>
                   {registerError && (
-                    <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive" data-testid="register-error">
-                      <AlertCircle className="h-4 w-4 shrink-0" />
-                      {registerError}
+                    <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive">
+                      <AlertCircle className="h-4 w-4 shrink-0" />{registerError}
                     </div>
                   )}
-
                   <Button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm shadow-[0_0_20px_rgba(25,90,55,0.3)] hover:shadow-[0_0_30px_rgba(25,90,55,0.5)] transition-all duration-300 group"
-                    data-testid="button-register"
+                    onClick={() => sendOtp(regPhone)}
+                    disabled={isLoading || regPhone.length < 9}
+                    className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm shadow-[0_0_20px_rgba(25,90,55,0.3)] transition-all duration-300"
+                    data-testid="button-send-otp"
                   >
-                    {isLoading ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <>
-                        Create Account
-                        <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                      </>
-                    )}
+                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Phone className="mr-2 h-4 w-4" />Send Verification Code</>}
                   </Button>
-                </form>
-              </Form>
+                </div>
+              )}
 
-              <div className="text-center mt-4">
+              {/* ── Step 2: OTP ── */}
+              {regStep === "otp" && (
+                <div className="space-y-4">
+                  <div className="p-3 bg-primary/5 border border-primary/20 rounded-sm flex items-start gap-2">
+                    <ShieldCheck className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                    <div className="text-sm">
+                      <p className="text-white font-medium">Code sent to {regPhone}</p>
+                      <p className="text-muted-foreground text-xs mt-0.5">Check your SMS messages. The code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}.</p>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">6-Digit Code</Label>
+                    <Input
+                      ref={otpInputRef}
+                      placeholder="• • • • • •"
+                      value={otpCode}
+                      onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setRegisterError(""); }}
+                      className="h-14 text-center text-2xl font-mono tracking-[0.5em] bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm"
+                      inputMode="numeric"
+                      maxLength={6}
+                      data-testid="input-otp-code"
+                      onKeyDown={(e) => e.key === "Enter" && otpCode.length === 6 && verifyOtp()}
+                    />
+                  </div>
+                  {registerError && (
+                    <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive">
+                      <AlertCircle className="h-4 w-4 shrink-0" />{registerError}
+                    </div>
+                  )}
+                  <Button
+                    onClick={verifyOtp}
+                    disabled={isLoading || otpCode.length !== 6}
+                    className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm shadow-[0_0_20px_rgba(25,90,55,0.3)] transition-all duration-300"
+                    data-testid="button-verify-otp"
+                  >
+                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="mr-2 h-4 w-4" />Verify Code</>}
+                  </Button>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <button onClick={() => { setRegStep("phone"); setRegisterError(""); }} className="hover:text-white transition-colors">← Change number</button>
+                    <button
+                      onClick={() => countdown === 0 && sendOtp(regPhone)}
+                      disabled={countdown > 0}
+                      className={`flex items-center gap-1 transition-colors ${countdown > 0 ? "opacity-40 cursor-not-allowed" : "hover:text-white cursor-pointer"}`}
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      {countdown > 0 ? `Resend in ${countdown}s` : "Resend code"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Step 3: Details ── */}
+              {regStep === "details" && (
+                <div className="space-y-4">
+                  <div className="p-3 bg-primary/5 border border-primary/20 rounded-sm flex items-center gap-2 text-sm">
+                    <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                    <span className="text-primary font-medium">Phone verified: {regPhone}</span>
+                  </div>
+                  <Form {...registerForm}>
+                    <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-4">
+                      <FormField control={registerForm.control} name="fullName" render={({ field }) => (
+                        <FormItem>
+                          <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">Full Name</Label>
+                          <FormControl>
+                            <Input placeholder="Ahmed Al-Mansouri" className="h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm" data-testid="input-full-name" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={registerForm.control} name="nationalId" render={({ field }) => (
+                        <FormItem>
+                          <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">National ID or Iqama Number</Label>
+                          <FormControl>
+                            <div className="relative group">
+                              <CreditCard className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                              <Input placeholder="National ID (1xxxxxxxxx) or Iqama (2xxxxxxxxx)" className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm font-mono tracking-wide" inputMode="numeric" data-testid="input-national-id" {...field} />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={registerForm.control} name="password" render={({ field }) => (
+                        <FormItem>
+                          <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">Password</Label>
+                          <FormControl>
+                            <div className="relative group">
+                              <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                              <Input type="password" placeholder="Minimum 8 characters" className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm" data-testid="input-register-password" {...field} />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      {registerError && (
+                        <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive" data-testid="register-error">
+                          <AlertCircle className="h-4 w-4 shrink-0" />{registerError}
+                        </div>
+                      )}
+                      <Button type="submit" disabled={isLoading} className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm shadow-[0_0_20px_rgba(25,90,55,0.3)] hover:shadow-[0_0_30px_rgba(25,90,55,0.5)] transition-all duration-300 group" data-testid="button-register">
+                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Create Account<ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" /></>}
+                      </Button>
+                    </form>
+                  </Form>
+                </div>
+              )}
+
+              <div className="text-center mt-2">
                 <p className="text-sm text-muted-foreground">
                   By registering, you agree to our{" "}
                   <a href="#" className="hover:text-primary transition-colors underline underline-offset-4">Terms of Service</a>

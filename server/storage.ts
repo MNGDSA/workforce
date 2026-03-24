@@ -13,6 +13,9 @@ import {
   smpContracts,
   questionSets,
   smsPlugins,
+  otpVerifications,
+  type OtpVerification,
+  type InsertOtpVerification,
   type User,
   type InsertUser,
   type Candidate,
@@ -56,6 +59,7 @@ export interface IStorage {
   // Candidates (70k scale)
   getCandidates(query: CandidateQuery): Promise<{ data: Candidate[]; total: number; page: number; limit: number }>;
   getCandidate(id: string): Promise<Candidate | undefined>;
+  getCandidateByPhone(phone: string): Promise<Candidate | undefined>;
   createCandidate(candidate: InsertCandidate): Promise<Candidate>;
   updateCandidate(id: string, data: Partial<InsertCandidate>): Promise<Candidate | undefined>;
   deleteCandidate(id: string): Promise<boolean>;
@@ -142,6 +146,15 @@ export interface IStorage {
   updateSmsPluginCredentials(id: string, credentials: Record<string, string>): Promise<SmsPlugin | undefined>;
   activateSmsPlugin(id: string): Promise<boolean>;
   deleteSmsPlugin(id: string): Promise<boolean>;
+
+  // OTP Verifications
+  createOtpVerification(phone: string, code: string, expiresAt: Date): Promise<OtpVerification>;
+  getLatestOtpVerification(phone: string): Promise<OtpVerification | undefined>;
+  incrementOtpAttempts(id: string): Promise<void>;
+  markOtpVerified(id: string): Promise<void>;
+  markOtpUsedForRegistration(id: string): Promise<void>;
+  countRecentOtpRequests(phone: string, sinceMs: number): Promise<number>;
+  flagPhoneTransferred(candidateId: string): Promise<void>;
 
   // Dashboard
   getDashboardStats(): Promise<{
@@ -253,6 +266,11 @@ export class DatabaseStorage implements IStorage {
 
   async getCandidate(id: string): Promise<Candidate | undefined> {
     const [candidate] = await db.select().from(candidates).where(eq(candidates.id, id));
+    return candidate;
+  }
+
+  async getCandidateByPhone(phone: string): Promise<Candidate | undefined> {
+    const [candidate] = await db.select().from(candidates).where(eq(candidates.phone, phone));
     return candidate;
   }
 
@@ -772,6 +790,60 @@ export class DatabaseStorage implements IStorage {
   async deleteSmsPlugin(id: string): Promise<boolean> {
     const result = await db.delete(smsPlugins).where(eq(smsPlugins.id, id)).returning();
     return result.length > 0;
+  }
+
+  // ─── OTP Verifications ────────────────────────────────────────────────────
+
+  async createOtpVerification(phone: string, code: string, expiresAt: Date): Promise<OtpVerification> {
+    const [otp] = await db.insert(otpVerifications).values({ phone, code, expiresAt, attempts: 0 }).returning();
+    return otp;
+  }
+
+  async getLatestOtpVerification(phone: string): Promise<OtpVerification | undefined> {
+    const [otp] = await db
+      .select()
+      .from(otpVerifications)
+      .where(eq(otpVerifications.phone, phone))
+      .orderBy(desc(otpVerifications.createdAt))
+      .limit(1);
+    return otp;
+  }
+
+  async incrementOtpAttempts(id: string): Promise<void> {
+    await db
+      .update(otpVerifications)
+      .set({ attempts: sql`${otpVerifications.attempts} + 1` })
+      .where(eq(otpVerifications.id, id));
+  }
+
+  async markOtpVerified(id: string): Promise<void> {
+    await db
+      .update(otpVerifications)
+      .set({ verifiedAt: new Date() })
+      .where(eq(otpVerifications.id, id));
+  }
+
+  async markOtpUsedForRegistration(id: string): Promise<void> {
+    await db
+      .update(otpVerifications)
+      .set({ usedForRegistration: true })
+      .where(eq(otpVerifications.id, id));
+  }
+
+  async countRecentOtpRequests(phone: string, sinceMs: number): Promise<number> {
+    const since = new Date(Date.now() - sinceMs);
+    const [result] = await db
+      .select({ count: count() })
+      .from(otpVerifications)
+      .where(and(eq(otpVerifications.phone, phone), sql`${otpVerifications.createdAt} >= ${since}`));
+    return Number(result?.count ?? 0);
+  }
+
+  async flagPhoneTransferred(candidateId: string): Promise<void> {
+    await db
+      .update(candidates)
+      .set({ phone: null, phoneTransferredAt: new Date(), updatedAt: new Date() })
+      .where(eq(candidates.id, candidateId));
   }
 }
 

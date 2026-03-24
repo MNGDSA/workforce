@@ -189,6 +189,7 @@ export const candidates = pgTable(
     notes: text("notes"),
     tags: text("tags").array(),
     metadata: jsonb("metadata"),
+    phoneTransferredAt: timestamp("phone_transferred_at"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
   },
@@ -444,6 +445,18 @@ export const smsPlugins = pgTable("sms_plugins", {
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
+// ─── OTP Verifications ──────────────────────────────────────────────────────
+export const otpVerifications = pgTable("otp_verifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  phone: text("phone").notNull(),
+  code: varchar("code", { length: 6 }).notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  verifiedAt: timestamp("verified_at"),
+  usedForRegistration: boolean("used_for_registration").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
 // ─── Insert Schemas (Zod) ───────────────────────────────────────────────────
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -564,6 +577,13 @@ export const insertSmsPluginSchema = createInsertSchema(smsPlugins).omit({
 });
 export type InsertSmsPlugin = z.infer<typeof insertSmsPluginSchema>;
 export type SmsPlugin = typeof smsPlugins.$inferSelect;
+
+export const insertOtpVerificationSchema = createInsertSchema(otpVerifications).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertOtpVerification = z.infer<typeof insertOtpVerificationSchema>;
+export type OtpVerification = typeof otpVerifications.$inferSelect;
 
 // ─── SMS Plugin Config Format (the contract every plugin must satisfy) ───────
 export interface SmsCredentialDef {
