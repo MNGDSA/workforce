@@ -443,14 +443,17 @@ function CreateJobDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Screening Question Set</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                    <Select
+                      onValueChange={(v) => field.onChange(v === "none" ? null : v)}
+                      value={field.value || "none"}
+                    >
                       <FormControl>
                         <SelectTrigger className="h-10 bg-muted/30 border-border focus:ring-primary/20 rounded-sm" data-testid="select-job-questionset">
                           <SelectValue placeholder="None (optional)" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-card border-border">
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="none">None</SelectItem>
                         {questionSets.map(qs => (
                           <SelectItem key={qs.id} value={qs.id}>{qs.name}</SelectItem>
                         ))}
@@ -706,14 +709,17 @@ function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
             <FormField control={form.control} name="questionSetId" render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Screening Question Set</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                <Select
+                  onValueChange={(v) => field.onChange(v === "none" ? null : v)}
+                  value={field.value || "none"}
+                >
                   <FormControl>
                     <SelectTrigger className="h-10 bg-muted/30 border-border focus:ring-primary/20 rounded-sm" data-testid="select-postjob-questionset">
                       <SelectValue placeholder="None (optional)" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent className="bg-card border-border">
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {questionSets.map(qs => (
                       <SelectItem key={qs.id} value={qs.id}>{qs.name}</SelectItem>
                     ))}
