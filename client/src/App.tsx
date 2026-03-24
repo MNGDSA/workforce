@@ -16,6 +16,7 @@ import JobPostingPage from "@/pages/job-posting";
 import AutomationPage from "@/pages/automation";
 import SettingsPage from "@/pages/settings";
 import DocumentationPage from "@/pages/documentation";
+import JobDetailPage from "@/pages/job-detail";
 
 function Router() {
   return (
@@ -33,6 +34,7 @@ function Router() {
       <Route path="/settings" component={SettingsPage} />
       <Route path="/documentation" component={DocumentationPage} />
       <Route path="/candidate-portal" component={CandidatePortal} />
+      <Route path="/jobs/:id" component={JobDetailPage} />
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>

@@ -376,8 +376,7 @@ export default function CandidatePortal() {
   const appliedJobs = jobs.filter((j) => appliedIds.has(j.id));
 
   const handleApply = (job: JobPosting) => {
-    setSelectedJob(job);
-    setApplyOpen(true);
+    setLocation(`/jobs/${job.id}`);
   };
 
   const handleApplySuccess = (jobId: string) => {
