@@ -53,7 +53,6 @@ const topNavItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/workforce", icon: Users,           label: "Workforce" },
   { href: "/payroll",   icon: Wallet,          label: "Payroll" },
-  { href: "/reports",   icon: BarChart3,       label: "Reports" },
 ];
 
 const settingsPaths = ["/settings", "/automation"];
@@ -190,6 +189,8 @@ export default function DashboardLayout({ children }: LayoutProps) {
             </div>
           )}
         </div>
+
+        {renderNavLink("/reports", BarChart3, "Reports")}
 
         {bottomNavItems.map((item) => renderNavLink(item.href, item.icon, item.label))}
 
