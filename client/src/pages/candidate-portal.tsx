@@ -27,6 +27,9 @@ import {
   User,
   ChevronDown,
   Save,
+  Eye,
+  EyeOff,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,9 +54,7 @@ import {
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+
 import { Separator } from "@/components/ui/separator";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -417,15 +418,29 @@ export default function CandidatePortal() {
     enabled: !!candidateId,
   });
 
-  // Profile form state
+  // ── Profile form state ──────────────────────────────────────────────────
   const [profileSkills, setProfileSkills] = useState("");
   const [profileLangs,  setProfileLangs]  = useState("");
+
+  // ── Password change state ────────────────────────────────────────────────
+  const [pwCurrent,  setPwCurrent]  = useState("");
+  const [pwNew,      setPwNew]      = useState("");
+  const [pwConfirm,  setPwConfirm]  = useState("");
+  const [showPwCur,  setShowPwCur]  = useState(false);
+  const [showPwNew,  setShowPwNew]  = useState(false);
+
+  /** Normalize a free-text tag list: handle ، ; | / as separators */
+  function normalizeTags(raw: string): string[] {
+    return raw.split(/[،,;|/\t\r\n]+/).map((s) => s.trim()).filter(Boolean);
+  }
+  function normalizeDisplay(raw: string): string {
+    return normalizeTags(raw).join(", ");
+  }
 
   const saveProfile = useMutation({
     mutationFn: async (data: Record<string, unknown>) =>
       apiRequest("PATCH", `/api/candidates/${candidateId}`, data).then((r) => r.json()),
     onSuccess: (updated) => {
-      // Sync back to localStorage so initials / name update everywhere
       const existing = (() => { try { return JSON.parse(localStorage.getItem("workforce_candidate") || "{}"); } catch { return {}; } })();
       localStorage.setItem("workforce_candidate", JSON.stringify({ ...existing, ...updated }));
       queryClient.invalidateQueries({ queryKey: ["/api/candidates/profile", candidateId] });
@@ -435,12 +450,29 @@ export default function CandidatePortal() {
     onError: () => toast({ title: "Save failed", description: "Please try again.", variant: "destructive" }),
   });
 
-  // Initialise the skill/lang text boxes whenever the sheet opens
+  const changePassword = useMutation({
+    mutationFn: async () =>
+      apiRequest("POST", "/api/auth/change-password", {
+        candidateId,
+        currentPassword: pwCurrent,
+        newPassword: pwNew,
+      }).then(async (r) => {
+        if (!r.ok) { const e = await r.json(); throw new Error(e.message); }
+        return r.json();
+      }),
+    onSuccess: () => {
+      toast({ title: "Password changed", description: "Your new password is active." });
+      setPwCurrent(""); setPwNew(""); setPwConfirm("");
+    },
+    onError: (err: Error) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
+
   const handleProfileOpen = (open: boolean) => {
     if (open && candidateProfile) {
-      setProfileSkills(Array.isArray(candidateProfile.skills) ? (candidateProfile.skills as string[]).join(", ") : "");
-      setProfileLangs(Array.isArray(candidateProfile.languages) ? (candidateProfile.languages as string[]).join(", ") : "");
+      setProfileSkills(Array.isArray(candidateProfile.skills)    ? (candidateProfile.skills    as string[]).join(", ") : "");
+      setProfileLangs( Array.isArray(candidateProfile.languages) ? (candidateProfile.languages as string[]).join(", ") : "");
     }
+    if (!open) { setPwCurrent(""); setPwNew(""); setPwConfirm(""); }
     setProfileOpen(open);
   };
 
@@ -449,11 +481,23 @@ export default function CandidatePortal() {
     const fd = new FormData(e.currentTarget);
     const raw: Record<string, unknown> = {};
     fd.forEach((v, k) => { if (String(v).trim()) raw[k] = String(v).trim(); });
-    raw.skills    = profileSkills.split(",").map((s) => s.trim()).filter(Boolean);
-    raw.languages = profileLangs.split(",").map((s) => s.trim()).filter(Boolean);
-    if (raw.experienceYears) raw.experienceYears = Number(raw.experienceYears);
-    if (raw.expectedSalary)  raw.expectedSalary  = String(raw.expectedSalary);
+    // Combine first + last name
+    const fn = String(raw.firstName ?? "").trim();
+    const ln = String(raw.lastName  ?? "").trim();
+    if (fn || ln) raw.fullNameEn = `${fn} ${ln}`.trim();
+    delete raw.firstName; delete raw.lastName;
+    raw.skills    = normalizeTags(profileSkills);
+    raw.languages = normalizeTags(profileLangs);
     saveProfile.mutate(raw);
+  }
+
+  function handlePasswordSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (pwNew !== pwConfirm) {
+      toast({ title: "Passwords don't match", description: "Please re-enter your new password.", variant: "destructive" });
+      return;
+    }
+    changePassword.mutate();
   }
 
   // Derive display name and initials from live profile or localStorage fallback
@@ -844,56 +888,54 @@ export default function CandidatePortal() {
 
           <form onSubmit={handleProfileSave} className="py-6 space-y-6">
 
-            {/* Personal */}
+            {/* ── Personal ──────────────────────────────────────────── */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Personal</p>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-white">Full Name (English)</label>
+                    <label className="text-sm font-medium text-white">First Name</label>
                     <Input
-                      name="fullNameEn"
-                      defaultValue={String(candidateProfile?.fullNameEn ?? storedCandidate.fullNameEn ?? "")}
-                      placeholder="e.g. Ahmed Al-Zahrani"
+                      name="firstName"
+                      defaultValue={(candidateProfile?.fullNameEn ?? storedCandidate.fullNameEn ?? "").toString().split(" ")[0]}
+                      placeholder="Mohammed"
                       className="bg-background border-border"
-                      data-testid="input-fullNameEn"
+                      data-testid="input-firstName"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-white">الاسم بالعربي</label>
+                    <label className="text-sm font-medium text-white">Last Name</label>
                     <Input
-                      name="fullNameAr"
-                      defaultValue={String(candidateProfile?.fullNameAr ?? "")}
-                      placeholder="أحمد الزهراني"
-                      dir="rtl"
+                      name="lastName"
+                      defaultValue={(candidateProfile?.fullNameEn ?? storedCandidate.fullNameEn ?? "").toString().split(" ").slice(1).join(" ")}
+                      placeholder="Al-Harbi"
                       className="bg-background border-border"
-                      data-testid="input-fullNameAr"
+                      data-testid="input-lastName"
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-white">Date of Birth</label>
-                    <Input
-                      name="dateOfBirth"
-                      type="date"
-                      defaultValue={String(candidateProfile?.dateOfBirth ?? "")}
-                      className="bg-background border-border"
-                      data-testid="input-dateOfBirth"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-white">Gender</label>
-                    <Select name="gender" defaultValue={String(candidateProfile?.gender ?? "")}>
-                      <SelectTrigger className="bg-background border-border" data-testid="select-gender">
-                        <SelectValue placeholder="Select gender" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-card border-border">
-                        <SelectItem value="male">Male</SelectItem>
-                        <SelectItem value="female">Female</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-white">الاسم بالعربي</label>
+                  <Input
+                    name="fullNameAr"
+                    defaultValue={String(candidateProfile?.fullNameAr ?? "")}
+                    placeholder="محمد الحربي"
+                    dir="rtl"
+                    className="bg-background border-border"
+                    data-testid="input-fullNameAr"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-white flex items-center gap-2">
+                    Date of Birth
+                    <span className="text-xs text-muted-foreground font-normal bg-muted/40 px-1.5 py-0.5 rounded">Locked — contact support to update</span>
+                  </label>
+                  <Input
+                    value={String(candidateProfile?.dateOfBirth ?? storedCandidate.dateOfBirth ?? "")}
+                    disabled
+                    className="bg-muted/20 border-border text-muted-foreground opacity-60 cursor-not-allowed"
+                    data-testid="input-dateOfBirth"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-white">Nationality</label>
@@ -910,31 +952,19 @@ export default function CandidatePortal() {
 
             <Separator className="bg-border" />
 
-            {/* Contact */}
+            {/* ── Contact ───────────────────────────────────────────── */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Contact</p>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-white">Phone</label>
-                    <Input
-                      name="phone"
-                      defaultValue={String(candidateProfile?.phone ?? storedCandidate.phone ?? "")}
-                      placeholder="05xxxxxxxx"
-                      className="bg-background border-border"
-                      data-testid="input-phone"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-white">WhatsApp</label>
-                    <Input
-                      name="whatsapp"
-                      defaultValue={String(candidateProfile?.whatsapp ?? "")}
-                      placeholder="05xxxxxxxx"
-                      className="bg-background border-border"
-                      data-testid="input-whatsapp"
-                    />
-                  </div>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-white">Phone</label>
+                  <Input
+                    name="phone"
+                    defaultValue={String(candidateProfile?.phone ?? storedCandidate.phone ?? "")}
+                    placeholder="05xxxxxxxx"
+                    className="bg-background border-border"
+                    data-testid="input-phone"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-white">Email</label>
@@ -947,37 +977,25 @@ export default function CandidatePortal() {
                     data-testid="input-email"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-white">City</label>
-                    <Input
-                      name="city"
-                      defaultValue={String(candidateProfile?.city ?? "")}
-                      placeholder="e.g. Riyadh"
-                      className="bg-background border-border"
-                      data-testid="input-city"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-white">Region</label>
-                    <Input
-                      name="region"
-                      defaultValue={String(candidateProfile?.region ?? "")}
-                      placeholder="e.g. Makkah"
-                      className="bg-background border-border"
-                      data-testid="input-region"
-                    />
-                  </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-white">City of Residence</label>
+                  <Input
+                    name="city"
+                    defaultValue={String(candidateProfile?.city ?? "")}
+                    placeholder="e.g. Riyadh"
+                    className="bg-background border-border"
+                    data-testid="input-city"
+                  />
                 </div>
               </div>
             </div>
 
             <Separator className="bg-border" />
 
-            {/* Professional */}
+            {/* ── Professional ──────────────────────────────────────── */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Professional</p>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-white">Current Role</label>
@@ -1000,47 +1018,41 @@ export default function CandidatePortal() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-white">Years of Experience</label>
-                    <Input
-                      name="experienceYears"
-                      type="number"
-                      min="0"
-                      max="50"
-                      defaultValue={String(candidateProfile?.experienceYears ?? "0")}
-                      className="bg-background border-border"
-                      data-testid="input-experienceYears"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-white">Education Level</label>
-                    <Input
-                      name="educationLevel"
-                      defaultValue={String(candidateProfile?.educationLevel ?? "")}
-                      placeholder="e.g. Bachelor's"
-                      className="bg-background border-border"
-                      data-testid="input-educationLevel"
-                    />
-                  </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-white">Education Level</label>
+                  <Input
+                    name="educationLevel"
+                    defaultValue={String(candidateProfile?.educationLevel ?? "")}
+                    placeholder="e.g. Bachelor's Degree"
+                    className="bg-background border-border"
+                    data-testid="input-educationLevel"
+                  />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-white">Skills <span className="text-muted-foreground font-normal">(comma-separated)</span></label>
+                  <label className="text-sm font-medium text-white">
+                    Skills
+                    <span className="text-muted-foreground font-normal ml-1 text-xs">separate with commas</span>
+                  </label>
                   <Textarea
                     value={profileSkills}
                     onChange={(e) => setProfileSkills(e.target.value)}
-                    placeholder="e.g. First Aid, Crowd Control, Arabic, English"
+                    onBlur={() => setProfileSkills(normalizeDisplay(profileSkills))}
+                    placeholder="First Aid, Crowd Control, Customer Service"
                     className="bg-background border-border resize-none"
                     rows={2}
                     data-testid="input-skills"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-white">Languages <span className="text-muted-foreground font-normal">(comma-separated)</span></label>
+                  <label className="text-sm font-medium text-white">
+                    Languages
+                    <span className="text-muted-foreground font-normal ml-1 text-xs">separate with commas</span>
+                  </label>
                   <Textarea
                     value={profileLangs}
                     onChange={(e) => setProfileLangs(e.target.value)}
-                    placeholder="e.g. Arabic, English, Urdu"
+                    onBlur={() => setProfileLangs(normalizeDisplay(profileLangs))}
+                    placeholder="Arabic, English, Urdu"
                     className="bg-background border-border resize-none"
                     rows={2}
                     data-testid="input-languages"
@@ -1049,38 +1061,7 @@ export default function CandidatePortal() {
               </div>
             </div>
 
-            <Separator className="bg-border" />
-
-            {/* Financial */}
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Financial</p>
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-white">IBAN Number</label>
-                  <Input
-                    name="ibanNumber"
-                    defaultValue={String(candidateProfile?.ibanNumber ?? "")}
-                    placeholder="SA00 0000 0000 0000 0000 0000"
-                    className="bg-background border-border font-mono"
-                    data-testid="input-ibanNumber"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-white">Expected Monthly Salary (SAR)</label>
-                  <Input
-                    name="expectedSalary"
-                    type="number"
-                    min="0"
-                    defaultValue={String(candidateProfile?.expectedSalary ?? "")}
-                    placeholder="e.g. 3500"
-                    className="bg-background border-border"
-                    data-testid="input-expectedSalary"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3 pt-2 pb-6">
+            <div className="flex gap-3 pt-2">
               <Button
                 type="submit"
                 disabled={saveProfile.isPending}
@@ -1094,6 +1075,72 @@ export default function CandidatePortal() {
                 Cancel
               </Button>
             </div>
+          </form>
+
+          <Separator className="bg-border" />
+
+          {/* ── Change Password ───────────────────────────────────────── */}
+          <form onSubmit={handlePasswordSave} className="py-6 space-y-3 pb-10">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-2">
+              <Lock className="h-3.5 w-3.5" />
+              Change Password
+            </p>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-white">Current Password</label>
+              <div className="relative">
+                <Input
+                  type={showPwCur ? "text" : "password"}
+                  value={pwCurrent}
+                  onChange={(e) => setPwCurrent(e.target.value)}
+                  placeholder="Enter current password"
+                  className="bg-background border-border pr-10"
+                  data-testid="input-pw-current"
+                />
+                <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white" onClick={() => setShowPwCur(!showPwCur)}>
+                  {showPwCur ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-white">New Password</label>
+              <div className="relative">
+                <Input
+                  type={showPwNew ? "text" : "password"}
+                  value={pwNew}
+                  onChange={(e) => setPwNew(e.target.value)}
+                  placeholder="At least 8 characters"
+                  className="bg-background border-border pr-10"
+                  data-testid="input-pw-new"
+                />
+                <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white" onClick={() => setShowPwNew(!showPwNew)}>
+                  {showPwNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-white">Confirm New Password</label>
+              <Input
+                type="password"
+                value={pwConfirm}
+                onChange={(e) => setPwConfirm(e.target.value)}
+                placeholder="Repeat new password"
+                className={`bg-background border-border ${pwConfirm && pwNew !== pwConfirm ? "border-destructive" : ""}`}
+                data-testid="input-pw-confirm"
+              />
+              {pwConfirm && pwNew !== pwConfirm && (
+                <p className="text-xs text-destructive">Passwords don't match</p>
+              )}
+            </div>
+            <Button
+              type="submit"
+              disabled={changePassword.isPending || !pwCurrent || !pwNew || pwNew !== pwConfirm}
+              variant="outline"
+              className="w-full border-border font-semibold"
+              data-testid="button-change-password"
+            >
+              {changePassword.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
+              Update Password
+            </Button>
           </form>
         </SheetContent>
       </Sheet>

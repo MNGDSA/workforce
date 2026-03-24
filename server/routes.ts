@@ -153,6 +153,34 @@ export async function registerRoutes(
     }
   });
 
+  // ─── Change password (candidate self-service) ───────────────────────────
+  app.post("/api/auth/change-password", async (req: Request, res: Response) => {
+    try {
+      const { candidateId, currentPassword, newPassword } = req.body as {
+        candidateId?: string; currentPassword?: string; newPassword?: string;
+      };
+      if (!candidateId || !currentPassword || !newPassword) {
+        return res.status(400).json({ message: "All fields are required" });
+      }
+      if (newPassword.length < 8) {
+        return res.status(400).json({ message: "New password must be at least 8 characters" });
+      }
+      const candidate = await storage.getCandidate(candidateId);
+      if (!candidate) return res.status(404).json({ message: "Candidate not found" });
+      const user = candidate.nationalId
+        ? await storage.getUserByNationalId(candidate.nationalId)
+        : undefined;
+      if (!user) return res.status(404).json({ message: "User account not found" });
+      const valid = await bcrypt.compare(currentPassword, user.password ?? "");
+      if (!valid) return res.status(401).json({ message: "Current password is incorrect" });
+      const hashed = await bcrypt.hash(newPassword, 12);
+      await storage.updateUser(user.id, { password: hashed });
+      return res.json({ message: "Password updated successfully" });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   // ─── Dashboard ───────────────────────────────────────────────────────────
   app.get("/api/dashboard/stats", async (_req: Request, res: Response) => {
     try {
