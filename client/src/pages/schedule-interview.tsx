@@ -59,7 +59,7 @@ const scheduleSchema = z.object({
   time: z.string().min(1, "Time is required"),
   venueName: z.string().min(2, "Venue name is required"),
   durationMinutes: z.coerce.number().min(15).max(480),
-  googleLocation: z.string().url("Must be a valid URL").optional().or(z.literal("")),
+  googleLocation: z.string().min(1, "Google Maps link is required").url("Must be a valid URL"),
   notes: z.string().min(1, "SMS content is required"),
 });
 type ScheduleForm = z.infer<typeof scheduleSchema>;
@@ -210,7 +210,7 @@ export default function ScheduleInterviewPage() {
         invitedCandidateIds,
         createdByName,
       };
-      if (data.googleLocation) payload.meetingUrl = data.googleLocation;
+      payload.meetingUrl = data.googleLocation;
       payload.notes = data.notes.trim();
 
       return apiRequest("POST", "/api/interviews", payload).then((r) => r.json());
@@ -376,7 +376,6 @@ export default function ScheduleInterviewPage() {
                       <FormItem>
                         <FormLabel className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
                           Google Maps Link
-                          <span className="ml-1 font-normal normal-case text-muted-foreground/60">(optional)</span>
                         </FormLabel>
                         <FormControl>
                           <Input
