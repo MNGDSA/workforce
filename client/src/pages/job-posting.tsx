@@ -902,16 +902,39 @@ function ApplicantsSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-2xl bg-card border-border flex flex-col p-0">
         <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <SheetTitle className="font-display text-xl font-bold text-white">{job.title}</SheetTitle>
-              <div className="text-muted-foreground mt-1 flex items-center gap-3 flex-wrap text-sm">
-                {job.region && <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{job.region}</span>}
-                <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" />{job.openings} openings</span>
-                <Badge variant="outline" className={`border-0 text-xs ${statusStyles[job.status] ?? "bg-muted text-muted-foreground"}`}>
-                  {statusLabel[job.status] ?? job.status}
-                </Badge>
+          <div>
+            <SheetTitle className="font-display text-xl font-bold text-white">{job.title}</SheetTitle>
+            <div className="text-muted-foreground mt-1 flex items-center gap-3 flex-wrap text-sm">
+              {job.region && <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{job.region}</span>}
+              <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" />{job.openings} openings</span>
+              <Badge variant="outline" className={`border-0 text-xs ${statusStyles[job.status] ?? "bg-muted text-muted-foreground"}`}>
+                {statusLabel[job.status] ?? job.status}
+              </Badge>
+            </div>
+          </div>
+
+          {/* Summary bar */}
+          <div className="flex items-center justify-between gap-4 mt-3">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-1.5 text-sm">
+                <UserCheck className="h-4 w-4 text-primary" />
+                <span className="text-white font-bold">{applications.length}</span>
+                <span className="text-muted-foreground">applicant{applications.length !== 1 ? "s" : ""}</span>
               </div>
+              {applications.length > 0 && (
+                <div className="flex gap-1.5 flex-wrap">
+                  {Object.entries(
+                    applications.reduce<Record<string, number>>((acc, a) => {
+                      acc[a.status] = (acc[a.status] ?? 0) + 1;
+                      return acc;
+                    }, {})
+                  ).map(([status, count]) => (
+                    <Badge key={status} variant="outline" className={`border-0 text-xs ${appStatusStyle[status] ?? "bg-muted text-muted-foreground"}`}>
+                      {count} {status}
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
             <Button
               size="sm"
@@ -924,29 +947,6 @@ function ApplicantsSheet({
               <FileDown className="h-4 w-4" />
               Export Excel
             </Button>
-          </div>
-
-          {/* Summary bar */}
-          <div className="flex items-center gap-4 mt-3">
-            <div className="flex items-center gap-1.5 text-sm">
-              <UserCheck className="h-4 w-4 text-primary" />
-              <span className="text-white font-bold">{applications.length}</span>
-              <span className="text-muted-foreground">applicant{applications.length !== 1 ? "s" : ""}</span>
-            </div>
-            {applications.length > 0 && (
-              <div className="flex gap-1.5 flex-wrap">
-                {Object.entries(
-                  applications.reduce<Record<string, number>>((acc, a) => {
-                    acc[a.status] = (acc[a.status] ?? 0) + 1;
-                    return acc;
-                  }, {})
-                ).map(([status, count]) => (
-                  <Badge key={status} variant="outline" className={`border-0 text-xs ${appStatusStyle[status] ?? "bg-muted text-muted-foreground"}`}>
-                    {count} {status}
-                  </Badge>
-                ))}
-              </div>
-            )}
           </div>
         </SheetHeader>
 
