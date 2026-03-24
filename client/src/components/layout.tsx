@@ -43,7 +43,6 @@ const navItems = [
   { href: "/talent", icon: Search, label: "Talent" },
   { href: "/automation", icon: Workflow, label: "Rules & Automation" },
   { href: "/question-sets", icon: ClipboardList, label: "Question Sets" },
-  { href: "/notifications", icon: Bell, label: "Notification Center" },
   { href: "/documentation", icon: BookOpen, label: "Documentation" },
   { href: "/settings", icon: Settings, label: "System & Settings" },
 ];

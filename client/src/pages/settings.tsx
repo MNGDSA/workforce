@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/layout";
 import { RolesAccessContent } from "@/pages/roles-access";
+import { NotificationSettingsContent } from "@/pages/notifications";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,7 +46,7 @@ export default function SettingsPage() {
         </div>
 
         <Tabs defaultValue="general" className="w-full">
-          <TabsList className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 w-full h-auto gap-2 bg-transparent p-0 mb-6">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 w-full h-auto gap-2 bg-transparent p-0 mb-6">
             <TabsTrigger 
               value="general" 
               className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
@@ -63,6 +64,12 @@ export default function SettingsPage() {
               className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
             >
               Roles & Access
+            </TabsTrigger>
+            <TabsTrigger 
+              value="notifications" 
+              className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
+            >
+              Notifications
             </TabsTrigger>
             <TabsTrigger 
               value="integrations" 
@@ -167,6 +174,10 @@ export default function SettingsPage() {
 
           <TabsContent value="roles" className="m-0 animate-in fade-in-50 duration-500">
             <RolesAccessContent />
+          </TabsContent>
+
+          <TabsContent value="notifications" className="m-0 animate-in fade-in-50 duration-500">
+            <NotificationSettingsContent />
           </TabsContent>
 
           <TabsContent value="integrations" className="m-0 animate-in fade-in-50 duration-500">
