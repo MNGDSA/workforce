@@ -24,6 +24,9 @@ import {
   ImageIcon,
   CreditCard,
   Landmark,
+  User,
+  ChevronDown,
+  Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +43,18 @@ import {
 } from "@/components/ui/dialog";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+} from "@/components/ui/sheet";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -329,12 +344,14 @@ function ProfileCompletionCard({ toast }: { toast: ReturnType<typeof useToast>["
 export default function CandidatePortal() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const sigCanvas = useRef<SignatureCanvas>(null);
   const [isSignModalOpen, setIsSignModalOpen] = useState(false);
   const [isSigned, setIsSigned] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<JobPosting | null>(null);
   const [activeNav, setActiveNav] = useState<"dashboard" | "jobs" | "documents">("dashboard");
+  const [profileOpen, setProfileOpen] = useState(false);
 
   // Load the current candidate from localStorage (set at login)
   const storedCandidate = (() => {
@@ -392,6 +409,56 @@ export default function CandidatePortal() {
 
   const appliedIds = new Set(myApplications.map((a) => a.jobId));
   const appliedJobs = jobs.filter((j) => appliedIds.has(j.id));
+
+  // Fetch the full candidate profile for the profile editor
+  const { data: candidateProfile } = useQuery<Record<string, unknown>>({
+    queryKey: ["/api/candidates/profile", candidateId],
+    queryFn: () => apiRequest("GET", `/api/candidates/${candidateId}`).then((r) => r.json()),
+    enabled: !!candidateId,
+  });
+
+  // Profile form state
+  const [profileSkills, setProfileSkills] = useState("");
+  const [profileLangs,  setProfileLangs]  = useState("");
+
+  const saveProfile = useMutation({
+    mutationFn: async (data: Record<string, unknown>) =>
+      apiRequest("PATCH", `/api/candidates/${candidateId}`, data).then((r) => r.json()),
+    onSuccess: (updated) => {
+      // Sync back to localStorage so initials / name update everywhere
+      const existing = (() => { try { return JSON.parse(localStorage.getItem("workforce_candidate") || "{}"); } catch { return {}; } })();
+      localStorage.setItem("workforce_candidate", JSON.stringify({ ...existing, ...updated }));
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates/profile", candidateId] });
+      toast({ title: "Profile updated", description: "Your information has been saved." });
+      setProfileOpen(false);
+    },
+    onError: () => toast({ title: "Save failed", description: "Please try again.", variant: "destructive" }),
+  });
+
+  // Initialise the skill/lang text boxes whenever the sheet opens
+  const handleProfileOpen = (open: boolean) => {
+    if (open && candidateProfile) {
+      setProfileSkills(Array.isArray(candidateProfile.skills) ? (candidateProfile.skills as string[]).join(", ") : "");
+      setProfileLangs(Array.isArray(candidateProfile.languages) ? (candidateProfile.languages as string[]).join(", ") : "");
+    }
+    setProfileOpen(open);
+  };
+
+  function handleProfileSave(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const raw: Record<string, unknown> = {};
+    fd.forEach((v, k) => { if (String(v).trim()) raw[k] = String(v).trim(); });
+    raw.skills    = profileSkills.split(",").map((s) => s.trim()).filter(Boolean);
+    raw.languages = profileLangs.split(",").map((s) => s.trim()).filter(Boolean);
+    if (raw.experienceYears) raw.experienceYears = Number(raw.experienceYears);
+    if (raw.expectedSalary)  raw.expectedSalary  = String(raw.expectedSalary);
+    saveProfile.mutate(raw);
+  }
+
+  // Derive display name and initials from live profile or localStorage fallback
+  const displayName: string = String(candidateProfile?.fullNameEn ?? storedCandidate.fullNameEn ?? "Candidate");
+  const displayInitials = displayName.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase() || "CA";
 
   const handleApply = (job: JobPosting) => {
     setLocation(`/jobs/${job.id}`);
@@ -464,13 +531,37 @@ export default function CandidatePortal() {
           <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white relative">
             <Bell className="h-5 w-5" />
           </Button>
-          <div className="flex items-center gap-3 pl-4 border-l border-border/50">
-            <Avatar className="h-9 w-9 border border-border">
-              <AvatarFallback className="bg-primary/20 text-primary font-bold text-sm">CA</AvatarFallback>
-            </Avatar>
-            <Button variant="ghost" size="icon" onClick={() => setLocation("/auth")} className="text-muted-foreground hover:text-destructive">
-              <LogOut className="h-5 w-5" />
-            </Button>
+          <div className="pl-4 border-l border-border/50">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="flex items-center gap-2 rounded-lg hover:bg-muted/50 p-1.5 transition-colors" data-testid="button-profile-menu">
+                  <Avatar className="h-8 w-8 border border-border">
+                    <AvatarFallback className="bg-primary/20 text-primary font-bold text-xs">{displayInitials}</AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium text-white hidden sm:block max-w-[120px] truncate">{displayName}</span>
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 bg-card border-border">
+                <DropdownMenuItem
+                  className="cursor-pointer text-white focus:bg-muted/60 gap-2"
+                  onClick={() => handleProfileOpen(true)}
+                  data-testid="menu-item-profile"
+                >
+                  <User className="h-4 w-4 text-primary" />
+                  My Profile
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-border" />
+                <DropdownMenuItem
+                  className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive gap-2"
+                  onClick={() => { localStorage.removeItem("workforce_candidate"); setLocation("/auth"); }}
+                  data-testid="menu-item-signout"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
@@ -492,12 +583,22 @@ export default function CandidatePortal() {
             <Card className="bg-card border-border overflow-hidden">
               <div className="h-20 bg-gradient-to-r from-primary/20 to-primary/5" />
               <CardContent className="pt-0 -mt-10 text-center relative z-10">
-                <Avatar className="h-20 w-20 border-4 border-card mx-auto">
-                  <AvatarFallback className="text-xl bg-muted text-muted-foreground">CA</AvatarFallback>
-                </Avatar>
+                <button
+                  type="button"
+                  onClick={() => handleProfileOpen(true)}
+                  className="group relative inline-block"
+                  data-testid="button-avatar-edit"
+                >
+                  <Avatar className="h-20 w-20 border-4 border-card mx-auto group-hover:opacity-80 transition-opacity">
+                    <AvatarFallback className="text-xl bg-primary/20 text-primary font-bold">{displayInitials}</AvatarFallback>
+                  </Avatar>
+                  <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 rounded-full">
+                    <User className="h-6 w-6 text-white" />
+                  </span>
+                </button>
                 <div className="mt-3">
-                  <h3 className="font-bold text-lg text-white">Candidate</h3>
-                  <p className="text-muted-foreground text-sm">Job Seeker</p>
+                  <h3 className="font-bold text-lg text-white">{displayName}</h3>
+                  <p className="text-muted-foreground text-sm">{String(candidateProfile?.currentRole ?? "Job Seeker")}</p>
                 </div>
                 <div className="mt-4 flex justify-center gap-2">
                   <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">Active</Badge>
@@ -727,6 +828,275 @@ export default function CandidatePortal() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Profile Editor Sheet ──────────────────────────────────────────── */}
+      <Sheet open={profileOpen} onOpenChange={handleProfileOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-lg bg-card border-border overflow-y-auto">
+          <SheetHeader className="pb-4 border-b border-border">
+            <SheetTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
+              <User className="h-5 w-5 text-primary" />
+              My Profile
+            </SheetTitle>
+            <SheetDescription className="text-muted-foreground text-sm">
+              Update your personal and professional information.
+            </SheetDescription>
+          </SheetHeader>
+
+          <form onSubmit={handleProfileSave} className="py-6 space-y-6">
+
+            {/* Personal */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Personal</p>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-white">Full Name (English)</label>
+                    <Input
+                      name="fullNameEn"
+                      defaultValue={String(candidateProfile?.fullNameEn ?? storedCandidate.fullNameEn ?? "")}
+                      placeholder="e.g. Ahmed Al-Zahrani"
+                      className="bg-background border-border"
+                      data-testid="input-fullNameEn"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-white">الاسم بالعربي</label>
+                    <Input
+                      name="fullNameAr"
+                      defaultValue={String(candidateProfile?.fullNameAr ?? "")}
+                      placeholder="أحمد الزهراني"
+                      dir="rtl"
+                      className="bg-background border-border"
+                      data-testid="input-fullNameAr"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-white">Date of Birth</label>
+                    <Input
+                      name="dateOfBirth"
+                      type="date"
+                      defaultValue={String(candidateProfile?.dateOfBirth ?? "")}
+                      className="bg-background border-border"
+                      data-testid="input-dateOfBirth"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-white">Gender</label>
+                    <Select name="gender" defaultValue={String(candidateProfile?.gender ?? "")}>
+                      <SelectTrigger className="bg-background border-border" data-testid="select-gender">
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-card border-border">
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-white">Nationality</label>
+                  <Input
+                    name="nationalityText"
+                    defaultValue={String(candidateProfile?.nationalityText ?? candidateProfile?.nationality ?? "")}
+                    placeholder="e.g. Saudi"
+                    className="bg-background border-border"
+                    data-testid="input-nationality"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Separator className="bg-border" />
+
+            {/* Contact */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Contact</p>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-white">Phone</label>
+                    <Input
+                      name="phone"
+                      defaultValue={String(candidateProfile?.phone ?? storedCandidate.phone ?? "")}
+                      placeholder="05xxxxxxxx"
+                      className="bg-background border-border"
+                      data-testid="input-phone"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-white">WhatsApp</label>
+                    <Input
+                      name="whatsapp"
+                      defaultValue={String(candidateProfile?.whatsapp ?? "")}
+                      placeholder="05xxxxxxxx"
+                      className="bg-background border-border"
+                      data-testid="input-whatsapp"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-white">Email</label>
+                  <Input
+                    name="email"
+                    type="email"
+                    defaultValue={String(candidateProfile?.email ?? "")}
+                    placeholder="your@email.com"
+                    className="bg-background border-border"
+                    data-testid="input-email"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-white">City</label>
+                    <Input
+                      name="city"
+                      defaultValue={String(candidateProfile?.city ?? "")}
+                      placeholder="e.g. Riyadh"
+                      className="bg-background border-border"
+                      data-testid="input-city"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-white">Region</label>
+                    <Input
+                      name="region"
+                      defaultValue={String(candidateProfile?.region ?? "")}
+                      placeholder="e.g. Makkah"
+                      className="bg-background border-border"
+                      data-testid="input-region"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <Separator className="bg-border" />
+
+            {/* Professional */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Professional</p>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-white">Current Role</label>
+                    <Input
+                      name="currentRole"
+                      defaultValue={String(candidateProfile?.currentRole ?? "")}
+                      placeholder="e.g. Security Guard"
+                      className="bg-background border-border"
+                      data-testid="input-currentRole"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-white">Current Employer</label>
+                    <Input
+                      name="currentEmployer"
+                      defaultValue={String(candidateProfile?.currentEmployer ?? "")}
+                      placeholder="Company name"
+                      className="bg-background border-border"
+                      data-testid="input-currentEmployer"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-white">Years of Experience</label>
+                    <Input
+                      name="experienceYears"
+                      type="number"
+                      min="0"
+                      max="50"
+                      defaultValue={String(candidateProfile?.experienceYears ?? "0")}
+                      className="bg-background border-border"
+                      data-testid="input-experienceYears"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-white">Education Level</label>
+                    <Input
+                      name="educationLevel"
+                      defaultValue={String(candidateProfile?.educationLevel ?? "")}
+                      placeholder="e.g. Bachelor's"
+                      className="bg-background border-border"
+                      data-testid="input-educationLevel"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-white">Skills <span className="text-muted-foreground font-normal">(comma-separated)</span></label>
+                  <Textarea
+                    value={profileSkills}
+                    onChange={(e) => setProfileSkills(e.target.value)}
+                    placeholder="e.g. First Aid, Crowd Control, Arabic, English"
+                    className="bg-background border-border resize-none"
+                    rows={2}
+                    data-testid="input-skills"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-white">Languages <span className="text-muted-foreground font-normal">(comma-separated)</span></label>
+                  <Textarea
+                    value={profileLangs}
+                    onChange={(e) => setProfileLangs(e.target.value)}
+                    placeholder="e.g. Arabic, English, Urdu"
+                    className="bg-background border-border resize-none"
+                    rows={2}
+                    data-testid="input-languages"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Separator className="bg-border" />
+
+            {/* Financial */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Financial</p>
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-white">IBAN Number</label>
+                  <Input
+                    name="ibanNumber"
+                    defaultValue={String(candidateProfile?.ibanNumber ?? "")}
+                    placeholder="SA00 0000 0000 0000 0000 0000"
+                    className="bg-background border-border font-mono"
+                    data-testid="input-ibanNumber"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-white">Expected Monthly Salary (SAR)</label>
+                  <Input
+                    name="expectedSalary"
+                    type="number"
+                    min="0"
+                    defaultValue={String(candidateProfile?.expectedSalary ?? "")}
+                    placeholder="e.g. 3500"
+                    className="bg-background border-border"
+                    data-testid="input-expectedSalary"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2 pb-6">
+              <Button
+                type="submit"
+                disabled={saveProfile.isPending}
+                className="flex-1 bg-primary text-primary-foreground font-bold"
+                data-testid="button-save-profile"
+              >
+                {saveProfile.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                Save Changes
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setProfileOpen(false)} className="border-border">
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
