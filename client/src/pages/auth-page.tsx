@@ -113,7 +113,7 @@ export default function AuthPage() {
                 <Building2 className="h-6 w-6" />
               </div>
               <span className="font-display font-bold text-2xl tracking-tight text-white">
-                WORKFORCE<span className="text-primary">.IO</span>
+                WORKFORCE
               </span>
             </div>
             <h1 className="font-display text-4xl font-bold tracking-tight text-white">Welcome back</h1>

@@ -274,7 +274,7 @@ export default function JobDetailPage() {
               <Building2 className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <p className="font-bold text-white">WORKFORCE.IO</p>
+              <p className="font-bold text-white">WORKFORCE</p>
               <p className="text-sm text-muted-foreground">Seasonal employment · Kingdom of Saudi Arabia</p>
             </div>
           </CardContent>
