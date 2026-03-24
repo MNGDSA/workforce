@@ -54,7 +54,9 @@ import {
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
-
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -419,8 +421,12 @@ export default function CandidatePortal() {
   });
 
   // ── Profile form state ──────────────────────────────────────────────────
-  const [profileSkills, setProfileSkills] = useState("");
-  const [profileLangs,  setProfileLangs]  = useState("");
+  const [profileSkills,   setProfileSkills]   = useState("");
+  const [profileLangs,    setProfileLangs]    = useState("");
+  const [profileEduLevel, setProfileEduLevel] = useState("");
+  const [profileMajor,    setProfileMajor]    = useState("");
+
+  const EDU_OPTIONS = ["High School and below", "University and higher"] as const;
 
   // ── Password change state ────────────────────────────────────────────────
   const [pwCurrent,  setPwCurrent]  = useState("");
@@ -471,6 +477,8 @@ export default function CandidatePortal() {
     if (open && candidateProfile) {
       setProfileSkills(Array.isArray(candidateProfile.skills)    ? (candidateProfile.skills    as string[]).join(", ") : "");
       setProfileLangs( Array.isArray(candidateProfile.languages) ? (candidateProfile.languages as string[]).join(", ") : "");
+      setProfileEduLevel(String(candidateProfile.educationLevel ?? ""));
+      setProfileMajor(String(candidateProfile.major ?? ""));
     }
     if (!open) { setPwCurrent(""); setPwNew(""); setPwConfirm(""); }
     setProfileOpen(open);
@@ -486,8 +494,10 @@ export default function CandidatePortal() {
     const ln = String(raw.lastName  ?? "").trim();
     if (fn || ln) raw.fullNameEn = `${fn} ${ln}`.trim();
     delete raw.firstName; delete raw.lastName;
-    raw.skills    = normalizeTags(profileSkills);
-    raw.languages = normalizeTags(profileLangs);
+    raw.skills         = normalizeTags(profileSkills);
+    raw.languages      = normalizeTags(profileLangs);
+    raw.educationLevel = profileEduLevel || undefined;
+    raw.major          = profileEduLevel === "University and higher" ? (profileMajor || undefined) : null;
     saveProfile.mutate(raw);
   }
 
@@ -1010,14 +1020,29 @@ export default function CandidatePortal() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-white">Education Level</label>
-                  <Input
-                    name="educationLevel"
-                    defaultValue={String(candidateProfile?.educationLevel ?? "")}
-                    placeholder="e.g. Bachelor's Degree"
-                    className="bg-background border-border"
-                    data-testid="input-educationLevel"
-                  />
+                  <Select value={profileEduLevel} onValueChange={setProfileEduLevel}>
+                    <SelectTrigger className="bg-background border-border" data-testid="select-educationLevel">
+                      <SelectValue placeholder="Select education level" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-card border-border">
+                      {EDU_OPTIONS.map((opt) => (
+                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
+                {profileEduLevel === "University and higher" && (
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-white">Field of Study / Major</label>
+                    <Input
+                      value={profileMajor}
+                      onChange={(e) => setProfileMajor(e.target.value)}
+                      placeholder="e.g. Business Administration, Engineering"
+                      className="bg-background border-border"
+                      data-testid="input-major"
+                    />
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-white">
                     Skills
