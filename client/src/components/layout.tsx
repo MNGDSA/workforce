@@ -18,6 +18,7 @@ import {
   ClipboardList,
   UserSearch,
   ChevronDown,
+  Banknote,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -49,6 +50,7 @@ const recruitmentItems = [
 const topNavItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/workforce", icon: Users,           label: "Workforce" },
+  { href: "/payroll",   icon: Banknote,        label: "Payroll" },
 ];
 
 const settingsPaths = ["/settings", "/automation"];
