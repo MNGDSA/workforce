@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 interface LayoutProps {
@@ -78,16 +79,29 @@ export default function DashboardLayout({ children }: LayoutProps) {
   const sessionUser = useMemo(() => {
     try {
       const raw = localStorage.getItem("workforce_candidate");
-      return raw ? JSON.parse(raw) : null;
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed === "object" ? parsed : null;
     } catch { return null; }
   }, []);
 
+  const { data: meUser } = useQuery<{ fullName?: string; name?: string; role?: string; email?: string; phone?: string }>({
+    queryKey: ["/api/me"],
+  });
+
   const displayName: string =
     sessionUser?.fullNameEn ||
+    sessionUser?.fullName ||
     sessionUser?.name ||
-    (sessionUser?.nationalId ? `ID ${sessionUser.nationalId}` : "Admin User");
+    meUser?.fullName ||
+    meUser?.name ||
+    "Admin User";
 
-  const displayRole: string = sessionUser?.role === "admin" ? "Administrator" : (sessionUser?.role ?? "Staff");
+  const rawRole = sessionUser?.role || meUser?.role || "";
+  const displayRole: string =
+    rawRole === "admin" || rawRole === "super_admin" ? "Administrator" :
+    rawRole === "recruiter" ? "Recruiter" :
+    rawRole === "manager" ? "Manager" :
+    rawRole || "Staff";
 
   const initials = displayName
     .split(" ")
@@ -293,9 +307,9 @@ export default function DashboardLayout({ children }: LayoutProps) {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setLocation("/settings")}>
+                <DropdownMenuItem onClick={() => setLocation("/profile")}>
                   <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
+                  <span>Profile</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem

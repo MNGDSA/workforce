@@ -22,6 +22,7 @@ import QuestionSetsPage from "@/pages/question-sets";
 import ScheduleInterviewPage from "@/pages/schedule-interview";
 import PayrollPage from "@/pages/payroll";
 import ReportsPage from "@/pages/reports";
+import ProfilePage from "@/pages/profile";
 
 function Router() {
   return (
@@ -42,6 +43,7 @@ function Router() {
       <Route path="/question-sets" component={QuestionSetsPage} />
       <Route path="/payroll" component={PayrollPage} />
       <Route path="/reports" component={ReportsPage} />
+      <Route path="/profile" component={ProfilePage} />
       <Route path="/candidate-portal" component={() => (
         <ProfileSetupGate><CandidatePortal /></ProfileSetupGate>
       )} />
