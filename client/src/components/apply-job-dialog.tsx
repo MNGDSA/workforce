@@ -1,17 +1,13 @@
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
-  Briefcase, Loader2, ChevronRight, ChevronLeft,
-  CheckCircle2, ClipboardList, AlignLeft, Hash, ToggleLeft, ListChecks,
+  Briefcase, Loader2, ChevronLeft,
+  CheckCircle2, ClipboardList, AlignLeft, Hash, ToggleLeft, ListChecks, User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -32,95 +28,76 @@ type Job = {
   questionSetId?: string | null;
 };
 
-// ─── Apply form (step 1) ──────────────────────────────────────────────────────
+type StoredCandidate = {
+  id?: string;
+  fullNameEn?: string;
+  phone?: string;
+  nationalId?: string;
+  candidateCode?: string;
+};
 
-const applySchema = z.object({
-  fullNameEn: z.string().min(2, "Full name is required"),
-  phone: z.string().min(9, "Phone number is required"),
-  nationalId: z.string().min(5, "National ID or Iqama number is required"),
-});
-type ApplyForm = z.infer<typeof applySchema>;
-
-// ─── Step indicators ─────────────────────────────────────────────────────────
+// ─── Type icon map ────────────────────────────────────────────────────────────
 
 const TYPE_ICON: Record<QuestionType, React.FC<{ className?: string }>> = {
   yes_no: ToggleLeft, multiple_choice: ListChecks, text: AlignLeft, number: Hash,
 };
 
-// ─── Step 1: Basic Info ───────────────────────────────────────────────────────
+// ─── Confirmation view (no question set) ─────────────────────────────────────
 
-function Step1({ form, onNext, hasQuestions, onCancel, isSubmitting }: {
-  form: ReturnType<typeof useForm<ApplyForm>>;
-  onNext: () => void;
-  hasQuestions: boolean;
+function ConfirmView({ job, candidate, onConfirm, onCancel, isSubmitting }: {
+  job: Job;
+  candidate: StoredCandidate;
+  onConfirm: () => void;
   onCancel: () => void;
   isSubmitting: boolean;
 }) {
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onNext)} className="space-y-4 pt-1">
-        <FormField control={form.control} name="fullNameEn" render={({ field }) => (
-          <FormItem>
-            <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-              Full Name (English)
-            </FormLabel>
-            <FormControl>
-              <Input placeholder="e.g. Mohammed Al-Harbi" className="bg-muted/30 border-border" data-testid="input-apply-name" {...field} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )} />
-
-        <FormField control={form.control} name="nationalId" render={({ field }) => (
-          <FormItem>
-            <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-              National ID / Iqama No.
-            </FormLabel>
-            <FormControl>
-              <Input placeholder="e.g. 1012345678" className="bg-muted/30 border-border font-mono" inputMode="numeric" data-testid="input-apply-national-id" {...field} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )} />
-
-        <FormField control={form.control} name="phone" render={({ field }) => (
-          <FormItem>
-            <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-              Phone Number
-            </FormLabel>
-            <FormControl>
-              <Input placeholder="e.g. 0512345678" className="bg-muted/30 border-border font-mono" inputMode="tel" data-testid="input-apply-phone" {...field} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )} />
-
-        <div className="flex justify-end gap-3 pt-2">
-          <Button type="button" variant="outline" className="border-border" onClick={onCancel} data-testid="button-apply-cancel">
-            Cancel
-          </Button>
-          {hasQuestions ? (
-            <Button type="submit" className="bg-primary text-primary-foreground font-bold gap-2" data-testid="button-apply-next">
-              Next <ChevronRight className="h-4 w-4" />
-            </Button>
-          ) : (
-            <Button type="submit" className="bg-primary text-primary-foreground font-bold min-w-[140px]" disabled={isSubmitting} data-testid="button-apply-submit">
-              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Application"}
-            </Button>
-          )}
+    <div className="space-y-5 pt-1">
+      <div className="bg-muted/10 border border-border rounded-md p-4 space-y-2">
+        <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-3">Applying as</p>
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+            <User className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <p className="font-semibold text-white text-sm">{candidate.fullNameEn || "—"}</p>
+            <p className="text-xs text-muted-foreground font-mono">{candidate.nationalId || candidate.phone || "—"}</p>
+          </div>
         </div>
-      </form>
-    </Form>
+      </div>
+
+      <p className="text-sm text-muted-foreground">
+        You are about to submit an application for <span className="text-white font-medium">"{job.title}"</span>.
+        Your profile information will be used for this application.
+      </p>
+
+      <div className="flex justify-end gap-3 pt-1">
+        <Button variant="outline" className="border-border" onClick={onCancel} data-testid="button-apply-cancel">
+          Cancel
+        </Button>
+        <Button
+          className="bg-primary text-primary-foreground font-bold min-w-[160px] gap-2"
+          disabled={isSubmitting}
+          onClick={onConfirm}
+          data-testid="button-apply-confirm"
+        >
+          {isSubmitting
+            ? <Loader2 className="h-4 w-4 animate-spin" />
+            : <><CheckCircle2 className="h-4 w-4" /> Confirm & Apply</>}
+        </Button>
+      </div>
+    </div>
   );
 }
 
-// ─── Step 2: Screening Questions ─────────────────────────────────────────────
+// ─── Screening Questions view ─────────────────────────────────────────────────
 
-function Step2({ questionSet, onBack, onSubmit, isSubmitting }: {
+function QuestionsView({ questionSet, onBack, onSubmit, isSubmitting, showBack }: {
   questionSet: QuestionSet;
   onBack: () => void;
   onSubmit: (answers: Record<string, string>) => void;
   isSubmitting: boolean;
+  showBack: boolean;
 }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [errors, setErrors]   = useState<Record<string, string>>({});
@@ -167,7 +144,6 @@ function Step2({ questionSet, onBack, onSubmit, isSubmitting }: {
                     </Badge>
                   </div>
 
-                  {/* Yes/No */}
                   {q.type === "yes_no" && (
                     <div className="flex gap-2 mt-2">
                       {["Yes", "No"].map((opt) => (
@@ -187,7 +163,6 @@ function Step2({ questionSet, onBack, onSubmit, isSubmitting }: {
                     </div>
                   )}
 
-                  {/* Multiple choice */}
                   {q.type === "multiple_choice" && (
                     <div className="flex flex-wrap gap-2 mt-2">
                       {(q.options ?? []).map((opt) => (
@@ -207,7 +182,6 @@ function Step2({ questionSet, onBack, onSubmit, isSubmitting }: {
                     </div>
                   )}
 
-                  {/* Text */}
                   {q.type === "text" && (
                     <Textarea
                       value={answers[q.id] ?? ""}
@@ -219,7 +193,6 @@ function Step2({ questionSet, onBack, onSubmit, isSubmitting }: {
                     />
                   )}
 
-                  {/* Number */}
                   {q.type === "number" && (
                     <Input
                       type="number"
@@ -241,17 +214,21 @@ function Step2({ questionSet, onBack, onSubmit, isSubmitting }: {
         })}
       </div>
 
-      <div className="flex justify-between gap-3 pt-2 border-t border-border">
-        <Button type="button" variant="outline" className="border-border gap-2" onClick={onBack} data-testid="button-qs-back">
-          <ChevronLeft className="h-4 w-4" /> Back
-        </Button>
+      <div className={`flex gap-3 pt-2 border-t border-border ${showBack ? "justify-between" : "justify-end"}`}>
+        {showBack && (
+          <Button type="button" variant="outline" className="border-border gap-2" onClick={onBack} data-testid="button-qs-back">
+            <ChevronLeft className="h-4 w-4" /> Back
+          </Button>
+        )}
         <Button
           className="bg-primary text-primary-foreground font-bold min-w-[160px] gap-2"
           disabled={isSubmitting}
           onClick={handleSubmit}
           data-testid="button-qs-submit"
         >
-          {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="h-4 w-4" /> Submit Application</>}
+          {isSubmitting
+            ? <Loader2 className="h-4 w-4 animate-spin" />
+            : <><CheckCircle2 className="h-4 w-4" /> Submit Application</>}
         </Button>
       </div>
     </div>
@@ -269,15 +246,17 @@ export default function ApplyJobDialog({
   onSuccess: (jobId: string) => void;
 }) {
   const { toast } = useToast();
-  const [step, setStep] = useState<1 | 2>(1);
 
-  const form = useForm<ApplyForm>({
-    resolver: zodResolver(applySchema),
-    defaultValues: { fullNameEn: "", phone: "", nationalId: "" },
-  });
+  // Read candidate from localStorage (set during login/register)
+  const candidate: StoredCandidate = (() => {
+    try {
+      const raw = localStorage.getItem("workforce_candidate");
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  })();
 
   // Fetch question set if job has one
-  const { data: questionSet } = useQuery<QuestionSet>({
+  const { data: questionSet, isLoading: loadingQS } = useQuery<QuestionSet>({
     queryKey: ["/api/question-sets", job?.questionSetId],
     queryFn: () => apiRequest("GET", `/api/question-sets/${job!.questionSetId}`).then(r => r.json()),
     enabled: !!job?.questionSetId && open,
@@ -286,19 +265,24 @@ export default function ApplyJobDialog({
   const hasQuestions = !!(questionSet?.questions?.length);
 
   const apply = useMutation({
-    mutationFn: async ({ basicData, answers }: { basicData: ApplyForm; answers?: Record<string, string> }) => {
-      const ts = Date.now().toString(36).toUpperCase().slice(-4);
-      const code = `CND-${basicData.nationalId.slice(-6)}-${ts}`;
+    mutationFn: async (answers?: Record<string, string>) => {
+      // Use existing candidate id if available, otherwise create a minimal record
+      let candidateId = candidate.id;
 
-      const candidate = await apiRequest("POST", "/api/candidates", {
-        candidateCode: code,
-        fullNameEn: basicData.fullNameEn,
-        phone: basicData.phone,
-        nationalId: basicData.nationalId,
-      }).then(r => r.json());
+      if (!candidateId) {
+        const ts = Date.now().toString(36).toUpperCase().slice(-4);
+        const code = `CND-${(candidate.nationalId ?? "000000").slice(-6)}-${ts}`;
+        const newCandidate = await apiRequest("POST", "/api/candidates", {
+          candidateCode: code,
+          fullNameEn: candidate.fullNameEn ?? "",
+          phone: candidate.phone ?? "",
+          nationalId: candidate.nationalId ?? "",
+        }).then(r => r.json());
+        candidateId = newCandidate.id;
+      }
 
       await apiRequest("POST", "/api/applications", {
-        candidateId: candidate.id,
+        candidateId,
         jobId: job!.id,
         status: "new",
         questionSetAnswers: answers ? { questionSetId: job!.questionSetId, answers } : null,
@@ -309,80 +293,51 @@ export default function ApplyJobDialog({
     onSuccess: (jobId) => {
       toast({ title: "Application submitted!", description: `Your application for "${job?.title}" has been received.` });
       onSuccess(jobId);
-      form.reset();
-      setStep(1);
       onOpenChange(false);
     },
-    onError: () => toast({ title: "Failed to submit", description: "Please check your details and try again.", variant: "destructive" }),
+    onError: () => toast({ title: "Failed to submit", description: "Please try again.", variant: "destructive" }),
   });
 
-  function handleStep1Valid(data: ApplyForm) {
-    if (hasQuestions) {
-      setStep(2);
-    } else {
-      apply.mutate({ basicData: data });
-    }
-  }
-
-  function handleQuestionsSubmit(answers: Record<string, string>) {
-    apply.mutate({ basicData: form.getValues(), answers });
-  }
-
   function handleClose() {
-    form.reset();
-    setStep(1);
     onOpenChange(false);
   }
 
-  const stepCount = hasQuestions ? 2 : 1;
-  const currentStep = step;
+  const isLoading = !!job?.questionSetId && loadingQS;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-lg bg-card border-border">
         <DialogHeader>
           <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
-            {step === 1 ? <Briefcase className="h-5 w-5 text-primary" /> : <ClipboardList className="h-5 w-5 text-primary" />}
-            {step === 1 ? "Apply for Position" : questionSet?.name ?? "Screening Questions"}
+            {hasQuestions
+              ? <><ClipboardList className="h-5 w-5 text-primary" /> {questionSet?.name ?? "Screening Questions"}</>
+              : <><Briefcase className="h-5 w-5 text-primary" /> Apply for Position</>}
           </DialogTitle>
-          {job && step === 1 && (
+          {job && (
             <DialogDescription className="text-muted-foreground">
               {job.title} · {job.region ?? job.location ?? "KSA"}
             </DialogDescription>
           )}
-          {step === 2 && (
-            <DialogDescription className="text-muted-foreground">
-              {job?.title} · {stepCount > 1 ? `Step 2 of ${stepCount}` : ""}
-            </DialogDescription>
-          )}
         </DialogHeader>
 
-        {/* Step indicator */}
-        {hasQuestions && (
-          <div className="flex items-center gap-2 px-0">
-            {[1, 2].map((s) => (
-              <div key={s} className="flex items-center gap-2 flex-1">
-                <div className={`h-1.5 flex-1 rounded-full transition-colors ${s <= currentStep ? "bg-primary" : "bg-border"}`} />
-              </div>
-            ))}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
-        )}
-
-        {step === 1 && (
-          <Step1
-            form={form}
-            onNext={handleStep1Valid}
-            hasQuestions={hasQuestions}
-            onCancel={handleClose}
+        ) : hasQuestions ? (
+          <QuestionsView
+            questionSet={questionSet!}
+            onBack={handleClose}
+            onSubmit={(answers) => apply.mutate(answers)}
             isSubmitting={apply.isPending}
+            showBack={false}
           />
-        )}
-
-        {step === 2 && questionSet && (
-          <Step2
-            questionSet={questionSet}
-            onBack={() => setStep(1)}
-            onSubmit={handleQuestionsSubmit}
+        ) : (
+          <ConfirmView
+            job={job!}
+            candidate={candidate}
+            onConfirm={() => apply.mutate(undefined)}
+            onCancel={handleClose}
             isSubmitting={apply.isPending}
           />
         )}
