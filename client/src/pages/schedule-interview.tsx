@@ -83,36 +83,6 @@ export default function ScheduleInterviewPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const smsTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const watchedGroupName = useWatch({ control: form.control, name: "groupName" });
-  const watchedDate      = useWatch({ control: form.control, name: "date" });
-  const watchedTime      = useWatch({ control: form.control, name: "time" });
-  const watchedVenue     = useWatch({ control: form.control, name: "venueName" });
-  const watchedLocation  = useWatch({ control: form.control, name: "googleLocation" });
-  const watchedNotes     = useWatch({ control: form.control, name: "notes" });
-
-  const resolveTemplate = (template: string) =>
-    template
-      .replace(/\{\{batch\}\}/g, watchedGroupName || "{{batch}}")
-      .replace(/\{\{date\}\}/g, watchedDate || "{{date}}")
-      .replace(/\{\{time\}\}/g, watchedTime || "{{time}}")
-      .replace(/\{\{venue\}\}/g, watchedVenue || "{{venue}}")
-      .replace(/\{\{location\}\}/g, watchedLocation || "{{location}}");
-
-  const insertVariable = (variable: string) => {
-    const el = smsTextareaRef.current;
-    if (!el) return;
-    const start = el.selectionStart ?? el.value.length;
-    const end   = el.selectionEnd   ?? el.value.length;
-    const current = form.getValues("notes");
-    const next = current.slice(0, start) + variable + current.slice(end);
-    form.setValue("notes", next, { shouldValidate: true });
-    requestAnimationFrame(() => {
-      el.focus();
-      const cursor = start + variable.length;
-      el.setSelectionRange(cursor, cursor);
-    });
-  };
-
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
@@ -214,6 +184,37 @@ export default function ScheduleInterviewPage() {
       notes: "",
     },
   });
+
+  // ─── SMS template helpers (must come after useForm) ──────────────────────
+  const watchedGroupName = useWatch({ control: form.control, name: "groupName" });
+  const watchedDate      = useWatch({ control: form.control, name: "date" });
+  const watchedTime      = useWatch({ control: form.control, name: "time" });
+  const watchedVenue     = useWatch({ control: form.control, name: "venueName" });
+  const watchedLocation  = useWatch({ control: form.control, name: "googleLocation" });
+  const watchedNotes     = useWatch({ control: form.control, name: "notes" });
+
+  const resolveTemplate = (template: string) =>
+    template
+      .replace(/\{\{batch\}\}/g, watchedGroupName || "{{batch}}")
+      .replace(/\{\{date\}\}/g, watchedDate || "{{date}}")
+      .replace(/\{\{time\}\}/g, watchedTime || "{{time}}")
+      .replace(/\{\{venue\}\}/g, watchedVenue || "{{venue}}")
+      .replace(/\{\{location\}\}/g, watchedLocation || "{{location}}");
+
+  const insertVariable = (variable: string) => {
+    const el = smsTextareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? el.value.length;
+    const end   = el.selectionEnd   ?? el.value.length;
+    const current = form.getValues("notes");
+    const next = current.slice(0, start) + variable + current.slice(end);
+    form.setValue("notes", next, { shouldValidate: true });
+    requestAnimationFrame(() => {
+      el.focus();
+      const cursor = start + variable.length;
+      el.setSelectionRange(cursor, cursor);
+    });
+  };
 
   const schedule = useMutation({
     mutationFn: async (data: ScheduleForm) => {
