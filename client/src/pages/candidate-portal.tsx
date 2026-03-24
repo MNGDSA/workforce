@@ -584,7 +584,12 @@ export default function CandidatePortal() {
                     const applied = appliedIds.has(job.id);
                     const salary = salaryLabel(job);
                     return (
-                      <Card key={job.id} className="bg-card border-border hover:border-primary/40 transition-all group" data-testid={`card-job-${job.id}`}>
+                      <Card
+                        key={job.id}
+                        className="bg-card border-border hover:border-primary/40 transition-all group cursor-pointer"
+                        onClick={() => setLocation(`/jobs/${job.id}`)}
+                        data-testid={`card-job-${job.id}`}
+                      >
                         <CardContent className="p-5">
                           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div className="flex-1 min-w-0">
@@ -593,6 +598,11 @@ export default function CandidatePortal() {
                                 <Badge variant="outline" className="border-border text-muted-foreground text-xs font-normal">
                                   {typeLabel(job.type)}
                                 </Badge>
+                                {applied && (
+                                  <Badge className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 text-xs font-medium gap-1">
+                                    <CheckCircle2 className="h-3 w-3" /> Applied
+                                  </Badge>
+                                )}
                               </div>
                               <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
                                 {(job.region ?? job.location) && (
@@ -618,14 +628,13 @@ export default function CandidatePortal() {
                                 <p className="text-xs text-muted-foreground/70 mt-2 line-clamp-2">{job.description}</p>
                               )}
                             </div>
-                            <div className="shrink-0">
-                              {applied ? (
-                                <Button variant="outline" className="border-emerald-500/40 text-emerald-500 bg-emerald-500/10 font-bold cursor-default" disabled data-testid={`button-applied-${job.id}`}>
-                                  <CheckCircle2 className="mr-1.5 h-4 w-4" />
-                                  Applied
-                                </Button>
-                              ) : (
-                                <Button className="bg-primary text-primary-foreground font-bold hover:bg-primary/90" onClick={() => handleApply(job)} data-testid={`button-apply-${job.id}`}>
+                            <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                              {!applied && (
+                                <Button
+                                  className="bg-primary text-primary-foreground font-bold hover:bg-primary/90"
+                                  onClick={() => handleApply(job)}
+                                  data-testid={`button-apply-${job.id}`}
+                                >
                                   Apply Now
                                 </Button>
                               )}
@@ -648,11 +657,16 @@ export default function CandidatePortal() {
                   </div>
                 ) : (
                   appliedJobs.map((job) => (
-                    <Card key={job.id} className="bg-card border-border" data-testid={`card-applied-${job.id}`}>
+                    <Card
+                      key={job.id}
+                      className="bg-card border-border hover:border-primary/40 transition-all cursor-pointer group"
+                      onClick={() => setLocation(`/jobs/${job.id}`)}
+                      data-testid={`card-applied-${job.id}`}
+                    >
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between gap-4">
                           <div>
-                            <div className="font-bold text-white text-base">{job.title}</div>
+                            <div className="font-bold text-white text-base group-hover:text-primary transition-colors">{job.title}</div>
                             <div className="text-sm text-muted-foreground flex items-center gap-3 mt-1">
                               {(job.region ?? job.location) && (
                                 <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{job.region ?? job.location}</span>

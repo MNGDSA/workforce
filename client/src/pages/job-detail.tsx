@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   MapPin,
@@ -63,7 +63,6 @@ export default function JobDetailPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [applyOpen, setApplyOpen] = useState(false);
-  const queryClient = useQueryClient();
 
   // Get candidate from session
   const candidateId: string | undefined = (() => {
@@ -77,7 +76,7 @@ export default function JobDetailPage() {
   });
 
   // Check if candidate already applied to this job
-  const { data: myApplications = [] } = useQuery<{ jobId: string }[]>({
+  const { data: myApplications = [], refetch: refetchApplications } = useQuery<{ jobId: string }[]>({
     queryKey: ["/api/applications/mine", candidateId],
     queryFn: () =>
       apiRequest("GET", `/api/applications?candidateId=${candidateId}`).then((r) => r.json()),
@@ -319,7 +318,7 @@ export default function JobDetailPage() {
         open={applyOpen}
         onOpenChange={setApplyOpen}
         onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ["/api/applications/mine", candidateId] });
+          refetchApplications();
           setApplyOpen(false);
         }}
       />
