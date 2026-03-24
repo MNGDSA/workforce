@@ -31,7 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 interface LayoutProps {
@@ -66,7 +66,7 @@ const bottomNavItems = [
 ];
 
 export default function DashboardLayout({ children }: LayoutProps) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [recruitmentOpen, setRecruitmentOpen] = useState(
     () => recruitmentPaths.some((p) => location.startsWith(p))
@@ -74,6 +74,33 @@ export default function DashboardLayout({ children }: LayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(
     () => settingsPaths.some((p) => location.startsWith(p))
   );
+
+  const sessionUser = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("workforce_candidate");
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }, []);
+
+  const displayName: string =
+    sessionUser?.fullNameEn ||
+    sessionUser?.name ||
+    (sessionUser?.nationalId ? `ID ${sessionUser.nationalId}` : "Admin User");
+
+  const displayRole: string = sessionUser?.role === "admin" ? "Administrator" : (sessionUser?.role ?? "Staff");
+
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w: string) => w[0])
+    .join("")
+    .toUpperCase() || "AU";
+
+  const handleLogout = () => {
+    localStorage.removeItem("workforce_candidate");
+    setLocation("/auth");
+  };
 
   const renderNavLink = (href: string, Icon: React.ElementType, label: string) => {
     const isActive = location === href;
@@ -252,26 +279,29 @@ export default function DashboardLayout({ children }: LayoutProps) {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                   <Avatar className="h-9 w-9 border border-border">
-                    <AvatarImage src="/avatar-foreman.png" alt="Foreman" />
-                    <AvatarFallback>JD</AvatarFallback>
+                    <AvatarFallback className="bg-primary/20 text-primary font-bold text-xs">
+                      {initials}
+                    </AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">John Davis</p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      Site Foreman
-                    </p>
+                    <p className="text-sm font-medium leading-none">{displayName}</p>
+                    <p className="text-xs leading-none text-muted-foreground">{displayRole}</p>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setLocation("/settings")}>
                   <Settings className="mr-2 h-4 w-4" />
-                  <span>Profile Settings</span>
+                  <span>Settings</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive focus:text-destructive">
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                  onClick={handleLogout}
+                >
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Log out</span>
                 </DropdownMenuItem>
