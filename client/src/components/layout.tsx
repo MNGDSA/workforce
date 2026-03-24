@@ -19,6 +19,7 @@ import {
   UserSearch,
   ChevronDown,
   Wallet,
+  BarChart3,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -37,14 +38,15 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
-const recruitmentPaths = ["/seasons", "/question-sets", "/job-posting", "/interviews", "/talent"];
+const recruitmentPaths = ["/seasons", "/question-sets", "/job-posting", "/interviews", "/talent", "/reports"];
 
-const recruitmentItems = [
+const recruitmentItems: { href: string; icon: React.ElementType; label: string }[] = [
   { href: "/seasons",       icon: CalendarRange, label: "Seasons & SMP" },
   { href: "/question-sets", icon: ClipboardList, label: "Question Sets" },
   { href: "/job-posting",   icon: Briefcase,     label: "Job Applications" },
   { href: "/interviews",    icon: Minimize,      label: "Interview Calls" },
   { href: "/talent",        icon: Search,        label: "Talent" },
+  { href: "/reports",       icon: BarChart3,     label: "Reports" },
 ];
 
 const topNavItems = [
