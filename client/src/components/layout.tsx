@@ -291,7 +291,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+                <Button variant="ghost" className="relative h-9 w-9 rounded-full hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0">
                   <Avatar className="h-9 w-9 border border-border">
                     <AvatarFallback className="bg-primary/20 text-primary font-bold text-xs">
                       {initials}
