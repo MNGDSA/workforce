@@ -590,6 +590,9 @@ export interface SmsPluginConfig {
     successStatusCodes: number[];
     responseMessageIdPath?: string;
     responseErrorPath?: string;
+    responseSuccessField?: string;
+    responseSuccessValue?: string;
+    responsePartialErrorPath?: string;
   };
   compliance?: {
     region?: string;

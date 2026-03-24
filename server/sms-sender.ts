@@ -22,11 +22,30 @@ function getValueAtPath(obj: unknown, path: string): string | undefined {
   const parts = path.split(".");
   let current: unknown = obj;
   for (const p of parts) {
-    if (current === null || typeof current !== "object") return undefined;
-    current = (current as Record<string, unknown>)[p];
+    if (current === null || current === undefined) return undefined;
+    if (Array.isArray(current)) {
+      const idx = parseInt(p, 10);
+      current = isNaN(idx) ? undefined : current[idx];
+    } else if (typeof current === "object") {
+      current = (current as Record<string, unknown>)[p];
+    } else {
+      return undefined;
+    }
   }
   if (current === undefined || current === null) return undefined;
   return typeof current === "string" ? current : JSON.stringify(current);
+}
+
+function parseUrlEncodedResponse(text: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const pair of text.split("&")) {
+    const eqIdx = pair.indexOf("=");
+    if (eqIdx === -1) continue;
+    const key = decodeURIComponent(pair.slice(0, eqIdx).replace(/\+/g, " "));
+    const val = decodeURIComponent(pair.slice(eqIdx + 1).replace(/\+/g, " "));
+    result[key] = val;
+  }
+  return result;
 }
 
 export interface SmsSendResult {
@@ -70,7 +89,13 @@ export async function sendSmsViaPlugin(
   const config = plugin.pluginConfig as SmsPluginConfig;
   const credentials = (plugin.credentials ?? {}) as Record<string, string>;
 
-  const vars: Record<string, string> = { ...credentials, to, message };
+  const vars: Record<string, string> = {
+    ...credentials,
+    to,
+    message,
+    timestamp: Date.now().toString(),
+    uuid: crypto.randomUUID(),
+  };
 
   const sendConfig = config.send;
   const endpoint = (sendConfig.endpoint ?? "").replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? "");
@@ -85,9 +110,14 @@ export async function sendSmsViaPlugin(
   }
 
   try {
+    const defaultHeaders: Record<string, string> = {};
+    if (sendConfig.method !== "GET") {
+      defaultHeaders["Content-Type"] = "application/json";
+    }
+
     const fetchOptions: RequestInit = {
       method: sendConfig.method,
-      headers: { "Content-Type": "application/json", ...headers },
+      headers: { ...defaultHeaders, ...headers },
     };
     if (sendConfig.method !== "GET") {
       fetchOptions.body = JSON.stringify(resolvedBody);
@@ -96,15 +126,50 @@ export async function sendSmsViaPlugin(
     const response = await fetch(url, fetchOptions);
     const successCodes = sendConfig.successStatusCodes ?? [200, 201];
 
+    const rawText = await response.text();
     let responseData: unknown;
+
     const ct = response.headers.get("content-type") ?? "";
     if (ct.includes("application/json")) {
-      responseData = await response.json();
+      try { responseData = JSON.parse(rawText); } catch { responseData = rawText; }
     } else {
-      responseData = await response.text();
+      try { responseData = JSON.parse(rawText); } catch {
+        if (rawText.includes("=") && rawText.includes("&")) {
+          responseData = parseUrlEncodedResponse(rawText);
+        } else {
+          responseData = rawText;
+        }
+      }
     }
 
-    if (successCodes.includes(response.status)) {
+    const httpOk = successCodes.includes(response.status);
+
+    let bodyOk = true;
+    if (sendConfig.responseSuccessField && sendConfig.responseSuccessValue) {
+      const fieldVal = getValueAtPath(responseData, sendConfig.responseSuccessField);
+      bodyOk = fieldVal === sendConfig.responseSuccessValue;
+    } else if (sendConfig.responseSuccessField && !sendConfig.responseSuccessValue) {
+      const fieldVal = getValueAtPath(responseData, sendConfig.responseSuccessField);
+      bodyOk = fieldVal === "0" || fieldVal?.toLowerCase() === "success" || fieldVal?.toLowerCase() === "ok";
+    }
+
+    let partialError: string | undefined;
+    if (httpOk && bodyOk && sendConfig.responsePartialErrorPath) {
+      const errorsVal = getValueAtPath(responseData, sendConfig.responsePartialErrorPath);
+      if (errorsVal && errorsVal !== "[]" && errorsVal !== "null") {
+        try {
+          const errArray = JSON.parse(errorsVal);
+          if (Array.isArray(errArray) && errArray.length > 0) {
+            const first = errArray[0] as Record<string, unknown>;
+            partialError = (first.errortext ?? first.errorMessage ?? JSON.stringify(first)) as string;
+          }
+        } catch {
+          partialError = errorsVal;
+        }
+      }
+    }
+
+    if (httpOk && bodyOk && !partialError) {
       const messageId = sendConfig.responseMessageIdPath
         ? getValueAtPath(responseData, sendConfig.responseMessageIdPath)
         : undefined;
@@ -115,7 +180,7 @@ export async function sendSmsViaPlugin(
         : undefined;
       return {
         success: false,
-        error: errorMsg ?? `HTTP ${response.status}`,
+        error: partialError ?? errorMsg ?? `HTTP ${response.status}`,
         statusCode: response.status,
         rawResponse: responseData,
       };

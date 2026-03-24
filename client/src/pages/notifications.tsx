@@ -67,22 +67,52 @@ const EXAMPLE_PLUGINS: Record<string, SmsPluginConfig> = {
   goinfinito: {
     name: "GoInfinito SMS",
     description: "CITC-compliant SMS gateway for Saudi Arabia via GoInfinito (ValueFirst)",
-    version: "1.0.0",
+    version: "1.1.0",
     author: "Workforce Platform",
     credentials: [
-      { key: "apiKey", label: "API Key", type: "secret", required: true, placeholder: "Your GoInfinito API key", hint: "Found in your GoInfinito dashboard under API settings." },
-      { key: "senderId", label: "Sender ID", type: "text", required: true, placeholder: "e.g. WORKFORCE", hint: "Must be pre-registered with CITC. Promotional IDs must end with -AD." },
+      { key: "clientId", label: "Client ID", type: "text", required: true, placeholder: "Your GoInfinito Client ID", hint: "Found in your GoInfinito dashboard." },
+      { key: "clientPassword", label: "Client Password", type: "secret", required: true, placeholder: "Your GoInfinito Client Password", hint: "Found in your GoInfinito dashboard." },
+      { key: "senderId", label: "Sender ID", type: "text", required: true, placeholder: "e.g. WORKFORCE", hint: "Must be pre-registered with CITC (CST). Promotional IDs must end with -AD." },
     ],
     send: {
-      endpoint: "https://api.goinfinito.com/api/v2/message",
+      endpoint: "https://api.goinfinito.me/unified/v2/send",
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer {{apiKey}}" },
-      body: { sender: "{{senderId}}", to: "{{to}}", message: "{{message}}" },
-      successStatusCodes: [200, 201],
-      responseMessageIdPath: "data.messageId",
-      responseErrorPath: "error.message",
+      headers: {
+        "Content-Type": "application/json",
+        "x-client-id": "{{clientId}}",
+        "x-client-password": "{{clientPassword}}",
+      },
+      body: {
+        sms: {
+          ver: "2.0",
+          dlr: { url: "" },
+          messages: [
+            {
+              udh: "0",
+              text: "{{message}}",
+              property: 0,
+              id: "{{timestamp}}",
+              coding: 1,
+              addresses: [
+                {
+                  from: "{{senderId}}",
+                  to: "{{to}}",
+                  seq: "1",
+                  tag: "",
+                },
+              ],
+            },
+          ],
+        },
+      },
+      successStatusCodes: [200],
+      responseSuccessField: "status",
+      responseSuccessValue: "Success",
+      responsePartialErrorPath: "messageack.guids.0.errors",
+      responseMessageIdPath: "messageack.guids.0.guid",
+      responseErrorPath: "statustext",
     },
-    compliance: { region: "Saudi Arabia", notes: "Promotional messages restricted to 9:00 AM – 8:00 PM KSA. Sender ID must be CITC-registered." },
+    compliance: { region: "Saudi Arabia", notes: "Sender ID must be pre-registered with CITC (CST). Promotional messages restricted to 9:00 AM – 8:00 PM KSA time." },
   },
   unifonic: {
     name: "Unifonic SMS",
