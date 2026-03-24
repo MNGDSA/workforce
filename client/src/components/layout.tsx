@@ -51,10 +51,14 @@ const topNavItems = [
   { href: "/workforce", icon: Users,           label: "Workforce" },
 ];
 
+const settingsPaths = ["/settings", "/automation"];
+
+const settingsSubItems = [
+  { href: "/automation", icon: Workflow, label: "Rules & Automation" },
+];
+
 const bottomNavItems = [
-  { href: "/automation",   icon: Workflow,  label: "Rules & Automation" },
-  { href: "/documentation",icon: BookOpen,  label: "Documentation" },
-  { href: "/settings",     icon: Settings,  label: "System & Settings" },
+  { href: "/documentation", icon: BookOpen, label: "Documentation" },
 ];
 
 export default function DashboardLayout({ children }: LayoutProps) {
@@ -62,6 +66,9 @@ export default function DashboardLayout({ children }: LayoutProps) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [recruitmentOpen, setRecruitmentOpen] = useState(
     () => recruitmentPaths.some((p) => location.startsWith(p))
+  );
+  const [settingsOpen, setSettingsOpen] = useState(
+    () => settingsPaths.some((p) => location.startsWith(p))
   );
 
   const renderNavLink = (href: string, Icon: React.ElementType, label: string) => {
@@ -140,6 +147,60 @@ export default function DashboardLayout({ children }: LayoutProps) {
         </div>
 
         {bottomNavItems.map((item) => renderNavLink(item.href, item.icon, item.label))}
+
+        {/* ── System & Settings Group ── */}
+        {(() => {
+          const isSettingsActive = settingsPaths.some((p) => location.startsWith(p));
+          return (
+            <div>
+              <button
+                onClick={() => setSettingsOpen((v) => !v)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-4 py-3 rounded-sm text-sm font-medium transition-all duration-200 group",
+                  isSettingsActive
+                    ? "bg-primary/10 text-primary border-l-2 border-primary"
+                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground border-l-2 border-transparent"
+                )}
+              >
+                <Settings className={cn("h-5 w-5 shrink-0", isSettingsActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                <span className="flex-1 text-left">System & Settings</span>
+                <ChevronDown className={cn("h-4 w-4 transition-transform duration-200 shrink-0", settingsOpen ? "rotate-0" : "-rotate-90")} />
+              </button>
+
+              {settingsOpen && (
+                <div className="ml-4 mt-0.5 space-y-0.5 border-l border-border/50 pl-3">
+                  <Link href="/settings">
+                    <button className={cn(
+                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 group",
+                      location === "/settings"
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    )}>
+                      <Settings className={cn("h-4 w-4 shrink-0", location === "/settings" ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                      Settings
+                    </button>
+                  </Link>
+                  {settingsSubItems.map((item) => {
+                    const isActive = location === item.href;
+                    return (
+                      <Link key={item.href} href={item.href}>
+                        <button className={cn(
+                          "w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 group",
+                          isActive
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                        )}>
+                          <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                          {item.label}
+                        </button>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       <div className="p-4 border-t border-border/50">
