@@ -879,12 +879,14 @@ function ApplicantsSheet({
     enabled: !!job && open,
   });
 
-  const { data: candidateResult } = useQuery({
+  const { data: candidates = [] } = useQuery<CandidateInfo[]>({
     queryKey: ["/api/candidates/list"],
-    queryFn: () => apiRequest("GET", "/api/candidates?limit=100").then((r) => r.json()),
+    queryFn: async () => {
+      const json = await apiRequest("GET", "/api/candidates?limit=100").then((r) => r.json());
+      return Array.isArray(json) ? json : Array.isArray(json?.data) ? json.data : [];
+    },
     enabled: !!job && open,
   });
-  const candidates: CandidateInfo[] = Array.isArray(candidateResult) ? candidateResult : (candidateResult?.data ?? []);
   const candidateMap = Object.fromEntries(candidates.map((c) => [c.id, c]));
 
   // Fetch question set for this job (to get question texts for export + display)
