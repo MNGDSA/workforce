@@ -254,6 +254,18 @@ export const smpContracts = pgTable(
   })
 );
 
+// ─── Question Sets ──────────────────────────────────────────────────────────
+export const questionSets = pgTable("question_sets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  questions: jsonb("questions").notNull().default(sql`'[]'::jsonb`),
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
 // ─── Job Postings ───────────────────────────────────────────────────────────
 export const jobPostings = pgTable(
   "job_postings",
@@ -276,6 +288,7 @@ export const jobPostings = pgTable(
     businessUnitId: varchar("business_unit_id").references(() => businessUnits.id, { onDelete: "set null" }),
     deadline: text("deadline"),
     skills: text("skills").array(),
+    questionSetId: varchar("question_set_id").references(() => questionSets.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
   },
@@ -304,6 +317,7 @@ export const applications = pgTable(
     reviewedAt: timestamp("reviewed_at"),
     notes: text("notes"),
     score: integer("score"),
+    questionSetAnswers: jsonb("question_set_answers"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
   },
@@ -479,6 +493,12 @@ export const insertBusinessUnitSchema = createInsertSchema(businessUnits).omit({
   createdAt: true,
 });
 
+export const insertQuestionSetSchema = createInsertSchema(questionSets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertBusinessUnit = z.infer<typeof insertBusinessUnitSchema>;
@@ -508,6 +528,9 @@ export type AutomationRule = typeof automationRules.$inferSelect;
 
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
+
+export type InsertQuestionSet = z.infer<typeof insertQuestionSetSchema>;
+export type QuestionSet = typeof questionSets.$inferSelect;
 
 export const insertSMPContractSchema = createInsertSchema(smpContracts).omit({
   id: true,

@@ -14,6 +14,7 @@ import {
   insertUserSchema,
   insertBusinessUnitSchema,
   insertSMPContractSchema,
+  insertQuestionSetSchema,
   candidateQuerySchema,
 } from "@shared/schema";
 import { z } from "zod";
@@ -727,6 +728,47 @@ export async function registerRoutes(
     } catch (err) {
       return handleError(res, err);
     }
+  });
+
+  // ─── Question Sets ────────────────────────────────────────────────────────
+  app.get("/api/question-sets", async (_req: Request, res: Response) => {
+    try {
+      const data = await storage.getQuestionSets();
+      return res.json(data);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/question-sets/:id", async (req: Request, res: Response) => {
+    try {
+      const qs = await storage.getQuestionSet(req.params.id);
+      if (!qs) return res.status(404).json({ message: "Question set not found" });
+      return res.json(qs);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/question-sets", async (req: Request, res: Response) => {
+    try {
+      const data = insertQuestionSetSchema.parse(req.body);
+      const qs = await storage.createQuestionSet(data);
+      return res.status(201).json(qs);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/question-sets/:id", async (req: Request, res: Response) => {
+    try {
+      const data = insertQuestionSetSchema.partial().parse(req.body);
+      const qs = await storage.updateQuestionSet(req.params.id, data);
+      if (!qs) return res.status(404).json({ message: "Question set not found" });
+      return res.json(qs);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.delete("/api/question-sets/:id", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteQuestionSet(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Question set not found" });
+      return res.status(204).send();
+    } catch (err) { return handleError(res, err); }
   });
 
   return httpServer;

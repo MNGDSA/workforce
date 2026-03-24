@@ -11,6 +11,7 @@ import {
   notifications,
   businessUnits,
   smpContracts,
+  questionSets,
   type User,
   type InsertUser,
   type Candidate,
@@ -33,6 +34,8 @@ import {
   type InsertBusinessUnit,
   type SMPContract,
   type InsertSMPContract,
+  type QuestionSet,
+  type InsertQuestionSet,
   type CandidateQuery,
 } from "@shared/schema";
 import { eq, and, or, ilike, desc, asc, count, sql, inArray } from "drizzle-orm";
@@ -117,6 +120,13 @@ export interface IStorage {
   createSMPContract(data: InsertSMPContract): Promise<SMPContract>;
   updateSMPContract(id: string, data: Partial<InsertSMPContract>): Promise<SMPContract | undefined>;
   deleteSMPContract(id: string): Promise<boolean>;
+
+  // Question Sets
+  getQuestionSets(): Promise<QuestionSet[]>;
+  getQuestionSet(id: string): Promise<QuestionSet | undefined>;
+  createQuestionSet(data: InsertQuestionSet): Promise<QuestionSet>;
+  updateQuestionSet(id: string, data: Partial<InsertQuestionSet>): Promise<QuestionSet | undefined>;
+  deleteQuestionSet(id: string): Promise<boolean>;
 
   // Dashboard
   getDashboardStats(): Promise<{
@@ -613,6 +623,35 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSMPContract(id: string): Promise<boolean> {
     const result = await db.delete(smpContracts).where(eq(smpContracts.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ─── Question Sets ─────────────────────────────────────────────────────────
+  async getQuestionSets(): Promise<QuestionSet[]> {
+    return db.select().from(questionSets).orderBy(desc(questionSets.createdAt));
+  }
+
+  async getQuestionSet(id: string): Promise<QuestionSet | undefined> {
+    const [qs] = await db.select().from(questionSets).where(eq(questionSets.id, id));
+    return qs;
+  }
+
+  async createQuestionSet(data: InsertQuestionSet): Promise<QuestionSet> {
+    const [qs] = await db.insert(questionSets).values(data).returning();
+    return qs;
+  }
+
+  async updateQuestionSet(id: string, data: Partial<InsertQuestionSet>): Promise<QuestionSet | undefined> {
+    const [qs] = await db
+      .update(questionSets)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(questionSets.id, id))
+      .returning();
+    return qs;
+  }
+
+  async deleteQuestionSet(id: string): Promise<boolean> {
+    const result = await db.delete(questionSets).where(eq(questionSets.id, id)).returning();
     return result.length > 0;
   }
 }

@@ -18,6 +18,7 @@ import SettingsPage from "@/pages/settings";
 import DocumentationPage from "@/pages/documentation";
 import JobDetailPage from "@/pages/job-detail";
 import ProfileSetupGate from "@/components/profile-setup-gate";
+import QuestionSetsPage from "@/pages/question-sets";
 
 function Router() {
   return (
@@ -34,6 +35,7 @@ function Router() {
       <Route path="/notifications" component={NotificationsPage} />
       <Route path="/settings" component={SettingsPage} />
       <Route path="/documentation" component={DocumentationPage} />
+      <Route path="/question-sets" component={QuestionSetsPage} />
       <Route path="/candidate-portal" component={() => (
         <ProfileSetupGate><CandidatePortal /></ProfileSetupGate>
       )} />

@@ -98,6 +98,7 @@ const createJobSchema = z.object({
   description: z.string().optional(),
   requirements: z.string().optional(),
   seasonId: z.string().optional(),
+  questionSetId: z.string().optional(),
 });
 
 type CreateJobForm = z.infer<typeof createJobSchema>;
@@ -119,6 +120,12 @@ function CreateJobDialog({
     enabled: open,
   });
 
+  const { data: questionSets = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/question-sets"],
+    queryFn: () => apiRequest("GET", "/api/question-sets").then(r => r.json()),
+    enabled: open,
+  });
+
   const form = useForm<CreateJobForm>({
     resolver: zodResolver(createJobSchema),
     defaultValues: {
@@ -134,6 +141,7 @@ function CreateJobDialog({
       description: "",
       requirements: "",
       seasonId: "",
+      questionSetId: "",
     },
   });
 
@@ -142,6 +150,7 @@ function CreateJobDialog({
       const payload: Record<string, unknown> = { ...data, type: "seasonal" };
       if (!payload.seasonId) delete payload.seasonId;
       if (!payload.deadline) delete payload.deadline;
+      if (!payload.questionSetId) delete payload.questionSetId;
       if (payload.salaryMin != null && payload.salaryMin !== "") {
         payload.salaryMin = String(payload.salaryMin);
       } else {
@@ -426,6 +435,30 @@ function CreateJobDialog({
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="questionSetId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Screening Question Set</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                      <FormControl>
+                        <SelectTrigger className="h-10 bg-muted/30 border-border focus:ring-primary/20 rounded-sm" data-testid="select-job-questionset">
+                          <SelectValue placeholder="None (optional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-card border-border">
+                        <SelectItem value="">None</SelectItem>
+                        {questionSets.map(qs => (
+                          <SelectItem key={qs.id} value={qs.id}>{qs.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             {/* ── Footer ── */}
@@ -489,6 +522,7 @@ const postJobSchema = z.object({
   description: z.string().optional(),
   requirements: z.string().optional(),
   status: z.enum(["draft", "active"]),
+  questionSetId: z.string().optional(),
 });
 
 type PostJobForm = z.infer<typeof postJobSchema>;
@@ -497,15 +531,22 @@ function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const { data: questionSets = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/question-sets"],
+    queryFn: () => apiRequest("GET", "/api/question-sets").then(r => r.json()),
+    enabled: open,
+  });
+
   const form = useForm<PostJobForm>({
     resolver: zodResolver(postJobSchema),
-    defaultValues: { title: "", type: "full_time", location: "", region: "", deadline: "", description: "", requirements: "", status: "active" },
+    defaultValues: { title: "", type: "full_time", location: "", region: "", deadline: "", description: "", requirements: "", status: "active", questionSetId: "" },
   });
 
   const postJob = useMutation({
     mutationFn: (data: PostJobForm) => {
       const payload: Record<string, unknown> = { ...data };
       if (!payload.deadline) delete payload.deadline;
+      if (!payload.questionSetId) delete payload.questionSetId;
       if (payload.salaryMin != null && payload.salaryMin !== "") {
         payload.salaryMin = String(payload.salaryMin);
       } else {
@@ -657,6 +698,26 @@ function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
                 <FormControl>
                   <Textarea placeholder="List qualifications, experience, and skills required..." rows={3} className="bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm resize-none" data-testid="textarea-postjob-requirements" {...field} />
                 </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="questionSetId" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Screening Question Set</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                  <FormControl>
+                    <SelectTrigger className="h-10 bg-muted/30 border-border focus:ring-primary/20 rounded-sm" data-testid="select-postjob-questionset">
+                      <SelectValue placeholder="None (optional)" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="">None</SelectItem>
+                    {questionSets.map(qs => (
+                      <SelectItem key={qs.id} value={qs.id}>{qs.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <FormMessage />
               </FormItem>
             )} />

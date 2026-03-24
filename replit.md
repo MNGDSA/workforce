@@ -34,6 +34,7 @@ A full-stack seasonal job hiring management platform built for Saudi Arabia oper
 │   │   ├── workforce.tsx         ← UI prototype
 │   │   ├── notifications.tsx     ← UI prototype
 │   │   ├── settings.tsx          ← UI prototype
+│   │   ├── question-sets.tsx     ← Full CRUD question set builder
 │   │   ├── candidate-portal.tsx  ← With e-signature (jspdf)
 │   │   └── auth-page.tsx         ← Login/Register
 │   ├── components/

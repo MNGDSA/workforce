@@ -16,6 +16,7 @@ import {
   Workflow,
   Minimize,
   BookOpen,
+  ClipboardList,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -42,6 +43,7 @@ const navItems = [
   { href: "/workforce", icon: Users, label: "Workforce" },
   { href: "/talent", icon: Search, label: "Talent" },
   { href: "/automation", icon: Workflow, label: "Rules & Automation" },
+  { href: "/question-sets", icon: ClipboardList, label: "Question Sets" },
   { href: "/notifications", icon: Bell, label: "Notification Center" },
   { href: "/documentation", icon: BookOpen, label: "Documentation" },
   { href: "/settings", icon: Settings, label: "System & Settings" },
