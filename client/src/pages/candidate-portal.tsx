@@ -660,10 +660,6 @@ export default function CandidatePortal() {
                   <h3 className="font-bold text-lg text-white">{displayName}</h3>
                   <p className="text-muted-foreground text-sm">{String(candidateProfile?.currentRole ?? "Job Seeker")}</p>
                 </div>
-                <div className="mt-4 flex justify-center gap-2">
-                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">Active</Badge>
-                  <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">Available</Badge>
-                </div>
                 <div className="mt-6 grid grid-cols-2 gap-4 border-t border-border pt-5">
                   <div>
                     <div className="text-2xl font-bold text-white">{appliedIds.size}</div>
