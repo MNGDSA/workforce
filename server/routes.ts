@@ -327,6 +327,12 @@ export async function registerRoutes(
 
   app.delete("/api/seasons/:id", async (req: Request, res: Response) => {
     try {
+      const jobCount = await storage.countJobPostingsBySeason(req.params.id);
+      if (jobCount > 0) {
+        return res.status(409).json({
+          message: `Cannot delete this season — it has ${jobCount} job posting${jobCount === 1 ? "" : "s"} linked to it. Remove or re-assign those job postings first, or archive the season instead.`,
+        });
+      }
       const deleted = await storage.deleteSeason(req.params.id);
       if (!deleted) return res.status(404).json({ message: "Season not found" });
       return res.status(204).send();

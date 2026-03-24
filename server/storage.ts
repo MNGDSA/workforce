@@ -65,6 +65,7 @@ export interface IStorage {
   createSeason(season: InsertSeason): Promise<Season>;
   updateSeason(id: string, data: Partial<InsertSeason>): Promise<Season | undefined>;
   deleteSeason(id: string): Promise<boolean>;
+  countJobPostingsBySeason(seasonId: string): Promise<number>;
 
   // Job Postings
   getJobPostings(params?: { status?: string; seasonId?: string }): Promise<JobPosting[]>;
@@ -317,6 +318,14 @@ export class DatabaseStorage implements IStorage {
   async deleteSeason(id: string): Promise<boolean> {
     const result = await db.delete(seasons).where(eq(seasons.id, id));
     return (result.rowCount ?? 0) > 0;
+  }
+
+  async countJobPostingsBySeason(seasonId: string): Promise<number> {
+    const [row] = await db
+      .select({ value: count() })
+      .from(jobPostings)
+      .where(eq(jobPostings.seasonId, seasonId));
+    return Number(row?.value ?? 0);
   }
 
   // ─── Job Postings ───────────────────────────────────────────────────────────
