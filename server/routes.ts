@@ -114,10 +114,6 @@ export async function registerRoutes(
       if (existingByNationalId) {
         return res.status(409).json({ message: "An account with this National ID already exists" });
       }
-      const existingByPhone = await storage.getUserByPhone(phone.trim());
-      if (existingByPhone) {
-        return res.status(409).json({ message: "An account with this phone number already exists" });
-      }
 
       const syntheticEmail = `${nationalId.trim()}@candidate.workforce.sa`;
       const hashed = await bcrypt.hash(password, 12);

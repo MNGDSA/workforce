@@ -127,7 +127,7 @@ export const users = pgTable(
     emailIdx: uniqueIndex("users_email_idx").on(t.email),
     usernameIdx: uniqueIndex("users_username_idx").on(t.username),
     phoneIdx: index("users_phone_idx").on(t.phone),
-    nationalIdIdx: index("users_national_id_idx").on(t.nationalId),
+    nationalIdIdx: uniqueIndex("users_national_id_idx").on(t.nationalId),
   })
 );
 
@@ -201,7 +201,7 @@ export const candidates = pgTable(
     cityIdx: index("candidates_city_idx").on(t.city),
     ratingIdx: index("candidates_rating_idx").on(t.rating),
     createdAtIdx: index("candidates_created_at_idx").on(t.createdAt),
-    nationalIdIdx: index("candidates_national_id_idx").on(t.nationalId),
+    nationalIdIdx: uniqueIndex("candidates_national_id_idx").on(t.nationalId),
     statusCityIdx: index("candidates_status_city_idx").on(t.status, t.city),
     fullNameEnIdx: index("candidates_full_name_en_idx").on(t.fullNameEn),
     candidateCodeIdx: uniqueIndex("candidates_code_idx").on(t.candidateCode),
