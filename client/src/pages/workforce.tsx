@@ -41,6 +41,7 @@ import {
   Clock,
   MapPin,
   Loader2,
+  CheckCircle2,
 } from "lucide-react";
 import {
   Table,
@@ -56,6 +57,9 @@ import { useToast } from "@/hooks/use-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Season = { id: string; name: string; status: string };
+type Job = { id: string; title: string; status: string };
+type Application = { id: string; candidateId: string; jobId: string; status: string };
+type Candidate = { id: string; fullNameEn: string; candidateCode: string; status: string };
 
 type WorkforceGroup = {
   id: string;
@@ -195,12 +199,62 @@ function CreateGroupDialog({
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // ── Member selection state ──
+  const [memberSource, setMemberSource] = useState<"applications" | "talent">("applications");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [memberJobId, setMemberJobId] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
+
   const { data: seasons = [] } = useQuery<Season[]>({
     queryKey: ["/api/seasons"],
     queryFn: () => apiRequest("GET", "/api/seasons").then((r) => r.json()),
     enabled: open,
     staleTime: 0,
   });
+
+  const { data: activeJobs = [] } = useQuery<Job[]>({
+    queryKey: ["/api/jobs", "active"],
+    queryFn: () => apiRequest("GET", "/api/jobs?status=active").then((r) => r.json()),
+    enabled: open,
+    staleTime: 0,
+  });
+
+  const { data: jobApplications = [], isLoading: loadingApps } = useQuery<Application[]>({
+    queryKey: ["/api/applications", memberJobId],
+    queryFn: () => apiRequest("GET", `/api/applications?jobId=${memberJobId}`).then((r) => r.json()),
+    enabled: !!memberJobId,
+    staleTime: 0,
+  });
+
+  const { data: allCandidates = [] } = useQuery<Candidate[]>({
+    queryKey: ["/api/candidates/list"],
+    queryFn: async () => {
+      const json = await apiRequest("GET", "/api/candidates?limit=100").then((r) => r.json());
+      return Array.isArray(json) ? json : Array.isArray(json?.data) ? json.data : [];
+    },
+    enabled: open,
+    staleTime: 0,
+  });
+
+  // Applicants for selected job
+  const applicantIds = new Set(jobApplications.map((a) => a.candidateId));
+  const jobApplicants = allCandidates.filter((c) => applicantIds.has(c.id));
+
+  // Talent pool filtered by search
+  const talentPool = allCandidates.filter(
+    (c) =>
+      !memberSearch ||
+      c.fullNameEn.toLowerCase().includes(memberSearch.toLowerCase()) ||
+      c.candidateCode.toLowerCase().includes(memberSearch.toLowerCase())
+  );
+
+  function toggleMember(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
 
   const form = useForm<CreateGroupForm>({
     resolver: zodResolver(createGroupSchema),
@@ -222,6 +276,13 @@ function CreateGroupDialog({
     return d.toLocaleDateString("en-SA", { month: "short", day: "numeric", year: "numeric" });
   }
 
+  function resetMemberState() {
+    setSelectedIds(new Set());
+    setMemberJobId("");
+    setMemberSearch("");
+    setMemberSource("applications");
+  }
+
   async function onSubmit(data: CreateGroupForm) {
     setIsSubmitting(true);
     try {
@@ -231,7 +292,7 @@ function CreateGroupDialog({
       const newGroup: WorkforceGroup = {
         id: `WG-${counter}`,
         name: data.name,
-        size: 0,
+        size: selectedIds.size,
         role: data.role,
         startDate: formatDisplayDate(data.startDate),
         endDate: data.endDate ? formatDisplayDate(data.endDate) : undefined,
@@ -246,9 +307,10 @@ function CreateGroupDialog({
       onCreated(newGroup);
       toast({
         title: "Group created",
-        description: `"${data.name}" has been added to the workforce groups.`,
+        description: `"${data.name}" has been added with ${selectedIds.size} member${selectedIds.size !== 1 ? "s" : ""}.`,
       });
       form.reset();
+      resetMemberState();
       onOpenChange(false);
     } catch {
       toast({
@@ -261,8 +323,13 @@ function CreateGroupDialog({
     }
   }
 
+  function handleOpenChange(v: boolean) {
+    if (!v) resetMemberState();
+    onOpenChange(v);
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-xl bg-card border-border max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
@@ -426,6 +493,155 @@ function CreateGroupDialog({
                   </FormItem>
                 )} />
               </div>
+            </div>
+
+            {/* Members */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b border-border pb-1.5">
+                <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground/60">
+                  Members
+                </p>
+                {selectedIds.size > 0 && (
+                  <span className="text-xs font-semibold text-primary">
+                    {selectedIds.size} selected
+                  </span>
+                )}
+              </div>
+
+              {/* Selected member chips */}
+              {selectedIds.size > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {allCandidates.filter((c) => selectedIds.has(c.id)).map((c) => (
+                    <Badge
+                      key={c.id}
+                      variant="outline"
+                      className="bg-primary/10 text-primary border-primary/30 text-xs gap-1 pr-1 cursor-pointer hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
+                      onClick={() => toggleMember(c.id)}
+                      data-testid={`chip-member-${c.id}`}
+                    >
+                      {c.fullNameEn}
+                      <span className="opacity-60">×</span>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              {/* Source toggle */}
+              <div className="flex rounded-sm overflow-hidden border border-border bg-muted/10">
+                <button
+                  type="button"
+                  onClick={() => setMemberSource("applications")}
+                  className={`flex-1 text-xs font-semibold py-2 transition-colors ${
+                    memberSource === "applications"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-white"
+                  }`}
+                  data-testid="tab-source-applications"
+                >
+                  Job Applications
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMemberSource("talent")}
+                  className={`flex-1 text-xs font-semibold py-2 transition-colors ${
+                    memberSource === "talent"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-white"
+                  }`}
+                  data-testid="tab-source-talent"
+                >
+                  Talent Pool
+                </button>
+              </div>
+
+              {/* Job Applications source */}
+              {memberSource === "applications" && (
+                <div className="space-y-2">
+                  <Select value={memberJobId || "none"} onValueChange={(v) => setMemberJobId(v === "none" ? "" : v)}>
+                    <SelectTrigger className="bg-muted/30 border-border h-9 text-sm" data-testid="select-member-job">
+                      <SelectValue placeholder="Select a job to see its applicants…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Select a job…</SelectItem>
+                      {activeJobs.map((j) => (
+                        <SelectItem key={j.id} value={j.id}>{j.title}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-muted/10 divide-y divide-border">
+                    {!memberJobId ? (
+                      <p className="text-xs text-muted-foreground text-center py-5">Select a job above to see applicants</p>
+                    ) : loadingApps ? (
+                      <div className="flex items-center justify-center py-5">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : jobApplicants.length === 0 ? (
+                      <p className="text-xs text-muted-foreground text-center py-5">No applicants found for this job</p>
+                    ) : (
+                      jobApplicants.map((c) => {
+                        const selected = selectedIds.has(c.id);
+                        return (
+                          <div
+                            key={c.id}
+                            className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${selected ? "bg-primary/10" : "hover:bg-muted/30"}`}
+                            onClick={() => toggleMember(c.id)}
+                            data-testid={`row-member-${c.id}`}
+                          >
+                            <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selected ? "bg-primary border-primary" : "border-muted-foreground/40"}`}>
+                              {selected && <CheckCircle2 className="h-3 w-3 text-primary-foreground" />}
+                            </div>
+                            <span className={`text-sm font-medium flex-1 truncate ${selected ? "text-primary" : "text-white"}`}>{c.fullNameEn}</span>
+                            <code className="text-[10px] text-muted-foreground font-mono shrink-0">{c.candidateCode}</code>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Talent Pool source */}
+              {memberSource === "talent" && (
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      placeholder="Search by name or code…"
+                      className="pl-9 h-9 text-sm bg-muted/30 border-border"
+                      value={memberSearch}
+                      onChange={(e) => setMemberSearch(e.target.value)}
+                      data-testid="input-member-search"
+                    />
+                  </div>
+
+                  <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-muted/10 divide-y divide-border">
+                    {talentPool.length === 0 ? (
+                      <p className="text-xs text-muted-foreground text-center py-5">
+                        {allCandidates.length === 0 ? "No candidates in the talent pool yet" : "No matches found"}
+                      </p>
+                    ) : (
+                      talentPool.map((c) => {
+                        const selected = selectedIds.has(c.id);
+                        return (
+                          <div
+                            key={c.id}
+                            className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${selected ? "bg-primary/10" : "hover:bg-muted/30"}`}
+                            onClick={() => toggleMember(c.id)}
+                            data-testid={`row-talent-${c.id}`}
+                          >
+                            <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selected ? "bg-primary border-primary" : "border-muted-foreground/40"}`}>
+                              {selected && <CheckCircle2 className="h-3 w-3 text-primary-foreground" />}
+                            </div>
+                            <span className={`text-sm font-medium flex-1 truncate ${selected ? "text-primary" : "text-white"}`}>{c.fullNameEn}</span>
+                            <code className="text-[10px] text-muted-foreground font-mono shrink-0">{c.candidateCode}</code>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Notes */}
