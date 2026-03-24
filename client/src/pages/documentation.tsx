@@ -195,7 +195,7 @@ export default function DocumentationPage() {
               <SectionHeading icon={Search} title="Finding Candidates in Talent" description="Tips for efficient candidate search." />
               <div className="space-y-3 text-sm text-muted-foreground">
                 <p>• Use the <span className="text-white">search bar</span> to find by name, national ID, phone number, or city.</p>
-                <p>• Use the <span className="text-white">Status filter</span> to narrow by: New, Screened, Interviewed, Hired, Rejected.</p>
+                <p>• Use the <span className="text-white">Status filter</span> to narrow by: New, Shortlisted, Interviewed, Hired, Not Shortlisted.</p>
                 <p>• Use the <span className="text-white">Nationality filter</span> to separate Saudi and Non-Saudi candidates.</p>
                 <p>• Click <span className="text-white">column headers</span> to sort by name, rating, or date added.</p>
                 <p>• Pagination shows 50 candidates per page for performance. Use filters to narrow large result sets.</p>

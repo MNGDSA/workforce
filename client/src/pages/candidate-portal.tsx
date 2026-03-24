@@ -212,8 +212,6 @@ function getApplicationBadge(deadline: string | undefined, status: string) {
       return { label: "Interviewed", className: "bg-violet-500/15 text-violet-400 border-violet-500/30 border" };
     case "rejected":
       return { label: "Not Shortlisted", className: "bg-muted/60 text-muted-foreground border-border border" };
-    case "screened":
-      return { label: "Screened", className: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30 border" };
     default:
       return { label: "Under Review", className: "bg-amber-500/15 text-amber-400 border-amber-500/30 border" };
   }
