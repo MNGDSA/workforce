@@ -258,7 +258,7 @@ export default function AuthPage() {
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                       <>
-                        Sign In to Dashboard
+                        Sign In
                         <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
                       </>
                     )}
