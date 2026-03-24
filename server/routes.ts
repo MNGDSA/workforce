@@ -162,8 +162,16 @@ export async function registerRoutes(
       if (!candidateId || !currentPassword || !newPassword) {
         return res.status(400).json({ message: "All fields are required" });
       }
-      if (newPassword.length < 8) {
-        return res.status(400).json({ message: "New password must be at least 8 characters" });
+      const pwRules = [
+        { ok: newPassword.length >= 8,              msg: "at least 8 characters" },
+        { ok: /[A-Z]/.test(newPassword),            msg: "one uppercase letter" },
+        { ok: /[a-z]/.test(newPassword),            msg: "one lowercase letter" },
+        { ok: /[0-9]/.test(newPassword),            msg: "one number" },
+        { ok: /[^A-Za-z0-9]/.test(newPassword),    msg: "one special character" },
+      ];
+      const failed = pwRules.filter((r) => !r.ok).map((r) => r.msg);
+      if (failed.length) {
+        return res.status(400).json({ message: `Password must contain: ${failed.join(", ")}` });
       }
       const candidate = await storage.getCandidate(candidateId);
       if (!candidate) return res.status(404).json({ message: "Candidate not found" });

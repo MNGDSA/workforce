@@ -1123,7 +1123,7 @@ export default function CandidatePortal() {
                   type={showPwNew ? "text" : "password"}
                   value={pwNew}
                   onChange={(e) => setPwNew(e.target.value)}
-                  placeholder="At least 8 characters"
+                  placeholder="Min 8 chars, upper, lower, number, symbol"
                   className="bg-background border-border pr-10"
                   data-testid="input-pw-new"
                 />
@@ -1131,6 +1131,22 @@ export default function CandidatePortal() {
                   {showPwNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {pwNew && (
+                <ul className="mt-2 space-y-1">
+                  {[
+                    { ok: pwNew.length >= 8,           label: "At least 8 characters" },
+                    { ok: /[A-Z]/.test(pwNew),         label: "One uppercase letter (A–Z)" },
+                    { ok: /[a-z]/.test(pwNew),         label: "One lowercase letter (a–z)" },
+                    { ok: /[0-9]/.test(pwNew),         label: "One number (0–9)" },
+                    { ok: /[^A-Za-z0-9]/.test(pwNew), label: "One special character (!@#…)" },
+                  ].map(({ ok, label }) => (
+                    <li key={label} className={`flex items-center gap-1.5 text-xs transition-colors ${ok ? "text-emerald-400" : "text-muted-foreground"}`}>
+                      <CheckCircle2 className={`h-3 w-3 shrink-0 ${ok ? "text-emerald-400" : "text-muted-foreground/40"}`} />
+                      {label}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-white">Confirm New Password</label>
@@ -1148,7 +1164,12 @@ export default function CandidatePortal() {
             </div>
             <Button
               type="submit"
-              disabled={changePassword.isPending || !pwCurrent || !pwNew || pwNew !== pwConfirm}
+              disabled={
+                changePassword.isPending ||
+                !pwCurrent || !pwNew || pwNew !== pwConfirm ||
+                pwNew.length < 8 || !/[A-Z]/.test(pwNew) || !/[a-z]/.test(pwNew) ||
+                !/[0-9]/.test(pwNew) || !/[^A-Za-z0-9]/.test(pwNew)
+              }
               variant="outline"
               className="w-full border-border font-semibold"
               data-testid="button-change-password"
