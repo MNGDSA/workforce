@@ -412,6 +412,15 @@ export default function CandidatePortal() {
   const appliedIds = new Set(myApplications.map((a) => a.jobId));
   const appliedJobs = jobs.filter((j) => appliedIds.has(j.id));
 
+  // Fetch interviews for this candidate
+  const { data: myInterviews = [] } = useQuery<{ id: string }[]>({
+    queryKey: ["/api/interviews/mine", candidateId],
+    queryFn: () =>
+      apiRequest("GET", `/api/interviews?candidateId=${candidateId}`)
+        .then((r) => r.json()),
+    enabled: !!candidateId,
+  });
+
   // Fetch the full candidate profile for the profile editor
   const { data: candidateProfile } = useQuery<Record<string, unknown>>({
     queryKey: ["/api/candidates/profile", candidateId],
@@ -661,7 +670,7 @@ export default function CandidatePortal() {
                     <div className="text-xs text-muted-foreground uppercase tracking-wider">Applied</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-white">0</div>
+                    <div className="text-2xl font-bold text-white">{myInterviews.length}</div>
                     <div className="text-xs text-muted-foreground uppercase tracking-wider">Interviews</div>
                   </div>
                 </div>
