@@ -38,7 +38,7 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
-const recruitmentPaths = ["/seasons", "/question-sets", "/job-posting", "/interviews", "/talent", "/reports"];
+const recruitmentPaths = ["/seasons", "/question-sets", "/job-posting", "/interviews", "/talent"];
 
 const recruitmentItems: { href: string; icon: React.ElementType; label: string }[] = [
   { href: "/seasons",       icon: CalendarRange, label: "Seasons & SMP" },
@@ -46,13 +46,13 @@ const recruitmentItems: { href: string; icon: React.ElementType; label: string }
   { href: "/job-posting",   icon: Briefcase,     label: "Job Applications" },
   { href: "/interviews",    icon: Minimize,      label: "Interview Calls" },
   { href: "/talent",        icon: Search,        label: "Talent" },
-  { href: "/reports",       icon: BarChart3,     label: "Reports" },
 ];
 
 const topNavItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/workforce", icon: Users,           label: "Workforce" },
   { href: "/payroll",   icon: Wallet,          label: "Payroll" },
+  { href: "/reports",   icon: BarChart3,       label: "Reports" },
 ];
 
 const settingsPaths = ["/settings", "/automation"];
