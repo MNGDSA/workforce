@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -335,6 +335,38 @@ export default function CandidatePortal() {
   const [applyOpen, setApplyOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<JobPosting | null>(null);
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
+  const [activeNav, setActiveNav] = useState<"dashboard" | "jobs" | "documents">("dashboard");
+
+  // Section refs for smooth-scroll navigation
+  const sectionDashboard = useRef<HTMLDivElement>(null);
+  const sectionJobs      = useRef<HTMLDivElement>(null);
+  const sectionDocuments = useRef<HTMLDivElement>(null);
+
+  // IntersectionObserver — highlight nav based on which section is visible
+  useEffect(() => {
+    const map: [React.RefObject<HTMLDivElement>, "dashboard" | "jobs" | "documents"][] = [
+      [sectionDocuments, "documents"],
+      [sectionJobs, "jobs"],
+      [sectionDashboard, "dashboard"],
+    ];
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const found = map.find(([r]) => r.current === entry.target);
+            if (found) setActiveNav(found[1]);
+          }
+        }
+      },
+      { threshold: 0.25 }
+    );
+    map.forEach(([r]) => { if (r.current) observer.observe(r.current); });
+    return () => observer.disconnect();
+  }, []);
+
+  function scrollTo(ref: React.RefObject<HTMLDivElement>) {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   const { data: jobs = [], isLoading } = useQuery<JobPosting[]>({
     queryKey: ["/api/jobs", "active"],
@@ -391,9 +423,24 @@ export default function CandidatePortal() {
         </div>
 
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
-          <a href="#" className="text-primary hover:text-primary transition-colors">Dashboard</a>
-          <a href="#" className="text-muted-foreground hover:text-white transition-colors">My Jobs</a>
-          <a href="#" className="text-muted-foreground hover:text-white transition-colors">Documents</a>
+          {(["dashboard", "jobs", "documents"] as const).map((key) => {
+            const labels: Record<string, string> = { dashboard: "Dashboard", jobs: "My Jobs", documents: "Documents" };
+            const refs: Record<string, React.RefObject<HTMLDivElement>> = {
+              dashboard: sectionDashboard, jobs: sectionJobs, documents: sectionDocuments,
+            };
+            const active = activeNav === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => { setActiveNav(key); scrollTo(refs[key]); }}
+                className={`transition-colors cursor-pointer bg-transparent border-0 p-0 font-medium text-sm ${active ? "text-primary" : "text-muted-foreground hover:text-white"}`}
+                data-testid={`nav-${key}`}
+              >
+                {labels[key]}
+              </button>
+            );
+          })}
         </nav>
 
         <div className="flex items-center gap-4">
@@ -413,8 +460,8 @@ export default function CandidatePortal() {
 
       <main className="flex-1 p-4 lg:p-8 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
 
-        {/* Welcome */}
-        <div className="flex flex-col md:flex-row gap-4 md:items-center justify-between">
+        {/* Welcome / Dashboard section */}
+        <div ref={sectionDashboard} className="flex flex-col md:flex-row gap-4 md:items-center justify-between scroll-mt-20">
           <div>
             <h1 className="text-3xl font-display font-bold text-white tracking-tight">Candidate Portal</h1>
             <p className="text-muted-foreground mt-1">Browse open positions and manage your applications.</p>
@@ -454,6 +501,7 @@ export default function CandidatePortal() {
 
             <ProfileCompletionCard toast={toast} />
 
+            <div ref={sectionDocuments} className="scroll-mt-20">
             <Card className="bg-card border-border">
               <CardHeader>
                 <CardTitle className="text-base font-display text-white">My Documents</CardTitle>
@@ -486,10 +534,11 @@ export default function CandidatePortal() {
                 </Button>
               </CardContent>
             </Card>
+            </div>{/* /sectionDocuments */}
           </div>
 
           {/* Right: Jobs */}
-          <div className="lg:col-span-2 space-y-6">
+          <div ref={sectionJobs} className="lg:col-span-2 space-y-6 scroll-mt-20">
             <Tabs defaultValue="open">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-display font-bold text-white">Job Opportunities</h3>
