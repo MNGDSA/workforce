@@ -474,7 +474,7 @@ export default function AuthPage() {
           </Tabs>
 
           <div className="flex items-center justify-between pt-8 border-t border-border/50 text-xs text-muted-foreground">
-            <span>© 2026 Workforce Systems Inc.</span>
+            <span>© {new Date().getFullYear()} Luxury Carts Company Ltd.</span>
             <span className="flex gap-4">
               <a href="#" className="hover:text-foreground transition-colors">Privacy</a>
               <a href="#" className="hover:text-foreground transition-colors">Terms</a>
