@@ -192,22 +192,26 @@ export default function ScheduleInterviewPage() {
         fullNameEn: data.groupName,
       }).then((r) => r.json());
 
+      // Resolve creator name from localStorage session
+      let createdByName = "Admin";
+      try {
+        const session = JSON.parse(localStorage.getItem("workforce_candidate") ?? "{}");
+        if (session?.fullName) createdByName = session.fullName;
+        else if (session?.fullNameEn) createdByName = session.fullNameEn;
+      } catch { /* ignore */ }
+
       const scheduledAt = new Date(`${data.date}T${data.time}:00`).toISOString();
+      const invitedCandidateIds = Array.from(selected.keys());
       const payload: Record<string, unknown> = {
         candidateId: candidate.id,
         scheduledAt,
         durationMinutes: data.durationMinutes,
         type: data.venueName,
+        invitedCandidateIds,
+        createdByName,
       };
       if (data.googleLocation) payload.meetingUrl = data.googleLocation;
-
-      const invitedNames = Array.from(selected.values())
-        .map((c) => c.fullNameEn)
-        .join(", ");
-      const notesText = [data.notes, invitedNames ? `Invited: ${invitedNames}` : ""]
-        .filter(Boolean)
-        .join("\n");
-      if (notesText) payload.notes = notesText;
+      if (data.notes?.trim()) payload.notes = data.notes.trim();
 
       return apiRequest("POST", "/api/interviews", payload).then((r) => r.json());
     },

@@ -349,6 +349,8 @@ export const interviews = pgTable(
     type: text("type").notNull().default("video"),
     meetingUrl: text("meeting_url"),
     notes: text("notes"),
+    invitedCandidateIds: text("invited_candidate_ids").array(),
+    createdByName: text("created_by_name"),
     rating: integer("rating"),
     feedback: text("feedback"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
@@ -469,6 +471,8 @@ export const insertInterviewSchema = createInsertSchema(interviews, {
   updatedAt: true,
 }).extend({
   applicationId: z.string().optional().nullable(),
+  invitedCandidateIds: z.array(z.string()).optional().nullable(),
+  createdByName: z.string().optional().nullable(),
 });
 
 export const insertWorkforceSchema = createInsertSchema(workforce).omit({

@@ -86,6 +86,7 @@ export interface IStorage {
   // Interviews
   getInterviews(params?: { status?: string; candidateId?: string }): Promise<Interview[]>;
   getInterview(id: string): Promise<Interview | undefined>;
+  getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null }[] } | undefined>;
   createInterview(interview: InsertInterview): Promise<Interview>;
   updateInterview(id: string, data: Partial<InsertInterview>): Promise<Interview | undefined>;
   getInterviewStats(): Promise<{ total: number; scheduled: number; completed: number; cancelled: number }>;
@@ -464,6 +465,22 @@ export class DatabaseStorage implements IStorage {
   async getInterview(id: string): Promise<Interview | undefined> {
     const [interview] = await db.select().from(interviews).where(eq(interviews.id, id));
     return interview;
+  }
+
+  async getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null }[] } | undefined> {
+    const [interview] = await db.select().from(interviews).where(eq(interviews.id, id));
+    if (!interview) return undefined;
+    let invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null }[] = [];
+    if (interview.invitedCandidateIds && interview.invitedCandidateIds.length > 0) {
+      invitedCandidates = await db.select({
+        id: candidates.id,
+        fullNameEn: candidates.fullNameEn,
+        nationalId: candidates.nationalId,
+      })
+        .from(candidates)
+        .where(inArray(candidates.id, interview.invitedCandidateIds));
+    }
+    return { interview, invitedCandidates };
   }
 
   async createInterview(interview: InsertInterview): Promise<Interview> {

@@ -486,6 +486,17 @@ export async function registerRoutes(
     }
   });
 
+  // Must be before /:id to avoid "stats" being treated as an id
+  app.get("/api/interviews/:id", async (req: Request, res: Response) => {
+    try {
+      const detail = await storage.getInterviewDetail(req.params.id);
+      if (!detail) return res.status(404).json({ message: "Interview not found" });
+      return res.json(detail);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   app.post("/api/interviews", async (req: Request, res: Response) => {
     try {
       const data = insertInterviewSchema.parse(req.body);
