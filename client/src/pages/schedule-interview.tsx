@@ -60,7 +60,7 @@ const scheduleSchema = z.object({
   venueName: z.string().min(2, "Venue name is required"),
   durationMinutes: z.coerce.number().min(15).max(480),
   googleLocation: z.string().url("Must be a valid URL").optional().or(z.literal("")),
-  notes: z.string().optional(),
+  notes: z.string().min(1, "SMS content is required"),
 });
 type ScheduleForm = z.infer<typeof scheduleSchema>;
 
@@ -211,7 +211,7 @@ export default function ScheduleInterviewPage() {
         createdByName,
       };
       if (data.googleLocation) payload.meetingUrl = data.googleLocation;
-      if (data.notes?.trim()) payload.notes = data.notes.trim();
+      payload.notes = data.notes.trim();
 
       return apiRequest("POST", "/api/interviews", payload).then((r) => r.json());
     },
@@ -390,22 +390,24 @@ export default function ScheduleInterviewPage() {
                       </FormItem>
                     )} />
 
-                    {/* Notes */}
+                    {/* SMS Content */}
                     <FormField control={form.control} name="notes" render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                          Session Notes
-                          <span className="ml-1 font-normal normal-case text-muted-foreground/60">(optional)</span>
+                          SMS Content
                         </FormLabel>
                         <FormControl>
                           <Textarea
-                            placeholder="Interview instructions, topics to cover, dress code, documents to bring…"
+                            placeholder="e.g. Please arrive at Gate 3, Al-Noor Tower, Makkah by 08:00 AM. Bring your National ID and a copy of your application. Dress code: formal."
                             className="bg-muted/30 border-border resize-none"
                             rows={5}
-                            data-testid="input-notes"
+                            data-testid="input-sms-content"
                             {...field}
                           />
                         </FormControl>
+                        <p className="text-xs text-muted-foreground/70 mt-1">
+                          This message will be sent via SMS to all invited candidates to notify them of the venue and interview instructions.
+                        </p>
                         <FormMessage />
                       </FormItem>
                     )} />
