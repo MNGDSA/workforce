@@ -10,7 +10,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -45,6 +45,7 @@ import {
   ChevronRight,
   Calendar,
   UserCheck,
+  Save,
 } from "lucide-react";
 import {
   Table,
@@ -531,9 +532,14 @@ const postJobSchema = z.object({
 
 type PostJobForm = z.infer<typeof postJobSchema>;
 
-function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+function PostJobDialog({ open, onOpenChange, initialJob }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  initialJob?: JobPosting | null;
+}) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const isEdit = !!initialJob;
 
   const { data: questionSets = [] } = useQuery<{ id: string; name: string }[]>({
     queryKey: ["/api/question-sets"],
@@ -545,6 +551,27 @@ function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
     resolver: zodResolver(postJobSchema),
     defaultValues: { title: "", type: "full_time", location: "", region: "", deadline: "", description: "", requirements: "", status: "active", questionSetId: "" },
   });
+
+  // Pre-fill form when editing an existing job
+  useEffect(() => {
+    if (open && initialJob) {
+      form.reset({
+        title:       initialJob.title ?? "",
+        type:        (initialJob.type === "full_time" || initialJob.type === "part_time") ? initialJob.type : "full_time",
+        location:    initialJob.location ?? "",
+        region:      initialJob.region ?? "",
+        deadline:    initialJob.deadline ?? "",
+        description: initialJob.description ?? "",
+        requirements:initialJob.requirements ?? "",
+        status:      (initialJob.status === "draft" || initialJob.status === "active") ? initialJob.status : "active",
+        questionSetId: initialJob.questionSetId ?? "",
+        salaryMin:   initialJob.salaryMin != null ? Number(initialJob.salaryMin) : undefined,
+        salaryMax:   initialJob.salaryMax != null ? Number(initialJob.salaryMax) : undefined,
+      });
+    } else if (open && !initialJob) {
+      form.reset({ title: "", type: "full_time", location: "", region: "", deadline: "", description: "", requirements: "", status: "active", questionSetId: "" });
+    }
+  }, [open, initialJob]);
 
   const postJob = useMutation({
     mutationFn: (data: PostJobForm) => {
@@ -561,17 +588,20 @@ function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
       } else {
         delete payload.salaryMax;
       }
+      if (isEdit) {
+        return apiRequest("PATCH", `/api/jobs/${initialJob!.id}`, payload).then(r => r.json());
+      }
       return apiRequest("POST", "/api/jobs", payload).then(r => r.json());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs/stats"] });
-      toast({ title: "Job posted successfully" });
+      toast({ title: isEdit ? "Job updated successfully" : "Job posted successfully" });
       form.reset();
       onOpenChange(false);
     },
     onError: () => {
-      toast({ title: "Failed to post job", description: "Please check all required fields and try again.", variant: "destructive" });
+      toast({ title: isEdit ? "Failed to update job" : "Failed to post job", description: "Please check all required fields and try again.", variant: "destructive" });
     },
   });
 
@@ -581,10 +611,10 @@ function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
         <DialogHeader>
           <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
             <Briefcase className="h-5 w-5 text-amber-400" />
-            Post a Job
+            {isEdit ? "Edit Job" : "Post a Job"}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Create a single standalone job posting.
+            {isEdit ? `Editing: ${initialJob?.title}` : "Create a single standalone job posting."}
           </DialogDescription>
         </DialogHeader>
 
@@ -738,7 +768,7 @@ function PostJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
                   {postJob.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save as Draft"}
                 </Button>
                 <Button type="submit" disabled={postJob.isPending} onClick={() => form.setValue("status", "active")} className="bg-amber-500 hover:bg-amber-500/90 text-white font-bold uppercase tracking-wide text-xs rounded-sm" data-testid="button-postjob-publish">
-                  {postJob.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="mr-1.5 h-4 w-4" />Post Job</>}
+                  {postJob.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : isEdit ? <><Save className="mr-1.5 h-4 w-4" />Update Job</> : <><Plus className="mr-1.5 h-4 w-4" />Post Job</>}
                 </Button>
               </div>
             </DialogFooter>
@@ -1051,6 +1081,7 @@ export default function JobPostingPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [postJobOpen, setPostJobOpen] = useState(false);
+  const [editingJob, setEditingJob] = useState<JobPosting | null>(null);
   const [selectedJob, setSelectedJob] = useState<JobPosting | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -1301,7 +1332,9 @@ export default function JobPostingPage() {
                             <DropdownMenuItem onClick={() => { setSelectedJob(job); setSheetOpen(true); }}>
                               View Applicants
                             </DropdownMenuItem>
-                            <DropdownMenuItem>Edit Job</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setEditingJob(job); setPostJobOpen(true); }}>
+                              Edit Job
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {job.status === "draft" && (
                               <DropdownMenuItem onClick={() => updateJob.mutate({ id: job.id, status: "active" })}>
@@ -1330,7 +1363,11 @@ export default function JobPostingPage() {
       {/* Create Job Dialog */}
       <CreateJobDialog open={createOpen} onOpenChange={setCreateOpen} />
       {/* Post Job Dialog */}
-      <PostJobDialog open={postJobOpen} onOpenChange={setPostJobOpen} />
+      <PostJobDialog
+        open={postJobOpen}
+        onOpenChange={(v) => { setPostJobOpen(v); if (!v) setEditingJob(null); }}
+        initialJob={editingJob}
+      />
       {/* Applicants Sheet */}
       <ApplicantsSheet job={selectedJob} open={sheetOpen} onOpenChange={setSheetOpen} />
     </DashboardLayout>
