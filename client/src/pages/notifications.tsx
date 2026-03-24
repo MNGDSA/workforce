@@ -72,7 +72,7 @@ const EXAMPLE_PLUGINS: Record<string, SmsPluginConfig> = {
     credentials: [
       { key: "clientId", label: "Client ID", type: "text", required: true, placeholder: "Your GoInfinito Client ID", hint: "Found in your GoInfinito dashboard." },
       { key: "clientPassword", label: "Client Password", type: "secret", required: true, placeholder: "Your GoInfinito Client Password", hint: "Found in your GoInfinito dashboard." },
-      { key: "senderId", label: "Sender ID", type: "text", required: true, placeholder: "e.g. WORKFORCE", hint: "Must be pre-registered with CITC (CST). Promotional IDs must end with -AD." },
+      { key: "senderId", label: "Sender ID", type: "text", required: true, placeholder: "e.g. WORKFORCE", hint: "Case-sensitive — must match your approved Sender ID exactly as shown in the GoInfinito portal (e.g. TANAQOL not Tanaqol). Must be pre-registered with CITC (CST). Promotional IDs must end with -AD." },
     ],
     send: {
       endpoint: "https://api.goinfinito.me/unified/v2/send",
