@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Briefcase, Loader2, ChevronLeft,
-  CheckCircle2, ClipboardList, AlignLeft, Hash, ToggleLeft, ListChecks, User,
+  CheckCircle2, ClipboardList, AlignLeft, Hash, ToggleLeft, ListChecks, User, ListOrdered,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type QuestionType = "yes_no" | "multiple_choice" | "text" | "number";
+type QuestionType = "yes_no" | "multiple_choice" | "text" | "number" | "job_ranking";
 type Question = {
   id: string; text: string; type: QuestionType;
   required: boolean; options?: string[];
@@ -39,7 +39,7 @@ type StoredCandidate = {
 // ─── Type icon map ────────────────────────────────────────────────────────────
 
 const TYPE_ICON: Record<QuestionType, React.FC<{ className?: string }>> = {
-  yes_no: ToggleLeft, multiple_choice: ListChecks, text: AlignLeft, number: Hash,
+  yes_no: ToggleLeft, multiple_choice: ListChecks, text: AlignLeft, number: Hash, job_ranking: ListOrdered,
 };
 
 // ─── Confirmation view (no question set) ─────────────────────────────────────
@@ -203,6 +203,54 @@ function QuestionsView({ questionSet, onBack, onSubmit, isSubmitting, showBack }
                       data-testid={`input-answer-${q.id}`}
                     />
                   )}
+
+                  {q.type === "job_ranking" && (() => {
+                    const opts = q.options ?? [];
+                    const ranked: string[] = answers[q.id] ? answers[q.id].split(",").filter(Boolean) : [];
+                    const toggleRank = (opt: string) => {
+                      let next: string[];
+                      if (ranked.includes(opt)) {
+                        next = ranked.filter(o => o !== opt);
+                      } else {
+                        next = [...ranked, opt];
+                      }
+                      setAnswer(q.id, next.join(","));
+                    };
+                    return (
+                      <div className="mt-2 space-y-1.5">
+                        <p className="text-[11px] text-muted-foreground">Click to rank in order of preference (1st choice first)</p>
+                        <div className="space-y-1">
+                          {opts.map((opt) => {
+                            const rank = ranked.indexOf(opt);
+                            const isRanked = rank !== -1;
+                            return (
+                              <button
+                                key={opt}
+                                type="button"
+                                onClick={() => toggleRank(opt)}
+                                data-testid={`button-rank-${q.id}-${opt}`}
+                                className={`w-full flex items-center gap-3 px-3 h-9 rounded-sm border text-xs font-medium text-left transition-colors ${
+                                  isRanked
+                                    ? "bg-primary/10 border-primary/40 text-white"
+                                    : "bg-muted/20 border-border text-muted-foreground hover:border-primary/50"
+                                }`}
+                              >
+                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                                  isRanked ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                                }`}>
+                                  {isRanked ? rank + 1 : "·"}
+                                </span>
+                                {opt}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {ranked.length > 0 && ranked.length < opts.length && (
+                          <p className="text-[11px] text-amber-400/80">{opts.length - ranked.length} item{opts.length - ranked.length > 1 ? "s" : ""} left to rank</p>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {errors[q.id] && (
                     <p className="text-red-400 text-xs mt-1">{errors[q.id]}</p>
