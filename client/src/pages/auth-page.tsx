@@ -172,7 +172,6 @@ export default function AuthPage() {
               </span>
             </div>
             <h1 className="font-display text-4xl font-bold tracking-tight text-white">Welcome back</h1>
-            <p className="text-muted-foreground text-lg">Sign in using your ID Number or Phone Number.</p>
           </div>
 
           <Tabs defaultValue="login" className="w-full">
