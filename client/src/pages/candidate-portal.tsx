@@ -914,17 +914,7 @@ export default function CandidatePortal() {
                     />
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-white">الاسم بالعربي</label>
-                  <Input
-                    name="fullNameAr"
-                    defaultValue={String(candidateProfile?.fullNameAr ?? "")}
-                    placeholder="محمد الحربي"
-                    dir="rtl"
-                    className="bg-background border-border"
-                    data-testid="input-fullNameAr"
-                  />
-                </div>
+
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-white flex items-center gap-2">
                     Date of Birth
