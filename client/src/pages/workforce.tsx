@@ -164,7 +164,6 @@ const createGroupSchema = z.object({
   region: z.string().min(1, "Region is required"),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().optional(),
-  targetSize: z.coerce.number().int().min(1, "Must have at least 1 member").max(10000),
   notes: z.string().optional(),
 });
 type CreateGroupForm = z.infer<typeof createGroupSchema>;
@@ -213,7 +212,6 @@ function CreateGroupDialog({
       region: "",
       startDate: "",
       endDate: "",
-      targetSize: 10,
       notes: "",
     },
   });
@@ -233,7 +231,7 @@ function CreateGroupDialog({
       const newGroup: WorkforceGroup = {
         id: `WG-${counter}`,
         name: data.name,
-        size: data.targetSize,
+        size: 0,
         role: data.role,
         startDate: formatDisplayDate(data.startDate),
         endDate: data.endDate ? formatDisplayDate(data.endDate) : undefined,
@@ -389,13 +387,13 @@ function CreateGroupDialog({
               </div>
             </div>
 
-            {/* Schedule & Size */}
+            {/* Schedule */}
             <div className="space-y-3">
               <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground/60 border-b border-border pb-1.5">
-                Schedule & Size
+                Schedule
               </p>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <FormField control={form.control} name="startDate" render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
@@ -421,25 +419,6 @@ function CreateGroupDialog({
                         type="date"
                         className="bg-muted/30 border-border"
                         data-testid="input-end-date"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-
-                <FormField control={form.control} name="targetSize" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                      Target Size <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={10000}
-                        className="bg-muted/30 border-border"
-                        data-testid="input-target-size"
                         {...field}
                       />
                     </FormControl>
