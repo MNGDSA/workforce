@@ -17,6 +17,7 @@ import AutomationPage from "@/pages/automation";
 import SettingsPage from "@/pages/settings";
 import DocumentationPage from "@/pages/documentation";
 import JobDetailPage from "@/pages/job-detail";
+import ProfileSetupGate from "@/components/profile-setup-gate";
 
 function Router() {
   return (
@@ -33,7 +34,9 @@ function Router() {
       <Route path="/notifications" component={NotificationsPage} />
       <Route path="/settings" component={SettingsPage} />
       <Route path="/documentation" component={DocumentationPage} />
-      <Route path="/candidate-portal" component={CandidatePortal} />
+      <Route path="/candidate-portal" component={() => (
+        <ProfileSetupGate><CandidatePortal /></ProfileSetupGate>
+      )} />
       <Route path="/jobs/:id" component={JobDetailPage} />
       {/* Fallback to 404 */}
       <Route component={NotFound} />

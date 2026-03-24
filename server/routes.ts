@@ -78,7 +78,15 @@ export async function registerRoutes(
       await storage.updateUser(user.id, { lastLogin: new Date() } as any);
 
       const { password: _, ...safeUser } = user;
-      return res.json({ user: safeUser });
+
+      // For candidate users, also return their candidate record
+      let candidate = null;
+      if (user.role === "candidate" && user.nationalId) {
+        const found = await storage.getCandidates({ page: 1, limit: 1, search: user.nationalId, sortBy: "createdAt", sortOrder: "desc" });
+        candidate = found.data?.[0] ?? null;
+      }
+
+      return res.json({ user: safeUser, candidate });
     } catch (err) {
       return handleError(res, err);
     }

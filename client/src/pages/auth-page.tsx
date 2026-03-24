@@ -62,6 +62,9 @@ export default function AuthPage() {
       });
       const data = await res.json();
       if (data.user?.role === "candidate") {
+        if (data.candidate) {
+          localStorage.setItem("workforce_candidate", JSON.stringify(data.candidate));
+        }
         setLocation("/candidate-portal");
       } else {
         setLocation("/dashboard");
@@ -78,12 +81,16 @@ export default function AuthPage() {
     setRegisterError("");
     setIsLoading(true);
     try {
-      await apiRequest("POST", "/api/auth/register", {
+      const res = await apiRequest("POST", "/api/auth/register", {
         fullName: values.fullName.trim(),
         phone: values.phone.trim(),
         nationalId: values.nationalId.trim(),
         password: values.password,
       });
+      const data = await res.json();
+      if (data.candidate) {
+        localStorage.setItem("workforce_candidate", JSON.stringify(data.candidate));
+      }
       setLocation("/candidate-portal");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Registration failed";

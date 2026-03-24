@@ -156,6 +156,8 @@ export const candidates = pgTable(
     passportNumber: varchar("passport_number", { length: 20 }),
     // Professional
     currentRole: text("current_role"),
+    currentEmployer: text("current_employer"),
+    isEmployedElsewhere: boolean("is_employed_elsewhere").notNull().default(false),
     experienceYears: integer("experience_years").notNull().default(0),
     educationLevel: text("education_level"),
     university: text("university"),
@@ -163,6 +165,12 @@ export const candidates = pgTable(
     skills: text("skills").array(),
     languages: text("languages").array(),
     certifications: text("certifications").array(),
+    // Extended profile
+    nationalityText: text("nationality_text"),
+    maritalStatus: text("marital_status"),
+    hasChronicDiseases: boolean("has_chronic_diseases").notNull().default(false),
+    chronicDiseases: text("chronic_diseases"),
+    profileCompleted: boolean("profile_completed").notNull().default(false),
     // Financial
     ibanNumber: text("iban_number"),
     expectedSalary: decimal("expected_salary", { precision: 10, scale: 2 }),
