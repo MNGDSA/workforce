@@ -19,6 +19,7 @@ import DocumentationPage from "@/pages/documentation";
 import JobDetailPage from "@/pages/job-detail";
 import ProfileSetupGate from "@/components/profile-setup-gate";
 import QuestionSetsPage from "@/pages/question-sets";
+import ScheduleInterviewPage from "@/pages/schedule-interview";
 
 function Router() {
   return (
@@ -31,6 +32,7 @@ function Router() {
       <Route path="/seasons" component={SeasonsPage} />
       <Route path="/workforce" component={WorkforcePage} />
       <Route path="/interviews" component={InterviewsPage} />
+      <Route path="/interviews/schedule" component={ScheduleInterviewPage} />
       <Route path="/automation" component={AutomationPage} />
       <Route path="/notifications" component={NotificationsPage} />
       <Route path="/settings" component={SettingsPage} />
