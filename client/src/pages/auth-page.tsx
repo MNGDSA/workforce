@@ -39,6 +39,7 @@ const registerSchema = z.object({
 export default function AuthPage() {
   const [, setLocation] = useLocation();
   const [loginError, setLoginError] = useState("");
+  const [registerError, setRegisterError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
@@ -73,9 +74,23 @@ export default function AuthPage() {
     }
   }
 
-  function onRegister(values: z.infer<typeof registerSchema>) {
-    // Registration flow — can be wired to POST /api/auth/register in future
-    console.log("register", values);
+  async function onRegister(values: z.infer<typeof registerSchema>) {
+    setRegisterError("");
+    setIsLoading(true);
+    try {
+      await apiRequest("POST", "/api/auth/register", {
+        fullName: values.fullName.trim(),
+        phone: values.phone.trim(),
+        nationalId: values.nationalId.trim(),
+        password: values.password,
+      });
+      setLocation("/candidate-portal");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Registration failed";
+      setRegisterError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -325,13 +340,28 @@ export default function AuthPage() {
                     )}
                   />
 
+                  {/* Register error banner */}
+                  {registerError && (
+                    <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive" data-testid="register-error">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      {registerError}
+                    </div>
+                  )}
+
                   <Button
                     type="submit"
+                    disabled={isLoading}
                     className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm shadow-[0_0_20px_rgba(25,90,55,0.3)] hover:shadow-[0_0_30px_rgba(25,90,55,0.5)] transition-all duration-300 group"
                     data-testid="button-register"
                   >
-                    Create Account
-                    <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                    {isLoading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        Create Account
+                        <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
                   </Button>
                 </form>
               </Form>

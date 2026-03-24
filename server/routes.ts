@@ -86,15 +86,63 @@ export async function registerRoutes(
 
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
-      const data = insertUserSchema.parse(req.body);
-      const existing = await storage.getUserByUsername(data.username);
-      if (existing) {
-        return res.status(409).json({ message: "Username already taken" });
+      const { fullName, phone, nationalId, password } = req.body as {
+        fullName?: string;
+        phone?: string;
+        nationalId?: string;
+        password?: string;
+      };
+
+      if (!fullName || !phone || !nationalId || !password) {
+        return res.status(400).json({ message: "Full name, phone, national ID and password are required" });
       }
-      const hashed = await bcrypt.hash(data.password, 12);
-      const user = await storage.createUser({ ...data, password: hashed });
+      if (password.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters" });
+      }
+
+      // Duplicate checks
+      const existingByNationalId = await storage.getUserByNationalId(nationalId.trim());
+      if (existingByNationalId) {
+        return res.status(409).json({ message: "An account with this National ID already exists" });
+      }
+      const existingByPhone = await storage.getUserByPhone(phone.trim());
+      if (existingByPhone) {
+        return res.status(409).json({ message: "An account with this phone number already exists" });
+      }
+
+      const syntheticEmail = `${nationalId.trim()}@candidate.workforce.sa`;
+      const hashed = await bcrypt.hash(password, 12);
+
+      // Create user account
+      const user = await storage.createUser({
+        username: nationalId.trim(),
+        email: syntheticEmail,
+        password: hashed,
+        fullName: fullName.trim(),
+        phone: phone.trim(),
+        nationalId: nationalId.trim(),
+        role: "candidate",
+        isActive: true,
+      });
+
+      // Generate a unique candidate code: CND-<last6ofNationalId>-<timestamp>
+      const ts = Date.now().toString(36).toUpperCase().slice(-4);
+      const candidateCode = `CND-${nationalId.trim().slice(-6)}-${ts}`;
+
+      // Create corresponding candidate record in the talent pool
+      const candidate = await storage.createCandidate({
+        candidateCode,
+        fullNameEn: fullName.trim(),
+        phone: phone.trim(),
+        nationalId: nationalId.trim(),
+        email: syntheticEmail,
+        status: "active",
+        experienceYears: 0,
+        country: "SA",
+      });
+
       const { password: _, ...safeUser } = user;
-      return res.status(201).json({ user: safeUser });
+      return res.status(201).json({ user: safeUser, candidate });
     } catch (err) {
       return handleError(res, err);
     }
