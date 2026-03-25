@@ -376,7 +376,7 @@ export default function InterviewsPage() {
             data-testid="button-schedule-interview"
           >
             <Plus className="mr-2 h-4 w-4" />
-            Schedule Interview
+            Schedule Session
           </Button>
         </div>
 
@@ -460,7 +460,7 @@ export default function InterviewsPage() {
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Users className="h-12 w-12 text-muted-foreground/30 mb-4" />
                 <p className="text-muted-foreground font-medium">No interviews scheduled</p>
-                <p className="text-muted-foreground/60 text-sm mt-1">Click "Schedule Interview" to add one</p>
+                <p className="text-muted-foreground/60 text-sm mt-1">Click "Schedule Session" to add one</p>
               </div>
             ) : (
               <Table>
