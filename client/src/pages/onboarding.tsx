@@ -149,7 +149,7 @@ export default function OnboardingPage() {
 
   const { data: candidates = [] } = useQuery<Candidate[]>({
     queryKey: ["/api/candidates", { limit: 200, status: "active" }],
-    queryFn: () => apiRequest("/api/candidates?limit=200"),
+    queryFn: () => apiRequest("GET", "/api/candidates?limit=200&status=active").then(r => r.json()),
     select: (r: any) => r?.data ?? [],
   });
 
@@ -159,7 +159,7 @@ export default function OnboardingPage() {
   });
 
   const admitMutation = useMutation({
-    mutationFn: (body: object) => apiRequest("/api/onboarding", { method: "POST", body: JSON.stringify(body) }),
+    mutationFn: (body: object) => apiRequest("POST", "/api/onboarding", body).then(r => r.json()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       setAdmitOpen(false);
@@ -172,7 +172,7 @@ export default function OnboardingPage() {
 
   const checklistMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: object }) =>
-      apiRequest(`/api/onboarding/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+      apiRequest("PATCH", `/api/onboarding/${id}`, data).then(r => r.json()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       // Refresh the local checklist record
@@ -182,7 +182,7 @@ export default function OnboardingPage() {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/onboarding/${id}`, { method: "PATCH", body: JSON.stringify({ status: "rejected" }) }),
+    mutationFn: (id: string) => apiRequest("PATCH", `/api/onboarding/${id}`, { status: "rejected" }).then(r => r.json()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       toast({ title: "Candidate rejected from onboarding" });
@@ -192,7 +192,7 @@ export default function OnboardingPage() {
 
   const convertMutation = useMutation({
     mutationFn: ({ id, body }: { id: string; body: object }) =>
-      apiRequest(`/api/onboarding/${id}/convert`, { method: "POST", body: JSON.stringify(body) }),
+      apiRequest("POST", `/api/onboarding/${id}/convert`, body).then(r => r.json()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
@@ -204,7 +204,7 @@ export default function OnboardingPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/onboarding/${id}`, { method: "DELETE" }),
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/onboarding/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       toast({ title: "Record removed" });
