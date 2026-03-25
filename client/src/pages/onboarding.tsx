@@ -39,7 +39,6 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
-  ChevronRight,
   Users,
   Camera,
   CreditCard,
@@ -140,8 +139,10 @@ export default function OnboardingPage() {
   const [checklistRecord, setChecklistRecord] = useState<OnboardingRecord | null>(null);
   const [convertRecord, setConvertRecord] = useState<OnboardingRecord | null>(null);
   const [admitSearch, setAdmitSearch] = useState("");
-  const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [admitPage, setAdmitPage] = useState(1);
   const [convertForm, setConvertForm] = useState({ position: "", department: "", startDate: "", salary: "" });
+  const ADMIT_PAGE_SIZE = 10;
 
   const { data: records = [], isLoading } = useQuery<OnboardingRecord[]>({
     queryKey: ["/api/onboarding"],
@@ -158,16 +159,20 @@ export default function OnboardingPage() {
     select: (r: any) => Array.isArray(r) ? r : [],
   });
 
+  type AdmitItem = { candidateId: string; applicationId: string | null; jobId: string | null; hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean };
   const admitMutation = useMutation({
-    mutationFn: (body: object) => apiRequest("POST", "/api/onboarding", body).then(r => r.json()),
-    onSuccess: () => {
+    mutationFn: async (items: AdmitItem[]) => {
+      await Promise.all(items.map(body => apiRequest("POST", "/api/onboarding", body)));
+    },
+    onSuccess: (_data, items) => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       setAdmitOpen(false);
-      setSelectedCandidate(null);
+      setSelectedIds(new Set());
       setAdmitSearch("");
-      toast({ title: "Candidate admitted to onboarding" });
+      setAdmitPage(1);
+      toast({ title: `${items.length} candidate${items.length !== 1 ? "s" : ""} admitted to onboarding` });
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message ?? "Could not admit candidate", variant: "destructive" }),
+    onError: (e: any) => toast({ title: "Error", description: e?.message ?? "Could not admit candidates", variant: "destructive" }),
   });
 
   const checklistMutation = useMutation({
@@ -237,21 +242,37 @@ export default function OnboardingPage() {
   const admitFiltered = eligibleCandidates.filter(c =>
     !admitSearch || c.fullNameEn.toLowerCase().includes(admitSearch.toLowerCase()) || c.candidateCode.toLowerCase().includes(admitSearch.toLowerCase())
   );
+  const admitTotalPages = Math.max(1, Math.ceil(admitFiltered.length / ADMIT_PAGE_SIZE));
+  const admitPageCandidates = admitFiltered.slice((admitPage - 1) * ADMIT_PAGE_SIZE, admitPage * ADMIT_PAGE_SIZE);
+  const allPageSelected = admitPageCandidates.length > 0 && admitPageCandidates.every(c => selectedIds.has(c.id));
+  const somePageSelected = admitPageCandidates.some(c => selectedIds.has(c.id));
 
   function getCandidateFor(rec: OnboardingRecord) {
     return candidates.find(c => c.id === rec.candidateId);
   }
 
   function handleAdmit() {
-    if (!selectedCandidate) return;
-    const app = applications.find(a => a.candidateId === selectedCandidate.id && ["interviewed", "hired", "shortlisted"].includes(a.status));
-    admitMutation.mutate({
-      candidateId: selectedCandidate.id,
-      applicationId: app?.id ?? null,
-      jobId: app?.jobId ?? null,
-      hasPhoto: selectedCandidate.hasPhoto,
-      hasIban: selectedCandidate.hasIban,
-      hasNationalId: selectedCandidate.hasNationalId,
+    if (selectedIds.size === 0) return;
+    const items = [...selectedIds].map(id => {
+      const c = eligibleCandidates.find(x => x.id === id)!;
+      const app = applications.find(a => a.candidateId === id && ["interviewed", "hired", "shortlisted"].includes(a.status));
+      return {
+        candidateId: id,
+        applicationId: app?.id ?? null,
+        jobId: app?.jobId ?? null,
+        hasPhoto: c.hasPhoto,
+        hasIban: c.hasIban,
+        hasNationalId: c.hasNationalId,
+      };
+    });
+    admitMutation.mutate(items);
+  }
+
+  function toggleCandidate(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
     });
   }
 
@@ -458,76 +479,157 @@ export default function OnboardingPage() {
       <Dialog open={admitOpen} onOpenChange={setAdmitOpen}>
         <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-lg">
           <DialogHeader>
-            <DialogTitle className="font-display text-lg">Admit Candidate to Onboarding</DialogTitle>
+            <DialogTitle className="font-display text-lg">Admit Candidates to Onboarding</DialogTitle>
             <DialogDescription className="text-zinc-400 text-sm">
-              Only candidates who have been interviewed or shortlisted are eligible.
+              Select one or more interviewed / shortlisted candidates to admit.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 mt-2">
+          <div className="space-y-3 mt-2">
+            {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
               <Input
                 data-testid="input-admit-search"
                 placeholder="Search candidates…"
                 value={admitSearch}
-                onChange={e => setAdmitSearch(e.target.value)}
+                onChange={e => { setAdmitSearch(e.target.value); setAdmitPage(1); }}
                 className="pl-9 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500"
               />
             </div>
 
-            <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
+            {/* Select-all row */}
+            {admitPageCandidates.length > 0 && (
+              <div className="flex items-center justify-between px-1">
+                <button
+                  data-testid="button-select-all-page"
+                  onClick={() => {
+                    if (allPageSelected) {
+                      setSelectedIds(prev => {
+                        const next = new Set(prev);
+                        admitPageCandidates.forEach(c => next.delete(c.id));
+                        return next;
+                      });
+                    } else {
+                      setSelectedIds(prev => {
+                        const next = new Set(prev);
+                        admitPageCandidates.forEach(c => next.add(c.id));
+                        return next;
+                      });
+                    }
+                  }}
+                  className="flex items-center gap-2 text-xs text-zinc-400 hover:text-white transition-colors"
+                >
+                  <div className={`h-4 w-4 rounded border flex items-center justify-center transition-colors ${
+                    allPageSelected ? "bg-[hsl(155,45%,45%)] border-[hsl(155,45%,45%)]"
+                    : somePageSelected ? "bg-[hsl(155,45%,45%)]/30 border-[hsl(155,45%,45%)]"
+                    : "border-zinc-600 bg-zinc-900"
+                  }`}>
+                    {(allPageSelected || somePageSelected) && <span className="text-white text-[9px] font-bold leading-none">{allPageSelected ? "✓" : "–"}</span>}
+                  </div>
+                  {allPageSelected ? "Deselect all on page" : "Select all on page"}
+                </button>
+                {selectedIds.size > 0 && (
+                  <span className="text-xs text-[hsl(155,45%,55%)] font-medium">
+                    {selectedIds.size} selected total
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Candidate list */}
+            <div className="space-y-1">
               {admitFiltered.length === 0 ? (
                 <div className="text-center py-8 text-zinc-500 text-sm">
                   {eligibleCandidates.length === 0
                     ? "No eligible candidates — candidates must be interviewed or shortlisted first"
                     : "No candidates match your search"}
                 </div>
-              ) : admitFiltered.map(c => (
-                <button
-                  key={c.id}
-                  data-testid={`button-select-candidate-${c.id}`}
-                  onClick={() => setSelectedCandidate(prev => prev?.id === c.id ? null : c)}
-                  className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors flex items-center gap-3 ${
-                    selectedCandidate?.id === c.id
-                      ? "border-[hsl(155,45%,45%)] bg-[hsl(155,45%,45%)]/10"
-                      : "border-zinc-800 hover:border-zinc-600 bg-zinc-900"
-                  }`}
-                >
-                  <div className="h-8 w-8 rounded-full bg-zinc-800 flex items-center justify-center text-sm font-bold text-zinc-300 shrink-0">
-                    {c.fullNameEn.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{c.fullNameEn}</p>
-                    <p className="text-xs text-zinc-500 font-mono">{c.candidateCode}</p>
-                  </div>
-                  <div className="flex gap-1 shrink-0">
-                    {c.hasPhoto     && <span title="Photo"     className="text-emerald-500"><Camera    className="h-3.5 w-3.5" /></span>}
-                    {c.hasIban      && <span title="IBAN"      className="text-emerald-500"><CreditCard className="h-3.5 w-3.5" /></span>}
-                    {c.hasNationalId && <span title="National ID" className="text-emerald-500"><IdCard  className="h-3.5 w-3.5" /></span>}
-                  </div>
-                  {selectedCandidate?.id === c.id && <ChevronRight className="h-4 w-4 text-[hsl(155,45%,45%)]" />}
-                </button>
-              ))}
+              ) : admitPageCandidates.map(c => {
+                const isSelected = selectedIds.has(c.id);
+                return (
+                  <button
+                    key={c.id}
+                    data-testid={`button-select-candidate-${c.id}`}
+                    onClick={() => toggleCandidate(c.id)}
+                    className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors flex items-center gap-3 ${
+                      isSelected
+                        ? "border-[hsl(155,45%,45%)] bg-[hsl(155,45%,45%)]/10"
+                        : "border-zinc-800 hover:border-zinc-600 bg-zinc-900"
+                    }`}
+                  >
+                    {/* Checkbox */}
+                    <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                      isSelected ? "bg-[hsl(155,45%,45%)] border-[hsl(155,45%,45%)]" : "border-zinc-600 bg-zinc-900"
+                    }`}>
+                      {isSelected && <span className="text-white text-[9px] font-bold leading-none">✓</span>}
+                    </div>
+                    {/* Avatar */}
+                    <div className="h-8 w-8 rounded-full bg-zinc-800 flex items-center justify-center text-sm font-bold text-zinc-300 shrink-0">
+                      {c.fullNameEn.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{c.fullNameEn}</p>
+                      <p className="text-xs text-zinc-500 font-mono">{c.candidateCode}</p>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      {c.hasPhoto      && <span title="Photo"      className="text-emerald-500"><Camera     className="h-3.5 w-3.5" /></span>}
+                      {c.hasIban       && <span title="IBAN"       className="text-emerald-500"><CreditCard  className="h-3.5 w-3.5" /></span>}
+                      {c.hasNationalId && <span title="National ID" className="text-emerald-500"><IdCard     className="h-3.5 w-3.5" /></span>}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
-            {selectedCandidate && (
-              <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-3 text-sm">
-                <p className="text-zinc-400">Selected: <span className="text-white font-medium">{selectedCandidate.fullNameEn}</span></p>
-                <p className="text-zinc-500 text-xs mt-0.5">Profile flags already available will be pre-checked in the onboarding checklist.</p>
+            {/* Pagination */}
+            {admitTotalPages > 1 && (
+              <div className="flex items-center justify-between pt-1">
+                <Button
+                  data-testid="button-admit-prev-page"
+                  size="sm"
+                  variant="outline"
+                  disabled={admitPage === 1}
+                  onClick={() => setAdmitPage(p => Math.max(1, p - 1))}
+                  className="border-zinc-700 text-zinc-300 h-7 px-2 text-xs"
+                >
+                  ← Prev
+                </Button>
+                <span className="text-xs text-zinc-500">
+                  Page {admitPage} of {admitTotalPages} &nbsp;·&nbsp; {admitFiltered.length} eligible
+                </span>
+                <Button
+                  data-testid="button-admit-next-page"
+                  size="sm"
+                  variant="outline"
+                  disabled={admitPage === admitTotalPages}
+                  onClick={() => setAdmitPage(p => Math.min(admitTotalPages, p + 1))}
+                  className="border-zinc-700 text-zinc-300 h-7 px-2 text-xs"
+                >
+                  Next →
+                </Button>
               </div>
             )}
 
+            {/* Footer actions */}
             <div className="flex gap-2 justify-end pt-1">
-              <Button variant="outline" className="border-zinc-700 text-zinc-300" onClick={() => setAdmitOpen(false)}>
+              <Button
+                variant="outline"
+                className="border-zinc-700 text-zinc-300"
+                onClick={() => { setAdmitOpen(false); setSelectedIds(new Set()); setAdmitSearch(""); setAdmitPage(1); }}
+              >
                 Cancel
               </Button>
               <Button
                 data-testid="button-confirm-admit"
-                disabled={!selectedCandidate || admitMutation.isPending}
+                disabled={selectedIds.size === 0 || admitMutation.isPending}
                 onClick={handleAdmit}
                 className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
               >
-                {admitMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Admit to Onboarding"}
+                {admitMutation.isPending
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : selectedIds.size > 0
+                    ? `Admit ${selectedIds.size} Candidate${selectedIds.size !== 1 ? "s" : ""}`
+                    : "Select Candidates"}
               </Button>
             </div>
           </div>
