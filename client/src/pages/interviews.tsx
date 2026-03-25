@@ -367,8 +367,8 @@ export default function InterviewsPage() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white tracking-tight">Interview Calls</h1>
-            <p className="text-muted-foreground mt-1">Manage and track candidate interview schedules.</p>
+            <h1 className="text-3xl font-display font-bold text-white tracking-tight">Interview & Training</h1>
+            <p className="text-muted-foreground mt-1">Manage and track candidate interview & training schedules.</p>
           </div>
           <Button
             className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
