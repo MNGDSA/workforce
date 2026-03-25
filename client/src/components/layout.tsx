@@ -45,7 +45,7 @@ const recruitmentItems: { href: string; icon: React.ElementType; label: string }
   { href: "/seasons",       icon: CalendarRange, label: "Seasons & SMP" },
   { href: "/question-sets", icon: ClipboardList, label: "Question Sets" },
   { href: "/job-posting",   icon: Briefcase,     label: "Job Applications" },
-  { href: "/interviews",    icon: Minimize,      label: "Interview Calls" },
+  { href: "/interviews",    icon: Minimize,      label: "Interview & Training" },
   { href: "/talent",        icon: Search,        label: "Talent" },
 ];
 
