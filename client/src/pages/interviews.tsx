@@ -449,7 +449,7 @@ export default function InterviewsPage() {
         {/* Table */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-lg font-display text-white">Interview Schedule</CardTitle>
+            <CardTitle className="text-lg font-display text-white">Interview & Training Schedule</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
