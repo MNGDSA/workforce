@@ -56,6 +56,9 @@ import {
   User,
   StickyNote,
   ExternalLink,
+  ThumbsUp,
+  ThumbsDown,
+  RotateCcw,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -82,7 +85,7 @@ type InterviewStats = {
 };
 type InterviewDetail = {
   interview: Interview;
-  invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null }[];
+  invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; applicationId: string | null; applicationStatus: string | null }[];
 };
 
 // ─── Utility helpers ───────────────────────────────────────────────────────────
@@ -141,11 +144,27 @@ function InterviewDetailSheet({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [localStatuses, setLocalStatuses] = useState<Record<string, string>>({});
+
   const { data, isLoading } = useQuery<InterviewDetail>({
     queryKey: ["/api/interviews", interviewId],
     queryFn: () => apiRequest("GET", `/api/interviews/${interviewId}`).then((r) => r.json()),
     enabled: open && !!interviewId,
     staleTime: 30_000,
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ appId, status }: { appId: string; candidateId: string; status: string }) =>
+      apiRequest("PATCH", `/api/applications/${appId}`, { status }).then((r) => r.json()),
+    onSuccess: (_data, vars) => {
+      setLocalStatuses(prev => ({ ...prev, [vars.candidateId]: vars.status }));
+      queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/interviews", interviewId] });
+      toast({ title: vars.status === "shortlisted" ? "Candidate shortlisted" : vars.status === "rejected" ? "Candidate rejected" : "Status updated" });
+    },
+    onError: () => toast({ title: "Failed to update status", variant: "destructive" }),
   });
 
   const iv = data?.interview;
@@ -278,22 +297,80 @@ function InterviewDetailSheet({
                   </div>
                 ) : (
                   <div className="rounded-md border border-border divide-y divide-border overflow-hidden">
-                    {invitedCandidates.map((c, idx) => (
-                      <div key={c.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/10 transition-colors" data-testid={`detail-candidate-${c.id}`}>
-                        <span className="text-[10px] text-muted-foreground/50 font-mono w-5 text-right shrink-0">{idx + 1}</span>
-                        <Avatar className="h-7 w-7 border border-border shrink-0">
-                          <AvatarFallback className="bg-primary/15 text-primary text-[10px]">
-                            {initials(c.fullNameEn)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-white font-medium truncate">{c.fullNameEn}</p>
+                    {invitedCandidates.map((c, idx) => {
+                      const effectiveStatus = localStatuses[c.id] ?? c.applicationStatus;
+                      const isShortlisted = effectiveStatus === "shortlisted";
+                      const isRejected    = effectiveStatus === "rejected";
+                      const isPending     = statusMutation.isPending && (statusMutation.variables as any)?.candidateId === c.id;
+                      return (
+                        <div key={c.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/10 transition-colors" data-testid={`detail-candidate-${c.id}`}>
+                          <span className="text-[10px] text-muted-foreground/50 font-mono w-5 text-right shrink-0">{idx + 1}</span>
+                          <Avatar className="h-7 w-7 border border-border shrink-0">
+                            <AvatarFallback className="bg-primary/15 text-primary text-[10px]">
+                              {initials(c.fullNameEn)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-white font-medium truncate">{c.fullNameEn}</p>
+                            <p className="text-[10px] text-muted-foreground font-mono">{c.nationalId ?? "—"}</p>
+                          </div>
+
+                          {/* Status badge */}
+                          {isShortlisted && (
+                            <Badge className="bg-emerald-900/50 text-emerald-400 border-0 text-[10px] px-2 shrink-0">Shortlisted</Badge>
+                          )}
+                          {isRejected && (
+                            <Badge className="bg-red-900/50 text-red-400 border-0 text-[10px] px-2 shrink-0">Rejected</Badge>
+                          )}
+
+                          {/* Action buttons */}
+                          <div className="flex gap-1 shrink-0">
+                            {isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            ) : c.applicationId ? (
+                              <>
+                                <Button
+                                  data-testid={`button-shortlist-${c.id}`}
+                                  size="icon"
+                                  variant="ghost"
+                                  title="Shortlist"
+                                  disabled={isShortlisted}
+                                  onClick={() => statusMutation.mutate({ appId: c.applicationId!, candidateId: c.id, status: "shortlisted" })}
+                                  className={`h-7 w-7 ${isShortlisted ? "text-emerald-500" : "text-muted-foreground hover:text-emerald-400 hover:bg-emerald-950/40"}`}
+                                >
+                                  <ThumbsUp className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  data-testid={`button-reject-candidate-${c.id}`}
+                                  size="icon"
+                                  variant="ghost"
+                                  title="Reject"
+                                  disabled={isRejected}
+                                  onClick={() => statusMutation.mutate({ appId: c.applicationId!, candidateId: c.id, status: "rejected" })}
+                                  className={`h-7 w-7 ${isRejected ? "text-red-500" : "text-muted-foreground hover:text-red-400 hover:bg-red-950/40"}`}
+                                >
+                                  <ThumbsDown className="h-3.5 w-3.5" />
+                                </Button>
+                                {(isShortlisted || isRejected) && (
+                                  <Button
+                                    data-testid={`button-reset-status-${c.id}`}
+                                    size="icon"
+                                    variant="ghost"
+                                    title="Reset to interviewed"
+                                    onClick={() => statusMutation.mutate({ appId: c.applicationId!, candidateId: c.id, status: "interviewed" })}
+                                    className="h-7 w-7 text-muted-foreground hover:text-white hover:bg-muted/20"
+                                  >
+                                    <RotateCcw className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground/40 italic">No application</span>
+                            )}
+                          </div>
                         </div>
-                        <code className="text-[10px] text-muted-foreground font-mono shrink-0">
-                          {c.nationalId ?? "—"}
-                        </code>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

@@ -96,7 +96,7 @@ export interface IStorage {
   // Interviews
   getInterviews(params?: { status?: string; candidateId?: string }): Promise<Interview[]>;
   getInterview(id: string): Promise<Interview | undefined>;
-  getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null }[] } | undefined>;
+  getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; applicationId: string | null; applicationStatus: string | null }[] } | undefined>;
   createInterview(interview: InsertInterview): Promise<Interview>;
   updateInterview(id: string, data: Partial<InsertInterview>): Promise<Interview | undefined>;
   getInterviewStats(): Promise<{ total: number; scheduled: number; completed: number; cancelled: number }>;
@@ -509,18 +509,40 @@ export class DatabaseStorage implements IStorage {
     return interview;
   }
 
-  async getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null }[] } | undefined> {
+  async getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; applicationId: string | null; applicationStatus: string | null }[] } | undefined> {
     const [interview] = await db.select().from(interviews).where(eq(interviews.id, id));
     if (!interview) return undefined;
-    let invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null }[] = [];
+    let invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; applicationId: string | null; applicationStatus: string | null }[] = [];
     if (interview.invitedCandidateIds && interview.invitedCandidateIds.length > 0) {
-      invitedCandidates = await db.select({
+      const candidateRows = await db.select({
         id: candidates.id,
         fullNameEn: candidates.fullNameEn,
         nationalId: candidates.nationalId,
       })
         .from(candidates)
         .where(inArray(candidates.id, interview.invitedCandidateIds));
+
+      // Look up the best application for each candidate (prefer most-progressed status)
+      const statusPriority: Record<string, number> = { hired: 6, shortlisted: 5, interviewed: 4, offered: 3, reviewing: 2, new: 1, rejected: 0, withdrawn: 0 };
+      const appRows = await db.select({
+        id: applications.id,
+        candidateId: applications.candidateId,
+        status: applications.status,
+        jobId: applications.jobId,
+      })
+        .from(applications)
+        .where(inArray(applications.candidateId, interview.invitedCandidateIds));
+
+      invitedCandidates = candidateRows.map(c => {
+        const candidateApps = appRows.filter(a => a.candidateId === c.id);
+        // Prefer app linked to same job, else highest priority status
+        const best = candidateApps.sort((a, b) => (statusPriority[b.status] ?? 0) - (statusPriority[a.status] ?? 0))[0];
+        return {
+          ...c,
+          applicationId: best?.id ?? null,
+          applicationStatus: best?.status ?? null,
+        };
+      });
     }
     return { interview, invitedCandidates };
   }
