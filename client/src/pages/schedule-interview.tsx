@@ -286,7 +286,7 @@ export default function ScheduleInterviewPage() {
             data-testid="button-back-interviews"
           >
             <ArrowLeft className="h-4 w-4" />
-            Interview Calls
+            Interview & Training
           </button>
           <span className="text-muted-foreground/40">/</span>
           <span className="text-sm text-white font-medium">Schedule New Session</span>
@@ -295,7 +295,7 @@ export default function ScheduleInterviewPage() {
         <div>
           <h1 className="text-3xl font-display font-bold text-white tracking-tight flex items-center gap-3">
             <Calendar className="h-7 w-7 text-primary" />
-            Schedule Interview Session
+            Schedule Interview or Training Session
           </h1>
           <p className="text-muted-foreground mt-1">
             Define the session details and select candidates from an active job's applicant pool.
