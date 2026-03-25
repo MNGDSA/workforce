@@ -92,7 +92,6 @@ const EXAMPLE_PLUGINS: Record<string, SmsPluginConfig> = {
               text: "{{message}}",
               property: 0,
               id: "{{timestamp}}",
-              coding: "{{coding}}",
               addresses: [
                 {
                   from: "{{senderId}}",

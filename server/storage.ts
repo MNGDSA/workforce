@@ -144,6 +144,7 @@ export interface IStorage {
   getActiveSmsPlugin(): Promise<SmsPlugin | undefined>;
   createSmsPlugin(data: InsertSmsPlugin): Promise<SmsPlugin>;
   updateSmsPluginCredentials(id: string, credentials: Record<string, string>): Promise<SmsPlugin | undefined>;
+  updateSmsPluginConfig(id: string, pluginConfig: Record<string, unknown>): Promise<SmsPlugin | undefined>;
   activateSmsPlugin(id: string): Promise<boolean>;
   deleteSmsPlugin(id: string): Promise<boolean>;
 
@@ -772,6 +773,15 @@ export class DatabaseStorage implements IStorage {
     const [p] = await db
       .update(smsPlugins)
       .set({ credentials, updatedAt: new Date() })
+      .where(eq(smsPlugins.id, id))
+      .returning();
+    return p;
+  }
+
+  async updateSmsPluginConfig(id: string, pluginConfig: Record<string, unknown>): Promise<SmsPlugin | undefined> {
+    const [p] = await db
+      .update(smsPlugins)
+      .set({ pluginConfig, updatedAt: new Date() })
       .where(eq(smsPlugins.id, id))
       .returning();
     return p;

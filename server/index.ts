@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { storage } from "./storage";
 
 const app = express();
 const httpServer = createServer(app);
@@ -60,6 +61,26 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Patch any installed SMS plugin configs that still contain the
+  // unsupported `coding` field (GoInfinito v2 unified API rejects it
+  // regardless of value and performs encoding auto-detection instead).
+  try {
+    const plugins = await storage.getSmsPlugins();
+    for (const plugin of plugins) {
+      const cfg = plugin.pluginConfig as Record<string, unknown>;
+      const messages = (cfg?.send as any)?.body?.sms?.messages;
+      if (Array.isArray(messages) && messages.length > 0 && "coding" in messages[0]) {
+        const patched = structuredClone(cfg);
+        const msgs = (patched.send as any).body.sms.messages as any[];
+        for (const msg of msgs) { delete msg.coding; }
+        await storage.updateSmsPluginConfig(plugin.id, patched);
+        console.log(`[Startup] Patched SMS plugin "${plugin.name}" — removed unsupported 'coding' field`);
+      }
+    }
+  } catch (e) {
+    console.warn("[Startup] Could not patch SMS plugin configs:", e);
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

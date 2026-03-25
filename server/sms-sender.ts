@@ -129,7 +129,7 @@ export async function sendSmsViaPlugin(
     unicode:  isUnicode ? "1" : "0",
     encoding: isUnicode ? "unicode" : "gsm7",
     charset:  isUnicode ? "UCS2" : "GSM7",
-    coding:   8,
+    coding:   "8",
   };
 
   if (isUnicode) {
