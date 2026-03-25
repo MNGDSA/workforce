@@ -149,7 +149,7 @@ export default function OnboardingPage() {
 
   const { data: candidates = [] } = useQuery<Candidate[]>({
     queryKey: ["/api/candidates", { limit: 200, status: "active" }],
-    queryFn: () => apiRequest("GET", "/api/candidates?limit=200&status=active").then(r => r.json()),
+    queryFn: () => apiRequest("GET", "/api/candidates?limit=1000&status=active").then(r => r.json()),
     select: (r: any) => r?.data ?? [],
   });
 
