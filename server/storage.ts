@@ -6,6 +6,7 @@ import {
   jobPostings,
   applications,
   interviews,
+  onboarding,
   workforce,
   automationRules,
   notifications,
@@ -28,6 +29,8 @@ import {
   type InsertApplication,
   type Interview,
   type InsertInterview,
+  type OnboardingRecord,
+  type InsertOnboarding,
   type WorkforceRecord,
   type InsertWorkforce,
   type AutomationRule,
@@ -137,6 +140,14 @@ export interface IStorage {
   createQuestionSet(data: InsertQuestionSet): Promise<QuestionSet>;
   updateQuestionSet(id: string, data: Partial<InsertQuestionSet>): Promise<QuestionSet | undefined>;
   deleteQuestionSet(id: string): Promise<boolean>;
+
+  // Onboarding
+  getOnboardingRecords(filters?: { status?: string; seasonId?: string; search?: string }): Promise<OnboardingRecord[]>;
+  getOnboardingRecord(id: string): Promise<OnboardingRecord | undefined>;
+  createOnboardingRecord(data: InsertOnboarding): Promise<OnboardingRecord>;
+  updateOnboardingRecord(id: string, data: Partial<InsertOnboarding>): Promise<OnboardingRecord | undefined>;
+  deleteOnboardingRecord(id: string): Promise<boolean>;
+  convertOnboardingToEmployee(id: string, employmentData: { position: string; department?: string; startDate: string; salary?: string; seasonId?: string; }, convertedBy?: string): Promise<WorkforceRecord>;
 
   // SMS Plugins
   getSmsPlugins(): Promise<SmsPlugin[]>;
@@ -747,6 +758,74 @@ export class DatabaseStorage implements IStorage {
   async deleteQuestionSet(id: string): Promise<boolean> {
     const result = await db.delete(questionSets).where(eq(questionSets.id, id)).returning();
     return result.length > 0;
+  }
+
+  // ─── Onboarding ─────────────────────────────────────────────────────────────
+  async getOnboardingRecords(filters?: { status?: string; seasonId?: string; search?: string }): Promise<OnboardingRecord[]> {
+    const conditions: any[] = [];
+    if (filters?.status) conditions.push(eq(onboarding.status, filters.status as any));
+    if (filters?.seasonId) conditions.push(eq(onboarding.seasonId, filters.seasonId));
+    const query = db.select().from(onboarding).orderBy(desc(onboarding.createdAt));
+    if (conditions.length > 0) return query.where(and(...conditions));
+    return query;
+  }
+
+  async getOnboardingRecord(id: string): Promise<OnboardingRecord | undefined> {
+    const [rec] = await db.select().from(onboarding).where(eq(onboarding.id, id));
+    return rec;
+  }
+
+  async createOnboardingRecord(data: InsertOnboarding): Promise<OnboardingRecord> {
+    const [rec] = await db.insert(onboarding).values(data).returning();
+    return rec;
+  }
+
+  async updateOnboardingRecord(id: string, data: Partial<InsertOnboarding>): Promise<OnboardingRecord | undefined> {
+    const [rec] = await db
+      .update(onboarding)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(onboarding.id, id))
+      .returning();
+    return rec;
+  }
+
+  async deleteOnboardingRecord(id: string): Promise<boolean> {
+    const result = await db.delete(onboarding).where(eq(onboarding.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async convertOnboardingToEmployee(
+    id: string,
+    employmentData: { position: string; department?: string; startDate: string; salary?: string; seasonId?: string },
+    convertedBy?: string,
+  ): Promise<WorkforceRecord> {
+    const rec = await this.getOnboardingRecord(id);
+    if (!rec) throw new Error("Onboarding record not found");
+
+    const [workforceRec] = await db.insert(workforce).values({
+      candidateId: rec.candidateId,
+      jobId: rec.jobId ?? undefined,
+      seasonId: employmentData.seasonId ?? rec.seasonId ?? undefined,
+      position: employmentData.position,
+      department: employmentData.department,
+      startDate: employmentData.startDate,
+      salary: employmentData.salary,
+      isActive: true,
+    }).returning();
+
+    await db.update(onboarding).set({
+      status: "converted",
+      convertedAt: new Date(),
+      convertedBy: convertedBy ?? null,
+      updatedAt: new Date(),
+    }).where(eq(onboarding.id, id));
+
+    await db.update(candidates).set({
+      status: "hired",
+      updatedAt: new Date(),
+    }).where(eq(candidates.id, rec.candidateId));
+
+    return workforceRec;
   }
 
   // ─── SMS Plugins ────────────────────────────────────────────────────────────

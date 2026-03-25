@@ -48,6 +48,14 @@ export const jobStatusEnum = pgEnum("job_status", [
   "filled",
 ]);
 
+export const onboardingStatusEnum = pgEnum("onboarding_status", [
+  "pending",
+  "in_progress",
+  "ready",
+  "converted",
+  "rejected",
+]);
+
 export const interviewStatusEnum = pgEnum("interview_status", [
   "scheduled",
   "in_progress",
@@ -365,6 +373,48 @@ export const interviews = pgTable(
   })
 );
 
+// ─── Onboarding ─────────────────────────────────────────────────────────────
+export const onboarding = pgTable(
+  "onboarding",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    candidateId: varchar("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    applicationId: varchar("application_id")
+      .references(() => applications.id, { onDelete: "set null" }),
+    jobId: varchar("job_id").references(() => jobPostings.id, { onDelete: "set null" }),
+    seasonId: varchar("season_id").references(() => seasons.id, { onDelete: "set null" }),
+    status: onboardingStatusEnum("status").notNull().default("pending"),
+    // Prerequisite checklist
+    hasPhoto: boolean("has_photo").notNull().default(false),
+    hasIban: boolean("has_iban").notNull().default(false),
+    hasNationalId: boolean("has_national_id").notNull().default(false),
+    hasMedicalFitness: boolean("has_medical_fitness").notNull().default(false),
+    hasSignedContract: boolean("has_signed_contract").notNull().default(false),
+    hasEmergencyContact: boolean("has_emergency_contact").notNull().default(false),
+    // Contract
+    contractSignedAt: timestamp("contract_signed_at"),
+    contractUrl: text("contract_url"),
+    // Employment details (populated before conversion)
+    position: text("position"),
+    department: text("department"),
+    startDate: text("start_date"),
+    salary: decimal("salary", { precision: 10, scale: 2 }),
+    // Meta
+    notes: text("notes"),
+    convertedAt: timestamp("converted_at"),
+    convertedBy: varchar("converted_by").references(() => users.id),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    candidateIdx: index("onboarding_candidate_idx").on(t.candidateId),
+    statusIdx: index("onboarding_status_idx").on(t.status),
+    seasonIdx: index("onboarding_season_idx").on(t.seasonId),
+  })
+);
+
 // ─── Workforce (hired placements) ───────────────────────────────────────────
 export const workforce = pgTable(
   "workforce",
@@ -502,6 +552,13 @@ export const insertInterviewSchema = createInsertSchema(interviews, {
   createdByName: z.string().optional().nullable(),
 });
 
+export const insertOnboardingSchema = createInsertSchema(onboarding).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  convertedAt: true,
+});
+
 export const insertWorkforceSchema = createInsertSchema(workforce).omit({
   id: true,
   createdAt: true,
@@ -550,6 +607,9 @@ export type Application = typeof applications.$inferSelect;
 
 export type InsertInterview = z.infer<typeof insertInterviewSchema>;
 export type Interview = typeof interviews.$inferSelect;
+
+export type InsertOnboarding = z.infer<typeof insertOnboardingSchema>;
+export type OnboardingRecord = typeof onboarding.$inferSelect;
 
 export type InsertWorkforce = z.infer<typeof insertWorkforceSchema>;
 export type WorkforceRecord = typeof workforce.$inferSelect;

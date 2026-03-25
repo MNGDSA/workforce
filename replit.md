@@ -136,7 +136,7 @@ GET    /api/notifications/unread-count/:recipientId
 - **Candidate**: `candidate@workforce.sa` / `password123`
 
 ## Navigation Order
-Dashboard → Job Posting → Seasons → Interview Calls → Workforce → Talent → Rules & Automation → Notification Center → System & Settings
+Dashboard → Job Posting → Seasons → Interview & Training → Onboarding → Workforce → Talent → Rules & Automation → Notification Center → System & Settings
 
 ## Planned Features (Post-Testing)
 - **Bilingual Input (EN/AR toggle)**: PrestaShop-style inline language switcher on text fields. A single `BilingualInput` component with an `EN | AR` pill toggle. Stores both `title` (English) and `titleAr` (Arabic) values, submits both, and the candidate portal renders the correct one based on user language preference. To be implemented after unit/system/regression/UAT/security testing is complete.

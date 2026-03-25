@@ -20,6 +20,7 @@ import {
   ChevronDown,
   Wallet,
   BarChart3,
+  UserCheck,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -46,6 +47,7 @@ const recruitmentItems: { href: string; icon: React.ElementType; label: string }
   { href: "/question-sets", icon: ClipboardList, label: "Question Sets" },
   { href: "/job-posting",   icon: Briefcase,     label: "Job Applications" },
   { href: "/interviews",    icon: Minimize,      label: "Interview & Training" },
+  { href: "/onboarding",    icon: UserCheck,     label: "Onboarding" },
   { href: "/talent",        icon: Search,        label: "Talent" },
 ];
 

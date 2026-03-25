@@ -8,6 +8,7 @@ import {
   insertJobPostingSchema,
   insertApplicationSchema,
   insertInterviewSchema,
+  insertOnboardingSchema,
   insertWorkforceSchema,
   insertAutomationRuleSchema,
   insertNotificationSchema,
@@ -687,6 +688,90 @@ export async function registerRoutes(
       const succeeded = results.filter((r) => r.success).length;
       const failed = results.filter((r) => !r.success).length;
       return res.json({ succeeded, failed, results });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // ─── Onboarding ───────────────────────────────────────────────────────────
+  app.get("/api/onboarding", async (req: Request, res: Response) => {
+    try {
+      const { status, seasonId } = req.query as Record<string, string>;
+      const records = await storage.getOnboardingRecords({ status, seasonId });
+      return res.json(records);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.get("/api/onboarding/:id", async (req: Request, res: Response) => {
+    try {
+      const record = await storage.getOnboardingRecord(req.params.id);
+      if (!record) return res.status(404).json({ message: "Onboarding record not found" });
+      return res.json(record);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/onboarding", async (req: Request, res: Response) => {
+    try {
+      const data = insertOnboardingSchema.parse(req.body);
+      // Prevent duplicate onboarding for same candidate
+      const existing = await storage.getOnboardingRecords({});
+      const dup = existing.find(r => r.candidateId === data.candidateId && r.status !== "converted" && r.status !== "rejected");
+      if (dup) return res.status(409).json({ message: "Candidate is already in onboarding" });
+      const record = await storage.createOnboardingRecord(data);
+      return res.status(201).json(record);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.patch("/api/onboarding/:id", async (req: Request, res: Response) => {
+    try {
+      const data = insertOnboardingSchema.partial().parse(req.body);
+      // Auto-compute status
+      if (data.hasPhoto !== undefined || data.hasIban !== undefined || data.hasNationalId !== undefined ||
+          data.hasMedicalFitness !== undefined || data.hasSignedContract !== undefined || data.hasEmergencyContact !== undefined) {
+        const current = await storage.getOnboardingRecord(req.params.id);
+        if (current && current.status !== "converted" && current.status !== "rejected") {
+          const merged = { ...current, ...data };
+          const allDone = merged.hasPhoto && merged.hasIban && merged.hasNationalId &&
+                          merged.hasMedicalFitness && merged.hasSignedContract && merged.hasEmergencyContact;
+          const anyDone = merged.hasPhoto || merged.hasIban || merged.hasNationalId ||
+                          merged.hasMedicalFitness || merged.hasSignedContract || merged.hasEmergencyContact;
+          data.status = allDone ? "ready" : anyDone ? "in_progress" : "pending";
+        }
+      }
+      const record = await storage.updateOnboardingRecord(req.params.id, data);
+      if (!record) return res.status(404).json({ message: "Onboarding record not found" });
+      return res.json(record);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.delete("/api/onboarding/:id", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteOnboardingRecord(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Onboarding record not found" });
+      return res.status(204).end();
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/onboarding/:id/convert", async (req: Request, res: Response) => {
+    try {
+      const { position, department, startDate, salary, seasonId } = req.body as Record<string, string>;
+      if (!position || !startDate) return res.status(400).json({ message: "position and startDate are required" });
+      const workforce = await storage.convertOnboardingToEmployee(
+        req.params.id,
+        { position, department, startDate, salary, seasonId },
+        (req as any).userId,
+      );
+      return res.status(201).json(workforce);
     } catch (err) {
       return handleError(res, err);
     }
