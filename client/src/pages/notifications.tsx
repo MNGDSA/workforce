@@ -513,7 +513,7 @@ function SmsPluginManager() {
                         { v: "{{message}}",  desc: "SMS message text" },
                         { v: "{{timestamp}}",desc: "Unix timestamp (ms)" },
                         { v: "{{uuid}}",     desc: "Random UUID per request" },
-                        { v: "{{coding}}",   desc: "8 for Arabic/Unicode, 0 for Latin/GSM-7 — use for GoInfinito coding field", highlight: true },
+                        { v: "{{coding}}",   desc: "Always 8 (UCS-2) — GoInfinito v2 only accepts this value; UCS-2 handles both Arabic and Latin", highlight: true },
                         { v: "{{unicode}}",  desc: "\"1\" for Arabic/non-Latin content, \"0\" for plain Latin", highlight: true },
                         { v: "{{encoding}}", desc: "\"unicode\" or \"gsm7\"", highlight: true },
                         { v: "{{charset}}",  desc: "\"UCS2\" or \"GSM7\"", highlight: true },

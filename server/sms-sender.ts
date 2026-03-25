@@ -124,11 +124,12 @@ export async function sendSmsViaPlugin(
     //   {{unicode}}   → "1" for Arabic/non-Latin, "0" for plain text
     //   {{encoding}}  → "unicode" | "gsm7"
     //   {{charset}}   → "UCS2" | "GSM7"
-    //   {{coding}}    → 8 (UCS-2) | 0 (GSM-7) — use for GoInfinito "coding" field
+    //   {{coding}}    → always 8 (UCS-2); GoInfinito v2 only accepts 8, and UCS-2
+    //                   handles both Arabic and Latin safely in Saudi Arabia deployments
     unicode:  isUnicode ? "1" : "0",
     encoding: isUnicode ? "unicode" : "gsm7",
     charset:  isUnicode ? "UCS2" : "GSM7",
-    coding:   isUnicode ? 8 : 0,
+    coding:   8,
   };
 
   if (isUnicode) {
