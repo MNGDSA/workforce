@@ -138,6 +138,95 @@ GET    /api/notifications/unread-count/:recipientId
 ## Navigation Order
 Dashboard → Job Posting → Seasons → Interview & Training → Onboarding → Workforce → Talent → Rules & Automation → Notification Center → System & Settings
 
+## Workflow Design (Business Logic — Agreed with Client)
+
+### Two Manpower Sources, One Unified Talent Pool
+
+**Source 1: Individual Candidates** — self-register via candidate portal, apply to job posts
+**Source 2: SMP Workers** — uploaded in bulk via SMP contract by manpower provider company
+
+Every person in the system is a **candidate record** in the talent pool, regardless of source. The `source` field (`individual` | `smp`) tracks how they entered.
+
+### Candidate Profile Activation
+
+- **Individual**: Self-registers → OTP verification → questionnaire (if job post has one) → profile complete
+- **SMP**: Profile auto-created from contract upload (basic info: name, phone, national ID) → worker must later activate via OTP → complete personal details (photo, ID) → no questionnaire (everything pre-agreed in contract)
+
+### Season-First Flow (Season is the anchor)
+
+```
+SETUP
+  Create Season (e.g., Hajj 2026)
+  ├── Individual track: Create Job Posts → attach to Season → optionally attach Question Set
+  └── SMP track: Create SMP Contract → attach to Season → upload worker list → auto-creates candidate profiles
+
+INTAKE
+  Individual: Candidate applies to job post → application record created
+  SMP: Workers linked via contract upload (profiles pending activation)
+
+PROCESSING (Individual only)
+  Schedule Interview & Training
+    → "Previously interviewed" badge shown if lastInterviewedAt exists
+    → Filter toggle: "Hide previously interviewed" (on by default, can override)
+  After interview: Shortlisted ✓ or Not Shortlisted ✗
+    → Not Shortlisted = professional HR term for rejection
+    → Candidate returns to talent pool, can apply to future jobs
+
+PROCESSING (SMP)
+  No interview, no training, no questionnaire
+  Once profile activated → eligible for onboarding directly
+
+ONBOARDING (THE DIVIDING LINE — pool → employee)
+  Source-dependent checklists:
+  ┌─────────────────────┬────────────┬─────┐
+  │ Document            │ Individual │ SMP │
+  ├─────────────────────┼────────────┼─────┤
+  │ Personal Photo      │     ✓      │  ✓  │
+  │ National ID / Iqama │     ✓      │  ✓  │
+  │ Signed Contract     │     ✓      │  ✗  │ ← contract is at company level for SMP
+  │ IBAN Certificate    │     ✓      │  ✗  │
+  │ Medical Fitness     │     ✓      │  ✗  │
+  │ Emergency Contact   │     ✓      │  ✗  │
+  └─────────────────────┴────────────┴─────┘
+  Individual: 6 items to be "ready"
+  SMP: 2 items to be "ready"
+  All complete → Convert to Employee (creates Workforce record)
+
+WORKFORCE (post-onboarding)
+  Active employee record
+  Can be Terminated (reason + date recorded)
+  SMP termination → option to Replace (new worker on same contract) or Leave Empty
+  Candidate record stays in system for future seasons
+
+RETURN TO POOL
+  Not-shortlisted individuals → back to talent pool, can reapply future seasons
+  Terminated workers → workforce record closed, candidate record preserved
+  Replaced SMP workers → marked "replaced" on contract, candidate preserved
+```
+
+### Key Design Decisions
+
+1. **Season anchors everything** — Job posts and SMP contracts both hang off a season. Every candidate journey traces back to one season.
+2. **Sequential seasons only** — same candidate cannot be in two seasons simultaneously.
+3. **`lastInterviewedAt` on candidate profile** — persists across seasons, prevents wasted repeat interviews. Admin sees badge + can filter.
+4. **Application status `not_shortlisted`** — correct HR terminology for rejection (not "rejected").
+5. **SMP contract worker status** — each worker on a contract has status: `active` | `replaced` | `terminated`.
+6. **Onboarding `source` field** — drives which checklist (6 items vs 2 items) is enforced.
+7. **SMP contract vs employee documents** — the contract is a company-level document (between client and SMP). Worker-level documents are only photo + ID.
+8. **Profile activation required for all** — SMP workers must activate via OTP before they can be onboarded, same as individuals.
+
+### Schema Changes Needed (Not Yet Implemented)
+
+- [ ] Add `source` field to `candidates` table (`individual` | `smp`, default `individual`)
+- [ ] Add `lastInterviewedAt` to `candidates` table
+- [ ] Add `source` field to `onboarding` table to drive different checklists
+- [ ] Rename application status `rejected` → `not_shortlisted`
+- [ ] Add per-worker status to SMP contract employee list (`active` | `replaced` | `terminated`)
+- [ ] Add `terminatedAt`, `terminationReason` to `workforce` table
+- [ ] Make onboarding "ready" threshold dynamic (6/6 individual, 2/2 SMP)
+
+---
+
 ## Planned Features (Post-Testing)
 - **Bilingual Input (EN/AR toggle)**: PrestaShop-style inline language switcher on text fields. A single `BilingualInput` component with an `EN | AR` pill toggle. Stores both `title` (English) and `titleAr` (Arabic) values, submits both, and the candidate portal renders the correct one based on user language preference. To be implemented after unit/system/regression/UAT/security testing is complete.
 
