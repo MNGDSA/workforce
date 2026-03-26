@@ -140,90 +140,108 @@ Dashboard → Job Posting → Seasons → Interview & Training → Onboarding �
 
 ## Workflow Design (Business Logic — Agreed with Client)
 
-### Two Manpower Sources, One Unified Talent Pool
+### Simplified Design Principle: One Pool, One Pipeline
 
-**Source 1: Individual Candidates** — self-register via candidate portal, apply to job posts
-**Source 2: SMP Workers** — uploaded in bulk via SMP contract by manpower provider company
+**Every person is a candidate in the talent pool. Period.**
 
-Every person in the system is a **candidate record** in the talent pool, regardless of source. The `source` field (`individual` | `smp`) tracks how they entered.
+There are no "SMP workers" vs "individual candidates" at the pipeline level. The only difference is how they entered the system. Once in the pool, everyone follows the same pipeline, same profile requirements, same onboarding checklist.
 
-### Candidate Profile Activation
+### How People Enter the Pool
 
-- **Individual**: Self-registers → OTP verification → questionnaire (if job post has one) → profile complete
-- **SMP**: Profile auto-created from contract upload (basic info: name, phone, national ID) → worker must later activate via OTP → complete personal details (photo, ID) → no questionnaire (everything pre-agreed in contract)
+1. **Self-registration** — candidate signs up via portal, goes through OTP, fills profile
+2. **Bulk upload** — admin uploads a list via the Talent section (could be SMP worker list or any other bulk source). Profiles are created. Workers activate later via OTP.
 
-### Season-First Flow (Season is the anchor)
+The bulk upload in Talent is **completely disconnected** from SMP contracts. Upload creates profiles. Contracts are a separate business concept.
+
+### What is an SMP Contract?
+
+An SMP contract is purely a **business agreement** between your company and a manpower provider. It:
+- Is attached to a Season
+- Links to candidates from the pool (not-yet-employees) OR existing workforce members (already employees)
+- Each linked person has a status on the contract: `active` | `removed`
+- Workers can be detached from one contract and attached to another (SMP transfer) without breaking anything
+
+**The contract does NOT own candidate data.** It's just a grouping/assignment record.
+
+### Candidate Profile (Same for Everyone)
+
+Every candidate has the same profile and requirements regardless of how they entered:
+- Personal photo, IBAN, National ID, phone, etc.
+- OTP activation required for all
+- Question sets only apply when attached to a job post (not required for all candidates)
+
+### The Complete Pipeline
 
 ```
-SETUP
+TALENT POOL (unified, permanent)
+  All candidates live here with full profiles
+  source field tracks origin: "self" | "bulk_upload" (for reporting only, no logic difference)
+  lastInterviewedAt persists across seasons (prevents repeat interviews)
+
+SEASON SETUP
   Create Season (e.g., Hajj 2026)
-  ├── Individual track: Create Job Posts → attach to Season → optionally attach Question Set
-  └── SMP track: Create SMP Contract → attach to Season → upload worker list → auto-creates candidate profiles
+  ├── Create Job Posts → attach to Season → optionally attach Question Set
+  └── Create SMP Contracts → attach to Season → pick candidates/employees to link
 
 INTAKE
-  Individual: Candidate applies to job post → application record created
-  SMP: Workers linked via contract upload (profiles pending activation)
+  Individual: applies to job post → application created
+  SMP: workers already in pool, linked to contract
 
-PROCESSING (Individual only)
-  Schedule Interview & Training
-    → "Previously interviewed" badge shown if lastInterviewedAt exists
-    → Filter toggle: "Hide previously interviewed" (on by default, can override)
+PROCESSING
+  Schedule Interview & Training for individual applicants
+    → "Previously interviewed" badge if lastInterviewedAt exists
+    → Filter: "Hide previously interviewed" (on by default, can override)
   After interview: Shortlisted ✓ or Not Shortlisted ✗
-    → Not Shortlisted = professional HR term for rejection
+    → Not Shortlisted = correct HR term (not "rejected")
     → Candidate returns to talent pool, can apply to future jobs
-
-PROCESSING (SMP)
-  No interview, no training, no questionnaire
-  Once profile activated → eligible for onboarding directly
+  SMP-linked candidates: skip interview/training (pre-agreed terms)
 
 ONBOARDING (THE DIVIDING LINE — pool → employee)
-  Source-dependent checklists:
-  ┌─────────────────────┬────────────┬─────┐
-  │ Document            │ Individual │ SMP │
-  ├─────────────────────┼────────────┼─────┤
-  │ Personal Photo      │     ✓      │  ✓  │
-  │ National ID / Iqama │     ✓      │  ✓  │
-  │ Signed Contract     │     ✓      │  ✗  │ ← contract is at company level for SMP
-  │ IBAN Certificate    │     ✓      │  ✗  │
-  │ Medical Fitness     │     ✓      │  ✗  │
-  │ Emergency Contact   │     ✓      │  ✗  │
-  └─────────────────────┴────────────┴─────┘
-  Individual: 6 items to be "ready"
-  SMP: 2 items to be "ready"
-  All complete → Convert to Employee (creates Workforce record)
+  Same checklist for EVERYONE (no split logic):
+    ☐ Personal Photo
+    ☐ IBAN Certificate
+    ☐ National ID / Iqama
+    ☐ Medical Fitness
+    ☐ Signed Contract
+    ☐ Emergency Contact
+  All 6 complete → status = "ready" → eligible for conversion
 
 WORKFORCE (post-onboarding)
-  Active employee record
-  Can be Terminated (reason + date recorded)
-  SMP termination → option to Replace (new worker on same contract) or Leave Empty
-  Candidate record stays in system for future seasons
+  Convert → creates employee record
+  Status: active | terminated
+  Termination: reason + date recorded
+  SMP contract: option to Remove worker and attach a replacement from pool
+  Candidate record always preserved for future seasons
 
 RETURN TO POOL
-  Not-shortlisted individuals → back to talent pool, can reapply future seasons
-  Terminated workers → workforce record closed, candidate record preserved
-  Replaced SMP workers → marked "replaced" on contract, candidate preserved
+  Not-shortlisted → back to pool, can reapply
+  Terminated → workforce closed, candidate preserved
+  SMP removed → detached from contract, candidate preserved
 ```
 
 ### Key Design Decisions
 
-1. **Season anchors everything** — Job posts and SMP contracts both hang off a season. Every candidate journey traces back to one season.
-2. **Sequential seasons only** — same candidate cannot be in two seasons simultaneously.
-3. **`lastInterviewedAt` on candidate profile** — persists across seasons, prevents wasted repeat interviews. Admin sees badge + can filter.
-4. **Application status `not_shortlisted`** — correct HR terminology for rejection (not "rejected").
-5. **SMP contract worker status** — each worker on a contract has status: `active` | `replaced` | `terminated`.
-6. **Onboarding `source` field** — drives which checklist (6 items vs 2 items) is enforced.
-7. **SMP contract vs employee documents** — the contract is a company-level document (between client and SMP). Worker-level documents are only photo + ID.
-8. **Profile activation required for all** — SMP workers must activate via OTP before they can be onboarded, same as individuals.
+1. **One pool, one pipeline** — no separate tracks for SMP vs individual. Everyone is a candidate with the same profile and onboarding requirements.
+2. **Bulk upload is in Talent, not in SMP contracts** — upload creates profiles, contracts are separate business groupings.
+3. **SMP contract = assignment record** — links pool candidates or workforce employees to a company + season. Does not own candidate data.
+4. **SMP transfers are simple** — remove from Contract A, attach to Contract B. No data loss.
+5. **Deduplication** — bulk upload matches existing candidates by national ID/phone before creating new profiles.
+6. **Season anchors everything** — job posts and SMP contracts both hang off a season.
+7. **Sequential seasons only** — same candidate cannot be in two seasons simultaneously.
+8. **`lastInterviewedAt` on candidate profile** — persists across seasons, badge + filter in interview scheduling.
+9. **Application status `not_shortlisted`** — professional HR term for rejection.
+10. **Same onboarding for all** — 6/6 checklist, no source-dependent logic.
+11. **Profile activation required for all** — OTP verification regardless of entry method.
 
 ### Schema Changes Needed (Not Yet Implemented)
 
-- [ ] Add `source` field to `candidates` table (`individual` | `smp`, default `individual`)
+- [ ] Add `source` field to `candidates` table (`self` | `bulk_upload`, default `self`) — reporting only
 - [ ] Add `lastInterviewedAt` to `candidates` table
-- [ ] Add `source` field to `onboarding` table to drive different checklists
 - [ ] Rename application status `rejected` → `not_shortlisted`
-- [ ] Add per-worker status to SMP contract employee list (`active` | `replaced` | `terminated`)
+- [ ] Redesign SMP contract to link to candidates/workforce by reference (pick from pool) instead of embedded employee data
+- [ ] Add per-link status on SMP contract: `active` | `removed`
 - [ ] Add `terminatedAt`, `terminationReason` to `workforce` table
-- [ ] Make onboarding "ready" threshold dynamic (6/6 individual, 2/2 SMP)
+- [ ] Bulk upload in Talent section with deduplication by national ID/phone
 
 ---
 
