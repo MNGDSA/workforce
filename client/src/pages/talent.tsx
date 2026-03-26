@@ -9,6 +9,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useState, useCallback } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useToast } from "@/hooks/use-toast";
+import * as XLSX from "xlsx";
 import {
   Search,
   Filter,
@@ -86,28 +87,73 @@ const BULK_TEMPLATE_HEADERS = [
   "city", "nationality", "gender", "dateOfBirth", "source"
 ];
 
-function downloadTemplate() {
-  const csv = BULK_TEMPLATE_HEADERS.join(",") + "\n" +
-    'John Doe,جون دو,0501234567,john@example.com,1234567890,Makkah,saudi,male,1990-01-15,individual\n' +
-    'Jane Smith,جين سميث,0559876543,jane@example.com,0987654321,Jeddah,non_saudi,female,1992-06-20,smp';
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "candidate_upload_template.csv";
-  a.click();
-  URL.revokeObjectURL(url);
+const TEMPLATE_SAMPLE_ROWS = [
+  ["John Doe", "جون دو", "0501234567", "john@example.com", "1234567890", "Makkah", "saudi", "male", "1990-01-15", "individual"],
+  ["Jane Smith", "جين سميث", "0559876543", "jane@example.com", "0987654321", "Jeddah", "non_saudi", "female", "1992-06-20", "smp"],
+];
+
+function downloadTemplate(format: "csv" | "xlsx") {
+  if (format === "xlsx") {
+    const ws = XLSX.utils.aoa_to_sheet([BULK_TEMPLATE_HEADERS, ...TEMPLATE_SAMPLE_ROWS]);
+    ws["!cols"] = BULK_TEMPLATE_HEADERS.map(() => ({ wch: 18 }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Candidates");
+    XLSX.writeFile(wb, "candidate_upload_template.xlsx");
+  } else {
+    const csv = BULK_TEMPLATE_HEADERS.join(",") + "\n" +
+      TEMPLATE_SAMPLE_ROWS.map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "candidate_upload_template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 }
 
-function parseCSV(text: string): Record<string, string>[] {
-  const lines = text.trim().split("\n");
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ""));
-  return lines.slice(1).map(line => {
-    const values = line.split(",").map(v => v.trim().replace(/^"|"$/g, ""));
-    const obj: Record<string, string> = {};
-    headers.forEach((h, i) => { obj[h] = values[i] || ""; });
-    return obj;
+function parseFileToRows(file: File): Promise<Record<string, string>[]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    const isExcel = /\.xlsx?$/i.test(file.name);
+
+    if (isExcel) {
+      reader.onload = (ev) => {
+        try {
+          const data = new Uint8Array(ev.target?.result as ArrayBuffer);
+          const wb = XLSX.read(data, { type: "array" });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows: Record<string, string>[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
+          const cleaned = rows.map(r => {
+            const obj: Record<string, string> = {};
+            for (const [k, v] of Object.entries(r)) obj[k.trim()] = String(v).trim();
+            return obj;
+          });
+          resolve(cleaned);
+        } catch {
+          reject(new Error("Could not parse Excel file. Please use the template."));
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.onload = (ev) => {
+        try {
+          const text = ev.target?.result as string;
+          const wb = XLSX.read(text, { type: "string" });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows: Record<string, string>[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
+          const cleaned = rows.map(r => {
+            const obj: Record<string, string> = {};
+            for (const [k, v] of Object.entries(r)) obj[k.trim()] = String(v).trim();
+            return obj;
+          });
+          resolve(cleaned);
+        } catch {
+          reject(new Error("Could not parse CSV file. Please use the template."));
+        }
+      };
+      reader.readAsText(file);
+    }
   });
 }
 
@@ -215,28 +261,22 @@ export default function TalentPage() {
       : <ArrowDown className="h-3 w-3 ml-1 text-primary" />;
   }
 
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadFile(file);
     setUploadError(null);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const text = ev.target?.result as string;
-        const rows = parseCSV(text);
-        if (rows.length === 0) {
-          setUploadError("No data rows found in file");
-          setUploadPreview(null);
-          return;
-        }
-        setUploadPreview(rows);
-      } catch {
-        setUploadError("Could not parse file. Please use the CSV template.");
-        setUploadPreview(null);
+    setUploadPreview(null);
+    try {
+      const rows = await parseFileToRows(file);
+      if (rows.length === 0) {
+        setUploadError("No data rows found in file");
+        return;
       }
-    };
-    reader.readAsText(file);
+      setUploadPreview(rows);
+    } catch (err: any) {
+      setUploadError(err.message || "Could not parse file. Please use the template.");
+    }
   }
 
   function handleExport() {
@@ -559,30 +599,41 @@ export default function TalentPage() {
           <DialogHeader>
             <DialogTitle>Bulk Upload Candidates</DialogTitle>
             <DialogDescription>
-              Upload a CSV file to add candidates to the talent pool. Download the template to match the required format.
+              Upload an Excel or CSV file to add candidates to the talent pool. Download the template to match the required format.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-2 h-10 border-dashed"
-              onClick={downloadTemplate}
-              data-testid="button-download-template"
-            >
-              <FileSpreadsheet className="h-4 w-4 text-primary" />
-              Download CSV Template
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 justify-start gap-2 h-10 border-dashed"
+                onClick={() => downloadTemplate("xlsx")}
+                data-testid="button-download-template-xlsx"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-primary" />
+                Download Excel Template
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1 justify-start gap-2 h-10 border-dashed"
+                onClick={() => downloadTemplate("csv")}
+                data-testid="button-download-template-csv"
+              >
+                <FileDown className="h-4 w-4 text-muted-foreground" />
+                Download CSV Template
+              </Button>
+            </div>
 
             <div className="border border-dashed border-border rounded-sm p-6 text-center">
               {!uploadFile ? (
                 <label className="cursor-pointer block">
                   <FileUp className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground mb-1">Click to select a CSV file</p>
-                  <p className="text-xs text-muted-foreground/60">Maximum 70,000 rows per upload</p>
+                  <p className="text-sm text-muted-foreground mb-1">Click to select an Excel or CSV file</p>
+                  <p className="text-xs text-muted-foreground/60">Supports .xlsx and .csv · Maximum 70,000 rows</p>
                   <input
                     type="file"
-                    accept=".csv"
+                    accept=".csv,.xlsx,.xls"
                     className="hidden"
                     onChange={handleFileSelect}
                     data-testid="input-upload-file"
