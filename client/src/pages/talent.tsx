@@ -312,7 +312,7 @@ export default function TalentPage() {
     }
   }
 
-  function handleExport() {
+  async function handleExport() {
     const params = new URLSearchParams({
       ...(debouncedSearch ? { search: debouncedSearch } : {}),
       ...(status && status !== "all" ? { status } : {}),
@@ -320,7 +320,19 @@ export default function TalentPage() {
       sortBy,
       sortOrder,
     });
-    window.open(`/api/candidates/export?${params.toString()}`, "_blank");
+    try {
+      const res = await apiRequest("GET", `/api/candidates/export?${params.toString()}`);
+      const data = await res.json();
+      const rows: any[][] = data.rows || [];
+      const headers: string[] = data.headers || [];
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      ws["!cols"] = headers.map(() => ({ wch: 20 }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Candidates");
+      XLSX.writeFile(wb, `candidates_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch {
+      toast({ title: "Export failed", description: "Could not export candidates.", variant: "destructive" });
+    }
   }
 
   return (
@@ -677,7 +689,7 @@ export default function TalentPage() {
       </div>
 
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Bulk Upload Candidates</DialogTitle>
             <DialogDescription>

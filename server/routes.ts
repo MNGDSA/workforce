@@ -312,13 +312,6 @@ export async function registerRoutes(
 
   app.get("/api/candidates/export", async (req: Request, res: Response) => {
     try {
-      const sanitize = (val: string) => {
-        if (!val) return "";
-        if (/^[=+\-@\t\r]/.test(val)) return `'${val}`;
-        return val;
-      };
-      const csvCell = (val: string) => `"${sanitize(val).replace(/"/g, '""')}"`;
-
       const allRows: any[] = [];
       let page = 1;
       const batchSize = 1000;
@@ -330,18 +323,13 @@ export async function registerRoutes(
         page++;
       }
       const headers = ["ID", "Candidate Code", "Full Name (EN)", "Full Name (AR)", "Classification", "Status", "Phone", "Email", "City", "Nationality", "National ID", "IBAN", "Gender", "Date of Birth", "Created At"];
-      const csvLines = [
-        headers.join(","),
-        ...allRows.map((r: any) => [
-          csvCell(r.id), csvCell(r.candidateCode), csvCell(r.fullNameEn || ""), csvCell(r.fullNameAr || ""),
-          csvCell(r.source || "individual"), csvCell(r.status), csvCell(r.phone || ""), csvCell(r.email || ""),
-          csvCell(r.city || ""), csvCell(r.nationality || ""), csvCell(r.nationalId || ""),
-          csvCell(r.ibanNumber || ""), csvCell(r.gender || ""), csvCell(r.dateOfBirth || ""), csvCell(String(r.createdAt || ""))
-        ].join(","))
-      ];
-      res.setHeader("Content-Type", "text/csv");
-      res.setHeader("Content-Disposition", `attachment; filename="candidates_export_${new Date().toISOString().slice(0, 10)}.csv"`);
-      return res.send(csvLines.join("\n"));
+      const rows = allRows.map((r: any) => [
+        r.id, r.candidateCode, r.fullNameEn || "", r.fullNameAr || "",
+        r.source || "individual", r.status, r.phone || "", r.email || "",
+        r.city || "", r.nationality || "", r.nationalId || "",
+        r.ibanNumber || "", r.gender || "", r.dateOfBirth || "", r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : ""
+      ]);
+      return res.json({ headers, rows, total: allRows.length });
     } catch (err) {
       return handleError(res, err);
     }
