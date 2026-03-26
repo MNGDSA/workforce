@@ -340,10 +340,9 @@ export default function TalentPage() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white tracking-tight">Talent Pool</h1>
+            <h1 className="text-3xl font-display font-bold text-white tracking-tight">Talent</h1>
             <p className="text-muted-foreground mt-1">
               Manage and search your candidate database.
-              {total > 0 && <span className="text-primary font-medium ml-1">{total.toLocaleString()} total records</span>}
             </p>
           </div>
           <div className="flex gap-2">
