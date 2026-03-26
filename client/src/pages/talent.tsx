@@ -28,6 +28,7 @@ import {
   FileUp,
   X,
   FileSpreadsheet,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   Table,
@@ -50,6 +51,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
@@ -81,6 +84,20 @@ function getDisplayStatus(candidate: Candidate): string {
 }
 
 type SortField = "createdAt" | "fullNameEn" | "city" | "source" | "phone" | "email";
+
+type ColumnKey = "id" | "candidate" | "classification" | "status" | "phone" | "email" | "city";
+
+const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
+  { key: "id", label: "ID" },
+  { key: "candidate", label: "Candidate" },
+  { key: "classification", label: "Classification" },
+  { key: "status", label: "Status" },
+  { key: "phone", label: "Phone" },
+  { key: "email", label: "Email" },
+  { key: "city", label: "City" },
+];
+
+const DEFAULT_VISIBLE: ColumnKey[] = ["id", "candidate", "classification", "status", "phone", "email", "city"];
 
 const BULK_TEMPLATE_HEADERS = [
   "fullNameEn", "fullNameAr", "phone", "email", "nationalId",
@@ -166,10 +183,26 @@ export default function TalentPage() {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [sortBy, setSortBy] = useState<SortField>("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(new Set(DEFAULT_VISIBLE));
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadPreview, setUploadPreview] = useState<Record<string, string>[] | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  function toggleColumn(key: ColumnKey) {
+    setVisibleColumns(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        if (next.size <= 2) return prev;
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  const col = (key: ColumnKey) => visibleColumns.has(key);
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -410,9 +443,34 @@ export default function TalentPage() {
               Candidate List
               {isFetching && <RefreshCw className="inline ml-2 h-3 w-3 animate-spin text-muted-foreground" />}
             </CardTitle>
-            <span className="text-xs text-muted-foreground">
-              Page {page} of {totalPages || 1} · {total.toLocaleString()} records
-            </span>
+            <div className="flex items-center gap-3">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 border-border bg-background gap-1.5" data-testid="button-toggle-columns">
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    Columns
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">Toggle columns</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {ALL_COLUMNS.map(({ key, label }) => (
+                    <DropdownMenuCheckboxItem
+                      key={key}
+                      checked={visibleColumns.has(key)}
+                      onCheckedChange={() => toggleColumn(key)}
+                      onSelect={(e) => e.preventDefault()}
+                      data-testid={`toggle-col-${key}`}
+                    >
+                      {label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <span className="text-xs text-muted-foreground">
+                Page {page} of {totalPages || 1} · {total.toLocaleString()} records
+              </span>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
@@ -432,43 +490,53 @@ export default function TalentPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="border-border hover:bg-transparent">
-                      <TableHead className="w-[110px] text-muted-foreground">ID</TableHead>
-                      <TableHead
-                        className="text-muted-foreground cursor-pointer select-none"
-                        onClick={() => handleColumnSort("fullNameEn")}
-                        data-testid="sort-candidate"
-                      >
-                        <span className="flex items-center">Candidate <SortIcon field="fullNameEn" /></span>
-                      </TableHead>
-                      <TableHead
-                        className="text-muted-foreground cursor-pointer select-none hidden md:table-cell"
-                        onClick={() => handleColumnSort("source")}
-                        data-testid="sort-classification"
-                      >
-                        <span className="flex items-center">Classification <SortIcon field="source" /></span>
-                      </TableHead>
-                      <TableHead className="text-muted-foreground hidden sm:table-cell">Status</TableHead>
-                      <TableHead
-                        className="text-muted-foreground cursor-pointer select-none hidden lg:table-cell"
-                        onClick={() => handleColumnSort("phone")}
-                        data-testid="sort-phone"
-                      >
-                        <span className="flex items-center">Phone <SortIcon field="phone" /></span>
-                      </TableHead>
-                      <TableHead
-                        className="text-muted-foreground cursor-pointer select-none hidden lg:table-cell"
-                        onClick={() => handleColumnSort("email")}
-                        data-testid="sort-email"
-                      >
-                        <span className="flex items-center">Email <SortIcon field="email" /></span>
-                      </TableHead>
-                      <TableHead
-                        className="text-muted-foreground cursor-pointer select-none hidden xl:table-cell"
-                        onClick={() => handleColumnSort("city")}
-                        data-testid="sort-city"
-                      >
-                        <span className="flex items-center">City <SortIcon field="city" /></span>
-                      </TableHead>
+                      {col("id") && <TableHead className="w-[110px] text-muted-foreground">ID</TableHead>}
+                      {col("candidate") && (
+                        <TableHead
+                          className="text-muted-foreground cursor-pointer select-none"
+                          onClick={() => handleColumnSort("fullNameEn")}
+                          data-testid="sort-candidate"
+                        >
+                          <span className="flex items-center">Candidate <SortIcon field="fullNameEn" /></span>
+                        </TableHead>
+                      )}
+                      {col("classification") && (
+                        <TableHead
+                          className="text-muted-foreground cursor-pointer select-none"
+                          onClick={() => handleColumnSort("source")}
+                          data-testid="sort-classification"
+                        >
+                          <span className="flex items-center">Classification <SortIcon field="source" /></span>
+                        </TableHead>
+                      )}
+                      {col("status") && <TableHead className="text-muted-foreground">Status</TableHead>}
+                      {col("phone") && (
+                        <TableHead
+                          className="text-muted-foreground cursor-pointer select-none"
+                          onClick={() => handleColumnSort("phone")}
+                          data-testid="sort-phone"
+                        >
+                          <span className="flex items-center">Phone <SortIcon field="phone" /></span>
+                        </TableHead>
+                      )}
+                      {col("email") && (
+                        <TableHead
+                          className="text-muted-foreground cursor-pointer select-none"
+                          onClick={() => handleColumnSort("email")}
+                          data-testid="sort-email"
+                        >
+                          <span className="flex items-center">Email <SortIcon field="email" /></span>
+                        </TableHead>
+                      )}
+                      {col("city") && (
+                        <TableHead
+                          className="text-muted-foreground cursor-pointer select-none"
+                          onClick={() => handleColumnSort("city")}
+                          data-testid="sort-city"
+                        >
+                          <span className="flex items-center">City <SortIcon field="city" /></span>
+                        </TableHead>
+                      )}
                       <TableHead className="text-right text-muted-foreground">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -477,61 +545,75 @@ export default function TalentPage() {
                       const displayStatus = getDisplayStatus(candidate);
                       return (
                         <TableRow key={candidate.id} className="border-border hover:bg-muted/20" data-testid={`row-candidate-${candidate.id}`}>
-                          <TableCell className="font-mono text-xs text-muted-foreground">
-                            {candidate.nationalId ?? candidate.candidateCode}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-9 w-9 border border-border">
-                                <AvatarFallback className="text-xs">
-                                  {candidate.fullNameEn.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <p className="font-medium text-white text-sm">{candidate.fullNameEn}</p>
-                                {candidate.fullNameAr && (
-                                  <p className="text-xs text-muted-foreground" dir="rtl">{candidate.fullNameAr}</p>
-                                )}
+                          {col("id") && (
+                            <TableCell className="font-mono text-xs text-muted-foreground">
+                              {candidate.nationalId ?? candidate.candidateCode}
+                            </TableCell>
+                          )}
+                          {col("candidate") && (
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-9 w-9 border border-border">
+                                  <AvatarFallback className="text-xs">
+                                    {candidate.fullNameEn.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <p className="font-medium text-white text-sm">{candidate.fullNameEn}</p>
+                                  {candidate.fullNameAr && (
+                                    <p className="text-xs text-muted-foreground" dir="rtl">{candidate.fullNameAr}</p>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            <Badge
-                              variant="outline"
-                              className={`font-medium text-xs border-0 ${
-                                (candidate as any).source === "smp"
-                                  ? "bg-violet-500/10 text-violet-400"
-                                  : "bg-blue-500/10 text-blue-400"
-                              }`}
-                              data-testid={`classification-${candidate.id}`}
-                            >
-                              {(candidate as any).source === "smp" ? "SMP" : "Individual"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="hidden sm:table-cell">
-                            <Badge
-                              variant="outline"
-                              className={`font-medium border-0 text-xs ${statusStyles[displayStatus] ?? "bg-muted text-muted-foreground"}`}
-                              data-testid={`status-${candidate.id}`}
-                            >
-                              {displayStatus.replace("_", " ")}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell">
-                            <span className="text-sm text-muted-foreground font-mono">
-                              {candidate.phone || "—"}
-                            </span>
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell">
-                            <span className="text-sm text-muted-foreground truncate max-w-[180px] block">
-                              {candidate.email || "—"}
-                            </span>
-                          </TableCell>
-                          <TableCell className="hidden xl:table-cell">
-                            <span className="text-sm text-muted-foreground">
-                              {candidate.city || "—"}
-                            </span>
-                          </TableCell>
+                            </TableCell>
+                          )}
+                          {col("classification") && (
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={`font-medium text-xs border-0 ${
+                                  (candidate as any).source === "smp"
+                                    ? "bg-violet-500/10 text-violet-400"
+                                    : "bg-blue-500/10 text-blue-400"
+                                }`}
+                                data-testid={`classification-${candidate.id}`}
+                              >
+                                {(candidate as any).source === "smp" ? "SMP" : "Individual"}
+                              </Badge>
+                            </TableCell>
+                          )}
+                          {col("status") && (
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={`font-medium border-0 text-xs ${statusStyles[displayStatus] ?? "bg-muted text-muted-foreground"}`}
+                                data-testid={`status-${candidate.id}`}
+                              >
+                                {displayStatus.replace("_", " ")}
+                              </Badge>
+                            </TableCell>
+                          )}
+                          {col("phone") && (
+                            <TableCell>
+                              <span className="text-sm text-muted-foreground font-mono">
+                                {candidate.phone || "—"}
+                              </span>
+                            </TableCell>
+                          )}
+                          {col("email") && (
+                            <TableCell>
+                              <span className="text-sm text-muted-foreground truncate max-w-[180px] block">
+                                {candidate.email || "—"}
+                              </span>
+                            </TableCell>
+                          )}
+                          {col("city") && (
+                            <TableCell>
+                              <span className="text-sm text-muted-foreground">
+                                {candidate.city || "—"}
+                              </span>
+                            </TableCell>
+                          )}
                           <TableCell className="text-right">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
