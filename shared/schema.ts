@@ -191,6 +191,9 @@ export const candidates = pgTable(
     hasPhoto: boolean("has_photo").notNull().default(false),
     hasNationalId: boolean("has_national_id").notNull().default(false),
     hasIban: boolean("has_iban").notNull().default(false),
+    // Classification & Activity
+    source: text("source").notNull().default("individual"),
+    lastLoginAt: timestamp("last_login_at"),
     // Meta
     resumeUrl: text("resume_url"),
     photoUrl: text("photo_url"),
@@ -690,7 +693,8 @@ export const candidateQuerySchema = z.object({
   city: z.string().optional(),
   nationality: z.enum(["saudi", "non_saudi"]).optional(),
   gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),
-  sortBy: z.enum(["createdAt", "fullNameEn", "rating", "experienceYears"]).default("createdAt"),
+  source: z.enum(["individual", "smp"]).optional(),
+  sortBy: z.enum(["createdAt", "fullNameEn", "rating", "experienceYears", "city", "source", "phone", "email"]).default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 

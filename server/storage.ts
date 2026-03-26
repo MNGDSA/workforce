@@ -249,6 +249,7 @@ export class DatabaseStorage implements IStorage {
     if (city) conditions.push(ilike(candidates.city, `%${city}%`));
     if (nationality) conditions.push(eq(candidates.nationality, nationality as any));
     if (gender) conditions.push(eq(candidates.gender, gender as any));
+    if ((query as any).source) conditions.push(eq(candidates.source, (query as any).source));
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -257,6 +258,10 @@ export class DatabaseStorage implements IStorage {
       sortBy === "fullNameEn" ? candidates.fullNameEn
       : sortBy === "rating" ? candidates.rating
       : sortBy === "experienceYears" ? candidates.experienceYears
+      : sortBy === "city" ? candidates.city
+      : sortBy === "source" ? candidates.source
+      : sortBy === "phone" ? candidates.phone
+      : sortBy === "email" ? candidates.email
       : candidates.createdAt;
 
     const [data, [{ value: total }]] = await Promise.all([

@@ -310,6 +310,43 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/candidates/export", async (req: Request, res: Response) => {
+    try {
+      const sanitize = (val: string) => {
+        if (!val) return "";
+        if (/^[=+\-@\t\r]/.test(val)) return `'${val}`;
+        return val;
+      };
+      const csvCell = (val: string) => `"${sanitize(val).replace(/"/g, '""')}"`;
+
+      const allRows: any[] = [];
+      let page = 1;
+      const batchSize = 1000;
+      while (true) {
+        const query = candidateQuerySchema.parse({ ...req.query, page, limit: batchSize });
+        const result = await storage.getCandidates(query);
+        allRows.push(...result.data);
+        if (allRows.length >= result.total || result.data.length < batchSize) break;
+        page++;
+      }
+      const headers = ["ID", "Candidate Code", "Full Name (EN)", "Full Name (AR)", "Classification", "Status", "Phone", "Email", "City", "Nationality", "National ID", "IBAN", "Gender", "Date of Birth", "Created At"];
+      const csvLines = [
+        headers.join(","),
+        ...allRows.map((r: any) => [
+          csvCell(r.id), csvCell(r.candidateCode), csvCell(r.fullNameEn || ""), csvCell(r.fullNameAr || ""),
+          csvCell(r.source || "individual"), csvCell(r.status), csvCell(r.phone || ""), csvCell(r.email || ""),
+          csvCell(r.city || ""), csvCell(r.nationality || ""), csvCell(r.nationalId || ""),
+          csvCell(r.ibanNumber || ""), csvCell(r.gender || ""), csvCell(r.dateOfBirth || ""), csvCell(String(r.createdAt || ""))
+        ].join(","))
+      ];
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="candidates_export_${new Date().toISOString().slice(0, 10)}.csv"`);
+      return res.send(csvLines.join("\n"));
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   app.get("/api/candidates/stats", async (_req: Request, res: Response) => {
     try {
       const stats = await storage.getCandidateStats();
@@ -370,13 +407,18 @@ export async function registerRoutes(
       if (rawCandidates.length > 70000) {
         return res.status(400).json({ message: "Maximum 70,000 candidates per bulk upload" });
       }
-      const validated = rawCandidates.map((c: unknown, i: number) => {
+      const errors: { row: number; message: string }[] = [];
+      const validated: any[] = [];
+      for (let i = 0; i < rawCandidates.length; i++) {
         try {
-          return insertCandidateSchema.parse(c);
+          validated.push(insertCandidateSchema.parse(rawCandidates[i]));
         } catch (e) {
-          throw new Error(`Row ${i + 1}: ${e instanceof z.ZodError ? e.errors[0].message : "invalid"}`);
+          errors.push({ row: i + 1, message: e instanceof z.ZodError ? e.errors.map(er => `${er.path.join(".")}: ${er.message}`).join("; ") : "invalid" });
         }
-      });
+      }
+      if (errors.length > 0) {
+        return res.status(400).json({ message: `Validation failed on ${errors.length} rows`, errors: errors.slice(0, 20) });
+      }
       const inserted = await storage.bulkInsertCandidates(validated);
       return res.status(201).json({ inserted, total: rawCandidates.length });
     } catch (err) {
