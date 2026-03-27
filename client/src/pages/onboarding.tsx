@@ -1257,10 +1257,13 @@ export default function OnboardingPage() {
     if (statusFilter !== "all" && statusFilter !== "active" && r.status !== statusFilter) return false;
     if (search) {
       const candidate = candidates.find(c => c.id === r.candidateId);
+      const q = search.toLowerCase();
       const name = candidate?.fullNameEn?.toLowerCase() ?? "";
       const code = candidate?.candidateCode?.toLowerCase() ?? "";
-      const q = search.toLowerCase();
-      if (!name.includes(q) && !code.includes(q)) return false;
+      const nationalId = candidate?.nationalId?.toLowerCase() ?? "";
+      const iqama = (candidate as any)?.iqamaNumber?.toLowerCase() ?? "";
+      const phone = candidate?.phone?.toLowerCase() ?? "";
+      if (!name.includes(q) && !code.includes(q) && !nationalId.includes(q) && !iqama.includes(q) && !phone.includes(q)) return false;
     }
     return true;
   });
@@ -1394,7 +1397,7 @@ export default function OnboardingPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
             <Input
               data-testid="input-search-onboarding"
-              placeholder="Search by name or code…"
+              placeholder="Search by name, ID number, or phone…"
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="pl-9 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500"
