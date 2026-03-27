@@ -71,8 +71,18 @@ export default function ScheduleInterviewPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // ─── Pre-select candidate from query params ──────────────────────────────────
+  const urlParams = new URLSearchParams(window.location.search);
+  const preselectedId = urlParams.get("candidateId");
+  const preselectedName = urlParams.get("candidateName");
+
   // ─── Candidate selection ────────────────────────────────────────────────────
-  const [selected, setSelected] = useState<Map<string, SelectedCandidate>>(new Map());
+  const [selected, setSelected] = useState<Map<string, SelectedCandidate>>(() => {
+    if (preselectedId && preselectedName) {
+      return new Map([[preselectedId, { fullNameEn: preselectedName, nationalId: null }]]);
+    }
+    return new Map();
+  });
   const [selectedJobId, setSelectedJobId] = useState<string>("");
   const [candidateError, setCandidateError] = useState<string | null>(null);
 
