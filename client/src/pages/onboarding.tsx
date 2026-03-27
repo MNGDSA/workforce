@@ -2104,7 +2104,7 @@ export default function OnboardingPage() {
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">Delete {pendingDeleteDoc?.label}?</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              This will permanently remove the uploaded file. The candidate will need to re-upload it.
+              This will permanently remove the uploaded file. The candidate will be notified by SMS and will need to re-upload it.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -192,6 +192,22 @@ export async function registerRoutes(
           await storage.updateOnboardingRecord(rec.id, syncPayload);
         }
       }
+      const docLabelMap: Record<string, string> = { photo: "Personal Photo", nationalId: "National ID / Iqama", iban: "IBAN Certificate" };
+      const docLabel = docLabelMap[docType] ?? "document";
+      if (updated.phone) {
+        const smsPlugin = await storage.getActiveSmsPlugin();
+        if (smsPlugin) {
+          const smsMsg = `Your ${docLabel} has been rejected by HR Team, please reupload the correct one as soon as possible.`;
+          sendSmsViaPlugin(smsPlugin, updated.phone, smsMsg)
+            .then(r => {
+              if (r.success) console.log(`[SMS] Doc rejection notification sent to ${updated.phone}`);
+              else console.error(`[SMS] Doc rejection notification failed: ${r.error}`);
+            })
+            .catch(e => console.error("[SMS] Doc rejection notification error:", e));
+        } else {
+          console.warn("[SMS] No active SMS plugin — skipping doc rejection notification");
+        }
+      }
       return res.json({ docType, candidate: updated });
     } catch (err) {
       return handleError(res, err);
