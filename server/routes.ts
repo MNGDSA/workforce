@@ -431,6 +431,46 @@ export async function registerRoutes(
     }
   });
 
+  // ─── Reset password (forgot password — OTP verified) ─────────────────────
+  app.post("/api/auth/reset-password", async (req: Request, res: Response) => {
+    try {
+      const { phone, otpId, newPassword } = req.body as {
+        phone?: string; otpId?: string; newPassword?: string;
+      };
+      if (!phone || !otpId || !newPassword) {
+        return res.status(400).json({ message: "Phone, OTP verification, and new password are required" });
+      }
+      if (newPassword.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      }
+
+      const normalizedPhone = phone.trim().replace(/\s+/g, "");
+      const otp = await storage.getLatestOtpVerification(normalizedPhone);
+      if (!otp || otp.id !== otpId) {
+        return res.status(400).json({ message: "Invalid OTP session. Please verify your phone again." });
+      }
+      if (!otp.verifiedAt) {
+        return res.status(400).json({ message: "Phone number has not been verified." });
+      }
+      if (new Date() > new Date(otp.expiresAt.getTime() + 30 * 60 * 1000)) {
+        return res.status(400).json({ message: "OTP session expired. Please verify your phone again." });
+      }
+
+      const user = await storage.getUserByPhone(normalizedPhone);
+      if (!user) {
+        return res.status(404).json({ message: "No account found with this phone number." });
+      }
+
+      const hashed = await bcrypt.hash(newPassword, 12);
+      await storage.updateUser(user.id, { password: hashed });
+      await storage.markOtpUsedForRegistration(otpId);
+
+      return res.json({ message: "Password has been reset successfully. You can now log in." });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   // ─── Dashboard ───────────────────────────────────────────────────────────
   app.get("/api/dashboard/stats", async (_req: Request, res: Response) => {
     try {

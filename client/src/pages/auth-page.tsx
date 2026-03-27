@@ -49,6 +49,18 @@ export default function AuthPage() {
   const otpInputRef = useRef<HTMLInputElement>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Forgot password flow state
+  type ResetStep = "phone" | "otp" | "newpass" | "done";
+  const [resetStep, setResetStep] = useState<ResetStep | null>(null);
+  const [resetPhone, setResetPhone] = useState("");
+  const [resetOtpCode, setResetOtpCode] = useState("");
+  const [resetOtpId, setResetOtpId] = useState("");
+  const [resetNewPassword, setResetNewPassword] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [resetCountdown, setResetCountdown] = useState(0);
+  const resetOtpRef = useRef<HTMLInputElement>(null);
+  const resetCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
     defaultValues: { identifier: "", password: "" },
@@ -157,6 +169,87 @@ export default function AuthPage() {
     }
   }
 
+  function startResetCountdown(expiresAt: Date) {
+    if (resetCountdownRef.current) clearInterval(resetCountdownRef.current);
+    const tick = () => {
+      const secs = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
+      setResetCountdown(secs);
+      if (secs === 0 && resetCountdownRef.current) clearInterval(resetCountdownRef.current);
+    };
+    tick();
+    resetCountdownRef.current = setInterval(tick, 1000);
+  }
+
+  async function sendResetOtp(phone: string) {
+    setResetError("");
+    setIsLoading(true);
+    try {
+      const res = await apiRequest("POST", "/api/auth/otp/request", { phone: phone.trim() });
+      const data = await res.json();
+      const expiresAt = new Date(data.expiresAt);
+      setResetPhone(phone.trim());
+      setResetOtpCode("");
+      setResetStep("otp");
+      startResetCountdown(expiresAt);
+      setTimeout(() => resetOtpRef.current?.focus(), 100);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to send OTP";
+      setResetError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function verifyResetOtp() {
+    setResetError("");
+    setIsLoading(true);
+    try {
+      const res = await apiRequest("POST", "/api/auth/otp/verify", { phone: resetPhone, code: resetOtpCode.trim() });
+      const data = await res.json();
+      setResetOtpId(data.otpId);
+      if (resetCountdownRef.current) clearInterval(resetCountdownRef.current);
+      setResetStep("newpass");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Verification failed";
+      setResetError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function submitNewPassword() {
+    setResetError("");
+    if (resetNewPassword.length < 6) {
+      setResetError("Password must be at least 6 characters");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await apiRequest("POST", "/api/auth/reset-password", {
+        phone: resetPhone,
+        otpId: resetOtpId,
+        newPassword: resetNewPassword,
+      });
+      setResetStep("done");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Reset failed";
+      setResetError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function closeResetFlow() {
+    setResetStep(null);
+    setResetPhone("");
+    setResetOtpCode("");
+    setResetOtpId("");
+    setResetNewPassword("");
+    setResetError("");
+    setResetCountdown(0);
+    if (resetCountdownRef.current) clearInterval(resetCountdownRef.current);
+  }
+
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-background font-sans text-foreground overflow-hidden">
       {/* ── Left Column: Form ─────────────────────────────────── */}
@@ -171,8 +264,149 @@ export default function AuthPage() {
                 WORKFORCE
               </span>
             </div>
-            <h1 className="font-display text-4xl font-bold tracking-tight text-white">Welcome back</h1>
+            <h1 className="font-display text-4xl font-bold tracking-tight text-white">
+              {resetStep ? "Reset Password" : "Welcome back"}
+            </h1>
           </div>
+
+          {resetStep ? (
+            <div className="space-y-5">
+              {resetStep === "phone" && (
+                <div className="space-y-4">
+                  <p className="text-muted-foreground text-sm">Enter your phone number to receive a verification code.</p>
+                  <div className="relative group">
+                    <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <Input
+                      placeholder="e.g. 0501234567"
+                      value={resetPhone}
+                      onChange={(e) => setResetPhone(e.target.value)}
+                      className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm font-mono tracking-wide"
+                      inputMode="numeric"
+                      data-testid="input-reset-phone"
+                    />
+                  </div>
+                  {resetError && (
+                    <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive" data-testid="reset-error">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      {resetError}
+                    </div>
+                  )}
+                  <Button
+                    onClick={() => sendResetOtp(resetPhone)}
+                    disabled={isLoading || resetPhone.trim().length < 9}
+                    className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm"
+                    data-testid="button-send-reset-otp"
+                  >
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <>Send Verification Code <ArrowRight className="ml-2 h-4 w-4" /></>}
+                  </Button>
+                  <button type="button" onClick={closeResetFlow} className="w-full text-center text-xs text-muted-foreground hover:text-primary transition-colors" data-testid="link-back-to-login">
+                    Back to login
+                  </button>
+                </div>
+              )}
+
+              {resetStep === "otp" && (
+                <div className="space-y-4">
+                  <p className="text-muted-foreground text-sm">
+                    Enter the code sent to <span className="text-white font-mono">{resetPhone}</span>
+                  </p>
+                  <div className="relative group">
+                    <ShieldCheck className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <Input
+                      ref={resetOtpRef}
+                      placeholder="Enter 6-digit code"
+                      value={resetOtpCode}
+                      onChange={(e) => setResetOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm font-mono tracking-[0.5em] text-center text-lg"
+                      inputMode="numeric"
+                      maxLength={6}
+                      data-testid="input-reset-otp"
+                    />
+                  </div>
+                  {resetCountdown > 0 && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      Code expires in <span className="text-white font-mono">{Math.floor(resetCountdown / 60)}:{String(resetCountdown % 60).padStart(2, "0")}</span>
+                    </p>
+                  )}
+                  {resetCountdown === 0 && (
+                    <button type="button" onClick={() => sendResetOtp(resetPhone)} className="w-full text-center text-xs text-primary hover:text-primary/80 flex items-center justify-center gap-1">
+                      <RefreshCw className="h-3 w-3" /> Resend code
+                    </button>
+                  )}
+                  {resetError && (
+                    <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive" data-testid="reset-error">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      {resetError}
+                    </div>
+                  )}
+                  <Button
+                    onClick={verifyResetOtp}
+                    disabled={isLoading || resetOtpCode.length !== 6}
+                    className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm"
+                    data-testid="button-verify-reset-otp"
+                  >
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <>Verify Code <ArrowRight className="ml-2 h-4 w-4" /></>}
+                  </Button>
+                  <button type="button" onClick={closeResetFlow} className="w-full text-center text-xs text-muted-foreground hover:text-primary transition-colors">
+                    Back to login
+                  </button>
+                </div>
+              )}
+
+              {resetStep === "newpass" && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-sm text-sm text-emerald-400">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    Phone verified. Set your new password.
+                  </div>
+                  <div className="relative group">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <Input
+                      type="password"
+                      placeholder="New password (min 6 characters)"
+                      value={resetNewPassword}
+                      onChange={(e) => setResetNewPassword(e.target.value)}
+                      className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm"
+                      data-testid="input-reset-new-password"
+                    />
+                  </div>
+                  {resetError && (
+                    <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive" data-testid="reset-error">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      {resetError}
+                    </div>
+                  )}
+                  <Button
+                    onClick={submitNewPassword}
+                    disabled={isLoading || resetNewPassword.length < 6}
+                    className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm"
+                    data-testid="button-submit-new-password"
+                  >
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <>Reset Password <ArrowRight className="ml-2 h-4 w-4" /></>}
+                  </Button>
+                </div>
+              )}
+
+              {resetStep === "done" && (
+                <div className="space-y-5">
+                  <div className="flex items-center gap-2 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-sm text-emerald-400">
+                    <CheckCircle2 className="h-5 w-5 shrink-0" />
+                    <div>
+                      <p className="font-semibold text-sm">Password reset successfully</p>
+                      <p className="text-xs text-emerald-400/80 mt-0.5">You can now log in with your new password.</p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={closeResetFlow}
+                    className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm"
+                    data-testid="button-back-to-login"
+                  >
+                    Back to Login <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
 
           <Tabs defaultValue="login" className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-8 bg-muted/50 p-1 rounded-sm">
@@ -221,7 +455,7 @@ export default function AuthPage() {
                       <FormItem>
                         <div className="flex items-center justify-between">
                           <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">Password</Label>
-                          <a href="#" className="text-xs text-muted-foreground hover:text-primary transition-colors">Forgot password?</a>
+                          <button type="button" onClick={() => setResetStep("phone")} className="text-xs text-muted-foreground hover:text-primary transition-colors" data-testid="link-forgot-password">Forgot password?</button>
                         </div>
                         <FormControl>
                           <div className="relative group">
@@ -471,6 +705,7 @@ export default function AuthPage() {
               </div>
             </TabsContent>
           </Tabs>
+          )}
 
           <div className="flex items-center justify-between pt-8 border-t border-border/50 text-xs text-muted-foreground">
             <span>© {new Date().getFullYear()} Luxury Carts Company Ltd.</span>
