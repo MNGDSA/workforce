@@ -94,6 +94,7 @@ POST   /api/candidates
 PATCH  /api/candidates/:id
 DELETE /api/candidates/:id
 POST   /api/candidates/bulk          ← Up to 70,000 per request
+POST   /api/candidates/:id/documents  ← File upload (photo, nationalId, iban, resume)
 
 GET    /api/seasons
 POST   /api/seasons

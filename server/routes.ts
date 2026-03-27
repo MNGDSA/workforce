@@ -74,8 +74,8 @@ export async function registerRoutes(
       const fileUrl = `/uploads/${req.file.filename}`;
       const updatePayload: Record<string, any> = {};
       if (docType === "photo") { updatePayload.photoUrl = fileUrl; updatePayload.hasPhoto = true; }
-      if (docType === "nationalId") { updatePayload.hasNationalId = true; }
-      if (docType === "iban") { updatePayload.hasIban = true; updatePayload.ibanNumber = fileUrl; }
+      if (docType === "nationalId") { updatePayload.hasNationalId = true; updatePayload.nationalIdFileUrl = fileUrl; }
+      if (docType === "iban") { updatePayload.hasIban = true; updatePayload.ibanFileUrl = fileUrl; }
       if (docType === "resume") { updatePayload.resumeUrl = fileUrl; updatePayload.hasResume = true; }
       const updated = await storage.updateCandidate(id, updatePayload);
       if (!updated) return res.status(404).json({ message: "Candidate not found" });

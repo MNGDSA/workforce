@@ -29,6 +29,8 @@ import {
   Eye,
   EyeOff,
   Lock,
+  RefreshCw,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -257,9 +259,23 @@ function ProfileCompletionCard({ toast, candidateId }: { toast: ReturnType<typeo
     iban:       useRef<HTMLInputElement>(null),
   };
 
+  const docUrlMap: Record<DocKey, string | null> = {
+    resume: profile?.resumeUrl || null,
+    photo: profile?.photoUrl || null,
+    nationalId: profile?.nationalIdFileUrl || null,
+    iban: profile?.ibanFileUrl || null,
+  };
+
   const isDone = (key: DocKey) => dbFlags[key] || !!justUploaded[key];
   const doneCount = DOC_ITEMS.filter(({ key }) => isDone(key)).length;
   const pct = Math.round((doneCount / DOC_ITEMS.length) * 100);
+
+  const handleDownload = useCallback((key: DocKey) => {
+    const url = docUrlMap[key];
+    if (url) {
+      window.open(url, "_blank");
+    }
+  }, [profile]);
 
   const handleClick = useCallback((key: DocKey) => {
     inputRefs[key].current?.click();
@@ -323,6 +339,7 @@ function ProfileCompletionCard({ toast, candidateId }: { toast: ReturnType<typeo
             const busy = uploading[key];
             const done = isDone(key);
             const uploadedName = justUploaded[key];
+            const hasFileUrl = !!docUrlMap[key];
 
             return (
               <div key={key}>
@@ -336,12 +353,15 @@ function ProfileCompletionCard({ toast, candidateId }: { toast: ReturnType<typeo
                 />
 
                 <div
-                  className={`flex items-center gap-3 p-2.5 rounded-md transition-all cursor-pointer select-none
-                    ${done   ? "bg-emerald-500/10 border border-emerald-500/25 cursor-default" : ""}
+                  className={`flex items-center gap-3 p-2.5 rounded-md transition-all select-none
+                    ${done   ? `bg-emerald-500/10 border border-emerald-500/25 ${hasFileUrl ? "cursor-pointer hover:bg-emerald-500/15" : "cursor-default"}` : ""}
                     ${!done && busy ? "bg-muted/20 border border-border opacity-70 cursor-wait" : ""}
-                    ${!done && !busy ? "bg-muted/20 border border-border hover:border-primary/40 hover:bg-primary/5 group" : ""}
+                    ${!done && !busy ? "bg-muted/20 border border-border hover:border-primary/40 hover:bg-primary/5 group cursor-pointer" : ""}
                   `}
-                  onClick={() => !done && !busy && handleClick(key)}
+                  onClick={() => {
+                    if (done && hasFileUrl) { handleDownload(key); }
+                    else if (!done && !busy) { handleClick(key); }
+                  }}
                   data-testid={`row-doc-${key}`}
                 >
                   <div className={`shrink-0 rounded-full p-1.5 
@@ -356,7 +376,10 @@ function ProfileCompletionCard({ toast, candidateId }: { toast: ReturnType<typeo
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm font-medium leading-tight ${done ? "text-emerald-400" : "text-white"}`}>{label}</p>
                     {done
-                      ? <p className="text-[11px] text-emerald-600 truncate">{uploadedName || "Uploaded"}</p>
+                      ? <p className="text-[11px] text-emerald-600 truncate flex items-center gap-1">
+                          {hasFileUrl && <Download className="h-2.5 w-2.5 inline-block" />}
+                          {uploadedName || (hasFileUrl ? "Click to view" : "Uploaded")}
+                        </p>
                       : <p className="text-[11px] text-muted-foreground/70">{hint}</p>}
                   </div>
 
@@ -365,11 +388,11 @@ function ProfileCompletionCard({ toast, candidateId }: { toast: ReturnType<typeo
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleClick(key); }}
-                      className="shrink-0 text-muted-foreground hover:text-primary transition-colors rounded-sm p-0.5"
+                      className="shrink-0 text-muted-foreground hover:text-primary transition-colors rounded-full p-1"
                       title="Re-upload"
                       data-testid={`button-reupload-${key}`}
                     >
-                      <UploadCloud className="h-3.5 w-3.5" />
+                      <RefreshCw className="h-3.5 w-3.5" />
                     </button>
                   )}
                   {!done && !busy && (

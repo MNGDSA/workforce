@@ -200,6 +200,8 @@ export const candidates = pgTable(
     // Meta
     resumeUrl: text("resume_url"),
     photoUrl: text("photo_url"),
+    nationalIdFileUrl: text("national_id_file_url"),
+    ibanFileUrl: text("iban_file_url"),
     notes: text("notes"),
     tags: text("tags").array(),
     metadata: jsonb("metadata"),
