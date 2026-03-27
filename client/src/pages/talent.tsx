@@ -76,10 +76,11 @@ const statusStyles: Record<string, string> = {
 function getDisplayStatus(candidate: Candidate): string {
   if (candidate.status === "blocked" || candidate.status === "hired") return candidate.status;
   const lastLogin = (candidate as any).lastLoginAt;
-  if (!lastLogin) return "dormant";
+  const createdAt = (candidate as any).createdAt;
   const oneYearAgo = new Date();
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-  if (new Date(lastLogin) < oneYearAgo) return "dormant";
+  if (lastLogin && new Date(lastLogin) < oneYearAgo) return "dormant";
+  if (!lastLogin && createdAt && new Date(createdAt) < oneYearAgo) return "dormant";
   return candidate.status;
 }
 
