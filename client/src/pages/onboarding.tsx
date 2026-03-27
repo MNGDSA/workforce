@@ -804,6 +804,22 @@ function ContractTemplatesTab() {
             </div>
 
             <div className="border-t border-zinc-800 pt-4 space-y-4">
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-3">
+                <p className="text-xs text-zinc-500 mb-2">Available variables (click to insert at cursor):</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {AVAILABLE_VARIABLES.map(v => (
+                    <button
+                      key={v.key}
+                      type="button"
+                      className="text-xs px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-emerald-400 rounded font-mono transition-colors"
+                      onClick={() => insertVariableAtCursor(v.key)}
+                    >
+                      {v.key}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="space-y-1.5">
                 <Label className="text-xs text-zinc-400 uppercase tracking-wider">Preamble & Recitals</Label>
                 <Textarea
@@ -825,22 +841,6 @@ function ContractTemplatesTab() {
                   <Plus className="h-3.5 w-3.5" />
                   Add Article
                 </Button>
-              </div>
-
-              <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-3 mb-3">
-                <p className="text-xs text-zinc-500 mb-2">Available variables (click to insert at cursor):</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {AVAILABLE_VARIABLES.map(v => (
-                    <button
-                      key={v.key}
-                      type="button"
-                      className="text-xs px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-emerald-400 rounded font-mono transition-colors"
-                      onClick={() => insertVariableAtCursor(v.key)}
-                    >
-                      {v.key}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               <div className="space-y-3">
