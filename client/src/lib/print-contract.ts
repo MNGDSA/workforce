@@ -22,7 +22,7 @@ export function printContract(title: string) {
     .print-page { width: ${A4_WIDTH_MM}mm; min-height: ${A4_HEIGHT_MM}mm; padding: ${MARGIN_TOP_MM}mm ${MARGIN_SIDE_MM}mm ${MARGIN_BOTTOM_MM}mm ${MARGIN_SIDE_MM}mm; position: relative; page-break-after: always; overflow: hidden; }
     .print-page:last-child { page-break-after: auto; }
     .print-page-number { position: absolute; bottom: 10mm; right: ${MARGIN_SIDE_MM}mm; font-size: 9px; color: #888; }
-    .print-doc-footer { position: absolute; bottom: 10mm; left: ${MARGIN_SIDE_MM}mm; right: 60mm; font-size: 8px; color: #999; border-top: 0.5px solid #ddd; padding-top: 2mm; }
+    .print-doc-footer { position: absolute; bottom: 10mm; left: ${MARGIN_SIDE_MM}mm; right: ${MARGIN_SIDE_MM}mm; font-size: 8px; color: #999; text-align: center; }
     .page-content > * + * { margin-top: 1.5rem; }
     .flex { display: flex; }
     .justify-start { justify-content: flex-start; }
