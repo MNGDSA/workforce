@@ -1,5 +1,45 @@
 # Event Workforce Hiring Management System
 
+## Client & Business Context
+
+**Client**: Luxury Carts Company Ltd — operates golf cart transportation inside Masjid Al-Haram (Makkah).
+
+**Problem**: During Ramadan and Hajj seasons, the company needs to rapidly recruit 5,000–8,000+ temporary workers. Traditional paperwork is chaotic and unscalable at this volume.
+
+**Solution**: This app digitizes the entire seasonal hiring lifecycle — from candidate intake through onboarding to workforce management — with a dual-interface system (admin back-office + candidate self-service portal).
+
+### Two Recruitment Tracks (Same Pipeline)
+
+1. **Regular candidates** — recruited publicly. They find a job post URL (shared via WhatsApp groups), sign up with OTP-verified phone, fill their profile, apply to jobs, get invited to interview/training groups, get shortlisted (thumbs up/down), go through onboarding document checks, and convert to employees.
+
+2. **SMP (Sub-Manpower Provider)** — the company contracts with external manpower firms. Cannot contact SMP workers directly — deal with their firm only. Tell the firm "we need 200 people," they provide a list. Admin bulk-uploads that list into the Talent pool. SMP workers then visit the portal to activate their profiles and upload required documents (photo + national ID only — no IBAN or contract since we deal with their company, not them individually). SMP workers can be converted to employees directly from the Talent pool, skipping interviews entirely.
+
+### End-to-End Workflow
+```
+1. EVENT SETUP     → Create event bucket (e.g., "Ramadan 2026")
+2. JOB POSTS       → Create public job URLs attached to event
+3. SMP CONTRACTS   → Create contract with firm, link to event, bulk-upload workers
+4. CANDIDATE INTAKE → Self-registration via job post OR bulk upload into Talent
+5. INTERVIEW       → Create groups, select applicants, send SMS invites, shortlist (👍/👎)
+6. ONBOARDING      → Admit shortlisted candidates, track document uploads, auto-status
+7. CONVERSION      → All docs complete → convert to employee (individual or bulk)
+8. WORKFORCE       → Active employee management, termination tracking, SMP transfers
+```
+
+### SMP-Specific Rules
+- SMP contract = business agreement with manpower firm (contract name, number, dates, notes)
+- SMP workers are bulk-uploaded into Talent pool, marked with SMP source + contract reference
+- SMP workers only need: personal photo + national ID copy (no IBAN, no individual contract)
+- SMP workers skip interview/training — pre-agreed terms with their firm
+- SMP workers can be converted to employees directly from Talent (bypass onboarding pipeline)
+- SMP transfers: remove from Contract A, attach to Contract B — no data loss
+
+### Regular Candidate Document Requirements (Onboarding)
+- Personal photo
+- National ID / Iqama copy
+- IBAN certificate
+- Signed job contract (admin uploads, candidate signs)
+
 ## Overview
 A full-stack event-based job hiring management platform built for Saudi Arabia operations. Designed to handle 70,000+ candidates at MAANG-scale with dual interfaces: an admin back-office and a candidate portal.
 
@@ -133,11 +173,12 @@ GET    /api/notifications/unread-count/:recipientId
 ```
 
 ## Demo Credentials
-- **Admin**: `admin@workforce.sa` / `password123`
-- **Candidate**: `candidate@workforce.sa` / `password123`
+- **Super Admin**: ID `1000000001` / phone `0500000001` / password `password123`
+- **Candidate (Faisal)**: ID `2000000002` / phone `0500000002` / password `password123`
+- **Recruiter**: ID `1000000003` / phone `0500000003` / password `password123`
 
 ## Navigation Order
-Dashboard → Job Posting → Seasons → Interview & Training → Onboarding → Workforce → Talent → Rules & Automation → Notification Center → System & Settings
+Dashboard → Job Posting → Events & SMP → Interview & Training → Onboarding → Workforce → Talent → Rules & Automation → Notification Center → System & Settings
 
 ## Workflow Design (Business Logic — Agreed with Client)
 
@@ -237,8 +278,19 @@ RETURN TO POOL
 10. **Same onboarding for all** — 5/5 checklist (no Medical Fitness), no source-dependent logic.
 11. **Profile activation required for all** — OTP verification regardless of entry method.
 
-### Schema Changes Needed (Not Yet Implemented)
+### Implementation Status
 
+#### Completed
+- [x] Onboarding document prerequisites: photo, IBAN, national ID are read-only flags driven by actual uploads (admin cannot manually toggle)
+- [x] Only `hasSignedContract` is admin-toggleable (handled in-person)
+- [x] Document delete from onboarding checklist with confirmation dialog
+- [x] Server hardening: PATCH onboarding strips hasPhoto/hasIban/hasNationalId from request body; status is always server-computed
+- [x] Dormant candidate logic: based on `lastLoginAt` > 1 year (or createdAt if never logged in)
+- [x] Login stamps `lastLoginAt` on candidate record
+- [x] Onboarding rejection flow with `rejectedAt`, `rejectedBy`, `rejectionReason`
+- [x] Candidates query on onboarding page uses `staleTime: 0` for always-fresh data
+
+#### Schema Changes Needed (Not Yet Implemented)
 - [ ] Add `source` field to `candidates` table (`self` | `bulk_upload`, default `self`) — reporting only
 - [ ] Add `lastInterviewedAt` to `candidates` table
 - [ ] Rename application status `rejected` → `not_shortlisted`
@@ -246,6 +298,8 @@ RETURN TO POOL
 - [ ] Add per-link status on SMP contract: `active` | `removed`
 - [ ] Add `terminatedAt`, `terminationReason` to `workforce` table
 - [ ] Bulk upload in Talent section with deduplication by national ID/phone
+- [ ] SMP-specific onboarding: only require photo + national ID (no IBAN, no contract)
+- [ ] SMP direct conversion from Talent pool (bypass interview + onboarding pipeline)
 
 ---
 
