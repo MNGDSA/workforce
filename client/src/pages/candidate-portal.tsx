@@ -563,7 +563,6 @@ export default function CandidatePortal() {
     const fd = new FormData(e.currentTarget);
     const raw: Record<string, unknown> = {};
     fd.forEach((v, k) => { if (String(v).trim()) raw[k] = String(v).trim(); });
-    // Combine first + last name
     const fn = String(raw.firstName ?? "").trim();
     const ln = String(raw.lastName  ?? "").trim();
     if (fn || ln) raw.fullNameEn = `${fn} ${ln}`.trim();
@@ -572,6 +571,10 @@ export default function CandidatePortal() {
     raw.languages      = normalizeTags(profileLangs);
     raw.educationLevel = profileEduLevel || undefined;
     raw.major          = profileEduLevel === "University and higher" ? (profileMajor || undefined) : null;
+    if (raw.ibanNumber && !/^SA\d{22}$/.test(String(raw.ibanNumber))) {
+      toast({ title: "Invalid IBAN", description: "IBAN must be SA followed by 22 digits (24 characters total)", variant: "destructive" });
+      return;
+    }
     saveProfile.mutate(raw);
   }
 
@@ -1062,6 +1065,27 @@ export default function CandidatePortal() {
                 </div>
               </div>
             </div>
+
+            {String(candidateProfile?.source ?? storedCandidate.source ?? "individual") !== "smp" && (
+              <>
+                <Separator className="bg-border" />
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Bank Details</p>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-white">IBAN Number</label>
+                    <Input
+                      name="ibanNumber"
+                      defaultValue={String(candidateProfile?.ibanNumber ?? "")}
+                      placeholder="SA0000000000000000000000"
+                      maxLength={24}
+                      className="bg-background border-border font-mono"
+                      data-testid="input-iban"
+                    />
+                    <p className="text-xs text-muted-foreground">Saudi IBAN: SA followed by 22 digits (24 characters total)</p>
+                  </div>
+                </div>
+              </>
+            )}
 
             <Separator className="bg-border" />
 

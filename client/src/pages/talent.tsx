@@ -82,6 +82,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -204,6 +205,417 @@ function parseFileToRows(file: File): Promise<Record<string, string>[]> {
       reader.readAsText(file);
     }
   });
+}
+
+const KSA_CITIES = [
+  "Makkah", "Madinah", "Jeddah", "Riyadh", "Taif", "Dammam", "Khobar",
+  "Dhahran", "Tabuk", "Abha", "Khamis Mushait", "Hail", "Buraidah",
+  "Hofuf", "Yanbu", "Najran", "Jazan", "Other",
+];
+const REGIONS = [
+  "Makkah Region", "Madinah Region", "Riyadh Region", "Eastern Region",
+  "Asir Region", "Tabuk Region", "Hail Region", "Northern Borders Region",
+  "Jazan Region", "Najran Region", "Al Baha Region", "Al Jawf Region", "Qassim Region",
+];
+const GENDER_OPTIONS = ["male", "female"];
+const MARITAL_OPTIONS = ["single", "married", "divorced", "widowed"];
+const NATIONALITY_OPTIONS = [
+  "Saudi Arabian", "Egyptian", "Yemeni", "Sudanese", "Jordanian", "Syrian",
+  "Pakistani", "Indian", "Bangladeshi", "Filipino", "Indonesian", "Nigerian",
+  "Ethiopian", "Burmese", "Nepali", "Sri Lankan", "Afghan", "Other",
+];
+const EDU_OPTIONS = ["High School and below", "University and higher"];
+
+function idLabel(val: string | null | undefined): string {
+  if (!val) return "National / Iqama ID";
+  if (val.startsWith("1")) return "National ID";
+  if (val.startsWith("2")) return "Iqama ID";
+  return "National / Iqama ID";
+}
+
+function CandidateProfileSheet({
+  candidate,
+  onClose,
+  onSaved,
+  onSchedule,
+}: {
+  candidate: Candidate | null;
+  onClose: () => void;
+  onSaved: (c: Candidate) => void;
+  onSchedule: (c: Candidate) => void;
+}) {
+  const { toast } = useToast();
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<Record<string, string>>({});
+
+  const saveMutation = useMutation({
+    mutationFn: async (data: Record<string, unknown>) =>
+      apiRequest("PATCH", `/api/candidates/${candidate!.id}`, data).then(r => r.json()),
+    onSuccess: (updated) => {
+      onSaved(updated);
+      setEditing(false);
+      toast({ title: "Profile updated" });
+    },
+    onError: () => toast({ title: "Save failed", variant: "destructive" }),
+  });
+
+  function startEditing() {
+    if (!candidate) return;
+    const c = candidate;
+    setForm({
+      city: c.city ?? "",
+      region: c.region ?? "",
+      gender: c.gender ?? "",
+      dateOfBirth: c.dateOfBirth ?? "",
+      nationalityText: (c as any).nationalityText ?? (c.nationality === "saudi" ? "Saudi Arabian" : ""),
+      maritalStatus: c.maritalStatus ?? "",
+      nationalId: c.nationalId ?? "",
+      educationLevel: c.educationLevel ?? "",
+      major: c.major ?? "",
+      ibanNumber: c.ibanNumber ?? "",
+      emergencyContactName: c.emergencyContactName ?? "",
+      emergencyContactPhone: c.emergencyContactPhone ?? "",
+    });
+    setEditing(true);
+  }
+
+  function handleSave() {
+    if (form.ibanNumber && !/^SA\d{22}$/.test(form.ibanNumber)) {
+      toast({ title: "Invalid IBAN", description: "IBAN must be SA followed by 22 digits (24 characters total)", variant: "destructive" });
+      return;
+    }
+    const isNonSaudi = form.nationalityText !== "Saudi Arabian";
+    saveMutation.mutate({
+      city: form.city || null,
+      region: form.region || null,
+      gender: form.gender || null,
+      dateOfBirth: form.dateOfBirth || null,
+      nationalityText: form.nationalityText || null,
+      nationality: isNonSaudi ? "non_saudi" : "saudi",
+      maritalStatus: form.maritalStatus || null,
+      nationalId: form.nationalId || null,
+      educationLevel: form.educationLevel || null,
+      major: form.educationLevel === "University and higher" ? (form.major || null) : null,
+      ibanNumber: form.ibanNumber || null,
+      emergencyContactName: form.emergencyContactName || null,
+      emergencyContactPhone: form.emergencyContactPhone || null,
+    });
+  }
+
+  function setField(key: string, val: string) {
+    setForm(prev => ({ ...prev, [key]: val }));
+  }
+
+  if (!candidate) return null;
+  const c = candidate;
+  const initials = c.fullNameEn.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+  const displaySt = getDisplayStatus(c);
+
+  const nidValue = editing ? form.nationalId : (c.nationalId ?? "");
+  const nidLabelText = idLabel(nidValue);
+
+  return (
+    <Sheet open={!!candidate} onOpenChange={(o) => { if (!o) { setEditing(false); onClose(); } }}>
+      <SheetContent side="right" className="w-full sm:max-w-lg bg-card border-border overflow-y-auto p-0">
+        <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
+          <div className="flex items-center gap-4">
+            <Avatar className="h-14 w-14 border-2 border-border">
+              <AvatarFallback className="bg-primary/10 text-primary font-display text-lg">{initials}</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <SheetTitle className="font-display text-xl font-bold text-white truncate">{c.fullNameEn}</SheetTitle>
+              <SheetDescription className="text-muted-foreground text-sm flex items-center gap-2 mt-0.5">
+                <span>{c.candidateCode}</span>
+                <Badge className={`text-[10px] px-1.5 py-0 ${statusStyles[displaySt] || statusStyles.active}`}>{displaySt}</Badge>
+                {c.source === "smp" && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/50 text-amber-400">SMP</Badge>}
+              </SheetDescription>
+            </div>
+          </div>
+        </SheetHeader>
+
+        <div className="px-6 py-5 space-y-6">
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Contact</h4>
+            <div className="space-y-2.5">
+              {c.phone && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-white" data-testid="profile-phone">{c.phone}</span>
+                </div>
+              )}
+              {c.email && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-white" data-testid="profile-email">{c.email}</span>
+                </div>
+              )}
+              {c.whatsapp && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Phone className="h-4 w-4 text-green-500 shrink-0" />
+                  <span className="text-white">WhatsApp: {c.whatsapp}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Location</h4>
+            {editing ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">City</p>
+                  <select value={form.city} onChange={e => setField("city", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none" data-testid="edit-city">
+                    <option value="" className="bg-card text-muted-foreground">Select...</option>
+                    {KSA_CITIES.map(c => <option key={c} value={c} className="bg-card text-white">{c}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">Region</p>
+                  <select value={form.region} onChange={e => setField("region", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none" data-testid="edit-region">
+                    <option value="" className="bg-card text-muted-foreground">Select...</option>
+                    {REGIONS.map(r => <option key={r} value={r} className="bg-card text-white">{r}</option>)}
+                  </select>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 text-sm">
+                <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-white">{[c.city, c.region].filter(Boolean).join(", ") || "—"}</span>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Personal</h4>
+            {editing ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">Gender</p>
+                  <select value={form.gender} onChange={e => setField("gender", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none capitalize" data-testid="edit-gender">
+                    <option value="" className="bg-card text-muted-foreground">Select...</option>
+                    {GENDER_OPTIONS.map(g => <option key={g} value={g} className="bg-card text-white capitalize">{g}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">Date of Birth</p>
+                  <Input type="date" value={form.dateOfBirth} onChange={e => setField("dateOfBirth", e.target.value)} className="h-9 bg-muted/30 border-border text-sm" data-testid="edit-dob" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">Nationality</p>
+                  <select value={form.nationalityText} onChange={e => setField("nationalityText", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none" data-testid="edit-nationality">
+                    <option value="" className="bg-card text-muted-foreground">Select...</option>
+                    {NATIONALITY_OPTIONS.map(n => <option key={n} value={n} className="bg-card text-white">{n}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">Marital Status</p>
+                  <select value={form.maritalStatus} onChange={e => setField("maritalStatus", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none capitalize" data-testid="edit-marital">
+                    <option value="" className="bg-card text-muted-foreground">Select...</option>
+                    {MARITAL_OPTIONS.map(m => <option key={m} value={m} className="bg-card text-white capitalize">{m}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <p className="text-[11px] text-muted-foreground">{nidLabelText}</p>
+                  <Input value={form.nationalId} onChange={e => setField("nationalId", e.target.value)} placeholder="10-digit ID number" maxLength={10} className="h-9 bg-muted/30 border-border text-sm font-mono" data-testid="edit-national-id" />
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {c.gender && (
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Gender</p>
+                    <p className="text-sm text-white capitalize">{c.gender}</p>
+                  </div>
+                )}
+                {c.dateOfBirth && (
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Date of Birth</p>
+                    <p className="text-sm text-white">{c.dateOfBirth}</p>
+                  </div>
+                )}
+                {((c as any).nationalityText || c.nationality) && (
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Nationality</p>
+                    <p className="text-sm text-white capitalize">{(c as any).nationalityText || c.nationality?.replace("_", " ")}</p>
+                  </div>
+                )}
+                {c.maritalStatus && (
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Marital Status</p>
+                    <p className="text-sm text-white capitalize">{c.maritalStatus}</p>
+                  </div>
+                )}
+                {c.nationalId && (
+                  <div className="col-span-2">
+                    <p className="text-[11px] text-muted-foreground">{nidLabelText}</p>
+                    <p className="text-sm text-white font-mono">{c.nationalId}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Education</h4>
+            {editing ? (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">Education Level</p>
+                  <select value={form.educationLevel} onChange={e => setField("educationLevel", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none" data-testid="edit-education">
+                    <option value="" className="bg-card text-muted-foreground">Select...</option>
+                    {EDU_OPTIONS.map(e => <option key={e} value={e} className="bg-card text-white">{e}</option>)}
+                  </select>
+                </div>
+                {form.educationLevel === "University and higher" && (
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-muted-foreground">Major / Field of Study</p>
+                    <Input value={form.major} onChange={e => setField("major", e.target.value)} placeholder="e.g. Business Administration" className="h-9 bg-muted/30 border-border text-sm" data-testid="edit-major" />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {c.educationLevel && (
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Level</p>
+                    <p className="text-sm text-white">{c.educationLevel}</p>
+                  </div>
+                )}
+                {c.major && (
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Major</p>
+                    <p className="text-sm text-white">{c.major}</p>
+                  </div>
+                )}
+                {!c.educationLevel && !c.major && <p className="text-sm text-muted-foreground col-span-2">—</p>}
+              </div>
+            )}
+            {c.skills && c.skills.length > 0 && (
+              <div className="mt-3">
+                <p className="text-[11px] text-muted-foreground mb-1.5">Skills</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {c.skills.map((s, i) => (
+                    <Badge key={i} variant="outline" className="text-[11px] px-2 py-0.5 border-border text-white/80">{s}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {c.languages && c.languages.length > 0 && (
+              <div className="mt-3">
+                <p className="text-[11px] text-muted-foreground mb-1.5">Languages</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {c.languages.map((l, i) => (
+                    <Badge key={i} variant="outline" className="text-[11px] px-2 py-0.5 border-primary/30 text-primary">{l}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">IBAN</h4>
+            {editing ? (
+              <div className="space-y-1">
+                <Input value={form.ibanNumber} onChange={e => setField("ibanNumber", e.target.value.toUpperCase())} placeholder="SA0000000000000000000000" maxLength={24} className="h-9 bg-muted/30 border-border text-sm font-mono" data-testid="edit-iban" />
+                {form.ibanNumber && !form.ibanNumber.match(/^SA\d{22}$/) && (
+                  <p className="text-[11px] text-amber-400">IBAN must be SA followed by 22 digits (24 chars total)</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-white font-mono">{c.ibanNumber || "—"}</p>
+            )}
+          </div>
+
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Emergency Contact</h4>
+            {editing ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">Name</p>
+                  <Input value={form.emergencyContactName} onChange={e => setField("emergencyContactName", e.target.value)} placeholder="Full name" className="h-9 bg-muted/30 border-border text-sm" data-testid="edit-emergency-name" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">Phone</p>
+                  <Input value={form.emergencyContactPhone} onChange={e => setField("emergencyContactPhone", e.target.value)} placeholder="05xxxxxxxx" className="h-9 bg-muted/30 border-border text-sm" data-testid="edit-emergency-phone" />
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[11px] text-muted-foreground">Name</p>
+                  <p className="text-sm text-white">{c.emergencyContactName || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-muted-foreground">Phone</p>
+                  <p className="text-sm text-white">{c.emergencyContactPhone || "—"}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {c.hasChronicDiseases && (
+            <div>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-400" /> Health Notes
+              </h4>
+              <p className="text-sm text-amber-200/80">{c.chronicDiseases || "Chronic condition noted"}</p>
+            </div>
+          )}
+
+          {c.notes && (
+            <div>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Notes</h4>
+              <p className="text-sm text-white/70">{c.notes}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-border flex gap-2">
+          {editing ? (
+            <>
+              <Button
+                size="sm"
+                className="flex-1 bg-primary text-primary-foreground"
+                onClick={handleSave}
+                disabled={saveMutation.isPending}
+                data-testid="profile-save"
+              >
+                {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Save Changes
+              </Button>
+              <Button size="sm" variant="outline" className="border-border" onClick={() => setEditing(false)}>
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-border"
+                onClick={startEditing}
+                data-testid="profile-edit"
+              >
+                Edit
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1 bg-primary text-primary-foreground"
+                onClick={() => onSchedule(c)}
+                data-testid="profile-schedule-interview"
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                Schedule Interview
+              </Button>
+              <Button size="sm" variant="outline" className="border-border" onClick={onClose}>
+                Close
+              </Button>
+            </>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
 }
 
 export default function TalentPage() {
@@ -871,243 +1283,18 @@ export default function TalentPage() {
         </DialogContent>
       </Dialog>
 
-      <Sheet open={!!profileCandidate} onOpenChange={(o) => !o && setProfileCandidate(null)}>
-        <SheetContent side="right" className="w-full sm:max-w-lg bg-card border-border overflow-y-auto p-0">
-          {profileCandidate && (() => {
-            const c = profileCandidate;
-            const initials = c.fullNameEn.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
-            const displaySt = getDisplayStatus(c);
-            return (
-              <>
-                <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
-                  <div className="flex items-center gap-4">
-                    <Avatar className="h-14 w-14 border-2 border-border">
-                      <AvatarFallback className="bg-primary/10 text-primary font-display text-lg">{initials}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <SheetTitle className="font-display text-xl font-bold text-white truncate">{c.fullNameEn}</SheetTitle>
-                      <SheetDescription className="text-muted-foreground text-sm flex items-center gap-2 mt-0.5">
-                        <span>{c.candidateCode}</span>
-                        <Badge className={`text-[10px] px-1.5 py-0 ${statusStyles[displaySt] || statusStyles.active}`}>{displaySt}</Badge>
-                        {c.source === "smp" && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/50 text-amber-400">SMP</Badge>}
-                      </SheetDescription>
-                    </div>
-                  </div>
-                </SheetHeader>
-
-                <div className="px-6 py-5 space-y-6">
-                  <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Contact</h4>
-                    <div className="space-y-2.5">
-                      {c.phone && (
-                        <div className="flex items-center gap-3 text-sm">
-                          <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-                          <span className="text-white" data-testid="profile-phone">{c.phone}</span>
-                        </div>
-                      )}
-                      {c.email && (
-                        <div className="flex items-center gap-3 text-sm">
-                          <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-                          <span className="text-white" data-testid="profile-email">{c.email}</span>
-                        </div>
-                      )}
-                      {c.whatsapp && (
-                        <div className="flex items-center gap-3 text-sm">
-                          <Phone className="h-4 w-4 text-green-500 shrink-0" />
-                          <span className="text-white">WhatsApp: {c.whatsapp}</span>
-                        </div>
-                      )}
-                      {(c.city || c.region) && (
-                        <div className="flex items-center gap-3 text-sm">
-                          <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                          <span className="text-white">{[c.city, c.region].filter(Boolean).join(", ")}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Personal</h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      {c.gender && (
-                        <div>
-                          <p className="text-[11px] text-muted-foreground">Gender</p>
-                          <p className="text-sm text-white capitalize">{c.gender}</p>
-                        </div>
-                      )}
-                      {c.dateOfBirth && (
-                        <div>
-                          <p className="text-[11px] text-muted-foreground">Date of Birth</p>
-                          <p className="text-sm text-white">{c.dateOfBirth}</p>
-                        </div>
-                      )}
-                      {(c.nationality || (c as any).nationalityText) && (
-                        <div>
-                          <p className="text-[11px] text-muted-foreground">Nationality</p>
-                          <p className="text-sm text-white capitalize">{(c as any).nationalityText || c.nationality?.replace("_", " ")}</p>
-                        </div>
-                      )}
-                      {c.maritalStatus && (
-                        <div>
-                          <p className="text-[11px] text-muted-foreground">Marital Status</p>
-                          <p className="text-sm text-white capitalize">{c.maritalStatus}</p>
-                        </div>
-                      )}
-                      {c.nationalId && (
-                        <div>
-                          <p className="text-[11px] text-muted-foreground">National ID</p>
-                          <p className="text-sm text-white font-mono">{c.nationalId}</p>
-                        </div>
-                      )}
-                      {c.iqamaNumber && (
-                        <div>
-                          <p className="text-[11px] text-muted-foreground">Iqama</p>
-                          <p className="text-sm text-white font-mono">{c.iqamaNumber}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Professional</h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      {c.educationLevel && (
-                        <div>
-                          <p className="text-[11px] text-muted-foreground">Education</p>
-                          <p className="text-sm text-white">{c.educationLevel}</p>
-                        </div>
-                      )}
-                      {c.major && (
-                        <div>
-                          <p className="text-[11px] text-muted-foreground">Major</p>
-                          <p className="text-sm text-white">{c.major}</p>
-                        </div>
-                      )}
-                      {c.experienceYears !== undefined && c.experienceYears > 0 && (
-                        <div>
-                          <p className="text-[11px] text-muted-foreground">Experience</p>
-                          <p className="text-sm text-white">{c.experienceYears} year{c.experienceYears !== 1 ? "s" : ""}</p>
-                        </div>
-                      )}
-                      {c.currentRole && (
-                        <div>
-                          <p className="text-[11px] text-muted-foreground">Current Role</p>
-                          <p className="text-sm text-white">{c.currentRole}</p>
-                        </div>
-                      )}
-                      {c.currentEmployer && (
-                        <div className="col-span-2">
-                          <p className="text-[11px] text-muted-foreground">Employer</p>
-                          <p className="text-sm text-white">{c.currentEmployer}</p>
-                        </div>
-                      )}
-                    </div>
-                    {c.skills && c.skills.length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-[11px] text-muted-foreground mb-1.5">Skills</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {c.skills.map((s, i) => (
-                            <Badge key={i} variant="outline" className="text-[11px] px-2 py-0.5 border-border text-white/80">{s}</Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {c.languages && c.languages.length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-[11px] text-muted-foreground mb-1.5">Languages</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {c.languages.map((l, i) => (
-                            <Badge key={i} variant="outline" className="text-[11px] px-2 py-0.5 border-primary/30 text-primary">{l}</Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {(c.expectedSalary || c.ibanNumber) && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Financial</h4>
-                      <div className="grid grid-cols-2 gap-3">
-                        {c.expectedSalary && (
-                          <div>
-                            <p className="text-[11px] text-muted-foreground">Expected Salary</p>
-                            <p className="text-sm text-white font-medium">SAR {Number(c.expectedSalary).toLocaleString()}</p>
-                          </div>
-                        )}
-                        {c.ibanNumber && (
-                          <div className="col-span-2">
-                            <p className="text-[11px] text-muted-foreground">IBAN</p>
-                            <p className="text-sm text-white font-mono text-[13px]">{c.ibanNumber}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {(c.emergencyContactName || c.emergencyContactPhone) && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Emergency Contact</h4>
-                      <div className="grid grid-cols-2 gap-3">
-                        {c.emergencyContactName && (
-                          <div>
-                            <p className="text-[11px] text-muted-foreground">Name</p>
-                            <p className="text-sm text-white">{c.emergencyContactName}</p>
-                          </div>
-                        )}
-                        {c.emergencyContactPhone && (
-                          <div>
-                            <p className="text-[11px] text-muted-foreground">Phone</p>
-                            <p className="text-sm text-white">{c.emergencyContactPhone}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {c.hasChronicDiseases && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                        <AlertTriangle className="h-3.5 w-3.5 text-amber-400" /> Health Notes
-                      </h4>
-                      <p className="text-sm text-amber-200/80">{c.chronicDiseases || "Chronic condition noted"}</p>
-                    </div>
-                  )}
-
-                  {c.notes && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Notes</h4>
-                      <p className="text-sm text-white/70">{c.notes}</p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="px-6 py-4 border-t border-border flex gap-2">
-                  <Button
-                    size="sm"
-                    className="flex-1 bg-primary text-primary-foreground"
-                    onClick={() => {
-                      setProfileCandidate(null);
-                      navigate(`/interviews/schedule?candidateId=${c.id}&candidateName=${encodeURIComponent(c.fullNameEn)}`);
-                    }}
-                    data-testid="profile-schedule-interview"
-                  >
-                    <Calendar className="mr-2 h-4 w-4" />
-                    Schedule Interview
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-border"
-                    onClick={() => setProfileCandidate(null)}
-                  >
-                    Close
-                  </Button>
-                </div>
-              </>
-            );
-          })()}
-        </SheetContent>
-      </Sheet>
+      <CandidateProfileSheet
+        candidate={profileCandidate}
+        onClose={() => setProfileCandidate(null)}
+        onSaved={(updated) => {
+          setProfileCandidate(updated);
+          queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
+        }}
+        onSchedule={(c) => {
+          setProfileCandidate(null);
+          navigate(`/interviews/schedule?candidateId=${c.id}&candidateName=${encodeURIComponent(c.fullNameEn)}`);
+        }}
+      />
 
       <AlertDialog open={!!blockCandidate} onOpenChange={(o) => !o && setBlockCandidate(null)}>
         <AlertDialogContent className="bg-card border-border">

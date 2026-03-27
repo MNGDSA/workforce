@@ -32,6 +32,7 @@ type StoredCandidate = {
   phone?: string;
   email?: string;
   profileCompleted?: boolean;
+  source?: string;
 };
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -123,6 +124,7 @@ const step2Schema = z.object({
   currentRole:         z.string().optional(),
   emergencyContactName:  z.string().min(2, "Emergency contact name is required"),
   emergencyContactPhone: z.string().min(7, "Emergency contact phone is required"),
+  ibanNumber:          z.string().optional(),
 }).superRefine((d, ctx) => {
   if (d.hasChronicDiseases && !d.chronicDiseases?.trim()) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please describe your condition(s)", path: ["chronicDiseases"] });
@@ -132,6 +134,9 @@ const step2Schema = z.object({
   }
   if (d.isEmployedElsewhere && !d.currentRole?.trim()) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please enter your position", path: ["currentRole"] });
+  }
+  if (d.ibanNumber && d.ibanNumber.trim() && !/^SA\d{22}$/.test(d.ibanNumber.trim())) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "IBAN must be SA followed by 22 digits (24 characters total)", path: ["ibanNumber"] });
   }
 });
 
@@ -331,9 +336,9 @@ function Step1Form({
 // ─── Step 2: Health & Employment ─────────────────────────────────────────────
 
 function Step2Form({
-  defaults, onNext, onBack,
+  defaults, onNext, onBack, isSmp,
 }: {
-  defaults: Partial<Step2>; onNext: (d: Step2) => void; onBack: () => void;
+  defaults: Partial<Step2>; onNext: (d: Step2) => void; onBack: () => void; isSmp: boolean;
 }) {
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<Step2>({
     resolver: zodResolver(step2Schema),
@@ -345,6 +350,7 @@ function Step2Form({
       currentRole:         defaults.currentRole         ?? "",
       emergencyContactName:  defaults.emergencyContactName ?? "",
       emergencyContactPhone: defaults.emergencyContactPhone ?? "",
+      ibanNumber:          defaults.ibanNumber           ?? "",
     },
   });
 
@@ -402,6 +408,25 @@ function Step2Form({
           </div>
         )}
       </div>
+
+      {!isSmp && (
+        <div className="space-y-4 p-4 rounded-md bg-muted/10 border border-border">
+          <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+            Bank Details
+          </Label>
+          <p className="text-xs text-muted-foreground -mt-2">Your Saudi IBAN number for salary transfers.</p>
+          <FieldWrapper label="IBAN Number" error={errors.ibanNumber?.message}>
+            <Input
+              {...register("ibanNumber")}
+              placeholder="SA0000000000000000000000"
+              maxLength={24}
+              className="bg-muted/30 border-border font-mono"
+              data-testid="input-iban"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">SA followed by 22 digits (24 characters total)</p>
+          </FieldWrapper>
+        </div>
+      )}
 
       {/* Emergency Contact */}
       <div className="space-y-4 p-4 rounded-md bg-muted/10 border border-border">
@@ -628,6 +653,7 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
       currentRole:         s2data.currentRole || null,
       emergencyContactName:  s2data.emergencyContactName || null,
       emergencyContactPhone: s2data.emergencyContactPhone || null,
+      ibanNumber:          s2data.ibanNumber?.trim() || null,
       educationLevel:      d.educationLevel,
       major:               d.major || null,
       languages:           langs,
@@ -725,7 +751,7 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
               <Step1Form defaults={s1data} onNext={handleStep1} candidate={candidate} />
             )}
             {step === 2 && (
-              <Step2Form defaults={s2data} onNext={handleStep2} onBack={() => setStep(1)} />
+              <Step2Form defaults={s2data} onNext={handleStep2} onBack={() => setStep(1)} isSmp={candidate.source === "smp"} />
             )}
             {step === 3 && (
               <Step3Form
