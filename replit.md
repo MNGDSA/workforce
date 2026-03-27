@@ -113,7 +113,7 @@ Tables with indexes designed for 70k+ candidates:
 | `notifications` | SMS/email/in-app | recipient, status, created_at |
 
 ### Candidate Table Design Decisions
-- `candidate_code`: Short unique code (e.g., `C-001234`) for internal references
+- Candidates are identified primarily by their `national_id` (no candidate code)
 - `skills`, `languages`, `certifications`, `tags`: Array columns for flexible filtering
 - `metadata`: JSONB for extensible attributes
 - Composite index on `(status, city)` for the most common query pattern

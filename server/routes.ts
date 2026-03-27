@@ -385,13 +385,7 @@ export async function registerRoutes(
         isActive: true,
       });
 
-      // Generate a unique candidate code: CND-<last6ofNationalId>-<timestamp>
-      const ts = Date.now().toString(36).toUpperCase().slice(-4);
-      const candidateCode = `CND-${nationalId.trim().slice(-6)}-${ts}`;
-
-      // Create corresponding candidate record in the talent pool
       const candidate = await storage.createCandidate({
-        candidateCode,
         fullNameEn: fullName.trim(),
         phone: normalizedPhone,
         nationalId: nationalId.trim(),

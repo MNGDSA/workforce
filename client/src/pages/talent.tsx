@@ -385,7 +385,7 @@ function CandidateProfileSheet({
             <div className="flex-1 min-w-0">
               <SheetTitle className="font-display text-xl font-bold text-white truncate">{c.fullNameEn}</SheetTitle>
               <SheetDescription className="text-muted-foreground text-sm flex items-center gap-2 mt-0.5">
-                <span>{c.candidateCode}</span>
+                {c.nationalId && <span>{c.nationalId}</span>}
                 <Badge className={`text-[10px] px-1.5 py-0 ${statusStyles[displaySt] || statusStyles.active}`}>{displaySt}</Badge>
                 {c.source === "smp" && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/50 text-amber-400">SMP</Badge>}
               </SheetDescription>
@@ -798,7 +798,6 @@ export default function TalentPage() {
         gender: c.gender || undefined,
         dateOfBirth: c.dateOfBirth || undefined,
         source: c.source === "smp" ? "smp" : "individual",
-        candidateCode: `C-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       }));
       return apiRequest("POST", "/api/candidates/bulk", { candidates: mapped }).then(r => r.json());
     },
@@ -1156,7 +1155,7 @@ export default function TalentPage() {
                           </TableCell>
                           {col("id") && (
                             <TableCell className="font-mono text-xs text-muted-foreground">
-                              {candidate.nationalId ?? candidate.candidateCode}
+                              {candidate.nationalId ?? "—"}
                             </TableCell>
                           )}
                           {col("candidate") && (
@@ -1350,7 +1349,7 @@ export default function TalentPage() {
               onClick={() => {
                 const selected = candidates.filter(c => selectedIds.has(c.id));
                 const ws = XLSX.utils.json_to_sheet(selected.map(c => ({
-                  ID: c.nationalId ?? c.candidateCode,
+                  ID: c.nationalId ?? "—",
                   Name: c.fullNameEn,
                   Phone: c.phone,
                   Email: c.email,

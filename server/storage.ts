@@ -264,7 +264,7 @@ export class DatabaseStorage implements IStorage {
           ilike(candidates.email, term),
           ilike(candidates.phone, term),
           ilike(candidates.currentRole, term),
-          ilike(candidates.candidateCode, term),
+          ilike(candidates.nationalId, term),
           ilike(candidates.city, term),
         )
       );
@@ -461,7 +461,6 @@ export class DatabaseStorage implements IStorage {
   async exportCandidates(): Promise<{ headers: string[]; rows: any[][]; total: number }> {
     const data = await db.select({
       id: candidates.id,
-      candidateCode: candidates.candidateCode,
       fullNameEn: candidates.fullNameEn,
       fullNameAr: candidates.fullNameAr,
       source: candidates.source,
@@ -484,9 +483,9 @@ export class DatabaseStorage implements IStorage {
       .where(isNull(candidates.archivedAt))
       .orderBy(desc(candidates.createdAt));
 
-    const headers = ["ID", "Candidate Code", "Full Name (EN)", "Full Name (AR)", "Classification", "Status", "Phone", "Email", "City", "Region", "Nationality", "National ID", "IBAN", "Gender", "Date of Birth", "Education", "Major", "Experience (Yrs)", "Created At"];
+    const headers = ["ID", "Full Name (EN)", "Full Name (AR)", "Classification", "Status", "Phone", "Email", "City", "Region", "Nationality", "National ID", "IBAN", "Gender", "Date of Birth", "Education", "Major", "Experience (Yrs)", "Created At"];
     const rows = data.map(r => [
-      r.id, r.candidateCode, r.fullNameEn || "", r.fullNameAr || "",
+      r.id, r.fullNameEn || "", r.fullNameAr || "",
       r.source || "individual", r.status, r.phone || "", r.email || "",
       r.city || "", r.region || "", r.nationality || "", r.nationalId || "",
       r.ibanNumber || "", r.gender || "", r.dateOfBirth || "",

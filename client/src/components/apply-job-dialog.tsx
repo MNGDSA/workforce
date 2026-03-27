@@ -33,7 +33,6 @@ type StoredCandidate = {
   fullNameEn?: string;
   phone?: string;
   nationalId?: string;
-  candidateCode?: string;
 };
 
 // ─── Type icon map ────────────────────────────────────────────────────────────
@@ -318,10 +317,7 @@ export default function ApplyJobDialog({
       let candidateId = candidate.id;
 
       if (!candidateId) {
-        const ts = Date.now().toString(36).toUpperCase().slice(-4);
-        const code = `CND-${(candidate.nationalId ?? "000000").slice(-6)}-${ts}`;
         const newCandidate = await apiRequest("POST", "/api/candidates", {
-          candidateCode: code,
           fullNameEn: candidate.fullNameEn ?? "",
           phone: candidate.phone ?? "",
           nationalId: candidate.nationalId ?? "",

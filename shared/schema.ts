@@ -145,7 +145,7 @@ export const candidates = pgTable(
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
     // Identity
-    candidateCode: varchar("candidate_code", { length: 20 }).notNull().unique(),
+    candidateCode: varchar("candidate_code", { length: 20 }),
     fullNameAr: text("full_name_ar"),
     fullNameEn: text("full_name_en").notNull(),
     gender: genderEnum("gender"),
@@ -222,7 +222,6 @@ export const candidates = pgTable(
     nationalIdIdx: uniqueIndex("candidates_national_id_idx").on(t.nationalId),
     statusCityIdx: index("candidates_status_city_idx").on(t.status, t.city),
     fullNameEnIdx: index("candidates_full_name_en_idx").on(t.fullNameEn),
-    candidateCodeIdx: uniqueIndex("candidates_code_idx").on(t.candidateCode),
   })
 );
 

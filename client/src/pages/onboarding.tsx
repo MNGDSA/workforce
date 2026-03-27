@@ -107,7 +107,6 @@ interface OnboardingRecord {
 
 interface Candidate {
   id: string;
-  candidateCode: string;
   fullNameEn: string;
   fullNameAr?: string | null;
   phone?: string | null;
@@ -1259,11 +1258,10 @@ export default function OnboardingPage() {
       const candidate = candidates.find(c => c.id === r.candidateId);
       const q = search.toLowerCase();
       const name = candidate?.fullNameEn?.toLowerCase() ?? "";
-      const code = candidate?.candidateCode?.toLowerCase() ?? "";
       const nationalId = candidate?.nationalId?.toLowerCase() ?? "";
       const iqama = (candidate as any)?.iqamaNumber?.toLowerCase() ?? "";
       const phone = candidate?.phone?.toLowerCase() ?? "";
-      if (!name.includes(q) && !code.includes(q) && !nationalId.includes(q) && !iqama.includes(q) && !phone.includes(q)) return false;
+      if (!name.includes(q) && !nationalId.includes(q) && !iqama.includes(q) && !phone.includes(q)) return false;
     }
     return true;
   });
@@ -1279,7 +1277,7 @@ export default function OnboardingPage() {
     (interviewedIds.has(c.id) || c.status === "hired") && !alreadyOnboarding.has(c.id)
   );
   const admitFiltered = eligibleCandidates.filter(c =>
-    !admitSearch || c.fullNameEn.toLowerCase().includes(admitSearch.toLowerCase()) || c.candidateCode.toLowerCase().includes(admitSearch.toLowerCase())
+    !admitSearch || c.fullNameEn.toLowerCase().includes(admitSearch.toLowerCase()) || (c.nationalId ?? "").toLowerCase().includes(admitSearch.toLowerCase()) || (c.phone ?? "").toLowerCase().includes(admitSearch.toLowerCase())
   );
   const admitTotalPages = Math.max(1, Math.ceil(admitFiltered.length / ADMIT_PAGE_SIZE));
   const admitPageCandidates = admitFiltered.slice((admitPage - 1) * ADMIT_PAGE_SIZE, admitPage * ADMIT_PAGE_SIZE);
@@ -1456,7 +1454,7 @@ export default function OnboardingPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-white text-sm">{candidate?.fullNameEn ?? "Unknown"}</span>
-                      <span className="text-zinc-500 text-xs font-mono">{candidate?.candidateCode}</span>
+                      {candidate?.nationalId && <span className="text-zinc-500 text-xs font-mono">{candidate.nationalId}</span>}
                       <Badge className={`text-xs px-2 py-0.5 ${cfg.color} border-0`}>
                         <StatusIcon className="h-3 w-3 mr-1" />
                         {cfg.label}
@@ -1660,7 +1658,7 @@ export default function OnboardingPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-white truncate">{c.fullNameEn}</p>
-                      <p className="text-xs text-zinc-500 font-mono">{c.candidateCode}</p>
+                      {c.nationalId && <p className="text-xs text-zinc-500 font-mono">{c.nationalId}</p>}
                     </div>
                     <div className="flex gap-1 shrink-0">
                       {c.hasPhoto      && <span title="Photo"      className="text-emerald-500"><Camera     className="h-3.5 w-3.5" /></span>}
@@ -1735,7 +1733,7 @@ export default function OnboardingPage() {
             <SheetDescription className="text-zinc-400 text-sm">
               {checklistRecord && (() => {
                 const c = getCandidateFor(checklistRecord);
-                return `${c?.fullNameEn ?? "Candidate"} — ${c?.candidateCode ?? ""}`;
+                return `${c?.fullNameEn ?? "Candidate"}${c?.nationalId ? ` — ${c.nationalId}` : ""}`;
               })()}
             </SheetDescription>
           </SheetHeader>

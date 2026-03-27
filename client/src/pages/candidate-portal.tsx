@@ -100,9 +100,7 @@ function ApplyDialog({
 
   const apply = useMutation({
     mutationFn: async (data: ApplyForm) => {
-      const code = "CND-" + Math.random().toString(36).substring(2, 8).toUpperCase();
       const candidate = await apiRequest("POST", "/api/candidates", {
-        candidateCode: code,
         fullNameEn: data.fullNameEn,
         phone: data.phone,
         nationalId: data.nationalId,
