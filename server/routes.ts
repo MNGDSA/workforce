@@ -486,7 +486,7 @@ export async function registerRoutes(
   });
 
   // ─── Seasons ─────────────────────────────────────────────────────────────
-  app.get("/api/seasons", async (_req: Request, res: Response) => {
+  app.get("/api/events", async (_req: Request, res: Response) => {
     try {
       const data = await storage.getSeasons();
       return res.json(data);
@@ -495,7 +495,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/seasons/:id", async (req: Request, res: Response) => {
+  app.get("/api/events/:id", async (req: Request, res: Response) => {
     try {
       const season = await storage.getSeason(req.params.id);
       if (!season) return res.status(404).json({ message: "Event not found" });
@@ -505,7 +505,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/seasons", async (req: Request, res: Response) => {
+  app.post("/api/events", async (req: Request, res: Response) => {
     try {
       const data = insertSeasonSchema.parse(req.body);
       const season = await storage.createSeason(data);
@@ -515,7 +515,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/seasons/:id", async (req: Request, res: Response) => {
+  app.patch("/api/events/:id", async (req: Request, res: Response) => {
     try {
       const data = insertSeasonSchema.partial().parse(req.body);
       const season = await storage.updateSeason(req.params.id, data);
@@ -526,7 +526,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/seasons/:id", async (req: Request, res: Response) => {
+  app.delete("/api/events/:id", async (req: Request, res: Response) => {
     try {
       const jobCount = await storage.countJobPostingsBySeason(req.params.id);
       if (jobCount > 0) {

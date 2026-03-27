@@ -137,9 +137,9 @@ function CreateSeasonDialog({
 
   const createSeason = useMutation({
     mutationFn: (data: CreateSeasonForm) =>
-      apiRequest("POST", "/api/seasons", data).then((r) => r.json()),
+      apiRequest("POST", "/api/events", data).then((r) => r.json()),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/seasons"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       toast({ title: "Event created", description: "The event has been added successfully." });
       form.reset();
       onOpenChange(false);
@@ -840,8 +840,8 @@ export default function SeasonsPage() {
   const [smpSheetOpen, setSmpSheetOpen] = useState(false);
 
   const { data: seasons = [], isLoading } = useQuery<Season[]>({
-    queryKey: ["/api/seasons"],
-    queryFn: () => apiRequest("GET", "/api/seasons").then((r) => r.json()),
+    queryKey: ["/api/events"],
+    queryFn: () => apiRequest("GET", "/api/events").then((r) => r.json()),
   });
 
   const { data: smpContracts = [] } = useQuery<SMPContract[]>({
@@ -851,13 +851,13 @@ export default function SeasonsPage() {
 
   const updateStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
-      apiRequest("PATCH", `/api/seasons/${id}`, { status }).then((r) => r.json()),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/seasons"] }),
+      apiRequest("PATCH", `/api/events/${id}`, { status }).then((r) => r.json()),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/events"] }),
   });
 
   const deleteSeason = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/seasons/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/seasons"] }),
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/events/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/events"] }),
   });
 
   const filtered = seasons.filter(

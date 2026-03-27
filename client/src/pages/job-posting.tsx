@@ -123,8 +123,8 @@ function CreateJobDialog({
   const { toast } = useToast();
 
   const { data: seasons = [] } = useQuery<Season[]>({
-    queryKey: ["/api/seasons"],
-    queryFn: () => apiRequest("GET", "/api/seasons").then(r => r.json()),
+    queryKey: ["/api/events"],
+    queryFn: () => apiRequest("GET", "/api/events").then(r => r.json()),
     enabled: open,
   });
 
