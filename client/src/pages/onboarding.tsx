@@ -49,6 +49,8 @@ import {
   Loader2,
   TriangleAlert,
   Eye,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 
 type OnboardingStatus = "pending" | "in_progress" | "ready" | "converted" | "rejected";
@@ -88,7 +90,9 @@ interface Candidate {
   hasNationalId: boolean;
   status: string;
   ibanNumber?: string | null;
+  ibanFileUrl?: string | null;
   photoUrl?: string | null;
+  nationalIdFileUrl?: string | null;
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
 }
@@ -109,11 +113,11 @@ const STATUS_CONFIG: Record<OnboardingStatus, { label: string; color: string; ic
 };
 
 const PREREQUISITES = [
-  { key: "hasPhoto",           label: "Personal Photo",       icon: Camera,        hint: "Clear ID-style photo uploaded",  profileKey: "photoUrl" as const },
-  { key: "hasIban",            label: "IBAN Number",          icon: CreditCard,    hint: "Saudi bank IBAN on file",        profileKey: "ibanNumber" as const },
-  { key: "hasNationalId",      label: "National ID / Iqama",  icon: IdCard,        hint: "ID copy submitted & verified",   profileKey: "nationalId" as const },
-  { key: "hasSignedContract",  label: "Signed Contract",      icon: FileSignature, hint: "Employment contract signed",     profileKey: null },
-  { key: "hasEmergencyContact",label: "Emergency Contact",    icon: Phone,         hint: "Contact details recorded",       profileKey: "emergencyContactName" as const },
+  { key: "hasPhoto",           label: "Personal Photo",       icon: Camera,        hint: "Clear ID-style photo uploaded",  profileKey: "photoUrl" as const,              isFile: true },
+  { key: "hasIban",            label: "IBAN Certificate",     icon: CreditCard,    hint: "Saudi bank IBAN on file",        profileKey: "ibanFileUrl" as const,           isFile: true },
+  { key: "hasNationalId",      label: "National ID / Iqama",  icon: IdCard,        hint: "ID copy submitted & verified",   profileKey: "nationalIdFileUrl" as const,     isFile: true },
+  { key: "hasSignedContract",  label: "Signed Contract",      icon: FileSignature, hint: "Employment contract signed",     profileKey: null,                             isFile: false },
+  { key: "hasEmergencyContact",label: "Emergency Contact",    icon: Phone,         hint: "Contact details recorded",       profileKey: "emergencyContactName" as const,  isFile: false },
 ] as const;
 const PREREQ_TOTAL = PREREQUISITES.length;
 
@@ -735,16 +739,20 @@ export default function OnboardingPage() {
                         <div className="mt-2 ml-8 bg-zinc-800/60 rounded-md p-2.5 border border-zinc-700/50">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 min-w-0">
-                              <Eye className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+                              {p.isFile ? <Download className="h-3.5 w-3.5 text-zinc-400 shrink-0" /> : <Eye className="h-3.5 w-3.5 text-zinc-400 shrink-0" />}
                               {p.profileKey === "photoUrl" ? (
-                                <div className="flex items-center gap-2">
+                                <a href={profileValue} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer" onClick={e => e.stopPropagation()}>
                                   <img src={profileValue} alt="Candidate photo" className="h-8 w-8 rounded-sm object-cover border border-zinc-600" />
-                                  <span className="text-xs text-zinc-300">Photo on file</span>
-                                </div>
+                                  <span className="text-xs text-emerald-400 underline underline-offset-2 flex items-center gap-1">View photo <ExternalLink className="h-2.5 w-2.5" /></span>
+                                </a>
                               ) : p.profileKey === "emergencyContactName" ? (
                                 <div className="text-xs text-zinc-300 truncate">
                                   {cand?.emergencyContactName}{cand?.emergencyContactPhone ? ` — ${cand.emergencyContactPhone}` : ""}
                                 </div>
+                              ) : p.isFile ? (
+                                <a href={profileValue} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-400 underline underline-offset-2 flex items-center gap-1 hover:text-emerald-300 transition-colors cursor-pointer" onClick={e => e.stopPropagation()}>
+                                  View document <ExternalLink className="h-2.5 w-2.5" />
+                                </a>
                               ) : (
                                 <span className="text-xs text-zinc-300 font-mono truncate">{String(profileValue)}</span>
                               )}
