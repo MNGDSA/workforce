@@ -709,7 +709,10 @@ export default function OnboardingPage() {
                 {PREREQUISITES.map(p => {
                   const checked = checklistRecord[p.key as keyof OnboardingRecord] as boolean;
                   const cand = getCandidateFor(checklistRecord);
-                  const profileValue = p.profileKey && cand ? (cand as any)[p.profileKey] : null;
+                  let profileValue = p.profileKey && cand ? (cand as any)[p.profileKey] : null;
+                  if (!profileValue && p.profileKey === "ibanFileUrl" && cand?.ibanNumber?.startsWith("/uploads/")) {
+                    profileValue = cand.ibanNumber;
+                  }
                   const hasProfileData = !!profileValue;
                   return (
                     <div
@@ -761,7 +764,15 @@ export default function OnboardingPage() {
                           </div>
                         </div>
                       )}
-                      {!hasProfileData && p.profileKey && (
+                      {!hasProfileData && p.profileKey && checked && (
+                        <div className="mt-2 ml-8 bg-zinc-800/40 rounded-md p-2 border border-zinc-700/30">
+                          <p className="text-[11px] text-emerald-500/70 flex items-center gap-1.5">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Verified by admin — no file uploaded by candidate
+                          </p>
+                        </div>
+                      )}
+                      {!hasProfileData && p.profileKey && !checked && (
                         <div className="mt-2 ml-8 bg-zinc-800/40 rounded-md p-2 border border-zinc-700/30">
                           <p className="text-[11px] text-zinc-500 flex items-center gap-1.5">
                             <TriangleAlert className="h-3 w-3" />
