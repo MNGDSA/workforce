@@ -358,7 +358,7 @@ function Step2Form({
   const isEmployed    = watch("isEmployedElsewhere");
 
   return (
-    <form onSubmit={handleSubmit(onNext)} className="space-y-6">
+    <form onSubmit={handleSubmit(onNext)} className="space-y-8">
       {/* Chronic diseases */}
       <div className="space-y-4 p-4 rounded-md bg-muted/10 border border-border">
         <ToggleGroup
