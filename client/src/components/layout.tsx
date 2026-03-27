@@ -40,7 +40,7 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
-const recruitmentPaths = ["/seasons", "/question-sets", "/job-posting", "/interviews", "/talent"];
+const recruitmentPaths = ["/seasons", "/question-sets", "/job-posting", "/interviews", "/onboarding", "/talent"];
 
 const recruitmentItems: { href: string; icon: React.ElementType; label: string }[] = [
   { href: "/seasons",       icon: CalendarRange, label: "Events & SMP" },
