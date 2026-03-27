@@ -144,7 +144,6 @@ const ALL_PREREQUISITES = [
   { key: "hasPhoto",           label: "Personal Photo",       icon: Camera,        hint: "Clear ID-style photo uploaded",  profileKey: "photoUrl" as const,              isFile: true,  smp: true },
   { key: "hasIban",            label: "IBAN Certificate",     icon: CreditCard,    hint: "Saudi bank IBAN on file",        profileKey: "ibanFileUrl" as const,           isFile: true,  smp: false },
   { key: "hasNationalId",      label: "National ID / Iqama",  icon: IdCard,        hint: "ID copy submitted & verified",   profileKey: "nationalIdFileUrl" as const,     isFile: true,  smp: true },
-  { key: "hasSignedContract",  label: "Signed Contract",      icon: FileSignature, hint: "Employment contract signed",     profileKey: null,                             isFile: false, smp: false },
 ] as const;
 
 function getPrerequisites(isSmp: boolean) {
@@ -212,7 +211,7 @@ interface CandidateContractRecord {
   candidateId: string;
   onboardingId?: string | null;
   templateId: string;
-  status: "generated" | "sent" | "signed";
+  status: "generated" | "awaiting_signing" | "sent" | "signed";
   signedAt?: string | null;
   signedIp?: string | null;
   createdAt: string;
@@ -274,7 +273,7 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
                 <Clock className="h-4 w-4 text-yellow-500" />
               )}
               <span className="text-sm text-white">
-                {latestContract.status === "signed" ? "Contract Signed" : latestContract.status === "sent" ? "Awaiting Signature" : "Contract Generated"}
+                {latestContract.status === "signed" ? "Contract Signed" : latestContract.status === "awaiting_signing" ? "Awaiting Signing" : latestContract.status === "sent" ? "Sent to Candidate" : "Contract Generated"}
               </span>
             </div>
             <Badge className={`text-xs border-0 ${latestContract.status === "signed" ? "bg-emerald-900/40 text-emerald-400" : "bg-yellow-900/40 text-yellow-400"}`}>
@@ -1128,6 +1127,8 @@ export default function OnboardingPage() {
   const [docPreview, setDocPreview] = useState<{ url: string; label: string; isImage: boolean } | null>(null);
   const [bulkConvertOpen, setBulkConvertOpen] = useState(false);
   const [bulkConvertForm, setBulkConvertForm] = useState({ position: "", department: "", startDate: "", salary: "" });
+  const [bulkContractOpen, setBulkContractOpen] = useState(false);
+  const [bulkContractTemplateId, setBulkContractTemplateId] = useState("");
   const ADMIT_PAGE_SIZE = 10;
 
   const { data: records = [], isLoading } = useQuery<OnboardingRecord[]>({
@@ -1224,6 +1225,27 @@ export default function OnboardingPage() {
         title: `${data.converted} employee${data.converted !== 1 ? "s" : ""} created`,
         description: errCount > 0 ? `${errCount} failed — check records individually.` : "All ready candidates converted successfully.",
         variant: errCount > 0 ? "destructive" : "default",
+      });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const { data: activeTemplates = [] } = useQuery<ContractTemplate[]>({
+    queryKey: ["/api/contract-templates"],
+    select: (data: ContractTemplate[]) => data.filter(t => t.status === "active"),
+  });
+
+  const bulkContractMutation = useMutation({
+    mutationFn: (body: { onboardingIds: string[]; templateId: string }) =>
+      apiRequest("POST", "/api/onboarding/bulk-generate-contracts", body).then(r => r.json()),
+    onSuccess: (data: any) => {
+      qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
+      qc.invalidateQueries({ queryKey: ["/api/candidate-contracts"] });
+      setBulkContractOpen(false);
+      setBulkContractTemplateId("");
+      toast({
+        title: `Contracts generated for ${data.generated} candidate${data.generated !== 1 ? "s" : ""}`,
+        description: data.failed > 0 ? `${data.failed} failed — check records individually.` : "All candidates notified by SMS.",
       });
     },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
@@ -1354,6 +1376,17 @@ export default function OnboardingPage() {
 
           <TabsContent value="pipeline" className="space-y-6 mt-4">
         <div className="flex justify-end gap-2">
+            {activeTemplates.length > 0 && filtered.filter(r => r.status !== "converted" && r.status !== "rejected").length > 0 && (
+              <Button
+                data-testid="button-bulk-contracts"
+                onClick={() => setBulkContractOpen(true)}
+                variant="outline"
+                className="border-blue-700 text-blue-400 hover:bg-blue-900/30 gap-2"
+              >
+                <FileSignature className="h-4 w-4" />
+                Bulk Generate Contracts
+              </Button>
+            )}
             {stats.ready > 0 && (
               <Button
                 data-testid="button-bulk-convert"
@@ -1472,10 +1505,10 @@ export default function OnboardingPage() {
                       )}
                     </div>
                     {(() => {
-                      const docPrereqs = getPrerequisites(isSmp).filter(p => p.key !== "hasSignedContract");
+                      const docPrereqs = getPrerequisites(isSmp);
                       const docsComplete = docPrereqs.every(p => rec[p.key as keyof OnboardingRecord]);
                       const docsDone = docPrereqs.filter(p => rec[p.key as keyof OnboardingRecord]).length;
-                      const contractSigned = !!rec.hasSignedContract || !!rec.contractSignedAt;
+                      const contractSigned = !!rec.contractSignedAt;
                       const phase = isConverted ? 3 : isSmp ? (docsComplete ? 3 : 1) : contractSigned ? 3 : docsComplete ? 2 : 1;
                       return (
                         <div className="mt-2">
@@ -1729,7 +1762,7 @@ export default function OnboardingPage() {
 
       {/* ── Checklist Sheet ── */}
       <Sheet open={!!checklistRecord} onOpenChange={o => !o && setChecklistRecord(null)}>
-        <SheetContent className="bg-zinc-950 border-zinc-800 text-white w-full sm:max-w-md">
+        <SheetContent className="bg-zinc-950 border-zinc-800 text-white w-full sm:max-w-md overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="font-display text-lg">Onboarding Checklist</SheetTitle>
             <SheetDescription className="text-zinc-400 text-sm">
@@ -1780,7 +1813,6 @@ export default function OnboardingPage() {
                   }
                   const hasProfileData = !!profileValue;
                   const isFilePrereq = p.isFile && p.profileKey;
-                  const isContractPrereq = p.key === "hasSignedContract";
                   const docTypeMap: Record<string, string> = { photoUrl: "photo", nationalIdFileUrl: "nationalId", ibanFileUrl: "iban" };
                   const docType = p.profileKey ? docTypeMap[p.profileKey] : null;
                   const isConverted = checklistRecord.status === "converted" || checklistRecord.status === "rejected";
@@ -1792,22 +1824,11 @@ export default function OnboardingPage() {
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        {isContractPrereq ? (
-                          <Checkbox
-                            id={`prereq-${p.key}`}
-                            data-testid={`checkbox-prereq-${p.key}`}
-                            checked={checked}
-                            disabled={isConverted}
-                            onCheckedChange={val => handleChecklistToggle(checklistRecord, p.key, !!val)}
-                            className="mt-0.5 border-zinc-600 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
-                          />
-                        ) : (
-                          <div className={`mt-0.5 h-4 w-4 rounded-sm border flex items-center justify-center shrink-0 ${
+                        <div className={`mt-0.5 h-4 w-4 rounded-sm border flex items-center justify-center shrink-0 ${
                             checked ? "bg-emerald-600 border-emerald-600" : "border-zinc-600 bg-transparent"
                           }`}>
                             {checked && <Check className="h-3 w-3 text-white" />}
                           </div>
-                        )}
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-white flex items-center gap-2">
                             <p.icon className="h-4 w-4 text-zinc-400" />
@@ -1876,7 +1897,7 @@ export default function OnboardingPage() {
                 <ContractPhaseSection
                   onboardingRecord={checklistRecord}
                   candidate={checklistCand}
-                  docsComplete={checklistPrereqs.filter(p => p.key !== "hasSignedContract").every(p => checklistRecord[p.key as keyof OnboardingRecord])}
+                  docsComplete={checklistPrereqs.every(p => checklistRecord[p.key as keyof OnboardingRecord])}
                 />
               )}
 
@@ -2070,6 +2091,66 @@ export default function OnboardingPage() {
                 {bulkConvertMutation.isPending
                   ? <><Loader2 className="h-4 w-4 animate-spin" /> Converting...</>
                   : <><UserCheck className="h-4 w-4" /> Convert {stats.ready} Employees</>
+                }
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={bulkContractOpen} onOpenChange={setBulkContractOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSignature className="h-5 w-5 text-blue-400" />
+              Bulk Generate Contracts
+            </DialogTitle>
+            <DialogDescription>
+              Generate employment contracts for all active onboarding candidates. Each candidate will be notified by SMS.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-3 flex items-center gap-3">
+              <FileText className="h-5 w-5 text-blue-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-blue-300">{records.filter(r => r.status !== "converted" && r.status !== "rejected").length} eligible candidates</p>
+                <p className="text-xs text-blue-400/70">Non-SMP candidates with complete documents will receive contracts</p>
+              </div>
+            </div>
+            <div>
+              <Label className="text-zinc-300 text-sm">Contract Template *</Label>
+              <Select value={bulkContractTemplateId} onValueChange={setBulkContractTemplateId}>
+                <SelectTrigger className="bg-zinc-900 border-zinc-700 mt-1" data-testid="select-bulk-contract-template">
+                  <SelectValue placeholder="Select template…" />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-700">
+                  {activeTemplates.map(t => (
+                    <SelectItem key={t.id} value={t.id}>{t.name} (v{t.version})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setBulkContractOpen(false)} className="border-zinc-700 text-zinc-300">
+                Cancel
+              </Button>
+              <Button
+                data-testid="button-confirm-bulk-contracts"
+                disabled={!bulkContractTemplateId || bulkContractMutation.isPending}
+                onClick={() => {
+                  const eligibleIds = records
+                    .filter(r => r.status !== "converted" && r.status !== "rejected")
+                    .filter(r => {
+                      const c = getCandidateFor(r);
+                      return c?.source !== "smp";
+                    })
+                    .map(r => r.id);
+                  bulkContractMutation.mutate({ onboardingIds: eligibleIds, templateId: bulkContractTemplateId });
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+              >
+                {bulkContractMutation.isPending
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
+                  : <><FileSignature className="h-4 w-4" /> Generate Contracts</>
                 }
               </Button>
             </div>

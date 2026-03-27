@@ -90,14 +90,14 @@ function buildVariableSnapshot(candidate: any, template: any, ob: any): Record<s
   };
 }
 
-function computeOnboardingStatus(rec: { hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean; hasSignedContract: boolean }, isSmp: boolean): "pending" | "in_progress" | "ready" {
+function computeOnboardingStatus(rec: { hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean; hasSignedContract?: boolean }, isSmp: boolean): "pending" | "in_progress" | "ready" {
   if (isSmp) {
     const allDone = rec.hasPhoto && rec.hasNationalId;
     const anyDone = rec.hasPhoto || rec.hasNationalId;
     return allDone ? "ready" : anyDone ? "in_progress" : "pending";
   }
-  const allDone = rec.hasPhoto && rec.hasIban && rec.hasNationalId && rec.hasSignedContract;
-  const anyDone = rec.hasPhoto || rec.hasIban || rec.hasNationalId || rec.hasSignedContract;
+  const allDone = rec.hasPhoto && rec.hasIban && rec.hasNationalId;
+  const anyDone = rec.hasPhoto || rec.hasIban || rec.hasNationalId;
   return allDone ? "ready" : anyDone ? "in_progress" : "pending";
 }
 
@@ -1591,8 +1591,18 @@ export async function registerRoutes(
           templateId: template.id,
           snapshotArticles: template.articles,
           snapshotVariables: buildVariableSnapshot(candidate, template, ob),
-          status: "generated",
+          status: "awaiting_signing",
         });
+
+        if (candidate.phone) {
+          const smsPlugin = await storage.getActiveSmsPlugin();
+          if (smsPlugin) {
+            sendSmsViaPlugin(smsPlugin, candidate.phone, "Your employment contract has been generated and is ready for your review and signature. Please log in to the candidate portal to view and sign it.")
+              .then(r => { if (r.success) console.log(`[SMS] Contract notification sent to ${candidate.phone}`); else console.error(`[SMS] Contract notification failed: ${r.error}`); })
+              .catch(e => console.error("[SMS] Contract notification error:", e));
+          }
+        }
+
         return res.json(updated);
       }
 
@@ -1600,14 +1610,80 @@ export async function registerRoutes(
         candidateId: candidate.id,
         onboardingId: ob.id,
         templateId: template.id,
-        status: "generated",
+        status: "awaiting_signing",
         snapshotArticles: template.articles,
         snapshotVariables: buildVariableSnapshot(candidate, template, ob),
       });
 
       await storage.updateOnboardingRecord(ob.id, { hasSignedContract: false });
 
+      if (candidate.phone) {
+        const smsPlugin = await storage.getActiveSmsPlugin();
+        if (smsPlugin) {
+          sendSmsViaPlugin(smsPlugin, candidate.phone, "Your employment contract has been generated and is ready for your review and signature. Please log in to the candidate portal to view and sign it.")
+            .then(r => { if (r.success) console.log(`[SMS] Contract notification sent to ${candidate.phone}`); else console.error(`[SMS] Contract notification failed: ${r.error}`); })
+            .catch(e => console.error("[SMS] Contract notification error:", e));
+        }
+      }
+
       return res.status(201).json(contract);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/onboarding/bulk-generate-contracts", async (req: Request, res: Response) => {
+    try {
+      const { onboardingIds, templateId } = req.body;
+      if (!templateId || !Array.isArray(onboardingIds) || onboardingIds.length === 0) {
+        return res.status(400).json({ message: "templateId and onboardingIds[] are required" });
+      }
+      const template = await storage.getContractTemplate(templateId);
+      if (!template) return res.status(404).json({ message: "Template not found" });
+
+      const results: { onboardingId: string; success: boolean; error?: string }[] = [];
+      const smsPlugin = await storage.getActiveSmsPlugin();
+
+      for (const obId of onboardingIds) {
+        try {
+          const ob = await storage.getOnboardingRecord(obId);
+          if (!ob) { results.push({ onboardingId: obId, success: false, error: "Record not found" }); continue; }
+          if (ob.status === "converted" || ob.status === "rejected") { results.push({ onboardingId: obId, success: false, error: "Already converted or rejected" }); continue; }
+          const candidate = await storage.getCandidate(ob.candidateId);
+          if (!candidate) { results.push({ onboardingId: obId, success: false, error: "Candidate not found" }); continue; }
+          if (candidate.source === "smp") { results.push({ onboardingId: obId, success: false, error: "SMP workers do not get contracts" }); continue; }
+
+          const existing = await storage.getCandidateContracts({ onboardingId: ob.id });
+          const pending = existing.find(c => c.status !== "signed");
+          if (pending) {
+            await storage.updateCandidateContract(pending.id, {
+              templateId: template.id,
+              snapshotArticles: template.articles,
+              snapshotVariables: buildVariableSnapshot(candidate, template, ob),
+              status: "awaiting_signing",
+            });
+          } else {
+            await storage.createCandidateContract({
+              candidateId: candidate.id,
+              onboardingId: ob.id,
+              templateId: template.id,
+              status: "awaiting_signing",
+              snapshotArticles: template.articles,
+              snapshotVariables: buildVariableSnapshot(candidate, template, ob),
+            });
+            await storage.updateOnboardingRecord(ob.id, { hasSignedContract: false });
+          }
+
+          if (candidate.phone && smsPlugin) {
+            sendSmsViaPlugin(smsPlugin, candidate.phone, "Your employment contract has been generated and is ready for your review and signature. Please log in to the candidate portal to view and sign it.")
+              .catch(e => console.error("[SMS] Bulk contract notification error:", e));
+          }
+
+          results.push({ onboardingId: obId, success: true });
+        } catch (e: any) {
+          results.push({ onboardingId: obId, success: false, error: e?.message ?? "Unknown error" });
+        }
+      }
+
+      return res.json({ generated: results.filter(r => r.success).length, failed: results.filter(r => !r.success).length, results });
     } catch (err) { return handleError(res, err); }
   });
 

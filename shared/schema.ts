@@ -696,6 +696,7 @@ export const contractTemplates = pgTable(
 // ─── Candidate Contracts (generated from templates) ─────────────────────────
 export const candidateContractStatusEnum = pgEnum("candidate_contract_status", [
   "generated",
+  "awaiting_signing",
   "sent",
   "signed",
 ]);
