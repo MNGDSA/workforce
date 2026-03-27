@@ -845,6 +845,18 @@ export async function registerRoutes(
       const existing = await storage.getOnboardingRecords({});
       const dup = existing.find(r => r.candidateId === data.candidateId && r.status !== "converted" && r.status !== "rejected");
       if (dup) return res.status(409).json({ message: "Candidate is already in onboarding" });
+      // Server-side: always read the candidate's actual upload status from DB
+      // so stale client caches don't create onboarding records with false flags
+      if (data.candidateId) {
+        const candidate = await storage.getCandidate(data.candidateId);
+        if (candidate) {
+          data.hasPhoto = candidate.hasPhoto ?? false;
+          data.hasIban = candidate.hasIban ?? false;
+          data.hasNationalId = candidate.hasNationalId ?? false;
+          const anyDone = data.hasPhoto || data.hasIban || data.hasNationalId;
+          if (anyDone) data.status = "in_progress";
+        }
+      }
       const record = await storage.createOnboardingRecord(data);
       return res.status(201).json(record);
     } catch (err) {
