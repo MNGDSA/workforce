@@ -341,6 +341,39 @@ The Contract Engine handles automated contract generation and digital signing fo
 3. Digital e-signature flow with legal compliance
 4. Admin monitoring dashboard for onboarding pipeline
 
+### Phased Onboarding Pipeline
+The onboarding checklist becomes a sequential pipeline instead of a flat list:
+```
+[Phase 1: Documents] ──→ [Phase 2: Contract] ──→ [Phase 3: Ready]
+```
+- **Phase 1 — Document Verification**: Candidate uploads docs → recruiter reviews each: Approve or Reject (with reason) → rejected items trigger re-upload notification. ALL required documents must be approved before Phase 2 unlocks.
+- **Phase 2 — Contract Signing**: Locked until Phase 1 complete. System auto-generates personalized contract from template. Candidate sees contract in portal and signs digitally. Admin sees signing status.
+- **Phase 3 — Ready for Conversion**: Auto-completes when Phase 1 + Phase 2 done. Eligible for bulk conversion to employee.
+- Recruiter dashboard groups candidates by phase for bottleneck visibility.
+
+### Technical Approach — Contract Generation
+- **Template storage**: Structured data in DB (not Word/DOCX). JSONB array of articles, each with title + body text containing `{{variable}}` placeholders.
+- **Variable injection**: System pulls candidate data from DB and replaces all `{{variables}}` with actual values at render time.
+- **PDF rendering**: `jspdf` (already installed) — lightweight, server-side, zero external dependencies.
+- **No Word/DOCX**: Avoids heavy rendering engines, formatting inconsistencies, and external dependencies.
+
+### Available Template Variables (Auto-Populated)
+| Variable | Source |
+|---|---|
+| `{{fullName}}` | candidate.fullName |
+| `{{nationalId}}` | candidate.nationalId |
+| `{{phone}}` | candidate.phone |
+| `{{iban}}` | candidate.ibanNumber |
+| `{{position}}` | jobPosting.title |
+| `{{dailyRate}}` | jobPosting.salary or contract-specific |
+| `{{startDate}}` / `{{endDate}}` | event dates |
+| `{{eventName}}` | event.name |
+| `{{contractDate}}` | today's date (generation date) |
+
+### New Database Tables
+- **`contract_templates`** — id, name, eventId, articles (JSONB array of `{title, body}`), variables list, createdBy, createdAt
+- **`candidate_contracts`** — id, candidateId, templateId, status (`generated` | `sent` | `signed`), signedAt, signedIp, pdfPath, createdAt
+
 ### Key Design Decisions
 - Template-driven: one template → thousands of personalized contracts
 - Self-service: candidates do their own uploads and signing from their phones
