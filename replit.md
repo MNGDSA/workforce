@@ -75,7 +75,7 @@ A full-stack event-based job hiring management platform built for Saudi Arabia o
 │   │   ├── notifications.tsx     ← UI prototype
 │   │   ├── settings.tsx          ← UI prototype
 │   │   ├── question-sets.tsx     ← Full CRUD question set builder
-│   │   ├── candidate-portal.tsx  ← With e-signature (jspdf)
+│   │   ├── candidate-portal.tsx  ← Contract preview + digital signing
 │   │   └── auth-page.tsx         ← Login/Register
 │   ├── components/
 │   │   ├── layout.tsx            ← Sidebar navigation

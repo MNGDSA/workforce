@@ -46,6 +46,12 @@ import {
   type SmsPlugin,
   type InsertSmsPlugin,
   type CandidateQuery,
+  contractTemplates,
+  candidateContracts,
+  type ContractTemplate,
+  type InsertContractTemplate,
+  type CandidateContract,
+  type InsertCandidateContract,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull } from "drizzle-orm";
 
@@ -173,6 +179,19 @@ export interface IStorage {
   markOtpUsedForRegistration(id: string): Promise<void>;
   countRecentOtpRequests(phone: string, sinceMs: number): Promise<number>;
   flagPhoneTransferred(candidateId: string): Promise<void>;
+
+  // Contract Templates
+  getContractTemplates(filters?: { eventId?: string; status?: string }): Promise<ContractTemplate[]>;
+  getContractTemplate(id: string): Promise<ContractTemplate | undefined>;
+  createContractTemplate(data: InsertContractTemplate): Promise<ContractTemplate>;
+  updateContractTemplate(id: string, data: Partial<InsertContractTemplate>): Promise<ContractTemplate | undefined>;
+  deleteContractTemplate(id: string): Promise<boolean>;
+
+  // Candidate Contracts
+  getCandidateContracts(filters?: { candidateId?: string; onboardingId?: string; templateId?: string; status?: string }): Promise<CandidateContract[]>;
+  getCandidateContract(id: string): Promise<CandidateContract | undefined>;
+  createCandidateContract(data: InsertCandidateContract): Promise<CandidateContract>;
+  updateCandidateContract(id: string, data: Partial<InsertCandidateContract>): Promise<CandidateContract | undefined>;
 
   // Dashboard
   getDashboardStats(): Promise<{
@@ -1127,6 +1146,75 @@ export class DatabaseStorage implements IStorage {
       .update(candidates)
       .set({ phone: null, phoneTransferredAt: new Date(), updatedAt: new Date() })
       .where(eq(candidates.id, candidateId));
+  }
+
+  // ─── Contract Templates ────────────────────────────────────────────────────
+  async getContractTemplates(filters?: { eventId?: string; status?: string }): Promise<ContractTemplate[]> {
+    const conditions: any[] = [];
+    if (filters?.eventId) conditions.push(eq(contractTemplates.eventId, filters.eventId));
+    if (filters?.status) conditions.push(eq(contractTemplates.status, filters.status as any));
+    return db
+      .select()
+      .from(contractTemplates)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(contractTemplates.createdAt));
+  }
+
+  async getContractTemplate(id: string): Promise<ContractTemplate | undefined> {
+    const [row] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, id));
+    return row;
+  }
+
+  async createContractTemplate(data: InsertContractTemplate): Promise<ContractTemplate> {
+    const [row] = await db.insert(contractTemplates).values(data).returning();
+    return row;
+  }
+
+  async updateContractTemplate(id: string, data: Partial<InsertContractTemplate>): Promise<ContractTemplate | undefined> {
+    const [row] = await db
+      .update(contractTemplates)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(contractTemplates.id, id))
+      .returning();
+    return row;
+  }
+
+  async deleteContractTemplate(id: string): Promise<boolean> {
+    const result = await db.delete(contractTemplates).where(eq(contractTemplates.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ─── Candidate Contracts ───────────────────────────────────────────────────
+  async getCandidateContracts(filters?: { candidateId?: string; onboardingId?: string; templateId?: string; status?: string }): Promise<CandidateContract[]> {
+    const conditions: any[] = [];
+    if (filters?.candidateId) conditions.push(eq(candidateContracts.candidateId, filters.candidateId));
+    if (filters?.onboardingId) conditions.push(eq(candidateContracts.onboardingId, filters.onboardingId));
+    if (filters?.templateId) conditions.push(eq(candidateContracts.templateId, filters.templateId));
+    if (filters?.status) conditions.push(eq(candidateContracts.status, filters.status as any));
+    return db
+      .select()
+      .from(candidateContracts)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(candidateContracts.createdAt));
+  }
+
+  async getCandidateContract(id: string): Promise<CandidateContract | undefined> {
+    const [row] = await db.select().from(candidateContracts).where(eq(candidateContracts.id, id));
+    return row;
+  }
+
+  async createCandidateContract(data: InsertCandidateContract): Promise<CandidateContract> {
+    const [row] = await db.insert(candidateContracts).values(data).returning();
+    return row;
+  }
+
+  async updateCandidateContract(id: string, data: Partial<InsertCandidateContract>): Promise<CandidateContract | undefined> {
+    const [row] = await db
+      .update(candidateContracts)
+      .set(data)
+      .where(eq(candidateContracts.id, id))
+      .returning();
+    return row;
   }
 }
 

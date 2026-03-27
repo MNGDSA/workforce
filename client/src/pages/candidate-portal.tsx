@@ -4,8 +4,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import SignatureCanvas from "react-signature-canvas";
-import jsPDF from "jspdf";
 import {
   LogOut,
   Briefcase,
@@ -412,9 +410,8 @@ export default function CandidatePortal() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const sigCanvas = useRef<SignatureCanvas>(null);
   const [isSignModalOpen, setIsSignModalOpen] = useState(false);
-  const [isSigned, setIsSigned] = useState(false);
+  const [contractPreviewOpen, setContractPreviewOpen] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<JobPosting | null>(null);
   const [activeNav, setActiveNav] = useState<"dashboard" | "jobs" | "documents">("dashboard");
@@ -485,6 +482,36 @@ export default function CandidatePortal() {
       apiRequest("GET", `/api/interviews?candidateId=${candidateId}`)
         .then((r) => r.json()),
     enabled: !!candidateId,
+  });
+
+  const { data: myContracts = [] } = useQuery<{ id: string; status: string; signedAt: string | null; templateId: string; snapshotArticles: any[]; snapshotVariables: Record<string, string> }[]>({
+    queryKey: ["/api/candidate-contracts/mine", candidateId],
+    queryFn: () =>
+      apiRequest("GET", `/api/candidate-contracts?candidateId=${candidateId}`)
+        .then((r) => r.json()),
+    enabled: !!candidateId,
+  });
+
+  const activeContract = myContracts.find(c => c.status !== "signed") || myContracts.find(c => c.status === "signed");
+  const contractIsSigned = activeContract?.status === "signed";
+
+  const { data: contractPreview } = useQuery<{ contract: any; template: any; articles: any[]; variables: Record<string, string> }>({
+    queryKey: ["/api/candidate-contracts/preview", activeContract?.id],
+    queryFn: () =>
+      apiRequest("GET", `/api/candidate-contracts/${activeContract!.id}/preview`)
+        .then((r) => r.json()),
+    enabled: !!activeContract?.id,
+  });
+
+  const signContractMutation = useMutation({
+    mutationFn: () =>
+      apiRequest("POST", `/api/candidate-contracts/${activeContract!.id}/sign`).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/candidate-contracts/mine"] });
+      toast({ title: "Contract signed successfully!", description: "Your employment contract has been recorded." });
+      setIsSignModalOpen(false);
+    },
+    onError: (e: any) => toast({ title: "Error signing contract", description: e?.message, variant: "destructive" }),
   });
 
   // Fetch the full candidate profile for the profile editor
@@ -599,30 +626,6 @@ export default function CandidatePortal() {
     refetchApplications();
   };
 
-  const clearSignature = () => sigCanvas.current?.clear();
-
-  const saveAndDownloadPdf = () => {
-    if (sigCanvas.current?.isEmpty()) return;
-    const dataURL = sigCanvas.current?.getCanvas().toDataURL("image/png");
-    const pdf = new jsPDF();
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(20);
-    pdf.text("Employment Agreement", 20, 30);
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(12);
-    pdf.text("Employer: WORKFORCE", 20, 50);
-    pdf.text("Start Date: " + new Date().toLocaleDateString(), 20, 60);
-    pdf.text("I hereby accept the terms and conditions of this employment offer.", 20, 80);
-    pdf.setFont("helvetica", "bold");
-    pdf.text("Employee Signature:", 20, 110);
-    if (dataURL) pdf.addImage(dataURL, "PNG", 20, 120, 80, 40);
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(10);
-    pdf.text("Date Signed: " + new Date().toLocaleDateString(), 20, 170);
-    pdf.save("Signed_Agreement.pdf");
-    setIsSigned(true);
-    setIsSignModalOpen(false);
-  };
 
   return (
     <div className="min-h-screen bg-background font-sans text-foreground flex flex-col">
@@ -749,34 +752,66 @@ export default function CandidatePortal() {
             <div ref={sectionDocuments} className="scroll-mt-20">
             <Card className="bg-card border-border">
               <CardHeader>
-                <CardTitle className="text-base font-display text-white">My Documents</CardTitle>
+                <CardTitle className="text-base font-display text-white">Employment Contract</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex items-center justify-between p-3 rounded-md bg-muted/20 border border-primary/30 relative overflow-hidden">
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary" />
-                  <div className="flex items-center gap-3">
-                    <FileText className="h-8 w-8 text-primary" />
-                    <div>
-                      <div className="text-sm font-medium text-white flex items-center gap-2">
-                        Employment_Agreement.pdf
-                        {isSigned && <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-500 text-[10px] h-4 py-0 border-0">Signed</Badge>}
+                {activeContract ? (
+                  <>
+                    <div className="flex items-center justify-between p-3 rounded-md bg-muted/20 border border-primary/30 relative overflow-hidden">
+                      <div className={`absolute left-0 top-0 bottom-0 w-1 ${contractIsSigned ? "bg-emerald-500" : "bg-yellow-500"}`} />
+                      <div className="flex items-center gap-3">
+                        <FileText className={`h-8 w-8 ${contractIsSigned ? "text-emerald-500" : "text-primary"}`} />
+                        <div>
+                          <div className="text-sm font-medium text-white flex items-center gap-2" data-testid="text-contract-title">
+                            Employment Contract
+                            <Badge variant="secondary" className={`text-[10px] h-4 py-0 border-0 ${contractIsSigned ? "bg-emerald-500/10 text-emerald-500" : "bg-yellow-500/10 text-yellow-500"}`}>
+                              {contractIsSigned ? "Signed" : "Pending Signature"}
+                            </Badge>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {contractIsSigned && activeContract.signedAt
+                              ? `Signed on ${new Date(activeContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`
+                              : "Please review and sign your employment contract"}
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground">{isSigned ? "Signed today" : "Requires your signature"}</div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-border text-xs"
+                          onClick={() => setContractPreviewOpen(true)}
+                          data-testid="button-preview-contract"
+                        >
+                          <Eye className="h-3 w-3 mr-1.5" />
+                          Preview
+                        </Button>
+                        {!contractIsSigned && (
+                          <Button
+                            size="sm"
+                            className="bg-primary text-primary-foreground text-xs font-bold"
+                            onClick={() => setIsSignModalOpen(true)}
+                            data-testid="button-sign-contract"
+                          >
+                            <PenTool className="h-3 w-3 mr-1.5" />
+                            Sign Now
+                          </Button>
+                        )}
+                        {contractIsSigned && (
+                          <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-3 p-4 rounded-md bg-muted/10 border border-border">
+                    <FileText className="h-8 w-8 text-muted-foreground" />
+                    <div>
+                      <div className="text-sm font-medium text-zinc-400">No Contract Available</div>
+                      <div className="text-xs text-muted-foreground">Your employment contract will appear here once generated by the admin team.</div>
                     </div>
                   </div>
-                  {!isSigned ? (
-                    <Button size="sm" className="bg-primary text-primary-foreground text-xs font-bold" onClick={() => setIsSignModalOpen(true)}>
-                      <PenTool className="h-3 w-3 mr-1.5" />
-                      Sign Now
-                    </Button>
-                  ) : (
-                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                  )}
-                </div>
-                <Button variant="outline" className="w-full border-dashed border-border text-muted-foreground hover:text-white hover:border-primary/50 hover:bg-primary/5">
-                  <UploadCloud className="mr-2 h-4 w-4" />
-                  Upload Document
-                </Button>
+                )}
               </CardContent>
             </Card>
             </div>{/* /sectionDocuments */}
@@ -929,33 +964,110 @@ export default function CandidatePortal() {
         onSuccess={handleApplySuccess}
       />
 
-      {/* Sign Dialog */}
+      {/* Contract Preview Dialog */}
+      <Dialog open={contractPreviewOpen} onOpenChange={setContractPreviewOpen}>
+        <DialogContent className="sm:max-w-2xl bg-card border-border max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Eye className="h-5 w-5 text-primary" />
+              Employment Contract Preview
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              {contractIsSigned ? "Your signed employment contract" : "Review this contract carefully before signing"}
+            </DialogDescription>
+          </DialogHeader>
+          {contractPreview && (
+            <div className="mt-4 bg-white text-black rounded-lg p-8 space-y-6 font-serif" data-testid="contract-preview-content">
+              {contractPreview.template?.logoUrl && (
+                <div className="flex justify-center">
+                  <img src={contractPreview.template.logoUrl} alt="Company Logo" className="h-16 object-contain" />
+                </div>
+              )}
+              {contractPreview.template?.companyName && (
+                <p className="text-center text-lg font-bold">{contractPreview.template.companyName}</p>
+              )}
+              {contractPreview.template?.headerText && (
+                <p className="text-center text-xl font-bold border-b pb-4">{contractPreview.template.headerText}</p>
+              )}
+              {Array.isArray(contractPreview.articles) && contractPreview.articles.map((article: any, idx: number) => {
+                let body = article.body || "";
+                if (contractPreview.variables) {
+                  Object.entries(contractPreview.variables).forEach(([key, val]) => {
+                    body = body.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(val));
+                  });
+                }
+                return (
+                  <div key={idx}>
+                    <h3 className="font-bold text-sm mb-1">Article {idx + 1}: {article.title}</h3>
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{body}</p>
+                  </div>
+                );
+              })}
+              {contractPreview.template?.footerText && (
+                <p className="text-xs text-gray-500 border-t pt-4 text-center italic">{contractPreview.template.footerText}</p>
+              )}
+              {contractIsSigned && activeContract?.signedAt && (
+                <div className="border-t pt-4 text-center">
+                  <p className="text-sm font-bold text-emerald-700">Digitally Signed</p>
+                  <p className="text-xs text-gray-500">
+                    Signed on {new Date(activeContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} at{" "}
+                    {new Date(activeContract.signedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setContractPreviewOpen(false)} className="border-border">Close</Button>
+            {!contractIsSigned && (
+              <Button
+                onClick={() => { setContractPreviewOpen(false); setIsSignModalOpen(true); }}
+                className="bg-primary text-primary-foreground font-bold"
+                data-testid="button-proceed-to-sign"
+              >
+                <PenTool className="h-3.5 w-3.5 mr-1.5" />
+                Proceed to Sign
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sign Confirmation Dialog */}
       <Dialog open={isSignModalOpen} onOpenChange={setIsSignModalOpen}>
         <DialogContent className="sm:max-w-md bg-card border-border">
           <DialogHeader>
-            <DialogTitle className="text-white">Sign Document</DialogTitle>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <PenTool className="h-5 w-5 text-primary" />
+              Sign Employment Contract
+            </DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              Draw your signature below to accept the Employment Agreement.
+              By signing, you agree to all terms and conditions in this employment contract. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-2">
-            <div className="border border-border rounded-md bg-white">
-              <SignatureCanvas
-                ref={sigCanvas}
-                penColor="black"
-                canvasProps={{ className: "w-full h-48 rounded-md cursor-crosshair" }}
-              />
+          <div className="py-4 space-y-4">
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+              <p className="text-sm text-yellow-400 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                Please ensure you have read and understood all contract terms before signing.
+              </p>
             </div>
-            <div className="flex justify-end mt-2">
-              <Button variant="ghost" size="sm" onClick={clearSignature} className="text-xs text-muted-foreground hover:text-white">
-                Clear
-              </Button>
+            <div className="bg-muted/20 rounded-lg p-3 text-sm text-muted-foreground space-y-1">
+              <p><strong className="text-white">Name:</strong> {displayName}</p>
+              <p><strong className="text-white">Date:</strong> {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>
+              <p><strong className="text-white">Method:</strong> Digital signature (IP-recorded)</p>
             </div>
           </div>
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setIsSignModalOpen(false)} className="border-border">Cancel</Button>
-            <Button onClick={saveAndDownloadPdf} className="bg-primary text-primary-foreground font-bold">
-              Sign & Download PDF
+            <Button
+              onClick={() => signContractMutation.mutate()}
+              disabled={signContractMutation.isPending}
+              className="bg-primary text-primary-foreground font-bold gap-2"
+              data-testid="button-confirm-sign"
+            >
+              {signContractMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              I Agree & Sign
             </Button>
           </div>
         </DialogContent>

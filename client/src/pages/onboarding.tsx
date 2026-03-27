@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -16,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Sheet,
@@ -63,6 +65,15 @@ import {
   ExternalLink,
   Check,
   Trash2,
+  FileText,
+  GripVertical,
+  Copy,
+  Pencil,
+  Archive,
+  ChevronUp,
+  ChevronDown,
+  Upload,
+  Image,
 } from "lucide-react";
 
 type OnboardingStatus = "pending" | "in_progress" | "ready" | "converted" | "rejected";
@@ -191,6 +202,709 @@ function AutoSaveNotes({ recordId, initialValue, onSave }: { recordId: string; i
         className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600 resize-none text-sm"
         rows={3}
       />
+    </div>
+  );
+}
+
+interface CandidateContractRecord {
+  id: string;
+  candidateId: string;
+  onboardingId?: string | null;
+  templateId: string;
+  status: "generated" | "sent" | "signed";
+  signedAt?: string | null;
+  signedIp?: string | null;
+  createdAt: string;
+}
+
+function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { onboardingRecord: OnboardingRecord; candidate: Candidate | undefined; docsComplete: boolean }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const { data: templates = [] } = useQuery<ContractTemplate[]>({
+    queryKey: ["/api/contract-templates"],
+    select: (data: ContractTemplate[]) => data.filter(t => t.status === "active"),
+  });
+
+  const { data: contracts = [] } = useQuery<CandidateContractRecord[]>({
+    queryKey: ["/api/candidate-contracts", { onboardingId: onboardingRecord.id }],
+    queryFn: () => apiRequest("GET", `/api/candidate-contracts?onboardingId=${onboardingRecord.id}`).then(r => r.json()),
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: (templateId: string) =>
+      apiRequest("POST", `/api/onboarding/${onboardingRecord.id}/generate-contract`, { templateId }).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/candidate-contracts"] });
+      qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
+      toast({ title: "Contract generated and ready for signing" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const latestContract = contracts[0];
+  const isLocked = !docsComplete;
+
+  return (
+    <div className={`border-t border-zinc-800 pt-4 mt-4 ${isLocked ? "opacity-50" : ""}`}>
+      <div className="flex items-center gap-2 mb-3">
+        <FileSignature className="h-4 w-4 text-primary" />
+        <span className="text-sm font-medium text-white">Phase 2: Employment Contract</span>
+        {isLocked && (
+          <Badge className="text-[10px] bg-zinc-800 text-zinc-500 border-0">Complete documents first</Badge>
+        )}
+      </div>
+
+      {isLocked ? (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+          <p className="text-xs text-zinc-500 flex items-center gap-1.5">
+            <Clock className="h-3 w-3" />
+            Complete all document requirements above to unlock contract generation
+          </p>
+        </div>
+      ) : latestContract ? (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {latestContract.status === "signed" ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              ) : (
+                <Clock className="h-4 w-4 text-yellow-500" />
+              )}
+              <span className="text-sm text-white">
+                {latestContract.status === "signed" ? "Contract Signed" : latestContract.status === "sent" ? "Awaiting Signature" : "Contract Generated"}
+              </span>
+            </div>
+            <Badge className={`text-xs border-0 ${latestContract.status === "signed" ? "bg-emerald-900/40 text-emerald-400" : "bg-yellow-900/40 text-yellow-400"}`}>
+              {latestContract.status}
+            </Badge>
+          </div>
+          {latestContract.signedAt && (
+            <p className="text-xs text-zinc-500">
+              Signed on {new Date(latestContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 space-y-3">
+          <p className="text-xs text-zinc-400">Select a contract template to generate for this candidate:</p>
+          <div className="flex gap-2">
+            <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+              <SelectTrigger className="bg-zinc-800 border-zinc-700 flex-1" data-testid="select-contract-template">
+                <SelectValue placeholder="Select template…" />
+              </SelectTrigger>
+              <SelectContent className="bg-zinc-900 border-zinc-700">
+                {templates.map(t => (
+                  <SelectItem key={t.id} value={t.id}>{t.name} (v{t.version})</SelectItem>
+                ))}
+                {templates.length === 0 && (
+                  <SelectItem value="none" disabled>No active templates — create one first</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1 shrink-0"
+              disabled={!selectedTemplateId || generateMutation.isPending}
+              onClick={() => selectedTemplateId && generateMutation.mutate(selectedTemplateId)}
+              data-testid="button-generate-contract"
+            >
+              {generateMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+              Generate
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface ContractTemplate {
+  id: string;
+  name: string;
+  eventId?: string | null;
+  version: number;
+  parentTemplateId?: string | null;
+  status: "draft" | "active" | "archived";
+  logoUrl?: string | null;
+  companyName?: string | null;
+  headerText?: string | null;
+  footerText?: string | null;
+  articles: { title: string; body: string }[];
+  createdAt: string;
+}
+
+interface Event {
+  id: string;
+  name: string;
+}
+
+const AVAILABLE_VARIABLES = [
+  { key: "{{fullName}}", label: "Full Name" },
+  { key: "{{nationalId}}", label: "National ID / Iqama" },
+  { key: "{{phone}}", label: "Phone Number" },
+  { key: "{{iban}}", label: "IBAN Number" },
+  { key: "{{position}}", label: "Position" },
+  { key: "{{department}}", label: "Department" },
+  { key: "{{salary}}", label: "Salary" },
+  { key: "{{startDate}}", label: "Start Date" },
+  { key: "{{eventName}}", label: "Event Name" },
+  { key: "{{contractDate}}", label: "Contract Date" },
+  { key: "{{companyName}}", label: "Company Name" },
+];
+
+function ContractTemplatesTab() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<ContractTemplate | null>(null);
+  const [previewTemplate, setPreviewTemplate] = useState<ContractTemplate | null>(null);
+
+  const [formName, setFormName] = useState("");
+  const [formEventId, setFormEventId] = useState("");
+  const [formCompanyName, setFormCompanyName] = useState("");
+  const [formHeaderText, setFormHeaderText] = useState("");
+  const [formFooterText, setFormFooterText] = useState("");
+  const [formArticles, setFormArticles] = useState<{ title: string; body: string }[]>([{ title: "", body: "" }]);
+  const [formStatus, setFormStatus] = useState<"draft" | "active">("draft");
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: templates = [], isLoading } = useQuery<ContractTemplate[]>({
+    queryKey: ["/api/contract-templates"],
+  });
+
+  const { data: eventsData = [] } = useQuery<Event[]>({
+    queryKey: ["/api/events"],
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/contract-templates", data).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/contract-templates"] });
+      toast({ title: "Template created" });
+      closeEditor();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => apiRequest("PATCH", `/api/contract-templates/${id}`, data).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/contract-templates"] });
+      toast({ title: "Template updated" });
+      closeEditor();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/contract-templates/${id}`).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/contract-templates"] });
+      toast({ title: "Template deleted" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const newVersionMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/contract-templates/${id}/new-version`, {}).then(r => r.json()),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["/api/contract-templates"] });
+      toast({ title: `New version (v${data.version}) created` });
+      openEditor(data);
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const logoUploadMutation = useMutation({
+    mutationFn: async ({ id, file }: { id: string; file: File }) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`/api/contract-templates/${id}/logo`, { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Logo upload failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/contract-templates"] });
+      toast({ title: "Logo uploaded" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  function openEditor(template?: ContractTemplate) {
+    if (template) {
+      setEditingTemplate(template);
+      setFormName(template.name);
+      setFormEventId(template.eventId || "");
+      setFormCompanyName(template.companyName || "");
+      setFormHeaderText(template.headerText || "");
+      setFormFooterText(template.footerText || "");
+      setFormArticles(Array.isArray(template.articles) && template.articles.length > 0 ? template.articles : [{ title: "", body: "" }]);
+      setFormStatus(template.status === "archived" ? "draft" : template.status);
+    } else {
+      setEditingTemplate(null);
+      setFormName("");
+      setFormEventId("");
+      setFormCompanyName("");
+      setFormHeaderText("");
+      setFormFooterText("");
+      setFormArticles([{ title: "", body: "" }]);
+      setFormStatus("draft");
+    }
+    setEditorOpen(true);
+  }
+
+  function closeEditor() {
+    setEditorOpen(false);
+    setEditingTemplate(null);
+  }
+
+  function handleSave() {
+    if (!formName.trim()) {
+      toast({ title: "Template name is required", variant: "destructive" });
+      return;
+    }
+    const validArticles = formArticles.filter(a => a.title.trim() || a.body.trim());
+    if (validArticles.length === 0) {
+      toast({ title: "Add at least one article", variant: "destructive" });
+      return;
+    }
+    const payload = {
+      name: formName.trim(),
+      eventId: formEventId === "none" ? null : formEventId || null,
+      companyName: formCompanyName.trim() || null,
+      headerText: formHeaderText.trim() || null,
+      footerText: formFooterText.trim() || null,
+      articles: validArticles,
+      status: formStatus,
+    };
+    if (editingTemplate) {
+      updateMutation.mutate({ id: editingTemplate.id, data: payload });
+    } else {
+      createMutation.mutate(payload);
+    }
+  }
+
+  function addArticle() {
+    setFormArticles(prev => [...prev, { title: "", body: "" }]);
+  }
+
+  function removeArticle(idx: number) {
+    setFormArticles(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  function moveArticle(idx: number, dir: "up" | "down") {
+    setFormArticles(prev => {
+      const arr = [...prev];
+      const target = dir === "up" ? idx - 1 : idx + 1;
+      if (target < 0 || target >= arr.length) return arr;
+      [arr[idx], arr[target]] = [arr[target], arr[idx]];
+      return arr;
+    });
+  }
+
+  function updateArticle(idx: number, field: "title" | "body", value: string) {
+    setFormArticles(prev => prev.map((a, i) => i === idx ? { ...a, [field]: value } : a));
+  }
+
+  function insertVariable(articleIdx: number, variable: string) {
+    setFormArticles(prev => prev.map((a, i) => i === articleIdx ? { ...a, body: a.body + variable } : a));
+  }
+
+  function replaceVariables(text: string): string {
+    let result = text;
+    AVAILABLE_VARIABLES.forEach(v => {
+      result = result.replace(new RegExp(v.key.replace(/[{}]/g, "\\$&"), "g"), `[${v.label}]`);
+    });
+    return result;
+  }
+
+  const activeTemplates = templates.filter(t => t.status !== "archived");
+  const archivedTemplates = templates.filter(t => t.status === "archived");
+
+  const statusBadge = (s: string) => {
+    const styles: Record<string, string> = {
+      draft: "bg-zinc-700 text-zinc-200",
+      active: "bg-emerald-900/60 text-emerald-300",
+      archived: "bg-zinc-800 text-zinc-500",
+    };
+    return styles[s] || styles.draft;
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-zinc-400 text-sm">Create and manage employment contract templates for auto-generation</p>
+        </div>
+        <Button
+          data-testid="button-create-template"
+          onClick={() => openEditor()}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+        >
+          <Plus className="h-4 w-4" />
+          Create Template
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+        </div>
+      ) : activeTemplates.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <FileText className="h-12 w-12 text-zinc-700 mb-4" />
+          <p className="text-zinc-400 font-medium">No contract templates yet</p>
+          <p className="text-zinc-600 text-sm mt-1">Create a template to start generating employment contracts</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {activeTemplates.map(t => {
+            const eventName = eventsData.find(e => e.id === t.eventId)?.name;
+            return (
+              <div
+                key={t.id}
+                data-testid={`card-template-${t.id}`}
+                className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4"
+              >
+                <div className="h-12 w-12 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0">
+                  {t.logoUrl ? (
+                    <img src={t.logoUrl} alt="Logo" className="h-10 w-10 object-contain rounded" />
+                  ) : (
+                    <FileText className="h-6 w-6 text-zinc-500" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-white text-sm">{t.name}</span>
+                    <Badge className={`text-xs px-2 py-0.5 ${statusBadge(t.status)} border-0`}>
+                      {t.status}
+                    </Badge>
+                    <span className="text-zinc-600 text-xs">v{t.version}</span>
+                  </div>
+                  <div className="flex gap-3 mt-1 text-xs text-zinc-500">
+                    {t.companyName && <span>{t.companyName}</span>}
+                    {eventName && <span>Event: {eventName}</span>}
+                    <span>{(Array.isArray(t.articles) ? t.articles.length : 0)} article{(Array.isArray(t.articles) ? t.articles.length : 0) !== 1 ? "s" : ""}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 gap-1"
+                    onClick={() => setPreviewTemplate(t)}
+                    data-testid={`button-preview-template-${t.id}`}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    Preview
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 gap-1"
+                    onClick={() => openEditor(t)}
+                    data-testid={`button-edit-template-${t.id}`}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 gap-1"
+                    onClick={() => {
+                      if (logoInputRef.current) {
+                        logoInputRef.current.dataset.templateId = t.id;
+                        logoInputRef.current.click();
+                      }
+                    }}
+                    data-testid={`button-upload-logo-${t.id}`}
+                  >
+                    <Image className="h-3.5 w-3.5" />
+                    Logo
+                  </Button>
+                  {t.status === "active" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 gap-1"
+                      onClick={() => newVersionMutation.mutate(t.id)}
+                      data-testid={`button-new-version-${t.id}`}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      New Version
+                    </Button>
+                  )}
+                  {t.status === "draft" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-red-900/60 text-red-400 hover:bg-red-950/40 gap-1"
+                      onClick={() => deleteMutation.mutate(t.id)}
+                      data-testid={`button-delete-template-${t.id}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {archivedTemplates.length > 0 && (
+        <details className="mt-4">
+          <summary className="text-xs text-zinc-500 cursor-pointer hover:text-zinc-400">
+            Archived versions ({archivedTemplates.length})
+          </summary>
+          <div className="space-y-2 mt-2">
+            {archivedTemplates.map(t => (
+              <div key={t.id} className="bg-zinc-950 border border-zinc-900 rounded-lg p-3 flex items-center gap-3 opacity-60">
+                <FileText className="h-4 w-4 text-zinc-600" />
+                <span className="text-sm text-zinc-500">{t.name} v{t.version}</span>
+                <Badge className="text-xs px-2 py-0.5 bg-zinc-800 text-zinc-500 border-0">archived</Badge>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
+      <input
+        ref={logoInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          const templateId = logoInputRef.current?.dataset.templateId;
+          if (file && templateId) {
+            logoUploadMutation.mutate({ id: templateId, file });
+          }
+          e.target.value = "";
+        }}
+      />
+
+      <Dialog open={editorOpen} onOpenChange={(v) => { if (!v) closeEditor(); }}>
+        <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display text-lg flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              {editingTemplate ? `Edit Template: ${editingTemplate.name}` : "Create Contract Template"}
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400 text-sm">
+              Define the contract structure with articles. Use {"{{variables}}"} for auto-filled candidate data.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-400 uppercase tracking-wider">Template Name *</Label>
+                <Input
+                  data-testid="input-template-name"
+                  value={formName}
+                  onChange={e => setFormName(e.target.value)}
+                  placeholder="e.g. Ramadan 2026 Employment Agreement"
+                  className="bg-zinc-900 border-zinc-700"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-400 uppercase tracking-wider">Linked Event</Label>
+                <Select value={formEventId} onValueChange={setFormEventId}>
+                  <SelectTrigger className="bg-zinc-900 border-zinc-700" data-testid="select-template-event">
+                    <SelectValue placeholder="No event linked" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-700">
+                    <SelectItem value="none">No event linked</SelectItem>
+                    {eventsData.map(e => (
+                      <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-400 uppercase tracking-wider">Company Name</Label>
+                <Input
+                  data-testid="input-company-name"
+                  value={formCompanyName}
+                  onChange={e => setFormCompanyName(e.target.value)}
+                  placeholder="e.g. Luxury Carts Company Ltd"
+                  className="bg-zinc-900 border-zinc-700"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-400 uppercase tracking-wider">Status</Label>
+                <Select value={formStatus} onValueChange={(v: any) => setFormStatus(v)}>
+                  <SelectTrigger className="bg-zinc-900 border-zinc-700" data-testid="select-template-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-700">
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-zinc-400 uppercase tracking-wider">Header Text</Label>
+              <Input
+                data-testid="input-header-text"
+                value={formHeaderText}
+                onChange={e => setFormHeaderText(e.target.value)}
+                placeholder="e.g. Employment Contract"
+                className="bg-zinc-900 border-zinc-700"
+              />
+            </div>
+
+            <div className="border-t border-zinc-800 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <Label className="text-xs text-zinc-400 uppercase tracking-wider">Contract Articles</Label>
+                <Button size="sm" variant="outline" className="border-zinc-700 text-zinc-300 gap-1" onClick={addArticle} data-testid="button-add-article">
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Article
+                </Button>
+              </div>
+
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-3 mb-3">
+                <p className="text-xs text-zinc-500 mb-2">Available variables (click to copy):</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {AVAILABLE_VARIABLES.map(v => (
+                    <button
+                      key={v.key}
+                      type="button"
+                      className="text-xs px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-emerald-400 rounded font-mono transition-colors"
+                      onClick={() => {
+                        navigator.clipboard.writeText(v.key);
+                        toast({ title: `Copied ${v.key}` });
+                      }}
+                    >
+                      {v.key}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {formArticles.map((article, idx) => (
+                  <div key={idx} className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-zinc-600 font-mono w-16 shrink-0">Art. {idx + 1}</span>
+                      <Input
+                        value={article.title}
+                        onChange={e => updateArticle(idx, "title", e.target.value)}
+                        placeholder="Article title"
+                        className="bg-zinc-800 border-zinc-700 h-8 text-sm flex-1"
+                        data-testid={`input-article-title-${idx}`}
+                      />
+                      <div className="flex gap-0.5">
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-zinc-500 hover:text-white" onClick={() => moveArticle(idx, "up")} disabled={idx === 0}>
+                          <ChevronUp className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-zinc-500 hover:text-white" onClick={() => moveArticle(idx, "down")} disabled={idx === formArticles.length - 1}>
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:text-red-400" onClick={() => removeArticle(idx)} disabled={formArticles.length <= 1}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                    <Textarea
+                      value={article.body}
+                      onChange={e => updateArticle(idx, "body", e.target.value)}
+                      placeholder="Article body — use {{variables}} for auto-filled data"
+                      className="bg-zinc-800 border-zinc-700 text-sm min-h-20"
+                      data-testid={`input-article-body-${idx}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-zinc-400 uppercase tracking-wider">Footer Text</Label>
+              <Input
+                data-testid="input-footer-text"
+                value={formFooterText}
+                onChange={e => setFormFooterText(e.target.value)}
+                placeholder="e.g. Legal disclaimer or signing terms"
+                className="bg-zinc-900 border-zinc-700"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4">
+            <Button variant="outline" className="border-zinc-700" onClick={closeEditor}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={createMutation.isPending || updateMutation.isPending}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+              data-testid="button-save-template"
+            >
+              {(createMutation.isPending || updateMutation.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
+              {editingTemplate ? "Update Template" : "Create Template"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!previewTemplate} onOpenChange={(v) => { if (!v) setPreviewTemplate(null); }}>
+        <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display text-lg flex items-center gap-2">
+              <Eye className="h-5 w-5 text-primary" />
+              Preview: {previewTemplate?.name}
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400 text-sm">
+              This shows how the contract will look with sample data filled in.
+            </DialogDescription>
+          </DialogHeader>
+          {previewTemplate && (
+            <div className="mt-4 bg-white text-black rounded-lg p-8 space-y-6 font-serif">
+              {previewTemplate.logoUrl && (
+                <div className="flex justify-center">
+                  <img src={previewTemplate.logoUrl} alt="Logo" className="h-16 object-contain" />
+                </div>
+              )}
+              {previewTemplate.companyName && (
+                <p className="text-center text-lg font-bold">{previewTemplate.companyName}</p>
+              )}
+              {previewTemplate.headerText && (
+                <p className="text-center text-xl font-bold border-b pb-4">{previewTemplate.headerText}</p>
+              )}
+              {Array.isArray(previewTemplate.articles) && previewTemplate.articles.map((article: any, idx: number) => (
+                <div key={idx}>
+                  <h3 className="font-bold text-sm mb-1">Article {idx + 1}: {article.title}</h3>
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVariables(article.body)}</p>
+                </div>
+              ))}
+              {previewTemplate.footerText && (
+                <div className="border-t pt-4 mt-6">
+                  <p className="text-xs text-gray-500">{previewTemplate.footerText}</p>
+                </div>
+              )}
+              <div className="border-t pt-4 grid grid-cols-2 gap-8 mt-6">
+                <div>
+                  <p className="text-xs text-gray-500 mb-8">Employer Signature</p>
+                  <div className="border-b border-gray-300" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-8">Employee Signature</p>
+                  <div className="border-b border-gray-300" />
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -429,7 +1143,22 @@ export default function OnboardingPage() {
             <h1 className="text-3xl font-display font-bold text-white tracking-tight">Onboarding</h1>
             <p className="text-zinc-400 mt-1 text-sm">Convert shortlisted candidates into employees after prerequisite verification</p>
           </div>
-          <div className="flex gap-2">
+        </div>
+
+        <Tabs defaultValue="pipeline" className="w-full">
+          <TabsList className="bg-zinc-900 border border-zinc-800 p-1">
+            <TabsTrigger value="pipeline" className="data-[state=active]:bg-zinc-800 data-[state=active]:text-white text-zinc-400 gap-2" data-testid="tab-pipeline">
+              <ClipboardCheck className="h-4 w-4" />
+              Onboarding Pipeline
+            </TabsTrigger>
+            <TabsTrigger value="templates" className="data-[state=active]:bg-zinc-800 data-[state=active]:text-white text-zinc-400 gap-2" data-testid="tab-templates">
+              <FileText className="h-4 w-4" />
+              Contract Templates
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="pipeline" className="space-y-6 mt-4">
+        <div className="flex justify-end gap-2">
             {stats.ready > 0 && (
               <Button
                 data-testid="button-bulk-convert"
@@ -450,7 +1179,6 @@ export default function OnboardingPage() {
               Admit Candidate
             </Button>
           </div>
-        </div>
 
         {/* KPI Row */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -548,26 +1276,33 @@ export default function OnboardingPage() {
                         </span>
                       )}
                     </div>
-                    <div className="mt-2 flex items-center gap-2">
-                      <ProgressBar value={done} total={total} />
-                      <span className="text-xs text-zinc-500 shrink-0">{done}/{total}</span>
-                    </div>
-                    {/* Prereq chips */}
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {getPrerequisites(isSmp).map(p => (
-                        <span
-                          key={p.key}
-                          className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                            rec[p.key as keyof OnboardingRecord]
-                              ? "bg-emerald-900/40 text-emerald-400 border border-emerald-800/50"
-                              : "bg-zinc-800 text-zinc-500 border border-zinc-700"
-                          }`}
-                        >
-                          <p.icon className="h-3 w-3" />
-                          {p.label}
-                        </span>
-                      ))}
-                    </div>
+                    {(() => {
+                      const docPrereqs = getPrerequisites(isSmp).filter(p => p.key !== "hasSignedContract");
+                      const docsComplete = docPrereqs.every(p => rec[p.key as keyof OnboardingRecord]);
+                      const docsDone = docPrereqs.filter(p => rec[p.key as keyof OnboardingRecord]).length;
+                      const contractSigned = !!rec.hasSignedContract || !!rec.contractSignedAt;
+                      const phase = isConverted ? 3 : isSmp ? (docsComplete ? 3 : 1) : contractSigned ? 3 : docsComplete ? 2 : 1;
+                      return (
+                        <div className="mt-2">
+                          <div className="flex items-center gap-1 text-xs">
+                            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${phase >= 1 ? (docsComplete ? "bg-emerald-900/40 text-emerald-400" : "bg-yellow-900/40 text-yellow-400") : "bg-zinc-800 text-zinc-500"}`}>
+                              <ClipboardCheck className="h-3 w-3" />
+                              Docs {docsDone}/{docPrereqs.length}
+                            </div>
+                            <div className={`w-4 h-px ${phase >= 2 ? "bg-emerald-700" : "bg-zinc-700"}`} />
+                            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${isSmp ? "bg-zinc-800 text-zinc-600" : phase >= 2 ? (contractSigned ? "bg-emerald-900/40 text-emerald-400" : "bg-yellow-900/40 text-yellow-400") : "bg-zinc-800 text-zinc-600"}`}>
+                              <FileSignature className="h-3 w-3" />
+                              {isSmp ? "N/A" : contractSigned ? "Signed" : docsComplete ? "Pending" : "Locked"}
+                            </div>
+                            <div className={`w-4 h-px ${phase >= 3 ? "bg-emerald-700" : "bg-zinc-700"}`} />
+                            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${phase >= 3 ? "bg-emerald-900/40 text-emerald-400" : "bg-zinc-800 text-zinc-600"}`}>
+                              <CheckCircle2 className="h-3 w-3" />
+                              {isConverted ? "Converted" : phase >= 3 ? "Ready" : "—"}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Actions */}
@@ -628,6 +1363,12 @@ export default function OnboardingPage() {
             })}
           </div>
         )}
+          </TabsContent>
+
+          <TabsContent value="templates" className="mt-4">
+            <ContractTemplatesTab />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* ── Admit Candidate Dialog ── */}
@@ -930,6 +1671,14 @@ export default function OnboardingPage() {
                   );
                 })}
               </div>
+
+              {!checklistIsSmp && (
+                <ContractPhaseSection
+                  onboardingRecord={checklistRecord}
+                  candidate={checklistCand}
+                  docsComplete={checklistPrereqs.filter(p => p.key !== "hasSignedContract").every(p => checklistRecord[p.key as keyof OnboardingRecord])}
+                />
+              )}
 
               {/* Notes */}
               <AutoSaveNotes

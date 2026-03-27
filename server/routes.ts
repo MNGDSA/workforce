@@ -20,6 +20,7 @@ import {
   insertBusinessUnitSchema,
   insertSMPContractSchema,
   insertQuestionSetSchema,
+  insertContractTemplateSchema,
   candidateQuerySchema,
 } from "@shared/schema";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
@@ -72,6 +73,22 @@ function handleError(res: Response, err: unknown) {
   }
   const message = err instanceof Error ? err.message : "Internal server error";
   return res.status(500).json({ message });
+}
+
+function buildVariableSnapshot(candidate: any, template: any, ob: any): Record<string, string> {
+  return {
+    fullName: candidate.fullNameEn || candidate.fullNameAr || "",
+    nationalId: candidate.nationalId || "",
+    phone: candidate.phone || "",
+    iban: candidate.ibanNumber || "",
+    position: ob.position || "",
+    department: ob.department || "",
+    salary: ob.salary?.toString() || "",
+    startDate: ob.startDate || "",
+    eventName: "",
+    contractDate: new Date().toISOString().split("T")[0],
+    companyName: template.companyName || "",
+  };
 }
 
 function computeOnboardingStatus(rec: { hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean; hasSignedContract: boolean }, isSmp: boolean): "pending" | "in_progress" | "ready" {
@@ -1439,6 +1456,189 @@ export async function registerRoutes(
     } catch (err) {
       return handleError(res, err);
     }
+  });
+
+  // ─── Contract Templates (Contract Engine) ─────────────────────────────────
+  app.get("/api/contract-templates", async (req: Request, res: Response) => {
+    try {
+      const { eventId, status } = req.query;
+      const data = await storage.getContractTemplates({
+        eventId: eventId as string | undefined,
+        status: status as string | undefined,
+      });
+      return res.json(data);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/contract-templates/:id", async (req: Request, res: Response) => {
+    try {
+      const t = await storage.getContractTemplate(req.params.id);
+      if (!t) return res.status(404).json({ message: "Template not found" });
+      return res.json(t);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/contract-templates", async (req: Request, res: Response) => {
+    try {
+      const parsed = insertContractTemplateSchema.parse(req.body);
+      const created = await storage.createContractTemplate(parsed);
+      return res.status(201).json(created);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/contract-templates/:id", async (req: Request, res: Response) => {
+    try {
+      const existing = await storage.getContractTemplate(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Template not found" });
+      const updated = await storage.updateContractTemplate(req.params.id, req.body);
+      return res.json(updated);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.delete("/api/contract-templates/:id", async (req: Request, res: Response) => {
+    try {
+      const contracts = await storage.getCandidateContracts({ templateId: req.params.id });
+      if (contracts.length > 0) {
+        return res.status(409).json({ message: "Cannot delete template that has generated contracts. Archive it instead." });
+      }
+      const ok = await storage.deleteContractTemplate(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Template not found" });
+      return res.json({ message: "Template deleted" });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/contract-templates/:id/new-version", async (req: Request, res: Response) => {
+    try {
+      const parent = await storage.getContractTemplate(req.params.id);
+      if (!parent) return res.status(404).json({ message: "Template not found" });
+      const newVersion = await storage.createContractTemplate({
+        name: parent.name,
+        eventId: parent.eventId,
+        version: parent.version + 1,
+        parentTemplateId: parent.id,
+        status: "draft",
+        logoUrl: parent.logoUrl,
+        companyName: parent.companyName,
+        headerText: parent.headerText,
+        footerText: parent.footerText,
+        articles: req.body.articles ?? parent.articles,
+        createdBy: req.body.createdBy ?? parent.createdBy,
+      });
+      await storage.updateContractTemplate(parent.id, { status: "archived" });
+      return res.status(201).json(newVersion);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/contract-templates/:id/logo", upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      const logoUrl = `/uploads/${req.file.filename}`;
+      const updated = await storage.updateContractTemplate(req.params.id, { logoUrl });
+      if (!updated) return res.status(404).json({ message: "Template not found" });
+      return res.json(updated);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Candidate Contracts (generate / sign) ──────────────────────────────
+  app.get("/api/candidate-contracts", async (req: Request, res: Response) => {
+    try {
+      const { candidateId, onboardingId, templateId, status } = req.query;
+      const data = await storage.getCandidateContracts({
+        candidateId: candidateId as string | undefined,
+        onboardingId: onboardingId as string | undefined,
+        templateId: templateId as string | undefined,
+        status: status as string | undefined,
+      });
+      return res.json(data);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/onboarding/:id/generate-contract", async (req: Request, res: Response) => {
+    try {
+      const ob = await storage.getOnboardingRecord(req.params.id);
+      if (!ob) return res.status(404).json({ message: "Onboarding record not found" });
+
+      const candidate = await storage.getCandidate(ob.candidateId);
+      if (!candidate) return res.status(404).json({ message: "Candidate not found" });
+
+      const { templateId } = req.body;
+      if (!templateId) return res.status(400).json({ message: "templateId is required" });
+
+      const template = await storage.getContractTemplate(templateId);
+      if (!template) return res.status(404).json({ message: "Template not found" });
+
+      const existing = await storage.getCandidateContracts({ onboardingId: ob.id });
+      const pending = existing.find(c => c.status !== "signed");
+      if (pending) {
+        const updated = await storage.updateCandidateContract(pending.id, {
+          templateId: template.id,
+          snapshotArticles: template.articles,
+          snapshotVariables: buildVariableSnapshot(candidate, template, ob),
+          status: "generated",
+        });
+        return res.json(updated);
+      }
+
+      const contract = await storage.createCandidateContract({
+        candidateId: candidate.id,
+        onboardingId: ob.id,
+        templateId: template.id,
+        status: "generated",
+        snapshotArticles: template.articles,
+        snapshotVariables: buildVariableSnapshot(candidate, template, ob),
+      });
+
+      await storage.updateOnboardingRecord(ob.id, { hasSignedContract: false });
+
+      return res.status(201).json(contract);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/candidate-contracts/:id/sign", async (req: Request, res: Response) => {
+    try {
+      const contract = await storage.getCandidateContract(req.params.id);
+      if (!contract) return res.status(404).json({ message: "Contract not found" });
+      if (contract.status === "signed") return res.status(409).json({ message: "Contract already signed" });
+
+      const ip = req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+
+      const updated = await storage.updateCandidateContract(contract.id, {
+        status: "signed",
+        signedAt: new Date(),
+        signedIp: ip,
+      });
+
+      if (contract.onboardingId) {
+        const ob = await storage.getOnboardingRecord(contract.onboardingId);
+        if (ob) {
+          const candidate = await storage.getCandidate(ob.candidateId);
+          const isSmp = candidate?.source === "smp";
+          const rec = { ...ob, hasSignedContract: true };
+          const newStatus = computeOnboardingStatus(rec, isSmp);
+          await storage.updateOnboardingRecord(contract.onboardingId, {
+            hasSignedContract: true,
+            contractSignedAt: new Date(),
+            status: newStatus,
+          });
+        }
+      }
+
+      return res.json(updated);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/candidate-contracts/:id/preview", async (req: Request, res: Response) => {
+    try {
+      const contract = await storage.getCandidateContract(req.params.id);
+      if (!contract) return res.status(404).json({ message: "Contract not found" });
+      const template = await storage.getContractTemplate(contract.templateId);
+      return res.json({
+        contract,
+        template: template ? { name: template.name, companyName: template.companyName, logoUrl: template.logoUrl, headerText: template.headerText, footerText: template.footerText } : null,
+        articles: contract.snapshotArticles,
+        variables: contract.snapshotVariables,
+      });
+    } catch (err) { return handleError(res, err); }
   });
 
   // ─── Question Sets ────────────────────────────────────────────────────────

@@ -659,6 +659,73 @@ export const insertOtpVerificationSchema = createInsertSchema(otpVerifications).
 export type InsertOtpVerification = z.infer<typeof insertOtpVerificationSchema>;
 export type OtpVerification = typeof otpVerifications.$inferSelect;
 
+// ─── Contract Templates (Contract Engine) ──────────────────────────────────
+export const contractTemplateStatusEnum = pgEnum("contract_template_status", [
+  "draft",
+  "active",
+  "archived",
+]);
+
+export const contractTemplates = pgTable(
+  "contract_templates",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    name: text("name").notNull(),
+    eventId: varchar("event_id").references(() => events.id, { onDelete: "set null" }),
+    version: integer("version").notNull().default(1),
+    parentTemplateId: varchar("parent_template_id"),
+    status: contractTemplateStatusEnum("status").notNull().default("draft"),
+    logoUrl: text("logo_url"),
+    companyName: text("company_name"),
+    headerText: text("header_text"),
+    footerText: text("footer_text"),
+    articles: jsonb("articles").notNull().default(sql`'[]'::jsonb`),
+    createdBy: varchar("created_by").references(() => users.id),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    eventIdx: index("ct_event_idx").on(t.eventId),
+    statusIdx: index("ct_status_idx").on(t.status),
+    parentIdx: index("ct_parent_idx").on(t.parentTemplateId),
+  })
+);
+
+// ─── Candidate Contracts (generated from templates) ─────────────────────────
+export const candidateContractStatusEnum = pgEnum("candidate_contract_status", [
+  "generated",
+  "sent",
+  "signed",
+]);
+
+export const candidateContracts = pgTable(
+  "candidate_contracts",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    candidateId: varchar("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    onboardingId: varchar("onboarding_id")
+      .references(() => onboarding.id, { onDelete: "set null" }),
+    templateId: varchar("template_id")
+      .notNull()
+      .references(() => contractTemplates.id, { onDelete: "restrict" }),
+    status: candidateContractStatusEnum("status").notNull().default("generated"),
+    snapshotArticles: jsonb("snapshot_articles"),
+    snapshotVariables: jsonb("snapshot_variables"),
+    generatedPdfUrl: text("generated_pdf_url"),
+    signedAt: timestamp("signed_at"),
+    signedIp: text("signed_ip"),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    candidateIdx: index("cc_candidate_idx").on(t.candidateId),
+    onboardingIdx: index("cc_onboarding_idx").on(t.onboardingId),
+    templateIdx: index("cc_template_idx").on(t.templateId),
+    statusIdx: index("cc_status_idx").on(t.status),
+  })
+);
+
 // ─── SMS Plugin Config Format (the contract every plugin must satisfy) ───────
 export interface SmsCredentialDef {
   key: string;
@@ -693,6 +760,21 @@ export interface SmsPluginConfig {
     notes?: string;
   };
 }
+
+export const insertContractTemplateSchema = createInsertSchema(contractTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
+export type ContractTemplate = typeof contractTemplates.$inferSelect;
+
+export const insertCandidateContractSchema = createInsertSchema(candidateContracts).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertCandidateContract = z.infer<typeof insertCandidateContractSchema>;
+export type CandidateContract = typeof candidateContracts.$inferSelect;
 
 // ─── Saudi Arabia Official 13 Administrative Regions ────────────────────────
 export const KSA_REGIONS = [
