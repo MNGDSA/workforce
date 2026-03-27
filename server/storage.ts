@@ -67,6 +67,8 @@ export interface IStorage {
   updateCandidate(id: string, data: Partial<InsertCandidate>): Promise<Candidate | undefined>;
   deleteCandidate(id: string): Promise<boolean>;
   bulkInsertCandidates(candidates: InsertCandidate[]): Promise<number>;
+  bulkUpdateCandidateStatus(ids: string[], status: string): Promise<number>;
+  bulkDeleteCandidates(ids: string[]): Promise<number>;
   getCandidateStats(): Promise<{ total: number; active: number; hired: number; blocked: number; avgRating: number }>;
 
   // Seasons
@@ -340,6 +342,26 @@ export class DatabaseStorage implements IStorage {
       inserted += result.length;
     }
     return inserted;
+  }
+
+  async bulkUpdateCandidateStatus(ids: string[], status: string): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await db
+      .update(candidates)
+      .set({ status: status as any, updatedAt: new Date() })
+      .where(inArray(candidates.id, ids))
+      .returning({ id: candidates.id });
+    return result.length;
+  }
+
+  async bulkDeleteCandidates(ids: string[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    await db.delete(applications).where(inArray(applications.candidateId, ids));
+    await db.delete(onboarding).where(inArray(onboarding.candidateId, ids));
+    await db.delete(interviews).where(inArray(interviews.candidateId, ids));
+    await db.delete(workforce).where(inArray(workforce.candidateId, ids));
+    const result = await db.delete(candidates).where(inArray(candidates.id, ids));
+    return result.rowCount ?? 0;
   }
 
   async getCandidateStats(): Promise<{ total: number; active: number; hired: number; blocked: number; avgRating: number }> {

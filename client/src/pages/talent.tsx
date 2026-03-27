@@ -46,6 +46,11 @@ import {
   ShieldAlert,
   Info,
   Trash2,
+  CheckSquare,
+  Square,
+  MinusSquare,
+  Ban,
+  Unlock,
 } from "lucide-react";
 import {
   Table,
@@ -665,6 +670,8 @@ export default function TalentPage() {
   const [profileCandidate, setProfileCandidate] = useState<Candidate | null>(null);
   const [blockCandidate, setBlockCandidate] = useState<Candidate | null>(null);
   const [deleteCandidate, setDeleteCandidate] = useState<Candidate | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkConfirmAction, setBulkConfirmAction] = useState<"block" | "unblock" | "delete" | null>(null);
 
   function toggleColumn(key: ColumnKey) {
     setVisibleColumns(prev => {
@@ -685,7 +692,7 @@ export default function TalentPage() {
 
   const queryParams = new URLSearchParams({
     page: String(page),
-    limit: "50",
+    limit: "100",
     sortBy,
     sortOrder,
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
@@ -724,6 +731,39 @@ export default function TalentPage() {
     onError: () => toast({ title: "Failed to delete candidate", variant: "destructive" }),
   });
 
+  const bulkAction = useMutation({
+    mutationFn: ({ ids, action }: { ids: string[]; action: "block" | "unblock" | "delete" }) =>
+      apiRequest("POST", "/api/candidates/bulk-action", { ids, action }).then(r => r.json()),
+    onSuccess: (data) => {
+      const labels: Record<string, string> = { block: "blocked", unblock: "unblocked", delete: "deleted" };
+      toast({ title: `${data.affected} candidate(s) ${labels[data.action]}` });
+      setSelectedIds(new Set());
+      setBulkConfirmAction(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
+    },
+    onError: () => {
+      toast({ title: "Bulk action failed", variant: "destructive" });
+      setBulkConfirmAction(null);
+    },
+  });
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (selectedIds.size === candidates.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(candidates.map(c => c.id)));
+    }
+  }, [candidates, selectedIds.size]);
+
   const bulkUpload = useMutation({
     mutationFn: (candidates: Record<string, string>[]) => {
       const mapped = candidates.map(c => ({
@@ -757,13 +797,15 @@ export default function TalentPage() {
 
   const candidates: Candidate[] = data?.data ?? [];
   const total: number = data?.total ?? 0;
-  const totalPages = Math.ceil(total / 50);
+  const PAGE_SIZE = 100;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const stats = statsData as { total: number; active: number; hired: number; blocked: number; avgRating: number } | undefined;
 
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
     setPage(1);
+    setSelectedIds(new Set());
   }, []);
 
   function handleColumnSort(field: SortField) {
@@ -910,7 +952,7 @@ export default function TalentPage() {
             />
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
+            <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); setSelectedIds(new Set()); }}>
               <SelectTrigger className="h-10 w-36 border-border bg-background" data-testid="select-status-filter">
                 <Filter className="mr-2 h-4 w-4" />
                 <SelectValue placeholder="Status" />
@@ -924,7 +966,7 @@ export default function TalentPage() {
                 <SelectItem value="dormant">Dormant</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); }}>
+            <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); setSelectedIds(new Set()); }}>
               <SelectTrigger className="h-10 w-40 border-border bg-background" data-testid="select-source-filter">
                 <SelectValue placeholder="Classification" />
               </SelectTrigger>
@@ -990,6 +1032,21 @@ export default function TalentPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="border-border hover:bg-transparent">
+                      <TableHead className="w-10 px-2">
+                        <button
+                          onClick={toggleSelectAll}
+                          className="text-muted-foreground hover:text-white transition-colors"
+                          data-testid="checkbox-select-all"
+                        >
+                          {selectedIds.size === 0 ? (
+                            <Square className="h-4 w-4" />
+                          ) : selectedIds.size === candidates.length ? (
+                            <CheckSquare className="h-4 w-4 text-primary" />
+                          ) : (
+                            <MinusSquare className="h-4 w-4 text-primary" />
+                          )}
+                        </button>
+                      </TableHead>
                       {col("id") && <TableHead className="w-[110px] text-muted-foreground">ID</TableHead>}
                       {col("candidate") && (
                         <TableHead
@@ -1044,7 +1101,20 @@ export default function TalentPage() {
                     {candidates.map((candidate) => {
                       const displayStatus = getDisplayStatus(candidate);
                       return (
-                        <TableRow key={candidate.id} className="border-border hover:bg-muted/20" data-testid={`row-candidate-${candidate.id}`}>
+                        <TableRow key={candidate.id} className={`border-border hover:bg-muted/20 ${selectedIds.has(candidate.id) ? "bg-primary/5" : ""}`} data-testid={`row-candidate-${candidate.id}`}>
+                          <TableCell className="px-2">
+                            <button
+                              onClick={() => toggleSelect(candidate.id)}
+                              className="text-muted-foreground hover:text-white transition-colors"
+                              data-testid={`checkbox-select-${candidate.id}`}
+                            >
+                              {selectedIds.has(candidate.id) ? (
+                                <CheckSquare className="h-4 w-4 text-primary" />
+                              ) : (
+                                <Square className="h-4 w-4" />
+                              )}
+                            </button>
+                          </TableCell>
                           {col("id") && (
                             <TableCell className="font-mono text-xs text-muted-foreground">
                               {candidate.nationalId ?? candidate.candidateCode}
@@ -1168,13 +1238,13 @@ export default function TalentPage() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-border">
               <p className="text-xs text-muted-foreground">
-                Showing {((page - 1) * 50) + 1}–{Math.min(page * 50, total)} of {total.toLocaleString()} candidates
+                Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total.toLocaleString()} candidates
               </p>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  onClick={() => { setPage(p => Math.max(1, p - 1)); setSelectedIds(new Set()); }}
                   disabled={page === 1}
                   data-testid="button-prev-page"
                 >
@@ -1186,7 +1256,7 @@ export default function TalentPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  onClick={() => { setPage(p => Math.min(totalPages, p + 1)); setSelectedIds(new Set()); }}
                   disabled={page === totalPages}
                   data-testid="button-next-page"
                 >
@@ -1196,7 +1266,111 @@ export default function TalentPage() {
             </div>
           )}
         </Card>
+
+        {selectedIds.size > 0 && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-card border border-border rounded-lg shadow-2xl px-5 py-3 flex items-center gap-4 animate-in slide-in-from-bottom-4 duration-200" data-testid="bulk-action-bar">
+            <span className="text-sm font-medium text-white">
+              {selectedIds.size} selected
+            </span>
+            <div className="h-5 w-px bg-border" />
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-border text-muted-foreground hover:text-red-400 hover:border-red-400/50"
+              onClick={() => setBulkConfirmAction("block")}
+              data-testid="bulk-block"
+            >
+              <Ban className="h-3.5 w-3.5 mr-1.5" />
+              Block
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-border text-muted-foreground hover:text-green-400 hover:border-green-400/50"
+              onClick={() => setBulkConfirmAction("unblock")}
+              data-testid="bulk-unblock"
+            >
+              <Unlock className="h-3.5 w-3.5 mr-1.5" />
+              Unblock
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-border text-muted-foreground hover:text-orange-400 hover:border-orange-400/50"
+              onClick={() => {
+                const selected = candidates.filter(c => selectedIds.has(c.id));
+                const ws = XLSX.utils.json_to_sheet(selected.map(c => ({
+                  ID: c.nationalId ?? c.candidateCode,
+                  Name: c.fullNameEn,
+                  Phone: c.phone,
+                  Email: c.email,
+                  City: c.city,
+                  Region: c.region,
+                  Status: c.status,
+                  Source: (c as any).source,
+                })));
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Selected Candidates");
+                XLSX.writeFile(wb, `selected-candidates-${selectedIds.size}.xlsx`);
+                toast({ title: `Exported ${selectedIds.size} candidate(s)` });
+              }}
+              data-testid="bulk-export"
+            >
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+              Export
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setBulkConfirmAction("delete")}
+              data-testid="bulk-delete"
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              Delete
+            </Button>
+            <div className="h-5 w-px bg-border" />
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground hover:text-white"
+              onClick={() => setSelectedIds(new Set())}
+              data-testid="bulk-deselect"
+            >
+              <X className="h-3.5 w-3.5 mr-1.5" />
+              Clear
+            </Button>
+          </div>
+        )}
       </div>
+
+      <AlertDialog open={!!bulkConfirmAction} onOpenChange={(o) => !o && setBulkConfirmAction(null)}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white font-display">
+              {bulkConfirmAction === "delete" ? "Delete" : bulkConfirmAction === "block" ? "Block" : "Unblock"} {selectedIds.size} candidate(s)?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              {bulkConfirmAction === "delete"
+                ? `This will permanently delete ${selectedIds.size} candidate(s) and all their related records (applications, interviews, onboarding). This action cannot be undone.`
+                : bulkConfirmAction === "block"
+                ? `This will block ${selectedIds.size} candidate(s) from applying or being processed.`
+                : `This will unblock ${selectedIds.size} candidate(s), restoring their active status.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border" data-testid="bulk-confirm-cancel">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={bulkConfirmAction === "delete" ? "bg-red-600 hover:bg-red-700" : bulkConfirmAction === "block" ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"}
+              onClick={() => bulkConfirmAction && bulkAction.mutate({ ids: [...selectedIds], action: bulkConfirmAction })}
+              disabled={bulkAction.isPending}
+              data-testid="bulk-confirm-action"
+            >
+              {bulkAction.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {bulkConfirmAction === "delete" ? "Delete" : bulkConfirmAction === "block" ? "Block" : "Unblock"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">

@@ -508,6 +508,32 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/candidates/bulk-action", async (req: Request, res: Response) => {
+    try {
+      const { ids, action } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "ids array is required" });
+      }
+      if (ids.length > 500) {
+        return res.status(400).json({ message: "Maximum 500 candidates per bulk action" });
+      }
+      if (action === "block") {
+        const affected = await storage.bulkUpdateCandidateStatus(ids, "blocked");
+        return res.json({ affected, action });
+      } else if (action === "unblock") {
+        const affected = await storage.bulkUpdateCandidateStatus(ids, "active");
+        return res.json({ affected, action });
+      } else if (action === "delete") {
+        const affected = await storage.bulkDeleteCandidates(ids);
+        return res.json({ affected, action });
+      } else {
+        return res.status(400).json({ message: "Invalid action. Must be: block, unblock, or delete" });
+      }
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   // Bulk upload endpoint – designed for 70k candidates
   app.post("/api/candidates/bulk", async (req: Request, res: Response) => {
     try {

@@ -702,7 +702,7 @@ export const KSA_REGIONS = [
 // ─── Query Params Types ─────────────────────────────────────────────────────
 export const candidateQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(1000).default(50),
+  limit: z.coerce.number().int().min(1).max(1000).default(100),
   search: z.string().optional(),
   status: z.enum(["active", "inactive", "blocked", "hired", "rejected", "pending_review"]).optional(),
   dormant: z.enum(["true"]).optional(),
