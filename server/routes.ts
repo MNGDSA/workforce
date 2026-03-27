@@ -106,7 +106,15 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
-  app.use("/uploads", express.static(UPLOADS_DIR));
+  app.use("/uploads", express.static(UPLOADS_DIR, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".pdf")) {
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", "inline");
+      }
+      res.setHeader("X-Content-Type-Options", "nosniff");
+    }
+  }));
 
   // ─── Document Upload ───────────────────────────────────────────────────────
   app.post("/api/candidates/:id/documents", upload.single("file"), async (req: Request, res: Response) => {

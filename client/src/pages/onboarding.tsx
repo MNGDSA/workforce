@@ -1820,18 +1820,19 @@ export default function OnboardingPage() {
                         <div className="mt-2 ml-8 bg-zinc-800/60 rounded-md p-2.5 border border-zinc-700/50">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 min-w-0">
-                              <Download className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
                               {(() => {
                                 const isImg = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(profileValue);
                                 const openPreview = (e: React.MouseEvent) => { e.stopPropagation(); setDocPreview({ url: profileValue, label: p.label, isImage: isImg }); };
                                 return p.profileKey === "photoUrl" && isImg ? (
-                                  <button className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer" onClick={openPreview}>
+                                  <button className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer" onClick={openPreview}>
+                                    <Eye className="h-5 w-5 text-emerald-400 shrink-0" />
                                     <img src={profileValue} alt="Candidate photo" className="h-8 w-8 rounded-sm object-cover border border-zinc-600" />
-                                    <span className="text-xs text-emerald-400 underline underline-offset-2 flex items-center gap-1">View photo <Eye className="h-2.5 w-2.5" /></span>
+                                    <span className="text-sm text-emerald-400 underline underline-offset-2">View photo</span>
                                   </button>
                                 ) : (
-                                  <button className="text-xs text-emerald-400 underline underline-offset-2 flex items-center gap-1 hover:text-emerald-300 transition-colors cursor-pointer" onClick={openPreview}>
-                                    {isImg ? "View image" : "View document"} <Eye className="h-2.5 w-2.5" />
+                                  <button className="flex items-center gap-3 hover:text-emerald-300 transition-colors cursor-pointer" onClick={openPreview}>
+                                    <Eye className="h-5 w-5 text-emerald-400 shrink-0" />
+                                    <span className="text-sm text-emerald-400 underline underline-offset-2">{isImg ? "View image" : "View document"}</span>
                                   </button>
                                 );
                               })()}
@@ -2131,15 +2132,22 @@ export default function OnboardingPage() {
               })()}
             </DialogDescription>
           </DialogHeader>
-          <div className="px-5 pb-5 flex items-center justify-center min-h-[300px] max-h-[70vh] overflow-auto">
+          <div className="px-5 pb-4 flex items-center justify-center min-h-[300px] max-h-[70vh] overflow-auto">
             {docPreview?.isImage ? (
               <img src={docPreview.url} alt={docPreview.label} className="max-w-full max-h-[65vh] object-contain rounded-md" data-testid="img-doc-preview" />
             ) : docPreview?.url.match(/\.pdf(\?|$)/i) ? (
-              <iframe src={docPreview.url} className="w-full h-[65vh] rounded-md border border-zinc-700" title={docPreview.label} data-testid="iframe-doc-preview" />
+              <object data={docPreview.url} type="application/pdf" className="w-full h-[65vh] rounded-md border border-zinc-700" data-testid="object-doc-preview">
+                <div className="flex flex-col items-center justify-center gap-4 h-full">
+                  <p className="text-zinc-400 text-sm">PDF preview is not supported in this browser</p>
+                  <a href={docPreview.url} target="_blank" rel="noopener noreferrer" className="text-emerald-400 text-sm underline underline-offset-2 flex items-center gap-1" data-testid="link-download-pdf">
+                    Open PDF <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              </object>
             ) : (
               <div className="flex flex-col items-center gap-4">
                 <div className="h-16 w-16 rounded-full bg-zinc-800 flex items-center justify-center">
-                  <Download className="h-7 w-7 text-zinc-400" />
+                  <Eye className="h-7 w-7 text-zinc-400" />
                 </div>
                 <p className="text-zinc-400 text-sm">Preview not available for this file type</p>
                 <a href={docPreview?.url} target="_blank" rel="noopener noreferrer" className="text-emerald-400 text-sm underline underline-offset-2 flex items-center gap-1" data-testid="link-download-doc">
@@ -2148,7 +2156,7 @@ export default function OnboardingPage() {
               </div>
             )}
           </div>
-          <DialogFooter className="px-5 pb-5 pt-0 border-t border-zinc-800 mt-0">
+          <DialogFooter className="px-5 pb-5 pt-4 border-t border-zinc-800">
             <a href={docPreview?.url} target="_blank" rel="noopener noreferrer" data-testid="button-open-new-tab">
               <Button variant="outline" size="sm" className="border-zinc-700 text-zinc-300 hover:text-white gap-1.5">
                 <ExternalLink className="h-3.5 w-3.5" /> Open in new tab
