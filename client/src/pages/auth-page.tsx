@@ -516,7 +516,7 @@ export default function AuthPage() {
               {/* Demo credentials box */}
               <div className="mt-4 p-4 bg-muted/30 border border-primary/20 rounded-sm space-y-3">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Demo Credentials</p>
-                <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-3 gap-3 text-xs">
                   <div className="space-y-1">
                     <p className="font-semibold text-white">Admin</p>
                     <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -526,6 +526,21 @@ export default function AuthPage() {
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <Phone className="h-3 w-3" />
                       <span className="font-mono">0500000001</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Lock className="h-3 w-3" />
+                      <span className="font-mono">password123</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="font-semibold text-white">Recruiter</p>
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <CreditCard className="h-3 w-3" />
+                      <span className="font-mono">1000000003</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Phone className="h-3 w-3" />
+                      <span className="font-mono">0500000003</span>
                     </div>
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <Lock className="h-3 w-3" />
