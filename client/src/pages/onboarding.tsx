@@ -103,6 +103,7 @@ interface Candidate {
   hasIban: boolean;
   hasNationalId: boolean;
   status: string;
+  source: string;
   ibanNumber?: string | null;
   ibanFileUrl?: string | null;
   photoUrl?: string | null;
@@ -126,16 +127,24 @@ const STATUS_CONFIG: Record<OnboardingStatus, { label: string; color: string; ic
   rejected:    { label: "Rejected",    color: "bg-red-900/60 text-red-300",       icon: XCircle },
 };
 
-const PREREQUISITES = [
-  { key: "hasPhoto",           label: "Personal Photo",       icon: Camera,        hint: "Clear ID-style photo uploaded",  profileKey: "photoUrl" as const,              isFile: true },
-  { key: "hasIban",            label: "IBAN Certificate",     icon: CreditCard,    hint: "Saudi bank IBAN on file",        profileKey: "ibanFileUrl" as const,           isFile: true },
-  { key: "hasNationalId",      label: "National ID / Iqama",  icon: IdCard,        hint: "ID copy submitted & verified",   profileKey: "nationalIdFileUrl" as const,     isFile: true },
-  { key: "hasSignedContract",  label: "Signed Contract",      icon: FileSignature, hint: "Employment contract signed",     profileKey: null,                             isFile: false },
+const ALL_PREREQUISITES = [
+  { key: "hasPhoto",           label: "Personal Photo",       icon: Camera,        hint: "Clear ID-style photo uploaded",  profileKey: "photoUrl" as const,              isFile: true,  smp: true },
+  { key: "hasIban",            label: "IBAN Certificate",     icon: CreditCard,    hint: "Saudi bank IBAN on file",        profileKey: "ibanFileUrl" as const,           isFile: true,  smp: false },
+  { key: "hasNationalId",      label: "National ID / Iqama",  icon: IdCard,        hint: "ID copy submitted & verified",   profileKey: "nationalIdFileUrl" as const,     isFile: true,  smp: true },
+  { key: "hasSignedContract",  label: "Signed Contract",      icon: FileSignature, hint: "Employment contract signed",     profileKey: null,                             isFile: false, smp: false },
 ] as const;
-const PREREQ_TOTAL = PREREQUISITES.length;
 
-function prereqCount(rec: OnboardingRecord) {
-  return [rec.hasPhoto, rec.hasIban, rec.hasNationalId, rec.hasSignedContract].filter(Boolean).length;
+function getPrerequisites(isSmp: boolean) {
+  return isSmp ? ALL_PREREQUISITES.filter(p => p.smp) : ALL_PREREQUISITES;
+}
+
+function prereqCount(rec: OnboardingRecord, isSmp: boolean) {
+  const keys = getPrerequisites(isSmp).map(p => p.key);
+  return keys.filter(k => rec[k as keyof OnboardingRecord]).length;
+}
+
+function prereqTotal(isSmp: boolean) {
+  return getPrerequisites(isSmp).length;
 }
 
 function AutoSaveNotes({ recordId, initialValue, onSave }: { recordId: string; initialValue: string; onSave: (id: string, notes: string) => void }) {
@@ -499,7 +508,9 @@ export default function OnboardingPage() {
           <div className="space-y-3">
             {filtered.map(rec => {
               const candidate = getCandidateFor(rec);
-              const done = prereqCount(rec);
+              const isSmp = candidate?.source === "smp";
+              const done = prereqCount(rec, isSmp);
+              const total = prereqTotal(isSmp);
               const cfg = STATUS_CONFIG[rec.status];
               const StatusIcon = cfg.icon;
               const isReady = rec.status === "ready";
@@ -526,6 +537,9 @@ export default function OnboardingPage() {
                         <StatusIcon className="h-3 w-3 mr-1" />
                         {cfg.label}
                       </Badge>
+                      {isSmp && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-800 text-blue-400">SMP</Badge>
+                      )}
                       {isRejected && rec.rejectedAt && (
                         <span className="text-[11px] text-zinc-500">
                           Rejected {new Date(rec.rejectedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} at {new Date(rec.rejectedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
@@ -534,12 +548,12 @@ export default function OnboardingPage() {
                       )}
                     </div>
                     <div className="mt-2 flex items-center gap-2">
-                      <ProgressBar value={done} total={PREREQ_TOTAL} />
-                      <span className="text-xs text-zinc-500 shrink-0">{done}/{PREREQ_TOTAL}</span>
+                      <ProgressBar value={done} total={total} />
+                      <span className="text-xs text-zinc-500 shrink-0">{done}/{total}</span>
                     </div>
                     {/* Prereq chips */}
                     <div className="flex flex-wrap gap-1.5 mt-2">
-                      {PREREQUISITES.map(p => (
+                      {getPrerequisites(isSmp).map(p => (
                         <span
                           key={p.key}
                           className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${
@@ -789,16 +803,28 @@ export default function OnboardingPage() {
             </SheetDescription>
           </SheetHeader>
 
-          {checklistRecord && (
+          {checklistRecord && (() => {
+            const checklistCand = getCandidateFor(checklistRecord);
+            const checklistIsSmp = checklistCand?.source === "smp";
+            const checklistPrereqs = getPrerequisites(checklistIsSmp);
+            const checklistDone = prereqCount(checklistRecord, checklistIsSmp);
+            const checklistTotal = prereqTotal(checklistIsSmp);
+            return (
             <div className="mt-6 space-y-4">
+              {checklistIsSmp && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-950/30 border border-blue-800/40 text-blue-300 text-xs">
+                  <Users className="h-3.5 w-3.5 shrink-0" />
+                  SMP worker — lighter checklist (photo + ID only)
+                </div>
+              )}
               {/* Progress summary */}
               <div className="bg-zinc-900 rounded-lg p-4">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm text-zinc-400">Completion</span>
-                  <span className="text-sm font-medium text-white">{prereqCount(checklistRecord)}/{PREREQ_TOTAL}</span>
+                  <span className="text-sm font-medium text-white">{checklistDone}/{checklistTotal}</span>
                 </div>
-                <ProgressBar value={prereqCount(checklistRecord)} total={PREREQ_TOTAL} />
-                {prereqCount(checklistRecord) === PREREQ_TOTAL && (
+                <ProgressBar value={checklistDone} total={checklistTotal} />
+                {checklistDone === checklistTotal && (
                   <p className="text-xs text-emerald-400 mt-2 flex items-center gap-1">
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     All prerequisites complete — candidate is ready to convert
@@ -808,7 +834,7 @@ export default function OnboardingPage() {
 
               {/* Checklist items */}
               <div className="space-y-3">
-                {PREREQUISITES.map(p => {
+                {checklistPrereqs.map(p => {
                   const checked = checklistRecord[p.key as keyof OnboardingRecord] as boolean;
                   const cand = getCandidateFor(checklistRecord);
                   let profileValue = p.profileKey && cand ? (cand as any)[p.profileKey] : null;
@@ -914,18 +940,19 @@ export default function OnboardingPage() {
               {/* Status indicator */}
               {checklistRecord.status !== "converted" && checklistRecord.status !== "rejected" && (
                 <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
-                  prereqCount(checklistRecord) === PREREQ_TOTAL
+                  checklistDone === checklistTotal
                     ? "bg-emerald-950/30 text-emerald-400 border border-emerald-800/40"
                     : "bg-zinc-900 text-zinc-400 border border-zinc-800"
                 }`}>
-                  {prereqCount(checklistRecord) === PREREQ_TOTAL
+                  {checklistDone === checklistTotal
                     ? <><CheckCircle2 className="h-4 w-4 shrink-0" /> Ready to convert — use the "Convert to Employee" button on the main list</>
-                    : <><TriangleAlert className="h-4 w-4 shrink-0" /> {PREREQ_TOTAL - prereqCount(checklistRecord)} prerequisite(s) still outstanding</>
+                    : <><TriangleAlert className="h-4 w-4 shrink-0" /> {checklistTotal - checklistDone} prerequisite(s) still outstanding</>
                   }
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
         </SheetContent>
       </Sheet>
 
@@ -1033,7 +1060,7 @@ export default function OnboardingPage() {
               <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
               <div>
                 <p className="text-sm font-medium text-emerald-300">{stats.ready} candidates ready</p>
-                <p className="text-xs text-emerald-400/70">All prerequisites verified ({PREREQ_TOTAL}/{PREREQ_TOTAL})</p>
+                <p className="text-xs text-emerald-400/70">All prerequisites verified</p>
               </div>
             </div>
             <div className="space-y-3">

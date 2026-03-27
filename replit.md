@@ -275,7 +275,7 @@ RETURN TO POOL
 7. **Sequential seasons only** — same candidate cannot be in two seasons simultaneously.
 8. **`lastInterviewedAt` on candidate profile** — persists across seasons, badge + filter in interview scheduling.
 9. **Application status `not_shortlisted`** — professional HR term for rejection.
-10. **Same onboarding for all** — 5/5 checklist (no Medical Fitness), no source-dependent logic.
+10. **Source-aware onboarding** — Regular candidates: 4-item checklist (photo, IBAN, national ID, signed contract). SMP workers: 2-item checklist (photo + national ID only — no IBAN or contract since we deal with their firm).
 11. **Profile activation required for all** — OTP verification regardless of entry method.
 
 ### Implementation Status
@@ -289,6 +289,10 @@ RETURN TO POOL
 - [x] Login stamps `lastLoginAt` on candidate record
 - [x] Onboarding rejection flow with `rejectedAt`, `rejectedBy`, `rejectionReason`
 - [x] Candidates query on onboarding page uses `staleTime: 0` for always-fresh data
+- [x] SMP-aware onboarding: SMP workers see 2-item checklist (photo + national ID); regular candidates see 4-item checklist
+- [x] Server `computeOnboardingStatus()` helper is SMP-aware — used in all 4 status computation points (upload, delete, create, patch)
+- [x] SMP badge displayed on onboarding list cards
+- [x] SMP info banner in checklist sheet ("SMP worker — lighter checklist")
 
 #### Schema Changes Needed (Not Yet Implemented)
 - [ ] Add `source` field to `candidates` table (`self` | `bulk_upload`, default `self`) — reporting only
@@ -298,7 +302,6 @@ RETURN TO POOL
 - [ ] Add per-link status on SMP contract: `active` | `removed`
 - [ ] Add `terminatedAt`, `terminationReason` to `workforce` table
 - [ ] Bulk upload in Talent section with deduplication by national ID/phone
-- [ ] SMP-specific onboarding: only require photo + national ID (no IBAN, no contract)
 - [ ] SMP direct conversion from Talent pool (bypass interview + onboarding pipeline)
 
 ---

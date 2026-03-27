@@ -55,6 +55,17 @@ function handleError(res: Response, err: unknown) {
   return res.status(500).json({ message });
 }
 
+function computeOnboardingStatus(rec: { hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean; hasSignedContract: boolean }, isSmp: boolean): "pending" | "in_progress" | "ready" {
+  if (isSmp) {
+    const allDone = rec.hasPhoto && rec.hasNationalId;
+    const anyDone = rec.hasPhoto || rec.hasNationalId;
+    return allDone ? "ready" : anyDone ? "in_progress" : "pending";
+  }
+  const allDone = rec.hasPhoto && rec.hasIban && rec.hasNationalId && rec.hasSignedContract;
+  const anyDone = rec.hasPhoto || rec.hasIban || rec.hasNationalId || rec.hasSignedContract;
+  return allDone ? "ready" : anyDone ? "in_progress" : "pending";
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -79,7 +90,7 @@ export async function registerRoutes(
       if (docType === "resume") { updatePayload.resumeUrl = fileUrl; updatePayload.hasResume = true; }
       const updated = await storage.updateCandidate(id, updatePayload);
       if (!updated) return res.status(404).json({ message: "Candidate not found" });
-      // Auto-sync onboarding record if one exists
+      const isSmp = updated.source === "smp";
       const onboardingRecords = await storage.getOnboardingRecords({ candidateId: id });
       for (const rec of onboardingRecords) {
         if (rec.status === "converted" || rec.status === "rejected") continue;
@@ -89,11 +100,7 @@ export async function registerRoutes(
         if (docType === "iban") syncPayload.hasIban = true;
         if (Object.keys(syncPayload).length > 0) {
           const merged = { ...rec, ...syncPayload };
-          const allDone = merged.hasPhoto && merged.hasIban && merged.hasNationalId &&
-                          merged.hasSignedContract;
-          const anyDone = merged.hasPhoto || merged.hasIban || merged.hasNationalId ||
-                          merged.hasSignedContract;
-          syncPayload.status = allDone ? "ready" : anyDone ? "in_progress" : "pending";
+          syncPayload.status = computeOnboardingStatus(merged, isSmp);
           await storage.updateOnboardingRecord(rec.id, syncPayload);
         }
       }
@@ -128,6 +135,7 @@ export async function registerRoutes(
       if (docType === "iban") { updatePayload.ibanFileUrl = null; updatePayload.hasIban = false; }
       const updated = await storage.updateCandidate(id, updatePayload);
       if (!updated) return res.status(404).json({ message: "Candidate not found" });
+      const isSmpDel = updated.source === "smp";
       const onboardingRecords = await storage.getOnboardingRecords({ candidateId: id });
       for (const rec of onboardingRecords) {
         if (rec.status === "converted" || rec.status === "rejected") continue;
@@ -137,11 +145,7 @@ export async function registerRoutes(
         if (docType === "iban") syncPayload.hasIban = false;
         if (Object.keys(syncPayload).length > 0) {
           const merged = { ...rec, ...syncPayload };
-          const allDone = merged.hasPhoto && merged.hasIban && merged.hasNationalId &&
-                          merged.hasSignedContract;
-          const anyDone = merged.hasPhoto || merged.hasIban || merged.hasNationalId ||
-                          merged.hasSignedContract;
-          syncPayload.status = allDone ? "ready" : anyDone ? "in_progress" : "pending";
+          syncPayload.status = computeOnboardingStatus(merged, isSmpDel);
           await storage.updateOnboardingRecord(rec.id, syncPayload);
         }
       }
@@ -905,8 +909,8 @@ export async function registerRoutes(
           data.hasPhoto = candidate.hasPhoto ?? false;
           data.hasIban = candidate.hasIban ?? false;
           data.hasNationalId = candidate.hasNationalId ?? false;
-          const anyDone = data.hasPhoto || data.hasIban || data.hasNationalId;
-          if (anyDone) data.status = "in_progress";
+          const isSmp = candidate.source === "smp";
+          data.status = computeOnboardingStatus(data as any, isSmp);
         }
       }
       const record = await storage.createOnboardingRecord(data);
@@ -929,11 +933,9 @@ export async function registerRoutes(
         if (current && current.status !== "converted" && current.status !== "rejected") {
           const merged = { ...current, ...data };
           if (!isRejection) {
-            const allDone = merged.hasPhoto && merged.hasIban && merged.hasNationalId &&
-                            merged.hasSignedContract;
-            const anyDone = merged.hasPhoto || merged.hasIban || merged.hasNationalId ||
-                            merged.hasSignedContract;
-            data.status = allDone ? "ready" : anyDone ? "in_progress" : "pending";
+            const cand = await storage.getCandidate(current.candidateId);
+            const isSmp = cand?.source === "smp";
+            data.status = computeOnboardingStatus(merged, isSmp);
           }
         }
       }
