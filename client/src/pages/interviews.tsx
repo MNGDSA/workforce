@@ -59,11 +59,14 @@ import {
   ThumbsUp,
   ThumbsDown,
   RotateCcw,
+  Maximize2,
+  ArrowLeft,
+  X,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
-type Candidate = { id: string; fullNameEn: string; nationalId?: string };
+type Candidate = { id: string; fullNameEn: string; nationalId?: string; photoUrl?: string | null };
 type Interview = {
   id: string;
   candidateId: string;
@@ -86,7 +89,7 @@ type InterviewStats = {
 };
 type InterviewDetail = {
   interview: Interview;
-  invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; applicationId: string | null; applicationStatus: string | null }[];
+  invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[];
 };
 
 // ─── Utility helpers ───────────────────────────────────────────────────────────
@@ -147,7 +150,9 @@ function InterviewDetailSheet({
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const [localStatuses, setLocalStatuses] = useState<Record<string, string>>({});
+  const [candidateSearch, setCandidateSearch] = useState("");
 
   const { data, isLoading } = useQuery<InterviewDetail>({
     queryKey: ["/api/interviews", interviewId],
@@ -286,19 +291,66 @@ function InterviewDetailSheet({
                     <Users className="h-3 w-3" />
                     Invited Candidates
                   </p>
-                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs font-bold">
-                    {invitedCandidates.length.toLocaleString()}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs font-bold">
+                      {invitedCandidates.length.toLocaleString()}
+                    </Badge>
+                    {invitedCandidates.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[10px] gap-1 border-border hover:bg-primary/10 hover:text-primary"
+                        data-testid="button-open-full-candidates"
+                        onClick={() => {
+                          onOpenChange(false);
+                          navigate(`/interviews/${interviewId}/candidates`);
+                        }}
+                      >
+                        <Maximize2 className="h-3 w-3" />
+                        Full Page
+                      </Button>
+                    )}
+                  </div>
                 </div>
+
+                {invitedCandidates.length > 5 && (
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      placeholder="Search by ID number…"
+                      value={candidateSearch}
+                      onChange={(e) => setCandidateSearch(e.target.value)}
+                      className="pl-9 h-8 text-xs bg-background border-border"
+                      data-testid="input-search-invited-candidates"
+                    />
+                    {candidateSearch && (
+                      <button
+                        onClick={() => setCandidateSearch("")}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {invitedCandidates.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center rounded-md border border-dashed border-border">
                     <Users className="h-8 w-8 text-muted-foreground/30 mb-2" />
                     <p className="text-sm text-muted-foreground">No candidates recorded for this session</p>
                   </div>
-                ) : (
+                ) : (() => {
+                  const filtered = candidateSearch.trim()
+                    ? invitedCandidates.filter(c => c.nationalId?.includes(candidateSearch.trim()))
+                    : invitedCandidates;
+                  return filtered.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-6 text-center rounded-md border border-dashed border-border">
+                      <Search className="h-6 w-6 text-muted-foreground/30 mb-2" />
+                      <p className="text-sm text-muted-foreground">No candidates matching "{candidateSearch}"</p>
+                    </div>
+                  ) : (
                   <div className="rounded-md border border-border divide-y divide-border overflow-hidden">
-                    {invitedCandidates.map((c, idx) => {
+                    {filtered.map((c, idx) => {
                       const effectiveStatus = localStatuses[c.id] ?? c.applicationStatus;
                       const isShortlisted = effectiveStatus === "shortlisted";
                       const isRejected    = effectiveStatus === "rejected";
@@ -374,13 +426,247 @@ function InterviewDetailSheet({
                       );
                     })}
                   </div>
-                )}
+                  );
+                })()}
               </div>
             </div>
           </ScrollArea>
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+// ─── Full Page Candidate List ─────────────────────────────────────────────────
+export function InterviewCandidatesPage({ params }: { params: { id: string } }) {
+  const interviewId = params.id;
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [localStatuses, setLocalStatuses] = useState<Record<string, string>>({});
+
+  const { data, isLoading } = useQuery<InterviewDetail>({
+    queryKey: ["/api/interviews", interviewId],
+    queryFn: () => apiRequest("GET", `/api/interviews/${interviewId}`).then((r) => r.json()),
+    enabled: !!interviewId,
+    staleTime: 30_000,
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ appId, status }: { appId: string; candidateId: string; status: string }) =>
+      apiRequest("PATCH", `/api/applications/${appId}`, { status }).then((r) => r.json()),
+    onSuccess: (_data, vars) => {
+      setLocalStatuses(prev => ({ ...prev, [vars.candidateId]: vars.status }));
+      queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/interviews", interviewId] });
+      toast({ title: vars.status === "shortlisted" ? "Candidate shortlisted" : vars.status === "rejected" ? "Candidate rejected" : "Status updated" });
+    },
+    onError: () => toast({ title: "Failed to update status", variant: "destructive" }),
+  });
+
+  const iv = data?.interview;
+  const invitedCandidates = data?.invitedCandidates ?? [];
+  const scheduled = iv ? formatScheduled(iv.scheduledAt) : null;
+
+  const filtered = search.trim()
+    ? invitedCandidates.filter(c =>
+        c.nationalId?.includes(search.trim()) ||
+        c.fullNameEn.toLowerCase().includes(search.trim().toLowerCase())
+      )
+    : invitedCandidates;
+
+  const shortlistedCount = invitedCandidates.filter(c => (localStatuses[c.id] ?? c.applicationStatus) === "shortlisted").length;
+  const rejectedCount = invitedCandidates.filter(c => (localStatuses[c.id] ?? c.applicationStatus) === "rejected").length;
+
+  return (
+    <DashboardLayout>
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            onClick={() => navigate("/interviews")}
+            data-testid="button-back-to-interviews"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-display text-2xl font-bold text-white truncate" data-testid="text-session-name">
+              {iv?.groupName || "Session"}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {scheduled ? `${scheduled.date} at ${scheduled.time}` : "Loading…"}
+              {iv && ` · ${typeLabel(iv.type)}`}
+            </p>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : !iv ? (
+          <div className="flex items-center justify-center py-20 text-muted-foreground">
+            Interview not found
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-sm font-bold px-3 py-1">
+                {invitedCandidates.length.toLocaleString()} Candidates
+              </Badge>
+              {shortlistedCount > 0 && (
+                <Badge className="bg-emerald-900/50 text-emerald-400 border-0 text-sm px-3 py-1">
+                  {shortlistedCount} Shortlisted
+                </Badge>
+              )}
+              {rejectedCount > 0 && (
+                <Badge className="bg-red-900/50 text-red-400 border-0 text-sm px-3 py-1">
+                  {rejectedCount} Rejected
+                </Badge>
+              )}
+            </div>
+
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by ID number or name…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10 bg-background border-border"
+                data-testid="input-fullpage-search-candidates"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center rounded-md border border-dashed border-border">
+                <Search className="h-8 w-8 text-muted-foreground/30 mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  {search ? `No candidates matching "${search}"` : "No candidates in this session"}
+                </p>
+              </div>
+            ) : (
+              <Card className="bg-card border-border">
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border hover:bg-transparent">
+                        <TableHead className="w-12 text-center">#</TableHead>
+                        <TableHead>Candidate</TableHead>
+                        <TableHead>ID Number</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filtered.map((c, idx) => {
+                        const effectiveStatus = localStatuses[c.id] ?? c.applicationStatus;
+                        const isShortlisted = effectiveStatus === "shortlisted";
+                        const isRejected = effectiveStatus === "rejected";
+                        const isPending = statusMutation.isPending && (statusMutation.variables as any)?.candidateId === c.id;
+                        return (
+                          <TableRow key={c.id} className="border-border" data-testid={`fullpage-candidate-${c.id}`}>
+                            <TableCell className="text-center text-muted-foreground/50 font-mono text-xs">
+                              {idx + 1}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-8 w-8 border border-border shrink-0">
+                                  {c.photoUrl && <AvatarImage src={c.photoUrl} alt={c.fullNameEn} className="object-cover" />}
+                                  <AvatarFallback className="bg-primary/15 text-primary text-[10px]">
+                                    {initials(c.fullNameEn)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-sm font-medium text-white truncate">{c.fullNameEn}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-mono text-xs text-muted-foreground">
+                              {c.nationalId ?? "—"}
+                            </TableCell>
+                            <TableCell>
+                              {isShortlisted && (
+                                <Badge className="bg-emerald-900/50 text-emerald-400 border-0 text-[10px] px-2">Shortlisted</Badge>
+                              )}
+                              {isRejected && (
+                                <Badge className="bg-red-900/50 text-red-400 border-0 text-[10px] px-2">Rejected</Badge>
+                              )}
+                              {!isShortlisted && !isRejected && effectiveStatus && (
+                                <Badge variant="outline" className="text-[10px] px-2">{statusLabel(effectiveStatus)}</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                {isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                ) : c.applicationId ? (
+                                  <>
+                                    <Button
+                                      data-testid={`fullpage-shortlist-${c.id}`}
+                                      size="icon"
+                                      variant="ghost"
+                                      title="Shortlist"
+                                      disabled={isShortlisted}
+                                      onClick={() => statusMutation.mutate({ appId: c.applicationId!, candidateId: c.id, status: "shortlisted" })}
+                                      className={`h-8 w-8 ${isShortlisted ? "text-emerald-500" : "text-muted-foreground hover:text-emerald-400 hover:bg-emerald-950/40"}`}
+                                    >
+                                      <ThumbsUp className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      data-testid={`fullpage-reject-${c.id}`}
+                                      size="icon"
+                                      variant="ghost"
+                                      title="Reject"
+                                      disabled={isRejected}
+                                      onClick={() => statusMutation.mutate({ appId: c.applicationId!, candidateId: c.id, status: "rejected" })}
+                                      className={`h-8 w-8 ${isRejected ? "text-red-500" : "text-muted-foreground hover:text-red-400 hover:bg-red-950/40"}`}
+                                    >
+                                      <ThumbsDown className="h-4 w-4" />
+                                    </Button>
+                                    {(isShortlisted || isRejected) && (
+                                      <Button
+                                        data-testid={`fullpage-reset-${c.id}`}
+                                        size="icon"
+                                        variant="ghost"
+                                        title="Reset to interviewed"
+                                        onClick={() => statusMutation.mutate({ appId: c.applicationId!, candidateId: c.id, status: "interviewed" })}
+                                        className="h-8 w-8 text-muted-foreground hover:text-white hover:bg-muted/20"
+                                      >
+                                        <RotateCcw className="h-3.5 w-3.5" />
+                                      </Button>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span className="text-[10px] text-muted-foreground/40 italic">No application</span>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+            {search && filtered.length > 0 && filtered.length < invitedCandidates.length && (
+              <p className="text-xs text-muted-foreground text-center">
+                Showing {filtered.length} of {invitedCandidates.length.toLocaleString()} candidates
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </DashboardLayout>
   );
 }
 

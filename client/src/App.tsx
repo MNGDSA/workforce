@@ -11,7 +11,7 @@ import SeasonsPage from "@/pages/seasons";
 import WorkforcePage from "@/pages/workforce";
 import NotificationsPage from "@/pages/notifications";
 import CandidatePortal from "@/pages/candidate-portal";
-import InterviewsPage from "@/pages/interviews";
+import InterviewsPage, { InterviewCandidatesPage } from "@/pages/interviews";
 import JobPostingPage from "@/pages/job-posting";
 import AutomationPage from "@/pages/automation";
 import SettingsPage from "@/pages/settings";
@@ -37,6 +37,7 @@ function Router() {
       <Route path="/workforce" component={WorkforcePage} />
       <Route path="/interviews" component={InterviewsPage} />
       <Route path="/interviews/schedule" component={ScheduleInterviewPage} />
+      <Route path="/interviews/:id/candidates" component={InterviewCandidatesPage} />
       <Route path="/automation" component={AutomationPage} />
       <Route path="/notifications" component={NotificationsPage} />
       <Route path="/settings" component={SettingsPage} />

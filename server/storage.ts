@@ -96,7 +96,7 @@ export interface IStorage {
   // Interviews
   getInterviews(params?: { status?: string; candidateId?: string }): Promise<Interview[]>;
   getInterview(id: string): Promise<Interview | undefined>;
-  getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; applicationId: string | null; applicationStatus: string | null }[] } | undefined>;
+  getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[] } | undefined>;
   createInterview(interview: InsertInterview): Promise<Interview>;
   updateInterview(id: string, data: Partial<InsertInterview>): Promise<Interview | undefined>;
   getInterviewStats(): Promise<{ total: number; scheduled: number; completed: number; cancelled: number }>;
@@ -521,15 +521,16 @@ export class DatabaseStorage implements IStorage {
     return interview;
   }
 
-  async getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; applicationId: string | null; applicationStatus: string | null }[] } | undefined> {
+  async getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[] } | undefined> {
     const [interview] = await db.select().from(interviews).where(eq(interviews.id, id));
     if (!interview) return undefined;
-    let invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; applicationId: string | null; applicationStatus: string | null }[] = [];
+    let invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[] = [];
     if (interview.invitedCandidateIds && interview.invitedCandidateIds.length > 0) {
       const candidateRows = await db.select({
         id: candidates.id,
         fullNameEn: candidates.fullNameEn,
         nationalId: candidates.nationalId,
+        photoUrl: candidates.photoUrl,
       })
         .from(candidates)
         .where(inArray(candidates.id, interview.invitedCandidateIds));
