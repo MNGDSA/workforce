@@ -73,6 +73,7 @@ type Interview = {
   type: string;
   meetingUrl?: string;
   notes?: string;
+  groupName?: string | null;
   invitedCandidateIds?: string[] | null;
   createdByName?: string | null;
   createdAt: string;
@@ -180,7 +181,7 @@ function InterviewDetailSheet({
             {groupName}
           </SheetTitle>
           <SheetDescription className="text-muted-foreground text-sm">
-            Interview session details and invited candidate list
+            Interview and Training session details and invited candidate list
           </SheetDescription>
         </SheetHeader>
 
@@ -574,7 +575,7 @@ export default function InterviewsPage() {
                             </Avatar>
                             <div>
                               <p className="font-medium text-white text-sm">
-                                {candidate?.fullNameEn ?? "Unknown Group"}
+                                {iv.groupName || candidate?.fullNameEn || "Unnamed Session"}
                               </p>
                               <p className="text-[10px] text-muted-foreground font-mono">
                                 {iv.id.slice(0, 8)}…
@@ -690,7 +691,7 @@ export default function InterviewsPage() {
       {/* ── Detail Sheet ── */}
       <InterviewDetailSheet
         interviewId={detailInterview?.id ?? ""}
-        groupName={detailInterview ? (candidateMap[detailInterview.candidateId]?.fullNameEn ?? "Interview Session") : ""}
+        groupName={detailInterview?.groupName || "Interview & Training Session"}
         open={!!detailInterview}
         onOpenChange={(v) => { if (!v) setDetailInterview(null); }}
       />
