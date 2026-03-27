@@ -273,12 +273,10 @@ function CandidateProfileSheet({
   candidate,
   onClose,
   onSaved,
-  onSchedule,
 }: {
   candidate: Candidate | null;
   onClose: () => void;
   onSaved: (c: Candidate) => void;
-  onSchedule: (c: Candidate) => void;
 }) {
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
@@ -642,15 +640,6 @@ function CandidateProfileSheet({
                 data-testid="profile-edit"
               >
                 Edit
-              </Button>
-              <Button
-                size="sm"
-                className="flex-1 bg-primary text-primary-foreground"
-                onClick={() => onSchedule(c)}
-                data-testid="profile-schedule-interview"
-              >
-                <Calendar className="mr-2 h-4 w-4" />
-                Schedule Interview
               </Button>
               <Button size="sm" variant="outline" className="border-border" onClick={onClose}>
                 Close
@@ -1349,10 +1338,6 @@ export default function TalentPage() {
         onSaved={(updated) => {
           setProfileCandidate(updated);
           queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
-        }}
-        onSchedule={(c) => {
-          setProfileCandidate(null);
-          navigate(`/interviews/schedule?candidateId=${c.id}&candidateName=${encodeURIComponent(c.fullNameEn)}`);
         }}
       />
 
