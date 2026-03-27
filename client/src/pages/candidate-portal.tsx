@@ -506,7 +506,9 @@ export default function CandidatePortal() {
     mutationFn: () =>
       apiRequest("POST", `/api/candidate-contracts/${activeContract!.id}/sign`).then(r => r.json()),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/candidate-contracts/mine"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidate-contracts/mine", candidateId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidate-contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] });
       toast({ title: "Contract signed successfully!", description: "Your employment contract has been recorded." });
       setIsSignModalOpen(false);
     },
@@ -755,55 +757,59 @@ export default function CandidatePortal() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {activeContract ? (
-                  <>
-                    <div className="flex items-center justify-between p-3 rounded-md bg-muted/20 border border-primary/30 relative overflow-hidden">
-                      <div className={`absolute left-0 top-0 bottom-0 w-1 ${contractIsSigned ? "bg-emerald-500" : "bg-yellow-500"}`} />
-                      <div className="flex items-center gap-3">
-                        <FileText className={`h-8 w-8 ${contractIsSigned ? "text-emerald-500" : "text-primary"}`} />
-                        <div>
-                          <div className="text-sm font-medium text-white flex items-center gap-2" data-testid="text-contract-title">
+                  <div className={`rounded-lg border overflow-hidden ${contractIsSigned ? "border-emerald-700/50 bg-emerald-950/10" : "border-yellow-700/50 bg-yellow-950/10"}`}>
+                    <div className="p-4 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${contractIsSigned ? "bg-emerald-900/40" : "bg-yellow-900/40"}`}>
+                          {contractIsSigned ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <PenTool className="h-5 w-5 text-yellow-500" />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-white flex items-center gap-2 flex-wrap" data-testid="text-contract-title">
                             Employment Contract
-                            <Badge variant="secondary" className={`text-[10px] h-4 py-0 border-0 ${contractIsSigned ? "bg-emerald-500/10 text-emerald-500" : "bg-yellow-500/10 text-yellow-500"}`}>
-                              {contractIsSigned ? "Signed" : "Pending Signature"}
+                            <Badge className={`text-[10px] h-5 border-0 ${contractIsSigned ? "bg-emerald-500/15 text-emerald-400" : "bg-yellow-500/15 text-yellow-400"}`}>
+                              {contractIsSigned ? "Signed" : "Awaiting Your Signature"}
                             </Badge>
                           </div>
-                          <div className="text-xs text-muted-foreground">
+                          <div className="text-xs text-muted-foreground mt-0.5">
                             {contractIsSigned && activeContract.signedAt
-                              ? `Signed on ${new Date(activeContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`
+                              ? `Signed on ${new Date(activeContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`
                               : "Please review and sign your employment contract"}
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         <Button
                           size="sm"
                           variant="outline"
-                          className="border-border text-xs"
+                          className="border-border text-xs gap-1.5"
                           onClick={() => setContractPreviewOpen(true)}
                           data-testid="button-preview-contract"
                         >
-                          <Eye className="h-3 w-3 mr-1.5" />
-                          Preview
+                          <Eye className="h-3 w-3" />
+                          {contractIsSigned ? "View" : "Preview"}
                         </Button>
                         {!contractIsSigned && (
                           <Button
                             size="sm"
-                            className="bg-primary text-primary-foreground text-xs font-bold"
+                            className="bg-primary text-primary-foreground text-xs font-bold gap-1.5"
                             onClick={() => setIsSignModalOpen(true)}
                             data-testid="button-sign-contract"
                           >
-                            <PenTool className="h-3 w-3 mr-1.5" />
+                            <PenTool className="h-3 w-3" />
                             Sign Now
                           </Button>
                         )}
-                        {contractIsSigned && (
-                          <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                        )}
                       </div>
                     </div>
-                  </>
+                    {contractIsSigned && activeContract.signedAt && (
+                      <div className="px-4 pb-3 border-t border-emerald-800/30 pt-3 flex items-center gap-2 text-xs text-emerald-400">
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                        This contract has been digitally signed and recorded. No further action is required.
+                      </div>
+                    )}
+                  </div>
                 ) : (
-                  <div className="flex items-center gap-3 p-4 rounded-md bg-muted/10 border border-border">
+                  <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/10 border border-border">
                     <FileText className="h-8 w-8 text-muted-foreground" />
                     <div>
                       <div className="text-sm font-medium text-zinc-400">No Contract Available</div>
@@ -1040,15 +1046,39 @@ export default function CandidatePortal() {
                     </div>
                   );
                 })()}
-                {contractIsSigned && activeContract?.signedAt && (
-                  <div className="border-t pt-4 text-center">
-                    <p className="text-sm font-bold text-emerald-700">Digitally Signed</p>
-                    <p className="text-xs text-gray-500">
-                      Signed on {new Date(activeContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} at{" "}
-                      {new Date(activeContract.signedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                    </p>
+                <div className="border-t pt-6 mt-8">
+                  <div className="grid grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                      <p className="text-sm font-bold">First Party (Employer)</p>
+                      <p className="text-xs text-gray-600">{contractPreview.template?.companyName || contractPreview.variables?.companyName || "Luxury Carts Company Ltd"}</p>
+                      <div className="border-b border-gray-400 mt-8 pt-6"></div>
+                      <p className="text-xs text-gray-500">Authorized Signature & Stamp</p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm font-bold">Second Party (Employee)</p>
+                      <p className="text-xs text-gray-600">{contractPreview.variables?.fullName || displayName}</p>
+                      {contractIsSigned && activeContract?.signedAt ? (
+                        <div className="mt-4 pt-2 text-center">
+                          <div className="inline-block border-2 border-emerald-600 rounded-md px-4 py-2">
+                            <p className="text-xs font-bold text-emerald-700">DIGITALLY SIGNED</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">
+                              {new Date(activeContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} at{" "}
+                              {new Date(activeContract.signedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="border-b border-gray-400 mt-8 pt-6"></div>
+                          <p className="text-xs text-gray-500">Employee Signature</p>
+                        </>
+                      )}
+                    </div>
                   </div>
-                )}
+                  <div className="mt-6 text-center">
+                    <p className="text-xs text-gray-500">Date: {contractIsSigned && activeContract?.signedAt ? new Date(activeContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "____________________"}</p>
+                  </div>
+                </div>
                 {contractPreview.template?.documentFooter && (
                   <div className="border-t border-gray-200 mt-10 pt-3 no-print">
                     <p className="text-[10px] text-gray-400 text-center whitespace-pre-wrap leading-relaxed">{contractPreview.template.documentFooter}</p>

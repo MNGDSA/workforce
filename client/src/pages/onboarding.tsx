@@ -214,6 +214,8 @@ interface CandidateContractRecord {
   status: "generated" | "awaiting_signing" | "sent" | "signed";
   signedAt?: string | null;
   signedIp?: string | null;
+  snapshotArticles?: any[];
+  snapshotVariables?: Record<string, string>;
   createdAt: string;
 }
 
@@ -229,6 +231,7 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
   const { data: contracts = [] } = useQuery<CandidateContractRecord[]>({
     queryKey: ["/api/candidate-contracts", { onboardingId: onboardingRecord.id }],
     queryFn: () => apiRequest("GET", `/api/candidate-contracts?onboardingId=${onboardingRecord.id}`).then(r => r.json()),
+    refetchInterval: 15000,
   });
 
   const generateMutation = useMutation({
@@ -244,7 +247,20 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
 
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const latestContract = contracts[0];
+  const [contractPreviewOpen, setContractPreviewOpen] = useState(false);
   const isLocked = !docsComplete;
+
+  function replaceVars(text: string, vars?: Record<string, string>): string {
+    let result = text;
+    if (vars) {
+      Object.entries(vars).forEach(([key, val]) => {
+        result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(val));
+      });
+    }
+    return result;
+  }
+
+  const previewTpl = latestContract ? templates.find(t => t.id === latestContract.templateId) : null;
 
   return (
     <div className={`border-t border-zinc-800 pt-4 mt-4 ${isLocked ? "opacity-50" : ""}`}>
@@ -276,9 +292,21 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
                 {latestContract.status === "signed" ? "Contract Signed" : latestContract.status === "awaiting_signing" ? "Awaiting Signing" : latestContract.status === "sent" ? "Sent to Candidate" : "Contract Generated"}
               </span>
             </div>
-            <Badge className={`text-xs border-0 ${latestContract.status === "signed" ? "bg-emerald-900/40 text-emerald-400" : "bg-yellow-900/40 text-yellow-400"}`}>
-              {latestContract.status}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-xs text-zinc-400 hover:text-white"
+                onClick={() => setContractPreviewOpen(true)}
+                data-testid="button-view-candidate-contract"
+              >
+                <Eye className="h-3 w-3 mr-1" />
+                View
+              </Button>
+              <Badge className={`text-xs border-0 ${latestContract.status === "signed" ? "bg-emerald-900/40 text-emerald-400" : "bg-yellow-900/40 text-yellow-400"}`}>
+                {latestContract.status === "signed" ? "Signed" : latestContract.status === "awaiting_signing" ? "Awaiting" : latestContract.status}
+              </Badge>
+            </div>
           </div>
           {latestContract.signedAt && (
             <p className="text-xs text-zinc-500">
@@ -315,6 +343,104 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
             </Button>
           </div>
         </div>
+      )}
+
+      {latestContract && previewTpl && (
+        <Dialog open={contractPreviewOpen} onOpenChange={setContractPreviewOpen}>
+          <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="font-display text-lg flex items-center gap-2">
+                <Eye className="h-5 w-5 text-primary" />
+                Candidate Contract
+                {latestContract.status === "signed" && (
+                  <Badge className="bg-emerald-900/40 text-emerald-400 border-0 text-xs">Signed</Badge>
+                )}
+              </DialogTitle>
+              <DialogDescription className="text-zinc-400 text-sm">
+                Viewing the candidate's generated contract with actual data.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="contract-print-area mt-4 bg-white text-black rounded-lg p-8 space-y-6 font-serif">
+              {previewTpl.logoUrl && (
+                <div className={`flex ${(previewTpl as any).logoAlignment === "left" ? "justify-start" : (previewTpl as any).logoAlignment === "right" ? "justify-end" : "justify-center"}`}>
+                  <img src={previewTpl.logoUrl} alt="Logo" className="h-16 object-contain" />
+                </div>
+              )}
+              {previewTpl.headerText && (
+                <p className="text-center text-xl font-bold border-b pb-4">{previewTpl.headerText}</p>
+              )}
+              {(previewTpl as any).preamble && (
+                <div className="text-sm whitespace-pre-wrap leading-relaxed italic">
+                  {replaceVars((previewTpl as any).preamble, latestContract.snapshotVariables)}
+                </div>
+              )}
+              {Array.isArray(latestContract.snapshotArticles || previewTpl.articles) && (latestContract.snapshotArticles || previewTpl.articles).map((article: any, idx: number) => (
+                <div key={idx}>
+                  <h3 className="font-bold text-sm mb-1">Article {idx + 1}: {article.title}</h3>
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVars(article.body || "", latestContract.snapshotVariables)}</p>
+                  {Array.isArray(article.subArticles) && article.subArticles.map((sub: any, subIdx: number) => (
+                    <div key={subIdx} className="ml-6 mt-2">
+                      <h4 className="font-bold text-sm mb-0.5">{idx + 1}.{subIdx + 1} {sub.title}</h4>
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVars(sub.body || "", latestContract.snapshotVariables)}</p>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {previewTpl.footerText && (
+                <div className="border-t pt-4 mt-6">
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed italic">{replaceVars(previewTpl.footerText, latestContract.snapshotVariables)}</p>
+                </div>
+              )}
+              <div className="border-t pt-6 mt-8">
+                <div className="grid grid-cols-2 gap-8">
+                  <div className="space-y-2">
+                    <p className="text-sm font-bold">First Party (Employer)</p>
+                    <p className="text-xs text-gray-600">{(previewTpl as any).companyName || "Luxury Carts Company Ltd"}</p>
+                    <div className="border-b border-gray-400 mt-8 pt-6"></div>
+                    <p className="text-xs text-gray-500">Authorized Signature & Stamp</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-bold">Second Party (Employee)</p>
+                    <p className="text-xs text-gray-600">{latestContract.snapshotVariables?.fullName || candidate?.fullName || "Employee"}</p>
+                    {latestContract.status === "signed" && latestContract.signedAt ? (
+                      <div className="mt-4 pt-2 text-center">
+                        <div className="inline-block border-2 border-emerald-600 rounded-md px-4 py-2">
+                          <p className="text-xs font-bold text-emerald-700">DIGITALLY SIGNED</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">
+                            {new Date(latestContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} at{" "}
+                            {new Date(latestContract.signedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="border-b border-gray-400 mt-8 pt-6"></div>
+                        <p className="text-xs text-gray-500">Employee Signature</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-6 text-center">
+                  <p className="text-xs text-gray-500">Date: {latestContract.signedAt ? new Date(latestContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "____________________"}</p>
+                </div>
+              </div>
+              {(previewTpl as any).documentFooter && (
+                <div className="border-t border-gray-200 mt-10 pt-3 no-print">
+                  <p className="text-[10px] text-gray-400 text-center whitespace-pre-wrap leading-relaxed">{(previewTpl as any).documentFooter}</p>
+                </div>
+              )}
+              {(previewTpl as any).documentFooter && (
+                <div className="contract-page-footer" dangerouslySetInnerHTML={{ __html: ((previewTpl as any).documentFooter || '').replace(/\n/g, '<br/>') }} />
+              )}
+            </div>
+            <div className="flex justify-end mt-3 no-print">
+              <Button variant="outline" className="border-zinc-700 text-zinc-300 gap-2" onClick={() => printContract(previewTpl?.name || 'Contract')}>
+                <Download className="h-4 w-4" />
+                Print / Export PDF
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
@@ -594,11 +720,17 @@ function ContractTemplatesTab() {
     }, 0);
   }
 
-  function replaceVariables(text: string): string {
+  function replaceVariables(text: string, snapshotVars?: Record<string, string>): string {
     let result = text;
-    AVAILABLE_VARIABLES.forEach(v => {
-      result = result.replace(new RegExp(v.key.replace(/[{}]/g, "\\$&"), "g"), `[${v.label}]`);
-    });
+    if (snapshotVars) {
+      Object.entries(snapshotVars).forEach(([key, val]) => {
+        result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(val));
+      });
+    } else {
+      AVAILABLE_VARIABLES.forEach(v => {
+        result = result.replace(new RegExp(v.key.replace(/[{}]/g, "\\$&"), "g"), `[${v.label}]`);
+      });
+    }
     return result;
   }
 
@@ -1062,14 +1194,23 @@ function ContractTemplatesTab() {
                     <p className="text-sm whitespace-pre-wrap leading-relaxed italic">{replaceVariables(previewTemplate.footerText)}</p>
                   </div>
                 )}
-                <div className="border-t pt-4 grid grid-cols-2 gap-8 mt-6">
-                  <div>
-                    <p className="text-xs text-gray-500 mb-8">Employer Signature</p>
-                    <div className="border-b border-gray-300" />
+                <div className="border-t pt-6 mt-8">
+                  <div className="grid grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                      <p className="text-sm font-bold">First Party (Employer)</p>
+                      <p className="text-xs text-gray-600">{(previewTemplate as any).companyName || "Luxury Carts Company Ltd"}</p>
+                      <div className="border-b border-gray-400 mt-8 pt-6"></div>
+                      <p className="text-xs text-gray-500">Authorized Signature & Stamp</p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm font-bold">Second Party (Employee)</p>
+                      <p className="text-xs text-gray-600">________________________</p>
+                      <div className="border-b border-gray-400 mt-8 pt-6"></div>
+                      <p className="text-xs text-gray-500">Employee Signature</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-500 mb-8">Employee Signature</p>
-                    <div className="border-b border-gray-300" />
+                  <div className="mt-6 text-center">
+                    <p className="text-xs text-gray-500">Date: ____________________</p>
                   </div>
                 </div>
                 {(previewTemplate as any).documentFooter && (
@@ -1133,6 +1274,7 @@ export default function OnboardingPage() {
 
   const { data: records = [], isLoading } = useQuery<OnboardingRecord[]>({
     queryKey: ["/api/onboarding"],
+    refetchInterval: 15000,
   });
 
   const { data: candidates = [] } = useQuery<Candidate[]>({
