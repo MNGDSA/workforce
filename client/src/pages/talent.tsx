@@ -219,7 +219,7 @@ const REGIONS = [
   "Jazan Region", "Najran Region", "Al Baha Region", "Al Jawf Region", "Qassim Region",
 ];
 const GENDER_OPTIONS = ["male", "female"];
-const MARITAL_OPTIONS = ["single", "married", "divorced", "widowed"];
+const MARITAL_OPTIONS = ["Single", "Married", "Divorced", "Widowed"];
 const NATIONALITY_OPTIONS = [
   "Saudi Arabian", "Egyptian", "Yemeni", "Sudanese", "Jordanian", "Syrian",
   "Pakistani", "Indian", "Bangladeshi", "Filipino", "Indonesian", "Nigerian",
@@ -260,18 +260,26 @@ function CandidateProfileSheet({
     onError: () => toast({ title: "Save failed", variant: "destructive" }),
   });
 
+  function matchOption(val: string | null | undefined, options: string[]): string {
+    if (!val) return "";
+    const exact = options.find(o => o === val);
+    if (exact) return exact;
+    const lower = options.find(o => o.toLowerCase() === val.toLowerCase());
+    return lower ?? val;
+  }
+
   function startEditing() {
     if (!candidate) return;
     const c = candidate;
     setForm({
-      city: c.city ?? "",
-      region: c.region ?? "",
-      gender: c.gender ?? "",
+      city: matchOption(c.city, KSA_CITIES),
+      region: matchOption(c.region, REGIONS),
+      gender: matchOption(c.gender, GENDER_OPTIONS),
       dateOfBirth: c.dateOfBirth ?? "",
-      nationalityText: (c as any).nationalityText ?? (c.nationality === "saudi" ? "Saudi Arabian" : ""),
-      maritalStatus: c.maritalStatus ?? "",
+      nationalityText: matchOption((c as any).nationalityText ?? (c.nationality === "saudi" ? "Saudi Arabian" : ""), NATIONALITY_OPTIONS),
+      maritalStatus: matchOption(c.maritalStatus, MARITAL_OPTIONS),
       nationalId: c.nationalId ?? "",
-      educationLevel: c.educationLevel ?? "",
+      educationLevel: matchOption(c.educationLevel, EDU_OPTIONS),
       major: c.major ?? "",
       ibanNumber: c.ibanNumber ?? "",
       emergencyContactName: c.emergencyContactName ?? "",
