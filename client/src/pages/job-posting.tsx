@@ -40,7 +40,6 @@ import {
   MoreHorizontal,
   Loader2,
   Users,
-  DollarSign,
   X,
   FileDown,
   FileUp,
@@ -1468,7 +1467,6 @@ export default function JobPostingPage() {
                       <TableCell className="hidden lg:table-cell">
                         {job.salaryMin && job.salaryMax ? (
                           <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                            <DollarSign className="h-3 w-3" />
                             {Number(job.salaryMin).toLocaleString()} – {Number(job.salaryMax).toLocaleString()} SAR
                           </div>
                         ) : (
