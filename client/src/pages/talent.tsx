@@ -904,7 +904,7 @@ export default function TalentPage() {
               data-testid="button-export"
             >
               <Download className="mr-2 h-4 w-4" />
-              Export
+              Export All
             </Button>
             <Button
               className="h-9 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"

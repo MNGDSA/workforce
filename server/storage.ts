@@ -71,6 +71,7 @@ export interface IStorage {
   bulkInsertCandidates(candidates: InsertCandidate[]): Promise<{ inserted: number; skipped: number; duplicates: { row: number; nationalId?: string; phone?: string; reason: string }[] }>;
   bulkUpdateCandidateStatus(ids: string[], status: string): Promise<number>;
   bulkArchiveCandidates(ids: string[]): Promise<number>;
+  exportCandidates(): Promise<{ headers: string[]; rows: any[][]; total: number }>;
   getCandidateStats(): Promise<{ total: number; active: number; hired: number; blocked: number; avgRating: number }>;
 
   // Seasons
@@ -426,6 +427,45 @@ export class DatabaseStorage implements IStorage {
       .where(and(inArray(candidates.id, ids), isNull(candidates.archivedAt)))
       .returning({ id: candidates.id });
     return result.length;
+  }
+
+  async exportCandidates(): Promise<{ headers: string[]; rows: any[][]; total: number }> {
+    const data = await db.select({
+      id: candidates.id,
+      candidateCode: candidates.candidateCode,
+      fullNameEn: candidates.fullNameEn,
+      fullNameAr: candidates.fullNameAr,
+      source: candidates.source,
+      status: candidates.status,
+      phone: candidates.phone,
+      email: candidates.email,
+      city: candidates.city,
+      region: candidates.region,
+      nationality: candidates.nationality,
+      nationalId: candidates.nationalId,
+      ibanNumber: candidates.ibanNumber,
+      gender: candidates.gender,
+      dateOfBirth: candidates.dateOfBirth,
+      educationLevel: candidates.educationLevel,
+      major: candidates.major,
+      experienceYears: candidates.experienceYears,
+      createdAt: candidates.createdAt,
+    })
+      .from(candidates)
+      .where(isNull(candidates.archivedAt))
+      .orderBy(desc(candidates.createdAt));
+
+    const headers = ["ID", "Candidate Code", "Full Name (EN)", "Full Name (AR)", "Classification", "Status", "Phone", "Email", "City", "Region", "Nationality", "National ID", "IBAN", "Gender", "Date of Birth", "Education", "Major", "Experience (Yrs)", "Created At"];
+    const rows = data.map(r => [
+      r.id, r.candidateCode, r.fullNameEn || "", r.fullNameAr || "",
+      r.source || "individual", r.status, r.phone || "", r.email || "",
+      r.city || "", r.region || "", r.nationality || "", r.nationalId || "",
+      r.ibanNumber || "", r.gender || "", r.dateOfBirth || "",
+      r.educationLevel || "", r.major || "", r.experienceYears ?? "",
+      r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : "",
+    ]);
+
+    return { headers, rows, total: rows.length };
   }
 
   async getCandidateStats(): Promise<{ total: number; active: number; hired: number; blocked: number; avgRating: number }> {

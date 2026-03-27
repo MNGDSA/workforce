@@ -454,24 +454,8 @@ export async function registerRoutes(
 
   app.get("/api/candidates/export", async (req: Request, res: Response) => {
     try {
-      const allRows: any[] = [];
-      let page = 1;
-      const batchSize = 1000;
-      while (true) {
-        const query = candidateQuerySchema.parse({ ...req.query, page, limit: batchSize });
-        const result = await storage.getCandidates(query);
-        allRows.push(...result.data);
-        if (allRows.length >= result.total || result.data.length < batchSize) break;
-        page++;
-      }
-      const headers = ["ID", "Candidate Code", "Full Name (EN)", "Full Name (AR)", "Classification", "Status", "Phone", "Email", "City", "Nationality", "National ID", "IBAN", "Gender", "Date of Birth", "Created At"];
-      const rows = allRows.map((r: any) => [
-        r.id, r.candidateCode, r.fullNameEn || "", r.fullNameAr || "",
-        r.source || "individual", r.status, r.phone || "", r.email || "",
-        r.city || "", r.nationality || "", r.nationalId || "",
-        r.ibanNumber || "", r.gender || "", r.dateOfBirth || "", r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : ""
-      ]);
-      return res.json({ headers, rows, total: allRows.length });
+      const result = await storage.exportCandidates();
+      return res.json(result);
     } catch (err) {
       return handleError(res, err);
     }
