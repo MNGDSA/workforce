@@ -1124,6 +1124,7 @@ export default function OnboardingPage() {
   const [convertForm, setConvertForm] = useState({ position: "", department: "", startDate: "", salary: "" });
   const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
   const [pendingDeleteDoc, setPendingDeleteDoc] = useState<{ candidateId: string; docType: string; label: string } | null>(null);
+  const [docPreview, setDocPreview] = useState<{ url: string; label: string; isImage: boolean } | null>(null);
   const [bulkConvertOpen, setBulkConvertOpen] = useState(false);
   const [bulkConvertForm, setBulkConvertForm] = useState({ position: "", department: "", startDate: "", salary: "" });
   const ADMIT_PAGE_SIZE = 10;
@@ -1820,16 +1821,20 @@ export default function OnboardingPage() {
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 min-w-0">
                               <Download className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-                              {p.profileKey === "photoUrl" ? (
-                                <a href={profileValue} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer" onClick={e => e.stopPropagation()}>
-                                  <img src={profileValue} alt="Candidate photo" className="h-8 w-8 rounded-sm object-cover border border-zinc-600" />
-                                  <span className="text-xs text-emerald-400 underline underline-offset-2 flex items-center gap-1">View photo <ExternalLink className="h-2.5 w-2.5" /></span>
-                                </a>
-                              ) : (
-                                <a href={profileValue} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-400 underline underline-offset-2 flex items-center gap-1 hover:text-emerald-300 transition-colors cursor-pointer" onClick={e => e.stopPropagation()}>
-                                  View document <ExternalLink className="h-2.5 w-2.5" />
-                                </a>
-                              )}
+                              {(() => {
+                                const isImg = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(profileValue);
+                                const openPreview = (e: React.MouseEvent) => { e.stopPropagation(); setDocPreview({ url: profileValue, label: p.label, isImage: isImg }); };
+                                return p.profileKey === "photoUrl" && isImg ? (
+                                  <button className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer" onClick={openPreview}>
+                                    <img src={profileValue} alt="Candidate photo" className="h-8 w-8 rounded-sm object-cover border border-zinc-600" />
+                                    <span className="text-xs text-emerald-400 underline underline-offset-2 flex items-center gap-1">View photo <Eye className="h-2.5 w-2.5" /></span>
+                                  </button>
+                                ) : (
+                                  <button className="text-xs text-emerald-400 underline underline-offset-2 flex items-center gap-1 hover:text-emerald-300 transition-colors cursor-pointer" onClick={openPreview}>
+                                    {isImg ? "View image" : "View document"} <Eye className="h-2.5 w-2.5" />
+                                  </button>
+                                );
+                              })()}
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                               <Badge variant="outline" className="text-[10px] border-emerald-800 text-emerald-400">Uploaded</Badge>
@@ -2115,6 +2120,46 @@ export default function OnboardingPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <Dialog open={!!docPreview} onOpenChange={(v) => { if (!v) setDocPreview(null); }}>
+        <DialogContent className="bg-zinc-950 border-zinc-800 max-w-2xl max-h-[90vh] p-0">
+          <DialogHeader className="px-5 pt-5 pb-0">
+            <DialogTitle className="text-white font-display">{docPreview?.label ?? "Document Preview"}</DialogTitle>
+            <DialogDescription className="text-zinc-400 text-sm">
+              {checklistRecord && (() => {
+                const c = getCandidateFor(checklistRecord);
+                return c ? `${c.fullNameEn}${c.nationalId ? ` — ${c.nationalId}` : ""}` : "";
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-5 pb-5 flex items-center justify-center min-h-[300px] max-h-[70vh] overflow-auto">
+            {docPreview?.isImage ? (
+              <img src={docPreview.url} alt={docPreview.label} className="max-w-full max-h-[65vh] object-contain rounded-md" data-testid="img-doc-preview" />
+            ) : docPreview?.url.match(/\.pdf(\?|$)/i) ? (
+              <iframe src={docPreview.url} className="w-full h-[65vh] rounded-md border border-zinc-700" title={docPreview.label} data-testid="iframe-doc-preview" />
+            ) : (
+              <div className="flex flex-col items-center gap-4">
+                <div className="h-16 w-16 rounded-full bg-zinc-800 flex items-center justify-center">
+                  <Download className="h-7 w-7 text-zinc-400" />
+                </div>
+                <p className="text-zinc-400 text-sm">Preview not available for this file type</p>
+                <a href={docPreview?.url} target="_blank" rel="noopener noreferrer" className="text-emerald-400 text-sm underline underline-offset-2 flex items-center gap-1" data-testid="link-download-doc">
+                  Download file <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="px-5 pb-5 pt-0 border-t border-zinc-800 mt-0">
+            <a href={docPreview?.url} target="_blank" rel="noopener noreferrer" data-testid="button-open-new-tab">
+              <Button variant="outline" size="sm" className="border-zinc-700 text-zinc-300 hover:text-white gap-1.5">
+                <ExternalLink className="h-3.5 w-3.5" /> Open in new tab
+              </Button>
+            </a>
+            <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white" onClick={() => setDocPreview(null)} data-testid="button-close-preview">
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
