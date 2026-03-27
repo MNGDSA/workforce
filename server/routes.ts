@@ -1,5 +1,9 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import express from "express";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import { storage } from "./storage";
 import { getAuthenticatedUser, listUserRepos, getRepo, listRepoIssues, listRepoPullRequests } from "./github";
 import {
@@ -22,6 +26,26 @@ import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 
+const UPLOADS_DIR = path.resolve("uploads");
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname);
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = [".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) cb(null, true);
+    else cb(new Error(`File type ${ext} not allowed`));
+  },
+});
+
 function handleError(res: Response, err: unknown) {
   console.error(err);
   if (err instanceof z.ZodError) {
@@ -35,6 +59,49 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  app.use("/uploads", express.static(UPLOADS_DIR));
+
+  // ─── Document Upload ───────────────────────────────────────────────────────
+  app.post("/api/candidates/:id/documents", upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const docType = req.body.docType as string;
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      if (!["photo", "nationalId", "iban", "resume"].includes(docType)) {
+        return res.status(400).json({ message: "Invalid docType. Must be photo, nationalId, iban, or resume" });
+      }
+      const fileUrl = `/uploads/${req.file.filename}`;
+      const updatePayload: Record<string, any> = {};
+      if (docType === "photo") { updatePayload.photoUrl = fileUrl; updatePayload.hasPhoto = true; }
+      if (docType === "nationalId") { updatePayload.hasNationalId = true; }
+      if (docType === "iban") { updatePayload.hasIban = true; updatePayload.ibanNumber = fileUrl; }
+      if (docType === "resume") { updatePayload.resumeUrl = fileUrl; updatePayload.hasResume = true; }
+      const updated = await storage.updateCandidate(id, updatePayload);
+      if (!updated) return res.status(404).json({ message: "Candidate not found" });
+      // Auto-sync onboarding record if one exists
+      const onboardingRecords = await storage.getOnboardingRecords({ candidateId: id });
+      for (const rec of onboardingRecords) {
+        if (rec.status === "converted" || rec.status === "rejected") continue;
+        const syncPayload: Record<string, any> = {};
+        if (docType === "photo") syncPayload.hasPhoto = true;
+        if (docType === "nationalId") syncPayload.hasNationalId = true;
+        if (docType === "iban") syncPayload.hasIban = true;
+        if (Object.keys(syncPayload).length > 0) {
+          const merged = { ...rec, ...syncPayload };
+          const allDone = merged.hasPhoto && merged.hasIban && merged.hasNationalId &&
+                          merged.hasSignedContract && merged.hasEmergencyContact;
+          const anyDone = merged.hasPhoto || merged.hasIban || merged.hasNationalId ||
+                          merged.hasSignedContract || merged.hasEmergencyContact;
+          syncPayload.status = allDone ? "ready" : anyDone ? "in_progress" : "pending";
+          await storage.updateOnboardingRecord(rec.id, syncPayload);
+        }
+      }
+      return res.json({ url: fileUrl, docType, candidate: updated });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
 
   // ─── Current User (dev bypass) ────────────────────────────────────────────
   app.get("/api/me", async (_req: Request, res: Response) => {

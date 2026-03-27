@@ -233,7 +233,8 @@ const DOC_ITEMS: {
   { key: "iban",       label: "IBAN Certificate",       hint: "PDF, JPG, PNG up to 5 MB", accept: ".pdf,.jpg,.jpeg,.png", icon: <Landmark className="h-4 w-4" /> },
 ];
 
-function ProfileCompletionCard({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
+function ProfileCompletionCard({ toast, candidateId }: { toast: ReturnType<typeof useToast>["toast"]; candidateId: string }) {
+  const queryClient = useQueryClient();
   const [files, setFiles] = useState<Record<DocKey, File | null>>({ resume: null, nationalId: null, photo: null, iban: null });
   const [uploading, setUploading] = useState<Record<DocKey, boolean>>({ resume: false, nationalId: false, photo: false, iban: false });
   const inputRefs = {
@@ -250,7 +251,7 @@ function ProfileCompletionCard({ toast }: { toast: ReturnType<typeof useToast>["
     inputRefs[key].current?.click();
   }, []);
 
-  const handleFile = useCallback((key: DocKey, file: File | null) => {
+  const handleFile = useCallback(async (key: DocKey, file: File | null) => {
     if (!file) return;
     const maxMb = key === "photo" ? 3 : 5;
     if (file.size > maxMb * 1024 * 1024) {
@@ -258,13 +259,28 @@ function ProfileCompletionCard({ toast }: { toast: ReturnType<typeof useToast>["
       return;
     }
     setUploading((p) => ({ ...p, [key]: true }));
-    // Simulate a brief upload
-    setTimeout(() => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("docType", key);
+      const res = await fetch(`/api/candidates/${candidateId}/documents`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Upload failed" }));
+        throw new Error(err.message);
+      }
       setFiles((p) => ({ ...p, [key]: file }));
-      setUploading((p) => ({ ...p, [key]: false }));
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates/profile", candidateId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] });
       toast({ title: "File uploaded", description: `"${file.name}" saved successfully.` });
-    }, 900);
-  }, [toast]);
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setUploading((p) => ({ ...p, [key]: false }));
+    }
+  }, [toast, candidateId, queryClient]);
 
   const handleRemove = useCallback((key: DocKey) => {
     setFiles((p) => ({ ...p, [key]: null }));
@@ -693,7 +709,7 @@ export default function CandidatePortal() {
               </CardContent>
             </Card>
 
-            <ProfileCompletionCard toast={toast} />
+            <ProfileCompletionCard toast={toast} candidateId={candidateId!} />
 
             <div ref={sectionDocuments} className="scroll-mt-20">
             <Card className="bg-card border-border">

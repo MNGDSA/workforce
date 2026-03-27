@@ -142,7 +142,7 @@ export interface IStorage {
   deleteQuestionSet(id: string): Promise<boolean>;
 
   // Onboarding
-  getOnboardingRecords(filters?: { status?: string; seasonId?: string; search?: string }): Promise<OnboardingRecord[]>;
+  getOnboardingRecords(filters?: { status?: string; seasonId?: string; search?: string; candidateId?: string }): Promise<OnboardingRecord[]>;
   getOnboardingRecord(id: string): Promise<OnboardingRecord | undefined>;
   createOnboardingRecord(data: InsertOnboarding): Promise<OnboardingRecord>;
   updateOnboardingRecord(id: string, data: Partial<InsertOnboarding>): Promise<OnboardingRecord | undefined>;
@@ -788,10 +788,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ─── Onboarding ─────────────────────────────────────────────────────────────
-  async getOnboardingRecords(filters?: { status?: string; seasonId?: string; search?: string }): Promise<OnboardingRecord[]> {
+  async getOnboardingRecords(filters?: { status?: string; seasonId?: string; search?: string; candidateId?: string }): Promise<OnboardingRecord[]> {
     const conditions: any[] = [];
     if (filters?.status) conditions.push(eq(onboarding.status, filters.status as any));
     if (filters?.seasonId) conditions.push(eq(onboarding.seasonId, filters.seasonId));
+    if (filters?.candidateId) conditions.push(eq(onboarding.candidateId, filters.candidateId));
     const query = db.select().from(onboarding).orderBy(desc(onboarding.createdAt));
     if (conditions.length > 0) return query.where(and(...conditions));
     return query;
