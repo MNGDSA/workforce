@@ -142,6 +142,8 @@ export default function OnboardingPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [admitPage, setAdmitPage] = useState(1);
   const [convertForm, setConvertForm] = useState({ position: "", department: "", startDate: "", salary: "" });
+  const [bulkConvertOpen, setBulkConvertOpen] = useState(false);
+  const [bulkConvertForm, setBulkConvertForm] = useState({ position: "", department: "", startDate: "", salary: "" });
   const ADMIT_PAGE_SIZE = 10;
 
   const { data: records = [], isLoading } = useQuery<OnboardingRecord[]>({
@@ -204,6 +206,24 @@ export default function OnboardingPage() {
       setConvertRecord(null);
       setConvertForm({ position: "", department: "", startDate: "", salary: "" });
       toast({ title: "Successfully converted to employee!", description: "Workforce record created." });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const bulkConvertMutation = useMutation({
+    mutationFn: (body: { ids: string[]; position: string; department: string; startDate: string; salary: string }) =>
+      apiRequest("POST", "/api/onboarding/bulk-convert", body).then(r => r.json()),
+    onSuccess: (data: any) => {
+      qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
+      qc.invalidateQueries({ queryKey: ["/api/workforce"] });
+      setBulkConvertOpen(false);
+      setBulkConvertForm({ position: "", department: "", startDate: "", salary: "" });
+      const errCount = data.errors?.length ?? 0;
+      toast({
+        title: `${data.converted} employee${data.converted !== 1 ? "s" : ""} created`,
+        description: errCount > 0 ? `${errCount} failed — check records individually.` : "All ready candidates converted successfully.",
+        variant: errCount > 0 ? "destructive" : "default",
+      });
     },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
@@ -299,14 +319,27 @@ export default function OnboardingPage() {
             <h1 className="text-3xl font-display font-bold text-white tracking-tight">Onboarding</h1>
             <p className="text-zinc-400 mt-1 text-sm">Convert shortlisted candidates into employees after prerequisite verification</p>
           </div>
-          <Button
-            data-testid="button-admit-candidate"
-            onClick={() => setAdmitOpen(true)}
-            className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Admit Candidate
-          </Button>
+          <div className="flex gap-2">
+            {stats.ready > 0 && (
+              <Button
+                data-testid="button-bulk-convert"
+                onClick={() => setBulkConvertOpen(true)}
+                variant="outline"
+                className="border-emerald-700 text-emerald-400 hover:bg-emerald-900/30 gap-2"
+              >
+                <UserCheck className="h-4 w-4" />
+                Convert All Ready ({stats.ready})
+              </Button>
+            )}
+            <Button
+              data-testid="button-admit-candidate"
+              onClick={() => setAdmitOpen(true)}
+              className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Admit Candidate
+            </Button>
+          </div>
         </div>
 
         {/* KPI Row */}
@@ -816,6 +849,89 @@ export default function OnboardingPage() {
                 className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white gap-2"
               >
                 {convertMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><UserCheck className="h-4 w-4" /> Confirm & Convert</>}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Bulk Convert Dialog ── */}
+      <Dialog open={bulkConvertOpen} onOpenChange={setBulkConvertOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bulk Convert to Employees</DialogTitle>
+            <DialogDescription>
+              Convert all {stats.ready} ready candidates into employees at once. Fill in the shared employment details below.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="bg-emerald-900/20 border border-emerald-800 rounded-lg p-3 flex items-center gap-3">
+              <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-emerald-300">{stats.ready} candidates ready</p>
+                <p className="text-xs text-emerald-400/70">All prerequisites verified (6/6)</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-zinc-300 text-sm">Position *</Label>
+                <Input
+                  data-testid="input-bulk-position"
+                  value={bulkConvertForm.position}
+                  onChange={e => setBulkConvertForm(f => ({ ...f, position: e.target.value }))}
+                  placeholder="e.g. Cart Operator"
+                  className="bg-zinc-900 border-zinc-700 text-white mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-zinc-300 text-sm">Department</Label>
+                <Input
+                  data-testid="input-bulk-department"
+                  value={bulkConvertForm.department}
+                  onChange={e => setBulkConvertForm(f => ({ ...f, department: e.target.value }))}
+                  placeholder="e.g. Operations"
+                  className="bg-zinc-900 border-zinc-700 text-white mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-zinc-300 text-sm">Start Date *</Label>
+                <Input
+                  data-testid="input-bulk-start-date"
+                  type="date"
+                  value={bulkConvertForm.startDate}
+                  onChange={e => setBulkConvertForm(f => ({ ...f, startDate: e.target.value }))}
+                  className="bg-zinc-900 border-zinc-700 text-white mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-zinc-300 text-sm">Salary (SAR)</Label>
+                <Input
+                  data-testid="input-bulk-salary"
+                  type="number"
+                  value={bulkConvertForm.salary}
+                  onChange={e => setBulkConvertForm(f => ({ ...f, salary: e.target.value }))}
+                  placeholder="e.g. 3000"
+                  className="bg-zinc-900 border-zinc-700 text-white mt-1"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setBulkConvertOpen(false)} className="border-zinc-700 text-zinc-300">
+                Cancel
+              </Button>
+              <Button
+                data-testid="button-confirm-bulk-convert"
+                disabled={!bulkConvertForm.position || !bulkConvertForm.startDate || bulkConvertMutation.isPending}
+                onClick={() => {
+                  const readyIds = records.filter(r => r.status === "ready").map(r => r.id);
+                  bulkConvertMutation.mutate({ ids: readyIds, ...bulkConvertForm });
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+              >
+                {bulkConvertMutation.isPending
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Converting...</>
+                  : <><UserCheck className="h-4 w-4" /> Convert {stats.ready} Employees</>
+                }
               </Button>
             </div>
           </div>

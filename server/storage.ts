@@ -828,6 +828,8 @@ export class DatabaseStorage implements IStorage {
   ): Promise<WorkforceRecord> {
     const rec = await this.getOnboardingRecord(id);
     if (!rec) throw new Error("Onboarding record not found");
+    if (rec.status === "converted") throw new Error("Already converted to employee");
+    if (rec.status !== "ready") throw new Error(`Cannot convert — status is "${rec.status}", must be "ready"`);
 
     const [workforceRec] = await db.insert(workforce).values({
       candidateId: rec.candidateId,

@@ -734,6 +734,33 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/onboarding/bulk-convert", async (req: Request, res: Response) => {
+    try {
+      const { ids, position, department, startDate, salary, seasonId } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "ids array is required" });
+      if (!position || !startDate) return res.status(400).json({ message: "position and startDate are required" });
+      const uniqueIds = [...new Set(ids as string[])];
+      const results: any[] = [];
+      const errors: { id: string; message: string }[] = [];
+      for (const id of uniqueIds) {
+        try {
+          const wf = await storage.convertOnboardingToEmployee(
+            id,
+            { position, department, startDate, salary, seasonId },
+            (req as any).userId,
+          );
+          results.push(wf);
+        } catch (e: any) {
+          errors.push({ id, message: e?.message || "conversion failed" });
+        }
+      }
+      const status = results.length === 0 && errors.length > 0 ? 422 : results.length > 0 ? 201 : 200;
+      return res.status(status).json({ converted: results.length, errors, total: uniqueIds.length });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   app.get("/api/onboarding/:id", async (req: Request, res: Response) => {
     try {
       const record = await storage.getOnboardingRecord(req.params.id);
