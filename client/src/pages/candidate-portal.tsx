@@ -235,7 +235,20 @@ const DOC_ITEMS: {
 
 function ProfileCompletionCard({ toast, candidateId }: { toast: ReturnType<typeof useToast>["toast"]; candidateId: string }) {
   const queryClient = useQueryClient();
-  const [files, setFiles] = useState<Record<DocKey, File | null>>({ resume: null, nationalId: null, photo: null, iban: null });
+  const { data: profile } = useQuery({
+    queryKey: ["/api/candidates/profile", candidateId],
+    queryFn: () => apiRequest("GET", `/api/candidates/${candidateId}`).then((r) => r.json()),
+    enabled: !!candidateId,
+  });
+
+  const dbFlags: Record<DocKey, boolean> = {
+    resume: !!profile?.hasResume,
+    nationalId: !!profile?.hasNationalId,
+    photo: !!profile?.hasPhoto,
+    iban: !!profile?.hasIban,
+  };
+
+  const [justUploaded, setJustUploaded] = useState<Record<DocKey, string | null>>({ resume: null, nationalId: null, photo: null, iban: null });
   const [uploading, setUploading] = useState<Record<DocKey, boolean>>({ resume: false, nationalId: false, photo: false, iban: false });
   const inputRefs = {
     resume:     useRef<HTMLInputElement>(null),
@@ -244,7 +257,8 @@ function ProfileCompletionCard({ toast, candidateId }: { toast: ReturnType<typeo
     iban:       useRef<HTMLInputElement>(null),
   };
 
-  const doneCount = Object.values(files).filter(Boolean).length;
+  const isDone = (key: DocKey) => dbFlags[key] || !!justUploaded[key];
+  const doneCount = DOC_ITEMS.filter(({ key }) => isDone(key)).length;
   const pct = Math.round((doneCount / DOC_ITEMS.length) * 100);
 
   const handleClick = useCallback((key: DocKey) => {
@@ -271,7 +285,7 @@ function ProfileCompletionCard({ toast, candidateId }: { toast: ReturnType<typeo
         const err = await res.json().catch(() => ({ message: "Upload failed" }));
         throw new Error(err.message);
       }
-      setFiles((p) => ({ ...p, [key]: file }));
+      setJustUploaded((p) => ({ ...p, [key]: file.name }));
       queryClient.invalidateQueries({ queryKey: ["/api/candidates/profile", candidateId] });
       queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] });
       toast({ title: "File uploaded", description: `"${file.name}" saved successfully.` });
@@ -279,13 +293,9 @@ function ProfileCompletionCard({ toast, candidateId }: { toast: ReturnType<typeo
       toast({ title: "Upload failed", description: err?.message || "Please try again.", variant: "destructive" });
     } finally {
       setUploading((p) => ({ ...p, [key]: false }));
+      if (inputRefs[key].current) inputRefs[key].current!.value = "";
     }
   }, [toast, candidateId, queryClient]);
-
-  const handleRemove = useCallback((key: DocKey) => {
-    setFiles((p) => ({ ...p, [key]: null }));
-    if (inputRefs[key].current) inputRefs[key].current!.value = "";
-  }, []);
 
   return (
     <Card className="bg-card border-border">
@@ -310,13 +320,12 @@ function ProfileCompletionCard({ toast, candidateId }: { toast: ReturnType<typeo
         {/* Document items */}
         <div className="space-y-2">
           {DOC_ITEMS.map(({ key, label, hint, accept, icon }) => {
-            const file = files[key];
             const busy = uploading[key];
-            const done = !!file && !busy;
+            const done = isDone(key);
+            const uploadedName = justUploaded[key];
 
             return (
               <div key={key}>
-                {/* Hidden file input */}
                 <input
                   ref={inputRefs[key]}
                   type="file"
@@ -329,13 +338,12 @@ function ProfileCompletionCard({ toast, candidateId }: { toast: ReturnType<typeo
                 <div
                   className={`flex items-center gap-3 p-2.5 rounded-md transition-all cursor-pointer select-none
                     ${done   ? "bg-emerald-500/10 border border-emerald-500/25 cursor-default" : ""}
-                    ${busy   ? "bg-muted/20 border border-border opacity-70 cursor-wait" : ""}
+                    ${!done && busy ? "bg-muted/20 border border-border opacity-70 cursor-wait" : ""}
                     ${!done && !busy ? "bg-muted/20 border border-border hover:border-primary/40 hover:bg-primary/5 group" : ""}
                   `}
                   onClick={() => !done && !busy && handleClick(key)}
                   data-testid={`row-doc-${key}`}
                 >
-                  {/* Status icon */}
                   <div className={`shrink-0 rounded-full p-1.5 
                     ${done ? "bg-emerald-500/20 text-emerald-500" : busy ? "bg-muted text-muted-foreground" : "bg-muted/30 text-muted-foreground group-hover:text-primary group-hover:bg-primary/10"}`}>
                     {busy
@@ -345,24 +353,23 @@ function ProfileCompletionCard({ toast, candidateId }: { toast: ReturnType<typeo
                       : icon}
                   </div>
 
-                  {/* Label + filename */}
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm font-medium leading-tight ${done ? "text-emerald-400" : "text-white"}`}>{label}</p>
                     {done
-                      ? <p className="text-[11px] text-emerald-600 truncate">{file!.name}</p>
+                      ? <p className="text-[11px] text-emerald-600 truncate">{uploadedName || "Uploaded"}</p>
                       : <p className="text-[11px] text-muted-foreground/70">{hint}</p>}
                   </div>
 
-                  {/* Right action */}
                   {busy && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0" />}
                   {done && (
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); handleRemove(key); }}
-                      className="shrink-0 text-muted-foreground hover:text-destructive transition-colors rounded-sm p-0.5"
-                      data-testid={`button-remove-${key}`}
+                      onClick={(e) => { e.stopPropagation(); handleClick(key); }}
+                      className="shrink-0 text-muted-foreground hover:text-primary transition-colors rounded-sm p-0.5"
+                      title="Re-upload"
+                      data-testid={`button-reupload-${key}`}
                     >
-                      <X className="h-3.5 w-3.5" />
+                      <UploadCloud className="h-3.5 w-3.5" />
                     </button>
                   )}
                   {!done && !busy && (
