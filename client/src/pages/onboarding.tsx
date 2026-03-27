@@ -85,6 +85,7 @@ interface OnboardingRecord {
   salary?: string | null;
   notes?: string | null;
   rejectedAt?: string | null;
+  rejectedBy?: string | null;
   rejectionReason?: string | null;
   convertedAt?: string | null;
   createdAt: string;
@@ -225,6 +226,16 @@ export default function OnboardingPage() {
     select: (r: any) => Array.isArray(r) ? r : [],
   });
 
+  const { data: adminUsers = [] } = useQuery<{ id: string; fullName: string }[]>({
+    queryKey: ["/api/users"],
+    queryFn: () => apiRequest("GET", "/api/users").then(r => r.json()),
+    select: (data: any[]) => data.map((u: any) => ({ id: u.id, fullName: u.fullName })),
+  });
+  const getAdminName = useCallback((id: string | null | undefined) => {
+    if (!id) return null;
+    return adminUsers.find(u => u.id === id)?.fullName ?? "Unknown admin";
+  }, [adminUsers]);
+
   type AdmitItem = { candidateId: string; applicationId: string | null; jobId: string | null; hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean };
   const admitMutation = useMutation({
     mutationFn: async (items: AdmitItem[]) => {
@@ -252,8 +263,13 @@ export default function OnboardingPage() {
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
 
+  const { data: meUser } = useQuery<{ id: string; fullName?: string }>({
+    queryKey: ["/api/me"],
+    queryFn: () => apiRequest("GET", "/api/me").then(r => r.json()),
+  });
+
   const rejectMutation = useMutation({
-    mutationFn: (id: string) => apiRequest("PATCH", `/api/onboarding/${id}`, { status: "rejected" }).then(r => r.json()),
+    mutationFn: (id: string) => apiRequest("PATCH", `/api/onboarding/${id}`, { status: "rejected", rejectedBy: meUser?.id ?? null }).then(r => r.json()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       toast({ title: "Candidate rejected from onboarding" });
@@ -494,6 +510,7 @@ export default function OnboardingPage() {
                       {isRejected && rec.rejectedAt && (
                         <span className="text-[11px] text-zinc-500">
                           Rejected {new Date(rec.rejectedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} at {new Date(rec.rejectedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                          {rec.rejectedBy && <> by <strong className="text-zinc-400">{getAdminName(rec.rejectedBy)}</strong></>}
                         </span>
                       )}
                     </div>
