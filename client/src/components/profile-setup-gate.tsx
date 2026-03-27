@@ -1,4 +1,5 @@
 import { useState, ReactNode } from "react";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useLocation } from "wouter";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -243,7 +244,7 @@ function Step1Form({
 }: {
   defaults: Partial<Step1>; onNext: (d: Step1) => void; candidate: StoredCandidate;
 }) {
-  const { register, handleSubmit, control, formState: { errors } } = useForm<Step1>({
+  const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm<Step1>({
     resolver: zodResolver(step1Schema),
     defaultValues: {
       firstName:       defaults.firstName ?? (candidate.fullNameEn?.split(" ")[0] ?? ""),
@@ -306,7 +307,7 @@ function Step1Form({
 
       <div className="grid grid-cols-2 gap-4">
         <FieldWrapper label="Date of Birth" required error={errors.dateOfBirth?.message}>
-          <Input {...register("dateOfBirth")} type="date" className="bg-muted/30 border-border" data-testid="input-dob" />
+          <DatePickerField value={watch("dateOfBirth")} onChange={(v) => setValue("dateOfBirth", v)} className="bg-muted/30 border-border" data-testid="input-dob" />
         </FieldWrapper>
         <FieldWrapper label="City of Residence" required error={errors.city?.message}>
           <Controller control={control} name="city" render={({ field }) => (

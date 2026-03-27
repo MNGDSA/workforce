@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import DashboardLayout from "@/components/layout";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -232,11 +233,11 @@ function CreateSeasonDialog({
                       Start Date <span className="text-primary">*</span>
                     </FormLabel>
                     <FormControl>
-                      <Input
-                        type="date"
+                      <DatePickerField
+                        value={field.value}
+                        onChange={field.onChange}
                         className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
                         data-testid="input-season-start-date"
-                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -252,11 +253,11 @@ function CreateSeasonDialog({
                       End Date <span className="text-primary">*</span>
                     </FormLabel>
                     <FormControl>
-                      <Input
-                        type="date"
+                      <DatePickerField
+                        value={field.value}
+                        onChange={field.onChange}
                         className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
                         data-testid="input-season-end-date"
-                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -460,7 +461,7 @@ function CreateSMPContractDialog({
                   <FormItem>
                     <FormLabel className="text-white text-sm">Start Date</FormLabel>
                     <FormControl>
-                      <Input {...field} type="date" className="bg-muted/30 border-border" data-testid="input-smp-start-date" />
+                      <DatePickerField value={field.value} onChange={field.onChange} className="bg-muted/30 border-border" data-testid="input-smp-start-date" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -469,7 +470,7 @@ function CreateSMPContractDialog({
                   <FormItem>
                     <FormLabel className="text-white text-sm">End Date</FormLabel>
                     <FormControl>
-                      <Input {...field} type="date" className="bg-muted/30 border-border" data-testid="input-smp-end-date" />
+                      <DatePickerField value={field.value} onChange={field.onChange} className="bg-muted/30 border-border" data-testid="input-smp-end-date" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

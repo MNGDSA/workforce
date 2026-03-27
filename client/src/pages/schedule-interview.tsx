@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -342,7 +343,7 @@ export default function ScheduleInterviewPage() {
                             Date
                           </FormLabel>
                           <FormControl>
-                            <Input type="date" className="bg-muted/30 border-border" data-testid="input-date" {...field} />
+                            <DatePickerField value={field.value} onChange={field.onChange} className="bg-muted/30 border-border" data-testid="input-date" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

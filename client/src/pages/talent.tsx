@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/layout";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -398,7 +399,7 @@ function CandidateProfileSheet({
                 </div>
                 <div className="space-y-1">
                   <p className="text-[11px] text-muted-foreground">Date of Birth</p>
-                  <Input type="date" value={form.dateOfBirth} onChange={e => setField("dateOfBirth", e.target.value)} className="h-9 bg-muted/30 border-border text-sm" data-testid="edit-dob" />
+                  <DatePickerField value={form.dateOfBirth} onChange={v => setField("dateOfBirth", v)} className="h-9 bg-muted/30 border-border text-sm" data-testid="edit-dob" />
                 </div>
                 <div className="space-y-1">
                   <p className="text-[11px] text-muted-foreground">Nationality</p>

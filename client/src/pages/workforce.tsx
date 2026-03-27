@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -467,11 +468,11 @@ function CreateGroupDialog({
                       Start Date <span className="text-destructive">*</span>
                     </FormLabel>
                     <FormControl>
-                      <Input
-                        type="date"
+                      <DatePickerField
+                        value={field.value}
+                        onChange={field.onChange}
                         className="bg-muted/30 border-border"
                         data-testid="input-start-date"
-                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -482,11 +483,11 @@ function CreateGroupDialog({
                   <FormItem>
                     <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">End Date</FormLabel>
                     <FormControl>
-                      <Input
-                        type="date"
+                      <DatePickerField
+                        value={field.value}
+                        onChange={field.onChange}
                         className="bg-muted/30 border-border"
                         data-testid="input-end-date"
-                        {...field}
                       />
                     </FormControl>
                     <FormMessage />

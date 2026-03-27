@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import DashboardLayout from "@/components/layout";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -333,11 +334,11 @@ function CreateJobDialog({
                     <FormItem>
                       <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Application Deadline</FormLabel>
                       <FormControl>
-                        <Input
-                          type="date"
+                        <DatePickerField
+                          value={field.value}
+                          onChange={field.onChange}
                           className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
                           data-testid="input-job-deadline"
-                          {...field}
                         />
                       </FormControl>
                       <FormMessage />
@@ -716,7 +717,7 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
               <FormItem>
                 <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Application Deadline</FormLabel>
                 <FormControl>
-                  <Input type="date" className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-deadline" {...field} />
+                  <DatePickerField value={field.value} onChange={field.onChange} className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-deadline" />
                 </FormControl>
                 <FormMessage />
               </FormItem>

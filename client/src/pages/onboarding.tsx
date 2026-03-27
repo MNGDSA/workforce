@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import Layout from "@/components/layout";
@@ -1001,11 +1002,10 @@ export default function OnboardingPage() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-zinc-400 text-sm">Start Date <span className="text-red-400">*</span></Label>
-                <Input
+                <DatePickerField
                   data-testid="input-convert-startdate"
-                  type="date"
                   value={convertForm.startDate}
-                  onChange={e => setConvertForm(f => ({ ...f, startDate: e.target.value }))}
+                  onChange={v => setConvertForm(f => ({ ...f, startDate: v }))}
                   className="bg-zinc-900 border-zinc-700 text-white"
                 />
               </div>
@@ -1086,11 +1086,10 @@ export default function OnboardingPage() {
               </div>
               <div>
                 <Label className="text-zinc-300 text-sm">Start Date *</Label>
-                <Input
+                <DatePickerField
                   data-testid="input-bulk-start-date"
-                  type="date"
                   value={bulkConvertForm.startDate}
-                  onChange={e => setBulkConvertForm(f => ({ ...f, startDate: e.target.value }))}
+                  onChange={v => setBulkConvertForm(f => ({ ...f, startDate: v }))}
                   className="bg-zinc-900 border-zinc-700 text-white mt-1"
                 />
               </div>

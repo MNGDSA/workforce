@@ -325,5 +325,6 @@ RETURN TO POOL
 - `react-signature-canvas` + `@types/react-signature-canvas` — e-signature
 - `jspdf` — PDF generation
 - `date-fns` — date formatting
+- Custom `DatePickerField` component (`client/src/components/ui/date-picker-field.tsx`) — replaces all native date inputs; supports day/month/year zoom-out navigation
 - `@replit/connectors-sdk` — Replit integration proxy (GitHub OAuth calls)
 - `@octokit/rest` — GitHub REST API client
