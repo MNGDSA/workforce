@@ -365,6 +365,7 @@ function ContractTemplatesTab() {
   const [formCompanyName, setFormCompanyName] = useState("");
   const [formHeaderText, setFormHeaderText] = useState("");
   const [formFooterText, setFormFooterText] = useState("");
+  const [formDocumentFooter, setFormDocumentFooter] = useState("");
   const [formPreamble, setFormPreamble] = useState("");
   const [formArticles, setFormArticles] = useState<{ title: string; body: string }[]>([{ title: "", body: "" }]);
   const lastFocusedTextarea = useRef<{ type: "preamble" } | { type: "article"; idx: number } | null>(null);
@@ -441,6 +442,7 @@ function ContractTemplatesTab() {
       setFormCompanyName(template.companyName || "");
       setFormHeaderText(template.headerText || "");
       setFormFooterText(template.footerText || "");
+      setFormDocumentFooter((template as any).documentFooter || "");
       setFormPreamble((template as any).preamble || "");
       setFormArticles(Array.isArray(template.articles) && template.articles.length > 0 ? template.articles : [{ title: "", body: "" }]);
       setFormStatus(template.status === "archived" ? "draft" : template.status);
@@ -451,6 +453,7 @@ function ContractTemplatesTab() {
       setFormCompanyName("");
       setFormHeaderText("");
       setFormFooterText("");
+      setFormDocumentFooter("");
       setFormPreamble("");
       setFormArticles([{ title: "", body: "" }]);
       setFormStatus("draft");
@@ -481,6 +484,7 @@ function ContractTemplatesTab() {
       companyName: formCompanyName.trim() || null,
       headerText: formHeaderText.trim() || null,
       footerText: formFooterText.trim() || null,
+      documentFooter: formDocumentFooter.trim() || null,
       preamble: formPreamble.trim() || null,
       articles: validArticles,
       status: formStatus,
@@ -892,6 +896,18 @@ function ContractTemplatesTab() {
               />
               <p className="text-[11px] text-zinc-600">Closing clause — the formal attestation that the parties have agreed and signed the contract.</p>
             </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-zinc-400 uppercase tracking-wider">Document Footer</Label>
+              <Textarea
+                data-testid="input-document-footer"
+                value={formDocumentFooter}
+                onChange={e => setFormDocumentFooter(e.target.value)}
+                placeholder="e.g. Luxury Carts Company Ltd | CR No. 4030123456 | P.O. Box 12345, Makkah 21955, Saudi Arabia | Tel: +966 12 345 6789"
+                className="bg-zinc-900 border-zinc-700 text-[11px] min-h-16 font-mono"
+              />
+              <p className="text-[11px] text-zinc-600">Small print at the bottom of every page — company name, commercial registration, address, contact details.</p>
+            </div>
           </div>
 
           <DialogFooter className="mt-4">
@@ -948,7 +964,12 @@ function ContractTemplatesTab() {
               ))}
               {previewTemplate.footerText && (
                 <div className="border-t pt-4 mt-6">
-                  <p className="text-xs text-gray-500">{previewTemplate.footerText}</p>
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed italic">{replaceVariables(previewTemplate.footerText)}</p>
+                </div>
+              )}
+              {(previewTemplate as any).documentFooter && (
+                <div className="border-t border-gray-200 mt-6 pt-3">
+                  <p className="text-[10px] text-gray-400 text-center whitespace-pre-wrap leading-relaxed">{(previewTemplate as any).documentFooter}</p>
                 </div>
               )}
               <div className="border-t pt-4 grid grid-cols-2 gap-8 mt-6">

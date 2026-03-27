@@ -1016,8 +1016,23 @@ export default function CandidatePortal() {
                   </div>
                 );
               })}
-              {contractPreview.template?.footerText && (
-                <p className="text-xs text-gray-500 border-t pt-4 text-center italic">{contractPreview.template.footerText}</p>
+              {contractPreview.template?.footerText && (() => {
+                let testimoniumText = contractPreview.template.footerText;
+                if (contractPreview.variables) {
+                  Object.entries(contractPreview.variables).forEach(([key, val]) => {
+                    testimoniumText = testimoniumText.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(val));
+                  });
+                }
+                return (
+                  <div className="border-t pt-4 mt-6">
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed italic">{testimoniumText}</p>
+                  </div>
+                );
+              })()}
+              {contractPreview.template?.documentFooter && (
+                <div className="border-t border-gray-200 mt-6 pt-3">
+                  <p className="text-[10px] text-gray-400 text-center whitespace-pre-wrap leading-relaxed">{contractPreview.template.documentFooter}</p>
+                </div>
               )}
               {contractIsSigned && activeContract?.signedAt && (
                 <div className="border-t pt-4 text-center">
