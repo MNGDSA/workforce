@@ -871,7 +871,7 @@ export default function TalentPage() {
           <div className="relative flex-1 w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
-              placeholder="Search by name, phone, email, ID..."
+              placeholder="Search by ID, name, phone, email"
               className="pl-10 h-10 bg-muted/30 border-border focus-visible:ring-primary/20"
               value={search}
               onChange={handleSearchChange}
