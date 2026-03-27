@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { printContract } from "@/lib/print-contract";
+import { PdfViewer } from "@/components/pdf-viewer";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -2136,14 +2137,7 @@ export default function OnboardingPage() {
             {docPreview?.isImage ? (
               <img src={docPreview.url} alt={docPreview.label} className="max-w-full max-h-[65vh] object-contain rounded-md" data-testid="img-doc-preview" />
             ) : docPreview?.url.match(/\.pdf(\?|$)/i) ? (
-              <object data={docPreview.url} type="application/pdf" className="w-full h-[65vh] rounded-md border border-zinc-700" data-testid="object-doc-preview">
-                <div className="flex flex-col items-center justify-center gap-4 h-full">
-                  <p className="text-zinc-400 text-sm">PDF preview is not supported in this browser</p>
-                  <a href={docPreview.url} target="_blank" rel="noopener noreferrer" className="text-emerald-400 text-sm underline underline-offset-2 flex items-center gap-1" data-testid="link-download-pdf">
-                    Open PDF <ExternalLink className="h-3 w-3" />
-                  </a>
-                </div>
-              </object>
+              <PdfViewer url={docPreview.url} className="w-full" />
             ) : (
               <div className="flex flex-col items-center gap-4">
                 <div className="h-16 w-16 rounded-full bg-zinc-800 flex items-center justify-center">
