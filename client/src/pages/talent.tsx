@@ -1148,14 +1148,6 @@ export default function TalentPage() {
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
-                                  onClick={() => setDeleteCandidate(candidate)}
-                                  className="text-red-500"
-                                  data-testid={`menu-delete-${candidate.id}`}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
                                   onClick={() => {
                                     if (candidate.status === "blocked") {
                                       updateStatus.mutate({ id: candidate.id, status: "active" });
@@ -1168,6 +1160,14 @@ export default function TalentPage() {
                                 >
                                   <ShieldAlert className="mr-2 h-4 w-4" />
                                   {candidate.status === "blocked" ? "Unblock" : "Block"}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => setDeleteCandidate(candidate)}
+                                  className="text-red-500"
+                                  data-testid={`menu-delete-${candidate.id}`}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
