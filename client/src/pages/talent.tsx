@@ -217,6 +217,7 @@ const REGIONS = [
   "Makkah Region", "Madinah Region", "Riyadh Region", "Eastern Region",
   "Asir Region", "Tabuk Region", "Hail Region", "Northern Borders Region",
   "Jazan Region", "Najran Region", "Al Baha Region", "Al Jawf Region", "Qassim Region",
+  "Western Region", "Central Region", "Southern Region", "Northern Region",
 ];
 const GENDER_OPTIONS = ["male", "female"];
 const MARITAL_OPTIONS = ["Single", "Married", "Divorced", "Widowed"];
