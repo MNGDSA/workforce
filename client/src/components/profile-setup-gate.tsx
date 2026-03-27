@@ -37,7 +37,13 @@ type StoredCandidate = {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const NATIONALITIES = [
+const PINNED_NATIONALITIES = [
+  "Saudi Arabian", "Yemeni", "Burmese", "Syrian", "Jordanian", "Egyptian",
+  "Pakistani", "Indian", "Bangladeshi", "Nigerian", "Eritrean", "Chadian",
+  "Ethiopian", "Filipino", "Thai",
+];
+
+const ALL_NATIONALITIES = [
   "Afghan", "Albanian", "Algerian", "American", "Andorran", "Angolan",
   "Antiguan and Barbudan", "Argentine", "Armenian", "Australian", "Austrian",
   "Azerbaijani", "Bahamian", "Bahraini", "Bangladeshi", "Barbadian",
@@ -75,6 +81,12 @@ const NATIONALITIES = [
   "Turkish", "Turkmenistani", "Tuvaluan", "Ugandan", "Ukrainian",
   "Uruguayan", "Uzbekistani", "Vanuatuan", "Venezuelan", "Vietnamese",
   "Yemeni", "Zambian", "Zimbabwean", "Other",
+];
+
+const NATIONALITIES = [
+  ...PINNED_NATIONALITIES,
+  "---",
+  ...ALL_NATIONALITIES.filter((n) => !PINNED_NATIONALITIES.includes(n)),
 ];
 
 const GENDER_OPTIONS = [
@@ -183,9 +195,13 @@ function SelectField({ value, onChange, options, placeholder, error }: {
         className="w-full h-10 bg-muted/30 border border-border rounded-sm px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
       >
         <option value="" className="bg-card text-muted-foreground">{placeholder ?? "Select..."}</option>
-        {options.map((o) => (
-          <option key={o} value={o} className="bg-card text-white">{o}</option>
-        ))}
+        {options.map((o, i) =>
+          o === "---" ? (
+            <option key={`sep-${i}`} disabled className="bg-card text-muted-foreground">{"─".repeat(20)}</option>
+          ) : (
+            <option key={o} value={o} className="bg-card text-white">{o}</option>
+          )
+        )}
       </select>
       {error && <p className="text-red-400 text-xs">{error}</p>}
     </div>
