@@ -183,7 +183,7 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
       <DialogContent className="max-w-lg bg-card border-border">
         <DialogHeader>
           <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
-            <Briefcase className="h-5 w-5 text-amber-400" />
+            <Briefcase className="h-5 w-5 text-primary" />
             {isEdit ? "Edit Job" : "Post a Job"}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
@@ -340,7 +340,7 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
                 <Button type="submit" variant="outline" disabled={postJob.isPending} onClick={() => form.setValue("status", "draft")} className="border-border bg-background hover:bg-muted" data-testid="button-postjob-draft">
                   {postJob.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save as Draft"}
                 </Button>
-                <Button type="submit" disabled={postJob.isPending} onClick={() => form.setValue("status", "active")} className="bg-amber-500 hover:bg-amber-500/90 text-white font-bold uppercase tracking-wide text-xs rounded-sm" data-testid="button-postjob-publish">
+                <Button type="submit" disabled={postJob.isPending} onClick={() => form.setValue("status", "active")} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold uppercase tracking-wide text-xs rounded-sm" data-testid="button-postjob-publish">
                   {postJob.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : isEdit ? <><Save className="mr-1.5 h-4 w-4" />Update Job</> : <><Plus className="mr-1.5 h-4 w-4" />Post Job</>}
                 </Button>
               </div>
@@ -1016,7 +1016,7 @@ export default function JobPostingPage() {
                       <TableCell className="hidden md:table-cell">
                         <Badge
                           variant="outline"
-                          className={`border-0 text-xs font-medium ${job.eventId ? "bg-primary/10 text-primary" : "bg-amber-500/10 text-amber-400"}`}
+                          className={`border-0 text-xs font-medium ${job.eventId ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}
                           data-testid={`type-job-${job.id}`}
                         >
                           {job.eventId ? "Event-linked" : "Standalone"}
@@ -1071,7 +1071,7 @@ export default function JobPostingPage() {
                             )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                              className="text-amber-500"
+                              className="text-destructive"
                               onClick={() => archiveJob.mutate(job.id)}
                             >
                               Archive
