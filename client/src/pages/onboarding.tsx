@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import Layout from "@/components/layout";
@@ -50,6 +50,7 @@ import {
   Eye,
   Download,
   ExternalLink,
+  Check,
 } from "lucide-react";
 
 type OnboardingStatus = "pending" | "in_progress" | "ready" | "converted" | "rejected";
@@ -121,6 +122,53 @@ const PREREQ_TOTAL = PREREQUISITES.length;
 
 function prereqCount(rec: OnboardingRecord) {
   return [rec.hasPhoto, rec.hasIban, rec.hasNationalId, rec.hasSignedContract].filter(Boolean).length;
+}
+
+function AutoSaveNotes({ recordId, initialValue, onSave }: { recordId: string; initialValue: string; onSave: (id: string, notes: string) => void }) {
+  const [value, setValue] = useState(initialValue);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedRef = useRef(initialValue);
+
+  useEffect(() => {
+    setValue(initialValue);
+    lastSavedRef.current = initialValue;
+    setSaveStatus("idle");
+  }, [recordId, initialValue]);
+
+  const debouncedSave = useCallback((text: string) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      if (text !== lastSavedRef.current) {
+        setSaveStatus("saving");
+        lastSavedRef.current = text;
+        onSave(recordId, text);
+        setTimeout(() => setSaveStatus("saved"), 400);
+        setTimeout(() => setSaveStatus("idle"), 2500);
+      }
+    }, 800);
+  }, [recordId, onSave]);
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <Label className="text-zinc-400 text-sm">Notes</Label>
+        <span className="text-[11px] text-zinc-500 flex items-center gap-1">
+          {saveStatus === "saving" && <><Loader2 className="h-3 w-3 animate-spin" /> Saving…</>}
+          {saveStatus === "saved" && <><Check className="h-3 w-3 text-emerald-500" /> Saved</>}
+          {saveStatus === "idle" && "Auto-saved"}
+        </span>
+      </div>
+      <Textarea
+        data-testid="textarea-onboarding-notes"
+        placeholder="Add notes about this candidate's onboarding…"
+        value={value}
+        onChange={e => { setValue(e.target.value); debouncedSave(e.target.value); }}
+        className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600 resize-none text-sm"
+        rows={3}
+      />
+    </div>
+  );
 }
 
 function ProgressBar({ value, total }: { value: number; total: number }) {
@@ -784,21 +832,11 @@ export default function OnboardingPage() {
               </div>
 
               {/* Notes */}
-              <div className="space-y-2">
-                <Label className="text-zinc-400 text-sm">Notes</Label>
-                <Textarea
-                  data-testid="textarea-onboarding-notes"
-                  placeholder="Add notes about this candidate's onboarding…"
-                  defaultValue={checklistRecord.notes ?? ""}
-                  onBlur={e => {
-                    if (e.target.value !== checklistRecord.notes) {
-                      checklistMutation.mutate({ id: checklistRecord.id, data: { notes: e.target.value } });
-                    }
-                  }}
-                  className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600 resize-none text-sm"
-                  rows={3}
-                />
-              </div>
+              <AutoSaveNotes
+                recordId={checklistRecord.id}
+                initialValue={checklistRecord.notes ?? ""}
+                onSave={(id, notes) => checklistMutation.mutate({ id, data: { notes } })}
+              />
 
               {/* Status indicator */}
               {checklistRecord.status !== "converted" && checklistRecord.status !== "rejected" && (
