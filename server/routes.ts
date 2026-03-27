@@ -23,6 +23,24 @@ import {
   candidateQuerySchema,
 } from "@shared/schema";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
+
+function validateProfileCompleteness(candidate: Record<string, any>): string[] {
+  const missing: string[] = [];
+  if (!candidate.fullNameEn) missing.push("Full Name");
+  if (!candidate.dateOfBirth) missing.push("Date of Birth");
+  if (!candidate.gender) missing.push("Gender");
+  if (!candidate.nationality) missing.push("Nationality");
+  if (!candidate.city) missing.push("City");
+  if (!candidate.maritalStatus) missing.push("Marital Status");
+  if (!candidate.educationLevel) missing.push("Education Level");
+  if (!candidate.emergencyContactName) missing.push("Emergency Contact Name");
+  if (!candidate.emergencyContactPhone) missing.push("Emergency Contact Phone");
+  if (!(candidate.languages && candidate.languages.length > 0)) missing.push("Languages");
+  if (candidate.source !== "smp") {
+    if (!candidate.ibanNumber) missing.push("IBAN Number");
+  }
+  return missing;
+}
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 
@@ -502,6 +520,20 @@ export async function registerRoutes(
   app.patch("/api/candidates/:id", async (req: Request, res: Response) => {
     try {
       const data = insertCandidateSchema.partial().parse(req.body);
+
+      if (data.profileCompleted === true) {
+        const existing = await storage.getCandidate(req.params.id);
+        if (!existing) return res.status(404).json({ message: "Candidate not found" });
+        const merged = { ...existing, ...data };
+        const missing = validateProfileCompleteness(merged);
+        if (missing.length > 0) {
+          return res.status(400).json({
+            message: `Cannot mark profile as complete. Missing required fields: ${missing.join(", ")}`,
+            missingFields: missing,
+          });
+        }
+      }
+
       const candidate = await storage.updateCandidate(req.params.id, data);
       if (!candidate) return res.status(404).json({ message: "Candidate not found" });
       return res.json(candidate);
@@ -570,7 +602,15 @@ export async function registerRoutes(
       const validated: any[] = [];
       for (let i = 0; i < rawCandidates.length; i++) {
         try {
-          validated.push(insertCandidateSchema.parse(rawCandidates[i]));
+          const parsed = insertCandidateSchema.parse(rawCandidates[i]);
+          if (parsed.profileCompleted) {
+            const missing = validateProfileCompleteness(parsed);
+            if (missing.length > 0) {
+              errors.push({ row: i + 1, message: `Profile marked complete but missing: ${missing.join(", ")}` });
+              continue;
+            }
+          }
+          validated.push(parsed);
         } catch (e) {
           errors.push({ row: i + 1, message: e instanceof z.ZodError ? e.errors.map(er => `${er.path.join(".")}: ${er.message}`).join("; ") : "invalid" });
         }

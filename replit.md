@@ -339,7 +339,13 @@ RETURN TO POOL
 - Archived candidates are hidden from all active listings, searches, and stats — but their data and all linked records (applications, interviews, onboarding, workforce) are fully preserved.
 - Routes: `POST /api/candidates/:id/archive`, `POST /api/candidates/:id/unarchive`. Bulk: `POST /api/candidates/bulk-action` with `action: "archive"`.
 - Frontend: "Archive" button (amber) in per-row dropdown + bulk action bar. "Archived" status filter shows archived candidates with "Restore" option.
-- All candidate queries (`getCandidates`, `getCandidateStats`, `getCandidateByPhone`, `getCandidateByNationalId`) filter with `isNull(archivedAt)` by default. Pass `archived=true` query param to view archived.
+- All candidate queries (`getCandidates`, `getCandidateStats`, `getCandidateByPhone`, `getCandidateByNationalId`, `getDashboardStats`) filter with `isNull(archivedAt)` by default. Pass `archived=true` query param to view archived.
+
+## Profile Completeness Validation (Server-Side)
+- `profileCompleted: true` is **enforced server-side** — the PATCH endpoint and bulk upload both validate required fields before accepting.
+- `validateProfileCompleteness()` helper in `server/routes.ts` checks: Full Name, DOB, Gender, Nationality, City, Marital Status, Education Level, Emergency Contact (name + phone), Languages (≥1). For non-SMP: IBAN Number.
+- Returns 400 with `missingFields` array if any are missing.
+- Bulk uploads that claim `profileCompleted: true` with missing fields are rejected per-row with clear error messages.
 
 ## Packages Installed
 - `bcryptjs` + `@types/bcryptjs` — password hashing
