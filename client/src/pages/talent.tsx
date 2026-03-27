@@ -670,7 +670,8 @@ export default function TalentPage() {
     sortBy,
     sortOrder,
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
-    ...(status && status !== "all" ? { status } : {}),
+    ...(status && status !== "all" && status !== "dormant" ? { status } : {}),
+    ...(status === "dormant" ? { dormant: "true" } : {}),
     ...(sourceFilter && sourceFilter !== "all" ? { source: sourceFilter } : {}),
   });
 
@@ -889,8 +890,7 @@ export default function TalentPage() {
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="hired">Hired</SelectItem>
                 <SelectItem value="blocked">Blocked</SelectItem>
-                <SelectItem value="pending_review">Pending Review</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="dormant">Dormant</SelectItem>
               </SelectContent>
             </Select>
             <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); }}>

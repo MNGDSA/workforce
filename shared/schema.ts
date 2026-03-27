@@ -698,6 +698,7 @@ export const candidateQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(1000).default(50),
   search: z.string().optional(),
   status: z.enum(["active", "inactive", "blocked", "hired", "rejected", "pending_review"]).optional(),
+  dormant: z.enum(["true"]).optional(),
   city: z.string().optional(),
   nationality: z.enum(["saudi", "non_saudi"]).optional(),
   gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),

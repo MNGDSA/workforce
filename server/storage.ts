@@ -47,7 +47,7 @@ import {
   type InsertSmsPlugin,
   type CandidateQuery,
 } from "@shared/schema";
-import { eq, and, or, ilike, desc, asc, count, sql, inArray } from "drizzle-orm";
+import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -226,7 +226,7 @@ export class DatabaseStorage implements IStorage {
     page: number;
     limit: number;
   }> {
-    const { page, limit, search, status, city, nationality, gender, sortBy, sortOrder } = query;
+    const { page, limit, search, status, city, nationality, gender, sortBy, sortOrder, dormant } = query;
     const offset = (page - 1) * limit;
 
     const conditions = [];
@@ -246,6 +246,17 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (status) conditions.push(eq(candidates.status, status as any));
+    if (dormant === "true") {
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      conditions.push(
+        not(inArray(candidates.status, ["blocked", "hired"])),
+        or(
+          and(isNotNull(candidates.lastLoginAt), lt(candidates.lastLoginAt, oneYearAgo)),
+          and(isNull(candidates.lastLoginAt), lt(candidates.createdAt, oneYearAgo)),
+        )
+      );
+    }
     if (city) conditions.push(ilike(candidates.city, `%${city}%`));
     if (nationality) conditions.push(eq(candidates.nationality, nationality as any));
     if (gender) conditions.push(eq(candidates.gender, gender as any));
