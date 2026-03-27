@@ -31,6 +31,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   UserCheck,
   Search,
   Plus,
@@ -193,6 +203,7 @@ export default function OnboardingPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [admitPage, setAdmitPage] = useState(1);
   const [convertForm, setConvertForm] = useState({ position: "", department: "", startDate: "", salary: "" });
+  const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
   const [bulkConvertOpen, setBulkConvertOpen] = useState(false);
   const [bulkConvertForm, setBulkConvertForm] = useState({ position: "", department: "", startDate: "", salary: "" });
   const ADMIT_PAGE_SIZE = 10;
@@ -538,7 +549,7 @@ export default function OnboardingPage() {
                         size="sm"
                         variant="outline"
                         className="border-red-900/60 text-red-400 hover:bg-red-950/40 gap-1"
-                        onClick={() => rejectMutation.mutate(rec.id)}
+                        onClick={() => setRejectConfirmId(rec.id)}
                         disabled={rejectMutation.isPending}
                       >
                         <XCircle className="h-3.5 w-3.5" />
@@ -1028,6 +1039,29 @@ export default function OnboardingPage() {
           </div>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={!!rejectConfirmId} onOpenChange={(v) => { if (!v) setRejectConfirmId(null); }}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Reject this candidate?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              This will remove the candidate from the onboarding pipeline. You can re-admit them later if needed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border" data-testid="button-reject-cancel">Keep</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="button-reject-confirm"
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={() => {
+                if (rejectConfirmId) rejectMutation.mutate(rejectConfirmId);
+                setRejectConfirmId(null);
+              }}
+            >
+              Yes, Reject
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 }
