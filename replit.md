@@ -306,6 +306,48 @@ RETURN TO POOL
 
 ---
 
+## Contract Engine (Planned)
+
+The Contract Engine handles automated contract generation and digital signing for onboarding at scale (5,000–8,000+ candidates in 3 weeks).
+
+### Architecture
+
+1. **Document Upload Checklist (Candidate Self-Service)**
+   - Candidate portal shows required document slots: ID copy, photo, IBAN proof, medical fitness, etc.
+   - Each slot has status: `missing` → `uploaded` → `approved` / `rejected` (by recruiter)
+   - Candidates see their progress; recruiters review and flag issues in bulk
+
+2. **Contract Template System (Admin-Managed)**
+   - Admin creates one contract template per job/event with placeholders: `{{fullName}}`, `{{nationalId}}`, `{{position}}`, `{{dailyRate}}`, `{{startDate}}`, `{{endDate}}`, etc.
+   - System auto-generates a personalized PDF contract for each shortlisted candidate by pulling their data from the database
+   - No manual data entry — one template serves all 8,000 candidates
+
+3. **Digital Contract Signing (E-Signature)**
+   - Candidate logs into portal, sees their generated contract as a PDF preview
+   - Reviews articles, terms, and personal details
+   - Clicks "I Agree & Sign" — system records digital consent with timestamp, IP, and user ID
+   - Signed copy (with digital signature stamp on PDF) stored and downloadable by both candidate and admin
+   - Legally valid under Saudi Arabia's Electronic Transactions Law (Royal Decree M/18)
+
+4. **Admin Monitoring Dashboard**
+   - Documents pipeline: how many uploaded all docs, incomplete, need review
+   - Contracts pipeline: how many generated, signed, pending
+   - Bulk actions: send SMS reminders to candidates who haven't completed docs or signed
+   - Real-time progress tracking across the entire onboarding cohort
+
+### Implementation Order
+1. Document upload checklist for candidate portal
+2. Contract template system with PDF generation
+3. Digital e-signature flow with legal compliance
+4. Admin monitoring dashboard for onboarding pipeline
+
+### Key Design Decisions
+- Template-driven: one template → thousands of personalized contracts
+- Self-service: candidates do their own uploads and signing from their phones
+- Admin role: monitor dashboard, send reminders, review edge cases
+- SMP workers: lighter checklist (photo + national ID only), no individual contract (firm-level agreement)
+- Legal: compliant with Saudi Electronic Transactions Law (Royal Decree M/18)
+
 ## Planned Features (Post-Testing)
 - **Bilingual Input (EN/AR toggle)**: PrestaShop-style inline language switcher on text fields. A single `BilingualInput` component with an `EN | AR` pill toggle. Stores both `title` (English) and `titleAr` (Arabic) values, submits both, and the candidate portal renders the correct one based on user language preference. To be implemented after unit/system/regression/UAT/security testing is complete.
 - **Employee ID Cards**: Printable ID cards generated from the app.
