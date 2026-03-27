@@ -756,14 +756,6 @@ export default function TalentPage() {
     });
   }, []);
 
-  const toggleSelectAll = useCallback(() => {
-    if (selectedIds.size === candidates.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(candidates.map(c => c.id)));
-    }
-  }, [candidates, selectedIds.size]);
-
   const bulkUpload = useMutation({
     mutationFn: (candidates: Record<string, string>[]) => {
       const mapped = candidates.map(c => ({
@@ -799,6 +791,14 @@ export default function TalentPage() {
   const total: number = data?.total ?? 0;
   const PAGE_SIZE = 100;
   const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  const toggleSelectAll = useCallback(() => {
+    if (selectedIds.size === candidates.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(candidates.map(c => c.id)));
+    }
+  }, [candidates, selectedIds.size]);
 
   const stats = statsData as { total: number; active: number; hired: number; blocked: number; avgRating: number } | undefined;
 
