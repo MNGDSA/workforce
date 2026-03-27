@@ -346,7 +346,6 @@ const AVAILABLE_VARIABLES = [
   { key: "{{phone}}", label: "Phone Number" },
   { key: "{{iban}}", label: "IBAN Number" },
   { key: "{{position}}", label: "Position" },
-  { key: "{{department}}", label: "Department" },
   { key: "{{salary}}", label: "Salary" },
   { key: "{{startDate}}", label: "Start Date" },
   { key: "{{eventName}}", label: "Event Name" },
@@ -366,7 +365,9 @@ function ContractTemplatesTab() {
   const [formCompanyName, setFormCompanyName] = useState("");
   const [formHeaderText, setFormHeaderText] = useState("");
   const [formFooterText, setFormFooterText] = useState("");
+  const [formPreamble, setFormPreamble] = useState("");
   const [formArticles, setFormArticles] = useState<{ title: string; body: string }[]>([{ title: "", body: "" }]);
+  const lastFocusedTextarea = useRef<{ type: "preamble" } | { type: "article"; idx: number } | null>(null);
   const [formStatus, setFormStatus] = useState<"draft" | "active">("draft");
   const logoInputRef = useRef<HTMLInputElement>(null);
 
@@ -440,6 +441,7 @@ function ContractTemplatesTab() {
       setFormCompanyName(template.companyName || "");
       setFormHeaderText(template.headerText || "");
       setFormFooterText(template.footerText || "");
+      setFormPreamble((template as any).preamble || "");
       setFormArticles(Array.isArray(template.articles) && template.articles.length > 0 ? template.articles : [{ title: "", body: "" }]);
       setFormStatus(template.status === "archived" ? "draft" : template.status);
     } else {
@@ -449,15 +451,18 @@ function ContractTemplatesTab() {
       setFormCompanyName("");
       setFormHeaderText("");
       setFormFooterText("");
+      setFormPreamble("");
       setFormArticles([{ title: "", body: "" }]);
       setFormStatus("draft");
     }
+    lastFocusedTextarea.current = null;
     setEditorOpen(true);
   }
 
   function closeEditor() {
     setEditorOpen(false);
     setEditingTemplate(null);
+    lastFocusedTextarea.current = null;
   }
 
   function handleSave() {
@@ -476,6 +481,7 @@ function ContractTemplatesTab() {
       companyName: formCompanyName.trim() || null,
       headerText: formHeaderText.trim() || null,
       footerText: formFooterText.trim() || null,
+      preamble: formPreamble.trim() || null,
       articles: validArticles,
       status: formStatus,
     };
@@ -508,8 +514,42 @@ function ContractTemplatesTab() {
     setFormArticles(prev => prev.map((a, i) => i === idx ? { ...a, [field]: value } : a));
   }
 
-  function insertVariable(articleIdx: number, variable: string) {
-    setFormArticles(prev => prev.map((a, i) => i === articleIdx ? { ...a, body: a.body + variable } : a));
+  function insertVariableAtCursor(variable: string) {
+    const target = lastFocusedTextarea.current;
+    if (!target) {
+      toast({ title: "Click inside the preamble or an article body first", variant: "destructive" });
+      return;
+    }
+
+    const el = document.querySelector(
+      target.type === "preamble"
+        ? `[data-testid="input-preamble"]`
+        : `[data-testid="input-article-body-${target.idx}"]`
+    ) as HTMLTextAreaElement | null;
+
+    const start = el?.selectionStart ?? 0;
+    const end = el?.selectionEnd ?? 0;
+
+    if (target.type === "preamble") {
+      const before = formPreamble.slice(0, start);
+      const after = formPreamble.slice(end);
+      setFormPreamble(before + variable + after);
+    } else {
+      setFormArticles(prev => prev.map((a, i) => {
+        if (i !== target.idx) return a;
+        const before = a.body.slice(0, start);
+        const after = a.body.slice(end);
+        return { ...a, body: before + variable + after };
+      }));
+    }
+
+    setTimeout(() => {
+      if (el) {
+        el.focus();
+        const pos = start + variable.length;
+        el.setSelectionRange(pos, pos);
+      }
+    }, 0);
   }
 
   function replaceVariables(text: string): string {
@@ -763,6 +803,21 @@ function ContractTemplatesTab() {
               />
             </div>
 
+            <div className="border-t border-zinc-800 pt-4 space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-400 uppercase tracking-wider">Preamble & Recitals</Label>
+                <Textarea
+                  value={formPreamble}
+                  onChange={e => setFormPreamble(e.target.value)}
+                  onFocus={() => { lastFocusedTextarea.current = { type: "preamble" }; }}
+                  placeholder="e.g. This Employment Contract is entered into between {{companyName}} (hereinafter referred to as the &quot;Employer&quot;) and {{fullName}} (hereinafter referred to as the &quot;Employee&quot;), holder of ID No. {{nationalId}}…"
+                  className="bg-zinc-900 border-zinc-700 text-sm min-h-24"
+                  data-testid="input-preamble"
+                />
+                <p className="text-[11px] text-zinc-600">Introductory section — identifies the parties, recites the background, and sets up the definitions before the numbered articles begin.</p>
+              </div>
+            </div>
+
             <div className="border-t border-zinc-800 pt-4">
               <div className="flex items-center justify-between mb-3">
                 <Label className="text-xs text-zinc-400 uppercase tracking-wider">Contract Articles</Label>
@@ -773,17 +828,14 @@ function ContractTemplatesTab() {
               </div>
 
               <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-3 mb-3">
-                <p className="text-xs text-zinc-500 mb-2">Available variables (click to copy):</p>
+                <p className="text-xs text-zinc-500 mb-2">Available variables (click to insert at cursor):</p>
                 <div className="flex flex-wrap gap-1.5">
                   {AVAILABLE_VARIABLES.map(v => (
                     <button
                       key={v.key}
                       type="button"
                       className="text-xs px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-emerald-400 rounded font-mono transition-colors"
-                      onClick={() => {
-                        navigator.clipboard.writeText(v.key);
-                        toast({ title: `Copied ${v.key}` });
-                      }}
+                      onClick={() => insertVariableAtCursor(v.key)}
                     >
                       {v.key}
                     </button>
@@ -818,6 +870,7 @@ function ContractTemplatesTab() {
                     <Textarea
                       value={article.body}
                       onChange={e => updateArticle(idx, "body", e.target.value)}
+                      onFocus={() => { lastFocusedTextarea.current = { type: "article", idx }; }}
                       placeholder="Article body — use {{variables}} for auto-filled data"
                       className="bg-zinc-800 border-zinc-700 text-sm min-h-20"
                       data-testid={`input-article-body-${idx}`}
@@ -879,6 +932,11 @@ function ContractTemplatesTab() {
               )}
               {previewTemplate.headerText && (
                 <p className="text-center text-xl font-bold border-b pb-4">{previewTemplate.headerText}</p>
+              )}
+              {(previewTemplate as any).preamble && (
+                <div className="text-sm whitespace-pre-wrap leading-relaxed italic border-l-2 border-gray-300 pl-4">
+                  {replaceVariables((previewTemplate as any).preamble)}
+                </div>
               )}
               {Array.isArray(previewTemplate.articles) && previewTemplate.articles.map((article: any, idx: number) => (
                 <div key={idx}>

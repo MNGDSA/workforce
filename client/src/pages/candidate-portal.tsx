@@ -989,6 +989,19 @@ export default function CandidatePortal() {
               {contractPreview.template?.headerText && (
                 <p className="text-center text-xl font-bold border-b pb-4">{contractPreview.template.headerText}</p>
               )}
+              {contractPreview.template?.preamble && (() => {
+                let preambleText = contractPreview.template.preamble;
+                if (contractPreview.variables) {
+                  Object.entries(contractPreview.variables).forEach(([key, val]) => {
+                    preambleText = preambleText.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(val));
+                  });
+                }
+                return (
+                  <div className="text-sm whitespace-pre-wrap leading-relaxed italic border-l-2 border-gray-300 pl-4">
+                    {preambleText}
+                  </div>
+                );
+              })()}
               {Array.isArray(contractPreview.articles) && contractPreview.articles.map((article: any, idx: number) => {
                 let body = article.body || "";
                 if (contractPreview.variables) {

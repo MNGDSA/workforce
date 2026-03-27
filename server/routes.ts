@@ -82,7 +82,6 @@ function buildVariableSnapshot(candidate: any, template: any, ob: any): Record<s
     phone: candidate.phone || "",
     iban: candidate.ibanNumber || "",
     position: ob.position || "",
-    department: ob.department || "",
     salary: ob.salary?.toString() || "",
     startDate: ob.startDate || "",
     eventName: "",
@@ -1634,7 +1633,7 @@ export async function registerRoutes(
       const template = await storage.getContractTemplate(contract.templateId);
       return res.json({
         contract,
-        template: template ? { name: template.name, companyName: template.companyName, logoUrl: template.logoUrl, headerText: template.headerText, footerText: template.footerText } : null,
+        template: template ? { name: template.name, companyName: template.companyName, logoUrl: template.logoUrl, headerText: template.headerText, preamble: template.preamble, footerText: template.footerText } : null,
         articles: contract.snapshotArticles,
         variables: contract.snapshotVariables,
       });

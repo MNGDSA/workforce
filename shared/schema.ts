@@ -678,6 +678,7 @@ export const contractTemplates = pgTable(
     logoUrl: text("logo_url"),
     companyName: text("company_name"),
     headerText: text("header_text"),
+    preamble: text("preamble"),
     footerText: text("footer_text"),
     articles: jsonb("articles").notNull().default(sql`'[]'::jsonb`),
     createdBy: varchar("created_by").references(() => users.id),
