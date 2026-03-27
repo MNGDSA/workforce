@@ -43,7 +43,7 @@ function typeLabel(type: string) {
   const map: Record<string, string> = {
     full_time: "Full Time",
     part_time: "Part Time",
-    seasonal: "Event-based",
+    event_based: "Event-based",
     contract: "Contract",
   };
   return map[type] ?? type;

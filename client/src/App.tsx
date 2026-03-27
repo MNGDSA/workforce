@@ -7,7 +7,7 @@ import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import TalentPage from "@/pages/talent";
-import SeasonsPage from "@/pages/seasons";
+import EventsPage from "@/pages/events";
 import WorkforcePage from "@/pages/workforce";
 import NotificationsPage from "@/pages/notifications";
 import CandidatePortal from "@/pages/candidate-portal";
@@ -33,7 +33,7 @@ function Router() {
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/job-posting" component={JobPostingPage} />
       <Route path="/talent" component={TalentPage} />
-      <Route path="/seasons" component={SeasonsPage} />
+      <Route path="/events" component={EventsPage} />
       <Route path="/workforce" component={WorkforcePage} />
       <Route path="/interviews" component={InterviewsPage} />
       <Route path="/interviews/schedule" component={ScheduleInterviewPage} />

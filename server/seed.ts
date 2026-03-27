@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, automationRules, seasons, jobPostings } from "@shared/schema";
+import { users, automationRules, events, jobPostings } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { sql } from "drizzle-orm";
 
@@ -90,9 +90,9 @@ async function seed() {
     ])
     .onConflictDoNothing();
 
-  // ─── Seasons ──────────────────────────────────────────────────────────────
-  const [season1] = await db
-    .insert(seasons)
+  // ─── Events ───────────────────────────────────────────────────────────────
+  const [event1] = await db
+    .insert(events)
     .values([
       {
         name: "Hajj Season 2026",

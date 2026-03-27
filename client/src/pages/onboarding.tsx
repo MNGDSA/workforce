@@ -72,7 +72,7 @@ interface OnboardingRecord {
   candidateId: string;
   applicationId?: string | null;
   jobId?: string | null;
-  seasonId?: string | null;
+  eventId?: string | null;
   status: OnboardingStatus;
   hasPhoto: boolean;
   hasIban: boolean;

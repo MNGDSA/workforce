@@ -40,10 +40,10 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
-const recruitmentPaths = ["/seasons", "/question-sets", "/job-posting", "/interviews", "/onboarding", "/talent"];
+const recruitmentPaths = ["/events", "/question-sets", "/job-posting", "/interviews", "/onboarding", "/talent"];
 
 const recruitmentItems: { href: string; icon: React.ElementType; label: string }[] = [
-  { href: "/seasons",       icon: CalendarRange, label: "Events & SMP" },
+  { href: "/events",        icon: CalendarRange, label: "Events & SMP" },
   { href: "/question-sets", icon: ClipboardList, label: "Question Sets" },
   { href: "/job-posting",   icon: Briefcase,     label: "Job Applications" },
   { href: "/interviews",    icon: Minimize,      label: "Interview & Training" },

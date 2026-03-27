@@ -58,7 +58,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Season = { id: string; name: string; status: string };
+type HiringEvent = { id: string; name: string; status: string };
 type Job = { id: string; title: string; status: string };
 type Application = { id: string; candidateId: string; jobId: string; status: string };
 type Candidate = { id: string; fullNameEn: string; nationalId?: string; status: string };
@@ -74,7 +74,7 @@ type WorkforceGroup = {
   progress: number;
   region: string;
   department?: string;
-  seasonName?: string;
+  eventName?: string;
   notes?: string;
 };
 
@@ -90,7 +90,7 @@ const INITIAL_GROUPS: WorkforceGroup[] = [
     progress: 20,
     region: "Makkah",
     department: "Operations",
-    seasonName: "Hajj 2026",
+    eventName: "Hajj 2026",
   },
   {
     id: "WG-002",
@@ -102,7 +102,7 @@ const INITIAL_GROUPS: WorkforceGroup[] = [
     progress: 100,
     region: "Madinah",
     department: "Security",
-    seasonName: "Ramadan 2026",
+    eventName: "Ramadan 2026",
   },
   {
     id: "WG-003",
@@ -114,7 +114,7 @@ const INITIAL_GROUPS: WorkforceGroup[] = [
     progress: 100,
     region: "Makkah",
     department: "Medical",
-    seasonName: "Umrah Event",
+    eventName: "Umrah Event",
   },
   {
     id: "WG-004",
@@ -126,7 +126,7 @@ const INITIAL_GROUPS: WorkforceGroup[] = [
     progress: 100,
     region: "Nationwide",
     department: "Logistics",
-    seasonName: "Hajj 2025",
+    eventName: "Hajj 2025",
   },
 ];
 
@@ -148,7 +148,7 @@ const createGroupSchema = z.object({
   name: z.string().min(3, "Group name must be at least 3 characters"),
   role: z.string().min(2, "Role / position is required"),
   department: z.string().optional(),
-  seasonId: z.string().optional(),
+  eventId: z.string().optional(),
   region: z.string().min(1, "Region is required"),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().optional(),
@@ -189,7 +189,7 @@ function CreateGroupDialog({
   const [memberJobId, setMemberJobId] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
 
-  const { data: seasons = [] } = useQuery<Season[]>({
+  const { data: hiringEvents = [] } = useQuery<HiringEvent[]>({
     queryKey: ["/api/events"],
     queryFn: () => apiRequest("GET", "/api/events").then((r) => r.json()),
     enabled: open,
@@ -246,7 +246,7 @@ function CreateGroupDialog({
       name: "",
       role: "",
       department: "",
-      seasonId: "",
+      eventId: "",
       region: "",
       startDate: "",
       endDate: "",
@@ -270,7 +270,7 @@ function CreateGroupDialog({
   async function onSubmit(data: CreateGroupForm) {
     setIsSubmitting(true);
     try {
-      const seasonName = seasons.find((s) => s.id === data.seasonId)?.name;
+      const evtName = hiringEvents.find((s) => s.id === data.eventId)?.name;
 
       const counter = Math.random().toString(36).substring(2, 5).toUpperCase();
       const newGroup: WorkforceGroup = {
@@ -284,7 +284,7 @@ function CreateGroupDialog({
         progress: groupProgress("Onboarding"),
         region: data.region,
         department: data.department || undefined,
-        seasonName: seasonName,
+        eventName: evtName,
         notes: data.notes || undefined,
       };
 
@@ -394,18 +394,18 @@ function CreateGroupDialog({
 
               {/* Event & Region */}
               <div className="grid grid-cols-2 gap-3">
-                <FormField control={form.control} name="seasonId" render={({ field }) => (
+                <FormField control={form.control} name="eventId" render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Event</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value || "none"}>
                       <FormControl>
-                        <SelectTrigger className="bg-muted/30 border-border" data-testid="select-season">
+                        <SelectTrigger className="bg-muted/30 border-border" data-testid="select-event">
                           <SelectValue placeholder="Select event…" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="none">No Event</SelectItem>
-                        {seasons.map((s) => (
+                        {hiringEvents.map((s) => (
                           <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -811,10 +811,10 @@ export default function WorkforcePage() {
                             <Clock className="h-3 w-3" />
                             {group.startDate}
                           </span>
-                          {group.seasonName && (
+                          {group.eventName && (
                             <>
                               <span>•</span>
-                              <span className="text-primary/70">{group.seasonName}</span>
+                              <span className="text-primary/70">{group.eventName}</span>
                             </>
                           )}
                         </div>

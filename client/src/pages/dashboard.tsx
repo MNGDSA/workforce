@@ -61,7 +61,7 @@ export default function Dashboard() {
   const dashStats = stats as {
     totalCandidates: number;
     openPositions: number;
-    activeSeasons: number;
+    activeEvents: number;
     scheduledInterviews: number;
     recentApplications: Array<{
       candidateName: string;
@@ -89,7 +89,7 @@ export default function Dashboard() {
     },
     {
       title: "Active Events",
-      value: dashStats ? dashStats.activeSeasons.toLocaleString() : "—",
+      value: dashStats ? dashStats.activeEvents.toLocaleString() : "—",
       icon: TrendingUp,
       color: "text-purple-500",
       sub: "Running right now",

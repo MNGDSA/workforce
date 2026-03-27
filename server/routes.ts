@@ -8,7 +8,7 @@ import { storage } from "./storage";
 import { getAuthenticatedUser, listUserRepos, getRepo, listRepoIssues, listRepoPullRequests } from "./github";
 import {
   insertCandidateSchema,
-  insertSeasonSchema,
+  insertEventSchema,
   insertJobPostingSchema,
   insertApplicationSchema,
   insertInterviewSchema,
@@ -627,10 +627,10 @@ export async function registerRoutes(
     }
   });
 
-  // ─── Seasons ─────────────────────────────────────────────────────────────
+  // ─── Events ──────────────────────────────────────────────────────────────
   app.get("/api/events", async (_req: Request, res: Response) => {
     try {
-      const data = await storage.getSeasons();
+      const data = await storage.getEvents();
       return res.json(data);
     } catch (err) {
       return handleError(res, err);
@@ -639,9 +639,9 @@ export async function registerRoutes(
 
   app.get("/api/events/:id", async (req: Request, res: Response) => {
     try {
-      const season = await storage.getSeason(req.params.id);
-      if (!season) return res.status(404).json({ message: "Event not found" });
-      return res.json(season);
+      const evt = await storage.getEvent(req.params.id);
+      if (!evt) return res.status(404).json({ message: "Event not found" });
+      return res.json(evt);
     } catch (err) {
       return handleError(res, err);
     }
@@ -649,9 +649,9 @@ export async function registerRoutes(
 
   app.post("/api/events", async (req: Request, res: Response) => {
     try {
-      const data = insertSeasonSchema.parse(req.body);
-      const season = await storage.createSeason(data);
-      return res.status(201).json(season);
+      const data = insertEventSchema.parse(req.body);
+      const evt = await storage.createEvent(data);
+      return res.status(201).json(evt);
     } catch (err) {
       return handleError(res, err);
     }
@@ -659,10 +659,10 @@ export async function registerRoutes(
 
   app.patch("/api/events/:id", async (req: Request, res: Response) => {
     try {
-      const data = insertSeasonSchema.partial().parse(req.body);
-      const season = await storage.updateSeason(req.params.id, data);
-      if (!season) return res.status(404).json({ message: "Event not found" });
-      return res.json(season);
+      const data = insertEventSchema.partial().parse(req.body);
+      const evt = await storage.updateEvent(req.params.id, data);
+      if (!evt) return res.status(404).json({ message: "Event not found" });
+      return res.json(evt);
     } catch (err) {
       return handleError(res, err);
     }
@@ -670,13 +670,13 @@ export async function registerRoutes(
 
   app.delete("/api/events/:id", async (req: Request, res: Response) => {
     try {
-      const jobCount = await storage.countJobPostingsBySeason(req.params.id);
+      const jobCount = await storage.countJobPostingsByEvent(req.params.id);
       if (jobCount > 0) {
         return res.status(409).json({
           message: `Cannot delete this event — it has ${jobCount} job posting${jobCount === 1 ? "" : "s"} linked to it. Remove or re-assign those job postings first, or archive the event instead.`,
         });
       }
-      const deleted = await storage.deleteSeason(req.params.id);
+      const deleted = await storage.deleteEvent(req.params.id);
       if (!deleted) return res.status(404).json({ message: "Event not found" });
       return res.status(204).send();
     } catch (err) {
@@ -687,8 +687,8 @@ export async function registerRoutes(
   // ─── Job Postings ─────────────────────────────────────────────────────────
   app.get("/api/jobs", async (req: Request, res: Response) => {
     try {
-      const { status, seasonId } = req.query as Record<string, string>;
-      const data = await storage.getJobPostings({ status, seasonId });
+      const { status, eventId } = req.query as Record<string, string>;
+      const data = await storage.getJobPostings({ status, eventId });
       return res.json(data);
     } catch (err) {
       return handleError(res, err);
@@ -949,8 +949,8 @@ export async function registerRoutes(
   // ─── Onboarding ───────────────────────────────────────────────────────────
   app.get("/api/onboarding", async (req: Request, res: Response) => {
     try {
-      const { status, seasonId } = req.query as Record<string, string>;
-      const records = await storage.getOnboardingRecords({ status, seasonId });
+      const { status, eventId } = req.query as Record<string, string>;
+      const records = await storage.getOnboardingRecords({ status, eventId });
       return res.json(records);
     } catch (err) {
       return handleError(res, err);
@@ -959,7 +959,7 @@ export async function registerRoutes(
 
   app.post("/api/onboarding/bulk-convert", async (req: Request, res: Response) => {
     try {
-      const { ids, position, department, startDate, salary, seasonId } = req.body;
+      const { ids, position, department, startDate, salary, eventId } = req.body;
       if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "ids array is required" });
       if (!position || !startDate) return res.status(400).json({ message: "position and startDate are required" });
       const uniqueIds = [...new Set(ids as string[])];
@@ -969,7 +969,7 @@ export async function registerRoutes(
         try {
           const wf = await storage.convertOnboardingToEmployee(
             id,
-            { position, department, startDate, salary, seasonId },
+            { position, department, startDate, salary, eventId },
             (req as any).userId,
           );
           results.push(wf);
@@ -1065,11 +1065,11 @@ export async function registerRoutes(
 
   app.post("/api/onboarding/:id/convert", async (req: Request, res: Response) => {
     try {
-      const { position, department, startDate, salary, seasonId } = req.body as Record<string, string>;
+      const { position, department, startDate, salary, eventId } = req.body as Record<string, string>;
       if (!position || !startDate) return res.status(400).json({ message: "position and startDate are required" });
       const workforce = await storage.convertOnboardingToEmployee(
         req.params.id,
-        { position, department, startDate, salary, seasonId },
+        { position, department, startDate, salary, eventId },
         (req as any).userId,
       );
       return res.status(201).json(workforce);
@@ -1081,9 +1081,9 @@ export async function registerRoutes(
   // ─── Workforce ────────────────────────────────────────────────────────────
   app.get("/api/workforce", async (req: Request, res: Response) => {
     try {
-      const { seasonId, isActive } = req.query as Record<string, string>;
+      const { eventId, isActive } = req.query as Record<string, string>;
       const data = await storage.getWorkforce({
-        seasonId,
+        eventId,
         isActive: isActive !== undefined ? isActive === "true" : undefined,
       });
       return res.json(data);

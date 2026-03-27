@@ -2,7 +2,7 @@ import { db } from "./db";
 import {
   users,
   candidates,
-  seasons,
+  events,
   jobPostings,
   applications,
   interviews,
@@ -21,8 +21,8 @@ import {
   type InsertUser,
   type Candidate,
   type InsertCandidate,
-  type Season,
-  type InsertSeason,
+  type Event,
+  type InsertEvent,
   type JobPosting,
   type InsertJobPosting,
   type Application,
@@ -75,16 +75,16 @@ export interface IStorage {
   exportCandidates(): Promise<{ headers: string[]; rows: any[][]; total: number }>;
   getCandidateStats(): Promise<{ total: number; active: number; hired: number; blocked: number; avgRating: number }>;
 
-  // Seasons
-  getSeasons(): Promise<Season[]>;
-  getSeason(id: string): Promise<Season | undefined>;
-  createSeason(season: InsertSeason): Promise<Season>;
-  updateSeason(id: string, data: Partial<InsertSeason>): Promise<Season | undefined>;
-  deleteSeason(id: string): Promise<boolean>;
-  countJobPostingsBySeason(seasonId: string): Promise<number>;
+  // Events
+  getEvents(): Promise<Event[]>;
+  getEvent(id: string): Promise<Event | undefined>;
+  createEvent(event: InsertEvent): Promise<Event>;
+  updateEvent(id: string, data: Partial<InsertEvent>): Promise<Event | undefined>;
+  deleteEvent(id: string): Promise<boolean>;
+  countJobPostingsByEvent(eventId: string): Promise<number>;
 
   // Job Postings
-  getJobPostings(params?: { status?: string; seasonId?: string }): Promise<JobPosting[]>;
+  getJobPostings(params?: { status?: string; eventId?: string }): Promise<JobPosting[]>;
   getJobPosting(id: string): Promise<JobPosting | undefined>;
   createJobPosting(job: InsertJobPosting): Promise<JobPosting>;
   updateJobPosting(id: string, data: Partial<InsertJobPosting>): Promise<JobPosting | undefined>;
@@ -109,7 +109,7 @@ export interface IStorage {
   getInterviewStats(): Promise<{ total: number; scheduled: number; completed: number; cancelled: number }>;
 
   // Workforce
-  getWorkforce(params?: { seasonId?: string; isActive?: boolean }): Promise<WorkforceRecord[]>;
+  getWorkforce(params?: { eventId?: string; isActive?: boolean }): Promise<WorkforceRecord[]>;
   createWorkforceRecord(record: InsertWorkforce): Promise<WorkforceRecord>;
   updateWorkforceRecord(id: string, data: Partial<InsertWorkforce>): Promise<WorkforceRecord | undefined>;
   getWorkforceStats(): Promise<{ total: number; active: number; byDepartment: Record<string, number> }>;
@@ -149,12 +149,12 @@ export interface IStorage {
   deleteQuestionSet(id: string): Promise<boolean>;
 
   // Onboarding
-  getOnboardingRecords(filters?: { status?: string; seasonId?: string; search?: string; candidateId?: string }): Promise<OnboardingRecord[]>;
+  getOnboardingRecords(filters?: { status?: string; eventId?: string; search?: string; candidateId?: string }): Promise<OnboardingRecord[]>;
   getOnboardingRecord(id: string): Promise<OnboardingRecord | undefined>;
   createOnboardingRecord(data: InsertOnboarding): Promise<OnboardingRecord>;
   updateOnboardingRecord(id: string, data: Partial<InsertOnboarding>): Promise<OnboardingRecord | undefined>;
   deleteOnboardingRecord(id: string): Promise<boolean>;
-  convertOnboardingToEmployee(id: string, employmentData: { position: string; department?: string; startDate: string; salary?: string; seasonId?: string; }, convertedBy?: string): Promise<WorkforceRecord>;
+  convertOnboardingToEmployee(id: string, employmentData: { position: string; department?: string; startDate: string; salary?: string; eventId?: string; }, convertedBy?: string): Promise<WorkforceRecord>;
 
   // SMS Plugins
   getSmsPlugins(): Promise<SmsPlugin[]>;
@@ -179,7 +179,7 @@ export interface IStorage {
   getDashboardStats(): Promise<{
     totalCandidates: number;
     openPositions: number;
-    activeSeasons: number;
+    activeEvents: number;
     scheduledInterviews: number;
     recentApplications: Array<{ candidateName: string; role: string; status: string; appliedAt: Date; photoUrl?: string | null }>;
   }>;
@@ -502,44 +502,44 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  // ─── Seasons ────────────────────────────────────────────────────────────────
-  async getSeasons(): Promise<Season[]> {
-    return db.select().from(seasons).orderBy(desc(seasons.createdAt));
+  // ─── Events ─────────────────────────────────────────────────────────────────
+  async getEvents(): Promise<Event[]> {
+    return db.select().from(events).orderBy(desc(events.createdAt));
   }
 
-  async getSeason(id: string): Promise<Season | undefined> {
-    const [season] = await db.select().from(seasons).where(eq(seasons.id, id));
-    return season;
+  async getEvent(id: string): Promise<Event | undefined> {
+    const [evt] = await db.select().from(events).where(eq(events.id, id));
+    return evt;
   }
 
-  async createSeason(season: InsertSeason): Promise<Season> {
-    const [created] = await db.insert(seasons).values(season).returning();
+  async createEvent(event: InsertEvent): Promise<Event> {
+    const [created] = await db.insert(events).values(event).returning();
     return created;
   }
 
-  async updateSeason(id: string, data: Partial<InsertSeason>): Promise<Season | undefined> {
-    const [updated] = await db.update(seasons).set({ ...data, updatedAt: new Date() }).where(eq(seasons.id, id)).returning();
+  async updateEvent(id: string, data: Partial<InsertEvent>): Promise<Event | undefined> {
+    const [updated] = await db.update(events).set({ ...data, updatedAt: new Date() }).where(eq(events.id, id)).returning();
     return updated;
   }
 
-  async deleteSeason(id: string): Promise<boolean> {
-    const result = await db.delete(seasons).where(eq(seasons.id, id));
+  async deleteEvent(id: string): Promise<boolean> {
+    const result = await db.delete(events).where(eq(events.id, id));
     return (result.rowCount ?? 0) > 0;
   }
 
-  async countJobPostingsBySeason(seasonId: string): Promise<number> {
+  async countJobPostingsByEvent(eventId: string): Promise<number> {
     const [row] = await db
       .select({ value: count() })
       .from(jobPostings)
-      .where(eq(jobPostings.seasonId, seasonId));
+      .where(eq(jobPostings.eventId, eventId));
     return Number(row?.value ?? 0);
   }
 
   // ─── Job Postings ───────────────────────────────────────────────────────────
-  async getJobPostings(params?: { status?: string; seasonId?: string }): Promise<JobPosting[]> {
+  async getJobPostings(params?: { status?: string; eventId?: string }): Promise<JobPosting[]> {
     const conditions = [isNull(jobPostings.archivedAt)];
     if (params?.status) conditions.push(eq(jobPostings.status, params.status as any));
-    if (params?.seasonId) conditions.push(eq(jobPostings.seasonId, params.seasonId));
+    if (params?.eventId) conditions.push(eq(jobPostings.eventId, params.eventId));
     return db.select().from(jobPostings).where(and(...conditions)).orderBy(desc(jobPostings.createdAt));
   }
 
@@ -748,9 +748,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ─── Workforce ──────────────────────────────────────────────────────────────
-  async getWorkforce(params?: { seasonId?: string; isActive?: boolean }): Promise<WorkforceRecord[]> {
+  async getWorkforce(params?: { eventId?: string; isActive?: boolean }): Promise<WorkforceRecord[]> {
     const conditions = [];
-    if (params?.seasonId) conditions.push(eq(workforce.seasonId, params.seasonId));
+    if (params?.eventId) conditions.push(eq(workforce.eventId, params.eventId));
     if (params?.isActive !== undefined) conditions.push(eq(workforce.isActive, params.isActive));
     const where = conditions.length > 0 ? and(...conditions) : undefined;
     return db.select().from(workforce).where(where).orderBy(desc(workforce.createdAt));
@@ -845,7 +845,7 @@ export class DatabaseStorage implements IStorage {
   async getDashboardStats() {
     const [totalCandidates] = await db.select({ value: count() }).from(candidates).where(isNull(candidates.archivedAt));
     const [openPositions] = await db.select({ value: count() }).from(jobPostings).where(eq(jobPostings.status, "active"));
-    const [activeSeasons] = await db.select({ value: count() }).from(seasons).where(eq(seasons.status, "active"));
+    const [activeEvents] = await db.select({ value: count() }).from(events).where(eq(events.status, "active"));
     const [scheduledInterviews] = await db.select({ value: count() }).from(interviews).where(eq(interviews.status, "scheduled"));
 
     const recentApps = await db
@@ -865,7 +865,7 @@ export class DatabaseStorage implements IStorage {
     return {
       totalCandidates: Number(totalCandidates.value),
       openPositions: Number(openPositions.value),
-      activeSeasons: Number(activeSeasons.value),
+      activeEvents: Number(activeEvents.value),
       scheduledInterviews: Number(scheduledInterviews.value),
       recentApplications: recentApps.map((r) => ({
         candidateName: r.candidateName ?? "Unknown",
@@ -961,10 +961,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ─── Onboarding ─────────────────────────────────────────────────────────────
-  async getOnboardingRecords(filters?: { status?: string; seasonId?: string; search?: string; candidateId?: string }): Promise<OnboardingRecord[]> {
+  async getOnboardingRecords(filters?: { status?: string; eventId?: string; search?: string; candidateId?: string }): Promise<OnboardingRecord[]> {
     const conditions: any[] = [];
     if (filters?.status) conditions.push(eq(onboarding.status, filters.status as any));
-    if (filters?.seasonId) conditions.push(eq(onboarding.seasonId, filters.seasonId));
+    if (filters?.eventId) conditions.push(eq(onboarding.eventId, filters.eventId));
     if (filters?.candidateId) conditions.push(eq(onboarding.candidateId, filters.candidateId));
     const query = db.select().from(onboarding).orderBy(desc(onboarding.createdAt));
     if (conditions.length > 0) return query.where(and(...conditions));
@@ -997,7 +997,7 @@ export class DatabaseStorage implements IStorage {
 
   async convertOnboardingToEmployee(
     id: string,
-    employmentData: { position: string; department?: string; startDate: string; salary?: string; seasonId?: string },
+    employmentData: { position: string; department?: string; startDate: string; salary?: string; eventId?: string },
     convertedBy?: string,
   ): Promise<WorkforceRecord> {
     const rec = await this.getOnboardingRecord(id);
@@ -1008,7 +1008,7 @@ export class DatabaseStorage implements IStorage {
     const [workforceRec] = await db.insert(workforce).values({
       candidateId: rec.candidateId,
       jobId: rec.jobId ?? undefined,
-      seasonId: employmentData.seasonId ?? rec.seasonId ?? undefined,
+      eventId: employmentData.eventId ?? rec.eventId ?? undefined,
       position: employmentData.position,
       department: employmentData.department,
       startDate: employmentData.startDate,

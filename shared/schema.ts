@@ -64,7 +64,7 @@ export const interviewStatusEnum = pgEnum("interview_status", [
   "no_show",
 ]);
 
-export const seasonStatusEnum = pgEnum("season_status", [
+export const eventStatusEnum = pgEnum("event_status", [
   "upcoming",
   "active",
   "closed",
@@ -226,16 +226,16 @@ export const candidates = pgTable(
   })
 );
 
-// ─── Seasons ────────────────────────────────────────────────────────────────
-export const seasons = pgTable(
-  "seasons",
+// ─── Events ─────────────────────────────────────────────────────────────────
+export const events = pgTable(
+  "events",
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
     name: text("name").notNull(),
     description: text("description"),
     startDate: text("start_date").notNull(),
     endDate: text("end_date").notNull(),
-    status: seasonStatusEnum("status").notNull().default("upcoming"),
+    status: eventStatusEnum("status").notNull().default("upcoming"),
     targetHeadcount: integer("target_headcount").notNull().default(0),
     filledPositions: integer("filled_positions").notNull().default(0),
     budget: decimal("budget", { precision: 14, scale: 2 }),
@@ -245,7 +245,7 @@ export const seasons = pgTable(
     updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
   },
   (t) => ({
-    statusIdx: index("seasons_status_idx").on(t.status),
+    statusIdx: index("events_status_idx").on(t.status),
   })
 );
 
@@ -301,7 +301,7 @@ export const jobPostings = pgTable(
     salaryMax: decimal("salary_max", { precision: 10, scale: 2 }),
     openings: integer("openings").notNull().default(1),
     status: jobStatusEnum("status").notNull().default("draft"),
-    seasonId: varchar("season_id").references(() => seasons.id),
+    eventId: varchar("event_id").references(() => events.id),
     postedBy: varchar("posted_by").references(() => users.id),
     businessUnitId: varchar("business_unit_id").references(() => businessUnits.id, { onDelete: "set null" }),
     deadline: text("deadline"),
@@ -313,7 +313,7 @@ export const jobPostings = pgTable(
   },
   (t) => ({
     statusIdx: index("jobs_status_idx").on(t.status),
-    seasonIdx: index("jobs_season_idx").on(t.seasonId),
+    eventIdx: index("jobs_event_idx").on(t.eventId),
     regionIdx: index("jobs_region_idx").on(t.region),
   })
 );
@@ -329,7 +329,7 @@ export const applications = pgTable(
     jobId: varchar("job_id")
       .notNull()
       .references(() => jobPostings.id, { onDelete: "cascade" }),
-    seasonId: varchar("season_id").references(() => seasons.id),
+    eventId: varchar("event_id").references(() => events.id),
     status: applicationStatusEnum("status").notNull().default("new"),
     appliedAt: timestamp("applied_at").notNull().default(sql`now()`),
     reviewedBy: varchar("reviewed_by").references(() => users.id),
@@ -393,7 +393,7 @@ export const onboarding = pgTable(
     applicationId: varchar("application_id")
       .references(() => applications.id, { onDelete: "set null" }),
     jobId: varchar("job_id").references(() => jobPostings.id, { onDelete: "set null" }),
-    seasonId: varchar("season_id").references(() => seasons.id, { onDelete: "set null" }),
+    eventId: varchar("event_id").references(() => events.id, { onDelete: "set null" }),
     status: onboardingStatusEnum("status").notNull().default("pending"),
     // Prerequisite checklist
     hasPhoto: boolean("has_photo").notNull().default(false),
@@ -423,7 +423,7 @@ export const onboarding = pgTable(
   (t) => ({
     candidateIdx: index("onboarding_candidate_idx").on(t.candidateId),
     statusIdx: index("onboarding_status_idx").on(t.status),
-    seasonIdx: index("onboarding_season_idx").on(t.seasonId),
+    eventIdx: index("onboarding_event_idx").on(t.eventId),
   })
 );
 
@@ -436,7 +436,7 @@ export const workforce = pgTable(
       .notNull()
       .references(() => candidates.id),
     jobId: varchar("job_id").references(() => jobPostings.id),
-    seasonId: varchar("season_id").references(() => seasons.id),
+    eventId: varchar("event_id").references(() => events.id),
     department: text("department"),
     position: text("position").notNull(),
     startDate: text("start_date").notNull(),
@@ -451,7 +451,7 @@ export const workforce = pgTable(
   },
   (t) => ({
     candidateIdx: index("workforce_candidate_idx").on(t.candidateId),
-    seasonIdx: index("workforce_season_idx").on(t.seasonId),
+    eventIdx: index("workforce_event_idx").on(t.eventId),
     activeIdx: index("workforce_active_idx").on(t.isActive),
   })
 );
@@ -534,7 +534,7 @@ export const insertCandidateSchema = createInsertSchema(candidates).omit({
   updatedAt: true,
 });
 
-export const insertSeasonSchema = createInsertSchema(seasons).omit({
+export const insertEventSchema = createInsertSchema(events).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -609,8 +609,8 @@ export type User = typeof users.$inferSelect;
 export type InsertCandidate = z.infer<typeof insertCandidateSchema>;
 export type Candidate = typeof candidates.$inferSelect;
 
-export type InsertSeason = z.infer<typeof insertSeasonSchema>;
-export type Season = typeof seasons.$inferSelect;
+export type InsertEvent = z.infer<typeof insertEventSchema>;
+export type Event = typeof events.$inferSelect;
 
 export type InsertJobPosting = z.infer<typeof insertJobPostingSchema>;
 export type JobPosting = typeof jobPostings.$inferSelect;

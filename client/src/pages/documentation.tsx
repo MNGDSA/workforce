@@ -178,7 +178,7 @@ export default function DocumentationPage() {
               </div>
             </DocCard>
 
-            {/* How to create a season */}
+            {/* How to create an event */}
             <DocCard>
               <SectionHeading icon={CalendarRange} title="How to Create an Event" description="Events group related job postings under one campaign." />
               <div className="space-y-4">
@@ -324,8 +324,8 @@ export default function DocumentationPage() {
                   {[
                     { table: "users", purpose: "Admin staff accounts + auth", notes: "Roles: super_admin, admin, hr_manager, recruiter, interviewer, viewer, candidate" },
                     { table: "candidates", purpose: "70k+ candidate profiles", notes: "Indexes on status+city, phone, national_id, name, rating. Bulk insert via 1000-row batches." },
-                    { table: "seasons", purpose: "Event campaigns (Hajj, Ramadan…)", notes: "Status enum: upcoming → active → closed → archived" },
-                    { table: "job_postings", purpose: "Job openings", notes: "Linked to events via season_id FK. Status: draft → active → filled → closed" },
+                    { table: "events", purpose: "Event campaigns (Hajj, Ramadan…)", notes: "Status enum: upcoming → active → closed → archived" },
+                    { table: "job_postings", purpose: "Job openings", notes: "Linked to events via event_id FK. Status: draft → active → filled → closed" },
                     { table: "applications", purpose: "Candidate ↔ Job links", notes: "Unique constraint on (candidate_id, job_id). Status pipeline." },
                     { table: "interviews", purpose: "Scheduled interview calls", notes: "Linked to candidate + job_posting. Type: video, phone, in_person" },
                     { table: "workforce", purpose: "Active placements", notes: "Linked to candidate + event. Tracks check-in/check-out." },
@@ -356,7 +356,7 @@ export default function DocumentationPage() {
                     { method: "GET", path: "/api/events", desc: "All events" },
                     { method: "POST", path: "/api/events", desc: "Create event" },
                     { method: "PATCH", path: "/api/events/:id", desc: "Update event fields (partial)" },
-                    { method: "GET", path: "/api/jobs", desc: "Job postings. Query: status, seasonId" },
+                    { method: "GET", path: "/api/jobs", desc: "Job postings. Query: status, eventId" },
                     { method: "POST", path: "/api/jobs", desc: "Create job posting" },
                     { method: "GET", path: "/api/applications/stats", desc: "Application pipeline counts" },
                     { method: "GET", path: "/api/automation", desc: "All automation rules" },

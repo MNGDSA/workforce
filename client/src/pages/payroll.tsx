@@ -36,7 +36,7 @@ const payrollRuns = [
   {
     id: "PR-2026-04",
     period: "April 2026",
-    season: "Hajj 2026",
+    event: "Hajj 2026",
     employees: 1240,
     totalAmount: 7_440_000,
     status: "draft",
@@ -45,7 +45,7 @@ const payrollRuns = [
   {
     id: "PR-2026-03",
     period: "March 2026",
-    season: "Ramadan 2026",
+    event: "Ramadan 2026",
     employees: 1850,
     totalAmount: 9_250_000,
     status: "processing",
@@ -54,7 +54,7 @@ const payrollRuns = [
   {
     id: "PR-2026-02",
     period: "February 2026",
-    season: "Ramadan 2026",
+    event: "Ramadan 2026",
     employees: 1200,
     totalAmount: 6_000_000,
     status: "paid",
@@ -63,7 +63,7 @@ const payrollRuns = [
   {
     id: "PR-2025-09",
     period: "September 2025",
-    season: "National Day 2025",
+    event: "National Day 2025",
     employees: 800,
     totalAmount: 4_800_000,
     status: "paid",
@@ -72,12 +72,12 @@ const payrollRuns = [
 ];
 
 const employeePayroll = [
-  { name: "Faisal Alam", id: "1071793537", role: "Crowd Management Officer", season: "Hajj 2026", salary: 5250, status: "pending", bank: "Al Rajhi Bank" },
-  { name: "Ahmad Al-Harbi", id: "1082345678", role: "Food Service Coordinator", season: "Ramadan 2026", salary: 4200, status: "paid", bank: "SNB" },
-  { name: "Mohammed Al-Zahrani", id: "1093456789", role: "Shuttle Bus Driver", season: "Hajj 2026", salary: 6000, status: "pending", bank: "Riyad Bank" },
-  { name: "Khalid Al-Otaibi", id: "1034567890", role: "Translation Officer", season: "Hajj 2026", salary: 7500, status: "on-hold", bank: "SABB" },
-  { name: "Omar Al-Ghamdi", id: "1045678901", role: "Crowd Management Officer", season: "Ramadan 2026", salary: 5000, status: "paid", bank: "Al Rajhi Bank" },
-  { name: "Nasser Al-Shehri", id: "1056789012", role: "Supervisor", season: "Hajj 2026", salary: 4800, status: "pending", bank: "SNB" },
+  { name: "Faisal Alam", id: "1071793537", role: "Crowd Management Officer", event: "Hajj 2026", salary: 5250, status: "pending", bank: "Al Rajhi Bank" },
+  { name: "Ahmad Al-Harbi", id: "1082345678", role: "Food Service Coordinator", event: "Ramadan 2026", salary: 4200, status: "paid", bank: "SNB" },
+  { name: "Mohammed Al-Zahrani", id: "1093456789", role: "Shuttle Bus Driver", event: "Hajj 2026", salary: 6000, status: "pending", bank: "Riyad Bank" },
+  { name: "Khalid Al-Otaibi", id: "1034567890", role: "Translation Officer", event: "Hajj 2026", salary: 7500, status: "on-hold", bank: "SABB" },
+  { name: "Omar Al-Ghamdi", id: "1045678901", role: "Crowd Management Officer", event: "Ramadan 2026", salary: 5000, status: "paid", bank: "Al Rajhi Bank" },
+  { name: "Nasser Al-Shehri", id: "1056789012", role: "Supervisor", event: "Hajj 2026", salary: 4800, status: "pending", bank: "SNB" },
 ];
 
 const statusBadge: Record<string, string> = {
@@ -117,7 +117,7 @@ export default function PayrollPage() {
           <div>
             <h1 className="font-display text-3xl font-bold text-white tracking-tight">Payroll</h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              Manage seasonal employee compensation and payment runs
+              Manage employee compensation and payment runs
             </p>
           </div>
           <div className="flex gap-2">
@@ -187,7 +187,7 @@ export default function PayrollPage() {
                   <TableRow key={run.id} className="border-border/30 hover:bg-muted/20 transition-colors" data-testid={`row-payrun-${run.id}`}>
                     <TableCell className="pl-6 font-mono text-xs text-muted-foreground">{run.id}</TableCell>
                     <TableCell className="text-sm font-medium text-white">{run.period}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{run.season}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{run.event}</TableCell>
                     <TableCell className="text-sm text-right text-white">{run.employees.toLocaleString()}</TableCell>
                     <TableCell className="text-sm text-right font-medium text-white">{run.totalAmount.toLocaleString()}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{run.dueDate}</TableCell>
@@ -268,7 +268,7 @@ export default function PayrollPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{emp.role}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{emp.season}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{emp.event}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{emp.bank}</TableCell>
                     <TableCell className="text-sm text-right font-medium text-white">{emp.salary.toLocaleString()}</TableCell>
                     <TableCell>

@@ -1016,10 +1016,10 @@ export default function JobPostingPage() {
                       <TableCell className="hidden md:table-cell">
                         <Badge
                           variant="outline"
-                          className={`border-0 text-xs font-medium ${job.seasonId ? "bg-primary/10 text-primary" : "bg-amber-500/10 text-amber-400"}`}
+                          className={`border-0 text-xs font-medium ${job.eventId ? "bg-primary/10 text-primary" : "bg-amber-500/10 text-amber-400"}`}
                           data-testid={`type-job-${job.id}`}
                         >
-                          {job.seasonId ? "Event-linked" : "Standalone"}
+                          {job.eventId ? "Event-linked" : "Standalone"}
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">

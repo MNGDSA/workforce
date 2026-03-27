@@ -25,7 +25,7 @@ import {
 type DashboardStats = {
   totalCandidates: number;
   openPositions: number;
-  activeSeasons: number;
+  activeEvents: number;
   scheduledInterviews: number;
 };
 
@@ -228,7 +228,7 @@ export default function ReportsPage() {
       ["Metric", "Value"],
       ["Total Candidates",    dashStats?.totalCandidates   ?? 0],
       ["Open Positions",      dashStats?.openPositions     ?? 0],
-      ["Active Events",      dashStats?.activeSeasons     ?? 0],
+      ["Active Events",      dashStats?.activeEvents     ?? 0],
       ["Scheduled Interviews",dashStats?.scheduledInterviews ?? 0],
       ["Total Jobs",          jobsStats?.total             ?? 0],
       ["Total Openings",      jobsStats?.totalOpenings     ?? 0],
@@ -330,7 +330,7 @@ export default function ReportsPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={Users}          label="Total Candidates"   value={dashStats?.totalCandidates ?? 0}    sub="Registered in system"      color="text-blue-400" />
           <StatCard icon={Briefcase}      label="Open Positions"     value={dashStats?.openPositions ?? 0}      sub={`of ${jobsStats?.total ?? 0} total jobs`} color="text-primary" />
-          <StatCard icon={CalendarCheck2} label="Active Events"     value={dashStats?.activeSeasons ?? 0}      sub="Hiring events"            color="text-amber-400" />
+          <StatCard icon={CalendarCheck2} label="Active Events"     value={dashStats?.activeEvents ?? 0}      sub="Hiring events"            color="text-amber-400" />
           <StatCard icon={TrendingUp}     label="Total Openings"     value={jobsStats?.totalOpenings ?? 0}      sub="Across all active jobs"    color="text-emerald-400" />
         </div>
 

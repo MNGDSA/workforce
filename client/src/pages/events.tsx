@@ -69,7 +69,7 @@ import {
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import type { Season, SMPContract } from "@shared/schema";
+import type { Event, SMPContract } from "@shared/schema";
 import { KSA_REGIONS } from "@shared/schema";
 
 const statusStyles: Record<string, string> = {
@@ -79,7 +79,7 @@ const statusStyles: Record<string, string> = {
   archived: "bg-zinc-800 text-zinc-500",
 };
 
-const createSeasonSchema = z.object({
+const createEventSchema = z.object({
   name: z.string().min(3, "Event name is required"),
   description: z.string().optional(),
   startDate: z.string().min(1, "Start date is required"),
@@ -90,9 +90,9 @@ const createSeasonSchema = z.object({
   status: z.enum(["upcoming", "active"]),
 });
 
-type CreateSeasonForm = z.infer<typeof createSeasonSchema>;
+type CreateEventForm = z.infer<typeof createEventSchema>;
 
-function CreateSeasonDialog({
+function CreateEventDialog({
   open,
   onOpenChange,
 }: {
@@ -107,8 +107,8 @@ function CreateSeasonDialog({
     queryFn: () => apiRequest("GET", "/api/me").then((r) => r.json()),
   });
 
-  const form = useForm<CreateSeasonForm>({
-    resolver: zodResolver(createSeasonSchema),
+  const form = useForm<CreateEventForm>({
+    resolver: zodResolver(createEventSchema),
     defaultValues: {
       name: "",
       description: "",
@@ -121,8 +121,8 @@ function CreateSeasonDialog({
     },
   });
 
-  const createSeason = useMutation({
-    mutationFn: (data: CreateSeasonForm) =>
+  const createEvent = useMutation({
+    mutationFn: (data: CreateEventForm) =>
       apiRequest("POST", "/api/events", data).then((r) => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
@@ -135,8 +135,8 @@ function CreateSeasonDialog({
     },
   });
 
-  function onSubmit(data: CreateSeasonForm) {
-    createSeason.mutate(data);
+  function onSubmit(data: CreateEventForm) {
+    createEvent.mutate(data);
   }
 
   return (
@@ -162,7 +162,7 @@ function CreateSeasonDialog({
                     <Input
                       placeholder="e.g. Hajj 2026"
                       className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
-                      data-testid="input-season-name"
+                      data-testid="input-event-name"
                       {...field}
                     />
                   </FormControl>
@@ -185,7 +185,7 @@ function CreateSeasonDialog({
                       placeholder="Brief overview of this event's scope and goals..."
                       rows={3}
                       className="bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm resize-none"
-                      data-testid="textarea-season-description"
+                      data-testid="textarea-event-description"
                       {...field}
                     />
                   </FormControl>
@@ -201,7 +201,7 @@ function CreateSeasonDialog({
                 value={currentUser?.fullName ?? "Loading..."}
                 disabled
                 className="h-10 bg-muted/10 border-border rounded-sm text-muted-foreground cursor-not-allowed"
-                data-testid="input-season-created-by"
+                data-testid="input-event-created-by"
               />
             </div>
 
@@ -222,7 +222,7 @@ function CreateSeasonDialog({
                         value={field.value}
                         onChange={field.onChange}
                         className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
-                        data-testid="input-season-start-date"
+                        data-testid="input-event-start-date"
                       />
                     </FormControl>
                     <FormMessage />
@@ -242,7 +242,7 @@ function CreateSeasonDialog({
                         value={field.value}
                         onChange={field.onChange}
                         className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
-                        data-testid="input-season-end-date"
+                        data-testid="input-event-end-date"
                       />
                     </FormControl>
                     <FormMessage />
@@ -257,17 +257,17 @@ function CreateSeasonDialog({
                 variant="ghost"
                 onClick={() => onOpenChange(false)}
                 className="text-muted-foreground"
-                data-testid="button-cancel-season"
+                data-testid="button-cancel-event"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 className="bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
-                disabled={createSeason.isPending}
-                data-testid="button-submit-season"
+                disabled={createEvent.isPending}
+                data-testid="button-submit-event"
               >
-                {createSeason.isPending ? (
+                {createEvent.isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <Plus className="mr-2 h-4 w-4" />
@@ -818,7 +818,7 @@ function SMPContractSheet({
   );
 }
 
-export default function SeasonsPage() {
+export default function EventsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -826,7 +826,7 @@ export default function SeasonsPage() {
   const [selectedSmp, setSelectedSmp] = useState<SMPContract | null>(null);
   const [smpSheetOpen, setSmpSheetOpen] = useState(false);
 
-  const { data: seasons = [], isLoading } = useQuery<Season[]>({
+  const { data: eventsList = [], isLoading } = useQuery<Event[]>({
     queryKey: ["/api/events"],
     queryFn: () => apiRequest("GET", "/api/events").then((r) => r.json()),
   });
@@ -842,17 +842,17 @@ export default function SeasonsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/events"] }),
   });
 
-  const deleteSeason = useMutation({
+  const deleteEvent = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/events/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/events"] }),
   });
 
-  const filtered = seasons.filter(
+  const filtered = eventsList.filter(
     (s) => !search || s.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const activeCount = seasons.filter((s) => s.status === "active").length;
-  const upcomingCount = seasons.filter((s) => s.status === "upcoming").length;
+  const activeCount = eventsList.filter((s) => s.status === "active").length;
+  const upcomingCount = eventsList.filter((s) => s.status === "upcoming").length;
 
   return (
     <DashboardLayout>
@@ -874,7 +874,7 @@ export default function SeasonsPage() {
             </Button>
             <Button
               className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
-              data-testid="button-create-season"
+              data-testid="button-create-event"
               onClick={() => setCreateOpen(true)}
             >
               <Plus className="mr-2 h-4 w-4" />
@@ -883,7 +883,7 @@ export default function SeasonsPage() {
           </div>
         </div>
 
-        <CreateSeasonDialog open={createOpen} onOpenChange={setCreateOpen} />
+        <CreateEventDialog open={createOpen} onOpenChange={setCreateOpen} />
         <CreateSMPContractDialog open={smpOpen} onOpenChange={setSmpOpen} />
         <SMPContractSheet
           contract={selectedSmp ? (smpContracts.find((c) => c.id === selectedSmp.id) ?? selectedSmp) : null}
@@ -907,7 +907,7 @@ export default function SeasonsPage() {
               <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Events</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-seasons">{seasons.length}</div>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-events">{eventsList.length}</div>
               <p className="text-xs text-muted-foreground mt-1">Across all time</p>
             </CardContent>
           </Card>
@@ -916,7 +916,7 @@ export default function SeasonsPage() {
               <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Active Campaigns</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-active-seasons">{activeCount}</div>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-active-events">{activeCount}</div>
               <p className="text-xs text-muted-foreground mt-1">Currently in progress</p>
             </CardContent>
           </Card>
@@ -925,7 +925,7 @@ export default function SeasonsPage() {
               <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Upcoming</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-upcoming-seasons">{upcomingCount}</div>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-upcoming-events">{upcomingCount}</div>
               <p className="text-xs text-muted-foreground mt-1">In planning phase</p>
             </CardContent>
           </Card>
@@ -940,7 +940,7 @@ export default function SeasonsPage() {
               className="pl-10 h-12 bg-muted/30 border-border focus-visible:ring-primary/20 text-base"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              data-testid="input-search-seasons"
+              data-testid="input-search-events"
             />
           </div>
           <div className="flex gap-2 w-full md:w-auto">
@@ -955,7 +955,7 @@ export default function SeasonsPage() {
           </div>
         </div>
 
-        {/* Seasons Table */}
+        {/* Events Table */}
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-lg font-display text-white">Events</CardTitle>
@@ -989,35 +989,35 @@ export default function SeasonsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((season) => {
+                  {filtered.map((evt) => {
                     const pct =
-                      season.targetHeadcount > 0
-                        ? Math.round((season.filledPositions / season.targetHeadcount) * 100)
+                      evt.targetHeadcount > 0
+                        ? Math.round((evt.filledPositions / evt.targetHeadcount) * 100)
                         : 0;
                     return (
-                      <TableRow key={season.id} className="border-border hover:bg-muted/20" data-testid={`row-season-${season.id}`}>
+                      <TableRow key={evt.id} className="border-border hover:bg-muted/20" data-testid={`row-event-${evt.id}`}>
                         <TableCell>
-                          <div className="font-medium text-white">{season.name}</div>
-                          {season.description && (
+                          <div className="font-medium text-white">{evt.name}</div>
+                          {evt.description && (
                             <div className="text-xs text-muted-foreground mt-0.5 max-w-[260px] truncate">
-                              {season.description}
+                              {evt.description}
                             </div>
                           )}
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-medium text-white">{season.endDate}</span>
+                            <span className="text-sm font-medium text-white">{evt.endDate}</span>
                           </div>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          <span className="text-sm text-muted-foreground">{season.region ?? "—"}</span>
+                          <span className="text-sm text-muted-foreground">{evt.region ?? "—"}</span>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell w-[200px]">
                           <div className="space-y-1.5">
                             <div className="flex justify-between text-xs">
                               <span className="text-muted-foreground flex items-center gap-1">
-                                <Users className="h-3 w-3" /> {season.filledPositions} / {season.targetHeadcount}
+                                <Users className="h-3 w-3" /> {evt.filledPositions} / {evt.targetHeadcount}
                               </span>
                               <span className="text-white font-medium">{pct}%</span>
                             </div>
@@ -1027,16 +1027,16 @@ export default function SeasonsPage() {
                         <TableCell>
                           <Badge
                             variant="outline"
-                            className={`font-medium border-0 capitalize ${statusStyles[season.status] ?? "bg-muted text-muted-foreground"}`}
-                            data-testid={`status-season-${season.id}`}
+                            className={`font-medium border-0 capitalize ${statusStyles[evt.status] ?? "bg-muted text-muted-foreground"}`}
+                            data-testid={`status-event-${evt.id}`}
                           >
-                            {season.status}
+                            {evt.status}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white" data-testid={`button-season-actions-${season.id}`}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white" data-testid={`button-event-actions-${evt.id}`}>
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -1044,20 +1044,20 @@ export default function SeasonsPage() {
                               <DropdownMenuItem>View Details</DropdownMenuItem>
                               <DropdownMenuItem>Edit Event</DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              {season.status === "upcoming" && (
-                                <DropdownMenuItem onClick={() => updateStatus.mutate({ id: season.id, status: "active" })}>
+                              {evt.status === "upcoming" && (
+                                <DropdownMenuItem onClick={() => updateStatus.mutate({ id: evt.id, status: "active" })}>
                                   Activate
                                 </DropdownMenuItem>
                               )}
-                              {season.status === "active" && (
-                                <DropdownMenuItem onClick={() => updateStatus.mutate({ id: season.id, status: "closed" })}>
-                                  Close Season
+                              {evt.status === "active" && (
+                                <DropdownMenuItem onClick={() => updateStatus.mutate({ id: evt.id, status: "closed" })}>
+                                  Close Event
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 className="text-red-500"
-                                onClick={() => deleteSeason.mutate(season.id)}
+                                onClick={() => deleteEvent.mutate(evt.id)}
                               >
                                 Delete
                               </DropdownMenuItem>

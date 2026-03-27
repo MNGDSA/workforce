@@ -66,7 +66,7 @@ A full-stack event-based job hiring management platform built for Saudi Arabia o
 │   ├── pages/           # All page components
 │   │   ├── dashboard.tsx         ← Real API data
 │   │   ├── talent.tsx            ← Real API + pagination (50/page)
-│   │   ├── seasons.tsx           ← Real API + CRUD actions
+│   │   ├── events.tsx            ← Real API + CRUD actions
 │   │   ├── job-posting.tsx       ← Real API + CRUD actions
 │   │   ├── roles-access.tsx      ← Business units, users, permissions matrix
 │   │   ├── automation.tsx        ← Real API + toggle rules
@@ -104,11 +104,11 @@ Tables with indexes designed for 70k+ candidates:
 |-------|---------|-------------|
 | `users` | Admin staff & auth | email, username |
 | `candidates` | 70k+ candidate profiles | status+city, name, phone, national_id, rating |
-| `seasons` | Hajj/Ramadan/events | status |
-| `job_postings` | Open positions | status, season, region |
+| `events` | Hajj/Ramadan/events | status |
+| `job_postings` | Open positions | status, event, region |
 | `applications` | Candidate ↔ Job links | candidate+job (unique), status |
 | `interviews` | Scheduled calls | candidate, scheduled_at, status |
-| `workforce` | Hired placements | candidate, season, active |
+| `workforce` | Hired placements | candidate, event, active |
 | `automation_rules` | Workflow triggers | — |
 | `notifications` | SMS/email/in-app | recipient, status, created_at |
 
@@ -141,7 +141,7 @@ POST   /api/events
 PATCH  /api/events/:id
 DELETE /api/events/:id
 
-GET    /api/jobs?status=&seasonId=
+GET    /api/jobs?status=&eventId=
 GET    /api/jobs/stats
 POST   /api/jobs
 PATCH  /api/jobs/:id
@@ -157,7 +157,7 @@ GET    /api/interviews/stats
 POST   /api/interviews
 PATCH  /api/interviews/:id
 
-GET    /api/workforce?seasonId=&isActive=
+GET    /api/workforce?eventId=&isActive=
 GET    /api/workforce/stats
 POST   /api/workforce
 PATCH  /api/workforce/:id
@@ -198,7 +198,7 @@ The bulk upload in Talent is **completely disconnected** from SMP contracts. Upl
 ### What is an SMP Contract?
 
 An SMP contract is purely a **business agreement** between your company and a manpower provider. It:
-- Is attached to a Season
+- Is attached to an Event
 - Links to candidates from the pool (not-yet-employees) OR existing workforce members (already employees)
 - Each linked person has a status on the contract: `active` | `removed`
 - Workers can be detached from one contract and attached to another (SMP transfer) without breaking anything
@@ -218,12 +218,12 @@ Every candidate has the same profile and requirements regardless of how they ent
 TALENT POOL (unified, permanent)
   All candidates live here with full profiles
   source field tracks origin: "self" | "bulk_upload" (for reporting only, no logic difference)
-  lastInterviewedAt persists across seasons (prevents repeat interviews)
+  lastInterviewedAt persists across events (prevents repeat interviews)
 
-SEASON SETUP
-  Create Season (e.g., Hajj 2026)
-  ├── Create Job Posts → attach to Season → optionally attach Question Set
-  └── Create SMP Contracts → attach to Season → pick candidates/employees to link
+EVENT SETUP
+  Create Event (e.g., Hajj 2026)
+  ├── Create Job Posts → attach to Event → optionally attach Question Set
+  └── Create SMP Contracts → attach to Event → pick candidates/employees to link
 
 INTAKE
   Individual: applies to job post → application created
@@ -256,7 +256,7 @@ WORKFORCE (post-onboarding)
   Status: active | terminated
   Termination: reason + date recorded
   SMP contract: option to Remove worker and attach a replacement from pool
-  Candidate record always preserved for future seasons
+  Candidate record always preserved for future events
 
 RETURN TO POOL
   Not-shortlisted → back to pool, can reapply
@@ -268,12 +268,12 @@ RETURN TO POOL
 
 1. **One pool, one pipeline** — no separate tracks for SMP vs individual. Everyone is a candidate with the same profile and onboarding requirements.
 2. **Bulk upload is in Talent, not in SMP contracts** — upload creates profiles, contracts are separate business groupings.
-3. **SMP contract = assignment record** — links pool candidates or workforce employees to a company + season. Does not own candidate data.
+3. **SMP contract = assignment record** — links pool candidates or workforce employees to a company + event. Does not own candidate data.
 4. **SMP transfers are simple** — remove from Contract A, attach to Contract B. No data loss.
 5. **Deduplication** — bulk upload matches existing candidates by national ID/phone before creating new profiles.
-6. **Season anchors everything** — job posts and SMP contracts both hang off a season.
-7. **Sequential seasons only** — same candidate cannot be in two seasons simultaneously.
-8. **`lastInterviewedAt` on candidate profile** — persists across seasons, badge + filter in interview scheduling.
+6. **Event anchors everything** — job posts and SMP contracts both hang off an event.
+7. **Sequential events only** — same candidate cannot be in two events simultaneously.
+8. **`lastInterviewedAt` on candidate profile** — persists across events, badge + filter in interview scheduling.
 9. **Application status `not_shortlisted`** — professional HR term for rejection.
 10. **Source-aware onboarding** — Regular candidates: 4-item checklist (photo, IBAN, national ID, signed contract). SMP workers: 2-item checklist (photo + national ID only — no IBAN or contract since we deal with their firm).
 11. **Profile activation required for all** — OTP verification regardless of entry method.
