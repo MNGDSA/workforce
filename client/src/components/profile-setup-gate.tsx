@@ -358,7 +358,7 @@ function Step2Form({
   const isEmployed    = watch("isEmployedElsewhere");
 
   return (
-    <form onSubmit={handleSubmit(onNext)} className="space-y-8">
+    <form onSubmit={handleSubmit(onNext)} className="space-y-10">
       {/* Chronic diseases */}
       <div className="space-y-4 p-4 rounded-md bg-muted/10 border border-border">
         <ToggleGroup
@@ -417,10 +417,15 @@ function Step2Form({
           <p className="text-xs text-muted-foreground -mt-2">Your Saudi IBAN number for salary transfers.</p>
           <FieldWrapper label="IBAN Number" error={errors.ibanNumber?.message}>
             <Input
-              {...register("ibanNumber")}
+              {...register("ibanNumber", {
+                onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                  e.target.value = e.target.value.toUpperCase();
+                  setValue("ibanNumber", e.target.value);
+                },
+              })}
               placeholder="SA0000000000000000000000"
               maxLength={24}
-              className="bg-muted/30 border-border font-mono"
+              className="bg-muted/30 border-border font-mono uppercase"
               data-testid="input-iban"
             />
             <p className="text-[11px] text-muted-foreground mt-1">SA followed by 22 digits (24 characters total)</p>
