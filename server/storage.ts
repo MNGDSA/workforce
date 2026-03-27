@@ -363,15 +363,12 @@ export class DatabaseStorage implements IStorage {
     const natIds = data.map(c => c.nationalId).filter(Boolean) as string[];
     const phones = data.map(c => c.phone).filter(Boolean) as string[];
 
-    const CHUNK = 2000;
-    for (let i = 0; i < natIds.length; i += CHUNK) {
-      const chunk = natIds.slice(i, i + CHUNK);
-      const found = await db.select({ nationalId: candidates.nationalId }).from(candidates).where(inArray(candidates.nationalId, chunk));
+    if (natIds.length > 0) {
+      const found = await db.select({ nationalId: candidates.nationalId }).from(candidates).where(inArray(candidates.nationalId, natIds));
       found.forEach(r => { if (r.nationalId) existingNatIds.add(r.nationalId); });
     }
-    for (let i = 0; i < phones.length; i += CHUNK) {
-      const chunk = phones.slice(i, i + CHUNK);
-      const found = await db.select({ phone: candidates.phone }).from(candidates).where(inArray(candidates.phone, chunk));
+    if (phones.length > 0) {
+      const found = await db.select({ phone: candidates.phone }).from(candidates).where(inArray(candidates.phone, phones));
       found.forEach(r => { if (r.phone) existingPhones.add(r.phone); });
     }
 
@@ -399,11 +396,9 @@ export class DatabaseStorage implements IStorage {
     }
 
     let inserted = 0;
-    const batchSize = 1000;
-    for (let i = 0; i < toInsert.length; i += batchSize) {
-      const batch = toInsert.slice(i, i + batchSize);
-      const result = await db.insert(candidates).values(batch).returning({ id: candidates.id });
-      inserted += result.length;
+    if (toInsert.length > 0) {
+      const result = await db.insert(candidates).values(toInsert).returning({ id: candidates.id });
+      inserted = result.length;
     }
 
     return { inserted, skipped: duplicates.length, duplicates };

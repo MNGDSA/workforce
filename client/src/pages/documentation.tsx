@@ -352,7 +352,7 @@ export default function DocumentationPage() {
                     { method: "POST", path: "/api/auth/login", desc: "Authenticate by nationalId, phone, email, or username + password" },
                     { method: "GET", path: "/api/dashboard/stats", desc: "Aggregate counts for dashboard metrics" },
                     { method: "GET", path: "/api/candidates", desc: "Paginated candidate list. Query: page, limit, search, status, city, nationality, sortBy, sortOrder" },
-                    { method: "POST", path: "/api/candidates/bulk", desc: "Bulk insert up to 70,000 candidates (batched in 1000-row chunks)" },
+                    { method: "POST", path: "/api/candidates/bulk", desc: "Bulk insert up to 1,000 candidates per upload" },
                     { method: "GET", path: "/api/events", desc: "All events" },
                     { method: "POST", path: "/api/events", desc: "Create event" },
                     { method: "PATCH", path: "/api/events/:id", desc: "Update event fields (partial)" },

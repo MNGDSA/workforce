@@ -580,8 +580,8 @@ export async function registerRoutes(
       if (!Array.isArray(rawCandidates) || rawCandidates.length === 0) {
         return res.status(400).json({ message: "candidates array is required" });
       }
-      if (rawCandidates.length > 70000) {
-        return res.status(400).json({ message: "Maximum 70,000 candidates per bulk upload" });
+      if (rawCandidates.length > 1000) {
+        return res.status(400).json({ message: "Maximum 1,000 candidates per bulk upload" });
       }
       const errors: { row: number; message: string }[] = [];
       const validated: any[] = [];

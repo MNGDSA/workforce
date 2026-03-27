@@ -857,6 +857,10 @@ export default function TalentPage() {
         setUploadError("No data rows found in file");
         return;
       }
+      if (rows.length > 1000) {
+        setUploadError(`File contains ${rows.length.toLocaleString()} rows. Maximum allowed is 1,000.`);
+        return;
+      }
       setUploadPreview(rows);
     } catch (err: any) {
       setUploadError(err.message || "Could not parse file. Please use the template.");
@@ -1441,7 +1445,7 @@ export default function TalentPage() {
                 <label className="cursor-pointer block">
                   <FileUp className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                   <p className="text-sm text-muted-foreground mb-1">Click to select an Excel or CSV file</p>
-                  <p className="text-xs text-muted-foreground/60">Supports .xlsx and .csv · Maximum 70,000 rows</p>
+                  <p className="text-xs text-muted-foreground/60">Supports .xlsx and .csv · Maximum 1,000 rows</p>
                   <input
                     type="file"
                     accept=".csv,.xlsx,.xls"
