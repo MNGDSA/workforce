@@ -880,6 +880,9 @@ export async function registerRoutes(
           data.status = allDone ? "ready" : anyDone ? "in_progress" : "pending";
         }
       }
+      if (data.status === "rejected") {
+        data.rejectedAt = new Date();
+      }
       const record = await storage.updateOnboardingRecord(req.params.id, data);
       if (!record) return res.status(404).json({ message: "Onboarding record not found" });
       if (data.status === "rejected" && record.applicationId) {

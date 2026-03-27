@@ -84,6 +84,8 @@ interface OnboardingRecord {
   startDate?: string | null;
   salary?: string | null;
   notes?: string | null;
+  rejectedAt?: string | null;
+  rejectionReason?: string | null;
   convertedAt?: string | null;
   createdAt: string;
 }
@@ -489,6 +491,11 @@ export default function OnboardingPage() {
                         <StatusIcon className="h-3 w-3 mr-1" />
                         {cfg.label}
                       </Badge>
+                      {isRejected && rec.rejectedAt && (
+                        <span className="text-[11px] text-zinc-500">
+                          Rejected {new Date(rec.rejectedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} at {new Date(rec.rejectedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      )}
                     </div>
                     <div className="mt-2 flex items-center gap-2">
                       <ProgressBar value={done} total={PREREQ_TOTAL} />

@@ -411,6 +411,9 @@ export const onboarding = pgTable(
     salary: decimal("salary", { precision: 10, scale: 2 }),
     // Meta
     notes: text("notes"),
+    rejectedAt: timestamp("rejected_at"),
+    rejectedBy: varchar("rejected_by").references(() => users.id),
+    rejectionReason: text("rejection_reason"),
     convertedAt: timestamp("converted_at"),
     convertedBy: varchar("converted_by").references(() => users.id),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
