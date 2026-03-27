@@ -61,6 +61,7 @@ import {
   Download,
   ExternalLink,
   Check,
+  Trash2,
 } from "lucide-react";
 
 type OnboardingStatus = "pending" | "in_progress" | "ready" | "converted" | "rejected";
@@ -313,6 +314,23 @@ export default function OnboardingPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       toast({ title: "Record removed" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const deleteDocMutation = useMutation({
+    mutationFn: ({ candidateId, docType }: { candidateId: string; docType: string }) =>
+      apiRequest("DELETE", `/api/candidates/${candidateId}/documents/${docType}`).then(r => r.json()),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
+      qc.invalidateQueries({ queryKey: ["/api/candidates"] });
+      const labels: Record<string, string> = { photo: "Photo", nationalId: "National ID", iban: "IBAN Certificate" };
+      toast({ title: `${labels[vars.docType] ?? "Document"} removed`, description: "Candidate will see the missing document on next login." });
+      if (checklistRecord) {
+        const keyMap: Record<string, string> = { photo: "hasPhoto", nationalId: "hasNationalId", iban: "hasIban" };
+        const flag = keyMap[vars.docType];
+        if (flag) setChecklistRecord(prev => prev ? { ...prev, [flag]: false } : prev);
+      }
     },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
@@ -797,6 +815,11 @@ export default function OnboardingPage() {
                     profileValue = cand.ibanNumber;
                   }
                   const hasProfileData = !!profileValue;
+                  const isFilePrereq = p.isFile && p.profileKey;
+                  const isContractPrereq = p.key === "hasSignedContract";
+                  const docTypeMap: Record<string, string> = { photoUrl: "photo", nationalIdFileUrl: "nationalId", ibanFileUrl: "iban" };
+                  const docType = p.profileKey ? docTypeMap[p.profileKey] : null;
+                  const isConverted = checklistRecord.status === "converted" || checklistRecord.status === "rejected";
                   return (
                     <div
                       key={p.key}
@@ -805,57 +828,65 @@ export default function OnboardingPage() {
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <Checkbox
-                          id={`prereq-${p.key}`}
-                          data-testid={`checkbox-prereq-${p.key}`}
-                          checked={checked}
-                          onCheckedChange={val => handleChecklistToggle(checklistRecord, p.key, !!val)}
-                          className="mt-0.5 border-zinc-600 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
-                        />
+                        {isContractPrereq ? (
+                          <Checkbox
+                            id={`prereq-${p.key}`}
+                            data-testid={`checkbox-prereq-${p.key}`}
+                            checked={checked}
+                            disabled={isConverted}
+                            onCheckedChange={val => handleChecklistToggle(checklistRecord, p.key, !!val)}
+                            className="mt-0.5 border-zinc-600 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                          />
+                        ) : (
+                          <div className={`mt-0.5 h-4 w-4 rounded-sm border flex items-center justify-center shrink-0 ${
+                            checked ? "bg-emerald-600 border-emerald-600" : "border-zinc-600 bg-transparent"
+                          }`}>
+                            {checked && <Check className="h-3 w-3 text-white" />}
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
-                          <label htmlFor={`prereq-${p.key}`} className="text-sm font-medium text-white cursor-pointer flex items-center gap-2">
+                          <div className="text-sm font-medium text-white flex items-center gap-2">
                             <p.icon className="h-4 w-4 text-zinc-400" />
                             {p.label}
-                          </label>
+                          </div>
                           <p className="text-xs text-zinc-500 mt-0.5">{p.hint}</p>
                         </div>
                         {checked && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />}
                       </div>
-                      {hasProfileData && (
+                      {hasProfileData && isFilePrereq && (
                         <div className="mt-2 ml-8 bg-zinc-800/60 rounded-md p-2.5 border border-zinc-700/50">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 min-w-0">
-                              {p.isFile ? <Download className="h-3.5 w-3.5 text-zinc-400 shrink-0" /> : <Eye className="h-3.5 w-3.5 text-zinc-400 shrink-0" />}
+                              <Download className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
                               {p.profileKey === "photoUrl" ? (
                                 <a href={profileValue} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer" onClick={e => e.stopPropagation()}>
                                   <img src={profileValue} alt="Candidate photo" className="h-8 w-8 rounded-sm object-cover border border-zinc-600" />
                                   <span className="text-xs text-emerald-400 underline underline-offset-2 flex items-center gap-1">View photo <ExternalLink className="h-2.5 w-2.5" /></span>
                                 </a>
-                              ) : p.profileKey === "emergencyContactName" ? (
-                                <div className="text-xs text-zinc-300 truncate">
-                                  {cand?.emergencyContactName}{cand?.emergencyContactPhone ? ` — ${cand.emergencyContactPhone}` : ""}
-                                </div>
-                              ) : p.isFile ? (
+                              ) : (
                                 <a href={profileValue} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-400 underline underline-offset-2 flex items-center gap-1 hover:text-emerald-300 transition-colors cursor-pointer" onClick={e => e.stopPropagation()}>
                                   View document <ExternalLink className="h-2.5 w-2.5" />
                                 </a>
-                              ) : (
-                                <span className="text-xs text-zinc-300 font-mono truncate">{String(profileValue)}</span>
                               )}
                             </div>
-                            <Badge variant="outline" className="text-[10px] border-emerald-800 text-emerald-400 shrink-0">From Profile</Badge>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Badge variant="outline" className="text-[10px] border-emerald-800 text-emerald-400">Uploaded</Badge>
+                              {!isConverted && docType && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                  data-testid={`button-delete-doc-${docType}`}
+                                  onClick={e => { e.stopPropagation(); deleteDocMutation.mutate({ candidateId: cand!.id, docType }); }}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       )}
-                      {!hasProfileData && p.profileKey && checked && (
-                        <div className="mt-2 ml-8 bg-zinc-800/40 rounded-md p-2 border border-zinc-700/30">
-                          <p className="text-[11px] text-emerald-500/70 flex items-center gap-1.5">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Verified by admin — no file uploaded by candidate
-                          </p>
-                        </div>
-                      )}
-                      {!hasProfileData && p.profileKey && !checked && (
+                      {!hasProfileData && isFilePrereq && (
                         <div className="mt-2 ml-8 bg-zinc-800/40 rounded-md p-2 border border-zinc-700/30">
                           <p className="text-[11px] text-zinc-500 flex items-center gap-1.5">
                             <TriangleAlert className="h-3 w-3" />

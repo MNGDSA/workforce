@@ -103,6 +103,54 @@ export async function registerRoutes(
     }
   });
 
+  // ─── Document Deletion ───────────────────────────────────────────────────
+  app.delete("/api/candidates/:id/documents/:docType", async (req: Request, res: Response) => {
+    try {
+      const { id, docType } = req.params;
+      if (!["photo", "nationalId", "iban"].includes(docType)) {
+        return res.status(400).json({ message: "Invalid docType. Must be photo, nationalId, or iban" });
+      }
+      const candidate = await storage.getCandidate(id);
+      if (!candidate) return res.status(404).json({ message: "Candidate not found" });
+      const fileUrlMap: Record<string, string | null | undefined> = {
+        photo: candidate.photoUrl,
+        nationalId: candidate.nationalIdFileUrl,
+        iban: candidate.ibanFileUrl,
+      };
+      const oldFileUrl = fileUrlMap[docType];
+      if (oldFileUrl && oldFileUrl.startsWith("/uploads/")) {
+        const filePath = path.join(UPLOADS_DIR, path.basename(oldFileUrl));
+        fs.promises.unlink(filePath).catch(() => {});
+      }
+      const updatePayload: Record<string, any> = {};
+      if (docType === "photo") { updatePayload.photoUrl = null; updatePayload.hasPhoto = false; }
+      if (docType === "nationalId") { updatePayload.nationalIdFileUrl = null; updatePayload.hasNationalId = false; }
+      if (docType === "iban") { updatePayload.ibanFileUrl = null; updatePayload.hasIban = false; }
+      const updated = await storage.updateCandidate(id, updatePayload);
+      if (!updated) return res.status(404).json({ message: "Candidate not found" });
+      const onboardingRecords = await storage.getOnboardingRecords({ candidateId: id });
+      for (const rec of onboardingRecords) {
+        if (rec.status === "converted" || rec.status === "rejected") continue;
+        const syncPayload: Record<string, any> = {};
+        if (docType === "photo") syncPayload.hasPhoto = false;
+        if (docType === "nationalId") syncPayload.hasNationalId = false;
+        if (docType === "iban") syncPayload.hasIban = false;
+        if (Object.keys(syncPayload).length > 0) {
+          const merged = { ...rec, ...syncPayload };
+          const allDone = merged.hasPhoto && merged.hasIban && merged.hasNationalId &&
+                          merged.hasSignedContract;
+          const anyDone = merged.hasPhoto || merged.hasIban || merged.hasNationalId ||
+                          merged.hasSignedContract;
+          syncPayload.status = allDone ? "ready" : anyDone ? "in_progress" : "pending";
+          await storage.updateOnboardingRecord(rec.id, syncPayload);
+        }
+      }
+      return res.json({ docType, candidate: updated });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   // ─── Current User (dev bypass) ────────────────────────────────────────────
   app.get("/api/me", async (_req: Request, res: Response) => {
     try {
@@ -871,20 +919,25 @@ export async function registerRoutes(
   app.patch("/api/onboarding/:id", async (req: Request, res: Response) => {
     try {
       const data = insertOnboardingSchema.partial().parse(req.body);
-      // Auto-compute status
-      if (data.hasPhoto !== undefined || data.hasIban !== undefined || data.hasNationalId !== undefined ||
-          data.hasSignedContract !== undefined) {
+      delete data.hasPhoto;
+      delete data.hasIban;
+      delete data.hasNationalId;
+      const isRejection = data.status === "rejected";
+      if (!isRejection) delete data.status;
+      if (data.hasSignedContract !== undefined || isRejection) {
         const current = await storage.getOnboardingRecord(req.params.id);
         if (current && current.status !== "converted" && current.status !== "rejected") {
           const merged = { ...current, ...data };
-          const allDone = merged.hasPhoto && merged.hasIban && merged.hasNationalId &&
-                          merged.hasSignedContract;
-          const anyDone = merged.hasPhoto || merged.hasIban || merged.hasNationalId ||
-                          merged.hasSignedContract;
-          data.status = allDone ? "ready" : anyDone ? "in_progress" : "pending";
+          if (!isRejection) {
+            const allDone = merged.hasPhoto && merged.hasIban && merged.hasNationalId &&
+                            merged.hasSignedContract;
+            const anyDone = merged.hasPhoto || merged.hasIban || merged.hasNationalId ||
+                            merged.hasSignedContract;
+            data.status = allDone ? "ready" : anyDone ? "in_progress" : "pending";
+          }
         }
       }
-      if (data.status === "rejected") {
+      if (isRejection) {
         data.rejectedAt = new Date();
       }
       const record = await storage.updateOnboardingRecord(req.params.id, data);
