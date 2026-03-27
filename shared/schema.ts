@@ -692,6 +692,13 @@ export interface SmsPluginConfig {
   };
 }
 
+// ─── Saudi Arabia Official 13 Administrative Regions ────────────────────────
+export const KSA_REGIONS = [
+  "Riyadh", "Makkah", "Madinah", "Eastern Province", "Asir",
+  "Tabuk", "Hail", "Northern Borders", "Jazan", "Najran",
+  "Al Bahah", "Al Jawf", "Qassim",
+] as const;
+
 // ─── Query Params Types ─────────────────────────────────────────────────────
 export const candidateQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

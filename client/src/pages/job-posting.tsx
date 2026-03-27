@@ -71,6 +71,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { formatDistanceToNow } from "date-fns";
 import type { JobPosting, Season } from "@shared/schema";
+import { KSA_REGIONS } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
 // ─── Status styles ─────────────────────────────────────────────────────────
@@ -87,11 +88,6 @@ const statusLabel: Record<string, string> = {
   closed: "Ended",
   filled: "Filled",
 };
-
-const SAUDI_REGIONS = [
-  "Riyadh", "Makkah", "Eastern Province", "Madinah", "Qassim",
-  "Asir", "Tabuk", "Hail", "Northern Borders", "Jazan", "Najran", "Bahah", "Jouf",
-];
 
 // ─── Create Job Form Schema ─────────────────────────────────────────────────
 const createJobSchema = z.object({
@@ -294,7 +290,7 @@ function CreateJobDialog({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {SAUDI_REGIONS.map(r => (
+                          {KSA_REGIONS.map(r => (
                             <SelectItem key={r} value={r}>{r}</SelectItem>
                           ))}
                         </SelectContent>
@@ -683,7 +679,7 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {SAUDI_REGIONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                      {KSA_REGIONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <FormMessage />

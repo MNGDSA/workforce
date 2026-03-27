@@ -70,22 +70,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import type { Season, SMPContract } from "@shared/schema";
-
-const SAUDI_REGIONS = [
-  "Riyadh",
-  "Makkah",
-  "Madinah",
-  "Eastern Province",
-  "Asir",
-  "Tabuk",
-  "Qassim",
-  "Hail",
-  "Jizan",
-  "Najran",
-  "Al Bahah",
-  "Northern Borders",
-  "Jawf",
-];
+import { KSA_REGIONS } from "@shared/schema";
 
 const statusStyles: Record<string, string> = {
   upcoming: "bg-blue-500/10 text-blue-500",
@@ -448,7 +433,7 @@ function CreateSMPContractDialog({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {SAUDI_REGIONS.map((r) => (
+                        {KSA_REGIONS.map((r) => (
                           <SelectItem key={r} value={r}>{r}</SelectItem>
                         ))}
                       </SelectContent>

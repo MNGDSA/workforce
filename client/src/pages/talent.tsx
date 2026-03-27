@@ -97,6 +97,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { Candidate } from "@shared/schema";
+import { KSA_REGIONS } from "@shared/schema";
 
 const statusStyles: Record<string, string> = {
   active: "bg-green-500/10 text-green-500",
@@ -216,12 +217,6 @@ const KSA_CITIES = [
   "Dhahran", "Tabuk", "Abha", "Khamis Mushait", "Hail", "Buraidah",
   "Hofuf", "Yanbu", "Najran", "Jazan", "Other",
 ];
-const REGIONS = [
-  "Makkah Region", "Madinah Region", "Riyadh Region", "Eastern Region",
-  "Asir Region", "Tabuk Region", "Hail Region", "Northern Borders Region",
-  "Jazan Region", "Najran Region", "Al Baha Region", "Al Jawf Region", "Qassim Region",
-  "Western Region", "Central Region", "Southern Region", "Northern Region",
-];
 const GENDER_OPTIONS = ["male", "female"];
 const MARITAL_OPTIONS = ["Single", "Married", "Divorced", "Widowed"];
 const NATIONALITY_OPTIONS = [
@@ -306,7 +301,7 @@ function CandidateProfileSheet({
     const c = candidate;
     setForm({
       city: matchOption(c.city, KSA_CITIES),
-      region: matchOption(c.region, REGIONS),
+      region: matchOption(c.region, [...KSA_REGIONS]),
       gender: matchOption(c.gender, GENDER_OPTIONS),
       dateOfBirth: c.dateOfBirth ?? "",
       nationalityText: matchOption((c as any).nationalityText ?? (c.nationality === "saudi" ? "Saudi Arabian" : ""), NATIONALITY_OPTIONS),
@@ -416,7 +411,7 @@ function CandidateProfileSheet({
                   <p className="text-[11px] text-muted-foreground">Region</p>
                   <select value={form.region} onChange={e => setField("region", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none" data-testid="edit-region">
                     <option value="" className="bg-card text-muted-foreground">Select...</option>
-                    {REGIONS.map(r => <option key={r} value={r} className="bg-card text-white">{r}</option>)}
+                    {KSA_REGIONS.map(r => <option key={r} value={r} className="bg-card text-white">{r}</option>)}
                   </select>
                 </div>
               </div>

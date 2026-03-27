@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery } from "@tanstack/react-query";
+import { KSA_REGIONS } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -127,24 +128,6 @@ const INITIAL_GROUPS: WorkforceGroup[] = [
     department: "Logistics",
     seasonName: "Hajj 2025",
   },
-];
-
-// ─── Saudi Arabia regions ─────────────────────────────────────────────────────
-const SA_REGIONS = [
-  "Makkah",
-  "Madinah",
-  "Riyadh",
-  "Eastern Province",
-  "Asir",
-  "Tabuk",
-  "Hail",
-  "Northern Borders",
-  "Najran",
-  "Al Bahah",
-  "Al Jawf",
-  "Jizan",
-  "Qassim",
-  "Nationwide",
 ];
 
 const SA_DEPARTMENTS = [
@@ -444,7 +427,7 @@ function CreateGroupDialog({
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="none">Select region…</SelectItem>
-                        {SA_REGIONS.map((r) => (
+                        {KSA_REGIONS.map((r) => (
                           <SelectItem key={r} value={r}>{r}</SelectItem>
                         ))}
                       </SelectContent>
