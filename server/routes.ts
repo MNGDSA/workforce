@@ -24,8 +24,6 @@ import {
 } from "@shared/schema";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
 
-const EDUCATION_REQUIRES_MAJOR = ["Diploma", "Associate Degree", "University and higher"];
-
 function validateProfileCompleteness(candidate: Record<string, any>): string[] {
   const missing: string[] = [];
   if (!candidate.fullNameEn) missing.push("Full Name");
@@ -35,7 +33,7 @@ function validateProfileCompleteness(candidate: Record<string, any>): string[] {
   if (!candidate.city) missing.push("City");
   if (!candidate.maritalStatus) missing.push("Marital Status");
   if (!candidate.educationLevel) missing.push("Education Level");
-  if (EDUCATION_REQUIRES_MAJOR.includes(candidate.educationLevel) && !candidate.major) missing.push("Major / Field of Study");
+  if (candidate.educationLevel === "University and higher" && !candidate.major) missing.push("Major / Field of Study");
   if (!candidate.emergencyContactName) missing.push("Emergency Contact Name");
   if (!candidate.emergencyContactPhone) missing.push("Emergency Contact Phone");
   if (!(candidate.languages && candidate.languages.length > 0)) missing.push("Languages");

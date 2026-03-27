@@ -343,8 +343,8 @@ RETURN TO POOL
 
 ## Profile Completeness Validation (Server-Side)
 - `profileCompleted: true` is **enforced server-side** — the PATCH endpoint and bulk upload both validate required fields before accepting.
-- `validateProfileCompleteness()` helper in `server/routes.ts` checks: Full Name, DOB, Gender, Nationality, City, Marital Status, Education Level, Major (required for Diploma / Associate Degree / University and higher), Emergency Contact (name + phone), Languages (≥1). For non-SMP: IBAN Number.
-- `EDUCATION_REQUIRES_MAJOR` constant: `["Diploma", "Associate Degree", "University and higher"]` — used in both server validation and frontend form (profile-setup-gate.tsx).
+- `validateProfileCompleteness()` helper in `server/routes.ts` checks: Full Name, DOB, Gender, Nationality, City, Marital Status, Education Level, Major (required only when "University and higher"), Emergency Contact (name + phone), Languages (≥1). For non-SMP: IBAN Number.
+- **Education levels are only two options**: "High School and below" or "University and higher". No Diploma/Associate/etc — this matches EU/MENA conventions. Major is required only for "University and higher". Both frontend (profile-setup-gate.tsx + talent.tsx profile sheet) and server enforce this.
 - Returns 400 with `missingFields` array if any are missing.
 - Bulk uploads that claim `profileCompleted: true` with missing fields are rejected per-row with clear error messages.
 

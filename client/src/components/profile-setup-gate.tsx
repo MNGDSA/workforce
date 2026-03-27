@@ -159,8 +159,7 @@ const step3Schema = z.object({
   languages:       z.array(z.string()).min(1, "Select at least one language"),
   otherLanguage:   z.string().optional(),
 }).superRefine((d, ctx) => {
-  const requiresMajor = ["Diploma", "Associate Degree", "University and higher"];
-  if (requiresMajor.includes(d.educationLevel) && !d.major?.trim()) {
+  if (d.educationLevel === "University and higher" && !d.major?.trim()) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please enter your major / field of study", path: ["major"] });
   }
 });
@@ -544,7 +543,7 @@ function Step3Form({
         </div>
         {errors.educationLevel && <p className="text-red-400 text-xs">{errors.educationLevel.message}</p>}
 
-        {["Diploma", "Associate Degree", "University and higher"].includes(educationLevel) && (
+        {educationLevel === "University and higher" && (
           <FieldWrapper label="Field of Study / Major" required error={errors.major?.message}>
             <Input
               {...register("major")}
