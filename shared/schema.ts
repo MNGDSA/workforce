@@ -309,6 +309,7 @@ export const jobPostings = pgTable(
     questionSetId: varchar("question_set_id").references(() => questionSets.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+    archivedAt: timestamp("archived_at"),
   },
   (t) => ({
     statusIdx: index("jobs_status_idx").on(t.status),

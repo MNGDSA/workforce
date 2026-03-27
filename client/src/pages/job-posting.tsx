@@ -4,7 +4,6 @@ import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -69,7 +68,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { formatDistanceToNow } from "date-fns";
-import type { JobPosting, Season } from "@shared/schema";
+import type { JobPosting } from "@shared/schema";
 import { KSA_REGIONS } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
@@ -88,436 +87,8 @@ const statusLabel: Record<string, string> = {
   filled: "Filled",
 };
 
-// ─── Create Job Form Schema ─────────────────────────────────────────────────
-const createJobSchema = z.object({
-  title: z.string().min(3, "Job title is required"),
-  department: z.string().optional(),
-  type: z.enum(["full_time", "part_time"]),
-  location: z.string().optional(),
-  region: z.string().optional(),
-  salaryMin: z.coerce.number().optional(),
-  salaryMax: z.coerce.number().optional(),
-  deadline: z.string().optional(),
-  status: z.enum(["draft", "active"]),
-  description: z.string().optional(),
-  requirements: z.string().optional(),
-  seasonId: z.string().optional(),
-  questionSetId: z.string().optional(),
-});
 
-type CreateJobForm = z.infer<typeof createJobSchema>;
-
-// ─── Create Job Dialog ──────────────────────────────────────────────────────
-function CreateJobDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-}) {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  const { data: seasons = [] } = useQuery<Season[]>({
-    queryKey: ["/api/events"],
-    queryFn: () => apiRequest("GET", "/api/events").then(r => r.json()),
-    enabled: open,
-  });
-
-  const { data: questionSets = [] } = useQuery<{ id: string; name: string }[]>({
-    queryKey: ["/api/question-sets"],
-    queryFn: () => apiRequest("GET", "/api/question-sets").then(r => r.json()),
-    enabled: open,
-  });
-
-  const form = useForm<CreateJobForm>({
-    resolver: zodResolver(createJobSchema),
-    defaultValues: {
-      title: "",
-      department: "",
-      type: "full_time",
-      location: "",
-      region: "",
-      salaryMin: undefined,
-      salaryMax: undefined,
-      deadline: "",
-      status: "draft",
-      description: "",
-      requirements: "",
-      seasonId: "",
-      questionSetId: "",
-    },
-  });
-
-  const createJob = useMutation({
-    mutationFn: (data: CreateJobForm) => {
-      const payload: Record<string, unknown> = { ...data, type: "seasonal" };
-      if (!payload.seasonId) delete payload.seasonId;
-      if (!payload.deadline) delete payload.deadline;
-      if (!payload.questionSetId) delete payload.questionSetId;
-      if (payload.salaryMin != null && payload.salaryMin !== "") {
-        payload.salaryMin = String(payload.salaryMin);
-      } else {
-        delete payload.salaryMin;
-      }
-      if (payload.salaryMax != null && payload.salaryMax !== "") {
-        payload.salaryMax = String(payload.salaryMax);
-      } else {
-        delete payload.salaryMax;
-      }
-      return apiRequest("POST", "/api/jobs", payload).then(r => r.json());
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs/stats"] });
-      toast({ title: "Job published successfully" });
-      form.reset();
-      onOpenChange(false);
-    },
-    onError: () => {
-      toast({ title: "Failed to create job", description: "Please check all required fields and try again.", variant: "destructive" });
-    },
-  });
-
-  function onSubmit(values: CreateJobForm) {
-    createJob.mutate(values);
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-card border-border">
-        <DialogHeader>
-          <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
-            <Briefcase className="h-5 w-5 text-primary" />
-            Create Consolidated App
-          </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            Fill in the details below. Save as draft or publish immediately.
-          </DialogDescription>
-        </DialogHeader>
-
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-
-            {/* ── Core Info ── */}
-            <div className="space-y-4">
-              <div className="w-full h-px bg-border" />
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Basic Info</p>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem className="col-span-2">
-                      <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                        Application Title <span className="text-primary">*</span>
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="e.g. Crowd Control Officer"
-                          className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
-                          data-testid="input-job-title"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-
-                <FormField
-                  control={form.control}
-                  name="type"
-                  render={({ field }) => (
-                    <FormItem className="col-span-2">
-                      <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Job Type</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="h-10 bg-muted/30 border-border focus:ring-primary/20 rounded-sm" data-testid="select-job-type">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="full_time">Full Time</SelectItem>
-                          <SelectItem value="part_time">Part Time</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-
-            {/* ── Location & Event ── */}
-            <div className="space-y-4">
-              <div className="w-full h-px bg-border" />
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Location & Event</p>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="location"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">City / Location</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="e.g. Makkah"
-                          className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
-                          data-testid="input-job-location"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="region"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Region</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="h-10 bg-muted/30 border-border focus:ring-primary/20 rounded-sm" data-testid="select-job-region">
-                            <SelectValue placeholder="Select region" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {KSA_REGIONS.map(r => (
-                            <SelectItem key={r} value={r}>{r}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="seasonId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Hiring Event</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="h-10 bg-muted/30 border-border focus:ring-primary/20 rounded-sm" data-testid="select-job-season">
-                            <SelectValue placeholder="Select event" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {seasons.map(s => (
-                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="deadline"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Application Deadline</FormLabel>
-                      <FormControl>
-                        <DatePickerField
-                          value={field.value}
-                          onChange={field.onChange}
-                          className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
-                          data-testid="input-job-deadline"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-
-            {/* ── Openings & Salary ── */}
-            <div className="space-y-4">
-              <div className="w-full h-px bg-border" />
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Compensation</p>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="salaryMin"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Min Salary (SAR)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={0}
-                          placeholder="e.g. 3000"
-                          className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
-                          data-testid="input-salary-min"
-                          {...field}
-                          value={field.value ?? ""}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="salaryMax"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Max Salary (SAR)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={0}
-                          placeholder="e.g. 5000"
-                          className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
-                          data-testid="input-salary-max"
-                          {...field}
-                          value={field.value ?? ""}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-
-            {/* ── Description & Requirements ── */}
-            <div className="space-y-4">
-              <div className="w-full h-px bg-border" />
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Details</p>
-
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Job Description</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Describe the role, responsibilities, and work environment..."
-                        rows={4}
-                        className="bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm resize-none"
-                        data-testid="textarea-job-description"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="requirements"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Requirements</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="List candidate requirements, qualifications, and skills..."
-                        rows={3}
-                        className="bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm resize-none"
-                        data-testid="textarea-job-requirements"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="questionSetId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Screening Question Set</FormLabel>
-                    <Select
-                      onValueChange={(v) => field.onChange(v === "none" ? null : v)}
-                      value={field.value || "none"}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="h-10 bg-muted/30 border-border focus:ring-primary/20 rounded-sm" data-testid="select-job-questionset">
-                          <SelectValue placeholder="None (optional)" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-card border-border">
-                        <SelectItem value="none">None</SelectItem>
-                        {questionSets.map(qs => (
-                          <SelectItem key={qs.id} value={qs.id}>{qs.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* ── Footer ── */}
-            <DialogFooter className="pt-2 flex gap-2 sm:justify-between">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => onOpenChange(false)}
-                className="text-muted-foreground"
-                data-testid="button-cancel-job"
-              >
-                Cancel
-              </Button>
-
-              <div className="flex gap-2">
-                <Button
-                  type="submit"
-                  variant="outline"
-                  disabled={createJob.isPending}
-                  onClick={() => form.setValue("status", "draft")}
-                  className="border-border bg-background hover:bg-muted"
-                  data-testid="button-save-draft"
-                >
-                  {createJob.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save as Draft"}
-                </Button>
-
-                <Button
-                  type="submit"
-                  disabled={createJob.isPending}
-                  onClick={() => form.setValue("status", "active")}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold uppercase tracking-wide text-xs rounded-sm"
-                  data-testid="button-publish-job"
-                >
-                  {createJob.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Plus className="mr-1.5 h-4 w-4" />
-                      Publish
-                    </>
-                  )}
-                </Button>
-              </div>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ─── Post Job Dialog (single posting) ───────────────────────────────────────
+// ─── Post Job Dialog ─────────────────────────────────────────────────────────
 const postJobSchema = z.object({
   title: z.string().min(3, "Job title is required"),
   type: z.enum(["full_time", "part_time"]),
@@ -800,6 +371,7 @@ type CandidateInfo = {
   email?: string;
   city?: string;
   nationality?: string;
+  photoUrl?: string | null;
 };
 
 type ExportQuestion = { id: string; text: string };
@@ -890,13 +462,17 @@ function ApplicantsSheet({
     enabled: !!job && open,
   });
 
+  const candidateIds = applications.map(a => a.candidateId).filter(Boolean);
   const { data: candidates = [] } = useQuery<CandidateInfo[]>({
-    queryKey: ["/api/candidates/list"],
+    queryKey: ["/api/candidates/by-ids", ...candidateIds],
     queryFn: async () => {
-      const json = await apiRequest("GET", "/api/candidates?limit=100").then((r) => r.json());
-      return Array.isArray(json) ? json : Array.isArray(json?.data) ? json.data : [];
+      if (candidateIds.length === 0) return [];
+      const params = new URLSearchParams();
+      candidateIds.forEach(id => params.append("ids", id));
+      const json = await fetch(`/api/candidates/by-ids?${params.toString()}`, { credentials: "include" }).then(r => r.json());
+      return Array.isArray(json) ? json : [];
     },
-    enabled: !!job && open,
+    enabled: !!job && open && applications.length > 0,
   });
   const candidateMap = Object.fromEntries(candidates.map((c) => [c.id, c]));
 
@@ -1244,7 +820,6 @@ export default function JobPostingPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [createOpen, setCreateOpen] = useState(false);
   const [postJobOpen, setPostJobOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<JobPosting | null>(null);
   const [selectedJob, setSelectedJob] = useState<JobPosting | null>(null);
@@ -1269,8 +844,8 @@ export default function JobPostingPage() {
     },
   });
 
-  const deleteJob = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/jobs/${id}`),
+  const archiveJob = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/jobs/${id}/archive`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs/stats"] });
@@ -1293,25 +868,14 @@ export default function JobPostingPage() {
             <h1 className="text-3xl font-display font-bold text-white tracking-tight">Job Applications</h1>
             <p className="text-muted-foreground mt-1">Manage and publish job applications.</p>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setPostJobOpen(true)}
-              className="h-11 border-border bg-background font-bold uppercase tracking-wide text-xs rounded-sm"
-              data-testid="button-post-job"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Post Job
-            </Button>
-            <Button
-              onClick={() => setCreateOpen(true)}
-              className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs rounded-sm shadow-[0_0_20px_rgba(25,90,55,0.25)] hover:shadow-[0_0_30px_rgba(25,90,55,0.45)] transition-all"
-              data-testid="button-create-job"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Post Consolidated Jobs
-            </Button>
-          </div>
+          <Button
+            onClick={() => setPostJobOpen(true)}
+            className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs rounded-sm shadow-[0_0_20px_rgba(25,90,55,0.25)] hover:shadow-[0_0_30px_rgba(25,90,55,0.45)] transition-all"
+            data-testid="button-post-job"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Post Job
+          </Button>
         </div>
 
         {/* Metrics */}
@@ -1395,9 +959,9 @@ export default function JobPostingPage() {
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Briefcase className="h-12 w-12 text-muted-foreground/30 mb-4" />
                 <p className="text-muted-foreground font-medium">No jobs found</p>
-                <p className="text-muted-foreground/60 text-sm mt-1">Post a consolidated application to attract candidates</p>
+                <p className="text-muted-foreground/60 text-sm mt-1">Post a job application to attract candidates</p>
                 <Button
-                  onClick={() => setCreateOpen(true)}
+                  onClick={() => setPostJobOpen(true)}
                   className="mt-4 h-9 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wide rounded-sm"
                   data-testid="button-create-first-job"
                 >
@@ -1455,7 +1019,7 @@ export default function JobPostingPage() {
                           className={`border-0 text-xs font-medium ${job.seasonId ? "bg-primary/10 text-primary" : "bg-amber-500/10 text-amber-400"}`}
                           data-testid={`type-job-${job.id}`}
                         >
-                          {job.seasonId ? "Consolidated" : "Single"}
+                          {job.seasonId ? "Event-linked" : "Standalone"}
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
@@ -1507,10 +1071,10 @@ export default function JobPostingPage() {
                             )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                              className="text-red-500"
-                              onClick={() => deleteJob.mutate(job.id)}
+                              className="text-amber-500"
+                              onClick={() => archiveJob.mutate(job.id)}
                             >
-                              Delete
+                              Archive
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -1524,8 +1088,6 @@ export default function JobPostingPage() {
         </Card>
       </div>
 
-      {/* Create Job Dialog */}
-      <CreateJobDialog open={createOpen} onOpenChange={setCreateOpen} />
       {/* Post Job Dialog */}
       <PostJobDialog
         open={postJobOpen}

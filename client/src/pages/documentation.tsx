@@ -147,7 +147,7 @@ export default function DocumentationPage() {
                 {[
                   { icon: LayoutDashboard, label: "Dashboard", desc: "Overview of active events, open positions, scheduled interviews, and recent applications. Quick-action buttons for common tasks." },
                   { icon: CalendarRange, label: "Events & SMP", desc: "Create and manage hiring events (e.g. Hajj 2026, Ramadan). Each event tracks its own timeline, headcount, and status." },
-                  { icon: Briefcase, label: "Job Applications", desc: "Post individual jobs or consolidated applications linked to an event. Filter by status (Active, Draft, Ended) and manage postings." },
+                  { icon: Briefcase, label: "Job Applications", desc: "Post jobs linked to events or standalone. Filter by status (Active, Draft, Ended) and manage postings." },
                   { icon: PhoneCall, label: "Interview Calls", desc: "Track scheduled interviews, their type (Video, Phone, In-Person), interviewer assignments, and current status." },
                   { icon: Users, label: "Workforce", desc: "View active workforce placements. See who is hired, their event assignment, and shift coverage." },
                   { icon: Search, label: "Talent", desc: "Full candidate database with search, filters, and pagination. Supports 70,000+ candidates with fast server-side queries." },
@@ -168,10 +168,10 @@ export default function DocumentationPage() {
 
             {/* How to post a job */}
             <DocCard>
-              <SectionHeading icon={Briefcase} title="How to Post a Job" description="Create a single job or a consolidated event application." />
+              <SectionHeading icon={Briefcase} title="How to Post a Job" description="Create a job application — standalone or linked to a hiring event." />
               <div className="space-y-4">
                 <Step number={1} title="Go to Job Applications" description="Click 'Job Applications' in the left sidebar." />
-                <Step number={2} title="Choose posting type" description="Click 'Post Job' for a single standalone position, or 'Post Consolidated Jobs' to link multiple roles to an event." />
+                <Step number={2} title="Fill in job details" description="Click 'Post Job' to create a new position — standalone or linked to a hiring event." />
                 <Step number={3} title="Fill in the form" description="Enter the job title, type (Full Time / Part Time), location, region, salary range, deadline, description, and requirements." />
                 <Step number={4} title="Set status" description="Choose 'Draft' to save without publishing, or 'Active' to publish immediately and accept applications." />
                 <Step number={5} title="Submit" description="Click 'Save Draft' or 'Publish Now'. The posting appears in the table immediately." />

@@ -452,6 +452,17 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/candidates/by-ids", async (req: Request, res: Response) => {
+    try {
+      const ids = Array.isArray(req.query.ids) ? req.query.ids as string[] : req.query.ids ? [req.query.ids as string] : [];
+      if (ids.length === 0) return res.json([]);
+      const result = await storage.getCandidatesByIds(ids);
+      return res.json(result);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   app.get("/api/candidates/export", async (req: Request, res: Response) => {
     try {
       const result = await storage.exportCandidates();
@@ -730,11 +741,21 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/jobs/:id", async (req: Request, res: Response) => {
+  app.post("/api/jobs/:id/archive", async (req: Request, res: Response) => {
     try {
-      const deleted = await storage.deleteJobPosting(req.params.id);
-      if (!deleted) return res.status(404).json({ message: "Job not found" });
-      return res.status(204).send();
+      const archived = await storage.archiveJobPosting(req.params.id);
+      if (!archived) return res.status(404).json({ message: "Job not found or already archived" });
+      return res.json({ success: true });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/jobs/:id/unarchive", async (req: Request, res: Response) => {
+    try {
+      const restored = await storage.unarchiveJobPosting(req.params.id);
+      if (!restored) return res.status(404).json({ message: "Job not found" });
+      return res.json({ success: true });
     } catch (err) {
       return handleError(res, err);
     }

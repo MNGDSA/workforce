@@ -71,6 +71,7 @@ export interface IStorage {
   bulkInsertCandidates(candidates: InsertCandidate[]): Promise<{ inserted: number; skipped: number; duplicates: { row: number; nationalId?: string; phone?: string; reason: string }[] }>;
   bulkUpdateCandidateStatus(ids: string[], status: string): Promise<number>;
   bulkArchiveCandidates(ids: string[]): Promise<number>;
+  getCandidatesByIds(ids: string[]): Promise<any[]>;
   exportCandidates(): Promise<{ headers: string[]; rows: any[][]; total: number }>;
   getCandidateStats(): Promise<{ total: number; active: number; hired: number; blocked: number; avgRating: number }>;
 
@@ -87,7 +88,8 @@ export interface IStorage {
   getJobPosting(id: string): Promise<JobPosting | undefined>;
   createJobPosting(job: InsertJobPosting): Promise<JobPosting>;
   updateJobPosting(id: string, data: Partial<InsertJobPosting>): Promise<JobPosting | undefined>;
-  deleteJobPosting(id: string): Promise<boolean>;
+  archiveJobPosting(id: string): Promise<boolean>;
+  unarchiveJobPosting(id: string): Promise<boolean>;
   getJobStats(): Promise<{ total: number; active: number; draft: number; filled: number; totalOpenings: number }>;
 
   // Applications
@@ -424,6 +426,20 @@ export class DatabaseStorage implements IStorage {
     return result.length;
   }
 
+  async getCandidatesByIds(ids: string[]): Promise<any[]> {
+    if (ids.length === 0) return [];
+    return db.select({
+      id: candidates.id,
+      fullNameEn: candidates.fullNameEn,
+      nationalId: candidates.nationalId,
+      phone: candidates.phone,
+      email: candidates.email,
+      city: candidates.city,
+      nationality: candidates.nationality,
+      photoUrl: candidates.photoUrl,
+    }).from(candidates).where(inArray(candidates.id, ids));
+  }
+
   async exportCandidates(): Promise<{ headers: string[]; rows: any[][]; total: number }> {
     const data = await db.select({
       id: candidates.id,
@@ -521,11 +537,10 @@ export class DatabaseStorage implements IStorage {
 
   // ─── Job Postings ───────────────────────────────────────────────────────────
   async getJobPostings(params?: { status?: string; seasonId?: string }): Promise<JobPosting[]> {
-    const conditions = [];
+    const conditions = [isNull(jobPostings.archivedAt)];
     if (params?.status) conditions.push(eq(jobPostings.status, params.status as any));
     if (params?.seasonId) conditions.push(eq(jobPostings.seasonId, params.seasonId));
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
-    return db.select().from(jobPostings).where(where).orderBy(desc(jobPostings.createdAt));
+    return db.select().from(jobPostings).where(and(...conditions)).orderBy(desc(jobPostings.createdAt));
   }
 
   async getJobPosting(id: string): Promise<JobPosting | undefined> {
@@ -543,20 +558,26 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async deleteJobPosting(id: string): Promise<boolean> {
-    const result = await db.delete(jobPostings).where(eq(jobPostings.id, id));
-    return (result.rowCount ?? 0) > 0;
+  async archiveJobPosting(id: string): Promise<boolean> {
+    const result = await db.update(jobPostings).set({ archivedAt: new Date() }).where(and(eq(jobPostings.id, id), isNull(jobPostings.archivedAt))).returning({ id: jobPostings.id });
+    return result.length > 0;
+  }
+
+  async unarchiveJobPosting(id: string): Promise<boolean> {
+    const result = await db.update(jobPostings).set({ archivedAt: null }).where(eq(jobPostings.id, id)).returning({ id: jobPostings.id });
+    return result.length > 0;
   }
 
   async getJobStats(): Promise<{ total: number; active: number; draft: number; filled: number; totalOpenings: number }> {
+    const notArchived = isNull(jobPostings.archivedAt);
     const [stats] = await db.select({
       total: count(),
       totalOpenings: sql<number>`coalesce(sum(${jobPostings.openings}), 0)`,
-    }).from(jobPostings);
+    }).from(jobPostings).where(notArchived);
 
-    const [activeRow] = await db.select({ value: count() }).from(jobPostings).where(eq(jobPostings.status, "active"));
-    const [draftRow] = await db.select({ value: count() }).from(jobPostings).where(eq(jobPostings.status, "draft"));
-    const [filledRow] = await db.select({ value: count() }).from(jobPostings).where(eq(jobPostings.status, "filled"));
+    const [activeRow] = await db.select({ value: count() }).from(jobPostings).where(and(eq(jobPostings.status, "active"), notArchived));
+    const [draftRow] = await db.select({ value: count() }).from(jobPostings).where(and(eq(jobPostings.status, "draft"), notArchived));
+    const [filledRow] = await db.select({ value: count() }).from(jobPostings).where(and(eq(jobPostings.status, "filled"), notArchived));
 
     return {
       total: Number(stats.total),

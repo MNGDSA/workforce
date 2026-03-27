@@ -116,11 +116,8 @@ export default function Dashboard() {
               <Calendar className="mr-2 h-4 w-4" />
               {new Date().toLocaleString("en-US", { month: "short", year: "numeric" })}
             </Button>
-            <Button variant="outline" className="h-9 border-border bg-background font-bold uppercase tracking-wide text-xs">
-              Post Job
-            </Button>
             <Button className="h-9 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs">
-              Post Consolidated Jobs
+              Post Job
             </Button>
           </div>
         </div>
