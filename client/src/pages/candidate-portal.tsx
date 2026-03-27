@@ -1057,9 +1057,7 @@ export default function CandidatePortal() {
                   </div>
                 )}
                 {contractPreview.template?.documentFooter && (
-                  <div className="contract-page-footer">
-                    {contractPreview.template.documentFooter}
-                  </div>
+                  <div className="contract-page-footer" dangerouslySetInnerHTML={{ __html: (contractPreview.template.documentFooter || '').replace(/\n/g, '<br/>') }} />
                 )}
               </div>
               <div className="flex justify-end gap-3 mt-4 no-print">

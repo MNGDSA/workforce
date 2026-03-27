@@ -1079,9 +1079,7 @@ function ContractTemplatesTab() {
                   </div>
                 )}
                 {(previewTemplate as any).documentFooter && (
-                  <div className="contract-page-footer">
-                    {(previewTemplate as any).documentFooter}
-                  </div>
+                  <div className="contract-page-footer" dangerouslySetInnerHTML={{ __html: ((previewTemplate as any).documentFooter || '').replace(/\n/g, '<br/>') }} />
                 )}
               </div>
               <div className="flex justify-end mt-3 no-print">

@@ -22,7 +22,7 @@ export function printContract(title: string) {
     .print-page { width: ${A4_WIDTH_MM}mm; min-height: ${A4_HEIGHT_MM}mm; padding: ${MARGIN_TOP_MM}mm ${MARGIN_SIDE_MM}mm ${MARGIN_BOTTOM_MM}mm ${MARGIN_SIDE_MM}mm; position: relative; page-break-after: always; overflow: hidden; }
     .print-page:last-child { page-break-after: auto; }
     .print-page-number { position: absolute; bottom: 10mm; right: ${MARGIN_SIDE_MM}mm; font-size: 9px; color: #888; }
-    .print-doc-footer { position: absolute; bottom: 10mm; left: ${MARGIN_SIDE_MM}mm; right: ${MARGIN_SIDE_MM}mm; font-size: 8px; color: #999; text-align: center; }
+    .print-doc-footer { position: absolute; bottom: 5mm; left: ${MARGIN_SIDE_MM}mm; right: ${MARGIN_SIDE_MM}mm; font-size: 8px; color: #999; text-align: center; white-space: pre-wrap; line-height: 1.4; }
     .page-content > * + * { margin-top: 1.5rem; }
     .flex { display: flex; }
     .justify-start { justify-content: flex-start; }
@@ -95,9 +95,9 @@ export function printContract(title: string) {
     if (currentPage.length > 0) pages.push(currentPage);
 
     const totalPages = pages.length;
-    let docFooterText = '';
+    let docFooterHtml = '';
     const footerEl = container.querySelector('.contract-page-footer');
-    if (footerEl) docFooterText = footerEl.textContent || '';
+    if (footerEl) docFooterHtml = footerEl.innerHTML || '';
 
     let bodyHtml = '';
     pages.forEach((pageChildren, pageIdx) => {
@@ -105,7 +105,7 @@ export function printContract(title: string) {
       pageChildren.forEach(child => { contentHtml += child.outerHTML; });
       bodyHtml += `<div class="print-page">
         <div class="page-content">${contentHtml}</div>
-        ${docFooterText ? `<div class="print-doc-footer">${docFooterText}</div>` : ''}
+        ${docFooterHtml ? `<div class="print-doc-footer">${docFooterHtml}</div>` : ''}
         <div class="print-page-number">Page ${pageIdx + 1} of ${totalPages}</div>
       </div>`;
     });
