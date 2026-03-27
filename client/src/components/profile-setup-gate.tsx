@@ -431,7 +431,7 @@ function Step2Form({
           <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
             Bank Details
           </Label>
-          <p className="text-xs text-muted-foreground -mt-2">Your Saudi IBAN number for salary transfers.</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Your Saudi IBAN number for salary transfers.</p>
           <FieldWrapper label="IBAN Number" error={errors.ibanNumber?.message}>
             <Input
               {...register("ibanNumber", {
@@ -455,7 +455,7 @@ function Step2Form({
         <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
           Emergency Contact<span className="text-red-500 ml-0.5">*</span>
         </Label>
-        <p className="text-xs text-muted-foreground -mt-2">Someone we can reach in case of an emergency during work.</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Someone we can reach in case of an emergency during work.</p>
         <div className="grid grid-cols-2 gap-4">
           <FieldWrapper label="Full Name" required error={errors.emergencyContactName?.message}>
             <Input
