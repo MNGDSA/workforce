@@ -195,7 +195,7 @@ export default function OnboardingPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("active");
   const [admitOpen, setAdmitOpen] = useState(false);
   const [checklistRecord, setChecklistRecord] = useState<OnboardingRecord | null>(null);
   const [convertRecord, setConvertRecord] = useState<OnboardingRecord | null>(null);
@@ -300,7 +300,8 @@ export default function OnboardingPage() {
   });
 
   const filtered = records.filter(r => {
-    if (statusFilter !== "all" && r.status !== statusFilter) return false;
+    if (statusFilter === "active" && (r.status === "rejected" || r.status === "converted")) return false;
+    if (statusFilter !== "all" && statusFilter !== "active" && r.status !== statusFilter) return false;
     if (search) {
       const candidate = candidates.find(c => c.id === r.candidateId);
       const name = candidate?.fullNameEn?.toLowerCase() ?? "";
@@ -437,6 +438,7 @@ export default function OnboardingPage() {
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent className="bg-zinc-900 border-zinc-700">
+              <SelectItem value="active">Active</SelectItem>
               <SelectItem value="all">All Statuses</SelectItem>
               {Object.entries(STATUS_CONFIG).map(([k, v]) => (
                 <SelectItem key={k} value={k}>{v.label}</SelectItem>
