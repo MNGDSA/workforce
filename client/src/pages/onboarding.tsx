@@ -967,11 +967,6 @@ function ContractTemplatesTab() {
                   <p className="text-sm whitespace-pre-wrap leading-relaxed italic">{replaceVariables(previewTemplate.footerText)}</p>
                 </div>
               )}
-              {(previewTemplate as any).documentFooter && (
-                <div className="border-t border-gray-200 mt-6 pt-3">
-                  <p className="text-[10px] text-gray-400 text-center whitespace-pre-wrap leading-relaxed">{(previewTemplate as any).documentFooter}</p>
-                </div>
-              )}
               <div className="border-t pt-4 grid grid-cols-2 gap-8 mt-6">
                 <div>
                   <p className="text-xs text-gray-500 mb-8">Employer Signature</p>
@@ -982,6 +977,11 @@ function ContractTemplatesTab() {
                   <div className="border-b border-gray-300" />
                 </div>
               </div>
+              {(previewTemplate as any).documentFooter && (
+                <div className="border-t border-gray-200 mt-10 pt-3">
+                  <p className="text-[10px] text-gray-400 text-center whitespace-pre-wrap leading-relaxed">{(previewTemplate as any).documentFooter}</p>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

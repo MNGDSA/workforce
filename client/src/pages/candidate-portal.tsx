@@ -1029,11 +1029,6 @@ export default function CandidatePortal() {
                   </div>
                 );
               })()}
-              {contractPreview.template?.documentFooter && (
-                <div className="border-t border-gray-200 mt-6 pt-3">
-                  <p className="text-[10px] text-gray-400 text-center whitespace-pre-wrap leading-relaxed">{contractPreview.template.documentFooter}</p>
-                </div>
-              )}
               {contractIsSigned && activeContract?.signedAt && (
                 <div className="border-t pt-4 text-center">
                   <p className="text-sm font-bold text-emerald-700">Digitally Signed</p>
@@ -1041,6 +1036,11 @@ export default function CandidatePortal() {
                     Signed on {new Date(activeContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} at{" "}
                     {new Date(activeContract.signedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
                   </p>
+                </div>
+              )}
+              {contractPreview.template?.documentFooter && (
+                <div className="border-t border-gray-200 mt-10 pt-3">
+                  <p className="text-[10px] text-gray-400 text-center whitespace-pre-wrap leading-relaxed">{contractPreview.template.documentFooter}</p>
                 </div>
               )}
             </div>
