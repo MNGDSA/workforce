@@ -122,9 +122,9 @@ export default function DocumentationPage() {
                 <div>
                   <h2 className="text-white font-display font-bold text-xl">Welcome to Workforce</h2>
                   <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
-                    Workforce is a seasonal hiring management system built for large-scale operations in Saudi Arabia.
+                    Workforce is an event-based hiring management system built for large-scale operations in Saudi Arabia.
                     It covers the entire hiring lifecycle — from posting jobs and screening candidates to scheduling interviews,
-                    managing workforce placements, and tracking seasonal campaign progress.
+                    managing workforce placements, and tracking event campaign progress.
                   </p>
                   <div className="flex gap-2 mt-3 flex-wrap">
                     <Badge className="bg-primary/10 text-primary border-0">Saudi Arabia Ready</Badge>

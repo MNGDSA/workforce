@@ -4,9 +4,9 @@
 
 **Client**: Luxury Carts Company Ltd — operates golf cart transportation inside Masjid Al-Haram (Makkah).
 
-**Problem**: During Ramadan and Hajj seasons, the company needs to rapidly recruit 5,000–8,000+ temporary workers. Traditional paperwork is chaotic and unscalable at this volume.
+**Problem**: During Ramadan and Hajj events, the company needs to rapidly recruit 5,000–8,000+ temporary workers. Traditional paperwork is chaotic and unscalable at this volume.
 
-**Solution**: This app digitizes the entire seasonal hiring lifecycle — from candidate intake through onboarding to workforce management — with a dual-interface system (admin back-office + candidate self-service portal).
+**Solution**: This app digitizes the entire event-based hiring lifecycle — from candidate intake through onboarding to workforce management — with a dual-interface system (admin back-office + candidate self-service portal).
 
 ### Two Recruitment Tracks (Same Pipeline)
 

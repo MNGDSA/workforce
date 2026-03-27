@@ -321,7 +321,7 @@ function CreateGroupDialog({
             Create Workforce Group
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Define a new group of seasonal workers for deployment.
+            Define a new group of event workers for deployment.
           </DialogDescription>
         </DialogHeader>
 

@@ -296,7 +296,7 @@ export const jobPostings = pgTable(
     location: text("location"),
     region: text("region"),
     department: text("department"),
-    type: text("type").notNull().default("seasonal"),
+    type: text("type").notNull().default("event_based"),
     salaryMin: decimal("salary_min", { precision: 10, scale: 2 }),
     salaryMax: decimal("salary_max", { precision: 10, scale: 2 }),
     openings: integer("openings").notNull().default(1),

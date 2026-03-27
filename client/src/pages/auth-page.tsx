@@ -490,10 +490,10 @@ export default function AuthPage() {
         <div className="relative z-20 max-w-lg p-12 backdrop-blur-md bg-background/30 border border-white/10 rounded-sm shadow-2xl animate-in slide-in-from-right-8 duration-1000 fade-in delay-200">
           <div className="w-12 h-1 bg-primary mb-6" />
           <h2 className="font-display text-3xl font-bold text-white mb-4 leading-tight">
-            Seamlessly Manage Your Seasonal Workforce
+            Seamlessly Manage Your Event Workforce
           </h2>
           <p className="text-white/80 text-lg leading-relaxed">
-            Advanced scheduling, automated onboarding, and real-time performance tracking for high-volume hiring seasons.
+            Advanced scheduling, automated onboarding, and real-time performance tracking for high-volume hiring events.
           </p>
 
           <div className="grid grid-cols-2 gap-4 mt-8 pt-8 border-t border-white/10">

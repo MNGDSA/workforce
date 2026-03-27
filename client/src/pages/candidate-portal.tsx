@@ -758,7 +758,7 @@ export default function CandidatePortal() {
                     <FileText className="h-8 w-8 text-primary" />
                     <div>
                       <div className="text-sm font-medium text-white flex items-center gap-2">
-                        Seasonal_Agreement.pdf
+                        Employment_Agreement.pdf
                         {isSigned && <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-500 text-[10px] h-4 py-0 border-0">Signed</Badge>}
                       </div>
                       <div className="text-xs text-muted-foreground">{isSigned ? "Signed today" : "Requires your signature"}</div>
