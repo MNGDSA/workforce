@@ -94,7 +94,7 @@ const statusStyles: Record<string, string> = {
 };
 
 const createSeasonSchema = z.object({
-  name: z.string().min(3, "Season name is required"),
+  name: z.string().min(3, "Event name is required"),
   description: z.string().optional(),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
@@ -140,12 +140,12 @@ function CreateSeasonDialog({
       apiRequest("POST", "/api/seasons", data).then((r) => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/seasons"] });
-      toast({ title: "Season created", description: "The season has been added successfully." });
+      toast({ title: "Event created", description: "The event has been added successfully." });
       form.reset();
       onOpenChange(false);
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to create season.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to create event.", variant: "destructive" });
     },
   });
 
@@ -157,24 +157,24 @@ function CreateSeasonDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="text-white font-display text-xl">Create Season</DialogTitle>
+          <DialogTitle className="text-white font-display text-xl">Create Event</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 pt-1">
 
-            {/* Season Name */}
+            {/* Event Name */}
             <FormField
               control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                    Season Name <span className="text-primary">*</span>
+                    Event Name <span className="text-primary">*</span>
                   </FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="e.g. Hajj Season 2026"
+                      placeholder="e.g. Hajj 2026"
                       className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
                       data-testid="input-season-name"
                       {...field}
@@ -196,7 +196,7 @@ function CreateSeasonDialog({
                   </FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Brief overview of this season's scope and goals..."
+                      placeholder="Brief overview of this event's scope and goals..."
                       rows={3}
                       className="bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm resize-none"
                       data-testid="textarea-season-description"
@@ -286,7 +286,7 @@ function CreateSeasonDialog({
                 ) : (
                   <Plus className="mr-2 h-4 w-4" />
                 )}
-                Create Season
+                Create Event
               </Button>
             </DialogFooter>
           </form>
@@ -380,7 +380,7 @@ function CreateSMPContractDialog({
       <DialogContent className="max-w-2xl bg-card border-border">
         <DialogHeader>
           <DialogTitle className="text-white font-display text-xl">Create SMP Contract</DialogTitle>
-          <p className="text-muted-foreground text-sm">Seasonal Manpower Plan — define contractor terms and workforce allocation.</p>
+          <p className="text-muted-foreground text-sm">Manpower Plan — define contractor terms and workforce allocation.</p>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -530,8 +530,8 @@ const TEMPLATE_HEADERS = [
 ];
 
 const TEMPLATE_ROWS: string[][] = [
-  ["Ahmed Al-Ghamdi", "أحمد الغامدي", "1012345678", "0501234567", "ahmed@example.com", "Makkah", "Saudi", "Ramadan 2026 Seasonal Jobs", ""],
-  ["Sara Al-Zahrani", "سارة الزهراني", "1087654321", "0557654321", "sara@example.com", "Jeddah", "Saudi", "Hajj 2026 Seasonal Jobs", "BLS certified"],
+  ["Ahmed Al-Ghamdi", "أحمد الغامدي", "1012345678", "0501234567", "ahmed@example.com", "Makkah", "Saudi", "Ramadan 2026", ""],
+  ["Sara Al-Zahrani", "سارة الزهراني", "1087654321", "0557654321", "sara@example.com", "Jeddah", "Saudi", "Hajj 2026", "BLS certified"],
 ];
 
 function parseCSV(text: string): CandidateRow[] {
@@ -872,8 +872,8 @@ export default function SeasonsPage() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white tracking-tight">Seasons Management</h1>
-            <p className="text-muted-foreground mt-1">Plan and track your seasonal workforce requirements.</p>
+            <h1 className="text-3xl font-display font-bold text-white tracking-tight">Events Management</h1>
+            <p className="text-muted-foreground mt-1">Plan and track your event workforce requirements.</p>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -891,7 +891,7 @@ export default function SeasonsPage() {
               onClick={() => setCreateOpen(true)}
             >
               <Plus className="mr-2 h-4 w-4" />
-              Create Season
+              Create Event
             </Button>
           </div>
         </div>
@@ -917,7 +917,7 @@ export default function SeasonsPage() {
           </Card>
           <Card className="bg-card border-border shadow-sm border-l-4 border-l-primary">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Seasons</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Events</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-seasons">{seasons.length}</div>
@@ -949,7 +949,7 @@ export default function SeasonsPage() {
           <div className="relative flex-1 w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
-              placeholder="Search seasons by name or region..."
+              placeholder="Search events by name or region..."
               className="pl-10 h-12 bg-muted/30 border-border focus-visible:ring-primary/20 text-base"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -971,7 +971,7 @@ export default function SeasonsPage() {
         {/* Seasons Table */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-lg font-display text-white">Seasons</CardTitle>
+            <CardTitle className="text-lg font-display text-white">Events</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
@@ -981,14 +981,14 @@ export default function SeasonsPage() {
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Calendar className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                <p className="text-muted-foreground font-medium">No seasons found</p>
-                <p className="text-muted-foreground/60 text-sm mt-1">Create your first season to get started</p>
+                <p className="text-muted-foreground font-medium">No events found</p>
+                <p className="text-muted-foreground/60 text-sm mt-1">Create your first event to get started</p>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="text-muted-foreground">Season Name</TableHead>
+                    <TableHead className="text-muted-foreground">Event Name</TableHead>
                     <TableHead className="text-muted-foreground hidden md:table-cell">
                       <span className="flex items-center">
                         Expiry
@@ -1055,7 +1055,7 @@ export default function SeasonsPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-44">
                               <DropdownMenuItem>View Details</DropdownMenuItem>
-                              <DropdownMenuItem>Edit Season</DropdownMenuItem>
+                              <DropdownMenuItem>Edit Event</DropdownMenuItem>
                               <DropdownMenuSeparator />
                               {season.status === "upcoming" && (
                                 <DropdownMenuItem onClick={() => updateStatus.mutate({ id: season.id, status: "active" })}>

@@ -1,7 +1,7 @@
-# Seasonal Workforce Hiring Management System
+# Event Workforce Hiring Management System
 
 ## Overview
-A full-stack seasonal job hiring management platform built for Saudi Arabia operations. Designed to handle 70,000+ candidates at MAANG-scale with dual interfaces: an admin back-office and a candidate portal.
+A full-stack event-based job hiring management platform built for Saudi Arabia operations. Designed to handle 70,000+ candidates at MAANG-scale with dual interfaces: an admin back-office and a candidate portal.
 
 ## Architecture
 

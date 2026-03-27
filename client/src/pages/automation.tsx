@@ -215,7 +215,7 @@ const PIPELINE_TEMPLATES: RuleTemplate[] = [
     iconColor: "text-purple-400",
     iconBg: "bg-purple-500/10",
     title: "Contract Renewal Prompt",
-    description: "Notify HR 14 days before a seasonal worker's contract expires to prompt renewal or offboarding.",
+    description: "Notify HR 14 days before a worker's contract expires to prompt renewal or offboarding.",
     when: "workforce.contract_expiry_14d",
     then: "notify.hr_manager",
     tag: "Alert",

@@ -125,7 +125,7 @@ const PERMISSIONS = [
   { label: "Schedule & conduct interviews",    super_admin: true,  admin: true,  hr_manager: true,  recruiter: true,  interviewer: true,  viewer: false },
   { label: "Access Talent Pool",               super_admin: true,  admin: true,  hr_manager: true,  recruiter: true,  interviewer: false, viewer: true  },
   { label: "Manage workforce records",         super_admin: true,  admin: true,  hr_manager: true,  recruiter: false, interviewer: false, viewer: false },
-  { label: "Manage seasons & SMP contracts",   super_admin: true,  admin: true,  hr_manager: true,  recruiter: false, interviewer: false, viewer: false },
+  { label: "Manage events & SMP contracts",   super_admin: true,  admin: true,  hr_manager: true,  recruiter: false, interviewer: false, viewer: false },
   { label: "Send notifications",               super_admin: true,  admin: true,  hr_manager: true,  recruiter: true,  interviewer: false, viewer: false },
   { label: "View reports & analytics",         super_admin: true,  admin: true,  hr_manager: true,  recruiter: false, interviewer: false, viewer: true  },
   { label: "Manage users & roles",             super_admin: true,  admin: false, hr_manager: false, recruiter: false, interviewer: false, viewer: false },

@@ -255,10 +255,10 @@ function CreateJobDialog({
               </div>
             </div>
 
-            {/* ── Location & Season ── */}
+            {/* ── Location & Event ── */}
             <div className="space-y-4">
               <div className="w-full h-px bg-border" />
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Location & Season</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Location & Event</p>
 
               <div className="grid grid-cols-2 gap-4">
                 <FormField
@@ -308,11 +308,11 @@ function CreateJobDialog({
                   name="seasonId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Hiring Season</FormLabel>
+                      <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Hiring Event</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger className="h-10 bg-muted/30 border-border focus:ring-primary/20 rounded-sm" data-testid="select-job-season">
-                            <SelectValue placeholder="Select season" />
+                            <SelectValue placeholder="Select event" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>

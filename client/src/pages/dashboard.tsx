@@ -87,7 +87,7 @@ export default function Dashboard() {
       sub: "Active postings",
     },
     {
-      title: "Active Seasons",
+      title: "Active Events",
       value: dashStats ? dashStats.activeSeasons.toLocaleString() : "—",
       icon: TrendingUp,
       color: "text-purple-500",
@@ -108,7 +108,7 @@ export default function Dashboard() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-display font-bold text-white tracking-tight">Dashboard</h1>
-            <p className="text-muted-foreground mt-1">Overview of your seasonal hiring pipeline and workforce status.</p>
+            <p className="text-muted-foreground mt-1">Overview of your event hiring pipeline and workforce status.</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" className="h-9 border-border bg-background">

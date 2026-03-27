@@ -604,7 +604,7 @@ export default function CandidatePortal() {
     const pdf = new jsPDF();
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(20);
-    pdf.text("Seasonal Employment Agreement", 20, 30);
+    pdf.text("Employment Agreement", 20, 30);
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(12);
     pdf.text("Employer: WORKFORCE", 20, 50);
@@ -930,7 +930,7 @@ export default function CandidatePortal() {
           <DialogHeader>
             <DialogTitle className="text-white">Sign Document</DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              Draw your signature below to accept the Seasonal Employment Agreement.
+              Draw your signature below to accept the Employment Agreement.
             </DialogDescription>
           </DialogHeader>
           <div className="py-2">

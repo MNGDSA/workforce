@@ -376,7 +376,7 @@ function QuestionSetEditor({
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Makkah Season Screening"
+                placeholder="e.g. Makkah Event Screening"
                 className="bg-muted/20 border-border mt-1.5"
                 data-testid="input-qs-name"
               />

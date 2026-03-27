@@ -112,7 +112,7 @@ const INITIAL_GROUPS: WorkforceGroup[] = [
     progress: 100,
     region: "Makkah",
     department: "Medical",
-    seasonName: "Umrah Season",
+    seasonName: "Umrah Event",
   },
   {
     id: "WG-004",
@@ -408,19 +408,19 @@ function CreateGroupDialog({
                 )} />
               </div>
 
-              {/* Season & Region */}
+              {/* Event & Region */}
               <div className="grid grid-cols-2 gap-3">
                 <FormField control={form.control} name="seasonId" render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Season</FormLabel>
+                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Event</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value || "none"}>
                       <FormControl>
                         <SelectTrigger className="bg-muted/30 border-border" data-testid="select-season">
-                          <SelectValue placeholder="Select season…" />
+                          <SelectValue placeholder="Select event…" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="none">No Season</SelectItem>
+                        <SelectItem value="none">No Event</SelectItem>
                         {seasons.map((s) => (
                           <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                         ))}

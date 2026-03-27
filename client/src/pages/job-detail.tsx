@@ -43,7 +43,7 @@ function typeLabel(type: string) {
   const map: Record<string, string> = {
     full_time: "Full Time",
     part_time: "Part Time",
-    seasonal: "Seasonal",
+    seasonal: "Event-based",
     contract: "Contract",
   };
   return map[type] ?? type;
@@ -289,7 +289,7 @@ export default function JobDetailPage() {
             </div>
             <div>
               <p className="font-bold text-white">WORKFORCE</p>
-              <p className="text-sm text-muted-foreground">Seasonal employment · Kingdom of Saudi Arabia</p>
+              <p className="text-sm text-muted-foreground">Event-based employment · Kingdom of Saudi Arabia</p>
             </div>
           </CardContent>
         </Card>

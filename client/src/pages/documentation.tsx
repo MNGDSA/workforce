@@ -145,11 +145,11 @@ export default function DocumentationPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {[
-                  { icon: LayoutDashboard, label: "Dashboard", desc: "Overview of active seasons, open positions, scheduled interviews, and recent applications. Quick-action buttons for common tasks." },
-                  { icon: CalendarRange, label: "Seasons", desc: "Create and manage hiring seasons (e.g. Hajj Season, Ramadan). Each season tracks its own timeline, headcount, and status." },
-                  { icon: Briefcase, label: "Job Applications", desc: "Post individual jobs or consolidated applications linked to a season. Filter by status (Active, Draft, Ended) and manage postings." },
+                  { icon: LayoutDashboard, label: "Dashboard", desc: "Overview of active events, open positions, scheduled interviews, and recent applications. Quick-action buttons for common tasks." },
+                  { icon: CalendarRange, label: "Events & SMP", desc: "Create and manage hiring events (e.g. Hajj 2026, Ramadan). Each event tracks its own timeline, headcount, and status." },
+                  { icon: Briefcase, label: "Job Applications", desc: "Post individual jobs or consolidated applications linked to an event. Filter by status (Active, Draft, Ended) and manage postings." },
                   { icon: PhoneCall, label: "Interview Calls", desc: "Track scheduled interviews, their type (Video, Phone, In-Person), interviewer assignments, and current status." },
-                  { icon: Users, label: "Workforce", desc: "View active workforce placements. See who is hired, their season assignment, and shift coverage." },
+                  { icon: Users, label: "Workforce", desc: "View active workforce placements. See who is hired, their event assignment, and shift coverage." },
                   { icon: Search, label: "Talent", desc: "Full candidate database with search, filters, and pagination. Supports 70,000+ candidates with fast server-side queries." },
                   { icon: Workflow, label: "Rules & Automation", desc: "Configure automated triggers — e.g. send SMS when a candidate applies, or flag incomplete profiles." },
                   { icon: Bell, label: "Notification Center", desc: "Manage SMS integrations (GoInfinito). Configure credentials and test connections." },
@@ -168,10 +168,10 @@ export default function DocumentationPage() {
 
             {/* How to post a job */}
             <DocCard>
-              <SectionHeading icon={Briefcase} title="How to Post a Job" description="Create a single job or a consolidated seasonal application." />
+              <SectionHeading icon={Briefcase} title="How to Post a Job" description="Create a single job or a consolidated event application." />
               <div className="space-y-4">
                 <Step number={1} title="Go to Job Applications" description="Click 'Job Applications' in the left sidebar." />
-                <Step number={2} title="Choose posting type" description="Click 'Post Job' for a single standalone position, or 'Post Consolidated Jobs' to link multiple roles to a season." />
+                <Step number={2} title="Choose posting type" description="Click 'Post Job' for a single standalone position, or 'Post Consolidated Jobs' to link multiple roles to an event." />
                 <Step number={3} title="Fill in the form" description="Enter the job title, type (Full Time / Part Time), location, region, salary range, deadline, description, and requirements." />
                 <Step number={4} title="Set status" description="Choose 'Draft' to save without publishing, or 'Active' to publish immediately and accept applications." />
                 <Step number={5} title="Submit" description="Click 'Save Draft' or 'Publish Now'. The posting appears in the table immediately." />
@@ -180,13 +180,13 @@ export default function DocumentationPage() {
 
             {/* How to create a season */}
             <DocCard>
-              <SectionHeading icon={CalendarRange} title="How to Create a Season" description="Seasons group related job postings under one campaign." />
+              <SectionHeading icon={CalendarRange} title="How to Create an Event" description="Events group related job postings under one campaign." />
               <div className="space-y-4">
-                <Step number={1} title="Go to Seasons" description="Click 'Seasons' in the sidebar." />
-                <Step number={2} title="Click 'Create Season'" description="Press the green 'Create Season' button in the top right." />
-                <Step number={3} title="Name and describe the season" description="Enter a clear name (e.g. 'Hajj Season 1446') and a short description of scope." />
-                <Step number={4} title="Set the timeline" description="Choose start and end dates. These define the active window for this season's hiring." />
-                <Step number={5} title="Submit" description="Click 'Create Season'. It will appear as 'Upcoming' and can be activated when ready." />
+                <Step number={1} title="Go to Events & SMP" description="Click 'Events & SMP' in the sidebar." />
+                <Step number={2} title="Click 'Create Event'" description="Press the green 'Create Event' button in the top right." />
+                <Step number={3} title="Name and describe the event" description="Enter a clear name (e.g. 'Hajj 1446') and a short description of scope." />
+                <Step number={4} title="Set the timeline" description="Choose start and end dates. These define the active window for this event's hiring." />
+                <Step number={5} title="Submit" description="Click 'Create Event'. It will appear as 'Upcoming' and can be activated when ready." />
               </div>
             </DocCard>
 
@@ -217,26 +217,26 @@ export default function DocumentationPage() {
                       <tr className="border-b border-border">
                         <th className="text-left text-muted-foreground font-medium pb-3 pr-4">Role</th>
                         <th className="text-left text-muted-foreground font-medium pb-3 pr-4">Jobs</th>
-                        <th className="text-left text-muted-foreground font-medium pb-3 pr-4">Seasons</th>
+                        <th className="text-left text-muted-foreground font-medium pb-3 pr-4">Events</th>
                         <th className="text-left text-muted-foreground font-medium pb-3 pr-4">Candidates</th>
                         <th className="text-left text-muted-foreground font-medium pb-3">Settings</th>
                       </tr>
                     </thead>
                     <tbody className="space-y-2">
                       {[
-                        { role: "super_admin", jobs: "Full", seasons: "Full", candidates: "Full", settings: "Full" },
-                        { role: "admin", jobs: "Full", seasons: "Full", candidates: "Full", settings: "Full" },
-                        { role: "hr_manager", jobs: "Create/Edit", seasons: "Create/Edit", candidates: "View/Edit", settings: "View" },
-                        { role: "recruiter", jobs: "Create", seasons: "View", candidates: "View/Edit", settings: "None" },
-                        { role: "interviewer", jobs: "View", seasons: "View", candidates: "View", settings: "None" },
-                        { role: "viewer", jobs: "View", seasons: "View", candidates: "View", settings: "None" },
+                        { role: "super_admin", jobs: "Full", events: "Full", candidates: "Full", settings: "Full" },
+                        { role: "admin", jobs: "Full", events: "Full", candidates: "Full", settings: "Full" },
+                        { role: "hr_manager", jobs: "Create/Edit", events: "Create/Edit", candidates: "View/Edit", settings: "View" },
+                        { role: "recruiter", jobs: "Create", events: "View", candidates: "View/Edit", settings: "None" },
+                        { role: "interviewer", jobs: "View", events: "View", candidates: "View", settings: "None" },
+                        { role: "viewer", jobs: "View", events: "View", candidates: "View", settings: "None" },
                       ].map((r) => (
                         <tr key={r.role} className="border-b border-border/30">
                           <td className="py-2.5 pr-4">
                             <Badge variant="outline" className="font-mono text-xs border-border">{r.role}</Badge>
                           </td>
                           <td className="py-2.5 pr-4 text-muted-foreground">{r.jobs}</td>
-                          <td className="py-2.5 pr-4 text-muted-foreground">{r.seasons}</td>
+                          <td className="py-2.5 pr-4 text-muted-foreground">{r.events}</td>
                           <td className="py-2.5 pr-4 text-muted-foreground">{r.candidates}</td>
                           <td className="py-2.5 text-muted-foreground">{r.settings}</td>
                         </tr>
@@ -324,11 +324,11 @@ export default function DocumentationPage() {
                   {[
                     { table: "users", purpose: "Admin staff accounts + auth", notes: "Roles: super_admin, admin, hr_manager, recruiter, interviewer, viewer, candidate" },
                     { table: "candidates", purpose: "70k+ candidate profiles", notes: "Indexes on status+city, phone, national_id, name, rating. Bulk insert via 1000-row batches." },
-                    { table: "seasons", purpose: "Seasonal campaigns (Hajj, Ramadan…)", notes: "Status enum: upcoming → active → closed → archived" },
-                    { table: "job_postings", purpose: "Job openings", notes: "Linked to seasons via season_id FK. Status: draft → active → filled → closed" },
+                    { table: "seasons", purpose: "Event campaigns (Hajj, Ramadan…)", notes: "Status enum: upcoming → active → closed → archived" },
+                    { table: "job_postings", purpose: "Job openings", notes: "Linked to events via season_id FK. Status: draft → active → filled → closed" },
                     { table: "applications", purpose: "Candidate ↔ Job links", notes: "Unique constraint on (candidate_id, job_id). Status pipeline." },
                     { table: "interviews", purpose: "Scheduled interview calls", notes: "Linked to candidate + job_posting. Type: video, phone, in_person" },
-                    { table: "workforce", purpose: "Active placements", notes: "Linked to candidate + season. Tracks check-in/check-out." },
+                    { table: "workforce", purpose: "Active placements", notes: "Linked to candidate + event. Tracks check-in/check-out." },
                     { table: "automation_rules", purpose: "Trigger-action rules", notes: "Stored in DB, toggled on/off. Executed server-side." },
                     { table: "notifications", purpose: "SMS/email/in-app log", notes: "Status: pending → sent → failed → read" },
                   ].map(({ table, purpose, notes }) => (
@@ -353,9 +353,9 @@ export default function DocumentationPage() {
                     { method: "GET", path: "/api/dashboard/stats", desc: "Aggregate counts for dashboard metrics" },
                     { method: "GET", path: "/api/candidates", desc: "Paginated candidate list. Query: page, limit, search, status, city, nationality, sortBy, sortOrder" },
                     { method: "POST", path: "/api/candidates/bulk", desc: "Bulk insert up to 70,000 candidates (batched in 1000-row chunks)" },
-                    { method: "GET", path: "/api/seasons", desc: "All seasons" },
-                    { method: "POST", path: "/api/seasons", desc: "Create season" },
-                    { method: "PATCH", path: "/api/seasons/:id", desc: "Update season fields (partial)" },
+                    { method: "GET", path: "/api/seasons", desc: "All events" },
+                    { method: "POST", path: "/api/seasons", desc: "Create event" },
+                    { method: "PATCH", path: "/api/seasons/:id", desc: "Update event fields (partial)" },
                     { method: "GET", path: "/api/jobs", desc: "Job postings. Query: status, seasonId" },
                     { method: "POST", path: "/api/jobs", desc: "Create job posting" },
                     { method: "GET", path: "/api/applications/stats", desc: "Application pipeline counts" },

@@ -136,7 +136,7 @@ export default function PayrollPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: "Total Payroll (MTD)", value: "SAR 16.69M", icon: Banknote, color: "text-primary", sub: "+12% vs last month" },
-            { label: "Employees on Payroll", value: "3,090", icon: Users, color: "text-blue-400", sub: "Across 2 active seasons" },
+            { label: "Employees on Payroll", value: "3,090", icon: Users, color: "text-blue-400", sub: "Across 2 active events" },
             { label: "Pending Payments", value: "SAR 7.44M", icon: Clock, color: "text-amber-400", sub: "April run not yet processed" },
             { label: "Completed Runs", value: "2", icon: CheckCircle2, color: "text-emerald-400", sub: "SAR 10.8M disbursed" },
           ].map((stat) => (
@@ -174,7 +174,7 @@ export default function PayrollPage() {
                 <TableRow className="border-border/50 hover:bg-transparent">
                   <TableHead className="text-xs uppercase tracking-wider text-muted-foreground font-medium pl-6">Run ID</TableHead>
                   <TableHead className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Period</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Season</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Event</TableHead>
                   <TableHead className="text-xs uppercase tracking-wider text-muted-foreground font-medium text-right">Employees</TableHead>
                   <TableHead className="text-xs uppercase tracking-wider text-muted-foreground font-medium text-right">Total (SAR)</TableHead>
                   <TableHead className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Due Date</TableHead>
@@ -245,7 +245,7 @@ export default function PayrollPage() {
                 <TableRow className="border-border/50 hover:bg-transparent">
                   <TableHead className="text-xs uppercase tracking-wider text-muted-foreground font-medium pl-6">Employee</TableHead>
                   <TableHead className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Role</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Season</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Event</TableHead>
                   <TableHead className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Bank</TableHead>
                   <TableHead className="text-xs uppercase tracking-wider text-muted-foreground font-medium text-right">Salary (SAR)</TableHead>
                   <TableHead className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Status</TableHead>
