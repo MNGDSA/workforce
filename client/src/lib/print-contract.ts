@@ -51,6 +51,10 @@ export function printContract(title: string) {
     .mb-8 { margin-bottom: 2rem; }
     img { max-height: 64px; object-fit: contain; }
     h3 { font-size: 0.875rem; font-weight: 700; margin-bottom: 0.25rem; }
+    h4 { font-size: 0.875rem; font-weight: 700; margin-bottom: 0.125rem; }
+    .ml-6 { margin-left: 1.5rem; }
+    .mt-2 { margin-top: 0.5rem; }
+    .mb-0\\.5 { margin-bottom: 0.125rem; }
     .text-gray-500 { color: #6b7280; }
     .text-gray-400 { color: #9ca3af; }
     .border-gray-300 { border-color: #d1d5db; }

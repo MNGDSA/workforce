@@ -1012,6 +1012,20 @@ export default function CandidatePortal() {
                     <div key={idx}>
                       <h3 className="font-bold text-sm mb-1">Article {idx + 1}: {article.title}</h3>
                       <p className="text-sm whitespace-pre-wrap leading-relaxed">{body}</p>
+                      {Array.isArray(article.subArticles) && article.subArticles.map((sub: any, subIdx: number) => {
+                        let subBody = sub.body || "";
+                        if (contractPreview.variables) {
+                          Object.entries(contractPreview.variables).forEach(([key, val]) => {
+                            subBody = subBody.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(val));
+                          });
+                        }
+                        return (
+                          <div key={subIdx} className="ml-6 mt-2">
+                            <h4 className="font-bold text-sm mb-0.5">{idx + 1}.{subIdx + 1} {sub.title}</h4>
+                            <p className="text-sm whitespace-pre-wrap leading-relaxed">{subBody}</p>
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })}

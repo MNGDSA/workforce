@@ -369,8 +369,8 @@ function ContractTemplatesTab() {
   const [formDocumentFooter, setFormDocumentFooter] = useState("");
   const [formLogoAlignment, setFormLogoAlignment] = useState<"left" | "center" | "right">("center");
   const [formPreamble, setFormPreamble] = useState("");
-  const [formArticles, setFormArticles] = useState<{ title: string; body: string }[]>([{ title: "", body: "" }]);
-  const lastFocusedTextarea = useRef<{ type: "preamble" } | { type: "article"; idx: number } | null>(null);
+  const [formArticles, setFormArticles] = useState<{ title: string; body: string; subArticles?: { title: string; body: string }[] }[]>([{ title: "", body: "", subArticles: [] }]);
+  const lastFocusedTextarea = useRef<{ type: "preamble" } | { type: "article"; idx: number } | { type: "subarticle"; idx: number; subIdx: number } | null>(null);
   const [formStatus, setFormStatus] = useState<"draft" | "active">("draft");
   const logoInputRef = useRef<HTMLInputElement>(null);
 
@@ -447,7 +447,7 @@ function ContractTemplatesTab() {
       setFormDocumentFooter((template as any).documentFooter || "");
       setFormLogoAlignment((template as any).logoAlignment || "center");
       setFormPreamble((template as any).preamble || "");
-      setFormArticles(Array.isArray(template.articles) && template.articles.length > 0 ? template.articles : [{ title: "", body: "" }]);
+      setFormArticles(Array.isArray(template.articles) && template.articles.length > 0 ? template.articles.map((a: any) => ({ title: a.title || "", body: a.body || "", subArticles: Array.isArray(a.subArticles) ? a.subArticles : [] })) : [{ title: "", body: "", subArticles: [] }]);
       setFormStatus(template.status === "archived" ? "draft" : template.status);
     } else {
       setEditingTemplate(null);
@@ -459,7 +459,7 @@ function ContractTemplatesTab() {
       setFormDocumentFooter("");
       setFormLogoAlignment("center");
       setFormPreamble("");
-      setFormArticles([{ title: "", body: "" }]);
+      setFormArticles([{ title: "", body: "", subArticles: [] }]);
       setFormStatus("draft");
     }
     lastFocusedTextarea.current = null;
@@ -502,7 +502,7 @@ function ContractTemplatesTab() {
   }
 
   function addArticle() {
-    setFormArticles(prev => [...prev, { title: "", body: "" }]);
+    setFormArticles(prev => [...prev, { title: "", body: "", subArticles: [] }]);
   }
 
   function removeArticle(idx: number) {
@@ -523,6 +523,27 @@ function ContractTemplatesTab() {
     setFormArticles(prev => prev.map((a, i) => i === idx ? { ...a, [field]: value } : a));
   }
 
+  function addSubArticle(articleIdx: number) {
+    setFormArticles(prev => prev.map((a, i) => {
+      if (i !== articleIdx) return a;
+      return { ...a, subArticles: [...(a.subArticles || []), { title: "", body: "" }] };
+    }));
+  }
+
+  function removeSubArticle(articleIdx: number, subIdx: number) {
+    setFormArticles(prev => prev.map((a, i) => {
+      if (i !== articleIdx) return a;
+      return { ...a, subArticles: (a.subArticles || []).filter((_, si) => si !== subIdx) };
+    }));
+  }
+
+  function updateSubArticle(articleIdx: number, subIdx: number, field: "title" | "body", value: string) {
+    setFormArticles(prev => prev.map((a, i) => {
+      if (i !== articleIdx) return a;
+      return { ...a, subArticles: (a.subArticles || []).map((s, si) => si === subIdx ? { ...s, [field]: value } : s) };
+    }));
+  }
+
   function insertVariableAtCursor(variable: string) {
     const target = lastFocusedTextarea.current;
     if (!target) {
@@ -533,7 +554,9 @@ function ContractTemplatesTab() {
     const el = document.querySelector(
       target.type === "preamble"
         ? `[data-testid="input-preamble"]`
-        : `[data-testid="input-article-body-${target.idx}"]`
+        : target.type === "subarticle"
+          ? `[data-testid="input-subarticle-body-${target.idx}-${target.subIdx}"]`
+          : `[data-testid="input-article-body-${target.idx}"]`
     ) as HTMLTextAreaElement | null;
 
     const start = el?.selectionStart ?? 0;
@@ -543,6 +566,17 @@ function ContractTemplatesTab() {
       const before = formPreamble.slice(0, start);
       const after = formPreamble.slice(end);
       setFormPreamble(before + variable + after);
+    } else if (target.type === "subarticle") {
+      const { idx, subIdx } = target;
+      setFormArticles(prev => prev.map((a, i) => {
+        if (i !== idx) return a;
+        return { ...a, subArticles: (a.subArticles || []).map((s, si) => {
+          if (si !== subIdx) return s;
+          const before = s.body.slice(0, start);
+          const after = s.body.slice(end);
+          return { ...s, body: before + variable + after };
+        })};
+      }));
     } else {
       setFormArticles(prev => prev.map((a, i) => {
         if (i !== target.idx) return a;
@@ -902,6 +936,41 @@ function ContractTemplatesTab() {
                       className="bg-zinc-800 border-zinc-700 text-sm min-h-20"
                       data-testid={`input-article-body-${idx}`}
                     />
+                    {(article.subArticles || []).map((sub, subIdx) => (
+                      <div key={subIdx} className="ml-8 border-l-2 border-zinc-700 pl-3 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-zinc-600 font-mono w-12 shrink-0">{idx + 1}.{subIdx + 1}</span>
+                          <Input
+                            value={sub.title}
+                            onChange={e => updateSubArticle(idx, subIdx, "title", e.target.value)}
+                            placeholder="Sub-article title"
+                            className="bg-zinc-800 border-zinc-700 h-7 text-xs flex-1"
+                            data-testid={`input-subarticle-title-${idx}-${subIdx}`}
+                          />
+                          <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500 hover:text-red-400" onClick={() => removeSubArticle(idx, subIdx)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <Textarea
+                          value={sub.body}
+                          onChange={e => updateSubArticle(idx, subIdx, "body", e.target.value)}
+                          onFocus={() => { lastFocusedTextarea.current = { type: "subarticle", idx, subIdx }; }}
+                          placeholder="Sub-article body — use {{variables}} for auto-filled data"
+                          className="bg-zinc-800 border-zinc-700 text-xs min-h-16"
+                          data-testid={`input-subarticle-body-${idx}-${subIdx}`}
+                        />
+                      </div>
+                    ))}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs text-zinc-500 hover:text-zinc-300 ml-8"
+                      onClick={() => addSubArticle(idx)}
+                      data-testid={`button-add-subarticle-${idx}`}
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add Sub-Article {idx + 1}.{(article.subArticles || []).length + 1}
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -981,6 +1050,12 @@ function ContractTemplatesTab() {
                   <div key={idx}>
                     <h3 className="font-bold text-sm mb-1">Article {idx + 1}: {article.title}</h3>
                     <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVariables(article.body)}</p>
+                    {Array.isArray(article.subArticles) && article.subArticles.map((sub: any, subIdx: number) => (
+                      <div key={subIdx} className="ml-6 mt-2">
+                        <h4 className="font-bold text-sm mb-0.5">{idx + 1}.{subIdx + 1} {sub.title}</h4>
+                        <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVariables(sub.body)}</p>
+                      </div>
+                    ))}
                   </div>
                 ))}
                 {previewTemplate.footerText && (
