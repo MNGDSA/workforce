@@ -961,47 +961,65 @@ function ContractTemplatesTab() {
             </DialogDescription>
           </DialogHeader>
           {previewTemplate && (
-            <div className="mt-4 bg-white text-black rounded-lg p-8 space-y-6 font-serif">
-              {previewTemplate.logoUrl && (
-                <div className={`flex ${(previewTemplate as any).logoAlignment === "left" ? "justify-start" : (previewTemplate as any).logoAlignment === "right" ? "justify-end" : "justify-center"}`}>
-                  <img src={previewTemplate.logoUrl} alt="Logo" className="h-16 object-contain" />
+            <>
+              <div className="contract-print-area mt-4 bg-white text-black rounded-lg p-8 space-y-6 font-serif">
+                {previewTemplate.logoUrl && (
+                  <div className={`flex ${(previewTemplate as any).logoAlignment === "left" ? "justify-start" : (previewTemplate as any).logoAlignment === "right" ? "justify-end" : "justify-center"}`}>
+                    <img src={previewTemplate.logoUrl} alt="Logo" className="h-16 object-contain" />
+                  </div>
+                )}
+                {previewTemplate.headerText && (
+                  <p className="text-center text-xl font-bold border-b pb-4">{previewTemplate.headerText}</p>
+                )}
+                {(previewTemplate as any).preamble && (
+                  <div className="text-sm whitespace-pre-wrap leading-relaxed italic border-l-2 border-gray-300 pl-4">
+                    {replaceVariables((previewTemplate as any).preamble)}
+                  </div>
+                )}
+                {Array.isArray(previewTemplate.articles) && previewTemplate.articles.map((article: any, idx: number) => (
+                  <div key={idx}>
+                    <h3 className="font-bold text-sm mb-1">Article {idx + 1}: {article.title}</h3>
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVariables(article.body)}</p>
+                  </div>
+                ))}
+                {previewTemplate.footerText && (
+                  <div className="border-t pt-4 mt-6">
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed italic">{replaceVariables(previewTemplate.footerText)}</p>
+                  </div>
+                )}
+                <div className="border-t pt-4 grid grid-cols-2 gap-8 mt-6">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-8">Employer Signature</p>
+                    <div className="border-b border-gray-300" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-8">Employee Signature</p>
+                    <div className="border-b border-gray-300" />
+                  </div>
                 </div>
-              )}
-              {previewTemplate.headerText && (
-                <p className="text-center text-xl font-bold border-b pb-4">{previewTemplate.headerText}</p>
-              )}
-              {(previewTemplate as any).preamble && (
-                <div className="text-sm whitespace-pre-wrap leading-relaxed italic border-l-2 border-gray-300 pl-4">
-                  {replaceVariables((previewTemplate as any).preamble)}
-                </div>
-              )}
-              {Array.isArray(previewTemplate.articles) && previewTemplate.articles.map((article: any, idx: number) => (
-                <div key={idx}>
-                  <h3 className="font-bold text-sm mb-1">Article {idx + 1}: {article.title}</h3>
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVariables(article.body)}</p>
-                </div>
-              ))}
-              {previewTemplate.footerText && (
-                <div className="border-t pt-4 mt-6">
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed italic">{replaceVariables(previewTemplate.footerText)}</p>
-                </div>
-              )}
-              <div className="border-t pt-4 grid grid-cols-2 gap-8 mt-6">
-                <div>
-                  <p className="text-xs text-gray-500 mb-8">Employer Signature</p>
-                  <div className="border-b border-gray-300" />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-8">Employee Signature</p>
-                  <div className="border-b border-gray-300" />
-                </div>
+                {(previewTemplate as any).documentFooter && (
+                  <div className="border-t border-gray-200 mt-10 pt-3 no-print">
+                    <p className="text-[10px] text-gray-400 text-center whitespace-pre-wrap leading-relaxed">{(previewTemplate as any).documentFooter}</p>
+                  </div>
+                )}
+                {(previewTemplate as any).documentFooter && (
+                  <div className="contract-page-footer">
+                    {(previewTemplate as any).documentFooter}
+                  </div>
+                )}
               </div>
-              {(previewTemplate as any).documentFooter && (
-                <div className="border-t border-gray-200 mt-10 pt-3">
-                  <p className="text-[10px] text-gray-400 text-center whitespace-pre-wrap leading-relaxed">{(previewTemplate as any).documentFooter}</p>
-                </div>
-              )}
-            </div>
+              <div className="flex justify-end mt-3 no-print">
+                <Button
+                  variant="outline"
+                  className="border-zinc-700 text-zinc-300 gap-2"
+                  onClick={() => window.print()}
+                  data-testid="button-print-contract"
+                >
+                  <Download className="h-4 w-4" />
+                  Print / Export PDF
+                </Button>
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>

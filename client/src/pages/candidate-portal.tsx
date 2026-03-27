@@ -977,84 +977,100 @@ export default function CandidatePortal() {
             </DialogDescription>
           </DialogHeader>
           {contractPreview && (
-            <div className="mt-4 bg-white text-black rounded-lg p-8 space-y-6 font-serif" data-testid="contract-preview-content">
-              {contractPreview.template?.logoUrl && (
-                <div className={`flex ${contractPreview.template?.logoAlignment === "left" ? "justify-start" : contractPreview.template?.logoAlignment === "right" ? "justify-end" : "justify-center"}`}>
-                  <img src={contractPreview.template.logoUrl} alt="Company Logo" className="h-16 object-contain" />
-                </div>
-              )}
-              {contractPreview.template?.headerText && (
-                <p className="text-center text-xl font-bold border-b pb-4">{contractPreview.template.headerText}</p>
-              )}
-              {contractPreview.template?.preamble && (() => {
-                let preambleText = contractPreview.template.preamble;
-                if (contractPreview.variables) {
-                  Object.entries(contractPreview.variables).forEach(([key, val]) => {
-                    preambleText = preambleText.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(val));
-                  });
-                }
-                return (
-                  <div className="text-sm whitespace-pre-wrap leading-relaxed italic border-l-2 border-gray-300 pl-4">
-                    {preambleText}
+            <>
+              <div className="contract-print-area mt-4 bg-white text-black rounded-lg p-8 space-y-6 font-serif" data-testid="contract-preview-content">
+                {contractPreview.template?.logoUrl && (
+                  <div className={`flex ${contractPreview.template?.logoAlignment === "left" ? "justify-start" : contractPreview.template?.logoAlignment === "right" ? "justify-end" : "justify-center"}`}>
+                    <img src={contractPreview.template.logoUrl} alt="Company Logo" className="h-16 object-contain" />
                   </div>
-                );
-              })()}
-              {Array.isArray(contractPreview.articles) && contractPreview.articles.map((article: any, idx: number) => {
-                let body = article.body || "";
-                if (contractPreview.variables) {
-                  Object.entries(contractPreview.variables).forEach(([key, val]) => {
-                    body = body.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(val));
-                  });
-                }
-                return (
-                  <div key={idx}>
-                    <h3 className="font-bold text-sm mb-1">Article {idx + 1}: {article.title}</h3>
-                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{body}</p>
+                )}
+                {contractPreview.template?.headerText && (
+                  <p className="text-center text-xl font-bold border-b pb-4">{contractPreview.template.headerText}</p>
+                )}
+                {contractPreview.template?.preamble && (() => {
+                  let preambleText = contractPreview.template.preamble;
+                  if (contractPreview.variables) {
+                    Object.entries(contractPreview.variables).forEach(([key, val]) => {
+                      preambleText = preambleText.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(val));
+                    });
+                  }
+                  return (
+                    <div className="text-sm whitespace-pre-wrap leading-relaxed italic border-l-2 border-gray-300 pl-4">
+                      {preambleText}
+                    </div>
+                  );
+                })()}
+                {Array.isArray(contractPreview.articles) && contractPreview.articles.map((article: any, idx: number) => {
+                  let body = article.body || "";
+                  if (contractPreview.variables) {
+                    Object.entries(contractPreview.variables).forEach(([key, val]) => {
+                      body = body.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(val));
+                    });
+                  }
+                  return (
+                    <div key={idx}>
+                      <h3 className="font-bold text-sm mb-1">Article {idx + 1}: {article.title}</h3>
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{body}</p>
+                    </div>
+                  );
+                })}
+                {contractPreview.template?.footerText && (() => {
+                  let testimoniumText = contractPreview.template.footerText;
+                  if (contractPreview.variables) {
+                    Object.entries(contractPreview.variables).forEach(([key, val]) => {
+                      testimoniumText = testimoniumText.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(val));
+                    });
+                  }
+                  return (
+                    <div className="border-t pt-4 mt-6">
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed italic">{testimoniumText}</p>
+                    </div>
+                  );
+                })()}
+                {contractIsSigned && activeContract?.signedAt && (
+                  <div className="border-t pt-4 text-center">
+                    <p className="text-sm font-bold text-emerald-700">Digitally Signed</p>
+                    <p className="text-xs text-gray-500">
+                      Signed on {new Date(activeContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} at{" "}
+                      {new Date(activeContract.signedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                    </p>
                   </div>
-                );
-              })}
-              {contractPreview.template?.footerText && (() => {
-                let testimoniumText = contractPreview.template.footerText;
-                if (contractPreview.variables) {
-                  Object.entries(contractPreview.variables).forEach(([key, val]) => {
-                    testimoniumText = testimoniumText.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(val));
-                  });
-                }
-                return (
-                  <div className="border-t pt-4 mt-6">
-                    <p className="text-sm whitespace-pre-wrap leading-relaxed italic">{testimoniumText}</p>
+                )}
+                {contractPreview.template?.documentFooter && (
+                  <div className="border-t border-gray-200 mt-10 pt-3 no-print">
+                    <p className="text-[10px] text-gray-400 text-center whitespace-pre-wrap leading-relaxed">{contractPreview.template.documentFooter}</p>
                   </div>
-                );
-              })()}
-              {contractIsSigned && activeContract?.signedAt && (
-                <div className="border-t pt-4 text-center">
-                  <p className="text-sm font-bold text-emerald-700">Digitally Signed</p>
-                  <p className="text-xs text-gray-500">
-                    Signed on {new Date(activeContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} at{" "}
-                    {new Date(activeContract.signedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </div>
-              )}
-              {contractPreview.template?.documentFooter && (
-                <div className="border-t border-gray-200 mt-10 pt-3">
-                  <p className="text-[10px] text-gray-400 text-center whitespace-pre-wrap leading-relaxed">{contractPreview.template.documentFooter}</p>
-                </div>
-              )}
-            </div>
+                )}
+                {contractPreview.template?.documentFooter && (
+                  <div className="contract-page-footer">
+                    {contractPreview.template.documentFooter}
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end gap-3 mt-4 no-print">
+                <Button variant="outline" onClick={() => setContractPreviewOpen(false)} className="border-border">Close</Button>
+                <Button
+                  variant="outline"
+                  className="border-border gap-2"
+                  onClick={() => window.print()}
+                  data-testid="button-print-contract-candidate"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Print / Export PDF
+                </Button>
+                {!contractIsSigned && (
+                  <Button
+                    onClick={() => { setContractPreviewOpen(false); setIsSignModalOpen(true); }}
+                    className="bg-primary text-primary-foreground font-bold"
+                    data-testid="button-proceed-to-sign"
+                  >
+                    <PenTool className="h-3.5 w-3.5 mr-1.5" />
+                    Proceed to Sign
+                  </Button>
+                )}
+              </div>
+            </>
           )}
-          <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setContractPreviewOpen(false)} className="border-border">Close</Button>
-            {!contractIsSigned && (
-              <Button
-                onClick={() => { setContractPreviewOpen(false); setIsSignModalOpen(true); }}
-                className="bg-primary text-primary-foreground font-bold"
-                data-testid="button-proceed-to-sign"
-              >
-                <PenTool className="h-3.5 w-3.5 mr-1.5" />
-                Proceed to Sign
-              </Button>
-            )}
-          </div>
         </DialogContent>
       </Dialog>
 
