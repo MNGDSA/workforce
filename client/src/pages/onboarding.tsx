@@ -202,7 +202,6 @@ export default function OnboardingPage() {
   const [statusFilter, setStatusFilter] = useState<string>("active");
   const [admitOpen, setAdmitOpen] = useState(false);
   const [checklistRecord, setChecklistRecord] = useState<OnboardingRecord | null>(null);
-  const [freshCandidate, setFreshCandidate] = useState<Candidate | null>(null);
   const [convertRecord, setConvertRecord] = useState<OnboardingRecord | null>(null);
   const [admitSearch, setAdmitSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -218,9 +217,11 @@ export default function OnboardingPage() {
   });
 
   const { data: candidates = [] } = useQuery<Candidate[]>({
-    queryKey: ["/api/candidates", { limit: 200, status: "active" }],
+    queryKey: ["/api/candidates", { limit: 1000, status: "active" }],
     queryFn: () => apiRequest("GET", "/api/candidates?limit=1000&status=active").then(r => r.json()),
     select: (r: any) => r?.data ?? [],
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const { data: applications = [] } = useQuery<Application[]>({
@@ -327,12 +328,9 @@ export default function OnboardingPage() {
       qc.invalidateQueries({ queryKey: ["/api/candidates"] });
       const labels: Record<string, string> = { photo: "Photo", nationalId: "National ID", iban: "IBAN Certificate" };
       toast({ title: `${labels[vars.docType] ?? "Document"} removed`, description: "Candidate will see the missing document on next login." });
-      const profileKeyMap: Record<string, string> = { photo: "photoUrl", nationalId: "nationalIdFileUrl", iban: "ibanFileUrl" };
       const flagMap: Record<string, string> = { photo: "hasPhoto", nationalId: "hasNationalId", iban: "hasIban" };
       const flag = flagMap[vars.docType];
-      const profileKey = profileKeyMap[vars.docType];
       if (flag) setChecklistRecord(prev => prev ? { ...prev, [flag]: false } : prev);
-      if (profileKey) setFreshCandidate(prev => prev ? { ...prev, [profileKey]: null, [flag]: false } as any : prev);
     },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
@@ -369,7 +367,6 @@ export default function OnboardingPage() {
   const somePageSelected = admitPageCandidates.some(c => selectedIds.has(c.id));
 
   function getCandidateFor(rec: OnboardingRecord) {
-    if (freshCandidate && freshCandidate.id === rec.candidateId) return freshCandidate;
     return candidates.find(c => c.id === rec.candidateId);
   }
 
@@ -565,10 +562,7 @@ export default function OnboardingPage() {
                         size="sm"
                         variant="outline"
                         className="border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-800 gap-1"
-                        onClick={() => {
-                          setChecklistRecord(rec);
-                          apiRequest("GET", `/api/candidates/${rec.candidateId}`).then(r => r.json()).then(c => setFreshCandidate(c)).catch(() => {});
-                        }}
+                        onClick={() => setChecklistRecord(rec)}
                       >
                         <ClipboardCheck className="h-3.5 w-3.5" />
                         Checklist
@@ -782,7 +776,7 @@ export default function OnboardingPage() {
       </Dialog>
 
       {/* ── Checklist Sheet ── */}
-      <Sheet open={!!checklistRecord} onOpenChange={o => { if (!o) { setChecklistRecord(null); setFreshCandidate(null); } }}>
+      <Sheet open={!!checklistRecord} onOpenChange={o => !o && setChecklistRecord(null)}>
         <SheetContent className="bg-zinc-950 border-zinc-800 text-white w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle className="font-display text-lg">Onboarding Checklist</SheetTitle>
