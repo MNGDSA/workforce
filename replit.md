@@ -308,6 +308,12 @@ RETURN TO POOL
 
 ## Planned Features (Post-Testing)
 - **Bilingual Input (EN/AR toggle)**: PrestaShop-style inline language switcher on text fields. A single `BilingualInput` component with an `EN | AR` pill toggle. Stores both `title` (English) and `titleAr` (Arabic) values, submits both, and the candidate portal renders the correct one based on user language preference. To be implemented after unit/system/regression/UAT/security testing is complete.
+- **Employee ID Cards**: Printable ID cards generated from the app.
+  - **Card format**: CR-80 standard (85.6mm × 54mm) — same as any bank/access card.
+  - **Printer-agnostic approach**: Generate the card as a precisely sized HTML print layout or PDF. Works with any card printer brand (Zebra ZC300, Matica, Evolis, HID Fargo, Entrust, etc.) as long as the printer's Windows driver is installed. No vendor SDK lock-in — user selects printer from browser print dialog.
+  - **Single print**: "Print ID Card" button on employee profile → opens browser print with card-sized layout.
+  - **Bulk print / Multi-card PDF**: Generate a multi-page PDF (one card per page, CR-80 sized) for batch printing — e.g., 600 cards in one go, sent to the printer once.
+  - **Optional future enhancement**: If a specific printer brand is locked in (e.g., Zebra), can add Zebra Browser Print SDK agent for "click-and-print" without dialog — but this is an optimization, not the default approach.
 
 ## Key Features
 - **Bulk Upload**: `/api/candidates/bulk` endpoint supports up to 70,000 candidates per request, batched in groups of 1,000
