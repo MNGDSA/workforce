@@ -208,6 +208,7 @@ export default function OnboardingPage() {
   const [admitPage, setAdmitPage] = useState(1);
   const [convertForm, setConvertForm] = useState({ position: "", department: "", startDate: "", salary: "" });
   const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
+  const [pendingDeleteDoc, setPendingDeleteDoc] = useState<{ candidateId: string; docType: string; label: string } | null>(null);
   const [bulkConvertOpen, setBulkConvertOpen] = useState(false);
   const [bulkConvertForm, setBulkConvertForm] = useState({ position: "", department: "", startDate: "", salary: "" });
   const ADMIT_PAGE_SIZE = 10;
@@ -877,7 +878,11 @@ export default function OnboardingPage() {
                                   size="icon"
                                   className="h-6 w-6 text-red-400 hover:text-red-300 hover:bg-red-500/10"
                                   data-testid={`button-delete-doc-${docType}`}
-                                  onClick={e => { e.stopPropagation(); deleteDocMutation.mutate({ candidateId: cand!.id, docType }); }}
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    const labels: Record<string, string> = { photo: "Photo", nationalId: "National ID", iban: "IBAN Certificate" };
+                                    setPendingDeleteDoc({ candidateId: cand!.id, docType: docType!, label: labels[docType!] ?? "Document" });
+                                  }}
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
@@ -1115,6 +1120,29 @@ export default function OnboardingPage() {
               }}
             >
               Yes, Reject
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={!!pendingDeleteDoc} onOpenChange={(v) => { if (!v) setPendingDeleteDoc(null); }}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Delete {pendingDeleteDoc?.label}?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              This will permanently remove the uploaded file. The candidate will need to re-upload it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border" data-testid="button-delete-doc-cancel">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="button-delete-doc-confirm"
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={() => {
+                if (pendingDeleteDoc) deleteDocMutation.mutate({ candidateId: pendingDeleteDoc.candidateId, docType: pendingDeleteDoc.docType });
+                setPendingDeleteDoc(null);
+              }}
+            >
+              Yes, Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
