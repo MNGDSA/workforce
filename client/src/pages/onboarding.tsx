@@ -881,14 +881,16 @@ function ContractTemplatesTab() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs text-zinc-400 uppercase tracking-wider">Footer Text</Label>
-              <Input
+              <Label className="text-xs text-zinc-400 uppercase tracking-wider">Testimonium</Label>
+              <Textarea
                 data-testid="input-footer-text"
                 value={formFooterText}
                 onChange={e => setFormFooterText(e.target.value)}
-                placeholder="e.g. Legal disclaimer or signing terms"
-                className="bg-zinc-900 border-zinc-700"
+                onFocus={() => { lastFocusedTextarea.current = { type: "preamble" }; }}
+                placeholder="e.g. IN WITNESS WHEREOF, the parties hereto have executed this Agreement as of the date first written above."
+                className="bg-zinc-900 border-zinc-700 text-sm min-h-20"
               />
+              <p className="text-[11px] text-zinc-600">Closing clause — the formal attestation that the parties have agreed and signed the contract.</p>
             </div>
           </div>
 
