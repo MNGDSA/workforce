@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useToast } from "@/hooks/use-toast";
@@ -243,6 +243,16 @@ function idLabel(val: string | null | undefined): string {
 
 function StatusInfoHeader() {
   const [visible, setVisible] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function show() {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setVisible(true);
+  }
+  function hide() {
+    timerRef.current = setTimeout(() => setVisible(false), 150);
+  }
+
   return (
     <span className="inline-flex items-center gap-1">
       Status
@@ -250,15 +260,19 @@ function StatusInfoHeader() {
         <button
           type="button"
           className="text-muted-foreground hover:text-primary transition-colors focus:outline-none"
-          onMouseEnter={() => setVisible(true)}
-          onMouseLeave={() => setVisible(false)}
+          onMouseEnter={show}
+          onMouseLeave={hide}
           onClick={() => setVisible((v) => !v)}
           aria-label="Status definitions"
         >
           <Info className="h-2.5 w-2.5" />
         </button>
         {visible && (
-          <span className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 w-72 rounded-sm bg-popover border border-border px-3.5 py-3 text-[11px] text-muted-foreground shadow-lg leading-relaxed pointer-events-none space-y-1.5">
+          <span
+            className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-50 w-72 rounded-sm bg-popover border border-border px-3.5 py-3 text-[11px] text-muted-foreground shadow-lg leading-relaxed space-y-1.5"
+            onMouseEnter={show}
+            onMouseLeave={hide}
+          >
             <span className="block"><span className="font-semibold text-green-400">Active</span> — Profile completed, account is live and ready.</span>
             <span className="block"><span className="font-semibold text-gray-400">Inactive</span> — Account created but profile not yet completed (e.g. bulk-uploaded SMP staff who haven't activated via OTP).</span>
             <span className="block"><span className="font-semibold text-blue-400">Hired</span> — Candidate converted to an active employee.</span>
@@ -671,6 +685,7 @@ export default function TalentPage() {
   const [uploadPreview, setUploadPreview] = useState<Record<string, string>[] | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [profileCandidate, setProfileCandidate] = useState<Candidate | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [blockCandidate, setBlockCandidate] = useState<Candidate | null>(null);
   const [archiveCandidate, setArchiveCandidate] = useState<Candidate | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -868,15 +883,11 @@ export default function TalentPage() {
   }
 
   async function handleExport() {
-    const params = new URLSearchParams({
-      ...(debouncedSearch ? { search: debouncedSearch } : {}),
-      ...(status && status !== "all" ? { status } : {}),
-      ...(sourceFilter && sourceFilter !== "all" ? { source: sourceFilter } : {}),
-      sortBy,
-      sortOrder,
-    });
+    if (exporting) return;
+    setExporting(true);
     try {
-      const res = await apiRequest("GET", `/api/candidates/export?${params.toString()}`);
+      const res = await fetch("/api/candidates/export", { credentials: "include" });
+      if (!res.ok) throw new Error("Export request failed");
       const data = await res.json();
       const rows: any[][] = data.rows || [];
       const headers: string[] = data.headers || [];
@@ -887,6 +898,8 @@ export default function TalentPage() {
       XLSX.writeFile(wb, `candidates_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch {
       toast({ title: "Export failed", description: "Could not export candidates.", variant: "destructive" });
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -905,10 +918,11 @@ export default function TalentPage() {
               variant="outline"
               className="h-9 border-border bg-background"
               onClick={handleExport}
+              disabled={exporting}
               data-testid="button-export"
             >
               <Download className="mr-2 h-4 w-4" />
-              Export All
+              {exporting ? "Exporting…" : "Export All"}
             </Button>
             <Button
               className="h-9 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
