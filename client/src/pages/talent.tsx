@@ -45,7 +45,8 @@ import {
   UserCheck,
   ShieldAlert,
   Info,
-  Trash2,
+  Archive,
+  ArchiveRestore,
   CheckSquare,
   Square,
   MinusSquare,
@@ -108,6 +109,7 @@ const statusStyles: Record<string, string> = {
   active: "bg-green-500/10 text-green-500",
   inactive: "bg-gray-500/10 text-gray-400",
   dormant: "bg-amber-500/10 text-amber-400",
+  archived: "bg-slate-500/10 text-slate-400",
   blocked: "bg-red-500/10 text-red-500",
   hired: "bg-blue-500/10 text-blue-400",
   rejected: "bg-red-500/10 text-red-400",
@@ -115,6 +117,7 @@ const statusStyles: Record<string, string> = {
 };
 
 function getDisplayStatus(candidate: Candidate): string {
+  if ((candidate as any).archivedAt) return "archived";
   if (candidate.status === "blocked" || candidate.status === "hired") return candidate.status;
   if (!candidate.profileCompleted) return "inactive";
   const lastLogin = (candidate as any).lastLoginAt;
@@ -669,9 +672,9 @@ export default function TalentPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [profileCandidate, setProfileCandidate] = useState<Candidate | null>(null);
   const [blockCandidate, setBlockCandidate] = useState<Candidate | null>(null);
-  const [deleteCandidate, setDeleteCandidate] = useState<Candidate | null>(null);
+  const [archiveCandidate, setArchiveCandidate] = useState<Candidate | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkConfirmAction, setBulkConfirmAction] = useState<"block" | "unblock" | "delete" | null>(null);
+  const [bulkConfirmAction, setBulkConfirmAction] = useState<"block" | "unblock" | "archive" | null>(null);
 
   function toggleColumn(key: ColumnKey) {
     setVisibleColumns(prev => {
@@ -696,9 +699,10 @@ export default function TalentPage() {
     sortBy,
     sortOrder,
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
-    ...(status && status !== "all" && status !== "dormant" && status !== "inactive" ? { status } : {}),
+    ...(status && status !== "all" && status !== "dormant" && status !== "inactive" && status !== "archived" ? { status } : {}),
     ...(status === "dormant" ? { dormant: "true" } : {}),
     ...(status === "inactive" ? { inactive: "true" } : {}),
+    ...(status === "archived" ? { archived: "true" } : {}),
     ...(sourceFilter && sourceFilter !== "all" ? { source: sourceFilter } : {}),
   });
 
@@ -721,21 +725,31 @@ export default function TalentPage() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/candidates/${id}`),
+  const archiveMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/candidates/${id}/archive`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
-      toast({ title: "Candidate deleted" });
+      toast({ title: "Candidate archived" });
     },
-    onError: () => toast({ title: "Failed to delete candidate", variant: "destructive" }),
+    onError: () => toast({ title: "Failed to archive candidate", variant: "destructive" }),
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/candidates/${id}/unarchive`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
+      toast({ title: "Candidate restored" });
+    },
+    onError: () => toast({ title: "Failed to restore candidate", variant: "destructive" }),
   });
 
   const bulkAction = useMutation({
-    mutationFn: ({ ids, action }: { ids: string[]; action: "block" | "unblock" | "delete" }) =>
+    mutationFn: ({ ids, action }: { ids: string[]; action: "block" | "unblock" | "archive" }) =>
       apiRequest("POST", "/api/candidates/bulk-action", { ids, action }).then(r => r.json()),
     onSuccess: (data) => {
-      const labels: Record<string, string> = { block: "blocked", unblock: "unblocked", delete: "deleted" };
+      const labels: Record<string, string> = { block: "blocked", unblock: "unblocked", archive: "archived" };
       toast({ title: `${data.affected} candidate(s) ${labels[data.action]}` });
       setSelectedIds(new Set());
       setBulkConfirmAction(null);
@@ -970,6 +984,7 @@ export default function TalentPage() {
                 <SelectItem value="hired">Hired</SelectItem>
                 <SelectItem value="blocked">Blocked</SelectItem>
                 <SelectItem value="dormant">Dormant</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
               </SelectContent>
             </Select>
             <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); setSelectedIds(new Set()); }}>
@@ -1221,14 +1236,25 @@ export default function TalentPage() {
                                   <ShieldAlert className="mr-2 h-4 w-4" />
                                   {candidate.status === "blocked" ? "Unblock" : "Block"}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => setDeleteCandidate(candidate)}
-                                  className="text-red-500"
-                                  data-testid={`menu-delete-${candidate.id}`}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete
-                                </DropdownMenuItem>
+                                {status === "archived" ? (
+                                  <DropdownMenuItem
+                                    onClick={() => restoreMutation.mutate(candidate.id)}
+                                    className="text-green-500"
+                                    data-testid={`menu-restore-${candidate.id}`}
+                                  >
+                                    <ArchiveRestore className="mr-2 h-4 w-4" />
+                                    Restore
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem
+                                    onClick={() => setArchiveCandidate(candidate)}
+                                    className="text-amber-500"
+                                    data-testid={`menu-archive-${candidate.id}`}
+                                  >
+                                    <Archive className="mr-2 h-4 w-4" />
+                                    Archive
+                                  </DropdownMenuItem>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
@@ -1327,12 +1353,13 @@ export default function TalentPage() {
             </Button>
             <Button
               size="sm"
-              variant="destructive"
-              onClick={() => setBulkConfirmAction("delete")}
-              data-testid="bulk-delete"
+              variant="outline"
+              className="border-amber-600 text-amber-500 hover:bg-amber-600/10"
+              onClick={() => setBulkConfirmAction("archive")}
+              data-testid="bulk-archive"
             >
-              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-              Delete
+              <Archive className="h-3.5 w-3.5 mr-1.5" />
+              Archive
             </Button>
             <div className="h-5 w-px bg-border" />
             <Button
@@ -1353,11 +1380,11 @@ export default function TalentPage() {
         <AlertDialogContent className="bg-card border-border">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white font-display">
-              {bulkConfirmAction === "delete" ? "Delete" : bulkConfirmAction === "block" ? "Block" : "Unblock"} {selectedIds.size} candidate(s)?
+              {bulkConfirmAction === "archive" ? "Archive" : bulkConfirmAction === "block" ? "Block" : "Unblock"} {selectedIds.size} candidate(s)?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              {bulkConfirmAction === "delete"
-                ? `This will permanently delete ${selectedIds.size} candidate(s) and all their related records (applications, interviews, onboarding). This action cannot be undone.`
+              {bulkConfirmAction === "archive"
+                ? `This will archive ${selectedIds.size} candidate(s). They will be hidden from active listings but all their records (applications, interviews, onboarding) will be preserved. Archived candidates can be restored later.`
                 : bulkConfirmAction === "block"
                 ? `This will block ${selectedIds.size} candidate(s) from applying or being processed.`
                 : `This will unblock ${selectedIds.size} candidate(s), restoring their active status.`}
@@ -1366,13 +1393,13 @@ export default function TalentPage() {
           <AlertDialogFooter>
             <AlertDialogCancel className="border-border" data-testid="bulk-confirm-cancel">Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className={bulkConfirmAction === "delete" ? "bg-red-600 hover:bg-red-700" : bulkConfirmAction === "block" ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"}
+              className={bulkConfirmAction === "archive" ? "bg-amber-600 hover:bg-amber-700" : bulkConfirmAction === "block" ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"}
               onClick={() => bulkConfirmAction && bulkAction.mutate({ ids: [...selectedIds], action: bulkConfirmAction })}
               disabled={bulkAction.isPending}
               data-testid="bulk-confirm-action"
             >
               {bulkAction.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {bulkConfirmAction === "delete" ? "Delete" : bulkConfirmAction === "block" ? "Block" : "Unblock"}
+              {bulkConfirmAction === "archive" ? "Archive" : bulkConfirmAction === "block" ? "Block" : "Unblock"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1542,27 +1569,27 @@ export default function TalentPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={!!deleteCandidate} onOpenChange={(o) => !o && setDeleteCandidate(null)}>
+      <AlertDialog open={!!archiveCandidate} onOpenChange={(o) => !o && setArchiveCandidate(null)}>
         <AlertDialogContent className="bg-card border-border">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white font-display">Delete Candidate</AlertDialogTitle>
+            <AlertDialogTitle className="text-white font-display">Archive Candidate</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              This will permanently delete <span className="text-white font-medium">{deleteCandidate?.fullNameEn}</span> and all their related records (applications, interviews, onboarding). This action cannot be undone.
+              This will archive <span className="text-white font-medium">{archiveCandidate?.fullNameEn}</span>. They will be hidden from active listings but all their records (applications, interviews, onboarding) will be preserved. You can restore them later.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="border-border">Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-600 text-white hover:bg-red-700"
+              className="bg-amber-600 text-white hover:bg-amber-700"
               onClick={() => {
-                if (deleteCandidate) {
-                  deleteMutation.mutate(deleteCandidate.id);
-                  setDeleteCandidate(null);
+                if (archiveCandidate) {
+                  archiveMutation.mutate(archiveCandidate.id);
+                  setArchiveCandidate(null);
                 }
               }}
-              data-testid="confirm-delete-candidate"
+              data-testid="confirm-archive-candidate"
             >
-              Delete Permanently
+              Archive Candidate
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

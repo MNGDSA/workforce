@@ -334,6 +334,13 @@ RETURN TO POOL
 - Bulk uploads pre-check against the DB AND within the batch itself, return HTTP 207 with a `duplicates` array listing row number + reason.
 - `seed.ts` is the only place `onConflictDoNothing()` is acceptable (idempotent dev seeding).
 
+## Candidate Archival (Soft Delete) Policy
+- **Candidates are NEVER hard-deleted.** All "delete" operations are soft-delete via `archivedAt` timestamp.
+- Archived candidates are hidden from all active listings, searches, and stats — but their data and all linked records (applications, interviews, onboarding, workforce) are fully preserved.
+- Routes: `POST /api/candidates/:id/archive`, `POST /api/candidates/:id/unarchive`. Bulk: `POST /api/candidates/bulk-action` with `action: "archive"`.
+- Frontend: "Archive" button (amber) in per-row dropdown + bulk action bar. "Archived" status filter shows archived candidates with "Restore" option.
+- All candidate queries (`getCandidates`, `getCandidateStats`, `getCandidateByPhone`, `getCandidateByNationalId`) filter with `isNull(archivedAt)` by default. Pass `archived=true` query param to view archived.
+
 ## Packages Installed
 - `bcryptjs` + `@types/bcryptjs` — password hashing
 - `drizzle-orm`, `drizzle-zod`, `drizzle-kit` — ORM

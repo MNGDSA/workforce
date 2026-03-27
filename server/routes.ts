@@ -510,11 +510,21 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/candidates/:id", async (req: Request, res: Response) => {
+  app.post("/api/candidates/:id/archive", async (req: Request, res: Response) => {
     try {
-      const deleted = await storage.deleteCandidate(req.params.id);
-      if (!deleted) return res.status(404).json({ message: "Candidate not found" });
-      return res.status(204).send();
+      const archived = await storage.archiveCandidate(req.params.id);
+      if (!archived) return res.status(404).json({ message: "Candidate not found or already archived" });
+      return res.json({ message: "Candidate archived" });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/candidates/:id/unarchive", async (req: Request, res: Response) => {
+    try {
+      const restored = await storage.unarchiveCandidate(req.params.id);
+      if (!restored) return res.status(404).json({ message: "Candidate not found or not archived" });
+      return res.json({ message: "Candidate restored" });
     } catch (err) {
       return handleError(res, err);
     }
@@ -535,11 +545,11 @@ export async function registerRoutes(
       } else if (action === "unblock") {
         const affected = await storage.bulkUpdateCandidateStatus(ids, "active");
         return res.json({ affected, action });
-      } else if (action === "delete") {
-        const affected = await storage.bulkDeleteCandidates(ids);
+      } else if (action === "archive") {
+        const affected = await storage.bulkArchiveCandidates(ids);
         return res.json({ affected, action });
       } else {
-        return res.status(400).json({ message: "Invalid action. Must be: block, unblock, or delete" });
+        return res.status(400).json({ message: "Invalid action. Must be: block, unblock, or archive" });
       }
     } catch (err) {
       return handleError(res, err);

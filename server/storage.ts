@@ -66,10 +66,11 @@ export interface IStorage {
   getCandidateByNationalId(nationalId: string): Promise<Candidate | undefined>;
   createCandidate(candidate: InsertCandidate): Promise<Candidate>;
   updateCandidate(id: string, data: Partial<InsertCandidate>): Promise<Candidate | undefined>;
-  deleteCandidate(id: string): Promise<boolean>;
+  archiveCandidate(id: string): Promise<boolean>;
+  unarchiveCandidate(id: string): Promise<boolean>;
   bulkInsertCandidates(candidates: InsertCandidate[]): Promise<{ inserted: number; skipped: number; duplicates: { row: number; nationalId?: string; phone?: string; reason: string }[] }>;
   bulkUpdateCandidateStatus(ids: string[], status: string): Promise<number>;
-  bulkDeleteCandidates(ids: string[]): Promise<number>;
+  bulkArchiveCandidates(ids: string[]): Promise<number>;
   getCandidateStats(): Promise<{ total: number; active: number; hired: number; blocked: number; avgRating: number }>;
 
   // Seasons
@@ -268,6 +269,12 @@ export class DatabaseStorage implements IStorage {
     if (nationality) conditions.push(eq(candidates.nationality, nationality as any));
     if (gender) conditions.push(eq(candidates.gender, gender as any));
     if ((query as any).source) conditions.push(eq(candidates.source, (query as any).source));
+    if ((query as any).archived === "true") {
+      conditions.push(isNotNull(candidates.archivedAt));
+    } else {
+      conditions.push(isNull(candidates.archivedAt));
+    }
+    if ((query as any).region) conditions.push(eq(candidates.region, (query as any).region));
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -305,12 +312,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCandidateByPhone(phone: string): Promise<Candidate | undefined> {
-    const [candidate] = await db.select().from(candidates).where(eq(candidates.phone, phone));
+    const [candidate] = await db.select().from(candidates).where(and(eq(candidates.phone, phone), isNull(candidates.archivedAt)));
     return candidate;
   }
 
   async getCandidateByNationalId(nationalId: string): Promise<Candidate | undefined> {
-    const [candidate] = await db.select().from(candidates).where(eq(candidates.nationalId, nationalId));
+    const [candidate] = await db.select().from(candidates).where(and(eq(candidates.nationalId, nationalId), isNull(candidates.archivedAt)));
     return candidate;
   }
 
@@ -328,13 +335,22 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async deleteCandidate(id: string): Promise<boolean> {
-    await db.delete(applications).where(eq(applications.candidateId, id));
-    await db.delete(onboarding).where(eq(onboarding.candidateId, id));
-    await db.delete(interviews).where(eq(interviews.candidateId, id));
-    await db.delete(workforce).where(eq(workforce.candidateId, id));
-    const result = await db.delete(candidates).where(eq(candidates.id, id));
-    return (result.rowCount ?? 0) > 0;
+  async archiveCandidate(id: string): Promise<boolean> {
+    const result = await db
+      .update(candidates)
+      .set({ archivedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(candidates.id, id), isNull(candidates.archivedAt)))
+      .returning({ id: candidates.id });
+    return result.length > 0;
+  }
+
+  async unarchiveCandidate(id: string): Promise<boolean> {
+    const result = await db
+      .update(candidates)
+      .set({ archivedAt: null, updatedAt: new Date() })
+      .where(and(eq(candidates.id, id), isNotNull(candidates.archivedAt)))
+      .returning({ id: candidates.id });
+    return result.length > 0;
   }
 
   async bulkInsertCandidates(data: InsertCandidate[]): Promise<{ inserted: number; skipped: number; duplicates: { row: number; nationalId?: string; phone?: string; reason: string }[] }> {
@@ -402,27 +418,29 @@ export class DatabaseStorage implements IStorage {
     return result.length;
   }
 
-  async bulkDeleteCandidates(ids: string[]): Promise<number> {
+  async bulkArchiveCandidates(ids: string[]): Promise<number> {
     if (ids.length === 0) return 0;
-    await db.delete(applications).where(inArray(applications.candidateId, ids));
-    await db.delete(onboarding).where(inArray(onboarding.candidateId, ids));
-    await db.delete(interviews).where(inArray(interviews.candidateId, ids));
-    await db.delete(workforce).where(inArray(workforce.candidateId, ids));
-    const result = await db.delete(candidates).where(inArray(candidates.id, ids));
-    return result.rowCount ?? 0;
+    const result = await db
+      .update(candidates)
+      .set({ archivedAt: new Date(), updatedAt: new Date() })
+      .where(and(inArray(candidates.id, ids), isNull(candidates.archivedAt)))
+      .returning({ id: candidates.id });
+    return result.length;
   }
 
   async getCandidateStats(): Promise<{ total: number; active: number; hired: number; blocked: number; avgRating: number }> {
+    const notArchived = isNull(candidates.archivedAt);
     const [stats] = await db
       .select({
         total: count(),
         avgRating: sql<number>`coalesce(avg(${candidates.rating}::numeric), 0)`,
       })
-      .from(candidates);
+      .from(candidates)
+      .where(notArchived);
 
-    const [activeRow] = await db.select({ value: count() }).from(candidates).where(eq(candidates.status, "active"));
-    const [hiredRow] = await db.select({ value: count() }).from(candidates).where(eq(candidates.status, "hired"));
-    const [blockedRow] = await db.select({ value: count() }).from(candidates).where(eq(candidates.status, "blocked"));
+    const [activeRow] = await db.select({ value: count() }).from(candidates).where(and(eq(candidates.status, "active"), notArchived));
+    const [hiredRow] = await db.select({ value: count() }).from(candidates).where(and(eq(candidates.status, "hired"), notArchived));
+    const [blockedRow] = await db.select({ value: count() }).from(candidates).where(and(eq(candidates.status, "blocked"), notArchived));
 
     return {
       total: Number(stats.total),
@@ -769,7 +787,7 @@ export class DatabaseStorage implements IStorage {
 
   // ─── Dashboard ──────────────────────────────────────────────────────────────
   async getDashboardStats() {
-    const [totalCandidates] = await db.select({ value: count() }).from(candidates);
+    const [totalCandidates] = await db.select({ value: count() }).from(candidates).where(isNull(candidates.archivedAt));
     const [openPositions] = await db.select({ value: count() }).from(jobPostings).where(eq(jobPostings.status, "active"));
     const [activeSeasons] = await db.select({ value: count() }).from(seasons).where(eq(seasons.status, "active"));
     const [scheduledInterviews] = await db.select({ value: count() }).from(interviews).where(eq(interviews.status, "scheduled"));
