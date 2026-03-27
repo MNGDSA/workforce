@@ -108,6 +108,7 @@ const statusStyles: Record<string, string> = {
 
 function getDisplayStatus(candidate: Candidate): string {
   if (candidate.status === "blocked" || candidate.status === "hired") return candidate.status;
+  if (!candidate.profileCompleted) return "inactive";
   const lastLogin = (candidate as any).lastLoginAt;
   const createdAt = (candidate as any).createdAt;
   const oneYearAgo = new Date();
@@ -670,8 +671,9 @@ export default function TalentPage() {
     sortBy,
     sortOrder,
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
-    ...(status && status !== "all" && status !== "dormant" ? { status } : {}),
+    ...(status && status !== "all" && status !== "dormant" && status !== "inactive" ? { status } : {}),
     ...(status === "dormant" ? { dormant: "true" } : {}),
+    ...(status === "inactive" ? { inactive: "true" } : {}),
     ...(sourceFilter && sourceFilter !== "all" ? { source: sourceFilter } : {}),
   });
 
@@ -888,6 +890,7 @@ export default function TalentPage() {
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
                 <SelectItem value="hired">Hired</SelectItem>
                 <SelectItem value="blocked">Blocked</SelectItem>
                 <SelectItem value="dormant">Dormant</SelectItem>

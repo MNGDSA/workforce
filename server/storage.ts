@@ -257,6 +257,10 @@ export class DatabaseStorage implements IStorage {
         )
       );
     }
+    if ((query as any).inactive === "true") {
+      conditions.push(eq(candidates.profileCompleted, false));
+      conditions.push(not(inArray(candidates.status, ["blocked", "hired"])));
+    }
     if (city) conditions.push(ilike(candidates.city, `%${city}%`));
     if (nationality) conditions.push(eq(candidates.nationality, nationality as any));
     if (gender) conditions.push(eq(candidates.gender, gender as any));
