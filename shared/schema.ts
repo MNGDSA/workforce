@@ -676,6 +676,7 @@ export const contractTemplates = pgTable(
     parentTemplateId: varchar("parent_template_id"),
     status: contractTemplateStatusEnum("status").notNull().default("draft"),
     logoUrl: text("logo_url"),
+    logoAlignment: text("logo_alignment").default("center"),
     companyName: text("company_name"),
     headerText: text("header_text"),
     preamble: text("preamble"),

@@ -366,6 +366,7 @@ function ContractTemplatesTab() {
   const [formHeaderText, setFormHeaderText] = useState("");
   const [formFooterText, setFormFooterText] = useState("");
   const [formDocumentFooter, setFormDocumentFooter] = useState("");
+  const [formLogoAlignment, setFormLogoAlignment] = useState<"left" | "center" | "right">("center");
   const [formPreamble, setFormPreamble] = useState("");
   const [formArticles, setFormArticles] = useState<{ title: string; body: string }[]>([{ title: "", body: "" }]);
   const lastFocusedTextarea = useRef<{ type: "preamble" } | { type: "article"; idx: number } | null>(null);
@@ -443,6 +444,7 @@ function ContractTemplatesTab() {
       setFormHeaderText(template.headerText || "");
       setFormFooterText(template.footerText || "");
       setFormDocumentFooter((template as any).documentFooter || "");
+      setFormLogoAlignment((template as any).logoAlignment || "center");
       setFormPreamble((template as any).preamble || "");
       setFormArticles(Array.isArray(template.articles) && template.articles.length > 0 ? template.articles : [{ title: "", body: "" }]);
       setFormStatus(template.status === "archived" ? "draft" : template.status);
@@ -454,6 +456,7 @@ function ContractTemplatesTab() {
       setFormHeaderText("");
       setFormFooterText("");
       setFormDocumentFooter("");
+      setFormLogoAlignment("center");
       setFormPreamble("");
       setFormArticles([{ title: "", body: "" }]);
       setFormStatus("draft");
@@ -485,6 +488,7 @@ function ContractTemplatesTab() {
       headerText: formHeaderText.trim() || null,
       footerText: formFooterText.trim() || null,
       documentFooter: formDocumentFooter.trim() || null,
+      logoAlignment: formLogoAlignment,
       preamble: formPreamble.trim() || null,
       articles: validArticles,
       status: formStatus,
@@ -796,15 +800,33 @@ function ContractTemplatesTab() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs text-zinc-400 uppercase tracking-wider">Header Text</Label>
-              <Input
-                data-testid="input-header-text"
-                value={formHeaderText}
-                onChange={e => setFormHeaderText(e.target.value)}
-                placeholder="e.g. Employment Contract"
-                className="bg-zinc-900 border-zinc-700"
-              />
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2 space-y-1.5">
+                <Label className="text-xs text-zinc-400 uppercase tracking-wider">Header Text</Label>
+                <Input
+                  data-testid="input-header-text"
+                  value={formHeaderText}
+                  onChange={e => setFormHeaderText(e.target.value)}
+                  placeholder="e.g. Employment Contract"
+                  className="bg-zinc-900 border-zinc-700"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-400 uppercase tracking-wider">Logo Position</Label>
+                <div className="flex gap-1">
+                  {(["left", "center", "right"] as const).map(pos => (
+                    <button
+                      key={pos}
+                      type="button"
+                      data-testid={`button-logo-align-${pos}`}
+                      className={`flex-1 h-9 rounded text-xs font-medium transition-colors ${formLogoAlignment === pos ? "bg-primary text-primary-foreground" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"}`}
+                      onClick={() => setFormLogoAlignment(pos)}
+                    >
+                      {pos.charAt(0).toUpperCase() + pos.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <div className="border-t border-zinc-800 pt-4 space-y-4">
@@ -941,12 +963,9 @@ function ContractTemplatesTab() {
           {previewTemplate && (
             <div className="mt-4 bg-white text-black rounded-lg p-8 space-y-6 font-serif">
               {previewTemplate.logoUrl && (
-                <div className="flex justify-center">
+                <div className={`flex ${(previewTemplate as any).logoAlignment === "left" ? "justify-start" : (previewTemplate as any).logoAlignment === "right" ? "justify-end" : "justify-center"}`}>
                   <img src={previewTemplate.logoUrl} alt="Logo" className="h-16 object-contain" />
                 </div>
-              )}
-              {previewTemplate.companyName && (
-                <p className="text-center text-lg font-bold">{previewTemplate.companyName}</p>
               )}
               {previewTemplate.headerText && (
                 <p className="text-center text-xl font-bold border-b pb-4">{previewTemplate.headerText}</p>

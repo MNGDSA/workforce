@@ -979,12 +979,9 @@ export default function CandidatePortal() {
           {contractPreview && (
             <div className="mt-4 bg-white text-black rounded-lg p-8 space-y-6 font-serif" data-testid="contract-preview-content">
               {contractPreview.template?.logoUrl && (
-                <div className="flex justify-center">
+                <div className={`flex ${contractPreview.template?.logoAlignment === "left" ? "justify-start" : contractPreview.template?.logoAlignment === "right" ? "justify-end" : "justify-center"}`}>
                   <img src={contractPreview.template.logoUrl} alt="Company Logo" className="h-16 object-contain" />
                 </div>
-              )}
-              {contractPreview.template?.companyName && (
-                <p className="text-center text-lg font-bold">{contractPreview.template.companyName}</p>
               )}
               {contractPreview.template?.headerText && (
                 <p className="text-center text-xl font-bold border-b pb-4">{contractPreview.template.headerText}</p>

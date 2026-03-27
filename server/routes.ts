@@ -1633,7 +1633,7 @@ export async function registerRoutes(
       const template = await storage.getContractTemplate(contract.templateId);
       return res.json({
         contract,
-        template: template ? { name: template.name, companyName: template.companyName, logoUrl: template.logoUrl, headerText: template.headerText, preamble: template.preamble, footerText: template.footerText, documentFooter: template.documentFooter } : null,
+        template: template ? { name: template.name, companyName: template.companyName, logoUrl: template.logoUrl, logoAlignment: template.logoAlignment, headerText: template.headerText, preamble: template.preamble, footerText: template.footerText, documentFooter: template.documentFooter } : null,
         articles: contract.snapshotArticles,
         variables: contract.snapshotVariables,
       });
