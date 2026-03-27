@@ -44,6 +44,7 @@ import {
   Star,
   UserCheck,
   ShieldAlert,
+  Info,
 } from "lucide-react";
 import {
   Table,
@@ -234,6 +235,37 @@ function idLabel(val: string | null | undefined): string {
   if (val.startsWith("1")) return "National ID";
   if (val.startsWith("2")) return "Iqama ID";
   return "National / Iqama ID";
+}
+
+function StatusInfoHeader() {
+  const [visible, setVisible] = useState(false);
+  return (
+    <span className="inline-flex items-center gap-1">
+      Status
+      <span className="relative inline-flex items-center">
+        <button
+          type="button"
+          className="h-4 w-4 rounded-full border border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-primary flex items-center justify-center transition-colors focus:outline-none"
+          onMouseEnter={() => setVisible(true)}
+          onMouseLeave={() => setVisible(false)}
+          onClick={() => setVisible((v) => !v)}
+          aria-label="Status definitions"
+        >
+          <Info className="h-2.5 w-2.5" />
+        </button>
+        {visible && (
+          <span className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 w-72 rounded-sm bg-popover border border-border px-3.5 py-3 text-[11px] text-muted-foreground shadow-lg leading-relaxed pointer-events-none space-y-1.5">
+            <span className="block"><span className="font-semibold text-green-400">Active</span> — Profile completed, account is live and ready.</span>
+            <span className="block"><span className="font-semibold text-gray-400">Inactive</span> — Account created but profile not yet completed (e.g. bulk-uploaded SMP staff who haven't activated via OTP).</span>
+            <span className="block"><span className="font-semibold text-blue-400">Hired</span> — Candidate converted to an active employee.</span>
+            <span className="block"><span className="font-semibold text-red-400">Blocked</span> — Manually blocked by an admin. Cannot apply or be processed.</span>
+            <span className="block"><span className="font-semibold text-amber-400">Dormant</span> — Was active but hasn't logged in for over 1 year.</span>
+            <span className="absolute left-1/2 -translate-x-1/2 bottom-full h-0 w-0 border-x-4 border-x-transparent border-b-4 border-b-border" />
+          </span>
+        )}
+      </span>
+    </span>
+  );
 }
 
 function CandidateProfileSheet({
@@ -981,7 +1013,7 @@ export default function TalentPage() {
                           <span className="flex items-center">Classification <SortIcon field="source" /></span>
                         </TableHead>
                       )}
-                      {col("status") && <TableHead className="text-muted-foreground">Status</TableHead>}
+                      {col("status") && <TableHead className="text-muted-foreground"><StatusInfoHeader /></TableHead>}
                       {col("phone") && (
                         <TableHead
                           className="text-muted-foreground cursor-pointer select-none"
