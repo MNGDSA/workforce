@@ -431,34 +431,79 @@ export async function registerRoutes(
     }
   });
 
-  // ─── Reset password (forgot password — OTP verified) ─────────────────────
+  // ─── Reset password: initiate (lookup by National ID, send OTP) ──────────
+  app.post("/api/auth/reset-password/request", async (req: Request, res: Response) => {
+    try {
+      const { nationalId } = req.body as { nationalId?: string };
+      if (!nationalId) {
+        return res.status(400).json({ message: "National ID is required" });
+      }
+      const clean = nationalId.trim();
+      const user = await storage.getUserByNationalId(clean);
+      if (!user) {
+        return res.status(404).json({ message: "No account found with this ID number." });
+      }
+      if (!user.phone) {
+        return res.status(400).json({ message: "No phone number on file. Contact an administrator." });
+      }
+      if (!user.isActive) {
+        return res.status(403).json({ message: "Account is disabled. Contact support." });
+      }
+
+      const phone = user.phone;
+      const recentCount = await storage.countRecentOtpRequests(phone, 10 * 60 * 1000);
+      if (recentCount >= 3) {
+        return res.status(429).json({ message: "Too many OTP requests. Please wait 10 minutes before trying again." });
+      }
+
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      await storage.createOtpVerification(phone, code, expiresAt);
+
+      const activePlugin = await storage.getActiveSmsPlugin();
+      if (activePlugin) {
+        const result = await sendSmsViaPlugin(activePlugin, phone, `Your password reset code is: ${code}`);
+        if (!result.success) {
+          console.error("[Reset] SMS delivery failed:", result.error);
+          return res.status(502).json({ message: "Failed to send OTP. Please try again." });
+        }
+      }
+
+      const masked = phone.replace(/.(?=.{2})/g, "x");
+      console.log(`[Reset] OTP sent to ${phone} for national ID ${clean}, expires ${expiresAt.toISOString()}`);
+      return res.json({ maskedPhone: masked, phone, expiresAt: expiresAt.toISOString() });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // ─── Reset password: finalize (OTP verified, set new password) ──────────
   app.post("/api/auth/reset-password", async (req: Request, res: Response) => {
     try {
-      const { phone, otpId, newPassword } = req.body as {
-        phone?: string; otpId?: string; newPassword?: string;
+      const { nationalId, otpId, newPassword } = req.body as {
+        nationalId?: string; otpId?: string; newPassword?: string;
       };
-      if (!phone || !otpId || !newPassword) {
-        return res.status(400).json({ message: "Phone, OTP verification, and new password are required" });
+      if (!nationalId || !otpId || !newPassword) {
+        return res.status(400).json({ message: "National ID, OTP verification, and new password are required" });
       }
       if (newPassword.length < 6) {
         return res.status(400).json({ message: "Password must be at least 6 characters" });
       }
 
-      const normalizedPhone = phone.trim().replace(/\s+/g, "");
-      const otp = await storage.getLatestOtpVerification(normalizedPhone);
+      const user = await storage.getUserByNationalId(nationalId.trim());
+      if (!user || !user.phone) {
+        return res.status(404).json({ message: "No account found." });
+      }
+
+      const otp = await storage.getLatestOtpVerification(user.phone);
       if (!otp || otp.id !== otpId) {
-        return res.status(400).json({ message: "Invalid OTP session. Please verify your phone again." });
+        return res.status(400).json({ message: "Invalid OTP session. Please verify again." });
       }
       if (!otp.verifiedAt) {
         return res.status(400).json({ message: "Phone number has not been verified." });
       }
       if (new Date() > new Date(otp.expiresAt.getTime() + 30 * 60 * 1000)) {
-        return res.status(400).json({ message: "OTP session expired. Please verify your phone again." });
-      }
-
-      const user = await storage.getUserByPhone(normalizedPhone);
-      if (!user) {
-        return res.status(404).json({ message: "No account found with this phone number." });
+        return res.status(400).json({ message: "OTP session expired. Please verify again." });
       }
 
       const hashed = await bcrypt.hash(newPassword, 12);

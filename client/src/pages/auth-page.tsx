@@ -50,14 +50,17 @@ export default function AuthPage() {
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Forgot password flow state
-  type ResetStep = "phone" | "otp" | "newpass" | "done";
+  type ResetStep = "id" | "otp" | "newpass" | "done";
   const [resetStep, setResetStep] = useState<ResetStep | null>(null);
+  const [resetNationalId, setResetNationalId] = useState("");
   const [resetPhone, setResetPhone] = useState("");
+  const [resetMaskedPhone, setResetMaskedPhone] = useState("");
   const [resetOtpCode, setResetOtpCode] = useState("");
   const [resetOtpId, setResetOtpId] = useState("");
   const [resetNewPassword, setResetNewPassword] = useState("");
   const [resetError, setResetError] = useState("");
   const [resetCountdown, setResetCountdown] = useState(0);
+  const [showSignUpFromReset, setShowSignUpFromReset] = useState(false);
   const resetOtpRef = useRef<HTMLInputElement>(null);
   const resetCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -180,14 +183,16 @@ export default function AuthPage() {
     resetCountdownRef.current = setInterval(tick, 1000);
   }
 
-  async function sendResetOtp(phone: string) {
+  async function requestResetOtp(nationalId: string) {
     setResetError("");
     setIsLoading(true);
     try {
-      const res = await apiRequest("POST", "/api/auth/otp/request", { phone: phone.trim() });
+      const res = await apiRequest("POST", "/api/auth/reset-password/request", { nationalId: nationalId.trim() });
       const data = await res.json();
       const expiresAt = new Date(data.expiresAt);
-      setResetPhone(phone.trim());
+      setResetNationalId(nationalId.trim());
+      setResetPhone(data.phone);
+      setResetMaskedPhone(data.maskedPhone);
       setResetOtpCode("");
       setResetStep("otp");
       startResetCountdown(expiresAt);
@@ -226,7 +231,7 @@ export default function AuthPage() {
     setIsLoading(true);
     try {
       await apiRequest("POST", "/api/auth/reset-password", {
-        phone: resetPhone,
+        nationalId: resetNationalId,
         otpId: resetOtpId,
         newPassword: resetNewPassword,
       });
@@ -241,12 +246,15 @@ export default function AuthPage() {
 
   function closeResetFlow() {
     setResetStep(null);
+    setResetNationalId("");
     setResetPhone("");
+    setResetMaskedPhone("");
     setResetOtpCode("");
     setResetOtpId("");
     setResetNewPassword("");
     setResetError("");
     setResetCountdown(0);
+    setShowSignUpFromReset(false);
     if (resetCountdownRef.current) clearInterval(resetCountdownRef.current);
   }
 
@@ -271,18 +279,18 @@ export default function AuthPage() {
 
           {resetStep ? (
             <div className="space-y-5">
-              {resetStep === "phone" && (
+              {resetStep === "id" && (
                 <div className="space-y-4">
-                  <p className="text-muted-foreground text-sm">Enter your phone number to receive a verification code.</p>
+                  <p className="text-muted-foreground text-sm">Enter your National ID or Iqama number to receive a verification code on your registered phone.</p>
                   <div className="relative group">
-                    <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <CreditCard className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                     <Input
-                      placeholder="e.g. 0501234567"
-                      value={resetPhone}
-                      onChange={(e) => setResetPhone(e.target.value)}
+                      placeholder="e.g. 1012345678"
+                      value={resetNationalId}
+                      onChange={(e) => setResetNationalId(e.target.value.replace(/\D/g, ""))}
                       className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm font-mono tracking-wide"
                       inputMode="numeric"
-                      data-testid="input-reset-phone"
+                      data-testid="input-reset-national-id"
                     />
                   </div>
                   {resetError && (
@@ -292,8 +300,8 @@ export default function AuthPage() {
                     </div>
                   )}
                   <Button
-                    onClick={() => sendResetOtp(resetPhone)}
-                    disabled={isLoading || resetPhone.trim().length < 9}
+                    onClick={() => requestResetOtp(resetNationalId)}
+                    disabled={isLoading || resetNationalId.trim().length < 8}
                     className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm"
                     data-testid="button-send-reset-otp"
                   >
@@ -308,7 +316,7 @@ export default function AuthPage() {
               {resetStep === "otp" && (
                 <div className="space-y-4">
                   <p className="text-muted-foreground text-sm">
-                    Enter the code sent to <span className="text-white font-mono">{resetPhone}</span>
+                    Enter the code sent to <span className="text-white font-mono">{resetMaskedPhone}</span>
                   </p>
                   <div className="relative group">
                     <ShieldCheck className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
@@ -329,7 +337,7 @@ export default function AuthPage() {
                     </p>
                   )}
                   {resetCountdown === 0 && (
-                    <button type="button" onClick={() => sendResetOtp(resetPhone)} className="w-full text-center text-xs text-primary hover:text-primary/80 flex items-center justify-center gap-1">
+                    <button type="button" onClick={() => requestResetOtp(resetNationalId)} className="w-full text-center text-xs text-primary hover:text-primary/80 flex items-center justify-center gap-1">
                       <RefreshCw className="h-3 w-3" /> Resend code
                     </button>
                   )}
@@ -347,6 +355,11 @@ export default function AuthPage() {
                   >
                     {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <>Verify Code <ArrowRight className="ml-2 h-4 w-4" /></>}
                   </Button>
+                  <div className="text-center pt-1">
+                    <button type="button" onClick={() => { closeResetFlow(); setShowSignUpFromReset(true); }} className="text-xs text-amber-400 hover:text-amber-300 transition-colors" data-testid="link-not-your-phone">
+                      Not your phone number? Sign up with a new one
+                    </button>
+                  </div>
                   <button type="button" onClick={closeResetFlow} className="w-full text-center text-xs text-muted-foreground hover:text-primary transition-colors">
                     Back to login
                   </button>
@@ -408,7 +421,7 @@ export default function AuthPage() {
             </div>
           ) : (
 
-          <Tabs defaultValue="login" className="w-full">
+          <Tabs defaultValue={showSignUpFromReset ? "register" : "login"} key={showSignUpFromReset ? "reg" : "login"} className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-8 bg-muted/50 p-1 rounded-sm">
               <TabsTrigger value="login" className="rounded-sm data-[state=active]:bg-background data-[state=active]:text-foreground font-medium">
                 Login
@@ -455,7 +468,7 @@ export default function AuthPage() {
                       <FormItem>
                         <div className="flex items-center justify-between">
                           <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">Password</Label>
-                          <button type="button" onClick={() => setResetStep("phone")} className="text-xs text-muted-foreground hover:text-primary transition-colors" data-testid="link-forgot-password">Forgot password?</button>
+                          <button type="button" onClick={() => setResetStep("id")} className="text-xs text-muted-foreground hover:text-primary transition-colors" data-testid="link-forgot-password">Forgot password?</button>
                         </div>
                         <FormControl>
                           <div className="relative group">
