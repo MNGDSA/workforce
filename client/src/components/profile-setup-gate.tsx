@@ -102,7 +102,14 @@ const step1Schema = z.object({
   lastName:        z.string().min(2, "Last name is required"),
   gender:          z.string().min(1, "Gender is required"),
   nationalityText: z.string().min(1, "Nationality is required"),
-  dateOfBirth:     z.string().min(8, "Date of birth is required"),
+  dateOfBirth:     z.string().min(8, "Date of birth is required").refine(val => {
+    const dob = new Date(val);
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const m = today.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+    return age >= 15;
+  }, "Candidate must be at least 15 years old"),
   city:            z.string().min(1, "City is required"),
   email:           z.string().email("Enter a valid email").optional().or(z.literal("")),
   maritalStatus:   z.string().min(1, "Marital status is required"),
@@ -730,18 +737,10 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
             )}
           </div>
 
-          {/* Badges */}
-          <div className="flex flex-wrap gap-2 justify-center">
-            <Badge variant="outline" className="border-border text-muted-foreground text-xs">
-              Secure & confidential
-            </Badge>
-            <Badge variant="outline" className="border-border text-muted-foreground text-xs">
-              Filled once — editable later
-            </Badge>
-            <Badge variant="outline" className="border-border text-muted-foreground text-xs">
-              Required for applications
-            </Badge>
-          </div>
+          {/* PDPL Notice */}
+          <p className="text-[11px] text-muted-foreground text-center leading-relaxed max-w-md mx-auto">
+            All personal data collected through the portal is subject to the Personal Data Protection Law issued by Royal Decree No. (M/19) dated 9/2/1443 AH and Cabinet Resolution No. (98) dated 7/2/1443 AH.
+          </p>
         </div>
       </div>
     </div>
