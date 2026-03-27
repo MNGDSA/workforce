@@ -568,21 +568,13 @@ export default function InterviewsPage() {
                       >
                         {/* Group name */}
                         <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8 border border-border shrink-0">
-                              {candidate?.photoUrl && <AvatarImage src={candidate.photoUrl} alt={candidate.fullNameEn} className="object-cover" />}
-                              <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                                {candidate ? initials(candidate.fullNameEn) : "??"}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-medium text-white text-sm">
-                                {iv.groupName || candidate?.fullNameEn || "Unnamed Session"}
-                              </p>
-                              <p className="text-[10px] text-muted-foreground font-mono">
-                                {iv.id.slice(0, 8)}…
-                              </p>
-                            </div>
+                          <div>
+                            <p className="font-medium text-white text-sm">
+                              {iv.groupName || candidate?.fullNameEn || "Unnamed Session"}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground font-mono">
+                              {iv.id.slice(0, 8)}…
+                            </p>
                           </div>
                         </TableCell>
 
