@@ -882,6 +882,9 @@ export async function registerRoutes(
       }
       const record = await storage.updateOnboardingRecord(req.params.id, data);
       if (!record) return res.status(404).json({ message: "Onboarding record not found" });
+      if (data.status === "rejected" && record.applicationId) {
+        await storage.updateApplication(record.applicationId, { status: "interviewed" });
+      }
       return res.json(record);
     } catch (err) {
       return handleError(res, err);
