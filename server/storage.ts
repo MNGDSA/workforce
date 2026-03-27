@@ -504,7 +504,14 @@ export class DatabaseStorage implements IStorage {
   async getInterviews(params?: { status?: string; candidateId?: string }): Promise<Interview[]> {
     const conditions = [];
     if (params?.status) conditions.push(eq(interviews.status, params.status as any));
-    if (params?.candidateId) conditions.push(eq(interviews.candidateId, params.candidateId));
+    if (params?.candidateId) {
+      conditions.push(
+        or(
+          eq(interviews.candidateId, params.candidateId),
+          sql`${params.candidateId} = ANY(${interviews.invitedCandidateIds})`
+        )!
+      );
+    }
     const where = conditions.length > 0 ? and(...conditions) : undefined;
     return db.select().from(interviews).where(where).orderBy(desc(interviews.scheduledAt));
   }

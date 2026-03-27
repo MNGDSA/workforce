@@ -218,13 +218,6 @@ export default function ScheduleInterviewPage() {
 
   const schedule = useMutation({
     mutationFn: async (data: ScheduleForm) => {
-      const code = "GRP-" + Math.random().toString(36).substring(2, 7).toUpperCase();
-      const candidate = await apiRequest("POST", "/api/candidates", {
-        candidateCode: code,
-        fullNameEn: data.groupName,
-      }).then((r) => r.json());
-
-      // Resolve creator name from localStorage session
       let createdByName = "Admin";
       try {
         const session = JSON.parse(localStorage.getItem("workforce_candidate") ?? "{}");
@@ -235,7 +228,6 @@ export default function ScheduleInterviewPage() {
       const scheduledAt = new Date(`${data.date}T${data.time}:00`).toISOString();
       const invitedCandidateIds = Array.from(selected.keys());
       const payload: Record<string, unknown> = {
-        candidateId: candidate.id,
         scheduledAt,
         durationMinutes: data.durationMinutes,
         type: data.venueName,

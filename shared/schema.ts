@@ -357,7 +357,6 @@ export const interviews = pgTable(
     applicationId: varchar("application_id")
       .references(() => applications.id, { onDelete: "set null" }),
     candidateId: varchar("candidate_id")
-      .notNull()
       .references(() => candidates.id),
     interviewerId: varchar("interviewer_id").references(() => users.id),
     scheduledAt: timestamp("scheduled_at").notNull(),
@@ -558,6 +557,7 @@ export const insertInterviewSchema = createInsertSchema(interviews, {
   createdAt: true,
   updatedAt: true,
 }).extend({
+  candidateId: z.string().optional().nullable(),
   applicationId: z.string().optional().nullable(),
   invitedCandidateIds: z.array(z.string()).optional().nullable(),
   createdByName: z.string().optional().nullable(),
