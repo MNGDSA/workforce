@@ -90,9 +90,9 @@ export async function registerRoutes(
         if (Object.keys(syncPayload).length > 0) {
           const merged = { ...rec, ...syncPayload };
           const allDone = merged.hasPhoto && merged.hasIban && merged.hasNationalId &&
-                          merged.hasSignedContract && merged.hasEmergencyContact;
+                          merged.hasSignedContract;
           const anyDone = merged.hasPhoto || merged.hasIban || merged.hasNationalId ||
-                          merged.hasSignedContract || merged.hasEmergencyContact;
+                          merged.hasSignedContract;
           syncPayload.status = allDone ? "ready" : anyDone ? "in_progress" : "pending";
           await storage.updateOnboardingRecord(rec.id, syncPayload);
         }
@@ -869,14 +869,14 @@ export async function registerRoutes(
       const data = insertOnboardingSchema.partial().parse(req.body);
       // Auto-compute status
       if (data.hasPhoto !== undefined || data.hasIban !== undefined || data.hasNationalId !== undefined ||
-          data.hasSignedContract !== undefined || data.hasEmergencyContact !== undefined) {
+          data.hasSignedContract !== undefined) {
         const current = await storage.getOnboardingRecord(req.params.id);
         if (current && current.status !== "converted" && current.status !== "rejected") {
           const merged = { ...current, ...data };
           const allDone = merged.hasPhoto && merged.hasIban && merged.hasNationalId &&
-                          merged.hasSignedContract && merged.hasEmergencyContact;
+                          merged.hasSignedContract;
           const anyDone = merged.hasPhoto || merged.hasIban || merged.hasNationalId ||
-                          merged.hasSignedContract || merged.hasEmergencyContact;
+                          merged.hasSignedContract;
           data.status = allDone ? "ready" : anyDone ? "in_progress" : "pending";
         }
       }

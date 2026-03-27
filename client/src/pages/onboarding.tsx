@@ -44,7 +44,6 @@ import {
   CreditCard,
   IdCard,
   FileSignature,
-  Phone,
   Briefcase,
   Loader2,
   TriangleAlert,
@@ -117,12 +116,11 @@ const PREREQUISITES = [
   { key: "hasIban",            label: "IBAN Certificate",     icon: CreditCard,    hint: "Saudi bank IBAN on file",        profileKey: "ibanFileUrl" as const,           isFile: true },
   { key: "hasNationalId",      label: "National ID / Iqama",  icon: IdCard,        hint: "ID copy submitted & verified",   profileKey: "nationalIdFileUrl" as const,     isFile: true },
   { key: "hasSignedContract",  label: "Signed Contract",      icon: FileSignature, hint: "Employment contract signed",     profileKey: null,                             isFile: false },
-  { key: "hasEmergencyContact",label: "Emergency Contact",    icon: Phone,         hint: "Contact details recorded",       profileKey: "emergencyContactName" as const,  isFile: false },
 ] as const;
 const PREREQ_TOTAL = PREREQUISITES.length;
 
 function prereqCount(rec: OnboardingRecord) {
-  return [rec.hasPhoto, rec.hasIban, rec.hasNationalId, rec.hasSignedContract, rec.hasEmergencyContact].filter(Boolean).length;
+  return [rec.hasPhoto, rec.hasIban, rec.hasNationalId, rec.hasSignedContract].filter(Boolean).length;
 }
 
 function ProgressBar({ value, total }: { value: number; total: number }) {
