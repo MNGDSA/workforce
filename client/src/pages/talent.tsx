@@ -774,13 +774,19 @@ export default function TalentPage() {
       return apiRequest("POST", "/api/candidates/bulk", { candidates: mapped }).then(r => r.json());
     },
     onSuccess: (data) => {
-      toast({ title: "Upload Complete", description: `${data.inserted} candidates imported successfully.` });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
-      setUploadOpen(false);
-      setUploadFile(null);
-      setUploadPreview(null);
-      setUploadError(null);
+      if (data.skipped > 0) {
+        const dupDetails = data.duplicates?.map((d: any) => `Row ${d.row}: ${d.reason}`).join("\n") ?? "";
+        setUploadError(`${data.inserted} imported, ${data.skipped} skipped (duplicates):\n${dupDetails}`);
+        toast({ title: "Upload Partial", description: `${data.inserted} imported, ${data.skipped} duplicates skipped.`, variant: "destructive" });
+      } else {
+        toast({ title: "Upload Complete", description: `${data.inserted} candidates imported successfully.` });
+        setUploadOpen(false);
+        setUploadFile(null);
+        setUploadPreview(null);
+        setUploadError(null);
+      }
     },
     onError: (err: any) => {
       setUploadError(err.message || "Upload failed");

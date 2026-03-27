@@ -480,6 +480,18 @@ export async function registerRoutes(
   app.post("/api/candidates", async (req: Request, res: Response) => {
     try {
       const data = insertCandidateSchema.parse(req.body);
+      if (data.nationalId) {
+        const existing = await storage.getCandidateByNationalId(data.nationalId);
+        if (existing) {
+          return res.status(409).json({ message: `A candidate with National ID ${data.nationalId} already exists` });
+        }
+      }
+      if (data.phone) {
+        const existing = await storage.getCandidateByPhone(data.phone);
+        if (existing) {
+          return res.status(409).json({ message: `A candidate with phone ${data.phone} already exists` });
+        }
+      }
       const candidate = await storage.createCandidate(data);
       return res.status(201).json(candidate);
     } catch (err) {
@@ -556,8 +568,14 @@ export async function registerRoutes(
       if (errors.length > 0) {
         return res.status(400).json({ message: `Validation failed on ${errors.length} rows`, errors: errors.slice(0, 20) });
       }
-      const inserted = await storage.bulkInsertCandidates(validated);
-      return res.status(201).json({ inserted, total: rawCandidates.length });
+      const result = await storage.bulkInsertCandidates(validated);
+      const statusCode = result.skipped > 0 ? 207 : 201;
+      return res.status(statusCode).json({
+        inserted: result.inserted,
+        skipped: result.skipped,
+        total: rawCandidates.length,
+        ...(result.duplicates.length > 0 ? { duplicates: result.duplicates.slice(0, 50) } : {}),
+      });
     } catch (err) {
       return handleError(res, err);
     }

@@ -328,6 +328,12 @@ RETURN TO POOL
 ## UI/UX Patterns & Gotchas
 - **Tooltip info icons**: Lucide's `Info` icon already renders as a circle with an "i" inside. Do NOT wrap it in a `rounded-full border` button — this creates a double-circle effect. Use a plain unstyled button with only `text-muted-foreground hover:text-primary` classes. No border, no rounded-full, no fixed h/w on the button wrapper.
 
+## Data Integrity Policy (GLOBAL)
+- **NEVER use `onConflictDoNothing()`** in production code. Duplicates must be caught, reported, and surfaced to the user — never silently swallowed.
+- All insert paths (single and bulk) must validate uniqueness of business keys (nationalId, phone, email, contract numbers, etc.) BEFORE inserting and return explicit 409 errors.
+- Bulk uploads pre-check against the DB AND within the batch itself, return HTTP 207 with a `duplicates` array listing row number + reason.
+- `seed.ts` is the only place `onConflictDoNothing()` is acceptable (idempotent dev seeding).
+
 ## Packages Installed
 - `bcryptjs` + `@types/bcryptjs` — password hashing
 - `drizzle-orm`, `drizzle-zod`, `drizzle-kit` — ORM

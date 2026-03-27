@@ -63,10 +63,11 @@ export interface IStorage {
   getCandidates(query: CandidateQuery): Promise<{ data: Candidate[]; total: number; page: number; limit: number }>;
   getCandidate(id: string): Promise<Candidate | undefined>;
   getCandidateByPhone(phone: string): Promise<Candidate | undefined>;
+  getCandidateByNationalId(nationalId: string): Promise<Candidate | undefined>;
   createCandidate(candidate: InsertCandidate): Promise<Candidate>;
   updateCandidate(id: string, data: Partial<InsertCandidate>): Promise<Candidate | undefined>;
   deleteCandidate(id: string): Promise<boolean>;
-  bulkInsertCandidates(candidates: InsertCandidate[]): Promise<number>;
+  bulkInsertCandidates(candidates: InsertCandidate[]): Promise<{ inserted: number; skipped: number; duplicates: { row: number; nationalId?: string; phone?: string; reason: string }[] }>;
   bulkUpdateCandidateStatus(ids: string[], status: string): Promise<number>;
   bulkDeleteCandidates(ids: string[]): Promise<number>;
   getCandidateStats(): Promise<{ total: number; active: number; hired: number; blocked: number; avgRating: number }>;
@@ -308,6 +309,11 @@ export class DatabaseStorage implements IStorage {
     return candidate;
   }
 
+  async getCandidateByNationalId(nationalId: string): Promise<Candidate | undefined> {
+    const [candidate] = await db.select().from(candidates).where(eq(candidates.nationalId, nationalId));
+    return candidate;
+  }
+
   async createCandidate(candidate: InsertCandidate): Promise<Candidate> {
     const [created] = await db.insert(candidates).values(candidate).returning();
     return created;
@@ -331,17 +337,59 @@ export class DatabaseStorage implements IStorage {
     return (result.rowCount ?? 0) > 0;
   }
 
-  async bulkInsertCandidates(data: InsertCandidate[]): Promise<number> {
-    if (data.length === 0) return 0;
-    // Insert in batches of 1000 for safety
-    const batchSize = 1000;
+  async bulkInsertCandidates(data: InsertCandidate[]): Promise<{ inserted: number; skipped: number; duplicates: { row: number; nationalId?: string; phone?: string; reason: string }[] }> {
+    if (data.length === 0) return { inserted: 0, skipped: 0, duplicates: [] };
+
+    const existingNatIds = new Set<string>();
+    const existingPhones = new Set<string>();
+
+    const natIds = data.map(c => c.nationalId).filter(Boolean) as string[];
+    const phones = data.map(c => c.phone).filter(Boolean) as string[];
+
+    const CHUNK = 2000;
+    for (let i = 0; i < natIds.length; i += CHUNK) {
+      const chunk = natIds.slice(i, i + CHUNK);
+      const found = await db.select({ nationalId: candidates.nationalId }).from(candidates).where(inArray(candidates.nationalId, chunk));
+      found.forEach(r => { if (r.nationalId) existingNatIds.add(r.nationalId); });
+    }
+    for (let i = 0; i < phones.length; i += CHUNK) {
+      const chunk = phones.slice(i, i + CHUNK);
+      const found = await db.select({ phone: candidates.phone }).from(candidates).where(inArray(candidates.phone, chunk));
+      found.forEach(r => { if (r.phone) existingPhones.add(r.phone); });
+    }
+
+    const toInsert: InsertCandidate[] = [];
+    const duplicates: { row: number; nationalId?: string; phone?: string; reason: string }[] = [];
+    const batchNatIds = new Set<string>();
+    const batchPhones = new Set<string>();
+
+    for (let i = 0; i < data.length; i++) {
+      const c = data[i];
+      const reasons: string[] = [];
+
+      if (c.nationalId && existingNatIds.has(c.nationalId)) reasons.push(`National ID ${c.nationalId} already exists`);
+      if (c.phone && existingPhones.has(c.phone)) reasons.push(`Phone ${c.phone} already exists`);
+      if (c.nationalId && batchNatIds.has(c.nationalId)) reasons.push(`Duplicate National ID ${c.nationalId} within upload`);
+      if (c.phone && batchPhones.has(c.phone)) reasons.push(`Duplicate phone ${c.phone} within upload`);
+
+      if (reasons.length > 0) {
+        duplicates.push({ row: i + 1, nationalId: c.nationalId ?? undefined, phone: c.phone ?? undefined, reason: reasons.join("; ") });
+      } else {
+        toInsert.push(c);
+        if (c.nationalId) batchNatIds.add(c.nationalId);
+        if (c.phone) batchPhones.add(c.phone);
+      }
+    }
+
     let inserted = 0;
-    for (let i = 0; i < data.length; i += batchSize) {
-      const batch = data.slice(i, i + batchSize);
-      const result = await db.insert(candidates).values(batch).onConflictDoNothing().returning({ id: candidates.id });
+    const batchSize = 1000;
+    for (let i = 0; i < toInsert.length; i += batchSize) {
+      const batch = toInsert.slice(i, i + batchSize);
+      const result = await db.insert(candidates).values(batch).returning({ id: candidates.id });
       inserted += result.length;
     }
-    return inserted;
+
+    return { inserted, skipped: duplicates.length, duplicates };
   }
 
   async bulkUpdateCandidateStatus(ids: string[], status: string): Promise<number> {
