@@ -374,12 +374,37 @@ The onboarding checklist becomes a sequential pipeline instead of a flat list:
 - **`contract_templates`** — id, name, eventId, articles (JSONB array of `{title, body}`), variables list, createdBy, createdAt
 - **`candidate_contracts`** — id, candidateId, templateId, status (`generated` | `sent` | `signed`), signedAt, signedIp, pdfPath, createdAt
 
+### Contract Versioning (Immutable Signed Contracts)
+- **Signed contracts are immutable.** Once signed, the contract content is frozen — no retroactive changes.
+- **Template versioning**: Editing a template creates a new version (v1 → v2). Old version is preserved and locked.
+- **Who gets what on update**:
+  - Already signed v1 → contract stays as-is, record shows "Signed (v1)"
+  - Haven't signed yet (pending) → pending contract auto-replaced with new version
+  - Not yet generated → get latest version when contract is generated
+- **Re-sign flow** (rare, explicit admin action): "Request Re-sign" resets signed candidates to pending on new version + sends SMS notification. Never automatic.
+- **Admin visibility**: Breakdown per version — how many signed, how many pending per version.
+- **DB**: `contract_templates` gets `version` (integer) + `parentTemplateId` (links version chain). `candidate_contracts` always points to exact template version signed.
+
+### Contract Template Branding (Logo + Header)
+- Template form includes: **logo upload** (image file), company name / header text, articles list, footer text (optional — legal disclaimers, stamp area)
+- Logo stored as file (like candidate documents)
+- `jspdf` renders logo at top of every generated PDF (top-left or top-center), company name beside it, articles flow below
+- One logo per template — different events/entities can have different branding
+
+### UI Layout (No New Pages)
+- **Onboarding page gets two tabs**: `[Onboarding Pipeline]` and `[Contract Templates]`
+- **Tab 1 — Pipeline**: Existing candidate list upgraded with 3-phase progress bar per card (Documents → Contract → Ready). Checklist side-sheet shows phased view with approve/reject per document, locked contract phase until docs approved, auto-ready when both complete.
+- **Tab 2 — Contract Templates**: List of templates with "Create Template" button (same pattern as Question Sets page). Create/edit form: name, linked event, logo upload, articles builder, variable placeholders. Preview renders sample PDF with dummy data.
+- **Candidate portal**: New "Your Employment Contract" section — Preview Contract button (PDF viewer), "I Agree & Sign" button with confirmation checkbox, download signed copy after signing.
+- **No new sidebar items. No new pages.**
+
 ### Key Design Decisions
 - Template-driven: one template → thousands of personalized contracts
 - Self-service: candidates do their own uploads and signing from their phones
 - Admin role: monitor dashboard, send reminders, review edge cases
 - SMP workers: lighter checklist (photo + national ID only), no individual contract (firm-level agreement)
 - Legal: compliant with Saudi Electronic Transactions Law (Royal Decree M/18)
+- Signed contracts immutable — versioning for updates, explicit re-sign for critical changes
 
 ## Planned Features (Post-Testing)
 - **Bilingual Input (EN/AR toggle)**: PrestaShop-style inline language switcher on text fields. A single `BilingualInput` component with an `EN | AR` pill toggle. Stores both `title` (English) and `titleAr` (Arabic) values, submits both, and the candidate portal renders the correct one based on user language preference. To be implemented after unit/system/regression/UAT/security testing is complete.
