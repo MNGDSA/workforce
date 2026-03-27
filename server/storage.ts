@@ -174,7 +174,7 @@ export interface IStorage {
     openPositions: number;
     activeSeasons: number;
     scheduledInterviews: number;
-    recentApplications: Array<{ candidateName: string; role: string; status: string; appliedAt: Date }>;
+    recentApplications: Array<{ candidateName: string; role: string; status: string; appliedAt: Date; photoUrl?: string | null }>;
   }>;
 }
 
@@ -690,6 +690,7 @@ export class DatabaseStorage implements IStorage {
         role: jobPostings.title,
         status: applications.status,
         appliedAt: applications.appliedAt,
+        photoUrl: candidates.photoUrl,
       })
       .from(applications)
       .leftJoin(candidates, eq(applications.candidateId, candidates.id))
@@ -707,6 +708,7 @@ export class DatabaseStorage implements IStorage {
         role: r.role ?? "Unknown",
         status: r.status,
         appliedAt: r.appliedAt,
+        photoUrl: (r as any).photoUrl ?? null,
       })),
     };
   }

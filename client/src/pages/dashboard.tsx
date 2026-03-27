@@ -13,7 +13,7 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 
@@ -68,6 +68,7 @@ export default function Dashboard() {
       role: string;
       status: string;
       appliedAt: string;
+      photoUrl?: string | null;
     }>;
   } | undefined;
 
@@ -172,6 +173,7 @@ export default function Dashboard() {
                       <div key={i} className="flex items-center justify-between p-3 bg-muted/20 rounded-sm border border-border/50 hover:bg-muted/40 transition-colors group" data-testid={`application-row-${i}`}>
                         <div className="flex items-center gap-4">
                           <Avatar className="h-10 w-10 border border-border bg-secondary text-secondary-foreground">
+                            {app.photoUrl && <AvatarImage src={app.photoUrl} alt={app.candidateName} className="object-cover" />}
                             <AvatarFallback>{app.candidateName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}</AvatarFallback>
                           </Avatar>
                           <div>

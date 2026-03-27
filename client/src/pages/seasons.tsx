@@ -29,7 +29,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Table,
   TableBody,
@@ -787,6 +787,7 @@ function SMPContractSheet({
                       <td className="px-6 py-2.5">
                         <div className="flex items-center gap-3">
                           <Avatar className="h-7 w-7 border border-border shrink-0">
+                            {(c as any).photoUrl && <AvatarImage src={(c as any).photoUrl} alt={c.fullNameEn} className="object-cover" />}
                             <AvatarFallback className="bg-primary/20 text-primary text-[10px]">
                               {c.fullNameEn.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?"}
                             </AvatarFallback>

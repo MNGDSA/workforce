@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sheet,
@@ -307,6 +307,7 @@ function InterviewDetailSheet({
                         <div key={c.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/10 transition-colors" data-testid={`detail-candidate-${c.id}`}>
                           <span className="text-[10px] text-muted-foreground/50 font-mono w-5 text-right shrink-0">{idx + 1}</span>
                           <Avatar className="h-7 w-7 border border-border shrink-0">
+                            {c.photoUrl && <AvatarImage src={c.photoUrl} alt={c.fullNameEn} className="object-cover" />}
                             <AvatarFallback className="bg-primary/15 text-primary text-[10px]">
                               {initials(c.fullNameEn)}
                             </AvatarFallback>
@@ -569,6 +570,7 @@ export default function InterviewsPage() {
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8 border border-border shrink-0">
+                              {candidate?.photoUrl && <AvatarImage src={candidate.photoUrl} alt={candidate.fullNameEn} className="object-cover" />}
                               <AvatarFallback className="bg-primary/20 text-primary text-xs">
                                 {candidate ? initials(candidate.fullNameEn) : "??"}
                               </AvatarFallback>

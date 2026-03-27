@@ -36,7 +36,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -665,6 +665,7 @@ export default function CandidatePortal() {
               <DropdownMenuTrigger asChild>
                 <button type="button" className="flex items-center gap-2 rounded-lg hover:bg-muted/50 p-1.5 transition-colors" data-testid="button-profile-menu">
                   <Avatar className="h-8 w-8 border border-border">
+                    {candidateProfile?.photoUrl && <AvatarImage src={candidateProfile.photoUrl} alt={candidateProfile.fullNameEn || ""} className="object-cover" />}
                     <AvatarFallback className="bg-primary/20 text-primary font-bold text-xs">{displayInitials}</AvatarFallback>
                   </Avatar>
                   <span className="text-sm font-medium text-white hidden sm:block max-w-[120px] truncate">{displayName}</span>
@@ -719,6 +720,7 @@ export default function CandidatePortal() {
                   data-testid="button-avatar-edit"
                 >
                   <Avatar className="h-20 w-20 border-4 border-card mx-auto group-hover:opacity-80 transition-opacity">
+                    {candidateProfile?.photoUrl && <AvatarImage src={candidateProfile.photoUrl} alt={candidateProfile.fullNameEn || ""} className="object-cover" />}
                     <AvatarFallback className="text-xl bg-primary/20 text-primary font-bold">{displayInitials}</AvatarFallback>
                   </Avatar>
                   <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 rounded-full">

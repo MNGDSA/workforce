@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState, useEffect } from "react";
@@ -1115,6 +1115,7 @@ function ApplicantsSheet({
                         <td className="px-6 py-3">
                           <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8 border border-border shrink-0">
+                              {candidate?.photoUrl && <AvatarImage src={candidate.photoUrl} alt={candidate.fullNameEn} className="object-cover" />}
                               <AvatarFallback className="bg-primary/20 text-primary text-xs">
                                 {candidate ? initials(candidate.fullNameEn) : "?"}
                               </AvatarFallback>

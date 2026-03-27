@@ -3,7 +3,7 @@ import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -321,6 +321,7 @@ function CandidateProfileSheet({
         <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
           <div className="flex items-center gap-4">
             <Avatar className="h-14 w-14 border-2 border-border">
+              {(c as any).photoUrl && <AvatarImage src={(c as any).photoUrl} alt={c.fullNameEn} className="object-cover" />}
               <AvatarFallback className="bg-primary/10 text-primary font-display text-lg">{initials}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
@@ -1013,6 +1014,7 @@ export default function TalentPage() {
                             <TableCell>
                               <div className="flex items-center gap-3">
                                 <Avatar className="h-9 w-9 border border-border">
+                                  {(candidate as any).photoUrl && <AvatarImage src={(candidate as any).photoUrl} alt={candidate.fullNameEn} className="object-cover" />}
                                   <AvatarFallback className="text-xs">
                                     {candidate.fullNameEn.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
                                   </AvatarFallback>
