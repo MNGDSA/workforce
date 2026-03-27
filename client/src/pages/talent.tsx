@@ -241,7 +241,7 @@ function StatusInfoHeader() {
       <span className="relative inline-flex items-center">
         <button
           type="button"
-          className="h-4 w-4 rounded-full border border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-primary flex items-center justify-center transition-colors focus:outline-none"
+          className="text-muted-foreground hover:text-primary transition-colors focus:outline-none"
           onMouseEnter={() => setVisible(true)}
           onMouseLeave={() => setVisible(false)}
           onClick={() => setVisible((v) => !v)}

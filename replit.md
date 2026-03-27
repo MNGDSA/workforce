@@ -325,6 +325,9 @@ RETURN TO POOL
 ## Integrations
 - **GitHub** — Connected via Replit OAuth (connection: `conn_github_01KMCD4T6871ZX6CKTKY6BG2YA`). Repo: `https://github.com/MNGDSA/workforce`. Permissions: `repo`, `read:org`, `read:project`, `read:user`, `user:email`. Service layer: `server/github.ts`. API routes under `/api/github/*`.
 
+## UI/UX Patterns & Gotchas
+- **Tooltip info icons**: Lucide's `Info` icon already renders as a circle with an "i" inside. Do NOT wrap it in a `rounded-full border` button — this creates a double-circle effect. Use a plain unstyled button with only `text-muted-foreground hover:text-primary` classes. No border, no rounded-full, no fixed h/w on the button wrapper.
+
 ## Packages Installed
 - `bcryptjs` + `@types/bcryptjs` — password hashing
 - `drizzle-orm`, `drizzle-zod`, `drizzle-kit` — ORM
