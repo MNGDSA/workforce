@@ -45,6 +45,7 @@ import {
   UserCheck,
   ShieldAlert,
   Info,
+  Trash2,
 } from "lucide-react";
 import {
   Table,
@@ -679,6 +680,7 @@ export default function TalentPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [profileCandidate, setProfileCandidate] = useState<Candidate | null>(null);
   const [blockCandidate, setBlockCandidate] = useState<Candidate | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<Candidate | null>(null);
 
   function toggleColumn(key: ColumnKey) {
     setVisibleColumns(prev => {
@@ -726,6 +728,16 @@ export default function TalentPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
     },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/candidates/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
+      toast({ title: "Candidate deleted" });
+    },
+    onError: () => toast({ title: "Failed to delete candidate", variant: "destructive" }),
   });
 
   const bulkUpload = useMutation({
@@ -1134,14 +1146,15 @@ export default function TalentPage() {
                                   <UserCheck className="mr-2 h-4 w-4" />
                                   View Profile
                                 </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => navigate(`/interviews/schedule?candidateId=${candidate.id}&candidateName=${encodeURIComponent(candidate.fullNameEn)}`)}
-                                  data-testid={`menu-schedule-interview-${candidate.id}`}
-                                >
-                                  <Calendar className="mr-2 h-4 w-4" />
-                                  Schedule Interview
-                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => setDeleteCandidate(candidate)}
+                                  className="text-red-500"
+                                  data-testid={`menu-delete-${candidate.id}`}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => {
                                     if (candidate.status === "blocked") {
@@ -1364,6 +1377,32 @@ export default function TalentPage() {
               data-testid="confirm-block"
             >
               Block Candidate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deleteCandidate} onOpenChange={(o) => !o && setDeleteCandidate(null)}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white font-display">Delete Candidate</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              This will permanently delete <span className="text-white font-medium">{deleteCandidate?.fullNameEn}</span> and all their related records (applications, interviews, onboarding). This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={() => {
+                if (deleteCandidate) {
+                  deleteMutation.mutate(deleteCandidate.id);
+                  setDeleteCandidate(null);
+                }
+              }}
+              data-testid="confirm-delete-candidate"
+            >
+              Delete Permanently
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
