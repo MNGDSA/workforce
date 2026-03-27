@@ -43,12 +43,12 @@ import {
   Camera,
   CreditCard,
   IdCard,
-  HeartPulse,
   FileSignature,
   Phone,
   Briefcase,
   Loader2,
   TriangleAlert,
+  Eye,
 } from "lucide-react";
 
 type OnboardingStatus = "pending" | "in_progress" | "ready" | "converted" | "rejected";
@@ -63,7 +63,6 @@ interface OnboardingRecord {
   hasPhoto: boolean;
   hasIban: boolean;
   hasNationalId: boolean;
-  hasMedicalFitness: boolean;
   hasSignedContract: boolean;
   hasEmergencyContact: boolean;
   contractSignedAt?: string | null;
@@ -90,6 +89,8 @@ interface Candidate {
   status: string;
   ibanNumber?: string | null;
   photoUrl?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
 }
 
 interface Application {
@@ -108,16 +109,16 @@ const STATUS_CONFIG: Record<OnboardingStatus, { label: string; color: string; ic
 };
 
 const PREREQUISITES = [
-  { key: "hasPhoto",           label: "Personal Photo",       icon: Camera,        hint: "Clear ID-style photo uploaded" },
-  { key: "hasIban",            label: "IBAN Number",          icon: CreditCard,    hint: "Saudi bank IBAN on file" },
-  { key: "hasNationalId",      label: "National ID / Iqama",  icon: IdCard,        hint: "ID copy submitted & verified" },
-  { key: "hasMedicalFitness",  label: "Medical Fitness",      icon: HeartPulse,    hint: "Fitness certificate received" },
-  { key: "hasSignedContract",  label: "Signed Contract",      icon: FileSignature, hint: "Employment contract signed" },
-  { key: "hasEmergencyContact",label: "Emergency Contact",    icon: Phone,         hint: "Contact details recorded" },
+  { key: "hasPhoto",           label: "Personal Photo",       icon: Camera,        hint: "Clear ID-style photo uploaded",  profileKey: "photoUrl" as const },
+  { key: "hasIban",            label: "IBAN Number",          icon: CreditCard,    hint: "Saudi bank IBAN on file",        profileKey: "ibanNumber" as const },
+  { key: "hasNationalId",      label: "National ID / Iqama",  icon: IdCard,        hint: "ID copy submitted & verified",   profileKey: "nationalId" as const },
+  { key: "hasSignedContract",  label: "Signed Contract",      icon: FileSignature, hint: "Employment contract signed",     profileKey: null },
+  { key: "hasEmergencyContact",label: "Emergency Contact",    icon: Phone,         hint: "Contact details recorded",       profileKey: "emergencyContactName" as const },
 ] as const;
+const PREREQ_TOTAL = PREREQUISITES.length;
 
 function prereqCount(rec: OnboardingRecord) {
-  return [rec.hasPhoto, rec.hasIban, rec.hasNationalId, rec.hasMedicalFitness, rec.hasSignedContract, rec.hasEmergencyContact].filter(Boolean).length;
+  return [rec.hasPhoto, rec.hasIban, rec.hasNationalId, rec.hasSignedContract, rec.hasEmergencyContact].filter(Boolean).length;
 }
 
 function ProgressBar({ value, total }: { value: number; total: number }) {
@@ -427,8 +428,8 @@ export default function OnboardingPage() {
                       </Badge>
                     </div>
                     <div className="mt-2 flex items-center gap-2">
-                      <ProgressBar value={done} total={6} />
-                      <span className="text-xs text-zinc-500 shrink-0">{done}/6</span>
+                      <ProgressBar value={done} total={PREREQ_TOTAL} />
+                      <span className="text-xs text-zinc-500 shrink-0">{done}/{PREREQ_TOTAL}</span>
                     </div>
                     {/* Prereq chips */}
                     <div className="flex flex-wrap gap-1.5 mt-2">
@@ -688,10 +689,10 @@ export default function OnboardingPage() {
               <div className="bg-zinc-900 rounded-lg p-4">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm text-zinc-400">Completion</span>
-                  <span className="text-sm font-medium text-white">{prereqCount(checklistRecord)}/6</span>
+                  <span className="text-sm font-medium text-white">{prereqCount(checklistRecord)}/{PREREQ_TOTAL}</span>
                 </div>
-                <ProgressBar value={prereqCount(checklistRecord)} total={6} />
-                {prereqCount(checklistRecord) === 6 && (
+                <ProgressBar value={prereqCount(checklistRecord)} total={PREREQ_TOTAL} />
+                {prereqCount(checklistRecord) === PREREQ_TOTAL && (
                   <p className="text-xs text-emerald-400 mt-2 flex items-center gap-1">
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     All prerequisites complete — candidate is ready to convert
@@ -703,28 +704,63 @@ export default function OnboardingPage() {
               <div className="space-y-3">
                 {PREREQUISITES.map(p => {
                   const checked = checklistRecord[p.key as keyof OnboardingRecord] as boolean;
+                  const cand = getCandidateFor(checklistRecord);
+                  const profileValue = p.profileKey && cand ? (cand as any)[p.profileKey] : null;
+                  const hasProfileData = !!profileValue;
                   return (
                     <div
                       key={p.key}
-                      className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                      className={`p-3 rounded-lg border transition-colors ${
                         checked ? "bg-emerald-950/20 border-emerald-800/40" : "bg-zinc-900 border-zinc-800"
                       }`}
                     >
-                      <Checkbox
-                        id={`prereq-${p.key}`}
-                        data-testid={`checkbox-prereq-${p.key}`}
-                        checked={checked}
-                        onCheckedChange={val => handleChecklistToggle(checklistRecord, p.key, !!val)}
-                        className="mt-0.5 border-zinc-600 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
-                      />
-                      <div className="flex-1">
-                        <label htmlFor={`prereq-${p.key}`} className="text-sm font-medium text-white cursor-pointer flex items-center gap-2">
-                          <p.icon className="h-4 w-4 text-zinc-400" />
-                          {p.label}
-                        </label>
-                        <p className="text-xs text-zinc-500 mt-0.5">{p.hint}</p>
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          id={`prereq-${p.key}`}
+                          data-testid={`checkbox-prereq-${p.key}`}
+                          checked={checked}
+                          onCheckedChange={val => handleChecklistToggle(checklistRecord, p.key, !!val)}
+                          className="mt-0.5 border-zinc-600 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <label htmlFor={`prereq-${p.key}`} className="text-sm font-medium text-white cursor-pointer flex items-center gap-2">
+                            <p.icon className="h-4 w-4 text-zinc-400" />
+                            {p.label}
+                          </label>
+                          <p className="text-xs text-zinc-500 mt-0.5">{p.hint}</p>
+                        </div>
+                        {checked && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />}
                       </div>
-                      {checked && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />}
+                      {hasProfileData && (
+                        <div className="mt-2 ml-8 bg-zinc-800/60 rounded-md p-2.5 border border-zinc-700/50">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Eye className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+                              {p.profileKey === "photoUrl" ? (
+                                <div className="flex items-center gap-2">
+                                  <img src={profileValue} alt="Candidate photo" className="h-8 w-8 rounded-sm object-cover border border-zinc-600" />
+                                  <span className="text-xs text-zinc-300">Photo on file</span>
+                                </div>
+                              ) : p.profileKey === "emergencyContactName" ? (
+                                <div className="text-xs text-zinc-300 truncate">
+                                  {cand?.emergencyContactName}{cand?.emergencyContactPhone ? ` — ${cand.emergencyContactPhone}` : ""}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-zinc-300 font-mono truncate">{String(profileValue)}</span>
+                              )}
+                            </div>
+                            <Badge variant="outline" className="text-[10px] border-emerald-800 text-emerald-400 shrink-0">From Profile</Badge>
+                          </div>
+                        </div>
+                      )}
+                      {!hasProfileData && p.profileKey && (
+                        <div className="mt-2 ml-8 bg-zinc-800/40 rounded-md p-2 border border-zinc-700/30">
+                          <p className="text-[11px] text-zinc-500 flex items-center gap-1.5">
+                            <TriangleAlert className="h-3 w-3" />
+                            Not yet submitted by candidate
+                          </p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -750,13 +786,13 @@ export default function OnboardingPage() {
               {/* Status indicator */}
               {checklistRecord.status !== "converted" && checklistRecord.status !== "rejected" && (
                 <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
-                  prereqCount(checklistRecord) === 6
+                  prereqCount(checklistRecord) === PREREQ_TOTAL
                     ? "bg-emerald-950/30 text-emerald-400 border border-emerald-800/40"
                     : "bg-zinc-900 text-zinc-400 border border-zinc-800"
                 }`}>
-                  {prereqCount(checklistRecord) === 6
+                  {prereqCount(checklistRecord) === PREREQ_TOTAL
                     ? <><CheckCircle2 className="h-4 w-4 shrink-0" /> Ready to convert — use the "Convert to Employee" button on the main list</>
-                    : <><TriangleAlert className="h-4 w-4 shrink-0" /> {6 - prereqCount(checklistRecord)} prerequisite(s) still outstanding</>
+                    : <><TriangleAlert className="h-4 w-4 shrink-0" /> {PREREQ_TOTAL - prereqCount(checklistRecord)} prerequisite(s) still outstanding</>
                   }
                 </div>
               )}
@@ -869,7 +905,7 @@ export default function OnboardingPage() {
               <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
               <div>
                 <p className="text-sm font-medium text-emerald-300">{stats.ready} candidates ready</p>
-                <p className="text-xs text-emerald-400/70">All prerequisites verified (6/6)</p>
+                <p className="text-xs text-emerald-400/70">All prerequisites verified ({PREREQ_TOTAL}/{PREREQ_TOTAL})</p>
               </div>
             </div>
             <div className="space-y-3">

@@ -179,6 +179,9 @@ export const candidates = pgTable(
     hasChronicDiseases: boolean("has_chronic_diseases").notNull().default(false),
     chronicDiseases: text("chronic_diseases"),
     profileCompleted: boolean("profile_completed").notNull().default(false),
+    // Emergency Contact
+    emergencyContactName: text("emergency_contact_name"),
+    emergencyContactPhone: text("emergency_contact_phone"),
     // Financial
     ibanNumber: text("iban_number"),
     expectedSalary: decimal("expected_salary", { precision: 10, scale: 2 }),

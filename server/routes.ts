@@ -790,14 +790,14 @@ export async function registerRoutes(
       const data = insertOnboardingSchema.partial().parse(req.body);
       // Auto-compute status
       if (data.hasPhoto !== undefined || data.hasIban !== undefined || data.hasNationalId !== undefined ||
-          data.hasMedicalFitness !== undefined || data.hasSignedContract !== undefined || data.hasEmergencyContact !== undefined) {
+          data.hasSignedContract !== undefined || data.hasEmergencyContact !== undefined) {
         const current = await storage.getOnboardingRecord(req.params.id);
         if (current && current.status !== "converted" && current.status !== "rejected") {
           const merged = { ...current, ...data };
           const allDone = merged.hasPhoto && merged.hasIban && merged.hasNationalId &&
-                          merged.hasMedicalFitness && merged.hasSignedContract && merged.hasEmergencyContact;
+                          merged.hasSignedContract && merged.hasEmergencyContact;
           const anyDone = merged.hasPhoto || merged.hasIban || merged.hasNationalId ||
-                          merged.hasMedicalFitness || merged.hasSignedContract || merged.hasEmergencyContact;
+                          merged.hasSignedContract || merged.hasEmergencyContact;
           data.status = allDone ? "ready" : anyDone ? "in_progress" : "pending";
         }
       }

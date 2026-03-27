@@ -114,6 +114,8 @@ const step2Schema = z.object({
   isEmployedElsewhere: z.boolean(),
   currentEmployer:     z.string().optional(),
   currentRole:         z.string().optional(),
+  emergencyContactName:  z.string().min(2, "Emergency contact name is required"),
+  emergencyContactPhone: z.string().min(7, "Emergency contact phone is required"),
 }).superRefine((d, ctx) => {
   if (d.hasChronicDiseases && !d.chronicDiseases?.trim()) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please describe your condition(s)", path: ["chronicDiseases"] });
@@ -334,6 +336,8 @@ function Step2Form({
       isEmployedElsewhere: defaults.isEmployedElsewhere ?? false,
       currentEmployer:     defaults.currentEmployer     ?? "",
       currentRole:         defaults.currentRole         ?? "",
+      emergencyContactName:  defaults.emergencyContactName ?? "",
+      emergencyContactPhone: defaults.emergencyContactPhone ?? "",
     },
   });
 
@@ -390,6 +394,32 @@ function Step2Form({
             </FieldWrapper>
           </div>
         )}
+      </div>
+
+      {/* Emergency Contact */}
+      <div className="space-y-4 p-4 rounded-md bg-muted/10 border border-border">
+        <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+          Emergency Contact<span className="text-red-500 ml-0.5">*</span>
+        </Label>
+        <p className="text-xs text-muted-foreground -mt-2">Someone we can reach in case of an emergency during work.</p>
+        <div className="grid grid-cols-2 gap-4">
+          <FieldWrapper label="Full Name" required error={errors.emergencyContactName?.message}>
+            <Input
+              {...register("emergencyContactName")}
+              placeholder="e.g. Ahmed Al-Harbi"
+              className="bg-muted/30 border-border"
+              data-testid="input-emergency-name"
+            />
+          </FieldWrapper>
+          <FieldWrapper label="Phone Number" required error={errors.emergencyContactPhone?.message}>
+            <Input
+              {...register("emergencyContactPhone")}
+              placeholder="e.g. 05XXXXXXXX"
+              className="bg-muted/30 border-border"
+              data-testid="input-emergency-phone"
+            />
+          </FieldWrapper>
+        </div>
       </div>
 
       <div className="flex justify-between pt-2">
@@ -589,6 +619,8 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
       isEmployedElsewhere: s2data.isEmployedElsewhere,
       currentEmployer:     s2data.currentEmployer || null,
       currentRole:         s2data.currentRole || null,
+      emergencyContactName:  s2data.emergencyContactName || null,
+      emergencyContactPhone: s2data.emergencyContactPhone || null,
       educationLevel:      d.educationLevel,
       major:               d.major || null,
       languages:           langs,

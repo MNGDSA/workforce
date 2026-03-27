@@ -198,13 +198,16 @@ PROCESSING
 
 ONBOARDING (THE DIVIDING LINE — pool → employee)
   Same checklist for EVERYONE (no split logic):
-    ☐ Personal Photo
-    ☐ IBAN Certificate
-    ☐ National ID / Iqama
-    ☐ Medical Fitness
-    ☐ Signed Contract
-    ☐ Emergency Contact
-  All 6 complete → status = "ready" → eligible for conversion
+    ☐ Personal Photo (pulled from candidate profile)
+    ☐ IBAN Number (pulled from candidate profile)
+    ☐ National ID / Iqama (pulled from candidate profile)
+    ☐ Signed Contract (manual admin verification)
+    ☐ Emergency Contact (pulled from candidate profile)
+  All 5 complete → status = "ready" → eligible for conversion
+  Each item is browsable — admin can see actual data/document from candidate profile
+  Bulk convert: convert all "ready" candidates at once with shared employment details
+  Candidate schema: emergencyContactName + emergencyContactPhone fields
+  Profile-setup-gate Step 2 collects emergency contact during sign-up questionnaire
 
 WORKFORCE (post-onboarding)
   Convert → creates employee record
@@ -230,7 +233,7 @@ RETURN TO POOL
 7. **Sequential seasons only** — same candidate cannot be in two seasons simultaneously.
 8. **`lastInterviewedAt` on candidate profile** — persists across seasons, badge + filter in interview scheduling.
 9. **Application status `not_shortlisted`** — professional HR term for rejection.
-10. **Same onboarding for all** — 6/6 checklist, no source-dependent logic.
+10. **Same onboarding for all** — 5/5 checklist (no Medical Fitness), no source-dependent logic.
 11. **Profile activation required for all** — OTP verification regardless of entry method.
 
 ### Schema Changes Needed (Not Yet Implemented)
