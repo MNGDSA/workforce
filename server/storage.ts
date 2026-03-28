@@ -790,6 +790,7 @@ export class DatabaseStorage implements IStorage {
           sql`LOWER(${candidates.fullNameEn}) LIKE ${s}`,
           sql`LOWER(${candidates.nationalId}) LIKE ${s}`,
           sql`LOWER(${workforce.employeeNumber}) LIKE ${s}`,
+          sql`LOWER(${candidates.phone}) LIKE ${s}`,
         )!,
       );
     }

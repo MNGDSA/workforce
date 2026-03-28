@@ -1250,7 +1250,11 @@ export async function registerRoutes(
 
   app.patch("/api/workforce/:id", async (req: Request, res: Response) => {
     try {
-      const data = insertWorkforceSchema.partial().parse(req.body);
+      const allowed = ["salary", "notes", "endDate", "supervisorId", "performanceScore", "isActive"];
+      const data: Record<string, any> = {};
+      for (const key of allowed) {
+        if (key in req.body) data[key] = req.body[key];
+      }
       const record = await storage.updateWorkforceRecord(req.params.id, data);
       if (!record) return res.status(404).json({ message: "Employee not found" });
       return res.json(record);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,12 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -25,7 +32,6 @@ import {
 import {
   Search,
   Users,
-  UserCheck,
   UserX,
   Briefcase,
   Clock,
@@ -40,6 +46,12 @@ import {
   AlertTriangle,
   XCircle,
   ChevronRight,
+  Download,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  FileSpreadsheet,
+  FileText,
 } from "lucide-react";
 import {
   Table,
@@ -94,6 +106,9 @@ type WorkHistory = {
   jobTitle: string | null;
 };
 
+type SortField = "employeeNumber" | "fullNameEn" | "nationalId" | "salary" | "startDate" | "endDate" | "phone";
+type SortDir = "asc" | "desc";
+
 function statusBadge(isActive: boolean) {
   return isActive
     ? { label: "Active", className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" }
@@ -106,14 +121,82 @@ function formatDate(iso: string | null | undefined) {
   return d.toLocaleDateString("en-SA", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function exportToCSV(employees: Employee[]) {
+  const headers = ["Employee #", "Full Name", "National ID", "Phone", "Job Title", "Event", "Salary (SAR)", "Start Date", "End Date", "Status", "Termination Reason"];
+  const rows = employees.map(e => [
+    e.employeeNumber,
+    e.fullNameEn ?? "",
+    e.nationalId ?? "",
+    e.phone ?? "",
+    e.jobTitle ?? "",
+    e.eventName ?? "",
+    e.salary ? Number(e.salary).toString() : "",
+    e.startDate ?? "",
+    e.endDate ?? "",
+    e.isActive ? "Active" : "Terminated",
+    e.terminationReason ?? "",
+  ]);
+  const csv = [headers.join(","), ...rows.map(r => r.map(c => `"${(c ?? "").replace(/"/g, '""')}"`).join(","))].join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `employees_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function exportToExcel(employees: Employee[]) {
+  const XLSX = await import("xlsx");
+  const data = employees.map(e => ({
+    "Employee #": e.employeeNumber,
+    "Full Name": e.fullNameEn ?? "",
+    "National ID": e.nationalId ?? "",
+    "Phone": e.phone ?? "",
+    "Job Title": e.jobTitle ?? "",
+    "Event": e.eventName ?? "",
+    "Salary (SAR)": e.salary ? Number(e.salary) : "",
+    "Start Date": e.startDate ?? "",
+    "End Date": e.endDate ?? "",
+    "Status": e.isActive ? "Active" : "Terminated",
+    "Termination Reason": e.terminationReason ?? "",
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Employees");
+  XLSX.writeFile(wb, `employees_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+function SortableHeader({ label, field, sortField, sortDir, onSort }: {
+  label: string; field: SortField; sortField: SortField | null; sortDir: SortDir; onSort: (f: SortField) => void;
+}) {
+  const active = sortField === field;
+  return (
+    <button
+      className="flex items-center gap-1 hover:text-white transition-colors text-left"
+      onClick={() => onSort(field)}
+      data-testid={`sort-${field}`}
+    >
+      {label}
+      {active ? (
+        sortDir === "asc" ? <ArrowUp className="h-3 w-3 text-primary" /> : <ArrowDown className="h-3 w-3 text-primary" />
+      ) : (
+        <ArrowUpDown className="h-3 w-3 opacity-40" />
+      )}
+    </button>
+  );
+}
+
 function EmployeeDetailDialog({
   employee,
   open,
   onOpenChange,
+  onUpdated,
 }: {
   employee: Employee | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  onUpdated: () => void;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -138,6 +221,7 @@ function EmployeeDetailDialog({
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
       setEditSalary(false);
       setEditNotes(false);
+      onUpdated();
       toast({ title: "Employee updated" });
     },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
@@ -150,6 +234,8 @@ function EmployeeDetailDialog({
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
       setTerminateOpen(false);
       setTerminateForm({ endDate: "", reason: "" });
+      onOpenChange(false);
+      onUpdated();
       toast({ title: "Employee terminated" });
     },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
@@ -246,7 +332,7 @@ function EmployeeDetailDialog({
                       size="sm"
                       className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
                       disabled={updateMutation.isPending}
-                      onClick={() => updateMutation.mutate({ salary: salaryValue || null })}
+                      onClick={() => updateMutation.mutate({ salary: salaryValue || undefined })}
                     >
                       {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
                     </Button>
@@ -285,7 +371,7 @@ function EmployeeDetailDialog({
                         size="sm"
                         className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
                         disabled={updateMutation.isPending}
-                        onClick={() => updateMutation.mutate({ notes: notesValue || null })}
+                        onClick={() => updateMutation.mutate({ notes: notesValue || undefined })}
                       >
                         {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
                       </Button>
@@ -445,9 +531,14 @@ function InfoRow({ icon, label, value, mono }: { icon: React.ReactNode; label: s
 }
 
 export default function WorkforcePage() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "terminated">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "terminated">("active");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const { data: employees = [], isLoading } = useQuery<Employee[]>({
     queryKey: ["/api/workforce", search, statusFilter],
@@ -467,6 +558,69 @@ export default function WorkforcePage() {
     refetchInterval: 15000,
   });
 
+  const handleSort = useCallback((field: SortField) => {
+    if (sortField === field) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  }, [sortField]);
+
+  const sortedEmployees = useMemo(() => {
+    if (!sortField) return employees;
+    return [...employees].sort((a, b) => {
+      let aVal: string | number = "";
+      let bVal: string | number = "";
+      switch (sortField) {
+        case "employeeNumber": aVal = a.employeeNumber; bVal = b.employeeNumber; break;
+        case "fullNameEn": aVal = (a.fullNameEn ?? "").toLowerCase(); bVal = (b.fullNameEn ?? "").toLowerCase(); break;
+        case "nationalId": aVal = a.nationalId ?? ""; bVal = b.nationalId ?? ""; break;
+        case "phone": aVal = a.phone ?? ""; bVal = b.phone ?? ""; break;
+        case "salary": aVal = Number(a.salary ?? 0); bVal = Number(b.salary ?? 0); break;
+        case "startDate": aVal = a.startDate ?? ""; bVal = b.startDate ?? ""; break;
+        case "endDate": aVal = a.endDate ?? ""; bVal = b.endDate ?? ""; break;
+      }
+      if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [employees, sortField, sortDir]);
+
+  const allSelected = sortedEmployees.length > 0 && selectedIds.size === sortedEmployees.length;
+  const someSelected = selectedIds.size > 0 && !allSelected;
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sortedEmployees.map(e => e.id)));
+    }
+  }
+
+  function toggleOne(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  const selectedEmployees = sortedEmployees.filter(e => selectedIds.has(e.id));
+  const showTerminated = statusFilter === "terminated" || statusFilter === "all";
+
+  function handleExportCSV() {
+    const data = selectedIds.size > 0 ? selectedEmployees : sortedEmployees;
+    exportToCSV(data);
+    toast({ title: `Exported ${data.length} employees to CSV` });
+  }
+
+  async function handleExportExcel() {
+    const data = selectedIds.size > 0 ? selectedEmployees : sortedEmployees;
+    await exportToExcel(data);
+    toast({ title: `Exported ${data.length} employees to Excel` });
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -475,6 +629,27 @@ export default function WorkforcePage() {
             <h1 className="text-3xl font-display font-bold text-white tracking-tight" data-testid="text-page-title">Employee Management</h1>
             <p className="text-muted-foreground mt-1">Manage seasonal and permanent employees across events.</p>
           </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs self-start sm:self-auto gap-2"
+                data-testid="button-export"
+              >
+                <Download className="h-4 w-4" />
+                Export{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={handleExportExcel} className="gap-2" data-testid="menu-export-excel">
+                <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
+                Export to Excel
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportCSV} className="gap-2" data-testid="menu-export-csv">
+                <FileText className="h-4 w-4 text-blue-400" />
+                Export to CSV
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -513,16 +688,16 @@ export default function WorkforcePage() {
           <div className="relative flex-1 w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
-              placeholder="Search by name, national ID, or employee number…"
+              placeholder="Search by Employee ID, ID Number, Name, Phone"
               className="pl-10 h-12 bg-muted/30 border-border focus-visible:ring-primary/20 text-base"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               data-testid="input-search-employees"
             />
           </div>
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v as any); setSelectedIds(new Set()); }}>
             <SelectTrigger className="w-full md:w-[180px] h-12 bg-background border-border" data-testid="select-status-filter">
-              <SelectValue placeholder="All Status" />
+              <SelectValue placeholder="Active Only" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
@@ -532,11 +707,21 @@ export default function WorkforcePage() {
           </Select>
         </div>
 
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-3 bg-primary/10 border border-primary/30 rounded-sm px-4 py-2.5">
+            <span className="text-sm font-medium text-primary">{selectedIds.size} employee{selectedIds.size !== 1 ? "s" : ""} selected</span>
+            <span className="text-zinc-600">|</span>
+            <Button variant="ghost" size="sm" className="text-xs text-zinc-400 hover:text-white" onClick={() => setSelectedIds(new Set())}>
+              Clear Selection
+            </Button>
+          </div>
+        )}
+
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-lg font-display text-white">
               Employee List
-              <span className="ml-2 text-sm font-normal text-muted-foreground">({employees.length})</span>
+              <span className="ml-2 text-sm font-normal text-muted-foreground">({sortedEmployees.length})</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -544,7 +729,7 @@ export default function WorkforcePage() {
               <div className="flex items-center justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
-            ) : employees.length === 0 ? (
+            ) : sortedEmployees.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <Users className="h-12 w-12 text-muted-foreground/20 mb-4" />
                 <p className="text-muted-foreground">No employees found</p>
@@ -554,63 +739,104 @@ export default function WorkforcePage() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="w-[100px] text-muted-foreground pl-6">Emp #</TableHead>
-                    <TableHead className="text-muted-foreground">Employee</TableHead>
-                    <TableHead className="text-muted-foreground hidden md:table-cell">National ID</TableHead>
-                    <TableHead className="text-muted-foreground hidden lg:table-cell">Job / Event</TableHead>
-                    <TableHead className="text-muted-foreground hidden lg:table-cell text-right">Salary</TableHead>
-                    <TableHead className="text-muted-foreground hidden md:table-cell">Start Date</TableHead>
+                    <TableHead className="w-[50px] pl-4">
+                      <Checkbox
+                        checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                        onCheckedChange={toggleAll}
+                        data-testid="checkbox-select-all"
+                      />
+                    </TableHead>
+                    <TableHead className="w-[100px] text-muted-foreground">
+                      <SortableHeader label="Emp #" field="employeeNumber" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                    </TableHead>
+                    <TableHead className="text-muted-foreground">
+                      <SortableHeader label="Employee" field="fullNameEn" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                    </TableHead>
+                    <TableHead className="text-muted-foreground hidden md:table-cell">
+                      <SortableHeader label="National ID" field="nationalId" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                    </TableHead>
+                    <TableHead className="text-muted-foreground hidden lg:table-cell">
+                      <SortableHeader label="Phone" field="phone" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                    </TableHead>
+                    <TableHead className="text-muted-foreground hidden xl:table-cell">Job / Event</TableHead>
+                    <TableHead className="text-muted-foreground hidden lg:table-cell text-right">
+                      <SortableHeader label="Salary" field="salary" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                    </TableHead>
+                    <TableHead className="text-muted-foreground hidden md:table-cell">
+                      <SortableHeader label="Start Date" field="startDate" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                    </TableHead>
+                    {showTerminated && (
+                      <TableHead className="text-muted-foreground hidden md:table-cell">
+                        <SortableHeader label="End Date" field="endDate" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                      </TableHead>
+                    )}
                     <TableHead className="text-muted-foreground">Status</TableHead>
                     <TableHead className="text-right text-muted-foreground pr-6">View</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {employees.map((emp) => {
+                  {sortedEmployees.map((emp) => {
                     const st = statusBadge(emp.isActive);
                     const initials = (emp.fullNameEn ?? "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+                    const checked = selectedIds.has(emp.id);
                     return (
                       <TableRow
                         key={emp.id}
-                        className="border-border hover:bg-muted/20 cursor-pointer"
-                        onClick={() => setSelectedEmployee(emp)}
+                        className={`border-border hover:bg-muted/20 cursor-pointer ${checked ? "bg-primary/5" : ""}`}
                         data-testid={`row-employee-${emp.employeeNumber}`}
                       >
-                        <TableCell className="font-mono text-xs text-primary font-semibold pl-6" data-testid={`text-empnum-${emp.id}`}>
+                        <TableCell className="pl-4" onClick={e => e.stopPropagation()}>
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={() => toggleOne(emp.id)}
+                            data-testid={`checkbox-${emp.id}`}
+                          />
+                        </TableCell>
+                        <TableCell
+                          className="font-mono text-xs text-primary font-semibold"
+                          onClick={() => setSelectedEmployee(emp)}
+                          data-testid={`text-empnum-${emp.id}`}
+                        >
                           {emp.employeeNumber}
                         </TableCell>
-                        <TableCell className="py-3">
+                        <TableCell className="py-3" onClick={() => setSelectedEmployee(emp)}>
                           <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8 border border-zinc-700">
                               <AvatarImage src={emp.photoUrl ?? undefined} />
                               <AvatarFallback className="bg-zinc-800 text-zinc-400 text-xs">{initials}</AvatarFallback>
                             </Avatar>
-                            <div>
-                              <div className="font-medium text-white text-sm">{emp.fullNameEn ?? "—"}</div>
-                              <div className="text-xs text-muted-foreground">{emp.phone ?? "—"}</div>
-                            </div>
+                            <div className="font-medium text-white text-sm">{emp.fullNameEn ?? "—"}</div>
                           </div>
                         </TableCell>
-                        <TableCell className="hidden md:table-cell font-mono text-xs text-zinc-400">
+                        <TableCell className="hidden md:table-cell font-mono text-xs text-zinc-400" onClick={() => setSelectedEmployee(emp)}>
                           {emp.nationalId ?? "—"}
                         </TableCell>
-                        <TableCell className="hidden lg:table-cell">
+                        <TableCell className="hidden lg:table-cell text-sm text-zinc-400" onClick={() => setSelectedEmployee(emp)}>
+                          {emp.phone ?? "—"}
+                        </TableCell>
+                        <TableCell className="hidden xl:table-cell" onClick={() => setSelectedEmployee(emp)}>
                           <div className="space-y-0.5">
                             <div className="text-sm text-white">{emp.jobTitle ?? "—"}</div>
                             {emp.eventName && <div className="text-xs text-primary/70">{emp.eventName}</div>}
                           </div>
                         </TableCell>
-                        <TableCell className="hidden lg:table-cell text-right text-sm text-white font-medium">
+                        <TableCell className="hidden lg:table-cell text-right text-sm text-white font-medium" onClick={() => setSelectedEmployee(emp)}>
                           {emp.salary ? `${Number(emp.salary).toLocaleString()}` : "—"}
                         </TableCell>
-                        <TableCell className="hidden md:table-cell text-sm text-zinc-400">
+                        <TableCell className="hidden md:table-cell text-sm text-zinc-400" onClick={() => setSelectedEmployee(emp)}>
                           {formatDate(emp.startDate)}
                         </TableCell>
-                        <TableCell>
+                        {showTerminated && (
+                          <TableCell className="hidden md:table-cell text-sm text-zinc-400" onClick={() => setSelectedEmployee(emp)}>
+                            {emp.endDate ? formatDate(emp.endDate) : "—"}
+                          </TableCell>
+                        )}
+                        <TableCell onClick={() => setSelectedEmployee(emp)}>
                           <Badge variant="outline" className={`text-[10px] font-medium border ${st.className}`} data-testid={`badge-status-${emp.id}`}>
                             {st.label}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right pr-6">
+                        <TableCell className="text-right pr-6" onClick={() => setSelectedEmployee(emp)}>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -634,6 +860,10 @@ export default function WorkforcePage() {
         employee={selectedEmployee}
         open={!!selectedEmployee}
         onOpenChange={(o) => !o && setSelectedEmployee(null)}
+        onUpdated={() => {
+          qc.invalidateQueries({ queryKey: ["/api/workforce"] });
+          setSelectedEmployee(null);
+        }}
       />
     </DashboardLayout>
   );
