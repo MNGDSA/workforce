@@ -443,7 +443,25 @@ The onboarding checklist becomes a sequential pipeline instead of a flat list:
 - **GitHub** — Connected via Replit OAuth (connection: `conn_github_01KMCD4T6871ZX6CKTKY6BG2YA`). Repo: `https://github.com/MNGDSA/workforce`. Permissions: `repo`, `read:org`, `read:project`, `read:user`, `user:email`. Service layer: `server/github.ts`. API routes under `/api/github/*`.
 
 ## UI/UX Patterns & Gotchas
-- **Tooltip info icons**: Lucide's `Info` icon already renders as a circle with an "i" inside. Do NOT wrap it in a `rounded-full border` button — this creates a double-circle effect. Use a plain unstyled button with only `text-muted-foreground hover:text-primary` classes. No border, no rounded-full, no fixed h/w on the button wrapper.
+
+### Portal Pattern for Dropdowns & Tooltips (MANDATORY)
+Any floating UI rendered inside a dialog, table, card, or any container with `overflow: hidden/auto/scroll` MUST use `createPortal(... , document.body)` with `position: fixed` + `z-index: 9999`. Otherwise it WILL get clipped.
+
+**DatePickerField** (`client/src/components/ui/date-picker-field.tsx`):
+- Already fixed. Calendar dropdown renders via `createPortal` to `document.body` with fixed positioning calculated from `buttonRef.getBoundingClientRect()`.
+- The portal div has `data-datepicker-portal` attribute and `style={{ pointerEvents: "auto" }}` to override Radix Dialog's body-level `pointer-events: none` on modal dialogs.
+- The Dialog component (`client/src/components/ui/dialog.tsx`) globally intercepts `onPointerDownOutside` and `onInteractOutside` — if the click target is inside `[data-datepicker-portal]`, it calls `e.preventDefault()` to prevent dialog dismissal. This is applied AFTER `{...props}` spread so it always wins.
+
+**InfoTooltip** (used in events.tsx, roles-access.tsx, and anywhere else):
+- Must use `createPortal` to render the tooltip popup to `document.body` with `position: fixed`.
+- Position is calculated from `btnRef.current.getBoundingClientRect()` on `mouseEnter`.
+- Use `pointer-events-none` on the tooltip popup so it doesn't interfere with hover state.
+- Do NOT use `position: absolute` with a `relative` parent — this gets clipped by table/card overflow.
+
+**General rule**: If it floats (dropdown, tooltip, popover, autocomplete), it MUST portal to `document.body` with fixed positioning. No exceptions.
+
+### Tooltip Info Icons
+- Lucide's `Info` icon already renders as a circle with an "i" inside. Do NOT wrap it in a `rounded-full border` button — this creates a double-circle effect. Use a plain unstyled button with only `text-muted-foreground hover:text-primary` classes. No border, no rounded-full, no fixed h/w on the button wrapper.
 
 ## Data Integrity Policy (GLOBAL)
 - **NEVER use `onConflictDoNothing()`** in production code. Duplicates must be caught, reported, and surfaced to the user — never silently swallowed.
