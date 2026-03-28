@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -263,22 +264,37 @@ function CreateEventDialog({
 
 function InfoTooltip({ text }: { text: string }) {
   const [visible, setVisible] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const show = () => {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 6, left: Math.max(8, r.right - 240) });
+    }
+    setVisible(true);
+  };
+
   return (
-    <span className="relative inline-flex items-center ml-1.5 normal-case">
+    <span className="inline-flex items-center ml-1.5 normal-case">
       <button
+        ref={btnRef}
         type="button"
         className="inline-flex items-center justify-center text-muted-foreground/50 hover:text-primary transition-colors"
-        onMouseEnter={() => setVisible(true)}
+        onMouseEnter={show}
         onMouseLeave={() => setVisible(false)}
         aria-label="More information"
       >
         <Info className="h-3.5 w-3.5" />
       </button>
-      {visible && (
-        <span className="absolute right-0 top-full mt-1.5 z-50 w-60 rounded-sm bg-popover border border-border px-3 py-2 text-xs text-muted-foreground shadow-lg leading-relaxed pointer-events-none normal-case tracking-normal font-normal">
-          <span className="absolute right-1.5 bottom-full h-0 w-0 border-x-4 border-x-transparent border-b-4 border-b-border" />
+      {visible && pos && createPortal(
+        <span
+          className="fixed z-[9999] w-60 rounded-sm bg-popover border border-border px-3 py-2 text-xs text-muted-foreground shadow-lg leading-relaxed pointer-events-none normal-case tracking-normal font-normal"
+          style={{ top: pos.top, left: pos.left }}
+        >
           {text}
-        </span>
+        </span>,
+        document.body
       )}
     </span>
   );
