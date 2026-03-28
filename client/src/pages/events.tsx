@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -263,24 +263,21 @@ function CreateEventDialog({
 
 function InfoTooltip({ text }: { text: string }) {
   const [visible, setVisible] = useState(false);
-  const ref = useRef<HTMLSpanElement>(null);
-
   return (
-    <span className="relative inline-flex items-center" ref={ref}>
+    <span className="relative inline-flex items-center ml-1.5 normal-case">
       <button
         type="button"
-        className="h-3.5 w-3.5 rounded-full border border-muted-foreground/50 text-muted-foreground hover:border-primary hover:text-primary flex items-center justify-center transition-colors focus:outline-none ml-1.5"
+        className="inline-flex items-center justify-center text-muted-foreground/50 hover:text-primary transition-colors"
         onMouseEnter={() => setVisible(true)}
         onMouseLeave={() => setVisible(false)}
-        onClick={() => setVisible((v) => !v)}
         aria-label="More information"
       >
-        <Info className="h-2.5 w-2.5" />
+        <Info className="h-3.5 w-3.5" />
       </button>
       {visible && (
-        <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-sm bg-popover border border-border px-3 py-2 text-xs text-muted-foreground shadow-lg leading-relaxed pointer-events-none">
+        <span className="absolute right-0 top-full mt-1.5 z-50 w-60 rounded-sm bg-popover border border-border px-3 py-2 text-xs text-muted-foreground shadow-lg leading-relaxed pointer-events-none normal-case tracking-normal font-normal">
+          <span className="absolute right-1.5 bottom-full h-0 w-0 border-x-4 border-x-transparent border-b-4 border-b-border" />
           {text}
-          <span className="absolute left-1/2 -translate-x-1/2 top-full h-0 w-0 border-x-4 border-x-transparent border-t-4 border-t-border" />
         </span>
       )}
     </span>
