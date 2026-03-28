@@ -108,7 +108,7 @@ Tables with indexes designed for 70k+ candidates:
 | `job_postings` | Open positions | status, event, region |
 | `applications` | Candidate ↔ Job links | candidate+job (unique), status |
 | `interviews` | Scheduled calls | candidate, scheduled_at, status |
-| `workforce` | Hired placements | candidate, event, active |
+| `workforce` | Employee records | employee_number (C000001), candidate, event, salary, active |
 | `automation_rules` | Workflow triggers | — |
 | `notifications` | SMS/email/in-app | recipient, status, created_at |
 
@@ -157,10 +157,14 @@ GET    /api/interviews/stats
 POST   /api/interviews
 PATCH  /api/interviews/:id
 
-GET    /api/workforce?eventId=&isActive=
+GET    /api/workforce?eventId=&isActive=&search=
 GET    /api/workforce/stats
+GET    /api/workforce/history/:nationalId
+GET    /api/workforce/:id
 POST   /api/workforce
 PATCH  /api/workforce/:id
+POST   /api/workforce/:id/terminate
+POST   /api/workforce/reinstate
 
 GET    /api/automation
 POST   /api/automation
@@ -300,7 +304,7 @@ RETURN TO POOL
 - [ ] Rename application status `rejected` → `not_shortlisted`
 - [ ] Redesign SMP contract to link to candidates/workforce by reference (pick from pool) instead of embedded employee data
 - [ ] Add per-link status on SMP contract: `active` | `removed`
-- [ ] Add `terminatedAt`, `terminationReason` to `workforce` table
+- [x] Add `terminationReason`, `endDate` to `workforce` table + employee management with work history
 - [ ] Bulk upload in Talent section with deduplication by national ID/phone
 - [ ] SMP direct conversion from Talent pool (bypass interview + onboarding pipeline)
 

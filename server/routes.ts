@@ -1076,7 +1076,7 @@ export async function registerRoutes(
 
   app.post("/api/onboarding/bulk-convert", async (req: Request, res: Response) => {
     try {
-      const { ids, startDate, eventId } = req.body;
+      const { ids, startDate, eventId, salary } = req.body;
       if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "ids array is required" });
       if (!startDate) return res.status(400).json({ message: "startDate is required" });
       const uniqueIds = [...new Set(ids as string[])];
@@ -1086,7 +1086,7 @@ export async function registerRoutes(
         try {
           const wf = await storage.convertOnboardingToEmployee(
             id,
-            { startDate, eventId },
+            { startDate, eventId, salary },
             (req as any).userId,
           );
           results.push(wf);
@@ -1182,11 +1182,11 @@ export async function registerRoutes(
 
   app.post("/api/onboarding/:id/convert", async (req: Request, res: Response) => {
     try {
-      const { startDate, eventId } = req.body as Record<string, string>;
+      const { startDate, eventId, salary } = req.body as Record<string, string>;
       if (!startDate) return res.status(400).json({ message: "startDate is required" });
       const workforce = await storage.convertOnboardingToEmployee(
         req.params.id,
-        { startDate, eventId },
+        { startDate, eventId, salary },
         (req as any).userId,
       );
       return res.status(201).json(workforce);
@@ -1195,13 +1195,14 @@ export async function registerRoutes(
     }
   });
 
-  // ─── Workforce ────────────────────────────────────────────────────────────
+  // ─── Workforce (Employees) ────────────────────────────────────────────────
   app.get("/api/workforce", async (req: Request, res: Response) => {
     try {
-      const { eventId, isActive } = req.query as Record<string, string>;
+      const { eventId, isActive, search } = req.query as Record<string, string>;
       const data = await storage.getWorkforce({
         eventId,
         isActive: isActive !== undefined ? isActive === "true" : undefined,
+        search,
       });
       return res.json(data);
     } catch (err) {
@@ -1213,6 +1214,25 @@ export async function registerRoutes(
     try {
       const stats = await storage.getWorkforceStats();
       return res.json(stats);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.get("/api/workforce/history/:nationalId", async (req: Request, res: Response) => {
+    try {
+      const history = await storage.getWorkHistory(req.params.nationalId);
+      return res.json(history);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.get("/api/workforce/:id", async (req: Request, res: Response) => {
+    try {
+      const employee = await storage.getWorkforceEmployee(req.params.id);
+      if (!employee) return res.status(404).json({ message: "Employee not found" });
+      return res.json(employee);
     } catch (err) {
       return handleError(res, err);
     }
@@ -1232,8 +1252,31 @@ export async function registerRoutes(
     try {
       const data = insertWorkforceSchema.partial().parse(req.body);
       const record = await storage.updateWorkforceRecord(req.params.id, data);
-      if (!record) return res.status(404).json({ message: "Record not found" });
+      if (!record) return res.status(404).json({ message: "Employee not found" });
       return res.json(record);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/workforce/:id/terminate", async (req: Request, res: Response) => {
+    try {
+      const { endDate, terminationReason } = req.body as { endDate: string; terminationReason?: string };
+      if (!endDate) return res.status(400).json({ message: "endDate is required" });
+      const record = await storage.terminateEmployee(req.params.id, { endDate, terminationReason });
+      if (!record) return res.status(404).json({ message: "Employee not found" });
+      return res.json(record);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/workforce/reinstate", async (req: Request, res: Response) => {
+    try {
+      const { nationalId, startDate, eventId, salary, jobId } = req.body as Record<string, string>;
+      if (!nationalId || !startDate) return res.status(400).json({ message: "nationalId and startDate are required" });
+      const record = await storage.reinstateEmployee(nationalId, { startDate, eventId, salary, jobId });
+      return res.status(201).json(record);
     } catch (err) {
       return handleError(res, err);
     }

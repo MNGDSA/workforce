@@ -422,18 +422,21 @@ export const onboarding = pgTable(
   })
 );
 
-// ─── Workforce (hired placements) ───────────────────────────────────────────
+// ─── Workforce (hired employees) ────────────────────────────────────────────
 export const workforce = pgTable(
   "workforce",
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    employeeNumber: varchar("employee_number", { length: 7 }).notNull(),
     candidateId: varchar("candidate_id")
       .notNull()
       .references(() => candidates.id),
     jobId: varchar("job_id").references(() => jobPostings.id),
     eventId: varchar("event_id").references(() => events.id),
+    salary: decimal("salary", { precision: 10, scale: 2 }),
     startDate: text("start_date").notNull(),
     endDate: text("end_date"),
+    terminationReason: text("termination_reason"),
     isActive: boolean("is_active").notNull().default(true),
     supervisorId: varchar("supervisor_id").references(() => users.id),
     performanceScore: decimal("performance_score", { precision: 3, scale: 2 }),
@@ -445,6 +448,7 @@ export const workforce = pgTable(
     candidateIdx: index("workforce_candidate_idx").on(t.candidateId),
     eventIdx: index("workforce_event_idx").on(t.eventId),
     activeIdx: index("workforce_active_idx").on(t.isActive),
+    empNumIdx: index("workforce_emp_num_idx").on(t.employeeNumber),
   })
 );
 

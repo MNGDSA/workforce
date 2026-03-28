@@ -1257,12 +1257,12 @@ export default function OnboardingPage() {
   const [admitSearch, setAdmitSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [admitPage, setAdmitPage] = useState(1);
-  const [convertForm, setConvertForm] = useState({ startDate: "" });
+  const [convertForm, setConvertForm] = useState({ startDate: "", salary: "" });
   const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
   const [pendingDeleteDoc, setPendingDeleteDoc] = useState<{ candidateId: string; docType: string; label: string } | null>(null);
   const [docPreview, setDocPreview] = useState<{ url: string; label: string; isImage: boolean } | null>(null);
   const [bulkConvertOpen, setBulkConvertOpen] = useState(false);
-  const [bulkConvertForm, setBulkConvertForm] = useState({ startDate: "" });
+  const [bulkConvertForm, setBulkConvertForm] = useState({ startDate: "", salary: "" });
   const [bulkContractOpen, setBulkContractOpen] = useState(false);
   const [bulkContractTemplateId, setBulkContractTemplateId] = useState("");
   const ADMIT_PAGE_SIZE = 10;
@@ -1343,8 +1343,8 @@ export default function OnboardingPage() {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
       setConvertRecord(null);
-      setConvertForm({ startDate: "" });
-      toast({ title: "Successfully converted to employee!", description: "Workforce record created." });
+      setConvertForm({ startDate: "", salary: "" });
+      toast({ title: "Successfully converted to employee!", description: "Employee record created." });
     },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
@@ -1356,7 +1356,7 @@ export default function OnboardingPage() {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
       setBulkConvertOpen(false);
-      setBulkConvertForm({ startDate: "" });
+      setBulkConvertForm({ startDate: "", salary: "" });
       const errCount = data.errors?.length ?? 0;
       toast({
         title: `${data.converted} employee${data.converted !== 1 ? "s" : ""} created`,
@@ -1693,6 +1693,7 @@ export default function OnboardingPage() {
                           setConvertRecord(rec);
                           setConvertForm({
                             startDate: rec.startDate ?? "",
+                            salary: "",
                           });
                         }}
                       >
@@ -2093,6 +2094,17 @@ export default function OnboardingPage() {
                   className="bg-zinc-900 border-zinc-700 text-white"
                 />
               </div>
+              <div className="space-y-1.5">
+                <Label className="text-zinc-400 text-sm">Monthly Salary (SAR)</Label>
+                <Input
+                  data-testid="input-convert-salary"
+                  type="number"
+                  placeholder="e.g. 4500"
+                  value={convertForm.salary}
+                  onChange={e => setConvertForm(f => ({ ...f, salary: e.target.value }))}
+                  className="bg-zinc-900 border-zinc-700 text-white"
+                />
+              </div>
             </div>
 
             <div className="flex gap-2 justify-end pt-1">
@@ -2143,6 +2155,17 @@ export default function OnboardingPage() {
                   data-testid="input-bulk-start-date"
                   value={bulkConvertForm.startDate}
                   onChange={v => setBulkConvertForm(f => ({ ...f, startDate: v }))}
+                  className="bg-zinc-900 border-zinc-700 text-white mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-zinc-300 text-sm">Monthly Salary (SAR)</Label>
+                <Input
+                  data-testid="input-bulk-salary"
+                  type="number"
+                  placeholder="e.g. 4500"
+                  value={bulkConvertForm.salary}
+                  onChange={e => setBulkConvertForm(f => ({ ...f, salary: e.target.value }))}
                   className="bg-zinc-900 border-zinc-700 text-white mt-1"
                 />
               </div>

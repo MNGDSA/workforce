@@ -114,11 +114,16 @@ export interface IStorage {
   updateInterview(id: string, data: Partial<InsertInterview>): Promise<Interview | undefined>;
   getInterviewStats(): Promise<{ total: number; scheduled: number; completed: number; cancelled: number }>;
 
-  // Workforce
-  getWorkforce(params?: { eventId?: string; isActive?: boolean }): Promise<WorkforceRecord[]>;
+  // Workforce (Employees)
+  getWorkforce(params?: { eventId?: string; isActive?: boolean; search?: string }): Promise<any[]>;
+  getWorkforceEmployee(id: string): Promise<any | undefined>;
+  getWorkHistory(nationalId: string): Promise<any[]>;
   createWorkforceRecord(record: InsertWorkforce): Promise<WorkforceRecord>;
   updateWorkforceRecord(id: string, data: Partial<InsertWorkforce>): Promise<WorkforceRecord | undefined>;
-  getWorkforceStats(): Promise<{ total: number; active: number; byDepartment: Record<string, number> }>;
+  terminateEmployee(id: string, data: { endDate: string; terminationReason?: string }): Promise<WorkforceRecord | undefined>;
+  reinstateEmployee(nationalId: string, data: { startDate: string; eventId?: string; salary?: string; jobId?: string }): Promise<WorkforceRecord>;
+  getWorkforceStats(): Promise<{ total: number; active: number; terminated: number }>;
+  generateEmployeeNumber(): Promise<string>;
 
   // Automation Rules
   getAutomationRules(): Promise<AutomationRule[]>;
@@ -160,7 +165,7 @@ export interface IStorage {
   createOnboardingRecord(data: InsertOnboarding): Promise<OnboardingRecord>;
   updateOnboardingRecord(id: string, data: Partial<InsertOnboarding>): Promise<OnboardingRecord | undefined>;
   deleteOnboardingRecord(id: string): Promise<boolean>;
-  convertOnboardingToEmployee(id: string, employmentData: { startDate: string; eventId?: string; }, convertedBy?: string): Promise<WorkforceRecord>;
+  convertOnboardingToEmployee(id: string, employmentData: { startDate: string; eventId?: string; salary?: string }, convertedBy?: string): Promise<WorkforceRecord>;
 
   // SMS Plugins
   getSmsPlugins(): Promise<SmsPlugin[]>;
@@ -765,12 +770,120 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ─── Workforce ──────────────────────────────────────────────────────────────
-  async getWorkforce(params?: { eventId?: string; isActive?: boolean }): Promise<WorkforceRecord[]> {
+  async generateEmployeeNumber(): Promise<string> {
+    const [result] = await db.select({ maxNum: sql<string>`MAX(employee_number)` }).from(workforce);
+    const maxNum = result?.maxNum;
+    if (!maxNum) return "C000001";
+    const numeric = parseInt(maxNum.substring(1), 10);
+    const next = numeric + 1;
+    return `C${String(next).padStart(6, "0")}`;
+  }
+
+  async getWorkforce(params?: { eventId?: string; isActive?: boolean; search?: string }): Promise<any[]> {
     const conditions = [];
     if (params?.eventId) conditions.push(eq(workforce.eventId, params.eventId));
     if (params?.isActive !== undefined) conditions.push(eq(workforce.isActive, params.isActive));
+    if (params?.search) {
+      const s = `%${params.search.toLowerCase()}%`;
+      conditions.push(
+        or(
+          sql`LOWER(${candidates.fullNameEn}) LIKE ${s}`,
+          sql`LOWER(${candidates.nationalId}) LIKE ${s}`,
+          sql`LOWER(${workforce.employeeNumber}) LIKE ${s}`,
+        )!,
+      );
+    }
     const where = conditions.length > 0 ? and(...conditions) : undefined;
-    return db.select().from(workforce).where(where).orderBy(desc(workforce.createdAt));
+    const rows = await db
+      .select({
+        id: workforce.id,
+        employeeNumber: workforce.employeeNumber,
+        candidateId: workforce.candidateId,
+        jobId: workforce.jobId,
+        eventId: workforce.eventId,
+        salary: workforce.salary,
+        startDate: workforce.startDate,
+        endDate: workforce.endDate,
+        terminationReason: workforce.terminationReason,
+        isActive: workforce.isActive,
+        supervisorId: workforce.supervisorId,
+        performanceScore: workforce.performanceScore,
+        notes: workforce.notes,
+        createdAt: workforce.createdAt,
+        updatedAt: workforce.updatedAt,
+        fullNameEn: candidates.fullNameEn,
+        nationalId: candidates.nationalId,
+        phone: candidates.phone,
+        photoUrl: candidates.photoUrl,
+        candidateStatus: candidates.status,
+        eventName: events.name,
+        jobTitle: jobPostings.title,
+      })
+      .from(workforce)
+      .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
+      .leftJoin(events, eq(workforce.eventId, events.id))
+      .leftJoin(jobPostings, eq(workforce.jobId, jobPostings.id))
+      .where(where)
+      .orderBy(desc(workforce.createdAt));
+    return rows;
+  }
+
+  async getWorkforceEmployee(id: string): Promise<any | undefined> {
+    const [row] = await db
+      .select({
+        id: workforce.id,
+        employeeNumber: workforce.employeeNumber,
+        candidateId: workforce.candidateId,
+        jobId: workforce.jobId,
+        eventId: workforce.eventId,
+        salary: workforce.salary,
+        startDate: workforce.startDate,
+        endDate: workforce.endDate,
+        terminationReason: workforce.terminationReason,
+        isActive: workforce.isActive,
+        supervisorId: workforce.supervisorId,
+        performanceScore: workforce.performanceScore,
+        notes: workforce.notes,
+        createdAt: workforce.createdAt,
+        updatedAt: workforce.updatedAt,
+        fullNameEn: candidates.fullNameEn,
+        nationalId: candidates.nationalId,
+        phone: candidates.phone,
+        photoUrl: candidates.photoUrl,
+        iban: candidates.ibanNumber,
+        eventName: events.name,
+        jobTitle: jobPostings.title,
+      })
+      .from(workforce)
+      .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
+      .leftJoin(events, eq(workforce.eventId, events.id))
+      .leftJoin(jobPostings, eq(workforce.jobId, jobPostings.id))
+      .where(eq(workforce.id, id));
+    return row;
+  }
+
+  async getWorkHistory(nationalId: string): Promise<any[]> {
+    const rows = await db
+      .select({
+        id: workforce.id,
+        employeeNumber: workforce.employeeNumber,
+        salary: workforce.salary,
+        startDate: workforce.startDate,
+        endDate: workforce.endDate,
+        terminationReason: workforce.terminationReason,
+        isActive: workforce.isActive,
+        notes: workforce.notes,
+        createdAt: workforce.createdAt,
+        eventName: events.name,
+        jobTitle: jobPostings.title,
+      })
+      .from(workforce)
+      .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
+      .leftJoin(events, eq(workforce.eventId, events.id))
+      .leftJoin(jobPostings, eq(workforce.jobId, jobPostings.id))
+      .where(eq(candidates.nationalId, nationalId))
+      .orderBy(desc(workforce.createdAt));
+    return rows;
   }
 
   async createWorkforceRecord(record: InsertWorkforce): Promise<WorkforceRecord> {
@@ -783,27 +896,57 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async getWorkforceStats(): Promise<{ total: number; active: number; byDepartment: Record<string, number> }> {
+  async terminateEmployee(id: string, data: { endDate: string; terminationReason?: string }): Promise<WorkforceRecord | undefined> {
+    const [existing] = await db.select().from(workforce).where(eq(workforce.id, id));
+    if (!existing) return undefined;
+    if (!existing.isActive) throw new Error("Employee is already terminated");
+    const [updated] = await db.update(workforce).set({
+      isActive: false,
+      endDate: data.endDate,
+      terminationReason: data.terminationReason ?? null,
+      updatedAt: new Date(),
+    }).where(eq(workforce.id, id)).returning();
+    return updated;
+  }
+
+  async reinstateEmployee(nationalId: string, data: { startDate: string; eventId?: string; salary?: string; jobId?: string }): Promise<WorkforceRecord> {
+    const prevRecords = await db
+      .select({ employeeNumber: workforce.employeeNumber })
+      .from(workforce)
+      .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
+      .where(eq(candidates.nationalId, nationalId))
+      .orderBy(desc(workforce.createdAt))
+      .limit(1);
+
+    const [cand] = await db.select().from(candidates).where(eq(candidates.nationalId, nationalId));
+    if (!cand) throw new Error("Candidate not found");
+
+    const empNumber = prevRecords.length > 0 ? prevRecords[0].employeeNumber : await this.generateEmployeeNumber();
+
+    const [created] = await db.insert(workforce).values({
+      employeeNumber: empNumber,
+      candidateId: cand.id,
+      jobId: data.jobId ?? undefined,
+      eventId: data.eventId ?? undefined,
+      salary: data.salary ?? undefined,
+      startDate: data.startDate,
+      isActive: true,
+    }).returning();
+
+    await db.update(candidates).set({ status: "hired", updatedAt: new Date() }).where(eq(candidates.id, cand.id));
+
+    return created;
+  }
+
+  async getWorkforceStats(): Promise<{ total: number; active: number; terminated: number }> {
     const [total] = await db.select({ value: count() }).from(workforce);
     const [activeRow] = await db.select({ value: count() }).from(workforce).where(eq(workforce.isActive, true));
-
-    const deptRows = await db
-      .select({
-        dept: workforce.department,
-        cnt: count(),
-      })
-      .from(workforce)
-      .groupBy(workforce.department);
-
-    const byDepartment: Record<string, number> = {};
-    for (const row of deptRows) {
-      if (row.dept) byDepartment[row.dept] = Number(row.cnt);
-    }
+    const [terminatedRow] = await db.select({ value: count() }).from(workforce).where(eq(workforce.isActive, false));
 
     return {
       total: Number(total.value),
       active: Number(activeRow.value),
-      byDepartment,
+      terminated: Number(terminatedRow.value),
     };
   }
 
@@ -1014,7 +1157,7 @@ export class DatabaseStorage implements IStorage {
 
   async convertOnboardingToEmployee(
     id: string,
-    employmentData: { startDate: string; eventId?: string },
+    employmentData: { startDate: string; eventId?: string; salary?: string },
     convertedBy?: string,
   ): Promise<WorkforceRecord> {
     const rec = await this.getOnboardingRecord(id);
@@ -1022,10 +1165,27 @@ export class DatabaseStorage implements IStorage {
     if (rec.status === "converted") throw new Error("Already converted to employee");
     if (rec.status !== "ready") throw new Error(`Cannot convert — status is "${rec.status}", must be "ready"`);
 
+    const [cand] = await db.select().from(candidates).where(eq(candidates.id, rec.candidateId));
+    let employeeNumber: string;
+    if (cand?.nationalId) {
+      const prev = await db
+        .select({ employeeNumber: workforce.employeeNumber })
+        .from(workforce)
+        .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
+        .where(eq(candidates.nationalId, cand.nationalId))
+        .orderBy(desc(workforce.createdAt))
+        .limit(1);
+      employeeNumber = prev.length > 0 ? prev[0].employeeNumber : await this.generateEmployeeNumber();
+    } else {
+      employeeNumber = await this.generateEmployeeNumber();
+    }
+
     const [workforceRec] = await db.insert(workforce).values({
+      employeeNumber,
       candidateId: rec.candidateId,
       jobId: rec.jobId ?? undefined,
       eventId: employmentData.eventId ?? rec.eventId ?? undefined,
+      salary: employmentData.salary ?? undefined,
       startDate: employmentData.startDate,
       isActive: true,
     }).returning();

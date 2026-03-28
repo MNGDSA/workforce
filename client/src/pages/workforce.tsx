@@ -1,15 +1,12 @@
 import { useState } from "react";
 import { DatePickerField } from "@/components/ui/date-picker-field";
-import { useQuery } from "@tanstack/react-query";
-import { KSA_REGIONS } from "@shared/schema";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -19,14 +16,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  Form,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormControl,
-  FormMessage,
-} from "@/components/ui/form";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -35,15 +24,22 @@ import {
 } from "@/components/ui/select";
 import {
   Search,
-  Filter,
-  MoreHorizontal,
   Users,
-  Plus,
+  UserCheck,
+  UserX,
   Briefcase,
   Clock,
-  MapPin,
+  Hash,
+  DollarSign,
+  Phone,
+  CreditCard,
+  Calendar,
+  History,
+  Eye,
   Loader2,
-  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  ChevronRight,
 } from "lucide-react";
 import {
   Table,
@@ -53,815 +49,580 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Progress } from "@/components/ui/progress";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-type HiringEvent = { id: string; name: string; status: string };
-type Job = { id: string; title: string; status: string };
-type Application = { id: string; candidateId: string; jobId: string; status: string };
-type Candidate = { id: string; fullNameEn: string; nationalId?: string; status: string };
-
-type WorkforceGroup = {
+type Employee = {
   id: string;
-  name: string;
-  size: number;
-  role: string;
+  employeeNumber: string;
+  candidateId: string;
+  jobId: string | null;
+  eventId: string | null;
+  salary: string | null;
   startDate: string;
-  endDate?: string;
-  status: "Onboarding" | "Active" | "Offboarded";
-  progress: number;
-  region: string;
-  department?: string;
-  eventName?: string;
-  notes?: string;
+  endDate: string | null;
+  terminationReason: string | null;
+  isActive: boolean;
+  supervisorId: string | null;
+  performanceScore: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  fullNameEn: string | null;
+  nationalId: string | null;
+  phone: string | null;
+  photoUrl: string | null;
+  candidateStatus: string | null;
+  eventName: string | null;
+  jobTitle: string | null;
+  iban?: string | null;
 };
 
-// ─── Initial mock groups (Saudi context) ──────────────────────────────────────
-const INITIAL_GROUPS: WorkforceGroup[] = [
-  {
-    id: "WG-001",
-    name: "Hajj 2026 – Crowd Management Alpha",
-    size: 120,
-    role: "Crowd Management Officer",
-    startDate: "May 10, 2026",
-    status: "Onboarding",
-    progress: 20,
-    region: "Makkah",
-    department: "Operations",
-    eventName: "Hajj 2026",
-  },
-  {
-    id: "WG-002",
-    name: "Ramadan 2026 – Gate Security",
-    size: 60,
-    role: "Security Personnel",
-    startDate: "Mar 01, 2026",
-    status: "Active",
-    progress: 100,
-    region: "Madinah",
-    department: "Security",
-    eventName: "Ramadan 2026",
-  },
-  {
-    id: "WG-003",
-    name: "Umrah Peak – Medical Support",
-    size: 30,
-    role: "Paramedic / First Aid",
-    startDate: "Jan 15, 2026",
-    status: "Active",
-    progress: 100,
-    region: "Makkah",
-    department: "Medical",
-    eventName: "Umrah Event",
-  },
-  {
-    id: "WG-004",
-    name: "Hajj 2025 – Transportation Crew",
-    size: 85,
-    role: "Driver / Logistics",
-    startDate: "Jun 01, 2025",
-    status: "Offboarded",
-    progress: 100,
-    region: "Nationwide",
-    department: "Logistics",
-    eventName: "Hajj 2025",
-  },
-];
+type WorkHistory = {
+  id: string;
+  employeeNumber: string;
+  salary: string | null;
+  startDate: string;
+  endDate: string | null;
+  terminationReason: string | null;
+  isActive: boolean;
+  notes: string | null;
+  createdAt: string;
+  eventName: string | null;
+  jobTitle: string | null;
+};
 
-const SA_DEPARTMENTS = [
-  "Operations",
-  "Security",
-  "Medical",
-  "Logistics",
-  "Hospitality",
-  "Administration",
-  "Technical",
-  "Communications",
-  "Finance",
-  "Other",
-];
-
-// ─── Form schema ──────────────────────────────────────────────────────────────
-const createGroupSchema = z.object({
-  name: z.string().min(3, "Group name must be at least 3 characters"),
-  role: z.string().min(2, "Role / position is required"),
-  department: z.string().optional(),
-  eventId: z.string().optional(),
-  region: z.string().min(1, "Region is required"),
-  startDate: z.string().min(1, "Start date is required"),
-  endDate: z.string().optional(),
-  notes: z.string().optional(),
-});
-type CreateGroupForm = z.infer<typeof createGroupSchema>;
-
-// ─── Group status helpers ─────────────────────────────────────────────────────
-function statusStyle(status: string) {
-  if (status === "Active")     return "bg-green-500/10 text-green-500";
-  if (status === "Onboarding") return "bg-blue-500/10 text-blue-500";
-  if (status === "Offboarded") return "bg-muted text-muted-foreground";
-  return "bg-zinc-800 text-zinc-500";
+function statusBadge(isActive: boolean) {
+  return isActive
+    ? { label: "Active", className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" }
+    : { label: "Terminated", className: "bg-red-500/10 text-red-400 border-red-500/30" };
 }
 
-function groupProgress(status: string) {
-  if (status === "Onboarding") return 20;
-  if (status === "Active")     return 100;
-  return 100;
+function formatDate(iso: string | null | undefined) {
+  if (!iso) return "—";
+  const d = new Date(iso.includes("T") ? iso : iso + "T00:00:00");
+  return d.toLocaleDateString("en-SA", { month: "short", day: "numeric", year: "numeric" });
 }
 
-// ─── Create Group Dialog ──────────────────────────────────────────────────────
-function CreateGroupDialog({
+function EmployeeDetailDialog({
+  employee,
   open,
   onOpenChange,
-  onCreated,
 }: {
+  employee: Employee | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onCreated: (group: WorkforceGroup) => void;
 }) {
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const qc = useQueryClient();
+  const [tab, setTab] = useState<"details" | "history">("details");
+  const [editSalary, setEditSalary] = useState(false);
+  const [salaryValue, setSalaryValue] = useState("");
+  const [notesValue, setNotesValue] = useState("");
+  const [editNotes, setEditNotes] = useState(false);
+  const [terminateOpen, setTerminateOpen] = useState(false);
+  const [terminateForm, setTerminateForm] = useState({ endDate: "", reason: "" });
 
-  // ── Member selection state ──
-  const [memberSource, setMemberSource] = useState<"applications" | "talent">("applications");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [memberJobId, setMemberJobId] = useState("");
-  const [memberSearch, setMemberSearch] = useState("");
-
-  const { data: hiringEvents = [] } = useQuery<HiringEvent[]>({
-    queryKey: ["/api/events"],
-    queryFn: () => apiRequest("GET", "/api/events").then((r) => r.json()),
-    enabled: open,
-    staleTime: 0,
+  const { data: history = [], isLoading: historyLoading } = useQuery<WorkHistory[]>({
+    queryKey: ["/api/workforce/history", employee?.nationalId],
+    queryFn: () => apiRequest("GET", `/api/workforce/history/${employee!.nationalId}`).then(r => r.json()),
+    enabled: open && !!employee?.nationalId && tab === "history",
   });
 
-  const { data: activeJobs = [] } = useQuery<Job[]>({
-    queryKey: ["/api/jobs", "active"],
-    queryFn: () => apiRequest("GET", "/api/jobs?status=active").then((r) => r.json()),
-    enabled: open,
-    staleTime: 0,
-  });
-
-  const { data: jobApplications = [], isLoading: loadingApps } = useQuery<Application[]>({
-    queryKey: ["/api/applications", memberJobId],
-    queryFn: () => apiRequest("GET", `/api/applications?jobId=${memberJobId}`).then((r) => r.json()),
-    enabled: !!memberJobId,
-    staleTime: 0,
-  });
-
-  const { data: allCandidates = [] } = useQuery<Candidate[]>({
-    queryKey: ["/api/candidates/list"],
-    queryFn: async () => {
-      const json = await apiRequest("GET", "/api/candidates?limit=100").then((r) => r.json());
-      return Array.isArray(json) ? json : Array.isArray(json?.data) ? json.data : [];
+  const updateMutation = useMutation({
+    mutationFn: (data: Record<string, any>) =>
+      apiRequest("PATCH", `/api/workforce/${employee!.id}`, data).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/workforce"] });
+      setEditSalary(false);
+      setEditNotes(false);
+      toast({ title: "Employee updated" });
     },
-    enabled: open,
-    staleTime: 0,
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
 
-  // Applicants for selected job
-  const applicantIds = new Set(jobApplications.map((a) => a.candidateId));
-  const jobApplicants = allCandidates.filter((c) => applicantIds.has(c.id));
-
-  // Talent pool filtered by search
-  const talentPool = allCandidates.filter(
-    (c) =>
-      !memberSearch ||
-      c.fullNameEn.toLowerCase().includes(memberSearch.toLowerCase()) ||
-      (c.nationalId ?? "").toLowerCase().includes(memberSearch.toLowerCase())
-  );
-
-  function toggleMember(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
-
-  const form = useForm<CreateGroupForm>({
-    resolver: zodResolver(createGroupSchema),
-    defaultValues: {
-      name: "",
-      role: "",
-      department: "",
-      eventId: "",
-      region: "",
-      startDate: "",
-      endDate: "",
-      notes: "",
+  const terminateMutation = useMutation({
+    mutationFn: (data: { endDate: string; terminationReason?: string }) =>
+      apiRequest("POST", `/api/workforce/${employee!.id}/terminate`, data).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/workforce"] });
+      setTerminateOpen(false);
+      setTerminateForm({ endDate: "", reason: "" });
+      toast({ title: "Employee terminated" });
     },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
 
-  function formatDisplayDate(iso: string) {
-    if (!iso) return "";
-    const d = new Date(iso + "T00:00:00");
-    return d.toLocaleDateString("en-SA", { month: "short", day: "numeric", year: "numeric" });
-  }
+  if (!employee) return null;
 
-  function resetMemberState() {
-    setSelectedIds(new Set());
-    setMemberJobId("");
-    setMemberSearch("");
-    setMemberSource("applications");
-  }
-
-  async function onSubmit(data: CreateGroupForm) {
-    setIsSubmitting(true);
-    try {
-      const evtName = hiringEvents.find((s) => s.id === data.eventId)?.name;
-
-      const counter = Math.random().toString(36).substring(2, 5).toUpperCase();
-      const newGroup: WorkforceGroup = {
-        id: `WG-${counter}`,
-        name: data.name,
-        size: selectedIds.size,
-        role: data.role,
-        startDate: formatDisplayDate(data.startDate),
-        endDate: data.endDate ? formatDisplayDate(data.endDate) : undefined,
-        status: "Onboarding",
-        progress: groupProgress("Onboarding"),
-        region: data.region,
-        department: data.department || undefined,
-        eventName: evtName,
-        notes: data.notes || undefined,
-      };
-
-      onCreated(newGroup);
-      toast({
-        title: "Group created",
-        description: `"${data.name}" has been added with ${selectedIds.size} member${selectedIds.size !== 1 ? "s" : ""}.`,
-      });
-      form.reset();
-      resetMemberState();
-      onOpenChange(false);
-    } catch {
-      toast({
-        title: "Failed to create group",
-        description: "Please check the details and try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  function handleOpenChange(v: boolean) {
-    if (!v) resetMemberState();
-    onOpenChange(v);
-  }
+  const st = statusBadge(employee.isActive);
+  const initials = (employee.fullNameEn ?? "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-xl bg-card border-border max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            Create Workforce Group
-          </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            Define a new group of event workers for deployment.
-          </DialogDescription>
-        </DialogHeader>
-
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 pt-1">
-
-            {/* Group Identity */}
-            <div className="space-y-3">
-              <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground/60 border-b border-border pb-1.5">
-                Group Identity
-              </p>
-
-              {/* Group Name */}
-              <FormField control={form.control} name="name" render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                    Group Name <span className="text-destructive">*</span>
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="e.g. Hajj 2026 – Crowd Management Alpha"
-                      className="bg-muted/30 border-border"
-                      data-testid="input-group-name"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-
-              {/* Role & Department */}
-              <div className="grid grid-cols-2 gap-3">
-                <FormField control={form.control} name="role" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                      Role / Position <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="e.g. Security Officer"
-                        className="bg-muted/30 border-border"
-                        data-testid="input-group-role"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-
-                <FormField control={form.control} name="department" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Department</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || "none"}>
-                      <FormControl>
-                        <SelectTrigger className="bg-muted/30 border-border" data-testid="select-department">
-                          <SelectValue placeholder="Select…" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {SA_DEPARTMENTS.map((d) => (
-                          <SelectItem key={d} value={d}>{d}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )} />
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl bg-zinc-950 border-zinc-800 text-white max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-3">
+              <Avatar className="h-10 w-10 border border-zinc-700">
+                <AvatarImage src={employee.photoUrl ?? undefined} />
+                <AvatarFallback className="bg-zinc-800 text-zinc-300 text-sm font-bold">{initials}</AvatarFallback>
+              </Avatar>
+              <div>
+                <div className="flex items-center gap-2">
+                  {employee.fullNameEn ?? "Unknown"}
+                  <Badge variant="outline" className={`text-[10px] font-mono ${st.className}`}>{st.label}</Badge>
+                </div>
+                <div className="text-xs text-zinc-500 font-mono font-normal">{employee.employeeNumber}</div>
               </div>
+            </DialogTitle>
+            <DialogDescription className="sr-only">Employee details and work history</DialogDescription>
+          </DialogHeader>
 
-              {/* Event & Region */}
-              <div className="grid grid-cols-2 gap-3">
-                <FormField control={form.control} name="eventId" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Event</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || "none"}>
-                      <FormControl>
-                        <SelectTrigger className="bg-muted/30 border-border" data-testid="select-event">
-                          <SelectValue placeholder="Select event…" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">No Event</SelectItem>
-                        {hiringEvents.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )} />
+          <div className="flex rounded-md overflow-hidden border border-zinc-800 bg-zinc-900/50 mt-2">
+            <button
+              onClick={() => setTab("details")}
+              className={`flex-1 text-xs font-semibold py-2.5 transition-colors flex items-center justify-center gap-1.5 ${
+                tab === "details" ? "bg-[hsl(155,45%,45%)] text-white" : "text-zinc-400 hover:text-white"
+              }`}
+              data-testid="tab-employee-details"
+            >
+              <Eye className="h-3.5 w-3.5" /> Details
+            </button>
+            <button
+              onClick={() => setTab("history")}
+              className={`flex-1 text-xs font-semibold py-2.5 transition-colors flex items-center justify-center gap-1.5 ${
+                tab === "history" ? "bg-[hsl(155,45%,45%)] text-white" : "text-zinc-400 hover:text-white"
+              }`}
+              data-testid="tab-employee-history"
+            >
+              <History className="h-3.5 w-3.5" /> Work History
+            </button>
+          </div>
 
-                <FormField control={form.control} name="region" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                      Region <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || "none"}>
-                      <FormControl>
-                        <SelectTrigger className="bg-muted/30 border-border" data-testid="select-region">
-                          <SelectValue placeholder="Select region…" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">Select region…</SelectItem>
-                        {KSA_REGIONS.map((r) => (
-                          <SelectItem key={r} value={r}>{r}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-              </div>
-            </div>
-
-            {/* Schedule */}
-            <div className="space-y-3">
-              <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground/60 border-b border-border pb-1.5">
-                Schedule
-              </p>
-
-              <div className="grid grid-cols-2 gap-3">
-                <FormField control={form.control} name="startDate" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                      Start Date <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <DatePickerField
-                        value={field.value}
-                        onChange={field.onChange}
-                        className="bg-muted/30 border-border"
-                        data-testid="input-start-date"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-
-                <FormField control={form.control} name="endDate" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">End Date</FormLabel>
-                    <FormControl>
-                      <DatePickerField
-                        value={field.value}
-                        onChange={field.onChange}
-                        className="bg-muted/30 border-border"
-                        data-testid="input-end-date"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-              </div>
-            </div>
-
-            {/* Members */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between border-b border-border pb-1.5">
-                <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground/60">
-                  Members
-                </p>
-                {selectedIds.size > 0 && (
-                  <span className="text-xs font-semibold text-primary">
-                    {selectedIds.size} selected
-                  </span>
+          {tab === "details" && (
+            <div className="space-y-4 mt-2">
+              <div className="grid grid-cols-2 gap-4">
+                <InfoRow icon={<Hash className="h-3.5 w-3.5" />} label="Employee #" value={employee.employeeNumber} mono />
+                <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="National ID" value={employee.nationalId ?? "—"} mono />
+                <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label="Phone" value={employee.phone ?? "—"} />
+                <InfoRow icon={<Briefcase className="h-3.5 w-3.5" />} label="Job Title" value={employee.jobTitle ?? "—"} />
+                <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label="Event" value={employee.eventName ?? "—"} />
+                <InfoRow icon={<Clock className="h-3.5 w-3.5" />} label="Start Date" value={formatDate(employee.startDate)} />
+                {!employee.isActive && (
+                  <>
+                    <InfoRow icon={<XCircle className="h-3.5 w-3.5" />} label="End Date" value={formatDate(employee.endDate)} />
+                    <InfoRow icon={<AlertTriangle className="h-3.5 w-3.5" />} label="Termination Reason" value={employee.terminationReason ?? "—"} />
+                  </>
                 )}
               </div>
 
-              {/* Selected member chips */}
-              {selectedIds.size > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {allCandidates.filter((c) => selectedIds.has(c.id)).map((c) => (
-                    <Badge
-                      key={c.id}
-                      variant="outline"
-                      className="bg-primary/10 text-primary border-primary/30 text-xs gap-1 pr-1 cursor-pointer hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
-                      onClick={() => toggleMember(c.id)}
-                      data-testid={`chip-member-${c.id}`}
+              <Separator className="bg-zinc-800" />
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <DollarSign className="h-3.5 w-3.5" /> Monthly Salary (SAR)
+                  </Label>
+                  {employee.isActive && !editSalary && (
+                    <Button variant="ghost" size="sm" className="h-6 text-xs text-primary" onClick={() => { setEditSalary(true); setSalaryValue(employee.salary ?? ""); }}>
+                      Edit
+                    </Button>
+                  )}
+                </div>
+                {editSalary ? (
+                  <div className="flex gap-2">
+                    <Input
+                      data-testid="input-edit-salary"
+                      type="number"
+                      value={salaryValue}
+                      onChange={e => setSalaryValue(e.target.value)}
+                      className="bg-zinc-900 border-zinc-700 text-white flex-1"
+                      placeholder="e.g. 4500"
+                    />
+                    <Button
+                      size="sm"
+                      className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
+                      disabled={updateMutation.isPending}
+                      onClick={() => updateMutation.mutate({ salary: salaryValue || null })}
                     >
-                      {c.fullNameEn}
-                      <span className="opacity-60">×</span>
-                    </Badge>
+                      {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                    </Button>
+                    <Button size="sm" variant="outline" className="border-zinc-700" onClick={() => setEditSalary(false)}>Cancel</Button>
+                  </div>
+                ) : (
+                  <p className="text-white font-medium text-lg" data-testid="text-employee-salary">
+                    {employee.salary ? `${Number(employee.salary).toLocaleString()} SAR` : "Not set"}
+                  </p>
+                )}
+              </div>
+
+              <Separator className="bg-zinc-800" />
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-zinc-400 text-xs uppercase tracking-wider">Notes</Label>
+                  {employee.isActive && !editNotes && (
+                    <Button variant="ghost" size="sm" className="h-6 text-xs text-primary" onClick={() => { setEditNotes(true); setNotesValue(employee.notes ?? ""); }}>
+                      Edit
+                    </Button>
+                  )}
+                </div>
+                {editNotes ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      data-testid="textarea-edit-notes"
+                      value={notesValue}
+                      onChange={e => setNotesValue(e.target.value)}
+                      className="bg-zinc-900 border-zinc-700 text-white resize-none"
+                      rows={3}
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <Button size="sm" variant="outline" className="border-zinc-700" onClick={() => setEditNotes(false)}>Cancel</Button>
+                      <Button
+                        size="sm"
+                        className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
+                        disabled={updateMutation.isPending}
+                        onClick={() => updateMutation.mutate({ notes: notesValue || null })}
+                      >
+                        {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-zinc-300 text-sm">{employee.notes || "No notes"}</p>
+                )}
+              </div>
+
+              {employee.isActive && (
+                <>
+                  <Separator className="bg-zinc-800" />
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      className="border-red-800 text-red-400 hover:bg-red-950/30 hover:text-red-300 gap-1.5"
+                      onClick={() => setTerminateOpen(true)}
+                      data-testid="button-terminate-employee"
+                    >
+                      <UserX className="h-4 w-4" /> Terminate Employee
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {tab === "history" && (
+            <div className="mt-2">
+              {historyLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-zinc-500" />
+                </div>
+              ) : history.length === 0 ? (
+                <div className="text-center py-12 text-zinc-500">
+                  <History className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">No work history found</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
+                    Employment Records ({history.length})
+                  </p>
+                  {history.map((h, idx) => (
+                    <div
+                      key={h.id}
+                      className={`border rounded-lg p-4 space-y-2 ${
+                        h.isActive ? "border-emerald-800/50 bg-emerald-950/10" : "border-zinc-800 bg-zinc-900/30"
+                      }`}
+                      data-testid={`history-record-${idx}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs font-mono text-zinc-400">{h.employeeNumber}</code>
+                          <Badge variant="outline" className={h.isActive ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[10px]" : "bg-red-500/10 text-red-400 border-red-500/30 text-[10px]"}>
+                            {h.isActive ? "Active" : "Terminated"}
+                          </Badge>
+                        </div>
+                        {h.salary && <span className="text-sm text-zinc-300 font-medium">{Number(h.salary).toLocaleString()} SAR</span>}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-zinc-500 text-xs">Event</span>
+                          <p className="text-zinc-200">{h.eventName ?? "—"}</p>
+                        </div>
+                        <div>
+                          <span className="text-zinc-500 text-xs">Job Title</span>
+                          <p className="text-zinc-200">{h.jobTitle ?? "—"}</p>
+                        </div>
+                        <div>
+                          <span className="text-zinc-500 text-xs">Start</span>
+                          <p className="text-zinc-200">{formatDate(h.startDate)}</p>
+                        </div>
+                        <div>
+                          <span className="text-zinc-500 text-xs">End</span>
+                          <p className="text-zinc-200">{formatDate(h.endDate)}</p>
+                        </div>
+                      </div>
+                      {h.terminationReason && (
+                        <div className="text-xs text-red-400/80 flex items-center gap-1 mt-1">
+                          <AlertTriangle className="h-3 w-3" /> {h.terminationReason}
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
-
-              {/* Source toggle */}
-              <div className="flex rounded-sm overflow-hidden border border-border bg-muted/10">
-                <button
-                  type="button"
-                  onClick={() => setMemberSource("applications")}
-                  className={`flex-1 text-xs font-semibold py-2 transition-colors ${
-                    memberSource === "applications"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-white"
-                  }`}
-                  data-testid="tab-source-applications"
-                >
-                  Job Applications
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMemberSource("talent")}
-                  className={`flex-1 text-xs font-semibold py-2 transition-colors ${
-                    memberSource === "talent"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-white"
-                  }`}
-                  data-testid="tab-source-talent"
-                >
-                  Talent Pool
-                </button>
-              </div>
-
-              {/* Job Applications source */}
-              {memberSource === "applications" && (
-                <div className="space-y-2">
-                  <Select value={memberJobId || "none"} onValueChange={(v) => setMemberJobId(v === "none" ? "" : v)}>
-                    <SelectTrigger className="bg-muted/30 border-border h-9 text-sm" data-testid="select-member-job">
-                      <SelectValue placeholder="Select a job to see its applicants…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Select a job…</SelectItem>
-                      {activeJobs.map((j) => (
-                        <SelectItem key={j.id} value={j.id}>{j.title}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-muted/10 divide-y divide-border">
-                    {!memberJobId ? (
-                      <p className="text-xs text-muted-foreground text-center py-5">Select a job above to see applicants</p>
-                    ) : loadingApps ? (
-                      <div className="flex items-center justify-center py-5">
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : jobApplicants.length === 0 ? (
-                      <p className="text-xs text-muted-foreground text-center py-5">No applicants found for this job</p>
-                    ) : (
-                      jobApplicants.map((c) => {
-                        const selected = selectedIds.has(c.id);
-                        return (
-                          <div
-                            key={c.id}
-                            className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${selected ? "bg-primary/10" : "hover:bg-muted/30"}`}
-                            onClick={() => toggleMember(c.id)}
-                            data-testid={`row-member-${c.id}`}
-                          >
-                            <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selected ? "bg-primary border-primary" : "border-muted-foreground/40"}`}>
-                              {selected && <CheckCircle2 className="h-3 w-3 text-primary-foreground" />}
-                            </div>
-                            <span className={`text-sm font-medium flex-1 truncate ${selected ? "text-primary" : "text-white"}`}>{c.fullNameEn}</span>
-                            <code className="text-[10px] text-muted-foreground font-mono shrink-0">{c.nationalId ?? "—"}</code>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Talent Pool source */}
-              {memberSource === "talent" && (
-                <div className="space-y-2">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                    <Input
-                      placeholder="Search by name or code…"
-                      className="pl-9 h-9 text-sm bg-muted/30 border-border"
-                      value={memberSearch}
-                      onChange={(e) => setMemberSearch(e.target.value)}
-                      data-testid="input-member-search"
-                    />
-                  </div>
-
-                  <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-muted/10 divide-y divide-border">
-                    {talentPool.length === 0 ? (
-                      <p className="text-xs text-muted-foreground text-center py-5">
-                        {allCandidates.length === 0 ? "No candidates in the talent pool yet" : "No matches found"}
-                      </p>
-                    ) : (
-                      talentPool.map((c) => {
-                        const selected = selectedIds.has(c.id);
-                        return (
-                          <div
-                            key={c.id}
-                            className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${selected ? "bg-primary/10" : "hover:bg-muted/30"}`}
-                            onClick={() => toggleMember(c.id)}
-                            data-testid={`row-talent-${c.id}`}
-                          >
-                            <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selected ? "bg-primary border-primary" : "border-muted-foreground/40"}`}>
-                              {selected && <CheckCircle2 className="h-3 w-3 text-primary-foreground" />}
-                            </div>
-                            <span className={`text-sm font-medium flex-1 truncate ${selected ? "text-primary" : "text-white"}`}>{c.fullNameEn}</span>
-                            <code className="text-[10px] text-muted-foreground font-mono shrink-0">{c.nationalId ?? "—"}</code>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
-            {/* Notes */}
-            <FormField control={form.control} name="notes" render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Notes</FormLabel>
-                <FormControl>
-                  <Textarea
-                    placeholder="Special instructions, uniform requirements, clearance needed, etc."
-                    className="bg-muted/30 border-border resize-none"
-                    rows={3}
-                    data-testid="textarea-notes"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )} />
-
-            <div className="flex justify-end gap-3 pt-1">
+      <Dialog open={terminateOpen} onOpenChange={setTerminateOpen}>
+        <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-lg flex items-center gap-2 text-red-400">
+              <UserX className="h-5 w-5" />
+              Terminate Employee
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400 text-sm">
+              This will mark {employee.fullNameEn ?? "this employee"} ({employee.employeeNumber}) as terminated.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="bg-red-950/20 border border-red-800/40 rounded-lg p-3 text-sm text-red-300 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              This action cannot be undone. The employee's record will be preserved in work history.
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-zinc-400 text-sm">End Date <span className="text-red-400">*</span></Label>
+              <DatePickerField
+                data-testid="input-terminate-enddate"
+                value={terminateForm.endDate}
+                onChange={v => setTerminateForm(f => ({ ...f, endDate: v }))}
+                className="bg-zinc-900 border-zinc-700 text-white"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-zinc-400 text-sm">Reason</Label>
+              <Textarea
+                data-testid="textarea-terminate-reason"
+                value={terminateForm.reason}
+                onChange={e => setTerminateForm(f => ({ ...f, reason: e.target.value }))}
+                className="bg-zinc-900 border-zinc-700 text-white resize-none"
+                rows={2}
+                placeholder="e.g. End of season, Performance, Resignation..."
+              />
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button variant="outline" className="border-zinc-700 text-zinc-300" onClick={() => setTerminateOpen(false)}>Cancel</Button>
               <Button
-                type="button"
-                variant="outline"
-                className="border-border"
-                onClick={() => onOpenChange(false)}
-                data-testid="button-cancel-create-group"
+                data-testid="button-confirm-terminate"
+                disabled={!terminateForm.endDate || terminateMutation.isPending}
+                onClick={() => terminateMutation.mutate({ endDate: terminateForm.endDate, terminationReason: terminateForm.reason || undefined })}
+                className="bg-red-600 hover:bg-red-700 text-white gap-2"
               >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                className="bg-primary text-primary-foreground font-bold min-w-[140px]"
-                disabled={isSubmitting}
-                data-testid="button-submit-create-group"
-              >
-                {isSubmitting
-                  ? <Loader2 className="h-4 w-4 animate-spin" />
-                  : <><Plus className="mr-1.5 h-4 w-4" />Create Group</>}
+                {terminateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><UserX className="h-4 w-4" /> Confirm Termination</>}
               </Button>
             </div>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-export default function WorkforcePage() {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [groups, setGroups] = useState<WorkforceGroup[]>(INITIAL_GROUPS);
-
-  const filtered = groups.filter(
-    (g) =>
-      !search ||
-      g.name.toLowerCase().includes(search.toLowerCase()) ||
-      g.role.toLowerCase().includes(search.toLowerCase()) ||
-      g.region.toLowerCase().includes(search.toLowerCase())
+function InfoRow({ icon, label, value, mono }: { icon: React.ReactNode; label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="bg-zinc-900/50 rounded-md p-3 border border-zinc-800/50">
+      <div className="flex items-center gap-1.5 text-zinc-500 text-[10px] uppercase tracking-wider font-semibold mb-1">
+        {icon} {label}
+      </div>
+      <p className={`text-white text-sm font-medium ${mono ? "font-mono" : ""}`}>{value}</p>
+    </div>
   );
+}
 
-  const activePersonnel = groups
-    .filter((g) => g.status !== "Offboarded")
-    .reduce((acc, g) => acc + g.size, 0);
-  const onboardingCount = groups.filter((g) => g.status === "Onboarding").length;
+export default function WorkforcePage() {
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "terminated">("all");
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+
+  const { data: employees = [], isLoading } = useQuery<Employee[]>({
+    queryKey: ["/api/workforce", search, statusFilter],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      if (statusFilter === "active") params.set("isActive", "true");
+      if (statusFilter === "terminated") params.set("isActive", "false");
+      return apiRequest("GET", `/api/workforce?${params}`).then(r => r.json());
+    },
+    refetchInterval: 15000,
+  });
+
+  const { data: stats } = useQuery<{ total: number; active: number; terminated: number }>({
+    queryKey: ["/api/workforce/stats"],
+    queryFn: () => apiRequest("GET", "/api/workforce/stats").then(r => r.json()),
+    refetchInterval: 15000,
+  });
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white tracking-tight">Workforce Groups</h1>
-            <p className="text-muted-foreground mt-1">Manage teams, assignments, and group lifecycles.</p>
+            <h1 className="text-3xl font-display font-bold text-white tracking-tight" data-testid="text-page-title">Employee Management</h1>
+            <p className="text-muted-foreground mt-1">Manage seasonal and permanent employees across events.</p>
           </div>
-          <Button
-            className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs self-start sm:self-auto"
-            onClick={() => setDialogOpen(true)}
-            data-testid="button-create-group"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Create Group
-          </Button>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="bg-card border-border shadow-sm border-l-4 border-l-primary">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Groups</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Employees</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-groups">{groups.length}</div>
-              <p className="text-xs text-muted-foreground mt-1">Active & Archived</p>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-employees">{stats?.total ?? 0}</div>
+              <p className="text-xs text-muted-foreground mt-1">All-time employee records</p>
             </CardContent>
           </Card>
 
           <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Active Personnel</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Active</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-active-personnel">{activePersonnel.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground mt-1">Currently deployed</p>
+              <div className="text-4xl font-bold font-display text-emerald-400" data-testid="stat-active-employees">{stats?.active ?? 0}</div>
+              <p className="text-xs text-muted-foreground mt-1">Currently employed</p>
             </CardContent>
           </Card>
 
           <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Onboarding</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Terminated</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-onboarding">{onboardingCount}</div>
-              <p className="text-xs text-muted-foreground mt-1">Groups in setup phase</p>
+              <div className="text-4xl font-bold font-display text-red-400" data-testid="stat-terminated-employees">{stats?.terminated ?? 0}</div>
+              <p className="text-xs text-muted-foreground mt-1">Past employees</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Search Bar */}
         <div className="flex flex-col md:flex-row gap-4 items-center bg-card p-4 rounded-sm border border-border">
           <div className="relative flex-1 w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
-              placeholder="Search groups by name, role, or region…"
+              placeholder="Search by name, national ID, or employee number…"
               className="pl-10 h-12 bg-muted/30 border-border focus-visible:ring-primary/20 text-base"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              data-testid="input-search-groups"
+              data-testid="input-search-employees"
             />
           </div>
-          <Button variant="outline" className="h-12 border-border bg-background w-full md:w-auto">
-            <Filter className="mr-2 h-4 w-4" />
-            Status
-          </Button>
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+            <SelectTrigger className="w-full md:w-[180px] h-12 bg-background border-border" data-testid="select-status-filter">
+              <SelectValue placeholder="All Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active">Active Only</SelectItem>
+              <SelectItem value="terminated">Terminated Only</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        {/* Groups Table */}
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-lg font-display text-white">
-              Groups List
-              <span className="ml-2 text-sm font-normal text-muted-foreground">({filtered.length})</span>
+              Employee List
+              <span className="ml-2 text-sm font-normal text-muted-foreground">({employees.length})</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {filtered.length === 0 ? (
+            {isLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : employees.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <Users className="h-12 w-12 text-muted-foreground/20 mb-4" />
-                <p className="text-muted-foreground">No groups found</p>
-                <Button
-                  variant="outline"
-                  className="mt-4 border-border"
-                  onClick={() => setDialogOpen(true)}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create First Group
-                </Button>
+                <p className="text-muted-foreground">No employees found</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Employees appear here after conversion from Onboarding.</p>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="w-[90px] text-muted-foreground pl-6">ID</TableHead>
-                    <TableHead className="text-muted-foreground">Group Name</TableHead>
-                    <TableHead className="text-muted-foreground hidden md:table-cell">Role & Region</TableHead>
-                    <TableHead className="text-muted-foreground hidden lg:table-cell">Lifecycle</TableHead>
+                    <TableHead className="w-[100px] text-muted-foreground pl-6">Emp #</TableHead>
+                    <TableHead className="text-muted-foreground">Employee</TableHead>
+                    <TableHead className="text-muted-foreground hidden md:table-cell">National ID</TableHead>
+                    <TableHead className="text-muted-foreground hidden lg:table-cell">Job / Event</TableHead>
+                    <TableHead className="text-muted-foreground hidden lg:table-cell text-right">Salary</TableHead>
+                    <TableHead className="text-muted-foreground hidden md:table-cell">Start Date</TableHead>
                     <TableHead className="text-muted-foreground">Status</TableHead>
-                    <TableHead className="text-right text-muted-foreground pr-6">Actions</TableHead>
+                    <TableHead className="text-right text-muted-foreground pr-6">View</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((group) => (
-                    <TableRow key={group.id} className="border-border hover:bg-muted/20" data-testid={`row-group-${group.id}`}>
-                      <TableCell className="font-mono text-xs text-muted-foreground pl-6">{group.id}</TableCell>
-                      <TableCell className="py-4">
-                        <div className="font-medium text-white">{group.name}</div>
-                        <div className="flex flex-wrap items-center text-xs text-muted-foreground mt-1 gap-x-2 gap-y-0.5">
-                          <span className="flex items-center gap-1">
-                            <Users className="h-3 w-3" />
-                            {group.size.toLocaleString()} members
-                          </span>
-                          <span>•</span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {group.startDate}
-                          </span>
-                          {group.eventName && (
-                            <>
-                              <span>•</span>
-                              <span className="text-primary/70">{group.eventName}</span>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell py-4">
-                        <div className="space-y-1 text-sm">
-                          <div className="flex items-center gap-1.5 text-white">
-                            <Briefcase className="h-3 w-3 text-primary shrink-0" />
-                            {group.role}
+                  {employees.map((emp) => {
+                    const st = statusBadge(emp.isActive);
+                    const initials = (emp.fullNameEn ?? "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+                    return (
+                      <TableRow
+                        key={emp.id}
+                        className="border-border hover:bg-muted/20 cursor-pointer"
+                        onClick={() => setSelectedEmployee(emp)}
+                        data-testid={`row-employee-${emp.employeeNumber}`}
+                      >
+                        <TableCell className="font-mono text-xs text-primary font-semibold pl-6" data-testid={`text-empnum-${emp.id}`}>
+                          {emp.employeeNumber}
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8 border border-zinc-700">
+                              <AvatarImage src={emp.photoUrl ?? undefined} />
+                              <AvatarFallback className="bg-zinc-800 text-zinc-400 text-xs">{initials}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className="font-medium text-white text-sm">{emp.fullNameEn ?? "—"}</div>
+                              <div className="text-xs text-muted-foreground">{emp.phone ?? "—"}</div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <MapPin className="h-3 w-3 shrink-0" />
-                            {group.region}
-                            {group.department && ` · ${group.department}`}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell font-mono text-xs text-zinc-400">
+                          {emp.nationalId ?? "—"}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          <div className="space-y-0.5">
+                            <div className="text-sm text-white">{emp.jobTitle ?? "—"}</div>
+                            {emp.eventName && <div className="text-xs text-primary/70">{emp.eventName}</div>}
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell w-[200px] py-4">
-                        <div className="space-y-1.5">
-                          <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground">Cycle Completion</span>
-                            <span className="text-white font-medium">{group.progress}%</span>
-                          </div>
-                          <Progress value={group.progress} className="h-1.5" />
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-4">
-                        <Badge
-                          variant="outline"
-                          className={`font-medium border-0 ${statusStyle(group.status)}`}
-                          data-testid={`badge-status-${group.id}`}
-                        >
-                          {group.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right pr-6 py-4">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-white"
-                          data-testid={`button-group-actions-${group.id}`}
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-right text-sm text-white font-medium">
+                          {emp.salary ? `${Number(emp.salary).toLocaleString()}` : "—"}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-sm text-zinc-400">
+                          {formatDate(emp.startDate)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`text-[10px] font-medium border ${st.className}`} data-testid={`badge-status-${emp.id}`}>
+                            {st.label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right pr-6">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-white"
+                            data-testid={`button-view-${emp.id}`}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
@@ -869,10 +630,10 @@ export default function WorkforcePage() {
         </Card>
       </div>
 
-      <CreateGroupDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onCreated={(g) => setGroups((prev) => [g, ...prev])}
+      <EmployeeDetailDialog
+        employee={selectedEmployee}
+        open={!!selectedEmployee}
+        onOpenChange={(o) => !o && setSelectedEmployee(null)}
       />
     </DashboardLayout>
   );
