@@ -29,8 +29,10 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [supportEmail, setSupportEmail] = useState("");
+  const [privacyPolicy, setPrivacyPolicy] = useState("");
+  const [termsConditions, setTermsConditions] = useState("");
 
-  const { data: systemSettings } = useQuery<{ support_email: string }>({
+  const { data: systemSettings } = useQuery<{ support_email: string; privacy_policy: string; terms_conditions: string }>({
     queryKey: ["/api/settings/system"],
     queryFn: () => apiRequest("GET", "/api/settings/system").then(r => r.json()),
   });
@@ -38,21 +40,23 @@ export default function SettingsPage() {
   useEffect(() => {
     if (systemSettings) {
       setSupportEmail(systemSettings.support_email ?? "");
+      setPrivacyPolicy(systemSettings.privacy_policy ?? "");
+      setTermsConditions(systemSettings.terms_conditions ?? "");
     }
   }, [systemSettings]);
 
   const saveSettings = useMutation({
-    mutationFn: (data: { support_email: string }) =>
+    mutationFn: (data: { support_email: string; privacy_policy: string; terms_conditions: string }) =>
       apiRequest("PATCH", "/api/settings/system", data).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/settings/system"] });
-      toast({ title: "Settings Saved", description: "Support email updated successfully." });
+      toast({ title: "Settings Saved", description: "Your settings have been updated successfully." });
     },
     onError: () => toast({ title: "Save failed", variant: "destructive" }),
   });
 
   const handleSave = () => {
-    saveSettings.mutate({ support_email: supportEmail });
+    saveSettings.mutate({ support_email: supportEmail, privacy_policy: privacyPolicy, terms_conditions: termsConditions });
   };
 
   return (
@@ -159,6 +163,39 @@ export default function SettingsPage() {
                     <div className="space-y-2">
                       <Label className="text-white">Date Format</Label>
                       <Input defaultValue="DD/MM/YYYY" className="bg-muted/30 border-border" />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator className="bg-border" />
+
+                <div>
+                  <h3 className="text-base font-medium text-white mb-4">Legal Pages</h3>
+                  <p className="text-sm text-muted-foreground mb-4">Content entered here is published on the login page links.</p>
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="privacyPolicy" className="text-white">Privacy Policy</Label>
+                      <textarea
+                        id="privacyPolicy"
+                        rows={8}
+                        placeholder="Enter your privacy policy text here..."
+                        value={privacyPolicy}
+                        onChange={(e) => setPrivacyPolicy(e.target.value)}
+                        className="flex w-full rounded-sm border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary resize-y"
+                        data-testid="textarea-privacy-policy"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="termsConditions" className="text-white">Terms & Conditions</Label>
+                      <textarea
+                        id="termsConditions"
+                        rows={8}
+                        placeholder="Enter your terms and conditions text here..."
+                        value={termsConditions}
+                        onChange={(e) => setTermsConditions(e.target.value)}
+                        className="flex w-full rounded-sm border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary resize-y"
+                        data-testid="textarea-terms-conditions"
+                      />
                     </div>
                   </div>
                 </div>

@@ -25,12 +25,15 @@ import PayrollPage from "@/pages/payroll";
 import ReportsPage from "@/pages/reports";
 import ProfilePage from "@/pages/profile";
 import OnboardingPage from "@/pages/onboarding";
+import LegalPage from "@/pages/legal-page";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={AuthPage} />
       <Route path="/auth" component={AuthPage} />
+      <Route path="/privacy-policy" component={() => <LegalPage type="privacy" />} />
+      <Route path="/terms-conditions" component={() => <LegalPage type="terms" />} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/job-posting" component={JobPostingPage} />
       <Route path="/job-posting/:id" component={JobPostingDetailPage} />

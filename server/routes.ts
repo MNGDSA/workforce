@@ -551,8 +551,16 @@ export async function registerRoutes(
   // ─── System Settings (public — no auth) ──────────────────────────────────
   app.get("/api/settings/public", async (_req: Request, res: Response) => {
     try {
-      const supportEmail = await storage.getSystemSetting("support_email");
-      return res.json({ supportEmail: supportEmail ?? null });
+      const [supportEmail, privacyPolicy, termsConditions] = await Promise.all([
+        storage.getSystemSetting("support_email"),
+        storage.getSystemSetting("privacy_policy"),
+        storage.getSystemSetting("terms_conditions"),
+      ]);
+      return res.json({
+        supportEmail: supportEmail ?? null,
+        privacyPolicy: privacyPolicy ?? null,
+        termsConditions: termsConditions ?? null,
+      });
     } catch (err) {
       return handleError(res, err);
     }
@@ -560,8 +568,16 @@ export async function registerRoutes(
 
   app.get("/api/settings/system", async (_req: Request, res: Response) => {
     try {
-      const supportEmail = await storage.getSystemSetting("support_email");
-      return res.json({ support_email: supportEmail ?? "" });
+      const [supportEmail, privacyPolicy, termsConditions] = await Promise.all([
+        storage.getSystemSetting("support_email"),
+        storage.getSystemSetting("privacy_policy"),
+        storage.getSystemSetting("terms_conditions"),
+      ]);
+      return res.json({
+        support_email: supportEmail ?? "",
+        privacy_policy: privacyPolicy ?? "",
+        terms_conditions: termsConditions ?? "",
+      });
     } catch (err) {
       return handleError(res, err);
     }
@@ -569,13 +585,19 @@ export async function registerRoutes(
 
   app.patch("/api/settings/system", async (req: Request, res: Response) => {
     try {
-      const { support_email } = req.body;
+      const { support_email, privacy_policy, terms_conditions } = req.body;
       if (typeof support_email === "string") {
         const trimmed = support_email.trim();
         if (trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
           return res.status(400).json({ message: "Invalid email format" });
         }
         await storage.setSystemSetting("support_email", trimmed);
+      }
+      if (typeof privacy_policy === "string") {
+        await storage.setSystemSetting("privacy_policy", privacy_policy);
+      }
+      if (typeof terms_conditions === "string") {
+        await storage.setSystemSetting("terms_conditions", terms_conditions);
       }
       return res.json({ success: true });
     } catch (err) {
