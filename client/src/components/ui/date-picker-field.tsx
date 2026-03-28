@@ -1,5 +1,6 @@
 import * as React from "react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +45,9 @@ export function DatePickerField({
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<View>("days");
   const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null);
 
   const parsed = value ? new Date(value + "T00:00:00") : null;
   const [viewYear, setViewYear] = useState(parsed?.getFullYear() ?? new Date().getFullYear());
@@ -52,6 +56,16 @@ export function DatePickerField({
     Math.floor((parsed?.getFullYear() ?? new Date().getFullYear()) / 12) * 12
   );
 
+  const updatePosition = useCallback(() => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const dropdownH = 320;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow >= dropdownH ? rect.bottom + 4 : rect.top - dropdownH - 4;
+    const left = Math.min(rect.left, window.innerWidth - 290);
+    setDropdownPos({ top: Math.max(4, top), left: Math.max(4, left) });
+  }, []);
+
   useEffect(() => {
     if (open && parsed) {
       setViewYear(parsed.getFullYear());
@@ -59,17 +73,33 @@ export function DatePickerField({
       setYearRangeStart(Math.floor(parsed.getFullYear() / 12) * 12);
       setView("days");
     }
+    if (open) updatePosition();
   }, [open]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         setOpen(false);
       }
     }
-    if (open) document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
+    function handleScroll() {
+      if (open) updatePosition();
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClick);
+      window.addEventListener("scroll", handleScroll, true);
+      window.addEventListener("resize", updatePosition);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [open, updatePosition]);
 
   const displayText = parsed
     ? `${parsed.getDate()} ${MONTH_NAMES[parsed.getMonth()]} ${parsed.getFullYear()}`
@@ -104,24 +134,12 @@ export function DatePickerField({
   const totalDays = daysInMonth(viewYear, viewMonth);
   const firstDay = startDay(viewYear, viewMonth);
 
-  return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        data-testid={testId}
-        className={cn(
-          "flex h-10 w-full items-center gap-2 rounded-sm border border-border bg-muted/30 px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary",
-          !displayText && "text-muted-foreground",
-          className
-        )}
-      >
-        <CalendarDays className="h-4 w-4 text-muted-foreground shrink-0" />
-        <span className="flex-1 text-left truncate">{displayText || placeholder}</span>
-      </button>
-
-      {open && (
-        <div className="absolute z-50 mt-1 w-[280px] rounded-md border border-border bg-card shadow-xl p-3 animate-in fade-in-0 zoom-in-95">
+  const calendarDropdown = open && dropdownPos ? createPortal(
+    <div
+      ref={dropdownRef}
+      className="fixed z-[9999] w-[280px] rounded-md border border-border bg-card shadow-xl p-3 animate-in fade-in-0 zoom-in-95"
+      style={{ top: dropdownPos.top, left: dropdownPos.left }}
+    >
           {view === "days" && (
             <>
               <div className="flex items-center justify-between mb-2">
@@ -254,8 +272,27 @@ export function DatePickerField({
               </div>
             </>
           )}
-        </div>
-      )}
+    </div>,
+    document.body
+  ) : null;
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen(!open)}
+        data-testid={testId}
+        className={cn(
+          "flex h-10 w-full items-center gap-2 rounded-sm border border-border bg-muted/30 px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary",
+          !displayText && "text-muted-foreground",
+          className
+        )}
+      >
+        <CalendarDays className="h-4 w-4 text-muted-foreground shrink-0" />
+        <span className="flex-1 text-left truncate">{displayText || placeholder}</span>
+      </button>
+      {calendarDropdown}
     </div>
   );
 }
