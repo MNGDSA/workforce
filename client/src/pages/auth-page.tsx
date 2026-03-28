@@ -743,9 +743,8 @@ export default function AuthPage() {
           </Tabs>
           )}
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-6 pt-8 border-t border-border/50 text-xs text-muted-foreground">
-            <span>© {new Date().getFullYear()} Luxury Carts Company Ltd.</span>
-            <span className="flex items-center gap-3 sm:gap-4">
+          <div className="pt-8 border-t border-border/50 text-xs text-muted-foreground space-y-3">
+            <div className="flex items-center justify-center gap-4">
               <a href="#" className="hover:text-foreground transition-colors">Privacy</a>
               <span className="text-border">·</span>
               <a href="#" className="hover:text-foreground transition-colors">Terms & Conditions</a>
@@ -756,7 +755,8 @@ export default function AuthPage() {
                 data-testid="link-contact-support"
                 {...(supportEmail ? {} : { onClick: (e: React.MouseEvent) => e.preventDefault() })}
               >Contact Support</a>
-            </span>
+            </div>
+            <p className="text-center">© {new Date().getFullYear()} Luxury Carts Company Ltd.</p>
           </div>
         </div>
       </div>
