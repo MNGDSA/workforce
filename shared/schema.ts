@@ -783,6 +783,15 @@ export const KSA_REGIONS = [
   "Al Bahah", "Al Jawf", "Qassim",
 ] as const;
 
+// ─── System Settings ────────────────────────────────────────────────────────
+export const systemSettings = pgTable("system_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type SystemSetting = typeof systemSettings.$inferSelect;
+
 // ─── Query Params Types ─────────────────────────────────────────────────────
 export const candidateQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

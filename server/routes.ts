@@ -548,6 +548,41 @@ export async function registerRoutes(
     }
   });
 
+  // ─── System Settings (public — no auth) ──────────────────────────────────
+  app.get("/api/settings/public", async (_req: Request, res: Response) => {
+    try {
+      const supportEmail = await storage.getSystemSetting("support_email");
+      return res.json({ supportEmail: supportEmail ?? null });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.get("/api/settings/system", async (_req: Request, res: Response) => {
+    try {
+      const supportEmail = await storage.getSystemSetting("support_email");
+      return res.json({ support_email: supportEmail ?? "" });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.patch("/api/settings/system", async (req: Request, res: Response) => {
+    try {
+      const { support_email } = req.body;
+      if (typeof support_email === "string") {
+        const trimmed = support_email.trim();
+        if (trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+          return res.status(400).json({ message: "Invalid email format" });
+        }
+        await storage.setSystemSetting("support_email", trimmed);
+      }
+      return res.json({ success: true });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   // ─── Dashboard ───────────────────────────────────────────────────────────
   app.get("/api/dashboard/stats", async (_req: Request, res: Response) => {
     try {

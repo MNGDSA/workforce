@@ -1,3 +1,6 @@
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import DashboardLayout from "@/components/layout";
 import { RolesAccessContent } from "@/pages/roles-access";
 import { NotificationSettingsContent } from "@/pages/notifications";
@@ -17,18 +20,39 @@ import {
   Database, 
   Save,
   CreditCard,
-  Bell
+  Bell,
+  Loader2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function SettingsPage() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [supportEmail, setSupportEmail] = useState("");
+
+  const { data: systemSettings } = useQuery<{ support_email: string }>({
+    queryKey: ["/api/settings/system"],
+    queryFn: () => apiRequest("GET", "/api/settings/system").then(r => r.json()),
+  });
+
+  useEffect(() => {
+    if (systemSettings) {
+      setSupportEmail(systemSettings.support_email ?? "");
+    }
+  }, [systemSettings]);
+
+  const saveSettings = useMutation({
+    mutationFn: (data: { support_email: string }) =>
+      apiRequest("PATCH", "/api/settings/system", data).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/system"] });
+      toast({ title: "Settings Saved", description: "Support email updated successfully." });
+    },
+    onError: () => toast({ title: "Save failed", variant: "destructive" }),
+  });
 
   const handleSave = () => {
-    toast({
-      title: "Settings Saved",
-      description: "Your organization settings have been updated successfully.",
-    });
+    saveSettings.mutate({ support_email: supportEmail });
   };
 
   return (
@@ -39,8 +63,8 @@ export default function SettingsPage() {
             <h1 className="text-3xl font-display font-bold text-white tracking-tight">System & Settings</h1>
             <p className="text-muted-foreground mt-1">Manage your organization profile, roles, and global preferences.</p>
           </div>
-          <Button onClick={handleSave} className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs">
-            <Save className="mr-2 h-4 w-4" />
+          <Button onClick={handleSave} disabled={saveSettings.isPending} className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs">
+            {saveSettings.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Save Changes
           </Button>
         </div>
@@ -106,7 +130,16 @@ export default function SettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="supportEmail" className="text-white">Support Email</Label>
-                    <Input id="supportEmail" defaultValue="support@workforce.sa" className="bg-muted/30 border-border" />
+                    <Input
+                      id="supportEmail"
+                      type="email"
+                      placeholder="support@company.com"
+                      value={supportEmail}
+                      onChange={(e) => setSupportEmail(e.target.value)}
+                      className="bg-muted/30 border-border"
+                      data-testid="input-support-email"
+                    />
+                    <p className="text-xs text-muted-foreground">Shown on the login page as "Contact Support" link</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone" className="text-white">Phone Number</Label>

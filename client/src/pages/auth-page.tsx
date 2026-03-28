@@ -8,7 +8,7 @@ import { useLocation } from "wouter";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { ArrowRight, Lock, CreditCard, Phone, AlertCircle, Loader2, CheckCircle2, RefreshCw, ShieldCheck } from "lucide-react";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { apiRequest } from "@/lib/queryClient";
 
 const loginSchema = z.object({
@@ -37,6 +37,14 @@ export default function AuthPage() {
   const [, setLocation] = useLocation();
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [supportEmail, setSupportEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/settings/public", { credentials: "include" })
+      .then(r => r.json())
+      .then(d => setSupportEmail(d.supportEmail ?? null))
+      .catch(() => {});
+  }, []);
 
   // OTP registration flow state
   const [regStep, setRegStep] = useState<RegStep>("phone");
@@ -740,7 +748,12 @@ export default function AuthPage() {
             <span className="flex gap-4">
               <a href="#" className="hover:text-foreground transition-colors">Privacy</a>
               <a href="#" className="hover:text-foreground transition-colors">Terms</a>
-              <a href="#" className="hover:text-foreground transition-colors" data-testid="link-contact-support">Contact Support</a>
+              <a
+                href={supportEmail ? `mailto:${supportEmail}` : "#"}
+                className="hover:text-foreground transition-colors"
+                data-testid="link-contact-support"
+                {...(supportEmail ? {} : { onClick: (e: React.MouseEvent) => e.preventDefault() })}
+              >Contact Support</a>
             </span>
           </div>
         </div>

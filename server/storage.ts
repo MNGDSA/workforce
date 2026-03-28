@@ -52,6 +52,7 @@ import {
   type InsertContractTemplate,
   type CandidateContract,
   type InsertCandidateContract,
+  systemSettings,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull } from "drizzle-orm";
 
@@ -198,6 +199,10 @@ export interface IStorage {
   getCandidateContract(id: string): Promise<CandidateContract | undefined>;
   createCandidateContract(data: InsertCandidateContract): Promise<CandidateContract>;
   updateCandidateContract(id: string, data: Partial<InsertCandidateContract>): Promise<CandidateContract | undefined>;
+
+  // System Settings
+  getSystemSetting(key: string): Promise<string | undefined>;
+  setSystemSetting(key: string, value: string): Promise<void>;
 
   // Dashboard
   getDashboardStats(): Promise<{
@@ -1419,6 +1424,21 @@ export class DatabaseStorage implements IStorage {
       .where(eq(candidateContracts.id, id))
       .returning();
     return row;
+  }
+
+  async getSystemSetting(key: string): Promise<string | undefined> {
+    const [row] = await db.select().from(systemSettings).where(eq(systemSettings.key, key));
+    return row?.value;
+  }
+
+  async setSystemSetting(key: string, value: string): Promise<void> {
+    await db
+      .insert(systemSettings)
+      .values({ key, value, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: systemSettings.key,
+        set: { value, updatedAt: new Date() },
+      });
   }
 }
 
