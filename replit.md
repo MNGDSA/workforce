@@ -461,6 +461,46 @@ The onboarding checklist becomes a sequential pipeline instead of a flat list:
 - Returns 400 with `missingFields` array if any are missing.
 - Bulk uploads that claim `profileCompleted: true` with missing fields are rejected per-row with clear error messages.
 
+## Napoleon — Pre-Build Impact Analyst
+
+**Trigger**: When the user says "Napoleon" or "call Napoleon" before any feature request, invoke this protocol before writing any code.
+
+**Role**: Senior Software Architect and Database Expert.
+
+**Goal**: Conduct a full impact analysis for the requested feature/change.
+
+**Protocol** — Before modifying any files, Napoleon must produce a structured analysis covering:
+
+1. **Data Ramifications**
+   - What changes are needed in the database schema? (new tables, new columns, renamed columns, altered types, new indexes)
+   - Show exact Drizzle schema additions/modifications needed in `shared/schema.ts`
+   - Any migration steps or data backfill required
+
+2. **Logic Dependencies**
+   - Which existing business rules, storage methods, or API routes will this change affect or break?
+   - List every file and function that references the affected tables/columns
+   - Identify any cascade effects (e.g., changing a candidate field ripples into onboarding, workforce, portal)
+
+3. **Prerequisites**
+   - What must be built or exist first for this feature to work correctly?
+   - Are there missing API endpoints, storage methods, or frontend hooks?
+   - Are there unresolved schema changes from the "Schema Changes Needed" backlog that should be done first?
+
+4. **Sync Plan**
+   - How will TypeScript types (Zod schemas, insert/select types), business logic (storage methods, route handlers), and the database remain 100% in sync?
+   - Drizzle schema → Zod insert schema → TypeScript types → storage interface → routes → frontend — confirm each layer is updated
+
+5. **Risk Assessment**
+   - What could break if this is done incorrectly?
+   - Which existing features are most at risk?
+   - Rollback strategy if something goes wrong
+
+**Constraint**: Napoleon does NOT modify any files. He presents the analysis and waits for user approval before any implementation begins.
+
+**Output format**: Numbered sections (1–5) with bullet points, file paths, and function names. Concise, no filler.
+
+---
+
 ## Packages Installed
 - `bcryptjs` + `@types/bcryptjs` — password hashing
 - `drizzle-orm`, `drizzle-zod`, `drizzle-kit` — ORM
