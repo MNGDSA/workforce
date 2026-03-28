@@ -469,6 +469,13 @@ Any floating UI rendered inside a dialog, table, card, or any container with `ov
 - Bulk uploads pre-check against the DB AND within the batch itself, return HTTP 207 with a `duplicates` array listing row number + reason.
 - `seed.ts` is the only place `onConflictDoNothing()` is acceptable (idempotent dev seeding).
 
+## Event Archival (Soft Delete) Policy
+- **Events are NEVER hard-deleted.** All "delete" operations replaced with soft-delete via `archivedAt` timestamp.
+- Archived events are hidden from all active listings by default — but preserved with all linked records (job postings, SMP contracts, interviews, onboarding, workforce, contract templates).
+- Routes: `POST /api/events/:id/archive`, `POST /api/events/:id/unarchive`. Query: `GET /api/events?archived=true` to include archived.
+- Frontend: "Archive" button (amber) in per-row dropdown. "Show Archived" toggle in filter bar reveals archived events with "Restore" option.
+- Events query filters with `isNull(archivedAt)` by default.
+
 ## Candidate Archival (Soft Delete) Policy
 - **Candidates are NEVER hard-deleted.** All "delete" operations are soft-delete via `archivedAt` timestamp.
 - Archived candidates are hidden from all active listings, searches, and stats — but their data and all linked records (applications, interviews, onboarding, workforce) are fully preserved.

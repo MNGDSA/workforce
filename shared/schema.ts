@@ -242,6 +242,7 @@ export const events = pgTable(
     budget: decimal("budget", { precision: 14, scale: 2 }),
     region: text("region"),
     createdBy: varchar("created_by").references(() => users.id),
+    archivedAt: timestamp("archived_at"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
   },
@@ -536,6 +537,7 @@ export const insertCandidateSchema = createInsertSchema(candidates).omit({
 
 export const insertEventSchema = createInsertSchema(events).omit({
   id: true,
+  archivedAt: true,
   createdAt: true,
   updatedAt: true,
 });

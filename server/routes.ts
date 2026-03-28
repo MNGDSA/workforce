@@ -819,9 +819,10 @@ export async function registerRoutes(
   });
 
   // ─── Events ──────────────────────────────────────────────────────────────
-  app.get("/api/events", async (_req: Request, res: Response) => {
+  app.get("/api/events", async (req: Request, res: Response) => {
     try {
-      const data = await storage.getEvents();
+      const includeArchived = req.query.archived === "true";
+      const data = await storage.getEvents({ includeArchived });
       return res.json(data);
     } catch (err) {
       return handleError(res, err);
@@ -859,17 +860,21 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/events/:id", async (req: Request, res: Response) => {
+  app.post("/api/events/:id/archive", async (req: Request, res: Response) => {
     try {
-      const jobCount = await storage.countJobPostingsByEvent(req.params.id);
-      if (jobCount > 0) {
-        return res.status(409).json({
-          message: `Cannot delete this event — it has ${jobCount} job posting${jobCount === 1 ? "" : "s"} linked to it. Remove or re-assign those job postings first, or archive the event instead.`,
-        });
-      }
-      const deleted = await storage.deleteEvent(req.params.id);
-      if (!deleted) return res.status(404).json({ message: "Event not found" });
-      return res.status(204).send();
+      const evt = await storage.archiveEvent(req.params.id);
+      if (!evt) return res.status(404).json({ message: "Event not found" });
+      return res.json(evt);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/events/:id/unarchive", async (req: Request, res: Response) => {
+    try {
+      const evt = await storage.unarchiveEvent(req.params.id);
+      if (!evt) return res.status(404).json({ message: "Event not found" });
+      return res.json(evt);
     } catch (err) {
       return handleError(res, err);
     }

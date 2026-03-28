@@ -21,6 +21,8 @@ import {
   Plus,
   Loader2,
   Info,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import {
   Table,
@@ -304,10 +306,11 @@ export default function EventsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const { data: eventsList = [], isLoading } = useQuery<Event[]>({
-    queryKey: ["/api/events"],
-    queryFn: () => apiRequest("GET", "/api/events").then((r) => r.json()),
+    queryKey: ["/api/events", showArchived],
+    queryFn: () => apiRequest("GET", `/api/events${showArchived ? "?archived=true" : ""}`).then((r) => r.json()),
   });
 
   const updateStatus = useMutation({
@@ -316,8 +319,13 @@ export default function EventsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/events"] }),
   });
 
-  const deleteEvent = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/events/${id}`),
+  const archiveEvent = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/events/${id}/archive`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/events"] }),
+  });
+
+  const unarchiveEvent = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/events/${id}/unarchive`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/events"] }),
   });
 
@@ -325,8 +333,8 @@ export default function EventsPage() {
     (s) => !search || s.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const activeCount = eventsList.filter((s) => s.status === "active").length;
-  const upcomingCount = eventsList.filter((s) => s.status === "upcoming").length;
+  const activeCount = eventsList.filter((s) => s.status === "active" && !s.archivedAt).length;
+  const upcomingCount = eventsList.filter((s) => s.status === "upcoming" && !s.archivedAt).length;
 
   return (
     <DashboardLayout>
@@ -397,6 +405,15 @@ export default function EventsPage() {
             <Button variant="outline" className="h-12 border-border bg-background flex-1 md:flex-none">
               <Calendar className="mr-2 h-4 w-4" />
               Date Range
+            </Button>
+            <Button
+              variant={showArchived ? "default" : "outline"}
+              className={`h-12 border-border flex-1 md:flex-none ${showArchived ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-background"}`}
+              onClick={() => setShowArchived(!showArchived)}
+              data-testid="button-toggle-archived"
+            >
+              <Archive className="mr-2 h-4 w-4" />
+              {showArchived ? "Showing All" : "Show Archived"}
             </Button>
           </div>
         </div>
@@ -470,13 +487,20 @@ export default function EventsPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={`font-medium border-0 capitalize ${statusStyles[evt.status] ?? "bg-muted text-muted-foreground"}`}
-                            data-testid={`status-event-${evt.id}`}
-                          >
-                            {evt.status}
-                          </Badge>
+                          <div className="flex items-center gap-1.5">
+                            <Badge
+                              variant="outline"
+                              className={`font-medium border-0 capitalize ${statusStyles[evt.status] ?? "bg-muted text-muted-foreground"}`}
+                              data-testid={`status-event-${evt.id}`}
+                            >
+                              {evt.status}
+                            </Badge>
+                            {evt.archivedAt && (
+                              <Badge variant="outline" className="font-medium border-0 bg-zinc-800 text-zinc-500 text-[10px]">
+                                Archived
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
@@ -500,12 +524,23 @@ export default function EventsPage() {
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-red-500"
-                                onClick={() => deleteEvent.mutate(evt.id)}
-                              >
-                                Delete
-                              </DropdownMenuItem>
+                              {evt.archivedAt ? (
+                                <DropdownMenuItem
+                                  className="text-green-500"
+                                  onClick={() => unarchiveEvent.mutate(evt.id)}
+                                >
+                                  <ArchiveRestore className="mr-2 h-4 w-4" />
+                                  Restore
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  className="text-amber-500"
+                                  onClick={() => archiveEvent.mutate(evt.id)}
+                                >
+                                  <Archive className="mr-2 h-4 w-4" />
+                                  Archive
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>

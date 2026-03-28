@@ -84,11 +84,12 @@ export interface IStorage {
   getCandidateStats(): Promise<{ total: number; active: number; hired: number; blocked: number; avgRating: number }>;
 
   // Events
-  getEvents(): Promise<Event[]>;
+  getEvents(params?: { includeArchived?: boolean }): Promise<Event[]>;
   getEvent(id: string): Promise<Event | undefined>;
   createEvent(event: InsertEvent): Promise<Event>;
   updateEvent(id: string, data: Partial<InsertEvent>): Promise<Event | undefined>;
-  deleteEvent(id: string): Promise<boolean>;
+  archiveEvent(id: string): Promise<Event | undefined>;
+  unarchiveEvent(id: string): Promise<Event | undefined>;
   countJobPostingsByEvent(eventId: string): Promise<number>;
 
   // Job Postings
@@ -537,8 +538,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ─── Events ─────────────────────────────────────────────────────────────────
-  async getEvents(): Promise<Event[]> {
-    return db.select().from(events).orderBy(desc(events.createdAt));
+  async getEvents(params?: { includeArchived?: boolean }): Promise<Event[]> {
+    const conditions = [];
+    if (!params?.includeArchived) {
+      conditions.push(isNull(events.archivedAt));
+    }
+    return db.select().from(events).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(events.createdAt));
   }
 
   async getEvent(id: string): Promise<Event | undefined> {
@@ -556,9 +561,14 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async deleteEvent(id: string): Promise<boolean> {
-    const result = await db.delete(events).where(eq(events.id, id));
-    return (result.rowCount ?? 0) > 0;
+  async archiveEvent(id: string): Promise<Event | undefined> {
+    const [updated] = await db.update(events).set({ archivedAt: new Date(), updatedAt: new Date() }).where(and(eq(events.id, id), isNull(events.archivedAt))).returning();
+    return updated;
+  }
+
+  async unarchiveEvent(id: string): Promise<Event | undefined> {
+    const [updated] = await db.update(events).set({ archivedAt: null, updatedAt: new Date() }).where(and(eq(events.id, id), isNotNull(events.archivedAt))).returning();
+    return updated;
   }
 
   async countJobPostingsByEvent(eventId: string): Promise<number> {
