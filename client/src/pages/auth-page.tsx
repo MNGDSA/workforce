@@ -740,6 +740,7 @@ export default function AuthPage() {
             <span className="flex gap-4">
               <a href="#" className="hover:text-foreground transition-colors">Privacy</a>
               <a href="#" className="hover:text-foreground transition-colors">Terms</a>
+              <a href="#" className="hover:text-foreground transition-colors" data-testid="link-contact-support">Contact Support</a>
             </span>
           </div>
         </div>
