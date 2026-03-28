@@ -30,6 +30,10 @@ import {
   Lock,
   RefreshCw,
   Download,
+  BadgeCheck,
+  Hash,
+  Clock,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -522,6 +526,18 @@ export default function CandidatePortal() {
     enabled: !!candidateId,
   });
 
+  const isHired = String(candidateProfile?.status ?? "") === "hired";
+
+  const { data: workforceRecord } = useQuery<{
+    id: string; employeeNumber: string; salary: string | null;
+    startDate: string; endDate: string | null; isActive: boolean;
+    eventName: string | null; jobTitle: string | null;
+  } | null>({
+    queryKey: ["/api/workforce/by-candidate", candidateId],
+    queryFn: () => apiRequest("GET", `/api/workforce/by-candidate/${candidateId}`).then((r) => r.json()),
+    enabled: !!candidateId && isHired,
+  });
+
   // ── Profile form state ──────────────────────────────────────────────────
   const [profileSkills,   setProfileSkills]   = useState("");
   const [profileLangs,    setProfileLangs]    = useState("");
@@ -635,13 +651,17 @@ export default function CandidatePortal() {
         <div className="flex items-center gap-2.5">
           <img src="/workforce-logo.svg" alt="Workforce" className="h-8 w-8" />
           <span className="font-display font-bold text-xl tracking-tight text-white hidden sm:inline-block">
-            WORKFORCE
+            {isHired ? "EMPLOYEE PORTAL" : "WORKFORCE"}
           </span>
         </div>
 
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
           {(["dashboard", "jobs", "documents"] as const).map((key) => {
-            const labels: Record<string, string> = { dashboard: "Dashboard", jobs: "My Jobs", documents: "Documents" };
+            const labels: Record<string, string> = {
+              dashboard: "Dashboard",
+              jobs: isHired ? "Employment" : "My Jobs",
+              documents: "Documents",
+            };
             const refs: Record<string, React.RefObject<HTMLDivElement>> = {
               dashboard: sectionDashboard, jobs: sectionJobs, documents: sectionDocuments,
             };
@@ -705,8 +725,12 @@ export default function CandidatePortal() {
         {/* Welcome / Dashboard section */}
         <div ref={sectionDashboard} className="flex flex-col md:flex-row gap-4 md:items-center justify-between scroll-mt-20">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white tracking-tight">Candidate Portal</h1>
-            <p className="text-muted-foreground mt-1">Browse open positions and manage your applications.</p>
+            <h1 className="text-3xl font-display font-bold text-white tracking-tight">
+              {isHired ? "Employee Portal" : "Candidate Portal"}
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              {isHired ? "View your employment details and manage your profile." : "Browse open positions and manage your applications."}
+            </p>
           </div>
         </div>
 
@@ -715,7 +739,7 @@ export default function CandidatePortal() {
           {/* Left: Profile stub */}
           <div className="space-y-6">
             <Card className="bg-card border-border overflow-hidden">
-              <div className="h-20 bg-gradient-to-r from-primary/20 to-primary/5" />
+              <div className={`h-20 bg-gradient-to-r ${isHired ? "from-emerald-600/20 to-emerald-600/5" : "from-primary/20 to-primary/5"}`} />
               <CardContent className="pt-0 -mt-10 text-center relative z-10">
                 <button
                   type="button"
@@ -733,18 +757,73 @@ export default function CandidatePortal() {
                 </button>
                 <div className="mt-3">
                   <h3 className="font-bold text-lg text-white">{displayName}</h3>
-                  <p className="text-muted-foreground text-sm">{String(candidateProfile?.currentRole ?? "Job Seeker")}</p>
+                  <p className="text-muted-foreground text-sm">
+                    {isHired ? (workforceRecord?.jobTitle ?? "Employee") : String(candidateProfile?.currentRole ?? "Job Seeker")}
+                  </p>
+                  {isHired && (
+                    <Badge className="mt-2 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs gap-1">
+                      <BadgeCheck className="h-3 w-3" /> Active Employee
+                    </Badge>
+                  )}
                 </div>
-                <div className="mt-6 grid grid-cols-2 gap-4 border-t border-border pt-5">
-                  <div>
-                    <div className="text-2xl font-bold text-white">{appliedIds.size}</div>
-                    <div className="text-xs text-muted-foreground uppercase tracking-wider">Applied</div>
+
+                {isHired && workforceRecord ? (
+                  <div className="mt-6 border-t border-border pt-5 space-y-3 text-left">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                        <Hash className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Employee ID</p>
+                        <p className="text-sm font-bold text-white font-mono" data-testid="text-employee-number">{workforceRecord.employeeNumber}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-md bg-emerald-500/10 flex items-center justify-center shrink-0">
+                        <Banknote className="h-4 w-4 text-emerald-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Monthly Salary</p>
+                        <p className="text-sm font-bold text-white" data-testid="text-employee-salary">
+                          {workforceRecord.salary ? `${Number(workforceRecord.salary).toLocaleString()} SAR` : "Not set"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-md bg-blue-500/10 flex items-center justify-center shrink-0">
+                        <Clock className="h-4 w-4 text-blue-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Start Date</p>
+                        <p className="text-sm font-bold text-white" data-testid="text-employee-start-date">
+                          {new Date(workforceRecord.startDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                        </p>
+                      </div>
+                    </div>
+                    {workforceRecord.eventName && (
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-md bg-violet-500/10 flex items-center justify-center shrink-0">
+                          <Building2 className="h-4 w-4 text-violet-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Event</p>
+                          <p className="text-sm font-bold text-white" data-testid="text-employee-event">{workforceRecord.eventName}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <div className="text-2xl font-bold text-white">{myInterviews.length}</div>
-                    <div className="text-xs text-muted-foreground uppercase tracking-wider">Interviews</div>
+                ) : (
+                  <div className="mt-6 grid grid-cols-2 gap-4 border-t border-border pt-5">
+                    <div>
+                      <div className="text-2xl font-bold text-white">{appliedIds.size}</div>
+                      <div className="text-xs text-muted-foreground uppercase tracking-wider">Applied</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-white">{myInterviews.length}</div>
+                      <div className="text-xs text-muted-foreground uppercase tracking-wider">Interviews</div>
+                    </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
 
@@ -822,8 +901,57 @@ export default function CandidatePortal() {
             </div>{/* /sectionDocuments */}
           </div>
 
-          {/* Right: Jobs */}
+          {/* Right: Jobs / Employee Info */}
           <div ref={sectionJobs} className="lg:col-span-2 space-y-6 scroll-mt-20">
+            {isHired && workforceRecord ? (
+              <Card className="bg-card border-border">
+                <CardHeader>
+                  <CardTitle className="text-lg font-display text-white flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-primary" />
+                    Employment Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="bg-muted/10 rounded-lg border border-border p-4 space-y-1">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Employee Number</p>
+                      <p className="text-lg font-bold text-white font-mono">{workforceRecord.employeeNumber}</p>
+                    </div>
+                    <div className="bg-muted/10 rounded-lg border border-border p-4 space-y-1">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Status</p>
+                      <div className="flex items-center gap-2">
+                        <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <p className="text-lg font-bold text-emerald-400">Active</p>
+                      </div>
+                    </div>
+                    <div className="bg-muted/10 rounded-lg border border-border p-4 space-y-1">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Monthly Salary</p>
+                      <p className="text-lg font-bold text-white">
+                        {workforceRecord.salary ? `${Number(workforceRecord.salary).toLocaleString()} SAR` : "—"}
+                      </p>
+                    </div>
+                    <div className="bg-muted/10 rounded-lg border border-border p-4 space-y-1">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Start Date</p>
+                      <p className="text-lg font-bold text-white">
+                        {new Date(workforceRecord.startDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                      </p>
+                    </div>
+                    {workforceRecord.jobTitle && (
+                      <div className="bg-muted/10 rounded-lg border border-border p-4 space-y-1">
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Position</p>
+                        <p className="text-lg font-bold text-white">{workforceRecord.jobTitle}</p>
+                      </div>
+                    )}
+                    {workforceRecord.eventName && (
+                      <div className="bg-muted/10 rounded-lg border border-border p-4 space-y-1">
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Assigned Event</p>
+                        <p className="text-lg font-bold text-white">{workforceRecord.eventName}</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
             <Tabs defaultValue="open">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-display font-bold text-white">Job Opportunities</h3>
@@ -957,6 +1085,7 @@ export default function CandidatePortal() {
                 )}
               </TabsContent>
             </Tabs>
+            )}
           </div>
         </div>
       </main>

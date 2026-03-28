@@ -1228,6 +1228,15 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/workforce/by-candidate/:candidateId", async (req: Request, res: Response) => {
+    try {
+      const record = await storage.getWorkforceByCandidateId(req.params.candidateId);
+      return res.json(record ?? null);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   app.get("/api/workforce/:id", async (req: Request, res: Response) => {
     try {
       const employee = await storage.getWorkforceEmployee(req.params.id);
@@ -1242,6 +1251,9 @@ export async function registerRoutes(
     try {
       const data = insertWorkforceSchema.parse(req.body);
       const record = await storage.createWorkforceRecord(data);
+      if (data.candidateId && data.isActive !== false) {
+        await storage.updateCandidate(data.candidateId, { status: "hired" });
+      }
       return res.status(201).json(record);
     } catch (err) {
       return handleError(res, err);

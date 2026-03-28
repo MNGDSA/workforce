@@ -117,6 +117,7 @@ export interface IStorage {
   // Workforce (Employees)
   getWorkforce(params?: { eventId?: string; isActive?: boolean; search?: string }): Promise<any[]>;
   getWorkforceEmployee(id: string): Promise<any | undefined>;
+  getWorkforceByCandidateId(candidateId: string): Promise<any | undefined>;
   getWorkHistory(nationalId: string): Promise<any[]>;
   createWorkforceRecord(record: InsertWorkforce): Promise<WorkforceRecord>;
   updateWorkforceRecord(id: string, data: Partial<InsertWorkforce>): Promise<WorkforceRecord | undefined>;
@@ -863,6 +864,42 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
+  async getWorkforceByCandidateId(candidateId: string): Promise<any | undefined> {
+    const [row] = await db
+      .select({
+        id: workforce.id,
+        employeeNumber: workforce.employeeNumber,
+        candidateId: workforce.candidateId,
+        jobId: workforce.jobId,
+        eventId: workforce.eventId,
+        salary: workforce.salary,
+        startDate: workforce.startDate,
+        endDate: workforce.endDate,
+        terminationReason: workforce.terminationReason,
+        isActive: workforce.isActive,
+        supervisorId: workforce.supervisorId,
+        performanceScore: workforce.performanceScore,
+        notes: workforce.notes,
+        createdAt: workforce.createdAt,
+        updatedAt: workforce.updatedAt,
+        fullNameEn: candidates.fullNameEn,
+        nationalId: candidates.nationalId,
+        phone: candidates.phone,
+        photoUrl: candidates.photoUrl,
+        iban: candidates.ibanNumber,
+        eventName: events.name,
+        jobTitle: jobPostings.title,
+      })
+      .from(workforce)
+      .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
+      .leftJoin(events, eq(workforce.eventId, events.id))
+      .leftJoin(jobPostings, eq(workforce.jobId, jobPostings.id))
+      .where(and(eq(workforce.candidateId, candidateId), eq(workforce.isActive, true)))
+      .orderBy(desc(workforce.createdAt))
+      .limit(1);
+    return row;
+  }
+
   async getWorkHistory(nationalId: string): Promise<any[]> {
     const rows = await db
       .select({
@@ -907,6 +944,16 @@ export class DatabaseStorage implements IStorage {
       terminationReason: data.terminationReason ?? null,
       updatedAt: new Date(),
     }).where(eq(workforce.id, id)).returning();
+
+    const hasOtherActive = await db
+      .select({ id: workforce.id })
+      .from(workforce)
+      .where(and(eq(workforce.candidateId, existing.candidateId), eq(workforce.isActive, true)))
+      .limit(1);
+    if (hasOtherActive.length === 0) {
+      await db.update(candidates).set({ status: "active", updatedAt: new Date() }).where(eq(candidates.id, existing.candidateId));
+    }
+
     return updated;
   }
 

@@ -160,6 +160,7 @@ PATCH  /api/interviews/:id
 GET    /api/workforce?eventId=&isActive=&search=
 GET    /api/workforce/stats
 GET    /api/workforce/history/:nationalId
+GET    /api/workforce/by-candidate/:candidateId
 GET    /api/workforce/:id
 POST   /api/workforce
 PATCH  /api/workforce/:id
@@ -256,15 +257,23 @@ ONBOARDING (THE DIVIDING LINE — pool → employee)
   Profile-setup-gate Step 2 collects emergency contact during sign-up questionnaire
 
 WORKFORCE (post-onboarding)
-  Convert → creates employee record
+  Convert → creates employee record, candidate.status → "hired"
   Status: active | terminated
-  Termination: reason + date recorded
+  Termination: reason + date recorded, candidate.status → "active" (returns to talent pool)
+  Reinstatement: reuses previous employee number, candidate.status → "hired"
   SMP contract: option to Remove worker and attach a replacement from pool
   Candidate record always preserved for future events
 
+PORTAL SWITCHING (candidate-portal.tsx)
+  candidate.status = "active" → Candidate Portal (job opportunities, applications)
+  candidate.status = "hired"  → Employee Portal (employment details, salary, employee #)
+  Termination reverts to Candidate Portal automatically
+  Profile data stays in candidates table (single source of truth) across all transitions
+  Workforce record fetched via /api/workforce/by-candidate/:candidateId
+
 RETURN TO POOL
   Not-shortlisted → back to pool, can reapply
-  Terminated → workforce closed, candidate preserved
+  Terminated → workforce closed, candidate.status → "active", candidate preserved
   SMP removed → detached from contract, candidate preserved
 ```
 
