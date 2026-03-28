@@ -94,10 +94,7 @@ interface OnboardingRecord {
   hasEmergencyContact: boolean;
   contractSignedAt?: string | null;
   contractUrl?: string | null;
-  position?: string | null;
-  department?: string | null;
   startDate?: string | null;
-  salary?: string | null;
   notes?: string | null;
   rejectedAt?: string | null;
   rejectedBy?: string | null;
@@ -471,8 +468,6 @@ const AVAILABLE_VARIABLES = [
   { key: "{{nationalId}}", label: "National ID / Iqama" },
   { key: "{{phone}}", label: "Phone Number" },
   { key: "{{iban}}", label: "IBAN Number" },
-  { key: "{{position}}", label: "Position" },
-  { key: "{{salary}}", label: "Salary" },
   { key: "{{startDate}}", label: "Start Date" },
   { key: "{{eventName}}", label: "Event Name" },
   { key: "{{contractDate}}", label: "Contract Date" },
@@ -1262,12 +1257,12 @@ export default function OnboardingPage() {
   const [admitSearch, setAdmitSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [admitPage, setAdmitPage] = useState(1);
-  const [convertForm, setConvertForm] = useState({ position: "", department: "", startDate: "", salary: "" });
+  const [convertForm, setConvertForm] = useState({ startDate: "" });
   const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
   const [pendingDeleteDoc, setPendingDeleteDoc] = useState<{ candidateId: string; docType: string; label: string } | null>(null);
   const [docPreview, setDocPreview] = useState<{ url: string; label: string; isImage: boolean } | null>(null);
   const [bulkConvertOpen, setBulkConvertOpen] = useState(false);
-  const [bulkConvertForm, setBulkConvertForm] = useState({ position: "", department: "", startDate: "", salary: "" });
+  const [bulkConvertForm, setBulkConvertForm] = useState({ startDate: "" });
   const [bulkContractOpen, setBulkContractOpen] = useState(false);
   const [bulkContractTemplateId, setBulkContractTemplateId] = useState("");
   const ADMIT_PAGE_SIZE = 10;
@@ -1348,20 +1343,20 @@ export default function OnboardingPage() {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
       setConvertRecord(null);
-      setConvertForm({ position: "", department: "", startDate: "", salary: "" });
+      setConvertForm({ startDate: "" });
       toast({ title: "Successfully converted to employee!", description: "Workforce record created." });
     },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
 
   const bulkConvertMutation = useMutation({
-    mutationFn: (body: { ids: string[]; position: string; department: string; startDate: string; salary: string }) =>
+    mutationFn: (body: { ids: string[]; startDate: string }) =>
       apiRequest("POST", "/api/onboarding/bulk-convert", body).then(r => r.json()),
     onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
       setBulkConvertOpen(false);
-      setBulkConvertForm({ position: "", department: "", startDate: "", salary: "" });
+      setBulkConvertForm({ startDate: "" });
       const errCount = data.errors?.length ?? 0;
       toast({
         title: `${data.converted} employee${data.converted !== 1 ? "s" : ""} created`,
@@ -1697,10 +1692,7 @@ export default function OnboardingPage() {
                         onClick={() => {
                           setConvertRecord(rec);
                           setConvertForm({
-                            position: rec.position ?? "",
-                            department: rec.department ?? "",
                             startDate: rec.startDate ?? "",
-                            salary: rec.salary ?? "",
                           });
                         }}
                       >
@@ -2093,43 +2085,12 @@ export default function OnboardingPage() {
 
             <div className="grid gap-3">
               <div className="space-y-1.5">
-                <Label className="text-zinc-400 text-sm">Position / Role <span className="text-red-400">*</span></Label>
-                <Input
-                  data-testid="input-convert-position"
-                  value={convertForm.position}
-                  onChange={e => setConvertForm(f => ({ ...f, position: e.target.value }))}
-                  placeholder="e.g. Cart Supervisor"
-                  className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-zinc-400 text-sm">Department</Label>
-                <Input
-                  data-testid="input-convert-department"
-                  value={convertForm.department}
-                  onChange={e => setConvertForm(f => ({ ...f, department: e.target.value }))}
-                  placeholder="e.g. Ground Operations"
-                  className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600"
-                />
-              </div>
-              <div className="space-y-1.5">
                 <Label className="text-zinc-400 text-sm">Start Date <span className="text-red-400">*</span></Label>
                 <DatePickerField
                   data-testid="input-convert-startdate"
                   value={convertForm.startDate}
                   onChange={v => setConvertForm(f => ({ ...f, startDate: v }))}
                   className="bg-zinc-900 border-zinc-700 text-white"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-zinc-400 text-sm">Monthly Salary (SAR)</Label>
-                <Input
-                  data-testid="input-convert-salary"
-                  type="number"
-                  value={convertForm.salary}
-                  onChange={e => setConvertForm(f => ({ ...f, salary: e.target.value }))}
-                  placeholder="e.g. 3500"
-                  className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600"
                 />
               </div>
             </div>
@@ -2144,7 +2105,7 @@ export default function OnboardingPage() {
               </Button>
               <Button
                 data-testid="button-confirm-convert"
-                disabled={!convertForm.position || !convertForm.startDate || convertMutation.isPending}
+                disabled={!convertForm.startDate || convertMutation.isPending}
                 onClick={() => convertRecord && convertMutation.mutate({
                   id: convertRecord.id,
                   body: convertForm,
@@ -2177,42 +2138,11 @@ export default function OnboardingPage() {
             </div>
             <div className="space-y-3">
               <div>
-                <Label className="text-zinc-300 text-sm">Position *</Label>
-                <Input
-                  data-testid="input-bulk-position"
-                  value={bulkConvertForm.position}
-                  onChange={e => setBulkConvertForm(f => ({ ...f, position: e.target.value }))}
-                  placeholder="e.g. Cart Operator"
-                  className="bg-zinc-900 border-zinc-700 text-white mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-zinc-300 text-sm">Department</Label>
-                <Input
-                  data-testid="input-bulk-department"
-                  value={bulkConvertForm.department}
-                  onChange={e => setBulkConvertForm(f => ({ ...f, department: e.target.value }))}
-                  placeholder="e.g. Operations"
-                  className="bg-zinc-900 border-zinc-700 text-white mt-1"
-                />
-              </div>
-              <div>
                 <Label className="text-zinc-300 text-sm">Start Date *</Label>
                 <DatePickerField
                   data-testid="input-bulk-start-date"
                   value={bulkConvertForm.startDate}
                   onChange={v => setBulkConvertForm(f => ({ ...f, startDate: v }))}
-                  className="bg-zinc-900 border-zinc-700 text-white mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-zinc-300 text-sm">Salary (SAR)</Label>
-                <Input
-                  data-testid="input-bulk-salary"
-                  type="number"
-                  value={bulkConvertForm.salary}
-                  onChange={e => setBulkConvertForm(f => ({ ...f, salary: e.target.value }))}
-                  placeholder="e.g. 3000"
                   className="bg-zinc-900 border-zinc-700 text-white mt-1"
                 />
               </div>
@@ -2223,7 +2153,7 @@ export default function OnboardingPage() {
               </Button>
               <Button
                 data-testid="button-confirm-bulk-convert"
-                disabled={!bulkConvertForm.position || !bulkConvertForm.startDate || bulkConvertMutation.isPending}
+                disabled={!bulkConvertForm.startDate || bulkConvertMutation.isPending}
                 onClick={() => {
                   const readyIds = records.filter(r => r.status === "ready").map(r => r.id);
                   bulkConvertMutation.mutate({ ids: readyIds, ...bulkConvertForm });

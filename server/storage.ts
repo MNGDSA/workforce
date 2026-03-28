@@ -160,7 +160,7 @@ export interface IStorage {
   createOnboardingRecord(data: InsertOnboarding): Promise<OnboardingRecord>;
   updateOnboardingRecord(id: string, data: Partial<InsertOnboarding>): Promise<OnboardingRecord | undefined>;
   deleteOnboardingRecord(id: string): Promise<boolean>;
-  convertOnboardingToEmployee(id: string, employmentData: { position: string; department?: string; startDate: string; salary?: string; eventId?: string; }, convertedBy?: string): Promise<WorkforceRecord>;
+  convertOnboardingToEmployee(id: string, employmentData: { startDate: string; eventId?: string; }, convertedBy?: string): Promise<WorkforceRecord>;
 
   // SMS Plugins
   getSmsPlugins(): Promise<SmsPlugin[]>;
@@ -1014,7 +1014,7 @@ export class DatabaseStorage implements IStorage {
 
   async convertOnboardingToEmployee(
     id: string,
-    employmentData: { position: string; department?: string; startDate: string; salary?: string; eventId?: string },
+    employmentData: { startDate: string; eventId?: string },
     convertedBy?: string,
   ): Promise<WorkforceRecord> {
     const rec = await this.getOnboardingRecord(id);
@@ -1026,10 +1026,7 @@ export class DatabaseStorage implements IStorage {
       candidateId: rec.candidateId,
       jobId: rec.jobId ?? undefined,
       eventId: employmentData.eventId ?? rec.eventId ?? undefined,
-      position: employmentData.position,
-      department: employmentData.department,
       startDate: employmentData.startDate,
-      salary: employmentData.salary,
       isActive: true,
     }).returning();
 

@@ -81,8 +81,6 @@ function buildVariableSnapshot(candidate: any, template: any, ob: any): Record<s
     nationalId: candidate.nationalId || "",
     phone: candidate.phone || "",
     iban: candidate.ibanNumber || "",
-    position: ob.position || "",
-    salary: ob.salary?.toString() || "",
     startDate: ob.startDate || "",
     eventName: "",
     contractDate: new Date().toISOString().split("T")[0],
@@ -1078,9 +1076,9 @@ export async function registerRoutes(
 
   app.post("/api/onboarding/bulk-convert", async (req: Request, res: Response) => {
     try {
-      const { ids, position, department, startDate, salary, eventId } = req.body;
+      const { ids, startDate, eventId } = req.body;
       if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "ids array is required" });
-      if (!position || !startDate) return res.status(400).json({ message: "position and startDate are required" });
+      if (!startDate) return res.status(400).json({ message: "startDate is required" });
       const uniqueIds = [...new Set(ids as string[])];
       const results: any[] = [];
       const errors: { id: string; message: string }[] = [];
@@ -1088,7 +1086,7 @@ export async function registerRoutes(
         try {
           const wf = await storage.convertOnboardingToEmployee(
             id,
-            { position, department, startDate, salary, eventId },
+            { startDate, eventId },
             (req as any).userId,
           );
           results.push(wf);
@@ -1184,11 +1182,11 @@ export async function registerRoutes(
 
   app.post("/api/onboarding/:id/convert", async (req: Request, res: Response) => {
     try {
-      const { position, department, startDate, salary, eventId } = req.body as Record<string, string>;
-      if (!position || !startDate) return res.status(400).json({ message: "position and startDate are required" });
+      const { startDate, eventId } = req.body as Record<string, string>;
+      if (!startDate) return res.status(400).json({ message: "startDate is required" });
       const workforce = await storage.convertOnboardingToEmployee(
         req.params.id,
-        { position, department, startDate, salary, eventId },
+        { startDate, eventId },
         (req as any).userId,
       );
       return res.status(201).json(workforce);

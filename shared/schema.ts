@@ -404,11 +404,7 @@ export const onboarding = pgTable(
     // Contract
     contractSignedAt: timestamp("contract_signed_at"),
     contractUrl: text("contract_url"),
-    // Employment details (populated before conversion)
-    position: text("position"),
-    department: text("department"),
     startDate: text("start_date"),
-    salary: decimal("salary", { precision: 10, scale: 2 }),
     // Meta
     notes: text("notes"),
     rejectedAt: timestamp("rejected_at"),
@@ -436,11 +432,8 @@ export const workforce = pgTable(
       .references(() => candidates.id),
     jobId: varchar("job_id").references(() => jobPostings.id),
     eventId: varchar("event_id").references(() => events.id),
-    department: text("department"),
-    position: text("position").notNull(),
     startDate: text("start_date").notNull(),
     endDate: text("end_date"),
-    salary: decimal("salary", { precision: 10, scale: 2 }),
     isActive: boolean("is_active").notNull().default(true),
     supervisorId: varchar("supervisor_id").references(() => users.id),
     performanceScore: decimal("performance_score", { precision: 3, scale: 2 }),
