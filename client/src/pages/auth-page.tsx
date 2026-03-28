@@ -747,7 +747,7 @@ export default function AuthPage() {
             <span>© {new Date().getFullYear()} Luxury Carts Company Ltd.</span>
             <span className="flex gap-4">
               <a href="#" className="hover:text-foreground transition-colors">Privacy</a>
-              <a href="#" className="hover:text-foreground transition-colors">Terms</a>
+              <a href="#" className="hover:text-foreground transition-colors">Terms & Conditions</a>
               <a
                 href={supportEmail ? `mailto:${supportEmail}` : "#"}
                 className="hover:text-foreground transition-colors"
