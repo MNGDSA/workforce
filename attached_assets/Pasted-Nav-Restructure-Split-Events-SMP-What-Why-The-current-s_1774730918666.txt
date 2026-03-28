@@ -1,0 +1,43 @@
+Nav Restructure: Split Events & SMP
+What & Why
+The current sidebar navigation groups Events and SMP Contracts together in one "Events & SMP" page. They are fundamentally different concepts — Events are operational time-bound buckets (Hajj 2026, Annual Operations), while SMP Contracts are vendor relationships with manpower firms. Separating them into distinct nav items gives each concept its own space, and restructures the nav to better reflect the system's workflow.
+
+Additionally, Job Postings, Onboarding, and Interview pages should have an event filter dropdown so admins can scope their view to a specific event without drilling down.
+
+Done looks like
+"Events & SMP" nav item is replaced by two separate items: "Events" and "SMP Contracts"
+Events page shows only events (no SMP contracts table at the bottom)
+SMP Contracts gets its own dedicated page at /smp-contracts showing only contract management
+Nav sidebar order is updated to:
+Recruitment: Events, SMP Contracts, Question Sets, Job Postings, Interview & Training, Onboarding, Talent
+Management: Dashboard, Workforce, Payroll
+System: Rules & Automation, Documentation
+Job Postings page has an event filter dropdown at the top
+Onboarding page has an event filter dropdown at the top
+Interview & Training page has an event filter dropdown at the top
+All existing functionality preserved — no data model changes
+Out of scope
+Offboarding page (separate future task)
+Any schema/data model changes
+Event-scoped dashboard analytics
+Tasks
+Split events.tsx into two page components — Extract the SMP contracts table and its create/edit dialogs into a new smp-contracts.tsx page. The existing events.tsx keeps only the events table and event-related dialogs. Both pages retain full CRUD functionality.
+
+Register the new SMP Contracts route — Add /smp-contracts route in App.tsx pointing to the new page component.
+
+Update sidebar navigation — In layout.tsx, replace the single "Events & SMP" item with "Events" (/events) and "SMP Contracts" (/smp-contracts). Reorder the nav groups to match the agreed structure. Update the collapsible section paths accordingly.
+
+Add event filter dropdown to Job Postings page — Add a dropdown at the top of the job postings list that fetches all events and filters the displayed jobs by eventId. "All Events" option shows everything.
+
+Add event filter dropdown to Onboarding page — Same pattern: fetch events, filter onboarding records by event.
+
+Add event filter dropdown to Interview & Training page — Same pattern: fetch events, filter interviews by event.
+
+Relevant files
+client/src/components/layout.tsx:43-68
+client/src/pages/events.tsx
+client/src/App.tsx
+client/src/pages/job-posting.tsx
+client/src/pages/onboarding.tsx
+client/src/pages/interviews.tsx
+server/routes.ts
