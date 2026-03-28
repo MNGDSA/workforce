@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { ArrowRight, Lock, CreditCard, Phone, AlertCircle, Loader2, CheckCircle2, RefreshCw, ShieldCheck } from "lucide-react";
@@ -745,9 +745,9 @@ export default function AuthPage() {
 
           <div className="pt-8 border-t border-border/50 text-xs text-muted-foreground space-y-3">
             <div className="flex items-center justify-center gap-4">
-              <a href="/privacy-policy" className="hover:text-foreground transition-colors">Privacy Policy</a>
+              <Link href="/privacy-policy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
               <span className="text-border">·</span>
-              <a href="/terms-conditions" className="hover:text-foreground transition-colors">Terms & Conditions</a>
+              <Link href="/terms-conditions" className="hover:text-foreground transition-colors">Terms & Conditions</Link>
               <span className="text-border">·</span>
               <a
                 href={supportEmail ? `mailto:${supportEmail}` : "#"}
