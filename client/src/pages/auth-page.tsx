@@ -743,11 +743,13 @@ export default function AuthPage() {
           </Tabs>
           )}
 
-          <div className="flex items-center justify-between pt-8 border-t border-border/50 text-xs text-muted-foreground">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-6 pt-8 border-t border-border/50 text-xs text-muted-foreground">
             <span>© {new Date().getFullYear()} Luxury Carts Company Ltd.</span>
-            <span className="flex gap-4">
+            <span className="flex items-center gap-3 sm:gap-4">
               <a href="#" className="hover:text-foreground transition-colors">Privacy</a>
+              <span className="text-border">·</span>
               <a href="#" className="hover:text-foreground transition-colors">Terms & Conditions</a>
+              <span className="text-border">·</span>
               <a
                 href={supportEmail ? `mailto:${supportEmail}` : "#"}
                 className="hover:text-foreground transition-colors"
