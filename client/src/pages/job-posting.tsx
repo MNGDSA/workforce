@@ -10,7 +10,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
+import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -420,18 +421,13 @@ function exportToExcel(
     ];
   });
 
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const instructionRow = [`# BULK STATUS UPDATE — Job: ${job.title} | Only edit the "New Status" column | Valid values: ${VALID_STATUSES.join(", ")} | Do NOT add/remove/reorder rows or columns`];
+  const ws = XLSX.utils.aoa_to_sheet([instructionRow, headers, ...rows]);
 
-  // Lock all columns except New Status (col index 6) by styling
   const colWidths = headers.map((h, i) => ({
     wch: Math.max(h.length, ...rows.map((r) => String(r[i] ?? "").length), 14),
   }));
   ws["!cols"] = colWidths;
-
-  // Add a note row at top explaining the format
-  XLSX.utils.sheet_add_aoa(ws, [
-    [`# BULK STATUS UPDATE — Job: ${job.title} | Only edit the "New Status" column | Valid values: ${VALID_STATUSES.join(", ")} | Do NOT add/remove/reorder rows or columns`],
-  ], { origin: "A1", sheetRows: 1 });
   ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }];
 
   const wb = XLSX.utils.book_new();
@@ -511,7 +507,7 @@ function ApplicantsSheet({
       try {
         const wb = XLSX.read(e.target?.result, { type: "array" });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "" });
+        const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "", range: 1 });
 
         // Validate columns
         const missing = BULK_FIXED_COLS.filter((col) => !(col in (rows[0] ?? {})));
@@ -681,8 +677,8 @@ function ApplicantsSheet({
                   const hasAnswers = Object.keys(answers).length > 0;
                   const isExpanded = expandedRow === app.id;
                   return (
-                    <>
-                      <tr key={app.id} className="hover:bg-muted/20 transition-colors" data-testid={`row-applicant-${app.id}`}>
+                    <Fragment key={app.id}>
+                      <tr className="hover:bg-muted/20 transition-colors" data-testid={`row-applicant-${app.id}`}>
                         <td className="px-6 py-3">
                           <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8 border border-border shrink-0">
@@ -803,7 +799,7 @@ function ApplicantsSheet({
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -817,6 +813,7 @@ function ApplicantsSheet({
 
 // ─── Main Page ──────────────────────────────────────────────────────────────
 export default function JobPostingPage() {
+  const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -989,7 +986,7 @@ export default function JobPostingPage() {
                       key={job.id}
                       className="border-border hover:bg-muted/20 cursor-pointer"
                       data-testid={`row-job-${job.id}`}
-                      onClick={() => { setSelectedJob(job); setSheetOpen(true); }}
+                      onClick={() => setLocation(`/job-posting/${job.id}`)}
                     >
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -1057,7 +1054,7 @@ export default function JobPostingPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem onClick={() => { setSelectedJob(job); setSheetOpen(true); }}>
+                            <DropdownMenuItem onClick={() => setLocation(`/job-posting/${job.id}`)}>
                               View Applicants
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => { setEditingJob(job); setPostJobOpen(true); }}>
