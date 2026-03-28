@@ -144,6 +144,7 @@ export const candidates = pgTable(
   "candidates",
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
     // Identity
     candidateCode: varchar("candidate_code", { length: 20 }),
     fullNameAr: text("full_name_ar"),
@@ -212,6 +213,7 @@ export const candidates = pgTable(
   },
   (t) => ({
     // Composite indexes for MAANG-scale search performance
+    userIdIdx: uniqueIndex("candidates_user_id_idx").on(t.userId),
     emailIdx: index("candidates_email_idx").on(t.email),
     phoneIdx: index("candidates_phone_idx").on(t.phone),
     statusIdx: index("candidates_status_idx").on(t.status),

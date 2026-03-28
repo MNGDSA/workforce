@@ -434,6 +434,7 @@ The onboarding checklist becomes a sequential pipeline instead of a flat list:
 - **e-Signature**: Candidate portal has draw + download PDF signature using `react-signature-canvas` + `jspdf`
 - **Automation Rules**: Database-backed toggleable workflows
 - **Saudi-specific**: National ID, Iqama, IBAN fields, Arabic name field, nationality (Saudi/Non-Saudi)
+- **User↔Candidate Link**: `candidates.userId` FK → `users.id`. This is the primary link between auth accounts and candidate profiles. `nationalId` is kept as a data field but is NOT used as the join key. Login resolves candidate via `getCandidateByUserId(user.id)` with fallback to `getCandidateByNationalId` for legacy records. Registration stores `userId` on the candidate at creation time.
 
 ## Integrations
 - **GitHub** — Connected via Replit OAuth (connection: `conn_github_01KMCD4T6871ZX6CKTKY6BG2YA`). Repo: `https://github.com/MNGDSA/workforce`. Permissions: `repo`, `read:org`, `read:project`, `read:user`, `user:email`. Service layer: `server/github.ts`. API routes under `/api/github/*`.

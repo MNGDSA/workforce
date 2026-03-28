@@ -258,12 +258,16 @@ export async function registerRoutes(
 
       const { password: _, ...safeUser } = user;
 
-      // For candidate users, also return their candidate record
       let candidate = null;
-      if (user.role === "candidate" && user.nationalId) {
-        const found = await storage.getCandidates({ page: 1, limit: 1, search: user.nationalId, sortBy: "createdAt", sortOrder: "desc" });
-        candidate = found.data?.[0] ?? null;
+      if (user.role === "candidate") {
+        candidate = await storage.getCandidateByUserId(user.id) ?? null;
+        if (!candidate && user.nationalId) {
+          candidate = await storage.getCandidateByNationalId(user.nationalId) ?? null;
+        }
         if (candidate) {
+          if (!candidate.userId) {
+            await storage.updateCandidate(candidate.id, { userId: user.id });
+          }
           await storage.updateCandidate(candidate.id, { lastLoginAt: new Date() });
           candidate.lastLoginAt = new Date();
         }
@@ -395,7 +399,6 @@ export async function registerRoutes(
       const syntheticEmail = `${nationalId.trim()}@candidate.workforce.sa`;
       const hashed = await bcrypt.hash(password, 12);
 
-      // Create user account
       const user = await storage.createUser({
         username: nationalId.trim(),
         email: syntheticEmail,
@@ -407,17 +410,28 @@ export async function registerRoutes(
         isActive: true,
       });
 
-      const candidate = await storage.createCandidate({
-        fullNameEn: fullName.trim(),
-        phone: normalizedPhone,
-        nationalId: nationalId.trim(),
-        email: syntheticEmail,
-        status: "active",
-        experienceYears: 0,
-        country: "SA",
-      });
+      let candidate = await storage.getCandidateByNationalId(nationalId.trim());
+      if (candidate) {
+        await storage.updateCandidate(candidate.id, {
+          userId: user.id,
+          phone: normalizedPhone,
+          fullNameEn: fullName.trim(),
+          email: syntheticEmail,
+        });
+        candidate = (await storage.getCandidate(candidate.id))!;
+      } else {
+        candidate = await storage.createCandidate({
+          fullNameEn: fullName.trim(),
+          phone: normalizedPhone,
+          nationalId: nationalId.trim(),
+          email: syntheticEmail,
+          status: "active",
+          experienceYears: 0,
+          country: "SA",
+          userId: user.id,
+        });
+      }
 
-      // Consume the OTP so it cannot be reused
       await storage.markOtpUsedForRegistration(otpId);
 
       const { password: _, ...safeUser } = user;
@@ -449,9 +463,12 @@ export async function registerRoutes(
       }
       const candidate = await storage.getCandidate(candidateId);
       if (!candidate) return res.status(404).json({ message: "Candidate not found" });
-      const user = candidate.nationalId
-        ? await storage.getUserByNationalId(candidate.nationalId)
+      let user = candidate.userId
+        ? await storage.getUser(candidate.userId)
         : undefined;
+      if (!user && candidate.nationalId) {
+        user = await storage.getUserByNationalId(candidate.nationalId);
+      }
       if (!user) return res.status(404).json({ message: "User account not found" });
       const valid = await bcrypt.compare(currentPassword, user.password ?? "");
       if (!valid) return res.status(401).json({ message: "Current password is incorrect" });
