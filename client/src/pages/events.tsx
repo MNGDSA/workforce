@@ -124,7 +124,10 @@ function CreateEventDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg bg-card border-border">
+      <DialogContent className="max-w-lg bg-card border-border" onPointerDownOutside={(e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest("[data-datepicker-portal]")) e.preventDefault();
+      }}>
         <DialogHeader>
           <DialogTitle className="text-white font-display text-xl">Create Event</DialogTitle>
         </DialogHeader>

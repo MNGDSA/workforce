@@ -116,7 +116,10 @@ function CreateSMPContractDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl bg-card border-border">
+      <DialogContent className="max-w-2xl bg-card border-border" onPointerDownOutside={(e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest("[data-datepicker-portal]")) e.preventDefault();
+      }}>
         <DialogHeader>
           <DialogTitle className="text-white font-display text-xl">Create SMP Contract</DialogTitle>
           <p className="text-muted-foreground text-sm">Manpower Plan — define contractor terms and workforce allocation.</p>

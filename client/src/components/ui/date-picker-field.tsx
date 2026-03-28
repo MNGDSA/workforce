@@ -137,8 +137,11 @@ export function DatePickerField({
   const calendarDropdown = open && dropdownPos ? createPortal(
     <div
       ref={dropdownRef}
+      data-datepicker-portal
       className="fixed z-[9999] w-[280px] rounded-md border border-border bg-card shadow-xl p-3 animate-in fade-in-0 zoom-in-95"
       style={{ top: dropdownPos.top, left: dropdownPos.left }}
+      onPointerDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
     >
           {view === "days" && (
             <>
