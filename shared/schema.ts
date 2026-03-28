@@ -357,6 +357,7 @@ export const interviews = pgTable(
   "interviews",
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    eventId: varchar("event_id").references(() => events.id, { onDelete: "set null" }),
     applicationId: varchar("application_id")
       .references(() => applications.id, { onDelete: "set null" }),
     candidateId: varchar("candidate_id")
@@ -377,6 +378,7 @@ export const interviews = pgTable(
     updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
   },
   (t) => ({
+    eventIdx: index("interviews_event_idx").on(t.eventId),
     candidateIdx: index("interviews_candidate_idx").on(t.candidateId),
     scheduledAtIdx: index("interviews_scheduled_at_idx").on(t.scheduledAt),
     statusIdx: index("interviews_status_idx").on(t.status),

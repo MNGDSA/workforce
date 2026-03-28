@@ -1265,10 +1265,21 @@ export default function OnboardingPage() {
   const [bulkConvertForm, setBulkConvertForm] = useState({ startDate: "", salary: "" });
   const [bulkContractOpen, setBulkContractOpen] = useState(false);
   const [bulkContractTemplateId, setBulkContractTemplateId] = useState("");
+  const [eventFilter, setEventFilter] = useState("all");
   const ADMIT_PAGE_SIZE = 10;
 
+  const { data: eventsList = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/events"],
+    queryFn: () => apiRequest("GET", "/api/events").then(r => r.json()),
+  });
+
   const { data: records = [], isLoading } = useQuery<OnboardingRecord[]>({
-    queryKey: ["/api/onboarding"],
+    queryKey: ["/api/onboarding", { eventId: eventFilter !== "all" ? eventFilter : undefined }],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (eventFilter !== "all") params.set("eventId", eventFilter);
+      return apiRequest("GET", `/api/onboarding${params.toString() ? `?${params}` : ""}`).then(r => r.json());
+    },
     refetchInterval: 15000,
   });
 
@@ -1573,6 +1584,17 @@ export default function OnboardingPage() {
               className="pl-9 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500"
             />
           </div>
+          <Select value={eventFilter} onValueChange={setEventFilter}>
+            <SelectTrigger data-testid="select-event-filter-onboarding" className="w-40 bg-zinc-900 border-zinc-700 text-white">
+              <SelectValue placeholder="All Events" />
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-zinc-700">
+              <SelectItem value="all">All Events</SelectItem>
+              {eventsList.map((evt) => (
+                <SelectItem key={evt.id} value={evt.id}>{evt.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger data-testid="select-status-filter" className="w-40 bg-zinc-900 border-zinc-700 text-white">
               <SelectValue placeholder="All statuses" />

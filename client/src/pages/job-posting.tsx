@@ -817,14 +817,24 @@ export default function JobPostingPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [eventFilter, setEventFilter] = useState("all");
   const [postJobOpen, setPostJobOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<JobPosting | null>(null);
   const [selectedJob, setSelectedJob] = useState<JobPosting | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
+  const { data: eventsList = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/events"],
+    queryFn: () => apiRequest("GET", "/api/events").then(r => r.json()),
+  });
+
   const { data: jobs = [], isLoading } = useQuery<JobPosting[]>({
-    queryKey: ["/api/jobs"],
-    queryFn: () => apiRequest("GET", "/api/jobs").then(r => r.json()),
+    queryKey: ["/api/jobs", { eventId: eventFilter !== "all" ? eventFilter : undefined }],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (eventFilter !== "all") params.set("eventId", eventFilter);
+      return apiRequest("GET", `/api/jobs${params.toString() ? `?${params}` : ""}`).then(r => r.json());
+    },
   });
 
   const { data: jobStats } = useQuery({
@@ -923,6 +933,17 @@ export default function JobPostingPage() {
               data-testid="input-search-jobs"
             />
           </div>
+          <Select value={eventFilter} onValueChange={setEventFilter}>
+            <SelectTrigger className="w-[180px] bg-muted/30 border-border" data-testid="select-event-filter-jobs">
+              <SelectValue placeholder="All Events" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Events</SelectItem>
+              {eventsList.map((evt) => (
+                <SelectItem key={evt.id} value={evt.id}>{evt.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="flex gap-2 flex-wrap">
             {["all", "active", "draft", "closed"].map(s => (
               <Button

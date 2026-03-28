@@ -21,6 +21,7 @@ import {
   Wallet,
   BarChart3,
   UserCheck,
+  FileText,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -40,10 +41,11 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
-const recruitmentPaths = ["/events", "/question-sets", "/job-posting", "/interviews", "/onboarding", "/talent"];
+const recruitmentPaths = ["/events", "/smp-contracts", "/question-sets", "/job-posting", "/interviews", "/onboarding", "/talent"];
 
 const recruitmentItems: { href: string; icon: React.ElementType; label: string }[] = [
-  { href: "/events",        icon: CalendarRange, label: "Events & SMP" },
+  { href: "/events",        icon: CalendarRange, label: "Events" },
+  { href: "/smp-contracts", icon: FileText,      label: "SMP Contracts" },
   { href: "/question-sets", icon: ClipboardList, label: "Question Sets" },
   { href: "/job-posting",   icon: Briefcase,     label: "Job Applications" },
   { href: "/interviews",    icon: Minimize,      label: "Interview & Training" },

@@ -109,7 +109,7 @@ export interface IStorage {
   getApplicationStats(): Promise<{ total: number; new: number; shortlisted: number; hired: number }>;
 
   // Interviews
-  getInterviews(params?: { status?: string; candidateId?: string }): Promise<Interview[]>;
+  getInterviews(params?: { status?: string; candidateId?: string; eventId?: string }): Promise<Interview[]>;
   getInterview(id: string): Promise<Interview | undefined>;
   getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[] } | undefined>;
   createInterview(interview: InsertInterview): Promise<Interview>;
@@ -698,9 +698,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ─── Interviews ─────────────────────────────────────────────────────────────
-  async getInterviews(params?: { status?: string; candidateId?: string }): Promise<Interview[]> {
+  async getInterviews(params?: { status?: string; candidateId?: string; eventId?: string }): Promise<Interview[]> {
     const conditions = [];
     if (params?.status) conditions.push(eq(interviews.status, params.status as any));
+    if (params?.eventId) conditions.push(eq(interviews.eventId, params.eventId));
     if (params?.candidateId) {
       conditions.push(
         or(

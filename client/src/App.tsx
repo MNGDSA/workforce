@@ -8,6 +8,7 @@ import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import TalentPage from "@/pages/talent";
 import EventsPage from "@/pages/events";
+import SMPContractsPage from "@/pages/smp-contracts";
 import WorkforcePage from "@/pages/workforce";
 import NotificationsPage from "@/pages/notifications";
 import CandidatePortal from "@/pages/candidate-portal";
@@ -39,6 +40,7 @@ function Router() {
       <Route path="/job-posting/:id" component={JobPostingDetailPage} />
       <Route path="/talent" component={TalentPage} />
       <Route path="/events" component={EventsPage} />
+      <Route path="/smp-contracts" component={SMPContractsPage} />
       <Route path="/workforce" component={WorkforcePage} />
       <Route path="/interviews" component={InterviewsPage} />
       <Route path="/interviews/schedule" component={ScheduleInterviewPage} />

@@ -1013,8 +1013,8 @@ export async function registerRoutes(
   // ─── Interviews ───────────────────────────────────────────────────────────
   app.get("/api/interviews", async (req: Request, res: Response) => {
     try {
-      const { status, candidateId } = req.query as Record<string, string>;
-      const data = await storage.getInterviews({ status, candidateId });
+      const { status, candidateId, eventId } = req.query as Record<string, string>;
+      const data = await storage.getInterviews({ status, candidateId, eventId });
       return res.json(data);
     } catch (err) {
       return handleError(res, err);

@@ -66,8 +66,9 @@ A full-stack event-based job hiring management platform built for Saudi Arabia o
 │   ├── pages/           # All page components
 │   │   ├── dashboard.tsx         ← Real API data
 │   │   ├── talent.tsx            ← Real API + pagination (50/page)
-│   │   ├── events.tsx            ← Real API + CRUD actions
-│   │   ├── job-posting.tsx       ← Real API + CRUD actions
+│   │   ├── events.tsx            ← Events-only management (CRUD)
+│   │   ├── smp-contracts.tsx     ← SMP Contracts management (separate page)
+│   │   ├── job-posting.tsx       ← Real API + CRUD actions + event filter
 │   │   ├── roles-access.tsx      ← Business units, users, permissions matrix
 │   │   ├── automation.tsx        ← Real API + toggle rules
 │   │   ├── interviews.tsx        ← UI prototype
@@ -183,7 +184,9 @@ GET    /api/notifications/unread-count/:recipientId
 - **Recruiter**: ID `1000000003` / phone `0500000003` / password `password123`
 
 ## Navigation Order
-Dashboard → Job Posting → Events & SMP → Interview & Training → Onboarding → Workforce → Talent → Rules & Automation → Notification Center → System & Settings
+**Recruitment**: Events → SMP Contracts → Question Sets → Job Applications → Interview & Training → Onboarding → Talent
+**Management**: Dashboard → Workforce → Payroll
+**System**: Rules & Automation → Documentation
 
 ## Workflow Design (Business Logic — Agreed with Client)
 

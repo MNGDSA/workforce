@@ -63,6 +63,13 @@ import {
   ArrowLeft,
   X,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -674,14 +681,24 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
 export default function InterviewsPage() {
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
+  const [eventFilter, setEventFilter] = useState("all");
   const [cancelPendingId, setCancelPendingId] = useState<string | null>(null);
   const [detailInterview, setDetailInterview] = useState<Interview | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const { data: eventsList = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/events"],
+    queryFn: () => apiRequest("GET", "/api/events").then((r) => r.json()),
+  });
+
   const { data: interviewList = [], isLoading } = useQuery<Interview[]>({
-    queryKey: ["/api/interviews"],
-    queryFn: () => apiRequest("GET", "/api/interviews").then((r) => r.json()),
+    queryKey: ["/api/interviews", { eventId: eventFilter !== "all" ? eventFilter : undefined }],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (eventFilter !== "all") params.set("eventId", eventFilter);
+      return apiRequest("GET", `/api/interviews${params.toString() ? `?${params}` : ""}`).then((r) => r.json());
+    },
   });
 
   const { data: stats } = useQuery<InterviewStats>({
@@ -799,6 +816,17 @@ export default function InterviewsPage() {
               data-testid="input-search-interviews"
             />
           </div>
+          <Select value={eventFilter} onValueChange={setEventFilter}>
+            <SelectTrigger className="w-[180px] h-12 bg-muted/30 border-border" data-testid="select-event-filter-interviews">
+              <SelectValue placeholder="All Events" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Events</SelectItem>
+              {eventsList.map((evt) => (
+                <SelectItem key={evt.id} value={evt.id}>{evt.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="flex gap-2 w-full md:w-auto">
             <Button variant="outline" className="h-12 border-border bg-background flex-1 md:flex-none">
               <Filter className="mr-2 h-4 w-4" />
