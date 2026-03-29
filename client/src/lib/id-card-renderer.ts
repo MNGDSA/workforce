@@ -248,9 +248,10 @@ export function renderIdCardHTML(
   employee: EmployeeCardData,
   scale: number = 1
 ): string {
-  const widthPx = Math.round(CR80_WIDTH_MM * 3.7795 * scale);
-  const heightPx = Math.round(CR80_HEIGHT_MM * 3.7795 * scale);
   const layout = template.layout ?? "horizontal";
+  const isVertical = layout === "vertical";
+  const widthPx = Math.round((isVertical ? CR80_HEIGHT_MM : CR80_WIDTH_MM) * 3.7795 * scale);
+  const heightPx = Math.round((isVertical ? CR80_WIDTH_MM : CR80_HEIGHT_MM) * 3.7795 * scale);
 
   switch (layout) {
     case "vertical":
@@ -273,9 +274,13 @@ export function printIdCardFallback(
     .map((emp) => renderIdCardHTML(template, emp, 1))
     .join(`<div style="page-break-after:always;margin-bottom:10mm;"></div>`);
 
+  const layout = template.layout ?? "horizontal";
+  const pageW = layout === "vertical" ? "54mm" : "85.6mm";
+  const pageH = layout === "vertical" ? "85.6mm" : "54mm";
+
   printWin.document.write(`<!DOCTYPE html><html><head><title>ID Cards</title>
     <style>
-      @page { size: 85.6mm 54mm; margin: 0; }
+      @page { size: ${pageW} ${pageH}; margin: 0; }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { background: #fff; }
       @media print { body { background: #fff; } }
