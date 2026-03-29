@@ -301,6 +301,7 @@ RETURN TO POOL
 9. **Application status `not_shortlisted`** — professional HR term for rejection.
 10. **Source-aware onboarding** — Regular candidates: 4-item checklist (photo, IBAN, national ID, signed contract). SMP workers: 2-item checklist (photo + national ID only — no IBAN or contract since we deal with their firm).
 11. **Profile activation required for all** — OTP verification regardless of entry method.
+12. **Auto event tagging (PLANNED)** — When a candidate's signed contract onboarding item is marked complete, the system auto-appends an event tag (e.g. `"event:Hajj 2026"`) to the candidate profile `tags` array. Threshold is signed contract, not tenure — even one day of work qualifies. This enables instant "returning worker" identification in future seasons. Uses existing `tags` text array on candidates table.
 
 ### Implementation Status
 
