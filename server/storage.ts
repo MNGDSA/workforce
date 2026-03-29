@@ -1288,7 +1288,7 @@ export class DatabaseStorage implements IStorage {
       candidateId: rec.candidateId,
       jobId: rec.jobId ?? undefined,
       eventId: employmentData.eventId ?? rec.eventId ?? undefined,
-      salary: employmentData.salary ?? undefined,
+      salary: employmentData.salary && employmentData.salary.trim() !== "" ? employmentData.salary : undefined,
       startDate: employmentData.startDate,
       isActive: true,
     }).returning();
