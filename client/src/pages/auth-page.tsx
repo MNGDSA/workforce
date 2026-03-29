@@ -275,9 +275,9 @@ export default function AuthPage() {
           {/* Logo */}
           <div className="space-y-2">
             <div className="flex items-center gap-3 mb-6">
-              <img src="/workforce-logo.svg" alt="Luxury Carts" className="h-10 w-10" />
+              <img src="/workforce-logo.svg" alt="Workforce" className="h-10 w-10" />
               <span className="font-display font-bold text-2xl tracking-tight text-white">
-                LUXURY CARTS
+                WORKFORCE
               </span>
             </div>
             <h1 className="font-display text-4xl font-bold tracking-tight text-white">

@@ -701,11 +701,9 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
       {/* Top bar */}
       <header className="h-14 border-b border-border px-6 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 bg-primary rounded-sm flex items-center justify-center">
-            <Building2 className="h-4 w-4 text-primary-foreground" />
-          </div>
+          <img src="/workforce-logo.svg" alt="Workforce" className="h-8 w-8" />
           <span className="font-display font-bold text-lg text-white">
-            LUXURY CARTS
+            WORKFORCE
           </span>
         </div>
         <button
