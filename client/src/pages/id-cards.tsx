@@ -134,6 +134,8 @@ function DraggableField({
   sampleValue,
   scale,
   selected,
+  canvasW: cw,
+  canvasH: ch,
   onSelect,
   onDragEnd,
   onResize,
@@ -143,6 +145,8 @@ function DraggableField({
   sampleValue: string;
   scale: number;
   selected: boolean;
+  canvasW: number;
+  canvasH: number;
   onSelect: () => void;
   onDragEnd: (x: number, y: number) => void;
   onResize: (w: number, h: number) => void;
@@ -151,6 +155,9 @@ function DraggableField({
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState(false);
   const startRef = useRef({ mx: 0, my: 0, ox: 0, oy: 0, ow: 0, oh: 0 });
+
+  const clampX = useCallback((x: number, w: number) => Math.max(0, Math.min(x, cw - w)), [cw]);
+  const clampY = useCallback((y: number, h: number) => Math.max(0, Math.min(y, ch - h)), [ch]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -182,16 +189,18 @@ function DraggableField({
       const dy = (e.clientY - startRef.current.my) / scale;
 
       if (dragging) {
-        const newX = Math.max(0, startRef.current.ox + dx);
-        const newY = Math.max(0, startRef.current.oy + dy);
+        const newX = clampX(startRef.current.ox + dx, fp.w);
+        const newY = clampY(startRef.current.oy + dy, fp.h);
         if (ref.current) {
           ref.current.style.left = `${newX * scale}px`;
           ref.current.style.top = `${newY * scale}px`;
         }
       }
       if (resizing) {
-        const newW = Math.max(30, startRef.current.ow + dx);
-        const newH = Math.max(14, startRef.current.oh + dy);
+        const maxW = cw - startRef.current.ox;
+        const maxH = ch - startRef.current.oy;
+        const newW = Math.min(maxW, Math.max(30, startRef.current.ow + dx));
+        const newH = Math.min(maxH, Math.max(14, startRef.current.oh + dy));
         if (ref.current) {
           ref.current.style.width = `${newW * scale}px`;
           ref.current.style.height = `${newH * scale}px`;
@@ -204,13 +213,15 @@ function DraggableField({
       const dy = (e.clientY - startRef.current.my) / scale;
 
       if (dragging) {
-        const newX = Math.max(0, Math.round(startRef.current.ox + dx));
-        const newY = Math.max(0, Math.round(startRef.current.oy + dy));
+        const newX = clampX(Math.round(startRef.current.ox + dx), fp.w);
+        const newY = clampY(Math.round(startRef.current.oy + dy), fp.h);
         onDragEnd(newX, newY);
       }
       if (resizing) {
-        const newW = Math.max(30, Math.round(startRef.current.ow + dx));
-        const newH = Math.max(14, Math.round(startRef.current.oh + dy));
+        const maxW = cw - startRef.current.ox;
+        const maxH = ch - startRef.current.oy;
+        const newW = Math.min(maxW, Math.max(30, Math.round(startRef.current.ow + dx)));
+        const newH = Math.min(maxH, Math.max(14, Math.round(startRef.current.oh + dy)));
         onResize(newW, newH);
       }
       setDragging(false);
@@ -223,7 +234,7 @@ function DraggableField({
       window.removeEventListener("mousemove", handleMove);
       window.removeEventListener("mouseup", handleUp);
     };
-  }, [dragging, resizing, scale, onDragEnd, onResize]);
+  }, [dragging, resizing, scale, onDragEnd, onResize, clampX, clampY, fp.w, fp.h, cw, ch]);
 
   if (!fp.visible) return null;
 
@@ -280,6 +291,8 @@ function DraggableField({
             whiteSpace: "nowrap",
             display: "flex",
             alignItems: "center",
+            justifyContent: fp.textAlign === "center" ? "center" : fp.textAlign === "right" ? "flex-end" : "flex-start",
+            textAlign: fp.textAlign || "left",
             lineHeight: 1.2,
             border: selected ? "2px dashed #16a34a" : "1px dashed rgba(255,255,255,0.15)",
             borderRadius: 2,
@@ -580,7 +593,7 @@ function TemplateDesigner() {
   const canvasLayout = form.layout;
   const canvasW = canvasLayout === "vertical" ? CANVAS_H : CANVAS_W;
   const canvasH = canvasLayout === "vertical" ? CANVAS_W : CANVAS_H;
-  const previewScale = 1.4;
+  const previewScale = 2.1;
 
   const previewConfig: IdCardTemplateConfig = {
     name: form.name || "Untitled",
@@ -954,13 +967,35 @@ function TemplateDesigner() {
                           />
                         </div>
                       </div>
+                      <div className="space-y-1">
+                        <Label className="text-zinc-400 text-xs">Text Alignment</Label>
+                        <div className="flex gap-1">
+                          {(["left", "center", "right"] as const).map((align) => (
+                            <button
+                              key={align}
+                              type="button"
+                              className={`flex-1 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                                (selectedPlacement.textAlign || "left") === align
+                                  ? "border-primary bg-primary/15 text-white"
+                                  : "border-zinc-700 text-zinc-400 hover:text-white"
+                              }`}
+                              onClick={() => updatePlacement(selectedPlacement.key, { textAlign: align })}
+                              data-testid={`button-align-${align}`}
+                            >
+                              {align.charAt(0).toUpperCase() + align.slice(1)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
                           <Label className="text-zinc-400 text-xs">X</Label>
                           <Input
                             type="number"
+                            min={0}
+                            max={canvasW - selectedPlacement.w}
                             value={selectedPlacement.x}
-                            onChange={(e) => updatePlacement(selectedPlacement.key, { x: Number(e.target.value) || 0 })}
+                            onChange={(e) => updatePlacement(selectedPlacement.key, { x: Math.max(0, Math.min(canvasW - selectedPlacement.w, Number(e.target.value) || 0)) })}
                             className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs"
                           />
                         </div>
@@ -968,8 +1003,10 @@ function TemplateDesigner() {
                           <Label className="text-zinc-400 text-xs">Y</Label>
                           <Input
                             type="number"
+                            min={0}
+                            max={canvasH - selectedPlacement.h}
                             value={selectedPlacement.y}
-                            onChange={(e) => updatePlacement(selectedPlacement.key, { y: Number(e.target.value) || 0 })}
+                            onChange={(e) => updatePlacement(selectedPlacement.key, { y: Math.max(0, Math.min(canvasH - selectedPlacement.h, Number(e.target.value) || 0)) })}
                             className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs"
                           />
                         </div>
@@ -980,7 +1017,7 @@ function TemplateDesigner() {
                           <Input
                             type="number"
                             value={selectedPlacement.w}
-                            onChange={(e) => updatePlacement(selectedPlacement.key, { w: Math.max(30, Number(e.target.value) || 30) })}
+                            onChange={(e) => updatePlacement(selectedPlacement.key, { w: Math.max(30, Math.min(canvasW - selectedPlacement.x, Number(e.target.value) || 30)) })}
                             className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs"
                           />
                         </div>
@@ -989,7 +1026,7 @@ function TemplateDesigner() {
                           <Input
                             type="number"
                             value={selectedPlacement.h}
-                            onChange={(e) => updatePlacement(selectedPlacement.key, { h: Math.max(14, Number(e.target.value) || 14) })}
+                            onChange={(e) => updatePlacement(selectedPlacement.key, { h: Math.max(14, Math.min(canvasH - selectedPlacement.y, Number(e.target.value) || 14)) })}
                             className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs"
                           />
                         </div>
@@ -1051,6 +1088,8 @@ function TemplateDesigner() {
                           sampleValue={sampleVal}
                           scale={previewScale}
                           selected={selectedFieldKey === fp.key}
+                          canvasW={canvasW}
+                          canvasH={canvasH}
                           onSelect={() => setSelectedFieldKey(fp.key)}
                           onDragEnd={(x, y) => updatePlacement(fp.key, { x, y })}
                           onResize={(w, h) => updatePlacement(fp.key, { w, h })}

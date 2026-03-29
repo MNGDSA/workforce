@@ -42,6 +42,7 @@ export interface FieldPlacement {
   fontSize: number;
   fontColor: string;
   fontWeight: number;
+  textAlign?: "left" | "center" | "right";
   visible: boolean;
 }
 
@@ -51,24 +52,24 @@ export function defaultFieldPlacements(layout: CardLayout): FieldPlacement[] {
 
   if (isVert) {
     return [
-      { key: "photo", x: (cw - 60) / 2, y: 10, w: 60, h: 72, fontSize: 0, fontColor: "#ffffff", fontWeight: 400, visible: true },
-      { key: "fullName", x: 10, y: 88, w: cw - 20, h: 22, fontSize: 13, fontColor: "#ffffff", fontWeight: 700, visible: true },
-      { key: "employeeNumber", x: 10, y: 112, w: cw - 20, h: 18, fontSize: 11, fontColor: "#ffffff", fontWeight: 600, visible: true },
-      { key: "nationalId", x: 10, y: 132, w: cw - 20, h: 18, fontSize: 10, fontColor: "#ffffff", fontWeight: 400, visible: true },
-      { key: "position", x: 10, y: 152, w: cw - 20, h: 18, fontSize: 10, fontColor: "#ffffff", fontWeight: 400, visible: true },
-      { key: "eventName", x: 10, y: 172, w: cw - 20, h: 18, fontSize: 9, fontColor: "#ffffff", fontWeight: 400, visible: false },
-      { key: "phone", x: 10, y: 192, w: cw - 20, h: 18, fontSize: 9, fontColor: "#ffffff", fontWeight: 400, visible: false },
+      { key: "photo", x: (cw - 60) / 2, y: 10, w: 60, h: 72, fontSize: 0, fontColor: "#000000", fontWeight: 400, visible: true },
+      { key: "fullName", x: 10, y: 88, w: cw - 20, h: 22, fontSize: 13, fontColor: "#000000", fontWeight: 700, visible: true },
+      { key: "employeeNumber", x: 10, y: 112, w: cw - 20, h: 18, fontSize: 11, fontColor: "#000000", fontWeight: 600, visible: true },
+      { key: "nationalId", x: 10, y: 132, w: cw - 20, h: 18, fontSize: 10, fontColor: "#000000", fontWeight: 400, visible: true },
+      { key: "position", x: 10, y: 152, w: cw - 20, h: 18, fontSize: 10, fontColor: "#000000", fontWeight: 400, visible: true },
+      { key: "eventName", x: 10, y: 172, w: cw - 20, h: 18, fontSize: 9, fontColor: "#000000", fontWeight: 400, visible: false },
+      { key: "phone", x: 10, y: 192, w: cw - 20, h: 18, fontSize: 9, fontColor: "#000000", fontWeight: 400, visible: false },
     ];
   }
 
   return [
-    { key: "photo", x: 12, y: 18, w: 60, h: 72, fontSize: 0, fontColor: "#ffffff", fontWeight: 400, visible: true },
-    { key: "fullName", x: 82, y: 18, w: 230, h: 22, fontSize: 14, fontColor: "#ffffff", fontWeight: 700, visible: true },
-    { key: "employeeNumber", x: 82, y: 44, w: 230, h: 18, fontSize: 11, fontColor: "#ffffff", fontWeight: 600, visible: true },
-    { key: "nationalId", x: 82, y: 66, w: 230, h: 18, fontSize: 10, fontColor: "#ffffff", fontWeight: 400, visible: true },
-    { key: "position", x: 82, y: 88, w: 230, h: 18, fontSize: 10, fontColor: "#ffffff", fontWeight: 400, visible: true },
-    { key: "eventName", x: 82, y: 110, w: 230, h: 18, fontSize: 9, fontColor: "#ffffff", fontWeight: 400, visible: false },
-    { key: "phone", x: 82, y: 132, w: 230, h: 18, fontSize: 9, fontColor: "#ffffff", fontWeight: 400, visible: false },
+    { key: "photo", x: 12, y: 18, w: 60, h: 72, fontSize: 0, fontColor: "#000000", fontWeight: 400, visible: true },
+    { key: "fullName", x: 82, y: 18, w: 230, h: 22, fontSize: 14, fontColor: "#000000", fontWeight: 700, visible: true },
+    { key: "employeeNumber", x: 82, y: 44, w: 230, h: 18, fontSize: 11, fontColor: "#000000", fontWeight: 600, visible: true },
+    { key: "nationalId", x: 82, y: 66, w: 230, h: 18, fontSize: 10, fontColor: "#000000", fontWeight: 400, visible: true },
+    { key: "position", x: 82, y: 88, w: 230, h: 18, fontSize: 10, fontColor: "#000000", fontWeight: 400, visible: true },
+    { key: "eventName", x: 82, y: 110, w: 230, h: 18, fontSize: 9, fontColor: "#000000", fontWeight: 400, visible: false },
+    { key: "phone", x: 82, y: 132, w: 230, h: 18, fontSize: 9, fontColor: "#000000", fontWeight: 400, visible: false },
   ];
 }
 
@@ -213,7 +214,11 @@ function renderTextPlacementHTML(
   const fs = fp.fontSize * scale;
   const color = escapeHTML(fp.fontColor);
 
-  return `<div style="position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;font-size:${fs}px;font-weight:${fp.fontWeight};color:${color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;line-height:1.2;">${escapeHTML(value)}</div>`;
+  const align = fp.textAlign || "left";
+  const justifyMap = { left: "flex-start", center: "center", right: "flex-end" };
+  const justify = justifyMap[align];
+
+  return `<div style="position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;font-size:${fs}px;font-weight:${fp.fontWeight};color:${color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;justify-content:${justify};text-align:${align};line-height:1.2;">${escapeHTML(value)}</div>`;
 }
 
 function getCanvasDimensions(layout: CardLayout): { w: number; h: number } {
