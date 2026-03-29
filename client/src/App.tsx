@@ -28,7 +28,6 @@ import ProfilePage from "@/pages/profile";
 import OnboardingPage from "@/pages/onboarding";
 import IdCardsPage from "@/pages/id-cards";
 import LegalPage from "@/pages/legal-page";
-import IdCardsPage from "@/pages/id-cards";
 
 function Router() {
   return (

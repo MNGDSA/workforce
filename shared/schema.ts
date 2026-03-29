@@ -880,29 +880,6 @@ export const systemSettings = pgTable("system_settings", {
 
 export type SystemSetting = typeof systemSettings.$inferSelect;
 
-export const insertIdCardTemplateSchema = createInsertSchema(idCardTemplates).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-export type InsertIdCardTemplate = z.infer<typeof insertIdCardTemplateSchema>;
-export type IdCardTemplate = typeof idCardTemplates.$inferSelect;
-
-export const insertPrinterPluginSchema = createInsertSchema(printerPlugins).omit({
-  id: true,
-  installedAt: true,
-  updatedAt: true,
-});
-export type InsertPrinterPlugin = z.infer<typeof insertPrinterPluginSchema>;
-export type PrinterPlugin = typeof printerPlugins.$inferSelect;
-
-export const insertIdCardPrintLogSchema = createInsertSchema(idCardPrintLogs).omit({
-  id: true,
-  printedAt: true,
-});
-export type InsertIdCardPrintLog = z.infer<typeof insertIdCardPrintLogSchema>;
-export type IdCardPrintLog = typeof idCardPrintLogs.$inferSelect;
-
 // ─── Query Params Types ─────────────────────────────────────────────────────
 export const candidateQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
