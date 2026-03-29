@@ -53,6 +53,15 @@ import {
   type CandidateContract,
   type InsertCandidateContract,
   systemSettings,
+  idCardTemplates,
+  printerPlugins,
+  idCardPrintLogs,
+  type IdCardTemplate,
+  type InsertIdCardTemplate,
+  type PrinterPlugin,
+  type InsertPrinterPlugin,
+  type IdCardPrintLog,
+  type InsertIdCardPrintLog,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull } from "drizzle-orm";
 
@@ -201,6 +210,29 @@ export interface IStorage {
   getCandidateContract(id: string): Promise<CandidateContract | undefined>;
   createCandidateContract(data: InsertCandidateContract): Promise<CandidateContract>;
   updateCandidateContract(id: string, data: Partial<InsertCandidateContract>): Promise<CandidateContract | undefined>;
+
+  // ID Card Templates
+  getIdCardTemplates(eventId?: string): Promise<IdCardTemplate[]>;
+  getIdCardTemplate(id: string): Promise<IdCardTemplate | undefined>;
+  getActiveIdCardTemplate(eventId?: string): Promise<IdCardTemplate | undefined>;
+  createIdCardTemplate(data: InsertIdCardTemplate): Promise<IdCardTemplate>;
+  updateIdCardTemplate(id: string, data: Partial<InsertIdCardTemplate>): Promise<IdCardTemplate | undefined>;
+  deleteIdCardTemplate(id: string): Promise<boolean>;
+  activateIdCardTemplate(id: string): Promise<boolean>;
+
+  // Printer Plugins
+  getPrinterPlugins(): Promise<PrinterPlugin[]>;
+  getPrinterPlugin(id: string): Promise<PrinterPlugin | undefined>;
+  getActivePrinterPlugin(): Promise<PrinterPlugin | undefined>;
+  createPrinterPlugin(data: InsertPrinterPlugin): Promise<PrinterPlugin>;
+  updatePrinterPlugin(id: string, data: Partial<InsertPrinterPlugin>): Promise<PrinterPlugin | undefined>;
+  activatePrinterPlugin(id: string): Promise<boolean>;
+  deletePrinterPlugin(id: string): Promise<boolean>;
+
+  // ID Card Print Logs
+  getIdCardPrintLogs(filters?: { employeeId?: string; printedBy?: string; limit?: number }): Promise<IdCardPrintLog[]>;
+  createIdCardPrintLog(data: InsertIdCardPrintLog): Promise<IdCardPrintLog>;
+  getLastPrintDate(employeeId: string): Promise<Date | null>;
 
   // System Settings
   getSystemSetting(key: string): Promise<string | undefined>;
@@ -1456,6 +1488,129 @@ export class DatabaseStorage implements IStorage {
         target: systemSettings.key,
         set: { value, updatedAt: new Date() },
       });
+  }
+
+  async getIdCardTemplates(eventId?: string): Promise<IdCardTemplate[]> {
+    const conditions = [];
+    if (eventId) conditions.push(eq(idCardTemplates.eventId, eventId));
+    const rows = conditions.length
+      ? await db.select().from(idCardTemplates).where(and(...conditions)).orderBy(desc(idCardTemplates.createdAt))
+      : await db.select().from(idCardTemplates).orderBy(desc(idCardTemplates.createdAt));
+    return rows;
+  }
+
+  async getIdCardTemplate(id: string): Promise<IdCardTemplate | undefined> {
+    const [row] = await db.select().from(idCardTemplates).where(eq(idCardTemplates.id, id));
+    return row;
+  }
+
+  async getActiveIdCardTemplate(eventId?: string): Promise<IdCardTemplate | undefined> {
+    const conditions = [eq(idCardTemplates.isActive, true)];
+    if (eventId) conditions.push(eq(idCardTemplates.eventId, eventId));
+    const [row] = await db.select().from(idCardTemplates).where(and(...conditions));
+    return row;
+  }
+
+  async createIdCardTemplate(data: InsertIdCardTemplate): Promise<IdCardTemplate> {
+    const [row] = await db.insert(idCardTemplates).values(data).returning();
+    return row;
+  }
+
+  async updateIdCardTemplate(id: string, data: Partial<InsertIdCardTemplate>): Promise<IdCardTemplate | undefined> {
+    const [row] = await db
+      .update(idCardTemplates)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(idCardTemplates.id, id))
+      .returning();
+    return row;
+  }
+
+  async deleteIdCardTemplate(id: string): Promise<boolean> {
+    const [row] = await db.delete(idCardTemplates).where(eq(idCardTemplates.id, id)).returning();
+    return !!row;
+  }
+
+  async activateIdCardTemplate(id: string): Promise<boolean> {
+    const template = await this.getIdCardTemplate(id);
+    if (!template) return false;
+    await db
+      .update(idCardTemplates)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(template.eventId ? eq(idCardTemplates.eventId, template.eventId) : sql`true`);
+    await db
+      .update(idCardTemplates)
+      .set({ isActive: true, updatedAt: new Date() })
+      .where(eq(idCardTemplates.id, id));
+    return true;
+  }
+
+  async getPrinterPlugins(): Promise<PrinterPlugin[]> {
+    return db.select().from(printerPlugins).orderBy(desc(printerPlugins.installedAt));
+  }
+
+  async getPrinterPlugin(id: string): Promise<PrinterPlugin | undefined> {
+    const [row] = await db.select().from(printerPlugins).where(eq(printerPlugins.id, id));
+    return row;
+  }
+
+  async getActivePrinterPlugin(): Promise<PrinterPlugin | undefined> {
+    const [row] = await db.select().from(printerPlugins).where(eq(printerPlugins.isActive, true));
+    return row;
+  }
+
+  async createPrinterPlugin(data: InsertPrinterPlugin): Promise<PrinterPlugin> {
+    const [row] = await db.insert(printerPlugins).values(data).returning();
+    return row;
+  }
+
+  async updatePrinterPlugin(id: string, data: Partial<InsertPrinterPlugin>): Promise<PrinterPlugin | undefined> {
+    const [row] = await db
+      .update(printerPlugins)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(printerPlugins.id, id))
+      .returning();
+    return row;
+  }
+
+  async activatePrinterPlugin(id: string): Promise<boolean> {
+    await db.update(printerPlugins).set({ isActive: false, updatedAt: new Date() });
+    const [row] = await db
+      .update(printerPlugins)
+      .set({ isActive: true, updatedAt: new Date() })
+      .where(eq(printerPlugins.id, id))
+      .returning();
+    return !!row;
+  }
+
+  async deletePrinterPlugin(id: string): Promise<boolean> {
+    const [row] = await db.delete(printerPlugins).where(eq(printerPlugins.id, id)).returning();
+    return !!row;
+  }
+
+  async getIdCardPrintLogs(filters?: { employeeId?: string; printedBy?: string; limit?: number }): Promise<IdCardPrintLog[]> {
+    const conditions = [];
+    if (filters?.employeeId) conditions.push(eq(idCardPrintLogs.employeeId, filters.employeeId));
+    if (filters?.printedBy) conditions.push(eq(idCardPrintLogs.printedBy, filters.printedBy));
+    const query = conditions.length
+      ? db.select().from(idCardPrintLogs).where(and(...conditions)).orderBy(desc(idCardPrintLogs.printedAt))
+      : db.select().from(idCardPrintLogs).orderBy(desc(idCardPrintLogs.printedAt));
+    if (filters?.limit) return query.limit(filters.limit);
+    return query;
+  }
+
+  async createIdCardPrintLog(data: InsertIdCardPrintLog): Promise<IdCardPrintLog> {
+    const [row] = await db.insert(idCardPrintLogs).values(data).returning();
+    return row;
+  }
+
+  async getLastPrintDate(employeeId: string): Promise<Date | null> {
+    const [row] = await db
+      .select({ printedAt: idCardPrintLogs.printedAt })
+      .from(idCardPrintLogs)
+      .where(eq(idCardPrintLogs.employeeId, employeeId))
+      .orderBy(desc(idCardPrintLogs.printedAt))
+      .limit(1);
+    return row?.printedAt ?? null;
   }
 }
 

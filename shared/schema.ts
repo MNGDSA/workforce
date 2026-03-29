@@ -789,6 +789,49 @@ export const KSA_REGIONS = [
   "Al Bahah", "Al Jawf", "Qassim",
 ] as const;
 
+// ─── ID Card Templates ──────────────────────────────────────────────────────
+export const idCardTemplates = pgTable("id_card_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  eventId: varchar("event_id").references(() => events.id),
+  layoutConfig: jsonb("layout_config").notNull().default(sql`'{}'::jsonb`),
+  logoUrl: text("logo_url"),
+  backgroundColor: text("background_color").notNull().default("#0f5a3a"),
+  textColor: text("text_color").notNull().default("#ffffff"),
+  fields: jsonb("fields").notNull().default(sql`'[]'::jsonb`),
+  isActive: boolean("is_active").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// ─── Printer Plugins ────────────────────────────────────────────────────────
+export const printerPlugins = pgTable("printer_plugins", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  description: text("description"),
+  pluginConfig: jsonb("plugin_config").notNull().default(sql`'{}'::jsonb`),
+  credentials: jsonb("credentials").notNull().default(sql`'{}'::jsonb`),
+  isActive: boolean("is_active").notNull().default(false),
+  installedAt: timestamp("installed_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// ─── ID Card Print Logs ─────────────────────────────────────────────────────
+export const idCardPrintLogs = pgTable("id_card_print_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").references(() => workforce.id),
+  templateId: varchar("template_id").references(() => idCardTemplates.id),
+  printedBy: varchar("printed_by").references(() => users.id),
+  printerPluginId: varchar("printer_plugin_id"),
+  status: text("status").notNull().default("completed"),
+  printedAt: timestamp("printed_at").notNull().default(sql`now()`),
+}, (t) => [
+  index("idx_print_logs_employee").on(t.employeeId),
+  index("idx_print_logs_printed_by").on(t.printedBy),
+  index("idx_print_logs_printed_at").on(t.printedAt),
+]);
+
 // ─── System Settings ────────────────────────────────────────────────────────
 export const systemSettings = pgTable("system_settings", {
   key: text("key").primaryKey(),
@@ -797,6 +840,29 @@ export const systemSettings = pgTable("system_settings", {
 });
 
 export type SystemSetting = typeof systemSettings.$inferSelect;
+
+export const insertIdCardTemplateSchema = createInsertSchema(idCardTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertIdCardTemplate = z.infer<typeof insertIdCardTemplateSchema>;
+export type IdCardTemplate = typeof idCardTemplates.$inferSelect;
+
+export const insertPrinterPluginSchema = createInsertSchema(printerPlugins).omit({
+  id: true,
+  installedAt: true,
+  updatedAt: true,
+});
+export type InsertPrinterPlugin = z.infer<typeof insertPrinterPluginSchema>;
+export type PrinterPlugin = typeof printerPlugins.$inferSelect;
+
+export const insertIdCardPrintLogSchema = createInsertSchema(idCardPrintLogs).omit({
+  id: true,
+  printedAt: true,
+});
+export type InsertIdCardPrintLog = z.infer<typeof insertIdCardPrintLogSchema>;
+export type IdCardPrintLog = typeof idCardPrintLogs.$inferSelect;
 
 // ─── Query Params Types ─────────────────────────────────────────────────────
 export const candidateQuerySchema = z.object({

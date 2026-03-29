@@ -65,6 +65,9 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { IdCardPreview, printCards, type CardEmployeeData } from "@/lib/card-renderer";
+import type { IdCardTemplate } from "@shared/schema";
+import { Printer } from "lucide-react";
 
 type Employee = {
   id: string;
@@ -192,11 +195,13 @@ function EmployeeDetailDialog({
   open,
   onOpenChange,
   onUpdated,
+  onPrintCard,
 }: {
   employee: Employee | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onUpdated: () => void;
+  onPrintCard?: (emp: Employee) => void;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -385,7 +390,19 @@ function EmployeeDetailDialog({
               {employee.isActive && (
                 <>
                   <Separator className="bg-zinc-800" />
-                  <div className="flex justify-end">
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      className="gap-1.5"
+                      onClick={() => {
+                        if (employee && onPrintCard) {
+                          onPrintCard(employee);
+                        }
+                      }}
+                      data-testid="button-print-id-card"
+                    >
+                      <Printer className="h-4 w-4" /> Print ID Card
+                    </Button>
                     <Button
                       variant="outline"
                       className="border-red-800 text-red-400 hover:bg-red-950/30 hover:text-red-300 gap-1.5"
@@ -621,6 +638,45 @@ export default function WorkforcePage() {
     toast({ title: `Exported ${data.length} employees to Excel` });
   }
 
+  const { data: activeCardTemplate } = useQuery<IdCardTemplate>({
+    queryKey: ["/api/id-card-templates/active"],
+    queryFn: () => apiRequest("GET", "/api/id-card-templates/active").then(r => r.json()),
+    retry: false,
+  });
+
+  function empToCardData(emp: Employee): CardEmployeeData {
+    return {
+      employeeNumber: emp.employeeNumber,
+      fullNameEn: emp.fullNameEn || "—",
+      nationalId: emp.nationalId || undefined,
+      photoUrl: emp.photoUrl || undefined,
+      jobTitle: emp.jobTitle || undefined,
+      eventName: emp.eventName || undefined,
+      phone: emp.phone || undefined,
+    };
+  }
+
+  function handlePrintCards(emps: Employee[]) {
+    if (!activeCardTemplate) {
+      toast({ title: "No active template", description: "Create and activate a template on the ID Cards page first.", variant: "destructive" });
+      return;
+    }
+    const cardData = emps.map(empToCardData);
+    printCards(activeCardTemplate, cardData);
+
+    const user = JSON.parse(localStorage.getItem("workforce_candidate") || localStorage.getItem("workforce_user") || "{}");
+    Promise.all(emps.map(emp =>
+      apiRequest("POST", "/api/id-card-print-logs", {
+        employeeId: emp.id,
+        templateId: activeCardTemplate.id,
+        printedBy: user?.id || null,
+        status: "completed",
+      })
+    )).catch(() => {});
+
+    toast({ title: `Printing ${emps.length} ID card${emps.length !== 1 ? "s" : ""}` });
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -647,6 +703,14 @@ export default function WorkforcePage() {
               <DropdownMenuItem onClick={handleExportCSV} className="gap-2" data-testid="menu-export-csv">
                 <FileText className="h-4 w-4 text-blue-400" />
                 Export to CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handlePrintCards(selectedIds.size > 0 ? selectedEmployees : sortedEmployees)}
+                className="gap-2"
+                data-testid="menu-print-id-cards"
+              >
+                <Printer className="h-4 w-4 text-amber-400" />
+                Print ID Cards{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -864,6 +928,7 @@ export default function WorkforcePage() {
           qc.invalidateQueries({ queryKey: ["/api/workforce"] });
           setSelectedEmployee(null);
         }}
+        onPrintCard={(emp) => handlePrintCards([emp])}
       />
     </DashboardLayout>
   );

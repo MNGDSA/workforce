@@ -1990,5 +1990,148 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
+  // ─── ID Card Templates ────────────────────────────────────────────────────
+  app.get("/api/id-card-templates", async (req: Request, res: Response) => {
+    try {
+      const eventId = req.query.eventId as string | undefined;
+      const templates = await storage.getIdCardTemplates(eventId);
+      return res.json(templates);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/id-card-templates/active", async (req: Request, res: Response) => {
+    try {
+      const eventId = req.query.eventId as string | undefined;
+      const template = await storage.getActiveIdCardTemplate(eventId);
+      if (!template) return res.status(404).json({ message: "No active template found" });
+      return res.json(template);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/id-card-templates/:id", async (req: Request, res: Response) => {
+    try {
+      const template = await storage.getIdCardTemplate(req.params.id);
+      if (!template) return res.status(404).json({ message: "Template not found" });
+      return res.json(template);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/id-card-templates", async (req: Request, res: Response) => {
+    try {
+      const data = z.object({
+        name: z.string().min(1),
+        eventId: z.string().nullable().optional(),
+        layoutConfig: z.any().optional(),
+        logoUrl: z.string().nullable().optional(),
+        backgroundColor: z.string().optional(),
+        textColor: z.string().optional(),
+        fields: z.array(z.any()).optional(),
+        isActive: z.boolean().optional(),
+      }).parse(req.body);
+      const template = await storage.createIdCardTemplate(data);
+      return res.status(201).json(template);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/id-card-templates/:id", async (req: Request, res: Response) => {
+    try {
+      const template = await storage.updateIdCardTemplate(req.params.id, req.body);
+      if (!template) return res.status(404).json({ message: "Template not found" });
+      return res.json(template);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/id-card-templates/:id/activate", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.activateIdCardTemplate(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Template not found" });
+      return res.json({ success: true });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.delete("/api/id-card-templates/:id", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteIdCardTemplate(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Template not found" });
+      return res.status(204).send();
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Printer Plugins ─────────────────────────────────────────────────────
+  app.get("/api/printer-plugins", async (req: Request, res: Response) => {
+    try {
+      const plugins = await storage.getPrinterPlugins();
+      const safe = plugins.map(({ credentials, ...rest }) => rest);
+      return res.json(safe);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/printer-plugins/active", async (req: Request, res: Response) => {
+    try {
+      const plugin = await storage.getActivePrinterPlugin();
+      if (!plugin) return res.status(404).json({ message: "No active printer plugin" });
+      return res.json(plugin);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/printer-plugins", async (req: Request, res: Response) => {
+    try {
+      const plugin = await storage.createPrinterPlugin(req.body);
+      return res.status(201).json(plugin);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/printer-plugins/:id", async (req: Request, res: Response) => {
+    try {
+      const plugin = await storage.updatePrinterPlugin(req.params.id, req.body);
+      if (!plugin) return res.status(404).json({ message: "Plugin not found" });
+      return res.json(plugin);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/printer-plugins/:id/activate", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.activatePrinterPlugin(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Plugin not found" });
+      return res.json({ success: true });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.delete("/api/printer-plugins/:id", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deletePrinterPlugin(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Plugin not found" });
+      return res.status(204).send();
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── ID Card Print Logs ──────────────────────────────────────────────────
+  app.get("/api/id-card-print-logs", async (req: Request, res: Response) => {
+    try {
+      const filters: { employeeId?: string; printedBy?: string; limit?: number } = {};
+      if (req.query.employeeId) filters.employeeId = req.query.employeeId as string;
+      if (req.query.printedBy) filters.printedBy = req.query.printedBy as string;
+      if (req.query.limit) filters.limit = parseInt(req.query.limit as string, 10);
+      const logs = await storage.getIdCardPrintLogs(filters);
+      return res.json(logs);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/id-card-print-logs", async (req: Request, res: Response) => {
+    try {
+      const log = await storage.createIdCardPrintLog(req.body);
+      return res.status(201).json(log);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/id-card-print-logs/bulk", async (req: Request, res: Response) => {
+    try {
+      const { entries } = req.body;
+      if (!Array.isArray(entries)) return res.status(400).json({ message: "entries must be an array" });
+      const logs = await Promise.all(entries.map((e: any) => storage.createIdCardPrintLog(e)));
+      return res.status(201).json(logs);
+    } catch (err) { return handleError(res, err); }
+  });
+
   return httpServer;
 }

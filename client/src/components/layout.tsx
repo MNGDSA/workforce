@@ -22,6 +22,7 @@ import {
   BarChart3,
   UserCheck,
   FileText,
+  CreditCard,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -56,6 +57,7 @@ const recruitmentItems: { href: string; icon: React.ElementType; label: string }
 const topNavItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/workforce", icon: Users,           label: "Workforce" },
+  { href: "/id-cards",  icon: CreditCard,      label: "ID Cards" },
   { href: "/payroll",   icon: Wallet,          label: "Payroll" },
 ];
 

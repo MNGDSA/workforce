@@ -72,7 +72,8 @@ A full-stack event-based job hiring management platform built for Saudi Arabia o
 │   │   ├── roles-access.tsx      ← Business units, users, permissions matrix
 │   │   ├── automation.tsx        ← Real API + toggle rules
 │   │   ├── interviews.tsx        ← UI prototype
-│   │   ├── workforce.tsx         ← UI prototype
+│   │   ├── workforce.tsx         ← UI prototype + Print ID Cards
+│   │   ├── id-cards.tsx          ← Template designer + printers + audit log
 │   │   ├── notifications.tsx     ← UI prototype
 │   │   ├── settings.tsx          ← UI prototype
 │   │   ├── question-sets.tsx     ← Full CRUD question set builder
@@ -112,6 +113,9 @@ Tables with indexes designed for 70k+ candidates:
 | `workforce` | Employee records | employee_number (C000001), candidate, event, salary, active |
 | `automation_rules` | Workflow triggers | — |
 | `notifications` | SMS/email/in-app | recipient, status, created_at |
+| `id_card_templates` | Card design templates | event_id, is_active |
+| `printer_plugins` | Printer integrations (Zebra etc.) | is_active |
+| `id_card_print_logs` | Print audit log | employee_id, printed_by, printed_at |
 
 ### Candidate Table Design Decisions
 - Candidates are identified primarily by their `national_id` (no candidate code)

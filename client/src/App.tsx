@@ -27,6 +27,7 @@ import ReportsPage from "@/pages/reports";
 import ProfilePage from "@/pages/profile";
 import OnboardingPage from "@/pages/onboarding";
 import LegalPage from "@/pages/legal-page";
+import IdCardsPage from "@/pages/id-cards";
 
 function Router() {
   return (
@@ -54,6 +55,7 @@ function Router() {
       <Route path="/reports" component={ReportsPage} />
       <Route path="/profile" component={ProfilePage} />
       <Route path="/onboarding" component={OnboardingPage} />
+      <Route path="/id-cards" component={IdCardsPage} />
       <Route path="/candidate-portal" component={() => (
         <ProfileSetupGate><CandidatePortal /></ProfileSetupGate>
       )} />
