@@ -653,9 +653,9 @@ export default function CandidatePortal() {
       {/* Navbar */}
       <header className="h-16 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-50 px-4 lg:px-8 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <img src="/workforce-logo.svg" alt="Workforce" className="h-8 w-8" />
+          <img src="/workforce-logo.svg" alt="Luxury Carts" className="h-8 w-8" />
           <span className="font-display font-bold text-xl tracking-tight text-white hidden sm:inline-block">
-            WORKFORCE
+            LUXURY CARTS
           </span>
         </div>
 

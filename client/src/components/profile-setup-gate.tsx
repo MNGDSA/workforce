@@ -705,7 +705,7 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
             <Building2 className="h-4 w-4 text-primary-foreground" />
           </div>
           <span className="font-display font-bold text-lg text-white">
-            WORKFORCE<span className="text-primary">.IO</span>
+            LUXURY CARTS
           </span>
         </div>
         <button

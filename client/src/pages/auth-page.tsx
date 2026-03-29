@@ -275,9 +275,9 @@ export default function AuthPage() {
           {/* Logo */}
           <div className="space-y-2">
             <div className="flex items-center gap-3 mb-6">
-              <img src="/workforce-logo.svg" alt="Workforce" className="h-10 w-10" />
+              <img src="/workforce-logo.svg" alt="Luxury Carts" className="h-10 w-10" />
               <span className="font-display font-bold text-2xl tracking-tight text-white">
-                WORKFORCE
+                LUXURY CARTS
               </span>
             </div>
             <h1 className="font-display text-4xl font-bold tracking-tight text-white">
@@ -769,7 +769,7 @@ export default function AuthPage() {
         <div className="relative z-20 max-w-lg p-12 backdrop-blur-md bg-background/30 border border-white/10 rounded-sm shadow-2xl animate-in slide-in-from-right-8 duration-1000 fade-in delay-200">
           <div className="w-12 h-1 bg-primary mb-6" />
           <h2 className="font-display text-3xl font-bold text-white mb-4 leading-tight">
-            Seamlessly Manage Your Temporary Workforce
+            Seamlessly Manage Your Seasonal Workforce
           </h2>
           <p className="text-white/80 text-lg leading-relaxed">
             Advanced scheduling, automated onboarding, and real-time performance tracking for high-volume hiring events.
