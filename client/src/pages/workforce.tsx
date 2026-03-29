@@ -52,6 +52,7 @@ import {
   ArrowDown,
   FileSpreadsheet,
   FileText,
+  Printer,
 } from "lucide-react";
 import {
   Table,
@@ -65,9 +66,13 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { IdCardPreview, printCards, type CardEmployeeData } from "@/lib/card-renderer";
-import type { IdCardTemplate } from "@shared/schema";
-import { Printer } from "lucide-react";
+import {
+  renderIdCardHTML,
+  sendPrintJob,
+  type IdCardTemplateConfig,
+  type EmployeeCardData,
+  type PrinterPluginConfig,
+} from "@/lib/id-card-renderer";
 
 type Employee = {
   id: string;
@@ -229,7 +234,7 @@ function EmployeeDetailDialog({
       onUpdated();
       toast({ title: "Employee updated" });
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const terminateMutation = useMutation({
@@ -243,7 +248,7 @@ function EmployeeDetailDialog({
       onUpdated();
       toast({ title: "Employee terminated" });
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   if (!employee) return null;
@@ -547,6 +552,18 @@ function InfoRow({ icon, label, value, mono }: { icon: React.ReactNode; label: s
   );
 }
 
+function employeeToCardData(emp: Employee): EmployeeCardData {
+  return {
+    fullName: emp.fullNameEn ?? "Unknown",
+    photoUrl: emp.photoUrl,
+    employeeNumber: emp.employeeNumber,
+    nationalId: emp.nationalId,
+    position: emp.jobTitle,
+    eventName: emp.eventName,
+    phone: emp.phone,
+  };
+}
+
 export default function WorkforcePage() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -556,6 +573,8 @@ export default function WorkforcePage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [printingIds, setPrintingIds] = useState<Set<string>>(new Set());
+  const [printProgress, setPrintProgress] = useState<{ total: number; done: number } | null>(null);
 
   const { data: employees = [], isLoading } = useQuery<Employee[]>({
     queryKey: ["/api/workforce", search, statusFilter],
@@ -573,6 +592,17 @@ export default function WorkforcePage() {
     queryKey: ["/api/workforce/stats"],
     queryFn: () => apiRequest("GET", "/api/workforce/stats").then(r => r.json()),
     refetchInterval: 15000,
+  });
+
+  const employeeIds = useMemo(() => employees.map(e => e.id), [employees]);
+  const { data: lastPrintDates = {} } = useQuery<Record<string, string | null>>({
+    queryKey: ["/api/workforce/last-printed-bulk", employeeIds],
+    queryFn: () =>
+      employeeIds.length > 0
+        ? apiRequest("POST", "/api/workforce/last-printed-bulk", { employeeIds }).then(r => r.json())
+        : Promise.resolve({}),
+    enabled: employeeIds.length > 0,
+    refetchInterval: 30000,
   });
 
   const handleSort = useCallback((field: SortField) => {
@@ -638,43 +668,92 @@ export default function WorkforcePage() {
     toast({ title: `Exported ${data.length} employees to Excel` });
   }
 
-  const { data: activeCardTemplate } = useQuery<IdCardTemplate>({
-    queryKey: ["/api/id-card-templates/active"],
-    queryFn: () => apiRequest("GET", "/api/id-card-templates/active").then(r => r.json()),
-    retry: false,
-  });
+  async function handlePrintIdCards(emps: Employee[]) {
+    if (emps.length === 0) return;
+    const ids = new Set(emps.map((e) => e.id));
+    setPrintingIds(ids);
+    setPrintProgress({ total: emps.length, done: 0 });
+    try {
+      const eventId = emps[0]?.eventId;
+      const templateUrl = eventId
+        ? `/api/id-card-templates/active?eventId=${encodeURIComponent(eventId)}`
+        : "/api/id-card-templates/active";
+      let templateRes: Record<string, unknown> | null = null;
+      try {
+        templateRes = await apiRequest("GET", templateUrl).then((r) => r.json());
+      } catch {
+        templateRes = null;
+      }
+      const templateConfig: IdCardTemplateConfig = templateRes
+        ? {
+            name: templateRes.name as string,
+            logoUrl: templateRes.logoUrl as string | null,
+            fields: templateRes.fields as string[],
+            backgroundColor: templateRes.backgroundColor as string,
+            textColor: templateRes.textColor as string,
+            accentColor: templateRes.accentColor as string,
+            layout: (templateRes.layoutConfig as Record<string, unknown>)?.layout as "horizontal" | "vertical" | "compact" | undefined,
+            nameFontSize: (templateRes.layoutConfig as Record<string, unknown>)?.nameFontSize as number | undefined,
+            showBorder: (templateRes.layoutConfig as Record<string, unknown>)?.showBorder as boolean | undefined,
+          }
+        : {
+            name: "Default",
+            logoUrl: null,
+            fields: ["fullName", "photo", "employeeNumber", "nationalId", "position"],
+            backgroundColor: "#1a1a2e",
+            textColor: "#ffffff",
+            accentColor: "#16a34a",
+          };
 
-  function empToCardData(emp: Employee): CardEmployeeData {
-    return {
-      employeeNumber: emp.employeeNumber,
-      fullNameEn: emp.fullNameEn || "—",
-      nationalId: emp.nationalId || undefined,
-      photoUrl: emp.photoUrl || undefined,
-      jobTitle: emp.jobTitle || undefined,
-      eventName: emp.eventName || undefined,
-      phone: emp.phone || undefined,
-    };
-  }
+      let activePlugin: PrinterPluginConfig | null = null;
+      try {
+        const plugins: PrinterPluginConfig[] = await apiRequest("GET", "/api/printer-plugins").then(r => r.json());
+        activePlugin = plugins.find(p => p.isActive) ?? null;
+      } catch {
+        activePlugin = null;
+      }
 
-  function handlePrintCards(emps: Employee[]) {
-    if (!activeCardTemplate) {
-      toast({ title: "No active template", description: "Create and activate a template on the ID Cards page first.", variant: "destructive" });
-      return;
+      const cardData = emps.map(employeeToCardData);
+      const results = await sendPrintJob(templateConfig, cardData, activePlugin);
+      setPrintProgress({ total: emps.length, done: emps.length });
+
+      const statuses = results.map((r, i) => ({
+        employeeId: emps[i].id,
+        status: r.status,
+        error: r.error,
+      }));
+
+      try {
+        await apiRequest("POST", "/api/id-card-print-jobs", {
+          employeeIds: emps.map(e => e.id),
+          templateId: templateRes?.id ?? null,
+          printerPluginId: activePlugin?.id ?? null,
+          statuses,
+        });
+      } catch {
+        // Log failure is non-critical
+      }
+
+      const successCount = results.filter(r => r.status === "success").length;
+      const pendingCount = results.filter(r => r.status === "pending").length;
+      const failCount = results.filter(r => r.status === "failed").length;
+
+      if (failCount === results.length) {
+        toast({ title: "Print failed", description: "All cards failed to print", variant: "destructive" });
+      } else if (failCount > 0) {
+        toast({ title: `Printed ${successCount + pendingCount}/${results.length} cards`, description: `${failCount} failed` });
+      } else {
+        toast({ title: `Printing ${emps.length} ID card${emps.length !== 1 ? "s" : ""}` });
+      }
+
+      qc.invalidateQueries({ queryKey: ["/api/workforce/last-printed-bulk"] });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      toast({ title: "Print failed", description: message, variant: "destructive" });
+    } finally {
+      setPrintingIds(new Set());
+      setPrintProgress(null);
     }
-    const cardData = emps.map(empToCardData);
-    printCards(activeCardTemplate, cardData);
-
-    const user = JSON.parse(localStorage.getItem("workforce_candidate") || localStorage.getItem("workforce_user") || "{}");
-    Promise.all(emps.map(emp =>
-      apiRequest("POST", "/api/id-card-print-logs", {
-        employeeId: emp.id,
-        templateId: activeCardTemplate.id,
-        printedBy: user?.id || null,
-        status: "completed",
-      })
-    )).catch(() => {});
-
-    toast({ title: `Printing ${emps.length} ID card${emps.length !== 1 ? "s" : ""}` });
   }
 
   return (
@@ -705,7 +784,7 @@ export default function WorkforcePage() {
                 Export to CSV
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => handlePrintCards(selectedIds.size > 0 ? selectedEmployees : sortedEmployees)}
+                onClick={() => handlePrintIdCards(selectedIds.size > 0 ? selectedEmployees : sortedEmployees)}
                 className="gap-2"
                 data-testid="menu-print-id-cards"
               >
@@ -775,6 +854,24 @@ export default function WorkforcePage() {
           <div className="flex items-center gap-3 bg-primary/10 border border-primary/30 rounded-sm px-4 py-2.5">
             <span className="text-sm font-medium text-primary">{selectedIds.size} employee{selectedIds.size !== 1 ? "s" : ""} selected</span>
             <span className="text-zinc-600">|</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-primary hover:text-white gap-1.5"
+              onClick={() => handlePrintIdCards(selectedEmployees)}
+              disabled={printingIds.size > 0}
+              data-testid="button-bulk-print-id-cards"
+            >
+              {printingIds.size > 0 ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Printer className="h-3.5 w-3.5" />
+              )}
+              {printProgress
+                ? `Printing ${printProgress.done}/${printProgress.total}...`
+                : `Print ID Cards (${selectedIds.size})`}
+            </Button>
+            <span className="text-zinc-600">|</span>
             <Button variant="ghost" size="sm" className="text-xs text-zinc-400 hover:text-white" onClick={() => setSelectedIds(new Set())}>
               Clear Selection
             </Button>
@@ -826,6 +923,7 @@ export default function WorkforcePage() {
                     <TableHead className="text-muted-foreground hidden lg:table-cell text-right">
                       <SortableHeader label="Salary" field="salary" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     </TableHead>
+                    <TableHead className="text-muted-foreground hidden xl:table-cell">Last Printed</TableHead>
                     <TableHead className="text-muted-foreground hidden md:table-cell">
                       <SortableHeader label="Start Date" field="startDate" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     </TableHead>
@@ -835,7 +933,7 @@ export default function WorkforcePage() {
                       </TableHead>
                     )}
                     <TableHead className="text-muted-foreground">Status</TableHead>
-                    <TableHead className="text-right text-muted-foreground pr-6">View</TableHead>
+                    <TableHead className="text-right text-muted-foreground pr-4">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -887,6 +985,9 @@ export default function WorkforcePage() {
                         <TableCell className="hidden lg:table-cell text-right text-sm text-white font-medium" onClick={() => setSelectedEmployee(emp)}>
                           {emp.salary ? `${Number(emp.salary).toLocaleString()}` : "—"}
                         </TableCell>
+                        <TableCell className="hidden xl:table-cell text-xs text-zinc-400" onClick={() => setSelectedEmployee(emp)} data-testid={`text-last-printed-${emp.id}`}>
+                          {lastPrintDates[emp.id] ? formatDate(lastPrintDates[emp.id]) : <span className="text-zinc-600">Never</span>}
+                        </TableCell>
                         <TableCell className="hidden md:table-cell text-sm text-zinc-400" onClick={() => setSelectedEmployee(emp)}>
                           {formatDate(emp.startDate)}
                         </TableCell>
@@ -900,15 +1001,33 @@ export default function WorkforcePage() {
                             {st.label}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right pr-6" onClick={() => setSelectedEmployee(emp)}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-white"
-                            data-testid={`button-view-${emp.id}`}
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
+                        <TableCell className="text-right pr-4">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-primary"
+                              onClick={(e) => { e.stopPropagation(); handlePrintIdCards([emp]); }}
+                              disabled={printingIds.has(emp.id)}
+                              data-testid={`button-print-id-${emp.id}`}
+                              title="Print ID Card"
+                            >
+                              {printingIds.has(emp.id) ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Printer className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-white"
+                              onClick={() => setSelectedEmployee(emp)}
+                              data-testid={`button-view-${emp.id}`}
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -928,7 +1047,7 @@ export default function WorkforcePage() {
           qc.invalidateQueries({ queryKey: ["/api/workforce"] });
           setSelectedEmployee(null);
         }}
-        onPrintCard={(emp) => handlePrintCards([emp])}
+        onPrintCard={(emp) => handlePrintIdCards([emp])}
       />
     </DashboardLayout>
   );

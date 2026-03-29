@@ -72,8 +72,8 @@ A full-stack event-based job hiring management platform built for Saudi Arabia o
 │   │   ├── roles-access.tsx      ← Business units, users, permissions matrix
 │   │   ├── automation.tsx        ← Real API + toggle rules
 │   │   ├── interviews.tsx        ← UI prototype
-│   │   ├── workforce.tsx         ← UI prototype + Print ID Cards
-│   │   ├── id-cards.tsx          ← Template designer + printers + audit log
+│   │   ├── workforce.tsx         ← Employee mgmt + ID card printing
+│   │   ├── id-cards.tsx          ← Template designer, printer plugins, print audit
 │   │   ├── notifications.tsx     ← UI prototype
 │   │   ├── settings.tsx          ← UI prototype
 │   │   ├── question-sets.tsx     ← Full CRUD question set builder
@@ -86,7 +86,8 @@ A full-stack event-based job hiring management platform built for Saudi Arabia o
 │   │   ├── use-debounce.ts       ← For search inputs
 │   │   └── use-mobile.tsx
 │   └── lib/
-│       └── queryClient.ts        ← API fetch + TanStack Query
+│       ├── queryClient.ts        ← API fetch + TanStack Query
+│       └── id-card-renderer.ts   ← CR-80 card rendering engine
 ├── server/
 │   ├── index.ts          ← Express app entry
 │   ├── routes.ts         ← All API endpoints (/api/*)
@@ -111,6 +112,9 @@ Tables with indexes designed for 70k+ candidates:
 | `applications` | Candidate ↔ Job links | candidate+job (unique), status |
 | `interviews` | Scheduled calls | candidate, scheduled_at, status |
 | `workforce` | Employee records | employee_number (C000001), candidate, event, salary, active |
+| `id_card_templates` | Card template designs | event_id, is_active |
+| `printer_plugins` | Printer integrations (Zebra, etc.) | is_active |
+| `id_card_print_logs` | Print audit trail | employee_id, template_id, printed_at |
 | `automation_rules` | Workflow triggers | — |
 | `notifications` | SMS/email/in-app | recipient, status, created_at |
 | `id_card_templates` | Card design templates | event_id, is_active |

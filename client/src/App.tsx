@@ -26,6 +26,7 @@ import PayrollPage from "@/pages/payroll";
 import ReportsPage from "@/pages/reports";
 import ProfilePage from "@/pages/profile";
 import OnboardingPage from "@/pages/onboarding";
+import IdCardsPage from "@/pages/id-cards";
 import LegalPage from "@/pages/legal-page";
 import IdCardsPage from "@/pages/id-cards";
 

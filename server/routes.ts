@@ -22,6 +22,9 @@ import {
   insertQuestionSetSchema,
   insertContractTemplateSchema,
   candidateQuerySchema,
+  insertIdCardTemplateSchema,
+  insertPrinterPluginSchema,
+  insertIdCardPrintLogSchema,
 } from "@shared/schema";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
 
@@ -1990,11 +1993,11 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  // ─── ID Card Templates ────────────────────────────────────────────────────
+  // ─── ID Card Templates ──────────────────────────────────────────────────────
   app.get("/api/id-card-templates", async (req: Request, res: Response) => {
     try {
       const eventId = req.query.eventId as string | undefined;
-      const templates = await storage.getIdCardTemplates(eventId);
+      const templates = await storage.getIdCardTemplates(eventId ? { eventId } : undefined);
       return res.json(templates);
     } catch (err) { return handleError(res, err); }
   });
@@ -2018,16 +2021,7 @@ export async function registerRoutes(
 
   app.post("/api/id-card-templates", async (req: Request, res: Response) => {
     try {
-      const data = z.object({
-        name: z.string().min(1),
-        eventId: z.string().nullable().optional(),
-        layoutConfig: z.any().optional(),
-        logoUrl: z.string().nullable().optional(),
-        backgroundColor: z.string().optional(),
-        textColor: z.string().optional(),
-        fields: z.array(z.any()).optional(),
-        isActive: z.boolean().optional(),
-      }).parse(req.body);
+      const data = insertIdCardTemplateSchema.parse(req.body);
       const template = await storage.createIdCardTemplate(data);
       return res.status(201).json(template);
     } catch (err) { return handleError(res, err); }
@@ -2035,17 +2029,10 @@ export async function registerRoutes(
 
   app.patch("/api/id-card-templates/:id", async (req: Request, res: Response) => {
     try {
-      const template = await storage.updateIdCardTemplate(req.params.id, req.body);
+      const data = insertIdCardTemplateSchema.partial().parse(req.body);
+      const template = await storage.updateIdCardTemplate(req.params.id, data);
       if (!template) return res.status(404).json({ message: "Template not found" });
       return res.json(template);
-    } catch (err) { return handleError(res, err); }
-  });
-
-  app.post("/api/id-card-templates/:id/activate", async (req: Request, res: Response) => {
-    try {
-      const ok = await storage.activateIdCardTemplate(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Template not found" });
-      return res.json({ success: true });
     } catch (err) { return handleError(res, err); }
   });
 
@@ -2057,16 +2044,23 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  // ─── Printer Plugins ─────────────────────────────────────────────────────
-  app.get("/api/printer-plugins", async (req: Request, res: Response) => {
+  app.post("/api/id-card-templates/:id/activate", async (req: Request, res: Response) => {
     try {
-      const plugins = await storage.getPrinterPlugins();
-      const safe = plugins.map(({ credentials, ...rest }) => rest);
-      return res.json(safe);
+      const ok = await storage.activateIdCardTemplate(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Template not found" });
+      return res.json({ success: true });
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/printer-plugins/active", async (req: Request, res: Response) => {
+  // ─── Printer Plugins ────────────────────────────────────────────────────────
+  app.get("/api/printer-plugins", async (_req: Request, res: Response) => {
+    try {
+      const plugins = await storage.getPrinterPlugins();
+      return res.json(plugins);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/printer-plugins/active", async (_req: Request, res: Response) => {
     try {
       const plugin = await storage.getActivePrinterPlugin();
       if (!plugin) return res.status(404).json({ message: "No active printer plugin" });
@@ -2076,14 +2070,16 @@ export async function registerRoutes(
 
   app.post("/api/printer-plugins", async (req: Request, res: Response) => {
     try {
-      const plugin = await storage.createPrinterPlugin(req.body);
+      const data = insertPrinterPluginSchema.parse(req.body);
+      const plugin = await storage.createPrinterPlugin(data);
       return res.status(201).json(plugin);
     } catch (err) { return handleError(res, err); }
   });
 
   app.patch("/api/printer-plugins/:id", async (req: Request, res: Response) => {
     try {
-      const plugin = await storage.updatePrinterPlugin(req.params.id, req.body);
+      const data = insertPrinterPluginSchema.partial().parse(req.body);
+      const plugin = await storage.updatePrinterPlugin(req.params.id, data);
       if (!plugin) return res.status(404).json({ message: "Plugin not found" });
       return res.json(plugin);
     } catch (err) { return handleError(res, err); }
@@ -2105,31 +2101,88 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  // ─── ID Card Print Logs ──────────────────────────────────────────────────
+  // ─── ID Card Print Logs ─────────────────────────────────────────────────────
   app.get("/api/id-card-print-logs", async (req: Request, res: Response) => {
     try {
-      const filters: { employeeId?: string; printedBy?: string; limit?: number } = {};
-      if (req.query.employeeId) filters.employeeId = req.query.employeeId as string;
-      if (req.query.printedBy) filters.printedBy = req.query.printedBy as string;
-      if (req.query.limit) filters.limit = parseInt(req.query.limit as string, 10);
-      const logs = await storage.getIdCardPrintLogs(filters);
+      const { employeeId, templateId, printedBy, limit } = req.query as Record<string, string>;
+      const logs = await storage.getIdCardPrintLogs({
+        employeeId,
+        templateId,
+        printedBy,
+        limit: limit ? parseInt(limit, 10) : undefined,
+      });
       return res.json(logs);
     } catch (err) { return handleError(res, err); }
   });
 
   app.post("/api/id-card-print-logs", async (req: Request, res: Response) => {
     try {
-      const log = await storage.createIdCardPrintLog(req.body);
+      const data = insertIdCardPrintLogSchema.parse(req.body);
+      const log = await storage.createIdCardPrintLog(data);
       return res.status(201).json(log);
     } catch (err) { return handleError(res, err); }
   });
 
   app.post("/api/id-card-print-logs/bulk", async (req: Request, res: Response) => {
     try {
-      const { entries } = req.body;
-      if (!Array.isArray(entries)) return res.status(400).json({ message: "entries must be an array" });
-      const logs = await Promise.all(entries.map((e: any) => storage.createIdCardPrintLog(e)));
-      return res.status(201).json(logs);
+      const body = req.body as { logs?: unknown[] };
+      if (!Array.isArray(body.logs) || body.logs.length === 0) {
+        return res.status(400).json({ message: "logs array is required" });
+      }
+      const validated = body.logs.map((l) => insertIdCardPrintLogSchema.parse(l));
+      const created = await storage.bulkCreateIdCardPrintLogs(validated);
+      return res.status(201).json(created);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/id-card-print-jobs", async (req: Request, res: Response) => {
+    try {
+      const { employeeIds, templateId, printerPluginId, statuses } = req.body as {
+        employeeIds: string[];
+        templateId?: string | null;
+        printerPluginId?: string | null;
+        statuses: { employeeId: string; status: string; error?: string }[];
+      };
+      if (!Array.isArray(employeeIds) || employeeIds.length === 0) {
+        return res.status(400).json({ message: "employeeIds array is required" });
+      }
+      if (!Array.isArray(statuses)) {
+        return res.status(400).json({ message: "statuses array is required" });
+      }
+      const logEntries = statuses.map((s) =>
+        insertIdCardPrintLogSchema.parse({
+          employeeId: s.employeeId,
+          templateId: templateId ?? null,
+          printedBy: null,
+          printerPluginId: printerPluginId ?? null,
+          status: s.status === "success" ? "success" : s.status === "pending" ? "pending" : "failed",
+          printedAt: new Date().toISOString(),
+        })
+      );
+      const created = await storage.bulkCreateIdCardPrintLogs(logEntries);
+      return res.status(201).json({ logged: created.length, logs: created });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/workforce/:id/last-printed", async (req: Request, res: Response) => {
+    try {
+      const date = await storage.getLastPrintDate(req.params.id);
+      return res.json({ lastPrintedAt: date?.toISOString() ?? null });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/workforce/last-printed-bulk", async (req: Request, res: Response) => {
+    try {
+      const { employeeIds } = req.body as { employeeIds?: string[] };
+      if (!Array.isArray(employeeIds)) {
+        return res.status(400).json({ message: "employeeIds array required" });
+      }
+      const results: Record<string, string | null> = {};
+      for (const id of employeeIds) {
+        const date = await storage.getLastPrintDate(id);
+        results[id] = date?.toISOString() ?? null;
+      }
+      return res.json(results);
     } catch (err) { return handleError(res, err); }
   });
 

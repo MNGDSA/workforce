@@ -15,8 +15,17 @@ import {
   questionSets,
   smsPlugins,
   otpVerifications,
+  idCardTemplates,
+  printerPlugins,
+  idCardPrintLogs,
   type OtpVerification,
   type InsertOtpVerification,
+  type IdCardTemplate,
+  type InsertIdCardTemplate,
+  type PrinterPlugin,
+  type InsertPrinterPlugin,
+  type IdCardPrintLog,
+  type InsertIdCardPrintLog,
   type User,
   type InsertUser,
   type Candidate,
@@ -53,15 +62,6 @@ import {
   type CandidateContract,
   type InsertCandidateContract,
   systemSettings,
-  idCardTemplates,
-  printerPlugins,
-  idCardPrintLogs,
-  type IdCardTemplate,
-  type InsertIdCardTemplate,
-  type PrinterPlugin,
-  type InsertPrinterPlugin,
-  type IdCardPrintLog,
-  type InsertIdCardPrintLog,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull } from "drizzle-orm";
 
@@ -212,7 +212,7 @@ export interface IStorage {
   updateCandidateContract(id: string, data: Partial<InsertCandidateContract>): Promise<CandidateContract | undefined>;
 
   // ID Card Templates
-  getIdCardTemplates(eventId?: string): Promise<IdCardTemplate[]>;
+  getIdCardTemplates(filters?: { eventId?: string }): Promise<IdCardTemplate[]>;
   getIdCardTemplate(id: string): Promise<IdCardTemplate | undefined>;
   getActiveIdCardTemplate(eventId?: string): Promise<IdCardTemplate | undefined>;
   createIdCardTemplate(data: InsertIdCardTemplate): Promise<IdCardTemplate>;
@@ -226,12 +226,13 @@ export interface IStorage {
   getActivePrinterPlugin(): Promise<PrinterPlugin | undefined>;
   createPrinterPlugin(data: InsertPrinterPlugin): Promise<PrinterPlugin>;
   updatePrinterPlugin(id: string, data: Partial<InsertPrinterPlugin>): Promise<PrinterPlugin | undefined>;
-  activatePrinterPlugin(id: string): Promise<boolean>;
   deletePrinterPlugin(id: string): Promise<boolean>;
+  activatePrinterPlugin(id: string): Promise<boolean>;
 
   // ID Card Print Logs
-  getIdCardPrintLogs(filters?: { employeeId?: string; printedBy?: string; limit?: number }): Promise<IdCardPrintLog[]>;
+  getIdCardPrintLogs(filters?: { employeeId?: string; templateId?: string; printedBy?: string; limit?: number }): Promise<Record<string, unknown>[]>;
   createIdCardPrintLog(data: InsertIdCardPrintLog): Promise<IdCardPrintLog>;
+  bulkCreateIdCardPrintLogs(data: InsertIdCardPrintLog[]): Promise<IdCardPrintLog[]>;
   getLastPrintDate(employeeId: string): Promise<Date | null>;
 
   // System Settings
@@ -1490,13 +1491,15 @@ export class DatabaseStorage implements IStorage {
       });
   }
 
-  async getIdCardTemplates(eventId?: string): Promise<IdCardTemplate[]> {
-    const conditions = [];
-    if (eventId) conditions.push(eq(idCardTemplates.eventId, eventId));
-    const rows = conditions.length
-      ? await db.select().from(idCardTemplates).where(and(...conditions)).orderBy(desc(idCardTemplates.createdAt))
-      : await db.select().from(idCardTemplates).orderBy(desc(idCardTemplates.createdAt));
-    return rows;
+  // ─── ID Card Templates ──────────────────────────────────────────────────────
+  async getIdCardTemplates(filters?: { eventId?: string }): Promise<IdCardTemplate[]> {
+    const conditions: any[] = [];
+    if (filters?.eventId) conditions.push(eq(idCardTemplates.eventId, filters.eventId));
+    return db
+      .select()
+      .from(idCardTemplates)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(idCardTemplates.createdAt));
   }
 
   async getIdCardTemplate(id: string): Promise<IdCardTemplate | undefined> {
@@ -1507,8 +1510,21 @@ export class DatabaseStorage implements IStorage {
   async getActiveIdCardTemplate(eventId?: string): Promise<IdCardTemplate | undefined> {
     const conditions = [eq(idCardTemplates.isActive, true)];
     if (eventId) conditions.push(eq(idCardTemplates.eventId, eventId));
-    const [row] = await db.select().from(idCardTemplates).where(and(...conditions));
-    return row;
+    const [row] = await db
+      .select()
+      .from(idCardTemplates)
+      .where(and(...conditions))
+      .limit(1);
+    if (row) return row;
+    if (eventId) {
+      const [fallback] = await db
+        .select()
+        .from(idCardTemplates)
+        .where(and(eq(idCardTemplates.isActive, true), isNull(idCardTemplates.eventId)))
+        .limit(1);
+      return fallback;
+    }
+    return undefined;
   }
 
   async createIdCardTemplate(data: InsertIdCardTemplate): Promise<IdCardTemplate> {
@@ -1526,8 +1542,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteIdCardTemplate(id: string): Promise<boolean> {
-    const [row] = await db.delete(idCardTemplates).where(eq(idCardTemplates.id, id)).returning();
-    return !!row;
+    const result = await db.delete(idCardTemplates).where(eq(idCardTemplates.id, id)).returning();
+    return result.length > 0;
   }
 
   async activateIdCardTemplate(id: string): Promise<boolean> {
@@ -1536,16 +1552,22 @@ export class DatabaseStorage implements IStorage {
     await db
       .update(idCardTemplates)
       .set({ isActive: false, updatedAt: new Date() })
-      .where(template.eventId ? eq(idCardTemplates.eventId, template.eventId) : sql`true`);
-    await db
+      .where(
+        template.eventId
+          ? eq(idCardTemplates.eventId, template.eventId)
+          : isNull(idCardTemplates.eventId)
+      );
+    const [updated] = await db
       .update(idCardTemplates)
       .set({ isActive: true, updatedAt: new Date() })
-      .where(eq(idCardTemplates.id, id));
-    return true;
+      .where(eq(idCardTemplates.id, id))
+      .returning();
+    return !!updated;
   }
 
+  // ─── Printer Plugins ────────────────────────────────────────────────────────
   async getPrinterPlugins(): Promise<PrinterPlugin[]> {
-    return db.select().from(printerPlugins).orderBy(desc(printerPlugins.installedAt));
+    return db.select().from(printerPlugins).orderBy(desc(printerPlugins.createdAt));
   }
 
   async getPrinterPlugin(id: string): Promise<PrinterPlugin | undefined> {
@@ -1554,7 +1576,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getActivePrinterPlugin(): Promise<PrinterPlugin | undefined> {
-    const [row] = await db.select().from(printerPlugins).where(eq(printerPlugins.isActive, true));
+    const [row] = await db
+      .select()
+      .from(printerPlugins)
+      .where(eq(printerPlugins.isActive, true))
+      .limit(1);
     return row;
   }
 
@@ -1572,36 +1598,66 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
+  async deletePrinterPlugin(id: string): Promise<boolean> {
+    const result = await db.delete(printerPlugins).where(eq(printerPlugins.id, id)).returning();
+    return result.length > 0;
+  }
+
   async activatePrinterPlugin(id: string): Promise<boolean> {
+    const target = await this.getPrinterPlugin(id);
+    if (!target) return false;
     await db.update(printerPlugins).set({ isActive: false, updatedAt: new Date() });
-    const [row] = await db
+    const [updated] = await db
       .update(printerPlugins)
       .set({ isActive: true, updatedAt: new Date() })
       .where(eq(printerPlugins.id, id))
       .returning();
-    return !!row;
+    return !!updated;
   }
 
-  async deletePrinterPlugin(id: string): Promise<boolean> {
-    const [row] = await db.delete(printerPlugins).where(eq(printerPlugins.id, id)).returning();
-    return !!row;
-  }
-
-  async getIdCardPrintLogs(filters?: { employeeId?: string; printedBy?: string; limit?: number }): Promise<IdCardPrintLog[]> {
-    const conditions = [];
+  // ─── ID Card Print Logs ─────────────────────────────────────────────────────
+  async getIdCardPrintLogs(filters?: { employeeId?: string; templateId?: string; printedBy?: string; limit?: number }): Promise<Record<string, unknown>[]> {
+    const conditions: ReturnType<typeof eq>[] = [];
     if (filters?.employeeId) conditions.push(eq(idCardPrintLogs.employeeId, filters.employeeId));
+    if (filters?.templateId) conditions.push(eq(idCardPrintLogs.templateId, filters.templateId));
     if (filters?.printedBy) conditions.push(eq(idCardPrintLogs.printedBy, filters.printedBy));
-    const query = conditions.length
-      ? db.select().from(idCardPrintLogs).where(and(...conditions)).orderBy(desc(idCardPrintLogs.printedAt))
-      : db.select().from(idCardPrintLogs).orderBy(desc(idCardPrintLogs.printedAt));
-    if (filters?.limit) return query.limit(filters.limit);
-    return query;
+
+    const rows = await db
+      .select({
+        id: idCardPrintLogs.id,
+        employeeId: idCardPrintLogs.employeeId,
+        templateId: idCardPrintLogs.templateId,
+        printedBy: idCardPrintLogs.printedBy,
+        printerPluginId: idCardPrintLogs.printerPluginId,
+        status: idCardPrintLogs.status,
+        printedAt: idCardPrintLogs.printedAt,
+        employeeNumber: workforce.employeeNumber,
+        employeeName: candidates.fullNameEn,
+        templateName: idCardTemplates.name,
+        printedByName: users.fullName,
+      })
+      .from(idCardPrintLogs)
+      .leftJoin(workforce, eq(idCardPrintLogs.employeeId, workforce.id))
+      .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
+      .leftJoin(idCardTemplates, eq(idCardPrintLogs.templateId, idCardTemplates.id))
+      .leftJoin(users, eq(idCardPrintLogs.printedBy, users.id))
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(idCardPrintLogs.printedAt))
+      .limit(filters?.limit ?? 200);
+
+    return rows;
   }
 
   async createIdCardPrintLog(data: InsertIdCardPrintLog): Promise<IdCardPrintLog> {
     const [row] = await db.insert(idCardPrintLogs).values(data).returning();
     return row;
   }
+
+  async bulkCreateIdCardPrintLogs(data: InsertIdCardPrintLog[]): Promise<IdCardPrintLog[]> {
+    if (data.length === 0) return [];
+    return db.insert(idCardPrintLogs).values(data).returning();
+  }
+
 
   async getLastPrintDate(employeeId: string): Promise<Date | null> {
     const [row] = await db
