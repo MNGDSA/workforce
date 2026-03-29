@@ -615,7 +615,11 @@ export default function CandidatePortal() {
     raw.languages      = normalizeTags(profileLangs);
     raw.educationLevel = profileEduLevel || undefined;
     raw.major          = profileEduLevel === "University and higher" ? (profileMajor || undefined) : null;
-    if (raw.ibanNumber && !/^SA\d{22}$/.test(String(raw.ibanNumber))) {
+    if (!raw.ibanNumber || !String(raw.ibanNumber).trim()) {
+      toast({ title: "IBAN Required", description: "Please enter your Saudi IBAN number for salary transfers.", variant: "destructive" });
+      return;
+    }
+    if (!/^SA\d{22}$/.test(String(raw.ibanNumber))) {
       toast({ title: "Invalid IBAN", description: "IBAN must be SA followed by 22 digits (24 characters total)", variant: "destructive" });
       return;
     }
@@ -1397,12 +1401,13 @@ export default function CandidatePortal() {
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Bank Details</p>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-white">IBAN Number</label>
+                    <label className="text-sm font-medium text-white">IBAN Number <span className="text-red-400">*</span></label>
                     <Input
                       name="ibanNumber"
                       defaultValue={String(candidateProfile?.ibanNumber ?? "")}
                       placeholder="SA0000000000000000000000"
                       maxLength={24}
+                      required
                       className="bg-background border-border font-mono"
                       data-testid="input-iban"
                     />
