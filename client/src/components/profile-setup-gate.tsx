@@ -338,7 +338,6 @@ function Step1Form({
             ))}
           </div>
         )} />
-        {errors.maritalStatus && <p className="text-red-400 text-xs">{errors.maritalStatus.message}</p>}
       </FieldWrapper>
 
       <div className="flex justify-end pt-2">
