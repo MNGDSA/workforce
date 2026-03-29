@@ -57,13 +57,13 @@ const recruitmentItems: { href: string; icon: React.ElementType; label: string }
 const topNavItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/workforce", icon: Users,           label: "Workforce" },
-  { href: "/id-cards",  icon: CreditCard,      label: "ID Cards" },
   { href: "/payroll",   icon: Wallet,          label: "Payroll" },
 ];
 
-const settingsPaths = ["/settings", "/automation"];
+const settingsPaths = ["/settings", "/automation", "/id-cards"];
 
 const settingsSubItems = [
+  { href: "/id-cards",  icon: CreditCard,      label: "ID Cards" },
   { href: "/automation", icon: Workflow, label: "Rules & Automation" },
 ];
 
