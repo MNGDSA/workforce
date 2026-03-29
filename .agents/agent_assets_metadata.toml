@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "sxPzKZGuorW_bqdyBkJNg"
+uri = "file://Candidate_Journey_Flow.pdf"
+type = "pdf"
+title = "Candidate Journey Business Flow"
