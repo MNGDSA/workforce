@@ -432,7 +432,7 @@ function Step2Form({
             Bank Details
           </Label>
           <p className="text-xs text-muted-foreground mt-0.5">Your Saudi IBAN number for salary transfers.</p>
-          <FieldWrapper label="IBAN Number *" error={errors.ibanNumber?.message}>
+          <FieldWrapper label="IBAN Number" required error={errors.ibanNumber?.message}>
             <Input
               {...register("ibanNumber", {
                 onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
