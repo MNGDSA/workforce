@@ -23,6 +23,12 @@ import {
   Info,
   Archive,
   ArchiveRestore,
+  Eye,
+  Pencil,
+  MapPin,
+  DollarSign,
+  Target,
+  Clock,
 } from "lucide-react";
 import {
   Table,
@@ -302,11 +308,170 @@ function InfoTooltip({ text }: { text: string }) {
   );
 }
 
+function ViewEventDialog({ event, open, onOpenChange }: { event: Event | null; open: boolean; onOpenChange: (v: boolean) => void }) {
+  if (!event) return null;
+  const pct = event.targetHeadcount > 0 ? Math.round((event.filledPositions / event.targetHeadcount) * 100) : 0;
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg bg-card border-border">
+        <DialogHeader>
+          <DialogTitle className="text-white font-display text-xl">Event Details</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 pt-1">
+          <div>
+            <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1">Event Name</p>
+            <p className="text-white font-medium" data-testid="view-event-name">{event.name}</p>
+          </div>
+          {event.description && (
+            <div>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1">Description</p>
+              <p className="text-white text-sm" data-testid="view-event-description">{event.description}</p>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> Start Date</p>
+              <p className="text-white text-sm">{event.startDate}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><Clock className="h-3 w-3" /> End Date</p>
+              <p className="text-white text-sm">{event.endDate}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><MapPin className="h-3 w-3" /> Region</p>
+              <p className="text-white text-sm">{event.region || "—"}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1">Status</p>
+              <Badge variant="outline" className={`font-medium border-0 capitalize ${statusStyles[event.status] ?? "bg-muted text-muted-foreground"}`}>
+                {event.status}
+              </Badge>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><Target className="h-3 w-3" /> Hiring Progress</p>
+              <p className="text-white text-sm">{event.filledPositions} / {event.targetHeadcount} ({pct}%)</p>
+              <Progress value={pct} className="h-1.5 mt-1.5" />
+            </div>
+            {event.budget != null && (
+              <div>
+                <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><DollarSign className="h-3 w-3" /> Budget</p>
+                <p className="text-white text-sm">{Number(event.budget).toLocaleString()} SAR</p>
+              </div>
+            )}
+          </div>
+          {event.createdBy && (
+            <div>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1">Created By</p>
+              <p className="text-white text-sm">{event.createdBy}</p>
+            </div>
+          )}
+        </div>
+        <DialogFooter className="pt-2">
+          <Button variant="ghost" className="text-muted-foreground" onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditEventDialog({ event, open, onOpenChange }: { event: Event | null; open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const form = useForm<CreateEventForm>({
+    resolver: zodResolver(createEventSchema),
+    values: event ? {
+      name: event.name,
+      description: event.description ?? "",
+      startDate: event.startDate,
+      endDate: event.endDate,
+      region: event.region ?? "",
+      targetHeadcount: event.targetHeadcount,
+      budget: event.budget != null ? Number(event.budget) : undefined,
+      status: event.status as "upcoming" | "active",
+    } : undefined,
+  });
+
+  const updateEvent = useMutation({
+    mutationFn: (data: CreateEventForm) =>
+      apiRequest("PATCH", `/api/events/${event!.id}`, data).then((r) => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      toast({ title: "Event updated", description: "Changes saved successfully." });
+      onOpenChange(false);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update event.", variant: "destructive" });
+    },
+  });
+
+  if (!event) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg bg-card border-border">
+        <DialogHeader>
+          <DialogTitle className="text-white font-display text-xl">Edit Event</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((data) => updateEvent.mutate(data))} className="space-y-5 pt-1">
+            <FormField control={form.control} name="name" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Event Name <span className="text-primary">*</span></FormLabel>
+                <FormControl><Input placeholder="e.g. Hajj 2026" className="h-10 bg-muted/30 border-border rounded-sm" data-testid="edit-event-name" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="description" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Description</FormLabel>
+                <FormControl><Textarea placeholder="Brief overview..." rows={3} className="bg-muted/30 border-border rounded-sm resize-none" data-testid="edit-event-description" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <div className="w-full h-px bg-border" />
+            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Timeline</p>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={form.control} name="startDate" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Start Date <span className="text-primary">*</span></FormLabel>
+                  <FormControl><DatePickerField value={field.value} onChange={field.onChange} className="h-10 bg-muted/30 border-border rounded-sm" data-testid="edit-event-start-date" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="endDate" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">End Date <span className="text-primary">*</span></FormLabel>
+                  <FormControl><DatePickerField value={field.value} onChange={field.onChange} className="h-10 bg-muted/30 border-border rounded-sm" data-testid="edit-event-end-date" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
+            <DialogFooter className="pt-1 flex gap-2 sm:justify-between">
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground">Cancel</Button>
+              <Button type="submit" className="bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs" disabled={updateEvent.isPending} data-testid="button-save-event">
+                {updateEvent.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Pencil className="mr-2 h-4 w-4" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function EventsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [viewEvent, setViewEvent] = useState<Event | null>(null);
+  const [editEvent, setEditEvent] = useState<Event | null>(null);
 
   const { data: eventsList = [], isLoading } = useQuery<Event[]>({
     queryKey: ["/api/events", showArchived],
@@ -355,6 +520,8 @@ export default function EventsPage() {
         </div>
 
         <CreateEventDialog open={createOpen} onOpenChange={setCreateOpen} />
+        <ViewEventDialog event={viewEvent} open={!!viewEvent} onOpenChange={(v) => { if (!v) setViewEvent(null); }} />
+        <EditEventDialog event={editEvent} open={!!editEvent} onOpenChange={(v) => { if (!v) setEditEvent(null); }} />
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="bg-card border-border shadow-sm border-l-4 border-l-primary">
@@ -510,18 +677,26 @@ export default function EventsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-44">
-                              <DropdownMenuItem>View Details</DropdownMenuItem>
-                              <DropdownMenuItem>Edit Event</DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              {evt.status === "upcoming" && (
-                                <DropdownMenuItem onClick={() => updateStatus.mutate({ id: evt.id, status: "active" })}>
-                                  Activate
-                                </DropdownMenuItem>
-                              )}
-                              {evt.status === "active" && (
-                                <DropdownMenuItem onClick={() => updateStatus.mutate({ id: evt.id, status: "closed" })}>
-                                  Close Event
-                                </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setViewEvent(evt)} data-testid={`button-view-event-${evt.id}`}>
+                                <Eye className="mr-2 h-4 w-4" /> View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setEditEvent(evt)} data-testid={`button-edit-event-${evt.id}`}>
+                                <Pencil className="mr-2 h-4 w-4" /> Edit Event
+                              </DropdownMenuItem>
+                              {(evt.status === "upcoming" || evt.status === "active") && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  {evt.status === "upcoming" && (
+                                    <DropdownMenuItem onClick={() => updateStatus.mutate({ id: evt.id, status: "active" })}>
+                                      Activate
+                                    </DropdownMenuItem>
+                                  )}
+                                  {evt.status === "active" && (
+                                    <DropdownMenuItem onClick={() => updateStatus.mutate({ id: evt.id, status: "closed" })}>
+                                      Close Event
+                                    </DropdownMenuItem>
+                                  )}
+                                </>
                               )}
                               <DropdownMenuSeparator />
                               {evt.archivedAt ? (
