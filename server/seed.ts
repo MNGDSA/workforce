@@ -91,7 +91,7 @@ async function seed() {
     .onConflictDoNothing();
 
   // ─── Events ───────────────────────────────────────────────────────────────
-  const [event1] = await db
+  const insertedEvents = await db
     .insert(events)
     .values([
       {
@@ -131,92 +131,104 @@ async function seed() {
     .onConflictDoNothing()
     .returning();
 
-  // ─── Job Postings ─────────────────────────────────────────────────────────
-  await db
-    .insert(jobPostings)
-    .values([
-      {
-        title: "Ramadan 2026 Event Jobs",
-        titleAr: "وظائف موسم رمضان 2026",
-        description: "Event-based positions available for Ramadan 2026 operations across various departments.",
-        requirements: "Minimum 1 year experience in the relevant field. Ability to work long hours during Ramadan.",
-        location: "Makkah",
-        region: "Makkah",
-        department: "Operations",
-        type: "event_based",
-        salaryMin: "4500.00",
-        salaryMax: "6000.00",
-        openings: 500,
-        status: "active",
-        deadline: "2026-05-15",
-        skills: ["crowd management", "first aid", "communication"],
-      },
-      {
-        title: "Shuttle Bus Driver",
-        titleAr: "سائق حافلة المكوك",
-        description: "Transport pilgrims between designated zones safely and efficiently.",
-        requirements: "Valid Saudi driving license. CDL preferred. Clean driving record.",
-        location: "Makkah",
-        region: "Makkah",
-        department: "Transportation",
-        type: "event_based",
-        salaryMin: "5000.00",
-        salaryMax: "7000.00",
-        openings: 300,
-        status: "active",
-        deadline: "2026-05-01",
-        skills: ["driving", "navigation", "customer service"],
-      },
-      {
-        title: "Hajj 2026 Event Jobs",
-        titleAr: "وظائف موسم الحج 2026",
-        description: "Event-based positions available for Hajj 2026 operations including medical, logistics, and crowd management.",
-        requirements: "Relevant certification required. BLS/ACLS preferred for medical roles.",
-        location: "Mina & Arafat",
-        region: "Makkah",
-        department: "Medical",
-        type: "event_based",
-        salaryMin: "7000.00",
-        salaryMax: "10000.00",
-        openings: 200,
-        status: "active",
-        deadline: "2026-04-30",
-        skills: ["first aid", "BLS", "emergency response"],
-      },
-      {
-        title: "Food Service Coordinator",
-        titleAr: "منسق خدمات الغذاء",
-        description: "Coordinate large-scale food distribution operations for pilgrims.",
-        requirements: "Food safety certification. Experience in large-scale catering preferred.",
-        location: "Multiple Sites",
-        region: "Makkah",
-        department: "Catering",
-        type: "event_based",
-        salaryMin: "3500.00",
-        salaryMax: "5000.00",
-        openings: 150,
-        status: "draft",
-        deadline: "2026-05-20",
-        skills: ["food safety", "logistics", "team coordination"],
-      },
-      {
-        title: "Translation Services Officer",
-        titleAr: "ضابط خدمات الترجمة",
-        description: "Provide real-time translation assistance for international pilgrims.",
-        requirements: "Fluency in Arabic plus 2 additional languages (English, Urdu, Indonesian, Turkish preferred).",
-        location: "Holy Sites",
-        region: "Makkah",
-        department: "Guest Services",
-        type: "event_based",
-        salaryMin: "6000.00",
-        salaryMax: "9000.00",
-        openings: 100,
-        status: "active",
-        deadline: "2026-05-10",
-        skills: ["translation", "multilingual", "cultural sensitivity"],
-      },
-    ])
-    .onConflictDoNothing();
+  const hajjEvent = insertedEvents[0];
+  const ramadanEvent = insertedEvents[1];
+
+  if (!hajjEvent || !ramadanEvent) {
+    console.log("⚠️  Events already exist — skipping job postings seed");
+  } else {
+    // ─── Job Postings ─────────────────────────────────────────────────────────
+    await db
+      .insert(jobPostings)
+      .values([
+        {
+          title: "Ramadan 2026 Event Jobs",
+          titleAr: "وظائف موسم رمضان 2026",
+          description: "Event-based positions available for Ramadan 2026 operations across various departments.",
+          requirements: "Minimum 1 year experience in the relevant field. Ability to work long hours during Ramadan.",
+          location: "Makkah",
+          region: "Makkah",
+          department: "Operations",
+          type: "seasonal_full_time",
+          salaryMin: "4500.00",
+          salaryMax: "6000.00",
+          openings: 500,
+          status: "active",
+          eventId: ramadanEvent.id,
+          deadline: "2026-05-15",
+          skills: ["crowd management", "first aid", "communication"],
+        },
+        {
+          title: "Shuttle Bus Driver",
+          titleAr: "سائق حافلة المكوك",
+          description: "Transport pilgrims between designated zones safely and efficiently.",
+          requirements: "Valid Saudi driving license. CDL preferred. Clean driving record.",
+          location: "Makkah",
+          region: "Makkah",
+          department: "Transportation",
+          type: "seasonal_full_time",
+          salaryMin: "5000.00",
+          salaryMax: "7000.00",
+          openings: 300,
+          status: "active",
+          eventId: ramadanEvent.id,
+          deadline: "2026-05-01",
+          skills: ["driving", "navigation", "customer service"],
+        },
+        {
+          title: "Hajj 2026 Event Jobs",
+          titleAr: "وظائف موسم الحج 2026",
+          description: "Event-based positions available for Hajj 2026 operations including medical, logistics, and crowd management.",
+          requirements: "Relevant certification required. BLS/ACLS preferred for medical roles.",
+          location: "Mina & Arafat",
+          region: "Makkah",
+          department: "Medical",
+          type: "seasonal_full_time",
+          salaryMin: "7000.00",
+          salaryMax: "10000.00",
+          openings: 200,
+          status: "active",
+          eventId: hajjEvent.id,
+          deadline: "2026-04-30",
+          skills: ["first aid", "BLS", "emergency response"],
+        },
+        {
+          title: "Food Service Coordinator",
+          titleAr: "منسق خدمات الغذاء",
+          description: "Coordinate large-scale food distribution operations for pilgrims.",
+          requirements: "Food safety certification. Experience in large-scale catering preferred.",
+          location: "Multiple Sites",
+          region: "Makkah",
+          department: "Catering",
+          type: "seasonal_full_time",
+          salaryMin: "3500.00",
+          salaryMax: "5000.00",
+          openings: 150,
+          status: "draft",
+          eventId: hajjEvent.id,
+          deadline: "2026-05-20",
+          skills: ["food safety", "logistics", "team coordination"],
+        },
+        {
+          title: "Translation Services Officer",
+          titleAr: "ضابط خدمات الترجمة",
+          description: "Provide real-time translation assistance for international pilgrims.",
+          requirements: "Fluency in Arabic plus 2 additional languages (English, Urdu, Indonesian, Turkish preferred).",
+          location: "Holy Sites",
+          region: "Makkah",
+          department: "Guest Services",
+          type: "seasonal_full_time",
+          salaryMin: "6000.00",
+          salaryMax: "9000.00",
+          openings: 100,
+          status: "active",
+          eventId: hajjEvent.id,
+          deadline: "2026-05-10",
+          skills: ["translation", "multilingual", "cultural sensitivity"],
+        },
+      ])
+      .onConflictDoNothing();
+  }
 
   console.log("✅ Seed complete!");
 }

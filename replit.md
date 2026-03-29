@@ -295,7 +295,7 @@ RETURN TO POOL
 3. **SMP contract = assignment record** — links pool candidates or workforce employees to a company + event. Does not own candidate data.
 4. **SMP transfers are simple** — remove from Contract A, attach to Contract B. No data loss.
 5. **Deduplication** — bulk upload matches existing candidates by national ID/phone before creating new profiles.
-6. **Event anchors everything** — job posts and SMP contracts both hang off an event.
+6. **Event anchors everything** — job posts (`eventId` required/non-null) and SMP contracts both hang off an event. Job types: `seasonal_full_time` and `seasonal_part_time`.
 7. **Sequential events only** — same candidate cannot be in two events simultaneously.
 8. **`lastInterviewedAt` on candidate profile** — persists across events, badge + filter in interview scheduling.
 9. **Application status `not_shortlisted`** — professional HR term for rejection.

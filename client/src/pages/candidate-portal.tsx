@@ -198,7 +198,7 @@ function salaryLabel(job: JobPosting) {
 }
 
 function typeLabel(type: string) {
-  return type === "full_time" ? "Full Time" : type === "part_time" ? "Part Time" : type;
+  return type === "seasonal_full_time" ? "Seasonal Full-Time" : type === "seasonal_part_time" ? "Seasonal Part-Time" : type === "full_time" ? "Full Time" : type === "part_time" ? "Part Time" : type;
 }
 
 function getApplicationBadge(deadline: string | undefined, status: string) {

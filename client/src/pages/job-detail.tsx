@@ -41,6 +41,8 @@ type JobPosting = {
 
 function typeLabel(type: string) {
   const map: Record<string, string> = {
+    seasonal_full_time: "Seasonal Full-Time",
+    seasonal_part_time: "Seasonal Part-Time",
     full_time: "Full Time",
     part_time: "Part Time",
     event_based: "Event-based",

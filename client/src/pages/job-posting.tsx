@@ -88,11 +88,20 @@ const statusLabel: Record<string, string> = {
   filled: "Filled",
 };
 
+const jobTypeLabel: Record<string, string> = {
+  seasonal_full_time: "Seasonal FT",
+  seasonal_part_time: "Seasonal PT",
+  full_time: "Full Time",
+  part_time: "Part Time",
+  event_based: "Event-based",
+};
+
 
 // ─── Post Job Dialog ─────────────────────────────────────────────────────────
 const postJobSchema = z.object({
   title: z.string().min(3, "Job title is required"),
-  type: z.enum(["full_time", "part_time"]),
+  eventId: z.string().min(1, "Event is required"),
+  type: z.enum(["seasonal_full_time", "seasonal_part_time"]),
   location: z.string().optional(),
   region: z.string().optional(),
   salaryMin: z.coerce.number().optional(),
@@ -121,9 +130,15 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
     enabled: open,
   });
 
+  const { data: events = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/events"],
+    queryFn: () => apiRequest("GET", "/api/events").then(r => r.json()),
+    enabled: open,
+  });
+
   const form = useForm<PostJobForm>({
     resolver: zodResolver(postJobSchema),
-    defaultValues: { title: "", type: "full_time", location: "", region: "", deadline: "", description: "", requirements: "", status: "active", questionSetId: "" },
+    defaultValues: { title: "", eventId: "", type: "seasonal_full_time", location: "", region: "", deadline: "", description: "", requirements: "", status: "active", questionSetId: "" },
   });
 
   // Pre-fill form when editing an existing job
@@ -131,7 +146,8 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
     if (open && initialJob) {
       form.reset({
         title:       initialJob.title ?? "",
-        type:        (initialJob.type === "full_time" || initialJob.type === "part_time") ? initialJob.type : "full_time",
+        eventId:     initialJob.eventId ?? "",
+        type:        (initialJob.type === "seasonal_full_time" || initialJob.type === "seasonal_part_time") ? initialJob.type : "seasonal_full_time",
         location:    initialJob.location ?? "",
         region:      initialJob.region ?? "",
         deadline:    initialJob.deadline ?? "",
@@ -143,7 +159,7 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
         salaryMax:   initialJob.salaryMax != null ? Number(initialJob.salaryMax) : undefined,
       });
     } else if (open && !initialJob) {
-      form.reset({ title: "", type: "full_time", location: "", region: "", deadline: "", description: "", requirements: "", status: "active", questionSetId: "" });
+      form.reset({ title: "", eventId: "", type: "seasonal_full_time", location: "", region: "", deadline: "", description: "", requirements: "", status: "active", questionSetId: "" });
     }
   }, [open, initialJob]);
 
@@ -188,12 +204,31 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
             {isEdit ? "Edit Job" : "Post a Job"}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            {isEdit ? `Editing: ${initialJob?.title}` : "Create a single standalone job posting."}
+            {isEdit ? `Editing: ${initialJob?.title}` : "Create a seasonal job posting linked to an event."}
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(d => postJob.mutate(d))} className="space-y-5 pt-1">
+
+            <FormField control={form.control} name="eventId" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                  Event <span className="text-primary">*</span>
+                </FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger className="h-10 bg-muted/30 border-border focus:ring-primary/20 rounded-sm" data-testid="select-postjob-event">
+                      <SelectValue placeholder="Select event" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {events.map(ev => <SelectItem key={ev.id} value={ev.id}>{ev.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )} />
 
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="title" render={({ field }) => (
@@ -220,8 +255,8 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="full_time">Full Time</SelectItem>
-                      <SelectItem value="part_time">Part Time</SelectItem>
+                      <SelectItem value="seasonal_full_time">Seasonal Full-Time</SelectItem>
+                      <SelectItem value="seasonal_part_time">Seasonal Part-Time</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -1016,7 +1051,7 @@ export default function JobPostingPage() {
                             {job.department && (
                               <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
                                 <Building className="h-3 w-3" />
-                                {job.department} · {job.type}
+                                {job.department} · {jobTypeLabel[job.type] ?? job.type}
                               </div>
                             )}
                           </div>
@@ -1034,10 +1069,10 @@ export default function JobPostingPage() {
                       <TableCell className="hidden md:table-cell">
                         <Badge
                           variant="outline"
-                          className={`border-0 text-xs font-medium ${job.eventId ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}
+                          className="border-0 text-xs font-medium bg-primary/10 text-primary"
                           data-testid={`type-job-${job.id}`}
                         >
-                          {job.eventId ? "Event-linked" : "Standalone"}
+                          {job.type === "seasonal_part_time" ? "Seasonal PT" : "Seasonal FT"}
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">

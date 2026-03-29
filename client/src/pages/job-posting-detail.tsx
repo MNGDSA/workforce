@@ -94,7 +94,7 @@ const statusStyles: Record<string, string> = {
 };
 
 function typeLabel(type: string) {
-  const map: Record<string, string> = { full_time: "Full Time", part_time: "Part Time", event_based: "Event-based", contract: "Contract" };
+  const map: Record<string, string> = { seasonal_full_time: "Seasonal Full-Time", seasonal_part_time: "Seasonal Part-Time", full_time: "Full Time", part_time: "Part Time", event_based: "Event-based" };
   return map[type] ?? type;
 }
 
