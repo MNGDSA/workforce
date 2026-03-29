@@ -2156,7 +2156,7 @@ export async function registerRoutes(
           printedBy: null,
           printerPluginId: printerPluginId ?? null,
           status: s.status === "success" ? "success" : s.status === "pending" ? "pending" : "failed",
-          printedAt: new Date().toISOString(),
+          printedAt: new Date(),
         })
       );
       const created = await storage.bulkCreateIdCardPrintLogs(logEntries);
