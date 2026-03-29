@@ -292,7 +292,7 @@ function Step1Form({
 
       <FieldWrapper label="Nationality" required error={errors.nationalityText?.message}>
         <Controller control={control} name="nationalityText" render={({ field }) => (
-          <SelectField value={field.value} onChange={field.onChange} options={NATIONALITIES} placeholder="Select nationality" error={errors.nationalityText?.message} />
+          <SelectField value={field.value} onChange={field.onChange} options={NATIONALITIES} placeholder="Select nationality" />
         )} />
       </FieldWrapper>
 
@@ -311,7 +311,7 @@ function Step1Form({
         </FieldWrapper>
         <FieldWrapper label="City of Residence" required error={errors.city?.message}>
           <Controller control={control} name="city" render={({ field }) => (
-            <SelectField value={field.value} onChange={field.onChange} options={KSA_CITIES} placeholder="Select city" error={errors.city?.message} />
+            <SelectField value={field.value} onChange={field.onChange} options={KSA_CITIES} placeholder="Select city" />
           )} />
         </FieldWrapper>
       </div>
