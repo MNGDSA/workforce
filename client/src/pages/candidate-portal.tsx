@@ -835,18 +835,15 @@ export default function CandidatePortal() {
 
             <div ref={sectionDocuments} className="scroll-mt-20">
             <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle className="text-base font-display text-white">Employment Contract</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="p-5">
                 {activeContract ? (
                   <div className={`rounded-lg border overflow-hidden ${contractIsSigned ? "border-emerald-700/50 bg-emerald-950/10" : "border-yellow-700/50 bg-yellow-950/10"}`}>
-                    <div className="p-4 flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-4 space-y-3">
+                      <div className="flex items-start gap-3">
                         <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${contractIsSigned ? "bg-emerald-900/40" : "bg-yellow-900/40"}`}>
                           {contractIsSigned ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <PenTool className="h-5 w-5 text-yellow-500" />}
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-white flex items-center gap-2 flex-wrap" data-testid="text-contract-title">
                             Employment Contract
                             <Badge className={`text-[10px] h-5 border-0 ${contractIsSigned ? "bg-emerald-500/15 text-emerald-400" : "bg-yellow-500/15 text-yellow-400"}`}>
@@ -860,7 +857,7 @@ export default function CandidatePortal() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-2 pl-[52px]">
                         <Button
                           size="sm"
                           variant="outline"
