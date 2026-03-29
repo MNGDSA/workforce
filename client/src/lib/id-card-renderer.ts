@@ -330,11 +330,11 @@ export function printIdCardFallback(
   const cardsHTML = employees
     .map((emp) => {
       const front = renderIdCardHTML(template, emp, 1);
-      if (!hasBack) return front;
+      if (!hasBack) return `<div class="card-page">${front}</div>`;
       const back = renderBackSideHTML(template, 1);
-      return `${front}<div style="page-break-after:always;"></div>${back}`;
+      return `<div class="card-page">${front}</div><div class="card-page">${back}</div>`;
     })
-    .join(`<div style="page-break-after:always;margin-bottom:10mm;"></div>`);
+    .join("");
 
   const layout = template.layout ?? "horizontal";
   const pageW = layout === "vertical" ? "54mm" : "85.6mm";
@@ -346,9 +346,14 @@ export function printIdCardFallback(
       @page { size: ${pageW} ${pageH}; margin: 0; }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { background: #fff; font-family: 'Inter', system-ui, sans-serif; }
-      @media print { body { background: #fff; } }
+      .card-page { page-break-after: always; }
+      .card-page:last-child { page-break-after: auto; }
+      @media print {
+        body { background: #fff; }
+        .duplex-instructions { display: none; }
+      }
     </style>
-  </head><body>${cardsHTML}</body></html>`);
+  </head><body>${hasBack ? '<div class="duplex-instructions" style="position:fixed;top:0;left:0;right:0;background:#fffbeb;border-bottom:2px solid #f59e0b;padding:8px 16px;font-size:13px;color:#92400e;z-index:9999;font-family:Inter,sans-serif;">⚠ Duplex card: Enable <b>two-sided / duplex</b> printing and <b>flip on short edge</b> in your printer settings so front &amp; back print on the same card.</div>' : ''}${cardsHTML}</body></html>`);
   printWin.document.close();
 
   setTimeout(() => {
