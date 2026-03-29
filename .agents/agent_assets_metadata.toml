@@ -6,3 +6,9 @@ id = "sxPzKZGuorW_bqdyBkJNg"
 uri = "file://Candidate_Journey_Flow.pdf"
 type = "pdf"
 title = "Candidate Journey Business Flow"
+
+[[outputs]]
+id = "7wR4iio2pCN242qb9Z73s"
+uri = "file://Admin_Workflow_Pipeline.pdf"
+type = "pdf"
+title = "Admin Workflow — Hiring Pipeline"
