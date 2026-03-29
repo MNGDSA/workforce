@@ -322,23 +322,25 @@ export function printIdCardFallback(
   template: IdCardTemplateConfig,
   employees: EmployeeCardData[],
 ): boolean {
-  const printWin = window.open("", "_blank", "width=400,height=600");
+  const printWin = window.open("", "_blank", "width=520,height=700");
   if (!printWin) return false;
 
   const hasBack = (template.backFields && template.backFields.length > 0) || template.backBackgroundImageUrl;
 
-  const cardsHTML = employees
-    .map((emp) => {
-      const front = renderIdCardHTML(template, emp, 1);
-      if (!hasBack) return `<div class="card-page">${front}</div>`;
-      const back = renderBackSideHTML(template, 1);
-      return `<div class="card-page">${front}</div><div class="card-page">${back}</div>`;
-    })
+  const frontsHTML = employees
+    .map((emp) => `<div class="card-page">${renderIdCardHTML(template, emp, 1)}</div>`)
     .join("");
+
+  const backsHTML = hasBack
+    ? employees
+        .map(() => `<div class="card-page">${renderBackSideHTML(template, 1)}</div>`)
+        .join("")
+    : "";
 
   const layout = template.layout ?? "horizontal";
   const pageW = layout === "vertical" ? "54mm" : "85.6mm";
   const pageH = layout === "vertical" ? "85.6mm" : "54mm";
+  const cardCount = employees.length;
 
   printWin.document.write(`<!DOCTYPE html><html><head><title>ID Cards</title>
     <style>
@@ -348,18 +350,83 @@ export function printIdCardFallback(
       body { background: #fff; font-family: 'Inter', system-ui, sans-serif; }
       .card-page { page-break-after: always; }
       .card-page:last-child { page-break-after: auto; }
+      #print-area-front, #print-area-back { display: none; }
       @media print {
-        body { background: #fff; }
-        .duplex-instructions { display: none; }
+        .print-ui { display: none !important; }
+        .print-active { display: block !important; }
       }
     </style>
-  </head><body>${hasBack ? '<div class="duplex-instructions" style="position:fixed;top:0;left:0;right:0;background:#fffbeb;border-bottom:2px solid #f59e0b;padding:8px 16px;font-size:13px;color:#92400e;z-index:9999;font-family:Inter,sans-serif;">⚠ Duplex card: Enable <b>two-sided / duplex</b> printing and <b>flip on short edge</b> in your printer settings so front &amp; back print on the same card.</div>' : ''}${cardsHTML}</body></html>`);
+  </head><body>
+    <div class="print-ui" style="padding:24px;font-family:'Inter',system-ui,sans-serif;max-width:480px;margin:0 auto;">
+      <div style="text-align:center;margin-bottom:20px;">
+        <div style="font-size:18px;font-weight:700;color:#1a1a2e;">ID Card Printing</div>
+        <div style="font-size:13px;color:#6b7280;margin-top:4px;">${cardCount} card${cardCount > 1 ? "s" : ""}${hasBack ? " — double-sided" : " — front only"}</div>
+      </div>
+      ${hasBack ? `
+      <div id="step-front" style="background:#f0fdf4;border:2px solid #86efac;border-radius:8px;padding:16px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:#16a34a;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">1</div>
+          <div style="font-weight:600;font-size:15px;color:#14532d;">Print Front Side</div>
+        </div>
+        <p style="font-size:13px;color:#166534;margin:0 0 12px 36px;">Load blank cards into the hopper. This will print the front of ${cardCount > 1 ? "all " + cardCount + " cards" : "the card"}.</p>
+        <div style="margin-left:36px;"><button onclick="printFront()" style="background:#16a34a;color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;">Print Front Side</button></div>
+      </div>
+      <div id="step-back" style="background:#f5f3ff;border:2px solid #c4b5fd;border-radius:8px;padding:16px;margin-bottom:12px;opacity:0.5;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">2</div>
+          <div style="font-weight:600;font-size:15px;color:#4c1d95;">Print Back Side</div>
+        </div>
+        <p style="font-size:13px;color:#5b21b6;margin:0 0 4px 36px;" id="back-instructions">Complete step 1 first.</p>
+        <div style="margin-left:36px;"><button id="btn-back" onclick="printBack()" disabled style="background:#7c3aed;color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;opacity:0.5;">Print Back Side</button></div>
+      </div>
+      <div style="background:#fffbeb;border:1px solid #fde047;border-radius:8px;padding:12px;margin-top:16px;">
+        <p style="font-size:12px;color:#854d0e;margin:0;line-height:1.5;">
+          <b>Manual duplex:</b> After printing the front, collect the printed cards and reinsert them into the manual feed slot <b>face-down</b> (printed side facing away from you). Then click "Print Back Side".
+        </p>
+      </div>
+      ` : `
+      <div style="background:#f0fdf4;border:2px solid #86efac;border-radius:8px;padding:16px;text-align:center;">
+        <button onclick="printFront()" style="background:#16a34a;color:#fff;border:none;padding:10px 24px;border-radius:6px;font-size:15px;font-weight:600;cursor:pointer;">Print Cards</button>
+      </div>
+      `}
+    </div>
+    <div id="print-area-front">${frontsHTML}</div>
+    <div id="print-area-back">${backsHTML}</div>
+    <script>
+      function printFront() {
+        document.getElementById('print-area-front').classList.add('print-active');
+        document.getElementById('print-area-back').classList.remove('print-active');
+        window.print();
+        ${hasBack ? `
+        setTimeout(function() {
+          document.getElementById('print-area-front').classList.remove('print-active');
+          var stepBack = document.getElementById('step-back');
+          stepBack.style.opacity = '1';
+          document.getElementById('btn-back').disabled = false;
+          document.getElementById('btn-back').style.opacity = '1';
+          document.getElementById('back-instructions').innerHTML = 'Reinsert the printed card${cardCount > 1 ? "s" : ""} <b>face-down</b> into the manual feed slot, then click below.';
+          document.getElementById('step-front').style.opacity = '0.5';
+          document.getElementById('step-front').querySelector('button').textContent = '✓ Front Printed';
+          document.getElementById('step-front').querySelector('button').disabled = true;
+          document.getElementById('step-front').querySelector('button').style.opacity = '0.6';
+        }, 1000);
+        ` : ""}
+      }
+      function printBack() {
+        document.getElementById('print-area-back').classList.add('print-active');
+        document.getElementById('print-area-front').classList.remove('print-active');
+        window.print();
+        setTimeout(function() {
+          document.getElementById('print-area-back').classList.remove('print-active');
+          document.getElementById('step-back').style.opacity = '0.5';
+          document.getElementById('btn-back').textContent = '✓ Back Printed';
+          document.getElementById('btn-back').disabled = true;
+          document.getElementById('btn-back').style.opacity = '0.6';
+        }, 1000);
+      }
+    </script>
+  </body></html>`);
   printWin.document.close();
-
-  setTimeout(() => {
-    printWin.focus();
-    printWin.print();
-  }, 500);
 
   return true;
 }
