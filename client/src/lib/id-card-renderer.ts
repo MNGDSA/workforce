@@ -359,13 +359,52 @@ export function printIdCardFallback(
   return true;
 }
 
+export const PLUGIN_TYPES = [
+  {
+    value: "zebra_browser_print",
+    label: "Zebra Browser Print SDK",
+    description: "Direct printing via Zebra Browser Print local service (ZC100, ZC300, ZXP Series)",
+    defaultConfig: { endpoint: "http://localhost:9100", deviceName: "" },
+    configFields: [
+      { key: "endpoint", label: "SDK Endpoint", placeholder: "http://localhost:9100", type: "text" as const },
+      { key: "deviceName", label: "Device Name (optional)", placeholder: "Auto-detect", type: "text" as const },
+    ],
+  },
+  {
+    value: "evolis_premium_suite",
+    label: "Evolis Premium Suite",
+    description: "Direct printing via Evolis Premium Suite REST API (Primacy 2, Avansia, Zenius)",
+    defaultConfig: { endpoint: "http://localhost:18000", printerName: "", duplexMode: "DUPLEX_CC_CC" },
+    configFields: [
+      { key: "endpoint", label: "API Endpoint", placeholder: "http://localhost:18000", type: "text" as const },
+      { key: "printerName", label: "Printer Name (optional)", placeholder: "Auto-detect first printer", type: "text" as const },
+      { key: "duplexMode", label: "Duplex Mode", placeholder: "DUPLEX_CC_CC", type: "select" as const, options: [
+        { value: "SIMPLEX", label: "Single Side" },
+        { value: "DUPLEX_CC_CC", label: "Duplex (Both Sides)" },
+      ]},
+    ],
+  },
+  {
+    value: "browser_fallback",
+    label: "Browser Print (Fallback)",
+    description: "Uses the browser's native print dialog — works with any printer",
+    defaultConfig: {},
+    configFields: [],
+  },
+] as const;
+
 export async function sendPrintJob(
   template: IdCardTemplateConfig,
   employees: EmployeeCardData[],
   activePlugin: PrinterPluginConfig | null,
 ): Promise<PrintJobResult[]> {
-  if (activePlugin && activePlugin.type === "zebra_browser_print") {
-    return sendViaZebraBrowserPrint(template, employees, activePlugin);
+  if (activePlugin) {
+    if (activePlugin.type === "zebra_browser_print") {
+      return sendViaZebraBrowserPrint(template, employees, activePlugin);
+    }
+    if (activePlugin.type === "evolis_premium_suite") {
+      return sendViaEvolisPremiumSuite(template, employees, activePlugin);
+    }
   }
 
   const opened = printIdCardFallback(template, employees);
@@ -434,6 +473,88 @@ async function sendViaZebraBrowserPrint(
       employeeId: emp.employeeNumber,
       status: fallbackOpened ? ("pending" as PrintJobStatus) : ("failed" as PrintJobStatus),
       error: fallbackOpened ? "Plugin failed — fell back to browser print" : "Plugin failed and popup blocked",
+      pluginUsed: null,
+    }));
+  }
+
+  return results;
+}
+
+async function sendViaEvolisPremiumSuite(
+  template: IdCardTemplateConfig,
+  employees: EmployeeCardData[],
+  plugin: PrinterPluginConfig,
+): Promise<PrintJobResult[]> {
+  const config = plugin.config as { endpoint?: string; printerName?: string; duplexMode?: string };
+  const endpoint = config.endpoint || "http://localhost:18000";
+  const printerName = config.printerName || "";
+  const duplexMode = config.duplexMode || "DUPLEX_CC_CC";
+  const hasBack = !!(template.backFields?.length || template.backBackgroundImageUrl);
+
+  const results: PrintJobResult[] = [];
+
+  for (const emp of employees) {
+    try {
+      const frontHTML = renderIdCardHTML(template, emp, 1);
+      const backHTML = hasBack ? renderBackSideHTML(template, 1) : null;
+
+      const printPayload: Record<string, unknown> = {
+        action: "print",
+        printer: printerName || undefined,
+        duplex: hasBack ? duplexMode : "SIMPLEX",
+        frontPage: {
+          type: "html",
+          data: frontHTML,
+        },
+      };
+
+      if (backHTML && hasBack) {
+        printPayload.backPage = {
+          type: "html",
+          data: backHTML,
+        };
+      }
+
+      const response = await fetch(`${endpoint}/api/print`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(printPayload),
+      });
+
+      if (response.ok) {
+        const result = await response.json().catch(() => ({}));
+        results.push({
+          employeeId: emp.employeeNumber,
+          status: "success",
+          pluginUsed: plugin.id,
+          error: result.jobId ? `Job ID: ${result.jobId}` : undefined,
+        });
+      } else {
+        const errText = await response.text().catch(() => "");
+        results.push({
+          employeeId: emp.employeeNumber,
+          status: "failed",
+          error: `Evolis API returned ${response.status}: ${errText}`.slice(0, 200),
+          pluginUsed: plugin.id,
+        });
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      results.push({
+        employeeId: emp.employeeNumber,
+        status: "failed",
+        error: `Evolis SDK error: ${message}`,
+        pluginUsed: plugin.id,
+      });
+    }
+  }
+
+  if (results.every((r) => r.status === "failed")) {
+    const fallbackOpened = printIdCardFallback(template, employees);
+    return employees.map((emp) => ({
+      employeeId: emp.employeeNumber,
+      status: fallbackOpened ? ("pending" as PrintJobStatus) : ("failed" as PrintJobStatus),
+      error: fallbackOpened ? "Evolis plugin failed — fell back to browser print" : "Plugin failed and popup blocked",
       pluginUsed: null,
     }));
   }

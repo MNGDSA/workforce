@@ -65,6 +65,7 @@ import {
   BACK_AVAILABLE_FIELDS,
   BACK_SAMPLE_DATA,
   CARD_LAYOUTS,
+  PLUGIN_TYPES,
   SAMPLE_EMPLOYEE,
   CANVAS_W,
   CANVAS_H,
@@ -1169,7 +1170,7 @@ function PrinterPluginManager() {
   const qc = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", type: "zebra_browser_print", config: "{}" });
+  const [form, setForm] = useState({ name: "", type: "zebra_browser_print", config: {} as Record<string, string> });
 
   const { data: plugins = [] } = useQuery<PrinterPluginType[]>({
     queryKey: ["/api/printer-plugins"],
@@ -1183,7 +1184,7 @@ function PrinterPluginManager() {
       toast({ title: "Printer Plugin Added" });
       qc.invalidateQueries({ queryKey: ["/api/printer-plugins"] });
       setFormOpen(false);
-      setForm({ name: "", type: "zebra_browser_print", config: "{}" });
+      setForm({ name: "", type: "zebra_browser_print", config: {} });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -1207,19 +1208,32 @@ function PrinterPluginManager() {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const selectedPluginType = PLUGIN_TYPES.find((pt) => pt.value === form.type);
+
   function handleCreate() {
     if (!form.name.trim()) {
       toast({ title: "Plugin name is required", variant: "destructive" });
       return;
     }
-    let parsedConfig = {};
-    try {
-      parsedConfig = JSON.parse(form.config);
-    } catch {
-      toast({ title: "Invalid JSON config", variant: "destructive" });
-      return;
+    const finalConfig: Record<string, string> = {};
+    if (selectedPluginType) {
+      for (const field of selectedPluginType.configFields) {
+        const val = form.config[field.key] || "";
+        if (val) finalConfig[field.key] = val;
+      }
     }
-    createMutation.mutate({ name: form.name.trim(), type: form.type, config: parsedConfig });
+    createMutation.mutate({ name: form.name.trim(), type: form.type, config: finalConfig });
+  }
+
+  function handleTypeChange(newType: string) {
+    const pt = PLUGIN_TYPES.find((p) => p.value === newType);
+    const defaultCfg: Record<string, string> = {};
+    if (pt) {
+      for (const field of pt.configFields) {
+        defaultCfg[field.key] = (pt.defaultConfig as Record<string, string>)[field.key] || "";
+      }
+    }
+    setForm((f) => ({ ...f, type: newType, config: defaultCfg }));
   }
 
   return (
@@ -1231,7 +1245,7 @@ function PrinterPluginManager() {
             Printer Plugins
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Configure printer plugins for direct card printing. Zebra Browser Print SDK is supported.
+            Configure printer plugins for direct card printing. Zebra and Evolis printers are supported.
           </p>
         </div>
         <Button
@@ -1270,7 +1284,9 @@ function PrinterPluginManager() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-white">{p.name}</span>
-                      <Badge variant="outline" className="text-xs text-zinc-400">{p.type}</Badge>
+                      <Badge variant="outline" className="text-xs text-zinc-400">
+                        {PLUGIN_TYPES.find((pt) => pt.value === p.type)?.label || p.type}
+                      </Badge>
                       {p.isActive && (
                         <Badge className="bg-primary/15 text-primary border-primary/20 text-xs">Active</Badge>
                       )}
@@ -1324,22 +1340,63 @@ function PrinterPluginManager() {
                 data-testid="input-printer-name"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. Zebra ZC300"
+                placeholder="e.g. Evolis Primacy 2"
                 className="bg-zinc-900 border-zinc-700 text-white"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-white">Type</Label>
-              <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}>
+              <Label className="text-white">Printer Type</Label>
+              <Select value={form.type} onValueChange={handleTypeChange}>
                 <SelectTrigger className="bg-zinc-900 border-zinc-700 text-white" data-testid="select-printer-type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="zebra_browser_print">Zebra Browser Print SDK</SelectItem>
-                  <SelectItem value="browser_fallback">Browser Print (Fallback)</SelectItem>
+                  {PLUGIN_TYPES.map((pt) => (
+                    <SelectItem key={pt.value} value={pt.value}>{pt.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              {selectedPluginType && (
+                <p className="text-[11px] text-zinc-500">{selectedPluginType.description}</p>
+              )}
             </div>
+
+            {selectedPluginType && selectedPluginType.configFields.length > 0 && (
+              <>
+                <Separator className="bg-zinc-800" />
+                <div className="space-y-3">
+                  <Label className="text-white text-xs uppercase tracking-wider">Connection Settings</Label>
+                  {selectedPluginType.configFields.map((field) => (
+                    <div key={field.key} className="space-y-1">
+                      <Label className="text-zinc-400 text-xs">{field.label}</Label>
+                      {field.type === "select" && "options" in field ? (
+                        <Select
+                          value={form.config[field.key] || ""}
+                          onValueChange={(v) => setForm((f) => ({ ...f, config: { ...f.config, [field.key]: v } }))}
+                        >
+                          <SelectTrigger className="bg-zinc-900 border-zinc-700 text-white h-8 text-xs">
+                            <SelectValue placeholder={field.placeholder} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(field as { options: { value: string; label: string }[] }).options.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          value={form.config[field.key] || ""}
+                          onChange={(e) => setForm((f) => ({ ...f, config: { ...f.config, [field.key]: e.target.value } }))}
+                          placeholder={field.placeholder}
+                          className="bg-zinc-900 border-zinc-700 text-white h-8 text-xs"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" className="border-zinc-700" onClick={() => setFormOpen(false)}>
                 Cancel
