@@ -11,6 +11,9 @@ export const CR80_WIDTH_MM = 85.6;
 export const CR80_HEIGHT_MM = 54;
 export const CR80_ASPECT = CR80_WIDTH_MM / CR80_HEIGHT_MM;
 
+export const CANVAS_W = 324;
+export const CANVAS_H = 204;
+
 export const AVAILABLE_FIELDS = [
   { key: "fullName", label: "Full Name" },
   { key: "photo", label: "Photo" },
@@ -26,15 +29,55 @@ export type FieldKey = (typeof AVAILABLE_FIELDS)[number]["key"];
 export type CardLayout = "horizontal" | "vertical" | "compact";
 
 export const CARD_LAYOUTS: { key: CardLayout; label: string; description: string }[] = [
-  { key: "horizontal", label: "Horizontal", description: "Photo left, info right (default)" },
-  { key: "vertical", label: "Vertical", description: "Photo top, info bottom" },
-  { key: "compact", label: "Compact", description: "No photo area, text-dense" },
+  { key: "horizontal", label: "Horizontal", description: "Landscape CR-80" },
+  { key: "vertical", label: "Vertical", description: "Portrait CR-80" },
 ];
+
+export interface FieldPlacement {
+  key: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  fontSize: number;
+  fontColor: string;
+  fontWeight: number;
+  visible: boolean;
+}
+
+export function defaultFieldPlacements(layout: CardLayout): FieldPlacement[] {
+  const isVert = layout === "vertical";
+  const cw = isVert ? CANVAS_H : CANVAS_W;
+
+  if (isVert) {
+    return [
+      { key: "photo", x: (cw - 60) / 2, y: 10, w: 60, h: 72, fontSize: 0, fontColor: "#ffffff", fontWeight: 400, visible: true },
+      { key: "fullName", x: 10, y: 88, w: cw - 20, h: 22, fontSize: 13, fontColor: "#ffffff", fontWeight: 700, visible: true },
+      { key: "employeeNumber", x: 10, y: 112, w: cw - 20, h: 18, fontSize: 11, fontColor: "#ffffff", fontWeight: 600, visible: true },
+      { key: "nationalId", x: 10, y: 132, w: cw - 20, h: 18, fontSize: 10, fontColor: "#ffffff", fontWeight: 400, visible: true },
+      { key: "position", x: 10, y: 152, w: cw - 20, h: 18, fontSize: 10, fontColor: "#ffffff", fontWeight: 400, visible: true },
+      { key: "eventName", x: 10, y: 172, w: cw - 20, h: 18, fontSize: 9, fontColor: "#ffffff", fontWeight: 400, visible: false },
+      { key: "phone", x: 10, y: 192, w: cw - 20, h: 18, fontSize: 9, fontColor: "#ffffff", fontWeight: 400, visible: false },
+    ];
+  }
+
+  return [
+    { key: "photo", x: 12, y: 18, w: 60, h: 72, fontSize: 0, fontColor: "#ffffff", fontWeight: 400, visible: true },
+    { key: "fullName", x: 82, y: 18, w: 230, h: 22, fontSize: 14, fontColor: "#ffffff", fontWeight: 700, visible: true },
+    { key: "employeeNumber", x: 82, y: 44, w: 230, h: 18, fontSize: 11, fontColor: "#ffffff", fontWeight: 600, visible: true },
+    { key: "nationalId", x: 82, y: 66, w: 230, h: 18, fontSize: 10, fontColor: "#ffffff", fontWeight: 400, visible: true },
+    { key: "position", x: 82, y: 88, w: 230, h: 18, fontSize: 10, fontColor: "#ffffff", fontWeight: 400, visible: true },
+    { key: "eventName", x: 82, y: 110, w: 230, h: 18, fontSize: 9, fontColor: "#ffffff", fontWeight: 400, visible: false },
+    { key: "phone", x: 82, y: 132, w: 230, h: 18, fontSize: 9, fontColor: "#ffffff", fontWeight: 400, visible: false },
+  ];
+}
 
 export interface IdCardTemplateConfig {
   name: string;
   logoUrl?: string | null;
+  backgroundImageUrl?: string | null;
   fields: string[];
+  fieldPlacements?: FieldPlacement[];
   backgroundColor: string;
   textColor: string;
   accentColor: string;
@@ -60,7 +103,7 @@ export const SAMPLE_EMPLOYEE: EmployeeCardData = {
   employeeNumber: "EMP-001",
   nationalId: "1234567890",
   position: "Operations Specialist",
-  eventName: "Riyadh Season 2026",
+  eventName: "Ramadan 1447",
   phone: "+966 50 123 4567",
 };
 
@@ -81,191 +124,110 @@ export interface PrintJobResult {
   pluginUsed: string | null;
 }
 
-function buildInfoLines(
-  template: IdCardTemplateConfig,
-  employee: EmployeeCardData,
-  scale: number,
-  safeAccent: string,
-  safeText: string,
-): string[] {
-  const lines: string[] = [];
-  const fields = template.fields || ["fullName", "photo", "employeeNumber"];
-  const nameFontSize = template.nameFontSize ?? 14;
-
-  if (fields.includes("employeeNumber")) {
-    lines.push(
-      `<div style="font-size:${10 * scale}px;font-family:monospace;color:${safeAccent};font-weight:700;letter-spacing:1px;">${escapeHTML(employee.employeeNumber)}</div>`
-    );
-  }
-  if (fields.includes("fullName")) {
-    lines.push(
-      `<div style="font-size:${nameFontSize * scale}px;font-weight:700;margin:${2 * scale}px 0;color:${safeText};">${escapeHTML(employee.fullName)}</div>`
-    );
-  }
-  if (fields.includes("position") && employee.position) {
-    lines.push(
-      `<div style="font-size:${10 * scale}px;color:${safeText};opacity:0.85;">${escapeHTML(employee.position)}</div>`
-    );
-  }
-  if (fields.includes("eventName") && employee.eventName) {
-    lines.push(
-      `<div style="font-size:${9 * scale}px;color:${safeAccent};margin-top:${2 * scale}px;">${escapeHTML(employee.eventName)}</div>`
-    );
-  }
-  if (fields.includes("nationalId") && employee.nationalId) {
-    lines.push(
-      `<div style="font-size:${9 * scale}px;color:${safeText};opacity:0.7;margin-top:${2 * scale}px;">ID: ${escapeHTML(employee.nationalId)}</div>`
-    );
-  }
-  if (fields.includes("phone") && employee.phone) {
-    lines.push(
-      `<div style="font-size:${9 * scale}px;color:${safeText};opacity:0.7;">Tel: ${escapeHTML(employee.phone)}</div>`
-    );
-  }
-  return lines;
+function getFieldValue(emp: EmployeeCardData, key: string): string {
+  const map: Record<string, string | null | undefined> = {
+    fullName: emp.fullName,
+    employeeNumber: emp.employeeNumber,
+    nationalId: emp.nationalId,
+    position: emp.position,
+    eventName: emp.eventName,
+    phone: emp.phone,
+  };
+  return map[key] ?? "";
 }
 
-function buildPhotoHTML(
-  template: IdCardTemplateConfig,
-  employee: EmployeeCardData,
+function renderPhotoPlacementHTML(
+  fp: FieldPlacement,
+  emp: EmployeeCardData,
   scale: number,
-  safeAccent: string,
-  safeBg: string,
 ): string {
-  const fields = template.fields || ["fullName", "photo", "employeeNumber"];
-  if (!fields.includes("photo")) return "";
-  const photoSize = Math.round(38 * scale);
-  const initials = employee.fullName
+  const x = fp.x * scale;
+  const y = fp.y * scale;
+  const w = fp.w * scale;
+  const h = fp.h * scale;
+  const initials = emp.fullName
     .split(" ")
-    .map((w) => w[0])
+    .map((word) => word[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();
 
-  if (employee.photoUrl) {
-    const safeUrl = escapeHTML(employee.photoUrl);
-    return `<img src="${safeUrl}" style="width:${photoSize}px;height:${photoSize}px;border-radius:${4 * scale}px;object-fit:cover;border:2px solid ${safeAccent};" crossorigin="anonymous" />`;
+  if (emp.photoUrl) {
+    return `<div style="position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;border-radius:${4 * scale}px;overflow:hidden;">
+      <img src="${escapeHTML(emp.photoUrl)}" style="width:100%;height:100%;object-fit:cover;" crossorigin="anonymous" />
+    </div>`;
   }
-  return `<div style="width:${photoSize}px;height:${photoSize}px;border-radius:${4 * scale}px;background:${safeAccent};display:flex;align-items:center;justify-content:center;font-size:${14 * scale}px;font-weight:700;color:${safeBg};">${escapeHTML(initials)}</div>`;
+  return `<div style="position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;border-radius:${4 * scale}px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;font-size:${14 * scale}px;font-weight:700;color:rgba(255,255,255,0.6);">${escapeHTML(initials)}</div>`;
 }
 
-function renderHorizontalLayout(
-  template: IdCardTemplateConfig,
-  employee: EmployeeCardData,
+function renderTextPlacementHTML(
+  fp: FieldPlacement,
+  value: string,
   scale: number,
-  widthPx: number,
-  heightPx: number,
 ): string {
-  const safeAccent = escapeHTML(template.accentColor);
-  const safeText = escapeHTML(template.textColor);
-  const safeBg = escapeHTML(template.backgroundColor);
-  const hasPhoto = (template.fields || []).includes("photo");
-  const photoHTML = buildPhotoHTML(template, employee, scale, safeAccent, safeBg);
-  const infoLines = buildInfoLines(template, employee, scale, safeAccent, safeText);
-  const safeLogoUrl = template.logoUrl ? escapeHTML(template.logoUrl) : "";
-  const logoHTML = template.logoUrl
-    ? `<img src="${safeLogoUrl}" style="max-height:${20 * scale}px;max-width:${80 * scale}px;object-fit:contain;" crossorigin="anonymous" />`
-    : "";
-  const borderStyle = template.showBorder ? `border:1px solid ${safeAccent};` : "";
+  const x = fp.x * scale;
+  const y = fp.y * scale;
+  const w = fp.w * scale;
+  const h = fp.h * scale;
+  const fs = fp.fontSize * scale;
+  const color = escapeHTML(fp.fontColor);
 
-  return `<div style="width:${widthPx}px;height:${heightPx}px;background:${safeBg};border-radius:${6 * scale}px;overflow:hidden;position:relative;font-family:'Inter',system-ui,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;${borderStyle}">
-    <div style="background:${safeAccent};height:${4 * scale}px;width:100%;"></div>
-    <div style="padding:${8 * scale}px ${12 * scale}px ${6 * scale}px;display:flex;align-items:flex-start;gap:${10 * scale}px;flex:1;">
-      ${hasPhoto ? `<div style="flex-shrink:0;">${photoHTML}</div>` : ""}
-      <div style="flex:1;min-width:0;">
-        ${logoHTML ? `<div style="margin-bottom:${4 * scale}px;">${logoHTML}</div>` : ""}
-        ${infoLines.join("")}
-      </div>
-    </div>
-    <div style="background:${safeAccent}22;padding:${3 * scale}px ${12 * scale}px;text-align:center;">
-      <div style="font-size:${7 * scale}px;color:${safeText};opacity:0.5;">EMPLOYEE IDENTIFICATION CARD</div>
-    </div>
-  </div>`;
+  return `<div style="position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;font-size:${fs}px;font-weight:${fp.fontWeight};color:${color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;line-height:1.2;">${escapeHTML(value)}</div>`;
 }
 
-function renderVerticalLayout(
-  template: IdCardTemplateConfig,
-  employee: EmployeeCardData,
-  scale: number,
-  widthPx: number,
-  heightPx: number,
-): string {
-  const safeAccent = escapeHTML(template.accentColor);
-  const safeText = escapeHTML(template.textColor);
-  const safeBg = escapeHTML(template.backgroundColor);
-  const photoHTML = buildPhotoHTML(template, employee, scale, safeAccent, safeBg);
-  const infoLines = buildInfoLines(template, employee, scale, safeAccent, safeText);
-  const safeLogoUrl = template.logoUrl ? escapeHTML(template.logoUrl) : "";
-  const logoHTML = template.logoUrl
-    ? `<img src="${safeLogoUrl}" style="max-height:${16 * scale}px;max-width:${60 * scale}px;object-fit:contain;" crossorigin="anonymous" />`
-    : "";
-  const borderStyle = template.showBorder ? `border:1px solid ${safeAccent};` : "";
-
-  return `<div style="width:${widthPx}px;height:${heightPx}px;background:${safeBg};border-radius:${6 * scale}px;overflow:hidden;position:relative;font-family:'Inter',system-ui,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;${borderStyle}">
-    <div style="background:${safeAccent};height:${4 * scale}px;width:100%;"></div>
-    ${logoHTML ? `<div style="margin-top:${4 * scale}px;">${logoHTML}</div>` : ""}
-    <div style="margin:${4 * scale}px 0;">${photoHTML}</div>
-    <div style="text-align:center;padding:0 ${8 * scale}px;flex:1;overflow:hidden;">
-      ${infoLines.join("")}
-    </div>
-    <div style="background:${safeAccent}22;padding:${3 * scale}px ${12 * scale}px;text-align:center;width:100%;">
-      <div style="font-size:${7 * scale}px;color:${safeText};opacity:0.5;">EMPLOYEE IDENTIFICATION CARD</div>
-    </div>
-  </div>`;
-}
-
-function renderCompactLayout(
-  template: IdCardTemplateConfig,
-  employee: EmployeeCardData,
-  scale: number,
-  widthPx: number,
-  heightPx: number,
-): string {
-  const safeAccent = escapeHTML(template.accentColor);
-  const safeText = escapeHTML(template.textColor);
-  const safeBg = escapeHTML(template.backgroundColor);
-  const infoLines = buildInfoLines(template, employee, scale, safeAccent, safeText);
-  const safeLogoUrl = template.logoUrl ? escapeHTML(template.logoUrl) : "";
-  const logoHTML = template.logoUrl
-    ? `<img src="${safeLogoUrl}" style="max-height:${18 * scale}px;max-width:${70 * scale}px;object-fit:contain;" crossorigin="anonymous" />`
-    : "";
-  const borderStyle = template.showBorder ? `border:1px solid ${safeAccent};` : "";
-
-  return `<div style="width:${widthPx}px;height:${heightPx}px;background:${safeBg};border-radius:${6 * scale}px;overflow:hidden;position:relative;font-family:'Inter',system-ui,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;${borderStyle}">
-    <div style="background:${safeAccent};height:${4 * scale}px;width:100%;"></div>
-    <div style="padding:${10 * scale}px ${14 * scale}px;flex:1;display:flex;flex-direction:column;justify-content:center;">
-      ${logoHTML ? `<div style="margin-bottom:${6 * scale}px;">${logoHTML}</div>` : ""}
-      ${infoLines.join("")}
-    </div>
-    <div style="background:${safeAccent}22;padding:${3 * scale}px ${12 * scale}px;text-align:center;">
-      <div style="font-size:${7 * scale}px;color:${safeText};opacity:0.5;">EMPLOYEE IDENTIFICATION CARD</div>
-    </div>
-  </div>`;
+function getCanvasDimensions(layout: CardLayout): { w: number; h: number } {
+  if (layout === "vertical") return { w: CANVAS_H, h: CANVAS_W };
+  return { w: CANVAS_W, h: CANVAS_H };
 }
 
 export function renderIdCardHTML(
   template: IdCardTemplateConfig,
   employee: EmployeeCardData,
-  scale: number = 1
+  scale: number = 1,
 ): string {
   const layout = template.layout ?? "horizontal";
-  const isVertical = layout === "vertical";
-  const widthPx = Math.round((isVertical ? CR80_HEIGHT_MM : CR80_WIDTH_MM) * 3.7795 * scale);
-  const heightPx = Math.round((isVertical ? CR80_WIDTH_MM : CR80_HEIGHT_MM) * 3.7795 * scale);
+  const dims = getCanvasDimensions(layout);
+  const w = Math.round(dims.w * scale);
+  const h = Math.round(dims.h * scale);
+  const bgColor = escapeHTML(template.backgroundColor || "#1a1a2e");
+  const bgImage = template.backgroundImageUrl;
 
-  switch (layout) {
-    case "vertical":
-      return renderVerticalLayout(template, employee, scale, widthPx, heightPx);
-    case "compact":
-      return renderCompactLayout(template, employee, scale, widthPx, heightPx);
-    default:
-      return renderHorizontalLayout(template, employee, scale, widthPx, heightPx);
+  let placements = template.fieldPlacements && template.fieldPlacements.length > 0
+    ? template.fieldPlacements
+    : defaultFieldPlacements(layout);
+
+  if (template.fields && template.fields.length > 0) {
+    placements = placements.map((fp) => ({
+      ...fp,
+      visible: template.fields.includes(fp.key),
+    }));
   }
+
+  const visiblePlacements = placements.filter((fp) => fp.visible);
+
+  const fieldElements = visiblePlacements
+    .map((fp) => {
+      if (fp.key === "photo") {
+        return renderPhotoPlacementHTML(fp, employee, scale);
+      }
+      const value = getFieldValue(employee, fp.key);
+      if (!value) return "";
+      return renderTextPlacementHTML(fp, value, scale);
+    })
+    .join("");
+
+  const bgStyle = bgImage
+    ? `background-image:url('${escapeHTML(bgImage)}');background-size:cover;background-position:center;`
+    : `background:${bgColor};`;
+
+  return `<div style="width:${w}px;height:${h}px;${bgStyle}border-radius:${6 * scale}px;overflow:hidden;position:relative;font-family:'Inter',system-ui,sans-serif;box-sizing:border-box;">
+    ${fieldElements}
+  </div>`;
 }
 
 export function printIdCardFallback(
   template: IdCardTemplateConfig,
-  employees: EmployeeCardData[]
+  employees: EmployeeCardData[],
 ): boolean {
   const printWin = window.open("", "_blank", "width=400,height=600");
   if (!printWin) return false;
@@ -280,9 +242,10 @@ export function printIdCardFallback(
 
   printWin.document.write(`<!DOCTYPE html><html><head><title>ID Cards</title>
     <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
       @page { size: ${pageW} ${pageH}; margin: 0; }
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { background: #fff; }
+      body { background: #fff; font-family: 'Inter', system-ui, sans-serif; }
       @media print { body { background: #fff; } }
     </style>
   </head><body>${cardsHTML}</body></html>`);

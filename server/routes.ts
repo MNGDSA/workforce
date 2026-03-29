@@ -2052,6 +2052,16 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
+  app.post("/api/id-card-templates/:id/background", upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      const backgroundImageUrl = `/uploads/${req.file.filename}`;
+      const template = await storage.updateIdCardTemplate(req.params.id, { backgroundImageUrl });
+      if (!template) return res.status(404).json({ message: "Template not found" });
+      return res.json(template);
+    } catch (err) { return handleError(res, err); }
+  });
+
   // ─── Printer Plugins ────────────────────────────────────────────────────────
   app.get("/api/printer-plugins", async (_req: Request, res: Response) => {
     try {

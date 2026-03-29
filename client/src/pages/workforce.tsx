@@ -684,21 +684,23 @@ export default function WorkforcePage() {
       } catch {
         templateRes = null;
       }
+      const lc = (templateRes?.layoutConfig as Record<string, unknown>) ?? {};
       const templateConfig: IdCardTemplateConfig = templateRes
         ? {
             name: templateRes.name as string,
             logoUrl: templateRes.logoUrl as string | null,
+            backgroundImageUrl: templateRes.backgroundImageUrl as string | null,
             fields: templateRes.fields as string[],
+            fieldPlacements: (lc.fieldPlacements as IdCardTemplateConfig["fieldPlacements"]) ?? undefined,
             backgroundColor: templateRes.backgroundColor as string,
             textColor: templateRes.textColor as string,
             accentColor: templateRes.accentColor as string,
-            layout: (templateRes.layoutConfig as Record<string, unknown>)?.layout as "horizontal" | "vertical" | "compact" | undefined,
-            nameFontSize: (templateRes.layoutConfig as Record<string, unknown>)?.nameFontSize as number | undefined,
-            showBorder: (templateRes.layoutConfig as Record<string, unknown>)?.showBorder as boolean | undefined,
+            layout: lc.layout as "horizontal" | "vertical" | "compact" | undefined,
           }
         : {
             name: "Default",
             logoUrl: null,
+            backgroundImageUrl: null,
             fields: ["fullName", "photo", "employeeNumber", "nationalId", "position"],
             backgroundColor: "#1a1a2e",
             textColor: "#ffffff",
