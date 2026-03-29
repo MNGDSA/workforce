@@ -1268,7 +1268,7 @@ export async function registerRoutes(
       if (!startDate) return res.status(400).json({ message: "startDate is required" });
       const workforce = await storage.convertOnboardingToEmployee(
         req.params.id,
-        { startDate, eventId, salary },
+        { startDate, eventId: eventId || undefined, salary: salary && salary.trim() !== "" ? salary : undefined },
         (req as any).userId,
       );
       return res.status(201).json(workforce);
