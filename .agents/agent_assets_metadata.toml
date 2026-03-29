@@ -12,3 +12,9 @@ id = "7wR4iio2pCN242qb9Z73s"
 uri = "file://Admin_Workflow_Pipeline.pdf"
 type = "pdf"
 title = "Admin Workflow — Hiring Pipeline"
+
+[[outputs]]
+id = "Jj8jP9BYhxYMrnVZ6jNgb"
+uri = "file://WORKFORCE_Business_Flows.pdf"
+type = "pdf"
+title = "WORKFORCE Business Flows (2 pages)"
