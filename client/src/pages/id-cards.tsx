@@ -62,12 +62,16 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
   AVAILABLE_FIELDS,
+  BACK_AVAILABLE_FIELDS,
+  BACK_SAMPLE_DATA,
   CARD_LAYOUTS,
   SAMPLE_EMPLOYEE,
   CANVAS_W,
   CANVAS_H,
   renderIdCardHTML,
+  renderBackSideHTML,
   defaultFieldPlacements,
+  defaultBackFieldPlacements,
   type IdCardTemplateConfig,
   type CardLayout,
   type FieldPlacement,
@@ -80,6 +84,7 @@ type IdCardTemplate = {
   layoutConfig: Record<string, unknown>;
   logoUrl: string | null;
   backgroundImageUrl: string | null;
+  backBackgroundImageUrl: string | null;
   fields: string[];
   backgroundColor: string;
   textColor: string;
@@ -315,14 +320,19 @@ function TemplateDesigner() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [cardSide, setCardSide] = useState<"front" | "back">("front");
+
   const [form, setForm] = useState({
     name: "",
     eventId: "",
     logoUrl: "",
     backgroundImageUrl: "" as string,
+    backBackgroundImageUrl: "" as string,
     fields: ["fullName", "photo", "employeeNumber"] as string[],
+    backFields: ["companyName", "companyAddress", "disclaimer"] as string[],
     layout: "horizontal" as CardLayout,
     fieldPlacements: defaultFieldPlacements("horizontal") as FieldPlacement[],
+    backFieldPlacements: defaultBackFieldPlacements("horizontal") as FieldPlacement[],
   });
 
   const { data: templates = [] } = useQuery<IdCardTemplate[]>({
@@ -342,8 +352,12 @@ function TemplateDesigner() {
         : apiRequest("POST", "/api/id-card-templates", data).then((r) => r.json()),
     onSuccess: async (created: { id: string }) => {
       if (pendingBgFile && !editId && created?.id) {
-        await uploadBackgroundFile(created.id, pendingBgFile);
+        await uploadBackgroundFile(created.id, pendingBgFile, "front");
         setPendingBgFile(null);
+      }
+      if (pendingBackBgFile && !editId && created?.id) {
+        await uploadBackgroundFile(created.id, pendingBackBgFile, "back");
+        setPendingBackBgFile(null);
       }
       toast({ title: editId ? "Template Updated" : "Template Created" });
       qc.invalidateQueries({ queryKey: ["/api/id-card-templates"] });
@@ -377,13 +391,17 @@ function TemplateDesigner() {
       eventId: "",
       logoUrl: "",
       backgroundImageUrl: "",
+      backBackgroundImageUrl: "",
       fields: ["fullName", "photo", "employeeNumber"],
+      backFields: ["companyName", "companyAddress", "disclaimer"],
       layout: "horizontal",
       fieldPlacements: defaultFieldPlacements("horizontal"),
+      backFieldPlacements: defaultBackFieldPlacements("horizontal"),
     });
     setEditId(null);
     setFormOpen(false);
     setSelectedFieldKey(null);
+    setCardSide("front");
   }
 
   function openEdit(t: IdCardTemplate) {
@@ -397,17 +415,28 @@ function TemplateDesigner() {
       : defaultFieldPlacements(layout)
     ).map((fp) => ({ ...fp, visible: activeFields.includes(fp.key) }));
 
+    const savedBackPlacements = (lc.backFieldPlacements as FieldPlacement[] | undefined);
+    const activeBackFields = (lc.backFields as string[] | undefined) ?? ["companyName", "companyAddress", "disclaimer"];
+    const backPlacements = (savedBackPlacements && savedBackPlacements.length > 0
+      ? savedBackPlacements
+      : defaultBackFieldPlacements(layout)
+    ).map((fp) => ({ ...fp, visible: activeBackFields.includes(fp.key) }));
+
     setForm({
       name: t.name,
       eventId: t.eventId ?? "",
       logoUrl: t.logoUrl ?? "",
       backgroundImageUrl: t.backgroundImageUrl ?? "",
+      backBackgroundImageUrl: t.backBackgroundImageUrl ?? "",
       fields: activeFields,
+      backFields: activeBackFields,
       layout,
       fieldPlacements: placements,
+      backFieldPlacements: backPlacements,
     });
     setEditId(t.id);
     setFormOpen(true);
+    setCardSide("front");
   }
 
   function handleSave() {
@@ -418,11 +447,15 @@ function TemplateDesigner() {
     const bgUrl = form.backgroundImageUrl && !form.backgroundImageUrl.startsWith("blob:")
       ? form.backgroundImageUrl
       : null;
+    const backBgUrl = form.backBackgroundImageUrl && !form.backBackgroundImageUrl.startsWith("blob:")
+      ? form.backBackgroundImageUrl
+      : null;
     saveMutation.mutate({
       name: form.name.trim(),
       eventId: form.eventId || null,
       logoUrl: form.logoUrl || null,
       backgroundImageUrl: bgUrl,
+      backBackgroundImageUrl: backBgUrl,
       fields: form.fields,
       backgroundColor: "#1a1a2e",
       textColor: "#ffffff",
@@ -430,29 +463,52 @@ function TemplateDesigner() {
       layoutConfig: {
         layout: form.layout,
         fieldPlacements: form.fieldPlacements,
+        backFields: form.backFields,
+        backFieldPlacements: form.backFieldPlacements,
       },
     });
   }
 
   function toggleField(key: string) {
-    setForm((f) => {
-      const newFields = f.fields.includes(key)
-        ? f.fields.filter((k) => k !== key)
-        : [...f.fields, key];
-      const newPlacements = f.fieldPlacements.map((fp) =>
-        fp.key === key ? { ...fp, visible: newFields.includes(key) } : fp,
-      );
-      return { ...f, fields: newFields, fieldPlacements: newPlacements };
-    });
+    if (cardSide === "back") {
+      setForm((f) => {
+        const newFields = f.backFields.includes(key)
+          ? f.backFields.filter((k) => k !== key)
+          : [...f.backFields, key];
+        const newPlacements = f.backFieldPlacements.map((fp) =>
+          fp.key === key ? { ...fp, visible: newFields.includes(key) } : fp,
+        );
+        return { ...f, backFields: newFields, backFieldPlacements: newPlacements };
+      });
+    } else {
+      setForm((f) => {
+        const newFields = f.fields.includes(key)
+          ? f.fields.filter((k) => k !== key)
+          : [...f.fields, key];
+        const newPlacements = f.fieldPlacements.map((fp) =>
+          fp.key === key ? { ...fp, visible: newFields.includes(key) } : fp,
+        );
+        return { ...f, fields: newFields, fieldPlacements: newPlacements };
+      });
+    }
   }
 
   function updatePlacement(key: string, updates: Partial<FieldPlacement>) {
-    setForm((f) => ({
-      ...f,
-      fieldPlacements: f.fieldPlacements.map((fp) =>
-        fp.key === key ? { ...fp, ...updates } : fp,
-      ),
-    }));
+    if (cardSide === "back") {
+      setForm((f) => ({
+        ...f,
+        backFieldPlacements: f.backFieldPlacements.map((fp) =>
+          fp.key === key ? { ...fp, ...updates } : fp,
+        ),
+      }));
+    } else {
+      setForm((f) => ({
+        ...f,
+        fieldPlacements: f.fieldPlacements.map((fp) =>
+          fp.key === key ? { ...fp, ...updates } : fp,
+        ),
+      }));
+    }
   }
 
   function handleLayoutChange(newLayout: CardLayout) {
@@ -465,27 +521,41 @@ function TemplateDesigner() {
           ? { ...dfp, visible: f.fields.includes(dfp.key), fontColor: existing.fontColor, fontSize: existing.fontSize, fontWeight: existing.fontWeight }
           : { ...dfp, visible: f.fields.includes(dfp.key) };
       }),
+      backFieldPlacements: defaultBackFieldPlacements(newLayout).map((dfp) => {
+        const existing = f.backFieldPlacements.find((fp) => fp.key === dfp.key);
+        return existing
+          ? { ...dfp, visible: f.backFields.includes(dfp.key), fontColor: existing.fontColor, fontSize: existing.fontSize, fontWeight: existing.fontWeight }
+          : { ...dfp, visible: f.backFields.includes(dfp.key) };
+      }),
     }));
   }
 
   const [pendingBgFile, setPendingBgFile] = useState<File | null>(null);
+  const [pendingBackBgFile, setPendingBackBgFile] = useState<File | null>(null);
+  const backFileInputRef = useRef<HTMLInputElement>(null);
 
-  async function handleBackgroundUpload(file: File) {
+  async function handleBackgroundUpload(file: File, side: "front" | "back" = "front") {
     if (!editId) {
       const localUrl = URL.createObjectURL(file);
-      setForm((f) => ({ ...f, backgroundImageUrl: localUrl }));
-      setPendingBgFile(file);
+      if (side === "back") {
+        setForm((f) => ({ ...f, backBackgroundImageUrl: localUrl }));
+        setPendingBackBgFile(file);
+      } else {
+        setForm((f) => ({ ...f, backgroundImageUrl: localUrl }));
+        setPendingBgFile(file);
+      }
       return;
     }
 
-    await uploadBackgroundFile(editId, file);
+    await uploadBackgroundFile(editId, file, side);
   }
 
-  async function uploadBackgroundFile(templateId: string, file: File) {
+  async function uploadBackgroundFile(templateId: string, file: File, side: "front" | "back") {
     setUploading(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
+      fd.append("side", side);
       const res = await fetch(`/api/id-card-templates/${templateId}/background`, {
         method: "POST",
         body: fd,
@@ -493,9 +563,13 @@ function TemplateDesigner() {
       });
       if (!res.ok) throw new Error("Upload failed");
       const updated = await res.json();
-      setForm((f) => ({ ...f, backgroundImageUrl: updated.backgroundImageUrl ?? "" }));
+      if (side === "back") {
+        setForm((f) => ({ ...f, backBackgroundImageUrl: updated.backBackgroundImageUrl ?? "" }));
+      } else {
+        setForm((f) => ({ ...f, backgroundImageUrl: updated.backgroundImageUrl ?? "" }));
+      }
       qc.invalidateQueries({ queryKey: ["/api/id-card-templates"] });
-      toast({ title: "Background uploaded" });
+      toast({ title: `${side === "back" ? "Back" : "Front"} background uploaded` });
     } catch {
       toast({ title: "Upload failed", variant: "destructive" });
     } finally {
@@ -512,16 +586,24 @@ function TemplateDesigner() {
     name: form.name || "Untitled",
     logoUrl: form.logoUrl || null,
     backgroundImageUrl: form.backgroundImageUrl || null,
+    backBackgroundImageUrl: form.backBackgroundImageUrl || null,
     fields: form.fields,
+    backFields: form.backFields,
     fieldPlacements: form.fieldPlacements,
+    backFieldPlacements: form.backFieldPlacements,
     backgroundColor: "#1a1a2e",
     textColor: "#ffffff",
     accentColor: "#16a34a",
     layout: form.layout,
   };
 
+  const currentFields = cardSide === "back" ? form.backFields : form.fields;
+  const currentPlacements = cardSide === "back" ? form.backFieldPlacements : form.fieldPlacements;
+  const currentAvailableFields = cardSide === "back" ? BACK_AVAILABLE_FIELDS : AVAILABLE_FIELDS;
+  const currentBgUrl = cardSide === "back" ? form.backBackgroundImageUrl : form.backgroundImageUrl;
+
   const selectedPlacement = selectedFieldKey
-    ? form.fieldPlacements.find((fp) => fp.key === selectedFieldKey)
+    ? currentPlacements.find((fp) => fp.key === selectedFieldKey)
     : null;
 
   return (
@@ -561,13 +643,17 @@ function TemplateDesigner() {
               name: t.name,
               logoUrl: t.logoUrl,
               backgroundImageUrl: t.backgroundImageUrl,
+              backBackgroundImageUrl: t.backBackgroundImageUrl,
               fields: t.fields,
+              backFields: (lc.backFields as string[]) ?? undefined,
               fieldPlacements: (lc.fieldPlacements as FieldPlacement[]) ?? undefined,
+              backFieldPlacements: (lc.backFieldPlacements as FieldPlacement[]) ?? undefined,
               backgroundColor: t.backgroundColor,
               textColor: t.textColor,
               accentColor: t.accentColor,
               layout,
             };
+            const hasBack = !!(config.backFields?.length || config.backBackgroundImageUrl);
             return (
               <Card
                 key={t.id}
@@ -580,6 +666,9 @@ function TemplateDesigner() {
                       <span className="text-sm font-medium text-white">{t.name}</span>
                       {t.isActive && (
                         <Badge className="bg-primary/15 text-primary border-primary/20 text-xs">Active</Badge>
+                      )}
+                      {hasBack && (
+                        <Badge variant="outline" className="border-zinc-600 text-zinc-400 text-[10px]">2-sided</Badge>
                       )}
                     </div>
                   </div>
@@ -620,8 +709,8 @@ function TemplateDesigner() {
       )}
 
       <Dialog open={formOpen} onOpenChange={(v) => { if (!v) resetForm(); }}>
-        <DialogContent className="max-w-5xl bg-zinc-950 border-zinc-800 text-white max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-5xl bg-zinc-950 border-zinc-800 text-white max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
               <CreditCard className="h-5 w-5 text-primary" />
               {editId ? "Edit Template" : "New ID Card Template"}
@@ -629,328 +718,386 @@ function TemplateDesigner() {
             <DialogDescription className="sr-only">Design your ID card template</DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6 mt-4">
-            <div className="space-y-4 overflow-y-auto max-h-[70vh] pr-1">
-              <div className="space-y-2">
-                <Label className="text-white">Template Name *</Label>
-                <Input
-                  data-testid="input-template-name"
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g. Ramadan 1447 Card"
-                  className="bg-zinc-900 border-zinc-700 text-white"
-                />
-              </div>
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6 mt-4">
+              <div className="space-y-4 pr-1">
+                <div className="space-y-2">
+                  <Label className="text-white">Template Name *</Label>
+                  <Input
+                    data-testid="input-template-name"
+                    value={form.name}
+                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="e.g. Ramadan 1447 Card"
+                    className="bg-zinc-900 border-zinc-700 text-white"
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label className="text-white">Event (optional)</Label>
-                <Select value={form.eventId} onValueChange={(v) => setForm((f) => ({ ...f, eventId: v === "none" ? "" : v }))}>
-                  <SelectTrigger className="bg-zinc-900 border-zinc-700 text-white" data-testid="select-template-event">
-                    <SelectValue placeholder="All events (global)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">All events (global)</SelectItem>
-                    {events.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                <div className="space-y-2">
+                  <Label className="text-white">Event (optional)</Label>
+                  <Select value={form.eventId} onValueChange={(v) => setForm((f) => ({ ...f, eventId: v === "none" ? "" : v }))}>
+                    <SelectTrigger className="bg-zinc-900 border-zinc-700 text-white" data-testid="select-template-event">
+                      <SelectValue placeholder="All events (global)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">All events (global)</SelectItem>
+                      {events.map((e) => (
+                        <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-white text-xs uppercase tracking-wider">Card Layout</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {CARD_LAYOUTS.map((l) => (
+                      <button
+                        key={l.key}
+                        type="button"
+                        className={`p-2 rounded-md border text-left transition-colors ${
+                          form.layout === l.key
+                            ? "border-primary bg-primary/10 text-white"
+                            : "border-zinc-800 hover:border-zinc-600 text-zinc-400"
+                        }`}
+                        onClick={() => handleLayoutChange(l.key)}
+                        data-testid={`button-layout-${l.key}`}
+                      >
+                        <div className="text-xs font-medium">{l.label}</div>
+                        <div className="text-[10px] opacity-70 mt-0.5">{l.description}</div>
+                      </button>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  </div>
+                </div>
 
-              <Separator className="bg-zinc-800" />
+                <Separator className="bg-zinc-800" />
 
-              <div className="space-y-2">
-                <Label className="text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
-                  <ImageIcon className="h-3.5 w-3.5" /> Background Template
-                </Label>
-                <p className="text-[11px] text-zinc-500">
-                  Upload a predesigned card image (PNG/JPG). Fields will overlay on top.
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-zinc-700 gap-1.5 flex-1"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading}
-                    data-testid="button-upload-background"
+                <div className="flex gap-1 p-1 bg-zinc-900 rounded-lg border border-zinc-800">
+                  <button
+                    type="button"
+                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-colors ${
+                      cardSide === "front"
+                        ? "bg-primary text-primary-foreground"
+                        : "text-zinc-400 hover:text-white"
+                    }`}
+                    onClick={() => { setCardSide("front"); setSelectedFieldKey(null); }}
+                    data-testid="button-card-side-front"
                   >
-                    {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                    {form.backgroundImageUrl ? "Change Image" : "Upload Image"}
-                  </Button>
-                  {form.backgroundImageUrl && (
+                    Front Side
+                  </button>
+                  <button
+                    type="button"
+                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-colors ${
+                      cardSide === "back"
+                        ? "bg-primary text-primary-foreground"
+                        : "text-zinc-400 hover:text-white"
+                    }`}
+                    onClick={() => { setCardSide("back"); setSelectedFieldKey(null); }}
+                    data-testid="button-card-side-back"
+                  >
+                    Back Side
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <ImageIcon className="h-3.5 w-3.5" /> {cardSide === "back" ? "Back" : "Front"} Background
+                  </Label>
+                  <p className="text-[11px] text-zinc-500">
+                    Upload a predesigned card image (PNG/JPG). Fields will overlay on top.
+                  </p>
+                  <div className="flex gap-2">
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="text-red-400 h-8 px-2"
-                      onClick={() => setForm((f) => ({ ...f, backgroundImageUrl: "" }))}
+                      className="border-zinc-700 gap-1.5 flex-1"
+                      onClick={() => cardSide === "back" ? backFileInputRef.current?.click() : fileInputRef.current?.click()}
+                      disabled={uploading}
+                      data-testid="button-upload-background"
                     >
-                      <X className="h-3.5 w-3.5" />
+                      {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                      {currentBgUrl ? "Change Image" : "Upload Image"}
                     </Button>
+                    {currentBgUrl && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-400 h-8 px-2"
+                        onClick={() => {
+                          if (cardSide === "back") {
+                            setForm((f) => ({ ...f, backBackgroundImageUrl: "" }));
+                          } else {
+                            setForm((f) => ({ ...f, backgroundImageUrl: "" }));
+                          }
+                        }}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleBackgroundUpload(file, "front");
+                      e.target.value = "";
+                    }}
+                  />
+                  <input
+                    ref={backFileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleBackgroundUpload(file, "back");
+                      e.target.value = "";
+                    }}
+                  />
+                  {currentBgUrl && (
+                    <div className="text-xs text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" /> Background image loaded
+                    </div>
                   )}
                 </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/jpg,image/webp"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleBackgroundUpload(file);
-                    e.target.value = "";
-                  }}
-                />
-                {form.backgroundImageUrl && (
-                  <div className="text-xs text-emerald-400 flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" /> Background image loaded
+
+                <Separator className="bg-zinc-800" />
+
+                <div className="space-y-2">
+                  <Label className="text-white text-xs uppercase tracking-wider">
+                    {cardSide === "back" ? "Back" : "Front"} Fields
+                  </Label>
+                  <div className="space-y-1">
+                    {currentAvailableFields.map((f) => (
+                      <label
+                        key={f.key}
+                        className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-colors ${
+                          selectedFieldKey === f.key
+                            ? "border-primary bg-primary/5"
+                            : "border-zinc-800 hover:border-zinc-700"
+                        }`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setSelectedFieldKey(f.key);
+                        }}
+                      >
+                        <Checkbox
+                          checked={currentFields.includes(f.key)}
+                          onCheckedChange={() => toggleField(f.key)}
+                          data-testid={`checkbox-field-${f.key}`}
+                        />
+                        <span className="text-sm text-zinc-300 flex-1">{f.label}</span>
+                        {currentFields.includes(f.key) && (
+                          <Move className="h-3 w-3 text-zinc-600" />
+                        )}
+                      </label>
+                    ))}
                   </div>
+                </div>
+
+                {selectedPlacement && selectedPlacement.key !== "photo" && selectedPlacement.key !== "qrCode" && (
+                  <>
+                    <Separator className="bg-zinc-800" />
+                    <div className="space-y-3">
+                      <Label className="text-white text-xs uppercase tracking-wider">
+                        Field: {[...AVAILABLE_FIELDS, ...BACK_AVAILABLE_FIELDS].find((f) => f.key === selectedPlacement.key)?.label}
+                      </Label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-zinc-400 text-xs">Font Size</Label>
+                          <Input
+                            type="number"
+                            min={6}
+                            max={28}
+                            value={selectedPlacement.fontSize}
+                            onChange={(e) =>
+                              updatePlacement(selectedPlacement.key, { fontSize: Number(e.target.value) || 10 })
+                            }
+                            className="bg-zinc-900 border-zinc-700 text-white h-8 text-xs"
+                            data-testid="input-field-font-size"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-zinc-400 text-xs">Font Weight</Label>
+                          <Select
+                            value={String(selectedPlacement.fontWeight)}
+                            onValueChange={(v) => updatePlacement(selectedPlacement.key, { fontWeight: Number(v) })}
+                          >
+                            <SelectTrigger className="bg-zinc-900 border-zinc-700 text-white h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="400">Normal</SelectItem>
+                              <SelectItem value="500">Medium</SelectItem>
+                              <SelectItem value="600">Semibold</SelectItem>
+                              <SelectItem value="700">Bold</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-zinc-400 text-xs">Font Color</Label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={selectedPlacement.fontColor}
+                            onChange={(e) => updatePlacement(selectedPlacement.key, { fontColor: e.target.value })}
+                            className="h-7 w-7 rounded cursor-pointer border-0"
+                            data-testid="input-field-color"
+                          />
+                          <Input
+                            value={selectedPlacement.fontColor}
+                            onChange={(e) => updatePlacement(selectedPlacement.key, { fontColor: e.target.value })}
+                            className="bg-zinc-900 border-zinc-700 text-white text-xs font-mono h-8 flex-1"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-zinc-400 text-xs">X</Label>
+                          <Input
+                            type="number"
+                            value={selectedPlacement.x}
+                            onChange={(e) => updatePlacement(selectedPlacement.key, { x: Number(e.target.value) || 0 })}
+                            className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-zinc-400 text-xs">Y</Label>
+                          <Input
+                            type="number"
+                            value={selectedPlacement.y}
+                            onChange={(e) => updatePlacement(selectedPlacement.key, { y: Number(e.target.value) || 0 })}
+                            className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-zinc-400 text-xs">Width</Label>
+                          <Input
+                            type="number"
+                            value={selectedPlacement.w}
+                            onChange={(e) => updatePlacement(selectedPlacement.key, { w: Math.max(30, Number(e.target.value) || 30) })}
+                            className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-zinc-400 text-xs">Height</Label>
+                          <Input
+                            type="number"
+                            value={selectedPlacement.h}
+                            onChange={(e) => updatePlacement(selectedPlacement.key, { h: Math.max(14, Number(e.target.value) || 14) })}
+                            className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
 
-              <Separator className="bg-zinc-800" />
+              <div className="space-y-3">
+                <Label className="text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <Eye className="h-3.5 w-3.5" /> Interactive Preview — {cardSide === "back" ? "Back" : "Front"}
+                </Label>
+                <p className="text-[11px] text-zinc-500">
+                  Drag fields to reposition them. Click a field to select it and adjust its properties.
+                </p>
 
-              <div className="space-y-2">
-                <Label className="text-white text-xs uppercase tracking-wider">Card Layout</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {CARD_LAYOUTS.map((l) => (
-                    <button
-                      key={l.key}
-                      type="button"
-                      className={`p-2 rounded-md border text-left transition-colors ${
-                        form.layout === l.key
-                          ? "border-primary bg-primary/10 text-white"
-                          : "border-zinc-800 hover:border-zinc-600 text-zinc-400"
-                      }`}
-                      onClick={() => handleLayoutChange(l.key)}
-                      data-testid={`button-layout-${l.key}`}
-                    >
-                      <div className="text-xs font-medium">{l.label}</div>
-                      <div className="text-[10px] opacity-70 mt-0.5">{l.description}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <Separator className="bg-zinc-800" />
-
-              <div className="space-y-2">
-                <Label className="text-white text-xs uppercase tracking-wider">Fields to Display</Label>
-                <div className="space-y-1">
-                  {AVAILABLE_FIELDS.map((f) => (
-                    <label
-                      key={f.key}
-                      className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-colors ${
-                        selectedFieldKey === f.key
-                          ? "border-primary bg-primary/5"
-                          : "border-zinc-800 hover:border-zinc-700"
-                      }`}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setSelectedFieldKey(f.key);
-                      }}
-                    >
-                      <Checkbox
-                        checked={form.fields.includes(f.key)}
-                        onCheckedChange={() => toggleField(f.key)}
-                        data-testid={`checkbox-field-${f.key}`}
-                      />
-                      <span className="text-sm text-zinc-300 flex-1">{f.label}</span>
-                      {form.fields.includes(f.key) && (
-                        <Move className="h-3 w-3 text-zinc-600" />
-                      )}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {selectedPlacement && selectedPlacement.key !== "photo" && (
-                <>
-                  <Separator className="bg-zinc-800" />
-                  <div className="space-y-3">
-                    <Label className="text-white text-xs uppercase tracking-wider">
-                      Field: {AVAILABLE_FIELDS.find((f) => f.key === selectedPlacement.key)?.label}
-                    </Label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label className="text-zinc-400 text-xs">Font Size</Label>
-                        <Input
-                          type="number"
-                          min={6}
-                          max={28}
-                          value={selectedPlacement.fontSize}
-                          onChange={(e) =>
-                            updatePlacement(selectedPlacement.key, { fontSize: Number(e.target.value) || 10 })
+                <div
+                  className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 flex items-center justify-center"
+                  onClick={() => setSelectedFieldKey(null)}
+                >
+                  <div
+                    style={{
+                      position: "relative",
+                      width: canvasW * previewScale,
+                      height: canvasH * previewScale,
+                      borderRadius: 6 * previewScale,
+                      overflow: "hidden",
+                      boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+                      fontFamily: "'Inter', system-ui, sans-serif",
+                      ...(currentBgUrl
+                        ? {
+                            backgroundImage: `url('${currentBgUrl}')`,
+                            backgroundSize: "cover",
+                            backgroundPosition: "center",
                           }
-                          className="bg-zinc-900 border-zinc-700 text-white h-8 text-xs"
-                          data-testid="input-field-font-size"
+                        : {
+                            background: "#1a1a2e",
+                          }),
+                    }}
+                    data-testid="template-canvas"
+                  >
+                    {currentPlacements.map((fp) => {
+                      const allFields = [...AVAILABLE_FIELDS, ...BACK_AVAILABLE_FIELDS];
+                      const fieldDef = allFields.find((f) => f.key === fp.key);
+                      let sampleVal = "";
+                      if (cardSide === "back") {
+                        sampleVal = fp.key === "qrCode" ? "QR" : (BACK_SAMPLE_DATA[fp.key] ?? "");
+                      } else {
+                        sampleVal = fp.key === "photo"
+                          ? (SAMPLE_EMPLOYEE.fullName?.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase() ?? "")
+                          : (SAMPLE_EMPLOYEE as Record<string, unknown>)[fp.key] as string || "";
+                      }
+                      return (
+                        <DraggableField
+                          key={fp.key}
+                          fp={fp}
+                          label={fieldDef?.label ?? fp.key}
+                          sampleValue={sampleVal}
+                          scale={previewScale}
+                          selected={selectedFieldKey === fp.key}
+                          onSelect={() => setSelectedFieldKey(fp.key)}
+                          onDragEnd={(x, y) => updatePlacement(fp.key, { x, y })}
+                          onResize={(w, h) => updatePlacement(fp.key, { w, h })}
                         />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-zinc-400 text-xs">Font Weight</Label>
-                        <Select
-                          value={String(selectedPlacement.fontWeight)}
-                          onValueChange={(v) => updatePlacement(selectedPlacement.key, { fontWeight: Number(v) })}
-                        >
-                          <SelectTrigger className="bg-zinc-900 border-zinc-700 text-white h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="400">Normal</SelectItem>
-                            <SelectItem value="500">Medium</SelectItem>
-                            <SelectItem value="600">Semibold</SelectItem>
-                            <SelectItem value="700">Bold</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <p className="text-xs text-zinc-500 text-center">
+                  CR-80 size: 85.6mm x 54mm — {cardSide === "back" ? "Back side" : "Front side"}
+                </p>
+
+                <Separator className="bg-zinc-800" />
+
+                <div className="space-y-2">
+                  <Label className="text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <Eye className="h-3.5 w-3.5" /> Print Preview
+                  </Label>
+                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 flex items-center justify-center gap-6 flex-wrap">
+                    <div className="space-y-1 text-center">
+                      <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Front</p>
+                      <div dangerouslySetInnerHTML={{ __html: renderIdCardHTML(previewConfig, SAMPLE_EMPLOYEE, 1.0) }} />
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-zinc-400 text-xs">Font Color</Label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={selectedPlacement.fontColor}
-                          onChange={(e) => updatePlacement(selectedPlacement.key, { fontColor: e.target.value })}
-                          className="h-7 w-7 rounded cursor-pointer border-0"
-                          data-testid="input-field-color"
-                        />
-                        <Input
-                          value={selectedPlacement.fontColor}
-                          onChange={(e) => updatePlacement(selectedPlacement.key, { fontColor: e.target.value })}
-                          className="bg-zinc-900 border-zinc-700 text-white text-xs font-mono h-8 flex-1"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label className="text-zinc-400 text-xs">X</Label>
-                        <Input
-                          type="number"
-                          value={selectedPlacement.x}
-                          onChange={(e) => updatePlacement(selectedPlacement.key, { x: Number(e.target.value) || 0 })}
-                          className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-zinc-400 text-xs">Y</Label>
-                        <Input
-                          type="number"
-                          value={selectedPlacement.y}
-                          onChange={(e) => updatePlacement(selectedPlacement.key, { y: Number(e.target.value) || 0 })}
-                          className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label className="text-zinc-400 text-xs">Width</Label>
-                        <Input
-                          type="number"
-                          value={selectedPlacement.w}
-                          onChange={(e) => updatePlacement(selectedPlacement.key, { w: Math.max(30, Number(e.target.value) || 30) })}
-                          className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-zinc-400 text-xs">Height</Label>
-                        <Input
-                          type="number"
-                          value={selectedPlacement.h}
-                          onChange={(e) => updatePlacement(selectedPlacement.key, { h: Math.max(14, Number(e.target.value) || 14) })}
-                          className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs"
-                        />
-                      </div>
+                    <div className="space-y-1 text-center">
+                      <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Back</p>
+                      <div dangerouslySetInnerHTML={{ __html: renderBackSideHTML(previewConfig, 1.0) }} />
                     </div>
                   </div>
-                </>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" className="border-zinc-700" onClick={resetForm}>
-                  Cancel
-                </Button>
-                <Button
-                  className="bg-primary text-primary-foreground"
-                  onClick={handleSave}
-                  disabled={saveMutation.isPending}
-                  data-testid="button-save-template"
-                >
-                  {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                  {editId ? "Update Template" : "Create Template"}
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
-                <Eye className="h-3.5 w-3.5" /> Interactive Preview
-              </Label>
-              <p className="text-[11px] text-zinc-500">
-                Drag fields to reposition them. Click a field to select it and adjust its properties.
-              </p>
-
-              <div
-                className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 flex items-center justify-center"
-                onClick={() => setSelectedFieldKey(null)}
-              >
-                <div
-                  style={{
-                    position: "relative",
-                    width: canvasW * previewScale,
-                    height: canvasH * previewScale,
-                    borderRadius: 6 * previewScale,
-                    overflow: "hidden",
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-                    fontFamily: "'Inter', system-ui, sans-serif",
-                    ...(form.backgroundImageUrl
-                      ? {
-                          backgroundImage: `url('${form.backgroundImageUrl}')`,
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                        }
-                      : {
-                          background: "#1a1a2e",
-                        }),
-                  }}
-                  data-testid="template-canvas"
-                >
-                  {form.fieldPlacements.map((fp) => {
-                    const fieldDef = AVAILABLE_FIELDS.find((f) => f.key === fp.key);
-                    const sampleVal =
-                      fp.key === "photo"
-                        ? (SAMPLE_EMPLOYEE.fullName?.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase() ?? "")
-                        : (SAMPLE_EMPLOYEE as Record<string, unknown>)[fp.key] as string || "";
-                    return (
-                      <DraggableField
-                        key={fp.key}
-                        fp={fp}
-                        label={fieldDef?.label ?? fp.key}
-                        sampleValue={sampleVal}
-                        scale={previewScale}
-                        selected={selectedFieldKey === fp.key}
-                        onSelect={() => setSelectedFieldKey(fp.key)}
-                        onDragEnd={(x, y) => updatePlacement(fp.key, { x, y })}
-                        onResize={(w, h) => updatePlacement(fp.key, { w, h })}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-
-              <p className="text-xs text-zinc-500 text-center">
-                CR-80 size: 85.6mm × 54mm — Drag fields to position them on the card
-              </p>
-
-              <Separator className="bg-zinc-800" />
-
-              <div className="space-y-2">
-                <Label className="text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
-                  <Eye className="h-3.5 w-3.5" /> Print Preview
-                </Label>
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 flex items-center justify-center">
-                  <div dangerouslySetInnerHTML={{ __html: renderIdCardHTML(previewConfig, SAMPLE_EMPLOYEE, 1.3) }} />
                 </div>
               </div>
             </div>
+          </div>
+
+          <div className="flex-shrink-0 flex justify-end gap-2 pt-4 border-t border-zinc-800 mt-4">
+            <Button variant="outline" className="border-zinc-700" onClick={resetForm}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-primary text-primary-foreground"
+              onClick={handleSave}
+              disabled={saveMutation.isPending}
+              data-testid="button-save-template"
+            >
+              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              {editId ? "Update Template" : "Create Template"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

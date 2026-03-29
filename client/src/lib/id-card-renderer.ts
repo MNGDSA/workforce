@@ -72,12 +72,53 @@ export function defaultFieldPlacements(layout: CardLayout): FieldPlacement[] {
   ];
 }
 
+export const BACK_AVAILABLE_FIELDS = [
+  { key: "companyName", label: "Company Name" },
+  { key: "companyAddress", label: "Company Address" },
+  { key: "companyPhone", label: "Company Phone" },
+  { key: "emergencyContact", label: "Emergency Contact" },
+  { key: "bloodType", label: "Blood Type" },
+  { key: "qrCode", label: "QR Code Placeholder" },
+  { key: "disclaimer", label: "Disclaimer Text" },
+] as const;
+
+export type BackFieldKey = (typeof BACK_AVAILABLE_FIELDS)[number]["key"];
+
+export function defaultBackFieldPlacements(layout: CardLayout): FieldPlacement[] {
+  const isVert = layout === "vertical";
+  const cw = isVert ? CANVAS_H : CANVAS_W;
+  const ch = isVert ? CANVAS_W : CANVAS_H;
+
+  return [
+    { key: "companyName", x: 10, y: 20, w: cw - 20, h: 22, fontSize: 13, fontColor: "#ffffff", fontWeight: 700, visible: true },
+    { key: "companyAddress", x: 10, y: 46, w: cw - 20, h: 18, fontSize: 9, fontColor: "#ffffff", fontWeight: 400, visible: true },
+    { key: "companyPhone", x: 10, y: 68, w: cw - 20, h: 18, fontSize: 9, fontColor: "#ffffff", fontWeight: 400, visible: false },
+    { key: "emergencyContact", x: 10, y: 90, w: cw - 20, h: 18, fontSize: 9, fontColor: "#ffffff", fontWeight: 400, visible: false },
+    { key: "bloodType", x: 10, y: 112, w: cw - 20, h: 18, fontSize: 10, fontColor: "#ffffff", fontWeight: 500, visible: false },
+    { key: "qrCode", x: (cw - 60) / 2, y: ch - 80, w: 60, h: 60, fontSize: 0, fontColor: "#ffffff", fontWeight: 400, visible: false },
+    { key: "disclaimer", x: 10, y: ch - 30, w: cw - 20, h: 20, fontSize: 7, fontColor: "#ffffff", fontWeight: 400, visible: true },
+  ];
+}
+
+export const BACK_SAMPLE_DATA: Record<string, string> = {
+  companyName: "Luxury Carts Company Ltd",
+  companyAddress: "Makkah, Saudi Arabia",
+  companyPhone: "+966 12 345 6789",
+  emergencyContact: "Emergency: 911",
+  bloodType: "O+",
+  qrCode: "QR",
+  disclaimer: "Property of Luxury Carts Co. Return if found.",
+};
+
 export interface IdCardTemplateConfig {
   name: string;
   logoUrl?: string | null;
   backgroundImageUrl?: string | null;
+  backBackgroundImageUrl?: string | null;
   fields: string[];
+  backFields?: string[];
   fieldPlacements?: FieldPlacement[];
+  backFieldPlacements?: FieldPlacement[];
   backgroundColor: string;
   textColor: string;
   accentColor: string;
@@ -225,6 +266,53 @@ export function renderIdCardHTML(
   </div>`;
 }
 
+export function renderBackSideHTML(
+  template: IdCardTemplateConfig,
+  scale: number = 1,
+): string {
+  const layout = template.layout ?? "horizontal";
+  const dims = getCanvasDimensions(layout);
+  const w = Math.round(dims.w * scale);
+  const h = Math.round(dims.h * scale);
+  const bgColor = escapeHTML(template.backgroundColor || "#1a1a2e");
+  const bgImage = template.backBackgroundImageUrl;
+
+  let placements = template.backFieldPlacements && template.backFieldPlacements.length > 0
+    ? template.backFieldPlacements
+    : defaultBackFieldPlacements(layout);
+
+  if (template.backFields !== undefined) {
+    placements = placements.map((fp) => ({
+      ...fp,
+      visible: template.backFields!.includes(fp.key),
+    }));
+  }
+
+  const visiblePlacements = placements.filter((fp) => fp.visible);
+
+  const fieldElements = visiblePlacements
+    .map((fp) => {
+      if (fp.key === "qrCode") {
+        const x = fp.x * scale;
+        const y = fp.y * scale;
+        const sz = fp.w * scale;
+        return `<div style="position:absolute;left:${x}px;top:${y}px;width:${sz}px;height:${sz}px;border:2px dashed rgba(255,255,255,0.3);border-radius:${4 * scale}px;display:flex;align-items:center;justify-content:center;font-size:${10 * scale}px;color:rgba(255,255,255,0.5);font-weight:600;">QR</div>`;
+      }
+      const value = BACK_SAMPLE_DATA[fp.key] ?? "";
+      if (!value) return "";
+      return renderTextPlacementHTML(fp, value, scale);
+    })
+    .join("");
+
+  const bgStyle = bgImage
+    ? `background-image:url('${escapeHTML(bgImage)}');background-size:cover;background-position:center;`
+    : `background:${bgColor};`;
+
+  return `<div style="width:${w}px;height:${h}px;${bgStyle}border-radius:${6 * scale}px;overflow:hidden;position:relative;font-family:'Inter',system-ui,sans-serif;box-sizing:border-box;">
+    ${fieldElements}
+  </div>`;
+}
+
 export function printIdCardFallback(
   template: IdCardTemplateConfig,
   employees: EmployeeCardData[],
@@ -232,8 +320,15 @@ export function printIdCardFallback(
   const printWin = window.open("", "_blank", "width=400,height=600");
   if (!printWin) return false;
 
+  const hasBack = (template.backFields && template.backFields.length > 0) || template.backBackgroundImageUrl;
+
   const cardsHTML = employees
-    .map((emp) => renderIdCardHTML(template, emp, 1))
+    .map((emp) => {
+      const front = renderIdCardHTML(template, emp, 1);
+      if (!hasBack) return front;
+      const back = renderBackSideHTML(template, 1);
+      return `${front}<div style="page-break-after:always;"></div>${back}`;
+    })
     .join(`<div style="page-break-after:always;margin-bottom:10mm;"></div>`);
 
   const layout = template.layout ?? "horizontal";
@@ -287,6 +382,8 @@ async function sendViaZebraBrowserPrint(
 
   const results: PrintJobResult[] = [];
 
+  const hasBack = !!(template.backFields?.length || template.backBackgroundImageUrl);
+
   for (const emp of employees) {
     try {
       const cardHTML = renderIdCardHTML(template, emp, 1);
@@ -295,6 +392,15 @@ async function sendViaZebraBrowserPrint(
         headers: { "Content-Type": "text/plain" },
         body: cardHTML,
       });
+
+      if (hasBack) {
+        const backHTML = renderBackSideHTML(template, 1);
+        await fetch(`${endpoint}/write`, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: backHTML,
+        });
+      }
 
       if (response.ok) {
         results.push({ employeeId: emp.employeeNumber, status: "success", pluginUsed: plugin.id });
