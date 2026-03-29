@@ -799,7 +799,6 @@ export const idCardTemplates = pgTable(
     layoutConfig: jsonb("layout_config").notNull().default(sql`'{}'::jsonb`),
     logoUrl: text("logo_url"),
     backgroundImageUrl: text("background_image_url"),
-    backBackgroundImageUrl: text("back_background_image_url"),
     fields: text("fields").array().notNull().default(sql`ARRAY['fullName','photo','employeeNumber']::text[]`),
     backgroundColor: text("background_color").notNull().default("#1a1a2e"),
     textColor: text("text_color").notNull().default("#ffffff"),

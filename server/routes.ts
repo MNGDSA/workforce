@@ -2056,10 +2056,7 @@ export async function registerRoutes(
     try {
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
       const imageUrl = `/uploads/${req.file.filename}`;
-      const side = req.body?.side === "back" ? "back" : "front";
-      const updateData = side === "back"
-        ? { backBackgroundImageUrl: imageUrl }
-        : { backgroundImageUrl: imageUrl };
+      const updateData = { backgroundImageUrl: imageUrl };
       const template = await storage.updateIdCardTemplate(req.params.id, updateData);
       if (!template) return res.status(404).json({ message: "Template not found" });
       return res.json(template);

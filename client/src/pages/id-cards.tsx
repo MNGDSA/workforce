@@ -62,17 +62,13 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
   AVAILABLE_FIELDS,
-  BACK_AVAILABLE_FIELDS,
-  BACK_SAMPLE_DATA,
   CARD_LAYOUTS,
   PLUGIN_TYPES,
   SAMPLE_EMPLOYEE,
   CANVAS_W,
   CANVAS_H,
   renderIdCardHTML,
-  renderBackSideHTML,
   defaultFieldPlacements,
-  defaultBackFieldPlacements,
   type IdCardTemplateConfig,
   type CardLayout,
   type FieldPlacement,
@@ -85,7 +81,6 @@ type IdCardTemplate = {
   layoutConfig: Record<string, unknown>;
   logoUrl: string | null;
   backgroundImageUrl: string | null;
-  backBackgroundImageUrl: string | null;
   fields: string[];
   backgroundColor: string;
   textColor: string;
@@ -334,19 +329,14 @@ function TemplateDesigner() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [cardSide, setCardSide] = useState<"front" | "back">("front");
-
   const [form, setForm] = useState({
     name: "",
     eventId: "",
     logoUrl: "",
     backgroundImageUrl: "" as string,
-    backBackgroundImageUrl: "" as string,
     fields: ["fullName", "photo", "employeeNumber"] as string[],
-    backFields: ["companyName", "companyAddress", "disclaimer"] as string[],
     layout: "horizontal" as CardLayout,
     fieldPlacements: defaultFieldPlacements("horizontal") as FieldPlacement[],
-    backFieldPlacements: defaultBackFieldPlacements("horizontal") as FieldPlacement[],
   });
 
   const { data: templates = [] } = useQuery<IdCardTemplate[]>({
@@ -366,12 +356,8 @@ function TemplateDesigner() {
         : apiRequest("POST", "/api/id-card-templates", data).then((r) => r.json()),
     onSuccess: async (created: { id: string }) => {
       if (pendingBgFile && !editId && created?.id) {
-        await uploadBackgroundFile(created.id, pendingBgFile, "front");
+        await uploadBackgroundFile(created.id, pendingBgFile);
         setPendingBgFile(null);
-      }
-      if (pendingBackBgFile && !editId && created?.id) {
-        await uploadBackgroundFile(created.id, pendingBackBgFile, "back");
-        setPendingBackBgFile(null);
       }
       toast({ title: editId ? "Template Updated" : "Template Created" });
       qc.invalidateQueries({ queryKey: ["/api/id-card-templates"] });
@@ -405,17 +391,13 @@ function TemplateDesigner() {
       eventId: "",
       logoUrl: "",
       backgroundImageUrl: "",
-      backBackgroundImageUrl: "",
       fields: ["fullName", "photo", "employeeNumber"],
-      backFields: ["companyName", "companyAddress", "disclaimer"],
       layout: "horizontal",
       fieldPlacements: defaultFieldPlacements("horizontal"),
-      backFieldPlacements: defaultBackFieldPlacements("horizontal"),
     });
     setEditId(null);
     setFormOpen(false);
     setSelectedFieldKey(null);
-    setCardSide("front");
   }
 
   function openEdit(t: IdCardTemplate) {
@@ -429,28 +411,17 @@ function TemplateDesigner() {
       : defaultFieldPlacements(layout)
     ).map((fp) => ({ ...fp, visible: activeFields.includes(fp.key) }));
 
-    const savedBackPlacements = (lc.backFieldPlacements as FieldPlacement[] | undefined);
-    const activeBackFields = (lc.backFields as string[] | undefined) ?? ["companyName", "companyAddress", "disclaimer"];
-    const backPlacements = (savedBackPlacements && savedBackPlacements.length > 0
-      ? savedBackPlacements
-      : defaultBackFieldPlacements(layout)
-    ).map((fp) => ({ ...fp, visible: activeBackFields.includes(fp.key) }));
-
     setForm({
       name: t.name,
       eventId: t.eventId ?? "",
       logoUrl: t.logoUrl ?? "",
       backgroundImageUrl: t.backgroundImageUrl ?? "",
-      backBackgroundImageUrl: t.backBackgroundImageUrl ?? "",
       fields: activeFields,
-      backFields: activeBackFields,
       layout,
       fieldPlacements: placements,
-      backFieldPlacements: backPlacements,
     });
     setEditId(t.id);
     setFormOpen(true);
-    setCardSide("front");
   }
 
   function handleSave() {
@@ -461,15 +432,11 @@ function TemplateDesigner() {
     const bgUrl = form.backgroundImageUrl && !form.backgroundImageUrl.startsWith("blob:")
       ? form.backgroundImageUrl
       : null;
-    const backBgUrl = form.backBackgroundImageUrl && !form.backBackgroundImageUrl.startsWith("blob:")
-      ? form.backBackgroundImageUrl
-      : null;
     saveMutation.mutate({
       name: form.name.trim(),
       eventId: form.eventId || null,
       logoUrl: form.logoUrl || null,
       backgroundImageUrl: bgUrl,
-      backBackgroundImageUrl: backBgUrl,
       fields: form.fields,
       backgroundColor: "#1a1a2e",
       textColor: "#ffffff",
@@ -477,52 +444,29 @@ function TemplateDesigner() {
       layoutConfig: {
         layout: form.layout,
         fieldPlacements: form.fieldPlacements,
-        backFields: form.backFields,
-        backFieldPlacements: form.backFieldPlacements,
       },
     });
   }
 
   function toggleField(key: string) {
-    if (cardSide === "back") {
-      setForm((f) => {
-        const newFields = f.backFields.includes(key)
-          ? f.backFields.filter((k) => k !== key)
-          : [...f.backFields, key];
-        const newPlacements = f.backFieldPlacements.map((fp) =>
-          fp.key === key ? { ...fp, visible: newFields.includes(key) } : fp,
-        );
-        return { ...f, backFields: newFields, backFieldPlacements: newPlacements };
-      });
-    } else {
-      setForm((f) => {
-        const newFields = f.fields.includes(key)
-          ? f.fields.filter((k) => k !== key)
-          : [...f.fields, key];
-        const newPlacements = f.fieldPlacements.map((fp) =>
-          fp.key === key ? { ...fp, visible: newFields.includes(key) } : fp,
-        );
-        return { ...f, fields: newFields, fieldPlacements: newPlacements };
-      });
-    }
+    setForm((f) => {
+      const newFields = f.fields.includes(key)
+        ? f.fields.filter((k) => k !== key)
+        : [...f.fields, key];
+      const newPlacements = f.fieldPlacements.map((fp) =>
+        fp.key === key ? { ...fp, visible: newFields.includes(key) } : fp,
+      );
+      return { ...f, fields: newFields, fieldPlacements: newPlacements };
+    });
   }
 
   function updatePlacement(key: string, updates: Partial<FieldPlacement>) {
-    if (cardSide === "back") {
-      setForm((f) => ({
-        ...f,
-        backFieldPlacements: f.backFieldPlacements.map((fp) =>
-          fp.key === key ? { ...fp, ...updates } : fp,
-        ),
-      }));
-    } else {
-      setForm((f) => ({
-        ...f,
-        fieldPlacements: f.fieldPlacements.map((fp) =>
-          fp.key === key ? { ...fp, ...updates } : fp,
-        ),
-      }));
-    }
+    setForm((f) => ({
+      ...f,
+      fieldPlacements: f.fieldPlacements.map((fp) =>
+        fp.key === key ? { ...fp, ...updates } : fp,
+      ),
+    }));
   }
 
   function handleLayoutChange(newLayout: CardLayout) {
@@ -535,41 +479,27 @@ function TemplateDesigner() {
           ? { ...dfp, visible: f.fields.includes(dfp.key), fontColor: existing.fontColor, fontSize: existing.fontSize, fontWeight: existing.fontWeight }
           : { ...dfp, visible: f.fields.includes(dfp.key) };
       }),
-      backFieldPlacements: defaultBackFieldPlacements(newLayout).map((dfp) => {
-        const existing = f.backFieldPlacements.find((fp) => fp.key === dfp.key);
-        return existing
-          ? { ...dfp, visible: f.backFields.includes(dfp.key), fontColor: existing.fontColor, fontSize: existing.fontSize, fontWeight: existing.fontWeight }
-          : { ...dfp, visible: f.backFields.includes(dfp.key) };
-      }),
     }));
   }
 
   const [pendingBgFile, setPendingBgFile] = useState<File | null>(null);
-  const [pendingBackBgFile, setPendingBackBgFile] = useState<File | null>(null);
-  const backFileInputRef = useRef<HTMLInputElement>(null);
 
-  async function handleBackgroundUpload(file: File, side: "front" | "back" = "front") {
+  async function handleBackgroundUpload(file: File) {
     if (!editId) {
       const localUrl = URL.createObjectURL(file);
-      if (side === "back") {
-        setForm((f) => ({ ...f, backBackgroundImageUrl: localUrl }));
-        setPendingBackBgFile(file);
-      } else {
-        setForm((f) => ({ ...f, backgroundImageUrl: localUrl }));
-        setPendingBgFile(file);
-      }
+      setForm((f) => ({ ...f, backgroundImageUrl: localUrl }));
+      setPendingBgFile(file);
       return;
     }
 
-    await uploadBackgroundFile(editId, file, side);
+    await uploadBackgroundFile(editId, file);
   }
 
-  async function uploadBackgroundFile(templateId: string, file: File, side: "front" | "back") {
+  async function uploadBackgroundFile(templateId: string, file: File) {
     setUploading(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
-      fd.append("side", side);
       const res = await fetch(`/api/id-card-templates/${templateId}/background`, {
         method: "POST",
         body: fd,
@@ -577,13 +507,9 @@ function TemplateDesigner() {
       });
       if (!res.ok) throw new Error("Upload failed");
       const updated = await res.json();
-      if (side === "back") {
-        setForm((f) => ({ ...f, backBackgroundImageUrl: updated.backBackgroundImageUrl ?? "" }));
-      } else {
-        setForm((f) => ({ ...f, backgroundImageUrl: updated.backgroundImageUrl ?? "" }));
-      }
+      setForm((f) => ({ ...f, backgroundImageUrl: updated.backgroundImageUrl ?? "" }));
       qc.invalidateQueries({ queryKey: ["/api/id-card-templates"] });
-      toast({ title: `${side === "back" ? "Back" : "Front"} background uploaded` });
+      toast({ title: "Background uploaded" });
     } catch {
       toast({ title: "Upload failed", variant: "destructive" });
     } finally {
@@ -600,21 +526,18 @@ function TemplateDesigner() {
     name: form.name || "Untitled",
     logoUrl: form.logoUrl || null,
     backgroundImageUrl: form.backgroundImageUrl || null,
-    backBackgroundImageUrl: form.backBackgroundImageUrl || null,
     fields: form.fields,
-    backFields: form.backFields,
     fieldPlacements: form.fieldPlacements,
-    backFieldPlacements: form.backFieldPlacements,
     backgroundColor: "#1a1a2e",
     textColor: "#ffffff",
     accentColor: "#16a34a",
     layout: form.layout,
   };
 
-  const currentFields = cardSide === "back" ? form.backFields : form.fields;
-  const currentPlacements = cardSide === "back" ? form.backFieldPlacements : form.fieldPlacements;
-  const currentAvailableFields = cardSide === "back" ? BACK_AVAILABLE_FIELDS : AVAILABLE_FIELDS;
-  const currentBgUrl = cardSide === "back" ? form.backBackgroundImageUrl : form.backgroundImageUrl;
+  const currentFields = form.fields;
+  const currentPlacements = form.fieldPlacements;
+  const currentAvailableFields = AVAILABLE_FIELDS;
+  const currentBgUrl = form.backgroundImageUrl;
 
   const selectedPlacement = selectedFieldKey
     ? currentPlacements.find((fp) => fp.key === selectedFieldKey)
@@ -657,17 +580,13 @@ function TemplateDesigner() {
               name: t.name,
               logoUrl: t.logoUrl,
               backgroundImageUrl: t.backgroundImageUrl,
-              backBackgroundImageUrl: t.backBackgroundImageUrl,
               fields: t.fields,
-              backFields: (lc.backFields as string[]) ?? undefined,
               fieldPlacements: (lc.fieldPlacements as FieldPlacement[]) ?? undefined,
-              backFieldPlacements: (lc.backFieldPlacements as FieldPlacement[]) ?? undefined,
               backgroundColor: t.backgroundColor,
               textColor: t.textColor,
               accentColor: t.accentColor,
               layout,
             };
-            const hasBack = !!(config.backFields?.length || config.backBackgroundImageUrl);
             return (
               <Card
                 key={t.id}
@@ -680,9 +599,6 @@ function TemplateDesigner() {
                       <span className="text-sm font-medium text-white">{t.name}</span>
                       {t.isActive && (
                         <Badge className="bg-primary/15 text-primary border-primary/20 text-xs">Active</Badge>
-                      )}
-                      {hasBack && (
-                        <Badge variant="outline" className="border-zinc-600 text-zinc-400 text-[10px]">2-sided</Badge>
                       )}
                     </div>
                   </div>
@@ -785,36 +701,9 @@ function TemplateDesigner() {
 
                 <Separator className="bg-zinc-800" />
 
-                <div className="flex gap-1 p-1 bg-zinc-900 rounded-lg border border-zinc-800">
-                  <button
-                    type="button"
-                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-colors ${
-                      cardSide === "front"
-                        ? "bg-primary text-primary-foreground"
-                        : "text-zinc-400 hover:text-white"
-                    }`}
-                    onClick={() => { setCardSide("front"); setSelectedFieldKey(null); }}
-                    data-testid="button-card-side-front"
-                  >
-                    Front Side
-                  </button>
-                  <button
-                    type="button"
-                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-colors ${
-                      cardSide === "back"
-                        ? "bg-primary text-primary-foreground"
-                        : "text-zinc-400 hover:text-white"
-                    }`}
-                    onClick={() => { setCardSide("back"); setSelectedFieldKey(null); }}
-                    data-testid="button-card-side-back"
-                  >
-                    Back Side
-                  </button>
-                </div>
-
                 <div className="space-y-2">
                   <Label className="text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
-                    <ImageIcon className="h-3.5 w-3.5" /> {cardSide === "back" ? "Back" : "Front"} Background
+                    <ImageIcon className="h-3.5 w-3.5" /> Background
                   </Label>
                   <p className="text-[11px] text-zinc-500">
                     Upload a predesigned card image (PNG/JPG). Fields will overlay on top.
@@ -824,7 +713,7 @@ function TemplateDesigner() {
                       variant="outline"
                       size="sm"
                       className="border-zinc-700 gap-1.5 flex-1"
-                      onClick={() => cardSide === "back" ? backFileInputRef.current?.click() : fileInputRef.current?.click()}
+                      onClick={() => fileInputRef.current?.click()}
                       disabled={uploading}
                       data-testid="button-upload-background"
                     >
@@ -837,11 +726,7 @@ function TemplateDesigner() {
                         size="sm"
                         className="text-red-400 h-8 px-2"
                         onClick={() => {
-                          if (cardSide === "back") {
-                            setForm((f) => ({ ...f, backBackgroundImageUrl: "" }));
-                          } else {
-                            setForm((f) => ({ ...f, backgroundImageUrl: "" }));
-                          }
+                          setForm((f) => ({ ...f, backgroundImageUrl: "" }));
                         }}
                       >
                         <X className="h-3.5 w-3.5" />
@@ -855,18 +740,7 @@ function TemplateDesigner() {
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
-                      if (file) handleBackgroundUpload(file, "front");
-                      e.target.value = "";
-                    }}
-                  />
-                  <input
-                    ref={backFileInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/jpg,image/webp"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleBackgroundUpload(file, "back");
+                      if (file) handleBackgroundUpload(file);
                       e.target.value = "";
                     }}
                   />
@@ -881,7 +755,7 @@ function TemplateDesigner() {
 
                 <div className="space-y-2">
                   <Label className="text-white text-xs uppercase tracking-wider">
-                    {cardSide === "back" ? "Back" : "Front"} Fields
+                    Fields
                   </Label>
                   <div className="space-y-1">
                     {currentAvailableFields.map((f) => (
@@ -916,7 +790,7 @@ function TemplateDesigner() {
                     <Separator className="bg-zinc-800" />
                     <div className="space-y-3">
                       <Label className="text-white text-xs uppercase tracking-wider">
-                        Field: {[...AVAILABLE_FIELDS, ...BACK_AVAILABLE_FIELDS].find((f) => f.key === selectedPlacement.key)?.label}
+                        Field: {AVAILABLE_FIELDS.find((f) => f.key === selectedPlacement.key)?.label}
                       </Label>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
@@ -1039,7 +913,7 @@ function TemplateDesigner() {
 
               <div className="space-y-3">
                 <Label className="text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
-                  <Eye className="h-3.5 w-3.5" /> Interactive Preview — {cardSide === "back" ? "Back" : "Front"}
+                  <Eye className="h-3.5 w-3.5" /> Interactive Preview
                 </Label>
                 <p className="text-[11px] text-zinc-500">
                   Drag fields to reposition them. Click a field to select it and adjust its properties.
@@ -1071,16 +945,10 @@ function TemplateDesigner() {
                     data-testid="template-canvas"
                   >
                     {currentPlacements.map((fp) => {
-                      const allFields = [...AVAILABLE_FIELDS, ...BACK_AVAILABLE_FIELDS];
-                      const fieldDef = allFields.find((f) => f.key === fp.key);
-                      let sampleVal = "";
-                      if (cardSide === "back") {
-                        sampleVal = fp.key === "qrCode" ? "QR" : (BACK_SAMPLE_DATA[fp.key] ?? "");
-                      } else {
-                        sampleVal = fp.key === "photo"
-                          ? (SAMPLE_EMPLOYEE.fullName?.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase() ?? "")
-                          : (SAMPLE_EMPLOYEE as Record<string, unknown>)[fp.key] as string || "";
-                      }
+                      const fieldDef = AVAILABLE_FIELDS.find((f) => f.key === fp.key);
+                      const sampleVal = fp.key === "photo"
+                        ? (SAMPLE_EMPLOYEE.fullName?.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase() ?? "")
+                        : (SAMPLE_EMPLOYEE as Record<string, unknown>)[fp.key] as string || "";
                       return (
                         <DraggableField
                           key={fp.key}
@@ -1101,7 +969,7 @@ function TemplateDesigner() {
                 </div>
 
                 <p className="text-xs text-zinc-500 text-center">
-                  CR-80 size: 85.6mm x 54mm — {cardSide === "back" ? "Back side" : "Front side"}
+                  CR-80 size: 85.6mm x 54mm
                 </p>
 
                 <Separator className="bg-zinc-800" />
@@ -1110,15 +978,8 @@ function TemplateDesigner() {
                   <Label className="text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
                     <Eye className="h-3.5 w-3.5" /> Print Preview
                   </Label>
-                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 flex items-center justify-center gap-6 flex-wrap">
-                    <div className="space-y-1 text-center">
-                      <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Front</p>
-                      <div dangerouslySetInnerHTML={{ __html: renderIdCardHTML(previewConfig, SAMPLE_EMPLOYEE, 1.0) }} />
-                    </div>
-                    <div className="space-y-1 text-center">
-                      <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Back</p>
-                      <div dangerouslySetInnerHTML={{ __html: renderBackSideHTML(previewConfig, 1.0) }} />
-                    </div>
+                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 flex items-center justify-center">
+                    <div dangerouslySetInnerHTML={{ __html: renderIdCardHTML(previewConfig, SAMPLE_EMPLOYEE, 1.0) }} />
                   </div>
                 </div>
               </div>

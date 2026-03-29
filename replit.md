@@ -434,10 +434,9 @@ The onboarding checklist becomes a sequential pipeline instead of a flat list:
 - **Bilingual Input (EN/AR toggle)**: PrestaShop-style inline language switcher on text fields. A single `BilingualInput` component with an `EN | AR` pill toggle. Stores both `title` (English) and `titleAr` (Arabic) values, submits both, and the candidate portal renders the correct one based on user language preference. To be implemented after unit/system/regression/UAT/security testing is complete.
 - **Employee ID Cards**: Full ID card design and print engine.
   - **Template engine**: Upload predesigned card backgrounds (PNG/JPG), then position data fields (photo, name, employee number, etc.) onto the card via drag-and-drop in an interactive canvas editor. Fields can be moved, resized, and styled (font size, weight, color) individually.
-  - **Two-sided cards**: Front and back sides each have independent background images, field lists, and field placements. Back-side fields include company name, address, phone, emergency contact, blood type, QR code placeholder, and disclaimer text. Print preview shows both sides.
-  - **Card format**: CR-80 standard (85.6mm × 54mm) — horizontal or vertical orientation.
-  - **Printer-agnostic**: Works with any card printer via browser print dialog. Optional Zebra Browser Print SDK plugin for direct printing. Both paths handle two-sided printing.
-  - **Field placements**: Stored per-template in `layoutConfig.fieldPlacements` (front) and `layoutConfig.backFieldPlacements` (back). Back fields stored in `layoutConfig.backFields`. Each field has x, y, width, height, fontSize, fontColor, fontWeight, and visibility.
+  - **Card format**: CR-80 standard (85.6mm × 54mm) — horizontal or vertical orientation. Front side only.
+  - **Printer-agnostic**: Works with any card printer via browser print dialog. Optional Zebra Browser Print SDK and Evolis Premium Suite plugins for direct printing.
+  - **Field placements**: Stored per-template in `layoutConfig.fieldPlacements`. Each field has x, y, width, height, fontSize, fontColor, fontWeight, and visibility.
   - **Dialog layout**: Cancel/Save buttons are pinned to the dialog footer (outside scrollable area) for consistent accessibility.
   - **Bulk/single print**: Print from employee profile or bulk-select from Workforce page.
 
