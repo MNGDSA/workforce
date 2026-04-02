@@ -22,13 +22,21 @@ const loginSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
+const passwordComplexity = z
+  .string()
+  .min(8, "Password must be at least 8 characters")
+  .refine((v) => /[A-Z]/.test(v), "Must contain at least one uppercase letter")
+  .refine((v) => /[a-z]/.test(v), "Must contain at least one lowercase letter")
+  .refine((v) => /[0-9]/.test(v), "Must contain at least one number")
+  .refine((v) => /[^A-Za-z0-9]/.test(v), "Must contain at least one special character");
+
 const registerSchema = z.object({
   fullName: z.string().min(2, "Full name is required"),
   nationalId: z
     .string()
     .min(8, "Enter a valid National ID or Iqama number")
     .refine((v) => /^[0-9]+$/.test(v.trim()), "Numbers only — no letters or spaces"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: passwordComplexity,
 });
 
 type RegStep = "phone" | "otp" | "details";
@@ -232,8 +240,16 @@ export default function AuthPage() {
 
   async function submitNewPassword() {
     setResetError("");
-    if (resetNewPassword.length < 8) {
-      setResetError("Password must be at least 8 characters");
+    const pwRules = [
+      { ok: resetNewPassword.length >= 8,              msg: "at least 8 characters" },
+      { ok: /[A-Z]/.test(resetNewPassword),            msg: "one uppercase letter" },
+      { ok: /[a-z]/.test(resetNewPassword),            msg: "one lowercase letter" },
+      { ok: /[0-9]/.test(resetNewPassword),            msg: "one number" },
+      { ok: /[^A-Za-z0-9]/.test(resetNewPassword),    msg: "one special character" },
+    ];
+    const failed = pwRules.filter((r) => !r.ok).map((r) => r.msg);
+    if (failed.length) {
+      setResetError(`Password must contain: ${failed.join(", ")}`);
       return;
     }
     setIsLoading(true);
@@ -384,7 +400,7 @@ export default function AuthPage() {
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                     <Input
                       type="password"
-                      placeholder="New password (min 6 characters)"
+                      placeholder="Min 8 chars, uppercase, number, symbol"
                       value={resetNewPassword}
                       onChange={(e) => setResetNewPassword(e.target.value)}
                       className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm"
@@ -714,7 +730,7 @@ export default function AuthPage() {
                           <FormControl>
                             <div className="relative group">
                               <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                              <Input type="password" placeholder="Minimum 8 characters" className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm" data-testid="input-register-password" {...field} />
+                              <Input type="password" placeholder="Min 8 chars, uppercase, number, symbol" className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm" data-testid="input-register-password" {...field} />
                             </div>
                           </FormControl>
                           <FormMessage />
