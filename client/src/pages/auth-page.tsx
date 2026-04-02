@@ -616,16 +616,17 @@ export default function AuthPage() {
                     <div className="relative group">
                       <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                       <Input
-                        placeholder="0501234567"
+                        placeholder="05xxxxxxxx"
                         value={regPhone}
-                        onChange={(e) => { setRegPhone(e.target.value); setRegisterError(""); }}
+                        onChange={(e) => { setRegPhone(e.target.value.replace(/\D/g, "").slice(0, 10)); setRegisterError(""); }}
                         className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm font-mono tracking-wide"
                         inputMode="tel"
+                        maxLength={10}
                         data-testid="input-phone"
-                        onKeyDown={(e) => e.key === "Enter" && regPhone.length >= 9 && sendOtp(regPhone)}
+                        onKeyDown={(e) => e.key === "Enter" && /^05\d{8}$/.test(regPhone) && sendOtp(regPhone)}
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground">A 6-digit verification code will be sent to this number.</p>
+                    <p className="text-xs text-muted-foreground">Saudi mobile number starting with 05 (e.g. 0501234567). A 6-digit code will be sent via SMS.</p>
                   </div>
                   {registerError && (
                     <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive">
@@ -634,7 +635,7 @@ export default function AuthPage() {
                   )}
                   <Button
                     onClick={() => sendOtp(regPhone)}
-                    disabled={isLoading || regPhone.length < 9}
+                    disabled={isLoading || !/^05\d{8}$/.test(regPhone)}
                     className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm shadow-[0_0_20px_rgba(25,90,55,0.3)] transition-all duration-300"
                     data-testid="button-send-otp"
                   >
