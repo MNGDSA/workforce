@@ -19,7 +19,7 @@ const loginSchema = z.object({
       (v) => /^[0-9]+$/.test(v.trim()),
       "Must contain numbers only (ID Number or Phone Number)"
     ),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
 const registerSchema = z.object({
@@ -232,8 +232,8 @@ export default function AuthPage() {
 
   async function submitNewPassword() {
     setResetError("");
-    if (resetNewPassword.length < 6) {
-      setResetError("Password must be at least 6 characters");
+    if (resetNewPassword.length < 8) {
+      setResetError("Password must be at least 8 characters");
       return;
     }
     setIsLoading(true);
@@ -399,7 +399,7 @@ export default function AuthPage() {
                   )}
                   <Button
                     onClick={submitNewPassword}
-                    disabled={isLoading || resetNewPassword.length < 6}
+                    disabled={isLoading || resetNewPassword.length < 8}
                     className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm"
                     data-testid="button-submit-new-password"
                   >
