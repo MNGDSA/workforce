@@ -406,6 +406,21 @@ RETURN TO POOL
 - Attendance tracking tied to events
 - Lives under the Workforce module
 
+
+  ---
+
+  ### Employee Portal — Candidate-to-Employee Portal Flip (PLANNED — build before Work Schedules)
+
+  **Concept:** When a candidate is converted to an employee (workforce record created), their login portal should flip from the candidate-facing view to an employee-facing view. The same login credentials are used — the portal detects the user's status and renders accordingly.
+
+  **Candidate portal shows:** Profile completion, job applications, onboarding checklist, document uploads.
+
+  **Employee portal shows (to be defined together):** Shift and schedule (fed from Work Schedules module), employment details, attendance history, payroll summary, assets assigned, and other sections to be defined.
+
+  **Key rule:** Task #5 (Work Schedules & Shifts) must be built AFTER the employee portal flip is complete. Task #5 delivers the schedule API endpoint that the employee portal will consume, but the employee portal UI for displaying shift info belongs to this portal flip task.
+
+  **Dependency order:** Employee Portal Flip → Work Schedules & Shifts (Task #5)
+  
 ### Implementation Status
 
 #### Completed
