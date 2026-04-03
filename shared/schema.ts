@@ -884,6 +884,130 @@ export const systemSettings = pgTable("system_settings", {
 
 export type SystemSetting = typeof systemSettings.$inferSelect;
 
+// ─── Work Schedules & Shifts ─────────────────────────────────────────────────
+export const attendanceStatusEnum = pgEnum("attendance_status", [
+  "present",
+  "absent",
+  "late",
+  "half_day",
+  "excused",
+]);
+
+export const attendanceSourceEnum = pgEnum("attendance_source", [
+  "manual",
+  "mobile",
+]);
+
+export const shifts = pgTable(
+  "shifts",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    name: text("name").notNull(),
+    startTime: text("start_time").notNull(),
+    endTime: text("end_time").notNull(),
+    color: text("color").notNull().default("#10b981"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  }
+);
+
+export const scheduleTemplates = pgTable(
+  "schedule_templates",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    name: text("name").notNull(),
+    eventId: varchar("event_id").references(() => events.id, { onDelete: "set null" }),
+    mondayShiftId: varchar("monday_shift_id").references(() => shifts.id, { onDelete: "set null" }),
+    tuesdayShiftId: varchar("tuesday_shift_id").references(() => shifts.id, { onDelete: "set null" }),
+    wednesdayShiftId: varchar("wednesday_shift_id").references(() => shifts.id, { onDelete: "set null" }),
+    thursdayShiftId: varchar("thursday_shift_id").references(() => shifts.id, { onDelete: "set null" }),
+    fridayShiftId: varchar("friday_shift_id").references(() => shifts.id, { onDelete: "set null" }),
+    saturdayShiftId: varchar("saturday_shift_id").references(() => shifts.id, { onDelete: "set null" }),
+    sundayShiftId: varchar("sunday_shift_id").references(() => shifts.id, { onDelete: "set null" }),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    eventIdx: index("schedule_templates_event_idx").on(t.eventId),
+  })
+);
+
+export const scheduleAssignments = pgTable(
+  "schedule_assignments",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    workforceId: varchar("workforce_id").notNull().references(() => workforce.id, { onDelete: "cascade" }),
+    templateId: varchar("template_id").notNull().references(() => scheduleTemplates.id, { onDelete: "restrict" }),
+    startDate: text("start_date").notNull(),
+    endDate: text("end_date"),
+    notes: text("notes"),
+    assignedBy: varchar("assigned_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    workforceIdx: index("schedule_assignments_workforce_idx").on(t.workforceId),
+    templateIdx: index("schedule_assignments_template_idx").on(t.templateId),
+    startDateIdx: index("schedule_assignments_start_date_idx").on(t.startDate),
+  })
+);
+
+export const attendanceRecords = pgTable(
+  "attendance_records",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    workforceId: varchar("workforce_id").notNull().references(() => workforce.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    status: attendanceStatusEnum("status").notNull(),
+    clockIn: text("clock_in"),
+    clockOut: text("clock_out"),
+    notes: text("notes"),
+    source: attendanceSourceEnum("source").notNull().default("manual"),
+    recordedBy: varchar("recorded_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    workforceIdx: index("attendance_records_workforce_idx").on(t.workforceId),
+    dateIdx: index("attendance_records_date_idx").on(t.date),
+    workforceDateIdx: uniqueIndex("attendance_records_workforce_date_idx").on(t.workforceId, t.date),
+  })
+);
+
+export const insertShiftSchema = createInsertSchema(shifts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertShift = z.infer<typeof insertShiftSchema>;
+export type Shift = typeof shifts.$inferSelect;
+
+export const insertScheduleTemplateSchema = createInsertSchema(scheduleTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertScheduleTemplate = z.infer<typeof insertScheduleTemplateSchema>;
+export type ScheduleTemplate = typeof scheduleTemplates.$inferSelect;
+
+export const insertScheduleAssignmentSchema = createInsertSchema(scheduleAssignments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertScheduleAssignment = z.infer<typeof insertScheduleAssignmentSchema>;
+export type ScheduleAssignment = typeof scheduleAssignments.$inferSelect;
+
+export const insertAttendanceRecordSchema = createInsertSchema(attendanceRecords).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertAttendanceRecord = z.infer<typeof insertAttendanceRecordSchema>;
+export type AttendanceRecord = typeof attendanceRecords.$inferSelect;
+
 // ─── Query Params Types ─────────────────────────────────────────────────────
 export const candidateQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

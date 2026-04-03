@@ -23,6 +23,7 @@ import {
   UserCheck,
   FileText,
   CreditCard,
+  Clock,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -56,8 +57,13 @@ const recruitmentItems: { href: string; icon: React.ElementType; label: string }
 
 const topNavItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/workforce", icon: Users,           label: "Workforce" },
   { href: "/payroll",   icon: Wallet,          label: "Payroll" },
+];
+
+const workforcePaths = ["/workforce", "/schedules"];
+const workforceSubItems = [
+  { href: "/workforce", icon: Users,  label: "Employees" },
+  { href: "/schedules", icon: Clock,  label: "Schedules & Shifts" },
 ];
 
 const settingsPaths = ["/settings", "/automation", "/id-cards"];
@@ -79,6 +85,9 @@ export default function DashboardLayout({ children }: LayoutProps) {
   );
   const [settingsOpen, setSettingsOpen] = useState(
     () => settingsPaths.some((p) => location.startsWith(p))
+  );
+  const [workforceOpen, setWorkforceOpen] = useState(
+    () => workforcePaths.some((p) => location.startsWith(p))
   );
 
   const sessionUser = useMemo(() => {
@@ -141,6 +150,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
   };
 
   const isRecruitmentActive = recruitmentPaths.some((p) => location.startsWith(p));
+  const isWorkforceActive = workforcePaths.some((p) => location.startsWith(p));
 
   const NavContent = () => (
     <div className="flex flex-col h-full bg-sidebar border-r border-border text-sidebar-foreground">
@@ -155,6 +165,46 @@ export default function DashboardLayout({ children }: LayoutProps) {
 
       <div className="flex-1 py-6 px-4 space-y-1 overflow-y-auto">
         {topNavItems.map((item) => renderNavLink(item.href, item.icon, item.label))}
+
+        {/* ── Workforce Group ── */}
+        <div>
+          <button
+            onClick={() => setWorkforceOpen((v) => !v)}
+            className={cn(
+              "w-full flex items-center gap-3 px-4 py-3 rounded-sm text-sm font-medium transition-all duration-200 group",
+              isWorkforceActive
+                ? "bg-primary/10 text-primary border-l-2 border-primary"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground border-l-2 border-transparent"
+            )}
+          >
+            <Users className={cn("h-5 w-5 shrink-0", isWorkforceActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+            <span className="flex-1 text-left">Workforce</span>
+            <ChevronDown className={cn("h-4 w-4 transition-transform duration-200 shrink-0", workforceOpen ? "rotate-0" : "-rotate-90")} />
+          </button>
+
+          {workforceOpen && (
+            <div className="ml-4 mt-0.5 space-y-0.5 border-l border-border/50 pl-3">
+              {workforceSubItems.map((item) => {
+                const isActive = location === item.href || location.startsWith(item.href + "/");
+                return (
+                  <Link key={item.href} href={item.href}>
+                    <button
+                      className={cn(
+                        "w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 group",
+                        isActive
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      )}
+                    >
+                      <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                      {item.label}
+                    </button>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {/* ── Recruitment Group ── */}
         <div>

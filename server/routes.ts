@@ -25,6 +25,10 @@ import {
   insertIdCardTemplateSchema,
   insertPrinterPluginSchema,
   insertIdCardPrintLogSchema,
+  insertShiftSchema,
+  insertScheduleTemplateSchema,
+  insertScheduleAssignmentSchema,
+  insertAttendanceRecordSchema,
   type InsertOnboarding,
 } from "@shared/schema";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
@@ -2551,6 +2555,253 @@ export async function registerRoutes(
         results[id] = date?.toISOString() ?? null;
       }
       return res.json(results);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Shifts ─────────────────────────────────────────────────────────────────
+  app.get("/api/shifts", async (_req: Request, res: Response) => {
+    try { return res.json(await storage.getShifts()); }
+    catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/shifts/:id", async (req: Request, res: Response) => {
+    try {
+      const row = await storage.getShift(req.params.id);
+      if (!row) return res.status(404).json({ message: "Shift not found" });
+      return res.json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/shifts", async (req: Request, res: Response) => {
+    try {
+      const data = insertShiftSchema.parse(req.body);
+      const row = await storage.createShift(data);
+      return res.status(201).json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/shifts/:id", async (req: Request, res: Response) => {
+    try {
+      const data = insertShiftSchema.partial().parse(req.body);
+      const row = await storage.updateShift(req.params.id, data);
+      if (!row) return res.status(404).json({ message: "Shift not found" });
+      return res.json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.delete("/api/shifts/:id", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteShift(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Shift not found" });
+      return res.status(204).end();
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Schedule Templates ──────────────────────────────────────────────────────
+  app.get("/api/schedule-templates", async (req: Request, res: Response) => {
+    try {
+      const { eventId } = req.query as { eventId?: string };
+      return res.json(await storage.getScheduleTemplates(eventId ? { eventId } : undefined));
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/schedule-templates/:id", async (req: Request, res: Response) => {
+    try {
+      const row = await storage.getScheduleTemplate(req.params.id);
+      if (!row) return res.status(404).json({ message: "Schedule template not found" });
+      return res.json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/schedule-templates", async (req: Request, res: Response) => {
+    try {
+      const data = insertScheduleTemplateSchema.parse(req.body);
+      const row = await storage.createScheduleTemplate(data);
+      return res.status(201).json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/schedule-templates/:id", async (req: Request, res: Response) => {
+    try {
+      const data = insertScheduleTemplateSchema.partial().parse(req.body);
+      const row = await storage.updateScheduleTemplate(req.params.id, data);
+      if (!row) return res.status(404).json({ message: "Schedule template not found" });
+      return res.json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.delete("/api/schedule-templates/:id", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteScheduleTemplate(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Schedule template not found" });
+      return res.status(204).end();
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Schedule Assignments ────────────────────────────────────────────────────
+  app.get("/api/schedule-assignments", async (req: Request, res: Response) => {
+    try {
+      const { workforceId, templateId, activeOnly } = req.query as { workforceId?: string; templateId?: string; activeOnly?: string };
+      return res.json(await storage.getScheduleAssignments({
+        workforceId,
+        templateId,
+        activeOnly: activeOnly === "true",
+      }));
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/schedule-assignments/employee/:workforceId/active", async (req: Request, res: Response) => {
+    try {
+      const row = await storage.getActiveAssignmentForEmployee(req.params.workforceId);
+      return res.json(row ?? null);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/schedule-assignments/employee/:workforceId", async (req: Request, res: Response) => {
+    try {
+      const rows = await storage.getScheduleAssignments({ workforceId: req.params.workforceId });
+      return res.json(rows);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/schedule-assignments", async (req: Request, res: Response) => {
+    try {
+      const data = insertScheduleAssignmentSchema.parse(req.body);
+      const endDate = data.endDate ?? null;
+      const allExisting = await storage.getScheduleAssignments({ workforceId: data.workforceId });
+      for (const existing of allExisting) {
+        const existsEnd = existing.endDate ?? "9999-12-31";
+        const newEnd = endDate ?? "9999-12-31";
+        const overlaps = existing.startDate < newEnd && existsEnd > data.startDate;
+        if (overlaps) {
+          if (existing.startDate < data.startDate) {
+            await storage.endScheduleAssignment(existing.id, data.startDate);
+          } else {
+            await storage.deleteScheduleAssignment(existing.id);
+          }
+        }
+      }
+      const row = await storage.createScheduleAssignment(data);
+      return res.status(201).json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/schedule-assignments/bulk", async (req: Request, res: Response) => {
+    try {
+      const { workforceIds, templateId, startDate, assignedBy, endDate } = req.body as {
+        workforceIds: string[];
+        templateId: string;
+        startDate: string;
+        assignedBy?: string;
+        endDate?: string | null;
+      };
+      if (!Array.isArray(workforceIds) || !templateId || !startDate) {
+        return res.status(400).json({ message: "workforceIds, templateId, startDate are required" });
+      }
+      const result = await storage.bulkAssignSchedule(workforceIds, templateId, startDate, assignedBy, endDate);
+      return res.status(201).json(result);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/schedule-assignments/:id", async (req: Request, res: Response) => {
+    try {
+      const data = insertScheduleAssignmentSchema.partial().parse(req.body);
+      const existing = await storage.getScheduleAssignment(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Schedule assignment not found" });
+      const startDate = data.startDate ?? existing.startDate;
+      const endDate = data.endDate !== undefined ? data.endDate : existing.endDate;
+      const hasOverlap = await storage.checkScheduleOverlap(existing.workforceId, startDate, endDate, req.params.id);
+      if (hasOverlap) return res.status(409).json({ message: "Assignment date range overlaps with an existing assignment for this employee" });
+      const row = await storage.updateScheduleAssignment(req.params.id, data);
+      if (!row) return res.status(404).json({ message: "Schedule assignment not found" });
+      return res.json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/schedule-assignments/:id/end", async (req: Request, res: Response) => {
+    try {
+      const { endDate } = req.body as { endDate: string };
+      if (!endDate) return res.status(400).json({ message: "endDate is required" });
+      const row = await storage.endScheduleAssignment(req.params.id, endDate);
+      if (!row) return res.status(404).json({ message: "Assignment not found" });
+      return res.json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.delete("/api/schedule-assignments/:id", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteScheduleAssignment(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Assignment not found" });
+      return res.status(204).end();
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Attendance Records ──────────────────────────────────────────────────────
+  app.get("/api/attendance", async (req: Request, res: Response) => {
+    try {
+      const { workforceId, dateFrom, dateTo, date } = req.query as { workforceId?: string; dateFrom?: string; dateTo?: string; date?: string };
+      return res.json(await storage.getAttendanceRecords({ workforceId, dateFrom, dateTo, date }));
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/attendance", async (req: Request, res: Response) => {
+    try {
+      const data = insertAttendanceRecordSchema.parse(req.body);
+      const row = await storage.upsertAttendanceRecord(data);
+      return res.status(201).json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/attendance/bulk", async (req: Request, res: Response) => {
+    try {
+      const { records } = req.body as { records: unknown[] };
+      if (!Array.isArray(records)) return res.status(400).json({ message: "records array required" });
+      const parsed = records.map(r => insertAttendanceRecordSchema.parse(r));
+      const results = await Promise.all(parsed.map(r => storage.upsertAttendanceRecord(r)));
+      return res.status(201).json(results);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/attendance/:id", async (req: Request, res: Response) => {
+    try {
+      const existing = await storage.getAttendanceRecord(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Attendance record not found" });
+      const data = insertAttendanceRecordSchema.partial().parse(req.body);
+      const row = await storage.upsertAttendanceRecord({ ...existing, ...data });
+      return res.json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.delete("/api/attendance/:id", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteAttendanceRecord(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Attendance record not found" });
+      return res.status(204).end();
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/attendance/summary", async (req: Request, res: Response) => {
+    try {
+      const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
+      if (!dateFrom || !dateTo) return res.status(400).json({ message: "dateFrom and dateTo are required" });
+      const allEmployees = await storage.getWorkforce({ isActive: true });
+      const workforceIds = allEmployees.map((e: { id: string }) => e.id);
+      const summary = await storage.getWorkedDaySummary(workforceIds, dateFrom, dateTo);
+      const summaryWithName = summary.map(s => {
+        const emp = allEmployees.find((e: { id: string; fullNameEn?: string | null; employeeNumber?: string }) => e.id === s.workforceId);
+        return { ...s, fullNameEn: emp?.fullNameEn ?? null, employeeNumber: emp?.employeeNumber ?? null };
+      });
+      return res.json(summaryWithName);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // Employee portal read-only endpoint: current schedule assignment for candidate portal
+  app.get("/api/portal/schedule/:workforceId", async (req: Request, res: Response) => {
+    try {
+      const assignment = await storage.getActiveAssignmentForEmployee(req.params.workforceId);
+      if (!assignment) return res.json(null);
+      const template = await storage.getScheduleTemplate(assignment.templateId);
+      return res.json({ assignment, template: template ?? null });
     } catch (err) { return handleError(res, err); }
   });
 

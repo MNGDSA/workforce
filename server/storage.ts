@@ -18,6 +18,10 @@ import {
   idCardTemplates,
   printerPlugins,
   idCardPrintLogs,
+  shifts,
+  scheduleTemplates,
+  scheduleAssignments,
+  attendanceRecords,
   type OtpVerification,
   type InsertOtpVerification,
   type IdCardTemplate,
@@ -62,6 +66,14 @@ import {
   type CandidateContract,
   type InsertCandidateContract,
   systemSettings,
+  type Shift,
+  type InsertShift,
+  type ScheduleTemplate,
+  type InsertScheduleTemplate,
+  type ScheduleAssignment,
+  type InsertScheduleAssignment,
+  type AttendanceRecord,
+  type InsertAttendanceRecord,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull } from "drizzle-orm";
 
@@ -239,6 +251,39 @@ export interface IStorage {
   // System Settings
   getSystemSetting(key: string): Promise<string | undefined>;
   setSystemSetting(key: string, value: string): Promise<void>;
+
+  // Shifts
+  getShifts(): Promise<Shift[]>;
+  getShift(id: string): Promise<Shift | undefined>;
+  createShift(data: InsertShift): Promise<Shift>;
+  updateShift(id: string, data: Partial<InsertShift>): Promise<Shift | undefined>;
+  deleteShift(id: string): Promise<boolean>;
+
+  // Schedule Templates
+  getScheduleTemplates(filters?: { eventId?: string }): Promise<ScheduleTemplate[]>;
+  getScheduleTemplate(id: string): Promise<ScheduleTemplate | undefined>;
+  createScheduleTemplate(data: InsertScheduleTemplate): Promise<ScheduleTemplate>;
+  updateScheduleTemplate(id: string, data: Partial<InsertScheduleTemplate>): Promise<ScheduleTemplate | undefined>;
+  deleteScheduleTemplate(id: string): Promise<boolean>;
+
+  // Schedule Assignments
+  getScheduleAssignments(filters?: { workforceId?: string; templateId?: string; activeOnly?: boolean }): Promise<ScheduleAssignment[]>;
+  getScheduleAssignment(id: string): Promise<ScheduleAssignment | undefined>;
+  getActiveAssignmentForEmployee(workforceId: string): Promise<ScheduleAssignment | undefined>;
+  checkScheduleOverlap(workforceId: string, startDate: string, endDate: string | null, excludeId?: string): Promise<boolean>;
+  createScheduleAssignment(data: InsertScheduleAssignment): Promise<ScheduleAssignment>;
+  updateScheduleAssignment(id: string, data: Partial<InsertScheduleAssignment>): Promise<ScheduleAssignment | undefined>;
+  deleteScheduleAssignment(id: string): Promise<boolean>;
+  endScheduleAssignment(id: string, endDate: string): Promise<ScheduleAssignment | undefined>;
+  bulkAssignSchedule(workforceIds: string[], templateId: string, startDate: string, assignedBy?: string, endDate?: string | null): Promise<{ assigned: number; ended: number; skipped: number }>;
+
+  // Attendance Records
+  getAttendanceRecords(filters?: { workforceId?: string; dateFrom?: string; dateTo?: string; date?: string }): Promise<AttendanceRecord[]>;
+  getAttendanceRecord(id: string): Promise<AttendanceRecord | undefined>;
+  getAttendanceForEmployee(workforceId: string, dateFrom: string, dateTo: string): Promise<AttendanceRecord[]>;
+  upsertAttendanceRecord(data: InsertAttendanceRecord): Promise<AttendanceRecord>;
+  deleteAttendanceRecord(id: string): Promise<boolean>;
+  getWorkedDaySummary(workforceIds: string[], dateFrom: string, dateTo: string): Promise<Array<{ workforceId: string; workedDays: number; absentDays: number; lateDays: number; halfDays: number; excusedDays: number; totalScheduledDays: number }>>;
 
   // Dashboard
   getDashboardStats(): Promise<{
@@ -1703,6 +1748,229 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(idCardPrintLogs.printedAt))
       .limit(1);
     return row?.printedAt ?? null;
+  }
+
+  // ─── Shifts ─────────────────────────────────────────────────────────────────
+  async getShifts(): Promise<Shift[]> {
+    return db.select().from(shifts).orderBy(asc(shifts.name));
+  }
+
+  async getShift(id: string): Promise<Shift | undefined> {
+    const [row] = await db.select().from(shifts).where(eq(shifts.id, id));
+    return row;
+  }
+
+  async createShift(data: InsertShift): Promise<Shift> {
+    const [row] = await db.insert(shifts).values(data).returning();
+    return row;
+  }
+
+  async updateShift(id: string, data: Partial<InsertShift>): Promise<Shift | undefined> {
+    const [row] = await db.update(shifts).set({ ...data, updatedAt: new Date() }).where(eq(shifts.id, id)).returning();
+    return row;
+  }
+
+  async deleteShift(id: string): Promise<boolean> {
+    const result = await db.delete(shifts).where(eq(shifts.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ─── Schedule Templates ──────────────────────────────────────────────────────
+  async getScheduleTemplates(filters?: { eventId?: string }): Promise<ScheduleTemplate[]> {
+    const conditions = [];
+    if (filters?.eventId) conditions.push(eq(scheduleTemplates.eventId, filters.eventId));
+    return db.select().from(scheduleTemplates)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(asc(scheduleTemplates.name));
+  }
+
+  async getScheduleTemplate(id: string): Promise<ScheduleTemplate | undefined> {
+    const [row] = await db.select().from(scheduleTemplates).where(eq(scheduleTemplates.id, id));
+    return row;
+  }
+
+  async createScheduleTemplate(data: InsertScheduleTemplate): Promise<ScheduleTemplate> {
+    const [row] = await db.insert(scheduleTemplates).values(data).returning();
+    return row;
+  }
+
+  async updateScheduleTemplate(id: string, data: Partial<InsertScheduleTemplate>): Promise<ScheduleTemplate | undefined> {
+    const [row] = await db.update(scheduleTemplates).set({ ...data, updatedAt: new Date() }).where(eq(scheduleTemplates.id, id)).returning();
+    return row;
+  }
+
+  async deleteScheduleTemplate(id: string): Promise<boolean> {
+    const result = await db.delete(scheduleTemplates).where(eq(scheduleTemplates.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ─── Schedule Assignments ────────────────────────────────────────────────────
+  async checkScheduleOverlap(workforceId: string, startDate: string, endDate: string | null, excludeId?: string): Promise<boolean> {
+    const conditions = [
+      eq(scheduleAssignments.workforceId, workforceId),
+      sql`${scheduleAssignments.startDate} < ${endDate ?? "9999-12-31"}`,
+      or(isNull(scheduleAssignments.endDate), sql`${scheduleAssignments.endDate} > ${startDate}`),
+    ];
+    if (excludeId) conditions.push(sql`${scheduleAssignments.id} != ${excludeId}`);
+    const rows = await db.select({ id: scheduleAssignments.id }).from(scheduleAssignments)
+      .where(and(...conditions));
+    return rows.length > 0;
+  }
+
+  async getScheduleAssignments(filters?: { workforceId?: string; templateId?: string; activeOnly?: boolean }): Promise<ScheduleAssignment[]> {
+    const conditions = [];
+    if (filters?.workforceId) conditions.push(eq(scheduleAssignments.workforceId, filters.workforceId));
+    if (filters?.templateId) conditions.push(eq(scheduleAssignments.templateId, filters.templateId));
+    if (filters?.activeOnly) {
+      const today = new Date().toISOString().slice(0, 10);
+      conditions.push(sql`(${scheduleAssignments.endDate} IS NULL OR ${scheduleAssignments.endDate} > ${today})`);
+    }
+    return db.select().from(scheduleAssignments)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(scheduleAssignments.startDate));
+  }
+
+  async getScheduleAssignment(id: string): Promise<ScheduleAssignment | undefined> {
+    const [row] = await db.select().from(scheduleAssignments).where(eq(scheduleAssignments.id, id));
+    return row;
+  }
+
+  async getActiveAssignmentForEmployee(workforceId: string): Promise<ScheduleAssignment | undefined> {
+    const today = new Date().toISOString().slice(0, 10);
+    const [row] = await db.select().from(scheduleAssignments)
+      .where(and(
+        eq(scheduleAssignments.workforceId, workforceId),
+        sql`${scheduleAssignments.startDate} <= ${today}`,
+        or(isNull(scheduleAssignments.endDate), sql`${scheduleAssignments.endDate} > ${today}`)
+      ))
+      .orderBy(desc(scheduleAssignments.startDate))
+      .limit(1);
+    return row;
+  }
+
+  async createScheduleAssignment(data: InsertScheduleAssignment): Promise<ScheduleAssignment> {
+    const [row] = await db.insert(scheduleAssignments).values(data).returning();
+    return row;
+  }
+
+  async updateScheduleAssignment(id: string, data: Partial<InsertScheduleAssignment>): Promise<ScheduleAssignment | undefined> {
+    const [row] = await db.update(scheduleAssignments).set({ ...data, updatedAt: new Date() }).where(eq(scheduleAssignments.id, id)).returning();
+    return row;
+  }
+
+  async deleteScheduleAssignment(id: string): Promise<boolean> {
+    const result = await db.delete(scheduleAssignments).where(eq(scheduleAssignments.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async endScheduleAssignment(id: string, endDate: string): Promise<ScheduleAssignment | undefined> {
+    const [row] = await db.update(scheduleAssignments)
+      .set({ endDate, updatedAt: new Date() })
+      .where(eq(scheduleAssignments.id, id))
+      .returning();
+    return row;
+  }
+
+  async bulkAssignSchedule(workforceIds: string[], templateId: string, startDate: string, assignedBy?: string, endDate?: string | null): Promise<{ assigned: number; ended: number; skipped: number }> {
+    let ended = 0;
+    let assigned = 0;
+    let skipped = 0;
+    const resolvedEndDate = endDate ?? null;
+    for (const wid of workforceIds) {
+      const allExisting = await this.getScheduleAssignments({ workforceId: wid });
+      for (const existing of allExisting) {
+        const existsEnd = existing.endDate ?? "9999-12-31";
+        const newEnd = resolvedEndDate ?? "9999-12-31";
+        const overlaps = existing.startDate < newEnd && existsEnd > startDate;
+        if (overlaps) {
+          if (existing.startDate < startDate) {
+            await this.endScheduleAssignment(existing.id, startDate);
+            ended++;
+          } else {
+            await this.deleteScheduleAssignment(existing.id);
+            ended++;
+          }
+        }
+      }
+      await this.createScheduleAssignment({ workforceId: wid, templateId, startDate, endDate: resolvedEndDate, assignedBy: assignedBy ?? null });
+      assigned++;
+    }
+    return { assigned, ended, skipped };
+  }
+
+  // ─── Attendance Records ──────────────────────────────────────────────────────
+  async getAttendanceRecords(filters?: { workforceId?: string; dateFrom?: string; dateTo?: string; date?: string }): Promise<AttendanceRecord[]> {
+    const conditions = [];
+    if (filters?.workforceId) conditions.push(eq(attendanceRecords.workforceId, filters.workforceId));
+    if (filters?.date) conditions.push(eq(attendanceRecords.date, filters.date));
+    if (filters?.dateFrom) conditions.push(sql`${attendanceRecords.date} >= ${filters.dateFrom}`);
+    if (filters?.dateTo) conditions.push(sql`${attendanceRecords.date} <= ${filters.dateTo}`);
+    return db.select().from(attendanceRecords)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(attendanceRecords.date));
+  }
+
+  async getAttendanceRecord(id: string): Promise<AttendanceRecord | undefined> {
+    const [row] = await db.select().from(attendanceRecords).where(eq(attendanceRecords.id, id));
+    return row;
+  }
+
+  async getAttendanceForEmployee(workforceId: string, dateFrom: string, dateTo: string): Promise<AttendanceRecord[]> {
+    return db.select().from(attendanceRecords)
+      .where(and(
+        eq(attendanceRecords.workforceId, workforceId),
+        sql`${attendanceRecords.date} >= ${dateFrom}`,
+        sql`${attendanceRecords.date} <= ${dateTo}`
+      ))
+      .orderBy(asc(attendanceRecords.date));
+  }
+
+  async upsertAttendanceRecord(data: InsertAttendanceRecord): Promise<AttendanceRecord> {
+    const [row] = await db.insert(attendanceRecords).values(data)
+      .onConflictDoUpdate({
+        target: [attendanceRecords.workforceId, attendanceRecords.date],
+        set: { status: data.status, clockIn: data.clockIn, clockOut: data.clockOut, notes: data.notes, recordedBy: data.recordedBy, updatedAt: new Date() },
+      })
+      .returning();
+    return row;
+  }
+
+  async deleteAttendanceRecord(id: string): Promise<boolean> {
+    const result = await db.delete(attendanceRecords).where(eq(attendanceRecords.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getWorkedDaySummary(workforceIds: string[], dateFrom: string, dateTo: string): Promise<Array<{ workforceId: string; workedDays: number; absentDays: number; lateDays: number; halfDays: number; excusedDays: number; totalScheduledDays: number }>> {
+    if (workforceIds.length === 0) return [];
+    const rows = await db.select({
+      workforceId: attendanceRecords.workforceId,
+      status: attendanceRecords.status,
+      cnt: count(attendanceRecords.id),
+    })
+      .from(attendanceRecords)
+      .where(and(
+        inArray(attendanceRecords.workforceId, workforceIds),
+        sql`${attendanceRecords.date} >= ${dateFrom}`,
+        sql`${attendanceRecords.date} <= ${dateTo}`
+      ))
+      .groupBy(attendanceRecords.workforceId, attendanceRecords.status);
+
+    const map: Record<string, { workedDays: number; absentDays: number; lateDays: number; halfDays: number; excusedDays: number; totalScheduledDays: number }> = {};
+    for (const wid of workforceIds) {
+      map[wid] = { workedDays: 0, absentDays: 0, lateDays: 0, halfDays: 0, excusedDays: 0, totalScheduledDays: 0 };
+    }
+    for (const r of rows) {
+      const entry = map[r.workforceId];
+      if (!entry) continue;
+      const n = Number(r.cnt);
+      entry.totalScheduledDays += n;
+      if (r.status === "present") entry.workedDays += n;
+      else if (r.status === "absent") entry.absentDays += n;
+      else if (r.status === "late") { entry.lateDays += n; entry.workedDays += n; }
+      else if (r.status === "half_day") { entry.halfDays += n; entry.workedDays += n * 0.5; }
+      else if (r.status === "excused") entry.excusedDays += n;
+    }
+    return workforceIds.map(wid => ({ workforceId: wid, ...map[wid] }));
   }
 }
 

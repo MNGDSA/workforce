@@ -195,6 +195,60 @@ function SortableHeader({ label, field, sortField, sortDir, onSort }: {
   );
 }
 
+type ScheduleTemplateWithDays = { id: string; name: string; mondayShiftId?: string | null; tuesdayShiftId?: string | null; wednesdayShiftId?: string | null; thursdayShiftId?: string | null; fridayShiftId?: string | null; saturdayShiftId?: string | null; sundayShiftId?: string | null };
+type ShiftBasic = { id: string; name: string; color: string; startTime: string; endTime: string };
+
+function ActiveAssignmentCard({
+  activeAssignment,
+  scheduleTemplates,
+  allShifts,
+  endAssignmentMutation,
+  formatDate,
+}: {
+  activeAssignment: { id: string; templateId: string; startDate: string };
+  scheduleTemplates: ScheduleTemplateWithDays[];
+  allShifts: ShiftBasic[];
+  endAssignmentMutation: { isPending: boolean; mutate: (id: string) => void };
+  formatDate: (d: string) => string;
+}) {
+  const template = scheduleTemplates.find(t => t.id === activeAssignment.templateId);
+  const DAY_KEYS = ["sundayShiftId", "mondayShiftId", "tuesdayShiftId", "wednesdayShiftId", "thursdayShiftId", "fridayShiftId", "saturdayShiftId"] as const;
+  const todayKey = DAY_KEYS[new Date().getDay()] as keyof ScheduleTemplateWithDays;
+  const todayShiftId = template ? (template[todayKey] as string | null | undefined) : undefined;
+  const todayShift = todayShiftId ? allShifts.find(s => s.id === todayShiftId) : undefined;
+  return (
+    <div className="border border-emerald-800/50 bg-emerald-950/10 rounded-lg p-4 space-y-2">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="font-semibold text-white text-sm">{template?.name ?? "Unknown Template"}</p>
+          <p className="text-xs text-zinc-400 mt-0.5">Since {formatDate(activeAssignment.startDate)}</p>
+          {todayShift ? (
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: todayShift.color }} />
+              <span className="text-xs text-zinc-300">
+                Today: <span className="font-medium text-white">{todayShift.name}</span>
+                <span className="text-zinc-500 ml-1">({todayShift.startTime}–{todayShift.endTime})</span>
+              </span>
+            </div>
+          ) : template ? (
+            <p className="text-xs text-zinc-500 mt-1">Today: Day off</p>
+          ) : null}
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 text-xs text-red-400 hover:text-red-300"
+          disabled={endAssignmentMutation.isPending}
+          onClick={() => endAssignmentMutation.mutate(activeAssignment.id)}
+          data-testid="button-end-schedule-assignment"
+        >
+          {endAssignmentMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Remove"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function EmployeeDetailDialog({
   employee,
   open,
@@ -210,18 +264,76 @@ function EmployeeDetailDialog({
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<"details" | "history">("details");
+  const [tab, setTab] = useState<"details" | "history" | "schedule">("details");
   const [editSalary, setEditSalary] = useState(false);
   const [salaryValue, setSalaryValue] = useState("");
   const [notesValue, setNotesValue] = useState("");
   const [editNotes, setEditNotes] = useState(false);
   const [terminateOpen, setTerminateOpen] = useState(false);
   const [terminateForm, setTerminateForm] = useState({ endDate: "", reason: "" });
+  const [assignScheduleOpen, setAssignScheduleOpen] = useState(false);
+  const [scheduleTemplateId, setScheduleTemplateId] = useState("");
+  const [scheduleStartDate, setScheduleStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [scheduleEndDate, setScheduleEndDate] = useState("");
 
   const { data: history = [], isLoading: historyLoading } = useQuery<WorkHistory[]>({
     queryKey: ["/api/workforce/history", employee?.nationalId],
     queryFn: () => apiRequest("GET", `/api/workforce/history/${employee!.nationalId}`).then(r => r.json()),
     enabled: open && !!employee?.nationalId && tab === "history",
+  });
+
+  const { data: scheduleTemplates = [] } = useQuery<ScheduleTemplateWithDays[]>({
+    queryKey: ["/api/schedule-templates"],
+    queryFn: () => apiRequest("GET", "/api/schedule-templates").then(r => r.json()),
+    enabled: open && tab === "schedule",
+  });
+
+  const { data: allShifts = [] } = useQuery<ShiftBasic[]>({
+    queryKey: ["/api/shifts"],
+    queryFn: () => apiRequest("GET", "/api/shifts").then(r => r.json()),
+    enabled: open && tab === "schedule",
+  });
+
+  const { data: activeAssignment, refetch: refetchAssignment } = useQuery<{
+    id: string; templateId: string; startDate: string; endDate: string | null; notes: string | null;
+  } | null>({
+    queryKey: ["/api/schedule-assignments/employee", employee?.id, "active"],
+    queryFn: () => apiRequest("GET", `/api/schedule-assignments/employee/${employee!.id}/active`).then(r => r.json()),
+    enabled: open && !!employee?.id && tab === "schedule",
+  });
+
+  const { data: assignmentHistory = [] } = useQuery<{ id: string; templateId: string; startDate: string; endDate: string | null }[]>({
+    queryKey: ["/api/schedule-assignments/employee", employee?.id],
+    queryFn: () => apiRequest("GET", `/api/schedule-assignments/employee/${employee!.id}`).then(r => r.json()),
+    enabled: open && !!employee?.id && tab === "schedule",
+  });
+
+  const assignScheduleMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/schedule-assignments", {
+      workforceId: employee!.id,
+      templateId: scheduleTemplateId,
+      startDate: scheduleStartDate,
+      endDate: scheduleEndDate || null,
+    }).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/schedule-assignments/employee", employee?.id] });
+      refetchAssignment();
+      setAssignScheduleOpen(false);
+      toast({ title: "Schedule assigned" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const endAssignmentMutation = useMutation({
+    mutationFn: (assignId: string) => apiRequest("POST", `/api/schedule-assignments/${assignId}/end`, {
+      endDate: new Date().toISOString().slice(0, 10),
+    }).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/schedule-assignments/employee", employee?.id] });
+      refetchAssignment();
+      toast({ title: "Schedule assignment ended" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
@@ -295,6 +407,15 @@ function EmployeeDetailDialog({
               data-testid="tab-employee-history"
             >
               <History className="h-3.5 w-3.5" /> Work History
+            </button>
+            <button
+              onClick={() => setTab("schedule")}
+              className={`flex-1 text-xs font-semibold py-2.5 transition-colors flex items-center justify-center gap-1.5 ${
+                tab === "schedule" ? "bg-[hsl(155,45%,45%)] text-white" : "text-zinc-400 hover:text-white"
+              }`}
+              data-testid="tab-employee-schedule"
+            >
+              <Clock className="h-3.5 w-3.5" /> Schedule
             </button>
           </div>
 
@@ -484,6 +605,117 @@ function EmployeeDetailDialog({
               )}
             </div>
           )}
+
+          {tab === "schedule" && (
+            <div className="space-y-4 mt-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Current Schedule</p>
+                {employee.isActive && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs border-zinc-700"
+                    onClick={() => setAssignScheduleOpen(true)}
+                    data-testid="button-assign-schedule-employee"
+                  >
+                    <Clock className="h-3.5 w-3.5 mr-1" />
+                    {activeAssignment ? "Reassign" : "Assign Schedule"}
+                  </Button>
+                )}
+              </div>
+              {activeAssignment ? (
+                <ActiveAssignmentCard
+                  activeAssignment={activeAssignment}
+                  scheduleTemplates={scheduleTemplates}
+                  allShifts={allShifts}
+                  endAssignmentMutation={endAssignmentMutation}
+                  formatDate={formatDate}
+                />
+              ) : (
+                <div className="border border-zinc-800 rounded-lg p-4 text-center text-zinc-500 text-sm">
+                  No schedule assigned
+                </div>
+              )}
+
+              {assignmentHistory.length > 1 && (
+                <>
+                  <Separator className="bg-zinc-800" />
+                  <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Assignment History</p>
+                  <div className="space-y-2">
+                    {assignmentHistory.filter(a => a.endDate != null || a.id !== activeAssignment?.id).map(a => (
+                      <div key={a.id} className="flex items-center justify-between text-xs border border-zinc-800 rounded p-3">
+                        <span className="text-zinc-300">
+                          {scheduleTemplates.find(t => t.id === a.templateId)?.name ?? a.templateId}
+                        </span>
+                        <span className="text-zinc-500">
+                          {formatDate(a.startDate)} – {a.endDate ? formatDate(a.endDate) : "Active"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={assignScheduleOpen} onOpenChange={setAssignScheduleOpen}>
+        <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{activeAssignment ? "Reassign Schedule" : "Assign Schedule"}</DialogTitle>
+            <DialogDescription className="text-zinc-400 text-sm">
+              {activeAssignment ? "This will end the current assignment and start a new one." : "Choose a schedule template for this employee."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Template</Label>
+              <Select value={scheduleTemplateId} onValueChange={setScheduleTemplateId}>
+                <SelectTrigger data-testid="select-schedule-template" className="bg-zinc-900 border-zinc-700 text-white">
+                  <SelectValue placeholder="Select template..." />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-700">
+                  {scheduleTemplates.map(t => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Start Date</Label>
+              <Input
+                data-testid="input-schedule-start-date"
+                type="date"
+                value={scheduleStartDate}
+                onChange={e => setScheduleStartDate(e.target.value)}
+                className="bg-zinc-900 border-zinc-700 text-white"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">End Date <span className="text-zinc-600 text-xs font-normal normal-case">(optional)</span></Label>
+              <Input
+                data-testid="input-schedule-end-date"
+                type="date"
+                value={scheduleEndDate}
+                min={scheduleStartDate}
+                onChange={e => setScheduleEndDate(e.target.value)}
+                className="bg-zinc-900 border-zinc-700 text-white"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="outline" className="border-zinc-700" onClick={() => setAssignScheduleOpen(false)}>Cancel</Button>
+            <Button
+              data-testid="button-confirm-assign-schedule"
+              className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
+              disabled={!scheduleTemplateId || assignScheduleMutation.isPending}
+              onClick={() => assignScheduleMutation.mutate()}
+            >
+              {assignScheduleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Assign
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -52,9 +52,16 @@ The system employs a modern, full-stack architecture.
 **Authentication**:
 - Session-based authentication using `bcryptjs` for password hashing.
 
+**Database Schema — Work Schedules & Shifts**:
+- `shifts`: Catalog of shift types with name, start/end times, and color.
+- `schedule_templates`: Weekly patterns linking each day-of-week to an optional shift. Optionally linked to an event.
+- `schedule_assignments`: Employee → template assignments with date ranges, supporting history. Overlap-prevention on create (ends current assignment before creating a new one).
+- `attendance_records`: One row per employee per date with status (present/absent/late/half_day/excused), clock-in/out times, source, and unique constraint on (workforceId, date).
+
 **Core Workflow & Features**:
 - **Unified Talent Pool**: All individuals are candidates in a single pool, differentiated by source (`self` or `bulk_upload`).
-- **End-to-End Workflow**: Covers event setup, job postings, SMP contracts, candidate intake, interviews, onboarding, conversion to employee, and workforce management.
+- **End-to-End Workflow**: Covers event setup, job postings, SMP contracts, candidate intake, interviews, onboarding, conversion to employee, workforce management, and work schedule/attendance tracking.
+- **Work Schedules & Shifts**: New module under `/schedules` (sidebar: Workforce section). Supports shift definitions (name, times, color), weekly schedule templates, employee roster grid (assign/reassign/end), daily attendance marking (Present/Absent/Late/Half Day/Excused), and summary worked-day totals. Employee detail dialog includes a Schedule tab for inline assignment and history. Employee portal read-only endpoint available at `/api/portal/schedule/:workforceId`.
 - **SMP-Specifics**: SMP workers are bulk-uploaded and skip interviews, requiring a lighter onboarding checklist (photo + national ID only). SMP contracts are assignment records, not data owners.
 - **Onboarding Pipeline**: A phased approach for document verification and contract signing, ensuring all prerequisites are met before conversion to employee.
 - **Contract Engine**: Automated contract generation and digital signing system with template management, variable injection, and PDF rendering using `jspdf`. Supports versioning and branding.
