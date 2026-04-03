@@ -303,6 +303,83 @@ RETURN TO POOL
 11. **Profile activation required for all** — OTP verification regardless of entry method.
 12. **Auto event tagging (PLANNED)** — When a candidate's signed contract onboarding item is marked complete, the system auto-appends an event tag (e.g. `"event:Hajj 2026"`) to the candidate profile `tags` array. Threshold is signed contract, not tenure — even one day of work qualifies. This enables instant "returning worker" identification in future seasons. Uses existing `tags` text array on candidates table.
 
+---
+
+### SMP Workflow Redesign (PLANNED — subject to adjustment before coding)
+
+**Full SMP lifecycle flow:**
+1. Create SMP contract first — contract is the anchor (company, contract number, dates, event).
+2. Upload workers to Talent specifying a contract — no uploading SMP workers without selecting a contract. All created candidates get `source: "smp"` + `smpContractId` automatically.
+3. SMS activation — send OTP to activate profiles. Workers who don't activate are marked inactive; no further pipeline actions allowed on them.
+4. Express hiring scoped to one contract at a time — UI shows contract selector at top, filters worker list to only that contract's candidates. No cross-contract bulk actions.
+5. Onboarding — SMP workers: 2-item checklist (photo + national ID only). Already designed and implemented.
+6. Convert to employee — event is pre-filled from their SMP contract's `eventId` (admin can override).
+7. Event ends — to keep a worker for the next event, update their workforce `eventId` to the new event. To release, trigger offboarding (section TBD). The `smpContractId` on candidate profile stays unchanged.
+8. SMP Settlements (new section) — groups payments by contract/company, not by individual. Worker data (dailyRate × daysWorked) feeds into it; output is an invoice-style settlement to the SMP firm.
+
+**Schema changes needed:**
+- Add `smpContractId` FK on `candidates` table (replace loose JSON blob in `smpContracts.employees`)
+- Add `eventId` on `smpContracts` table
+- Add `dailyRate` + `rateType` (daily/monthly) on `workforce` table
+- New SMP Settlements section (separate from regular payroll)
+- Offboarding section (to be defined)
+
+---
+
+### Individual Candidate Lifecycle (PLANNED)
+
+14-step flow for regular (non-SMP) candidates:
+1. Self-register via portal
+2. Complete profile
+3. Apply to open jobs
+4. Event must exist first as pre-requisite (annual operations event for long-stay employees; seasonal events for short-stay)
+5. Admin reviews appliers per job post
+6. Bulk invite to interview/training groups (capacity-based, e.g. 1000 per group per venue)
+7. Thumbs up/down shortlisting at interview — or record on Excel for later office entry
+8. Onboarding with automated SMS reminders every 12 hours for 5 days for missing documents; auto-push back to Talent if unresponsive; manual push-back button also available
+9. Contract template with variables (name, phone, ID) generated per candidate after docs complete
+10. 5-day signing window — if unsigned, auto-push back to interview shortlist or Talent
+11. Convert to employee, issue Employee ID
+12. Event ends → auto-move linked employees to Offboarding
+13. Offboarding: asset return or payroll deduction; SMS warnings for 7 days
+14. Payroll scoped per event with deductibles; handed off to finance for deposits
+
+**Scheduler-dependent features (require background job infrastructure):**
+- Step 8: SMS reminders every 12 hours for 5 days
+- Step 10: 5-day contract signing window + auto-expiry
+- Step 12: Auto-offboarding trigger on event end
+- Step 13: 7-day SMS warning cycle
+
+**Pending design decisions:**
+- Annual operations event type vs seasonal event type (employees who work year-round should not auto-offboard)
+- Default sort order for bulk interview selection (application date? rating? profile completeness?)
+- Asset tracking table design (categories, serial numbers, issuer, issue date)
+- Finance handoff format (export PDF/Excel or system integration?)
+
+---
+
+### Mobile Attendance App (PLANNED — separate React Native project)
+
+**Facial recognition approach:**
+- Native Face ID / Samsung biometrics cannot be used for custom server-side photo comparison (Apple/Samsung lock hardware biometrics to device auth only)
+- Use AWS Rekognition or Azure Face API: 99%+ accuracy, built-in liveness detection (prevents spoofing with photos/screens), server-side comparison
+- Current system's 65% client-side similarity threshold with no liveness detection is the root problem to fix
+
+**Offline-first attendance with encrypted ledger:**
+- Attendance is written to an encrypted local ledger on the device at the moment of clock-in/out (timestamp captured on device, not server)
+- Ledger syncs to server when connectivity is restored, in chronological order
+- Server enforces duplicate detection (idempotent sync — same record sent twice is safe)
+- Ledger is permanent on device (not cleared after sync) — enables dispute resolution by comparing device ledger vs server record
+- Encryption key tied to employee's authenticated session — stolen device cannot be read without login
+- Sync-age warning triggers after 24 hours without a successful sync (alerts employee or supervisor before records are at risk)
+- Factory reset / lost device risk acknowledged: offline records are unrecoverable if device is lost before sync
+
+**Work Schedule section (to be built in web app first):**
+- Shift assignment per employee
+- Workday calendar (weekly/monthly view)
+- Attendance tracking tied to events
+- Lives under the Workforce module
+
 ### Implementation Status
 
 #### Completed
