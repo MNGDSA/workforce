@@ -85,6 +85,8 @@ export const notificationStatusEnum = pgEnum("notification_status", [
   "read",
 ]);
 
+export const employmentTypeEnum = pgEnum("employment_type", ["individual", "smp"]);
+
 export const userRoleEnum = pgEnum("user_role", [
   "super_admin",
   "admin",
@@ -438,6 +440,7 @@ export const workforce = pgTable(
       .references(() => candidates.id),
     jobId: varchar("job_id").references(() => jobPostings.id),
     eventId: varchar("event_id").references(() => events.id),
+    employmentType: employmentTypeEnum("employment_type").notNull().default("individual"),
     salary: decimal("salary", { precision: 10, scale: 2 }),
     startDate: text("start_date").notNull(),
     endDate: text("end_date"),

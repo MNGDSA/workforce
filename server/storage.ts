@@ -130,11 +130,12 @@ export interface IStorage {
   getWorkforce(params?: { eventId?: string; isActive?: boolean; search?: string }): Promise<any[]>;
   getWorkforceEmployee(id: string): Promise<any | undefined>;
   getWorkforceByCandidateId(candidateId: string): Promise<any | undefined>;
+  getAllWorkforceByCandidateId(candidateId: string): Promise<any[]>;
   getWorkHistory(nationalId: string): Promise<any[]>;
   createWorkforceRecord(record: InsertWorkforce): Promise<WorkforceRecord>;
   updateWorkforceRecord(id: string, data: Partial<InsertWorkforce>): Promise<WorkforceRecord | undefined>;
   terminateEmployee(id: string, data: { endDate: string; terminationReason?: string }): Promise<WorkforceRecord | undefined>;
-  reinstateEmployee(nationalId: string, data: { startDate: string; eventId?: string; salary?: string; jobId?: string }): Promise<WorkforceRecord>;
+  reinstateEmployee(nationalId: string, data: { startDate: string; eventId?: string; salary?: string; jobId?: string; employmentType?: "individual" | "smp" }): Promise<WorkforceRecord>;
   getWorkforceStats(): Promise<{ total: number; active: number; terminated: number }>;
   generateEmployeeNumber(): Promise<string>;
 
@@ -178,7 +179,7 @@ export interface IStorage {
   createOnboardingRecord(data: InsertOnboarding): Promise<OnboardingRecord>;
   updateOnboardingRecord(id: string, data: Partial<InsertOnboarding>): Promise<OnboardingRecord | undefined>;
   deleteOnboardingRecord(id: string): Promise<boolean>;
-  convertOnboardingToEmployee(id: string, employmentData: { startDate: string; eventId?: string; salary?: string }, convertedBy?: string): Promise<WorkforceRecord>;
+  convertOnboardingToEmployee(id: string, employmentData: { startDate: string; eventId?: string; salary?: string; employmentType?: "individual" | "smp" }, convertedBy?: string): Promise<WorkforceRecord>;
 
   // SMS Plugins
   getSmsPlugins(): Promise<SmsPlugin[]>;
@@ -927,6 +928,7 @@ export class DatabaseStorage implements IStorage {
         candidateId: workforce.candidateId,
         jobId: workforce.jobId,
         eventId: workforce.eventId,
+        employmentType: workforce.employmentType,
         salary: workforce.salary,
         startDate: workforce.startDate,
         endDate: workforce.endDate,
@@ -953,6 +955,33 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(workforce.createdAt))
       .limit(1);
     return row;
+  }
+
+  async getAllWorkforceByCandidateId(candidateId: string): Promise<any[]> {
+    const rows = await db
+      .select({
+        id: workforce.id,
+        employeeNumber: workforce.employeeNumber,
+        candidateId: workforce.candidateId,
+        jobId: workforce.jobId,
+        eventId: workforce.eventId,
+        employmentType: workforce.employmentType,
+        salary: workforce.salary,
+        startDate: workforce.startDate,
+        endDate: workforce.endDate,
+        terminationReason: workforce.terminationReason,
+        isActive: workforce.isActive,
+        notes: workforce.notes,
+        createdAt: workforce.createdAt,
+        eventName: events.name,
+        jobTitle: jobPostings.title,
+      })
+      .from(workforce)
+      .leftJoin(events, eq(workforce.eventId, events.id))
+      .leftJoin(jobPostings, eq(workforce.jobId, jobPostings.id))
+      .where(eq(workforce.candidateId, candidateId))
+      .orderBy(desc(workforce.createdAt));
+    return rows;
   }
 
   async getWorkHistory(nationalId: string): Promise<any[]> {
@@ -1012,7 +1041,7 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async reinstateEmployee(nationalId: string, data: { startDate: string; eventId?: string; salary?: string; jobId?: string }): Promise<WorkforceRecord> {
+  async reinstateEmployee(nationalId: string, data: { startDate: string; eventId?: string; salary?: string; jobId?: string; employmentType?: "individual" | "smp" }): Promise<WorkforceRecord> {
     const prevRecords = await db
       .select({ employeeNumber: workforce.employeeNumber })
       .from(workforce)
@@ -1034,6 +1063,7 @@ export class DatabaseStorage implements IStorage {
       salary: data.salary ?? undefined,
       startDate: data.startDate,
       isActive: true,
+      employmentType: data.employmentType ?? "individual",
     }).returning();
 
     await db.update(candidates).set({ status: "hired", updatedAt: new Date() }).where(eq(candidates.id, cand.id));
@@ -1260,7 +1290,7 @@ export class DatabaseStorage implements IStorage {
 
   async convertOnboardingToEmployee(
     id: string,
-    employmentData: { startDate: string; eventId?: string; salary?: string },
+    employmentData: { startDate: string; eventId?: string; salary?: string; employmentType?: "individual" | "smp" },
     convertedBy?: string,
   ): Promise<WorkforceRecord> {
     const rec = await this.getOnboardingRecord(id);
@@ -1283,11 +1313,17 @@ export class DatabaseStorage implements IStorage {
       employeeNumber = await this.generateEmployeeNumber();
     }
 
+    // employmentType is always explicit — never derived from candidate.source.
+    // Caller MUST pass the correct type. Defaults to "individual" if not provided.
+    const derivedEmploymentType: "individual" | "smp" =
+      employmentData.employmentType ?? "individual";
+
     const [workforceRec] = await db.insert(workforce).values({
       employeeNumber,
       candidateId: rec.candidateId,
       jobId: rec.jobId ?? undefined,
       eventId: employmentData.eventId ?? rec.eventId ?? undefined,
+      employmentType: derivedEmploymentType,
       salary: employmentData.salary && employmentData.salary.trim() !== "" ? employmentData.salary : undefined,
       startDate: employmentData.startDate,
       isActive: true,

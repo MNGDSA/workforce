@@ -684,6 +684,14 @@ export default function TalentPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadPreview, setUploadPreview] = useState<Record<string, string>[] | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [smpValidating, setSmpValidating] = useState(false);
+  const [smpValidationResults, setSmpValidationResults] = useState<{
+    status: "new" | "clean" | "blocked";
+    row: Record<string, string>;
+    candidate?: { id: string; fullNameEn: string; nationalId: string | null };
+    blockedReason?: string;
+  }[] | null>(null);
+  const [smpConfirmedClean, setSmpConfirmedClean] = useState<Set<number>>(new Set());
   const [profileCandidate, setProfileCandidate] = useState<Candidate | null>(null);
   const [exporting, setExporting] = useState(false);
   const [blockCandidate, setBlockCandidate] = useState<Candidate | null>(null);
@@ -786,9 +794,52 @@ export default function TalentPage() {
   }, []);
 
   const bulkUpload = useMutation({
-    mutationFn: (candidates: Record<string, string>[]) => {
+    mutationFn: async (candidates: Record<string, string>[]) => {
+      const hasSmpRows = candidates.some(r => (r.source || "").toLowerCase() === "smp");
+
+      // ── SMP rows: use smp-commit endpoint (validated + clean confirmed) ──────
+      if (hasSmpRows && smpValidationResults) {
+        const nonSmpRows = candidates.filter(r => (r.source || "").toLowerCase() !== "smp");
+
+        // Build results with per-row confirmed flag for CLEAN rows (server enforces this)
+        const resultsWithConfirmation = smpValidationResults.map((r, idx) => ({
+          ...r,
+          confirmed: r.status === "clean" ? smpConfirmedClean.has(idx) : undefined,
+        }));
+
+        // Commit SMP batch via dedicated endpoint
+        const smpRes = await apiRequest("POST", "/api/candidates/smp-commit", {
+          results: resultsWithConfirmation,
+        }).then(r => r.json());
+
+        // If there are also non-SMP rows, bulk-insert those normally
+        if (nonSmpRows.length > 0) {
+          const mapped = nonSmpRows.map(c => ({
+            fullNameEn: c.fullNameEn || "Unknown",
+            fullNameAr: c.fullNameAr || undefined,
+            phone: c.phone || undefined,
+            email: c.email || undefined,
+            nationalId: c.nationalId || undefined,
+            city: c.city || undefined,
+            nationality: c.nationality === "saudi" ? "saudi" : c.nationality === "non_saudi" ? "non_saudi" : undefined,
+            gender: c.gender || undefined,
+            dateOfBirth: c.dateOfBirth || undefined,
+            source: "individual" as const,
+          }));
+          const indivRes = await apiRequest("POST", "/api/candidates/bulk", { candidates: mapped }).then(r => r.json());
+          return {
+            mode: "mixed",
+            smp: smpRes,
+            individual: indivRes,
+          };
+        }
+
+        return { mode: "smp", smp: smpRes };
+      }
+
+      // ── Non-SMP only: use generic bulk endpoint ────────────────────────────
       const mapped = candidates.map(c => ({
-        fullNameEn: c.fullNameEn || c.fullNameEn || "Unknown",
+        fullNameEn: c.fullNameEn || "Unknown",
         fullNameAr: c.fullNameAr || undefined,
         phone: c.phone || undefined,
         email: c.email || undefined,
@@ -797,23 +848,48 @@ export default function TalentPage() {
         nationality: c.nationality === "saudi" ? "saudi" : c.nationality === "non_saudi" ? "non_saudi" : undefined,
         gender: c.gender || undefined,
         dateOfBirth: c.dateOfBirth || undefined,
-        source: c.source === "smp" ? "smp" : "individual",
+        source: c.source === "smp" ? "smp" as const : "individual" as const,
       }));
-      return apiRequest("POST", "/api/candidates/bulk", { candidates: mapped }).then(r => r.json());
+      const res = await apiRequest("POST", "/api/candidates/bulk", { candidates: mapped }).then(r => r.json());
+      return { mode: "individual", individual: res };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
-      if (data.skipped > 0) {
-        const dupDetails = data.duplicates?.map((d: any) => `Row ${d.row}: ${d.reason}`).join("\n") ?? "";
-        setUploadError(`${data.inserted} imported, ${data.skipped} skipped (duplicates):\n${dupDetails}`);
-        toast({ title: "Upload Partial", description: `${data.inserted} imported, ${data.skipped} duplicates skipped.`, variant: "destructive" });
-      } else {
-        toast({ title: "Upload Complete", description: `${data.inserted} candidates imported successfully.` });
+
+      if (data.mode === "smp" || data.mode === "mixed") {
+        const smp = data.smp;
+        const indiv = data.individual;
+        let description = smp.message ?? `${smp.created ?? 0} new, ${smp.attached ?? 0} existing attached to SMP pipeline.`;
+        if (data.mode === "mixed" && indiv) {
+          description += ` ${indiv.inserted ?? 0} individual candidate(s) imported${indiv.skipped > 0 ? `, ${indiv.skipped} skipped (duplicates)` : ""}.`;
+        }
+        toast({
+          title: data.mode === "mixed" ? "Batch Upload Complete" : "SMP Batch Committed",
+          description,
+          ...(data.mode === "mixed" && indiv?.skipped > 0 ? { variant: "default" } : {}),
+        });
         setUploadOpen(false);
         setUploadFile(null);
         setUploadPreview(null);
         setUploadError(null);
+        setSmpValidationResults(null);
+        setSmpConfirmedClean(new Set());
+      } else {
+        const indiv = data.individual;
+        if (indiv.skipped > 0) {
+          const dupDetails = indiv.duplicates?.map((d: any) => `Row ${d.row}: ${d.reason}`).join("\n") ?? "";
+          setUploadError(`${indiv.inserted} imported, ${indiv.skipped} skipped (duplicates):\n${dupDetails}`);
+          toast({ title: "Upload Partial", description: `${indiv.inserted} imported, ${indiv.skipped} duplicates skipped.`, variant: "destructive" });
+        } else {
+          toast({ title: "Upload Complete", description: `${indiv.inserted} candidates imported successfully.` });
+          setUploadOpen(false);
+          setUploadFile(null);
+          setUploadPreview(null);
+          setUploadError(null);
+          setSmpValidationResults(null);
+          setSmpConfirmedClean(new Set());
+        }
       }
     },
     onError: (err: any) => {
@@ -865,6 +941,8 @@ export default function TalentPage() {
     setUploadFile(file);
     setUploadError(null);
     setUploadPreview(null);
+    setSmpValidationResults(null);
+    setSmpConfirmedClean(new Set());
     try {
       const rows = await parseFileToRows(file);
       if (rows.length === 0) {
@@ -878,6 +956,27 @@ export default function TalentPage() {
       setUploadPreview(rows);
     } catch (err: any) {
       setUploadError(err.message || "Could not parse file. Please use the template.");
+    }
+  }
+
+  async function handleSmpValidate() {
+    if (!uploadPreview) return;
+    const smpRows = uploadPreview.filter(r => (r.source || "").toLowerCase() === "smp");
+    if (smpRows.length === 0) {
+      toast({ title: "No SMP rows detected", description: "Set the 'source' column to 'smp' for SMP workers.", variant: "destructive" });
+      return;
+    }
+    setSmpValidating(true);
+    setSmpValidationResults(null);
+    setSmpConfirmedClean(new Set());
+    try {
+      const res = await apiRequest("POST", "/api/candidates/smp-validate", { candidates: smpRows });
+      const data = await res.json();
+      setSmpValidationResults(data.results);
+    } catch (err: any) {
+      toast({ title: "Validation failed", description: err.message || "Could not validate SMP rows.", variant: "destructive" });
+    } finally {
+      setSmpValidating(false);
     }
   }
 
@@ -1422,7 +1521,16 @@ export default function TalentPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+      <Dialog open={uploadOpen} onOpenChange={(v) => {
+        setUploadOpen(v);
+        if (!v) {
+          setUploadFile(null);
+          setUploadPreview(null);
+          setUploadError(null);
+          setSmpValidationResults(null);
+          setSmpConfirmedClean(new Set());
+        }
+      }}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Bulk Upload Candidates</DialogTitle>
@@ -1520,6 +1628,100 @@ export default function TalentPage() {
               </div>
             )}
 
+            {/* SMP Validation Results */}
+            {uploadPreview && uploadPreview.some(r => (r.source || "").toLowerCase() === "smp") && (
+              <div className="border border-amber-500/30 rounded-md p-3 bg-amber-500/5">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-amber-400 flex items-center gap-2">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    SMP rows detected ({uploadPreview.filter(r => (r.source || "").toLowerCase() === "smp").length} rows)
+                  </p>
+                  {!smpValidationResults && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-amber-500/40 text-amber-400 text-xs h-7"
+                      onClick={handleSmpValidate}
+                      disabled={smpValidating}
+                      data-testid="button-smp-validate"
+                    >
+                      {smpValidating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                      Validate SMP Rows
+                    </Button>
+                  )}
+                </div>
+                {!smpValidationResults && !smpValidating && (
+                  <p className="text-xs text-muted-foreground">Click "Validate SMP Rows" to check for conflicts before uploading.</p>
+                )}
+                {smpValidationResults && (
+                  <div className="space-y-2 mt-2">
+                    {/* NEW bucket — list each row explicitly for auditability */}
+                    {smpValidationResults.filter(r => r.status === "new").length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-emerald-400 mb-1">
+                          NEW ({smpValidationResults.filter(r => r.status === "new").length}) — Will be created fresh in the talent pool and added to SMP pipeline
+                        </p>
+                        <div className="space-y-1">
+                          {smpValidationResults.filter(r => r.status === "new").map((result, i) => (
+                            <div key={i} className="bg-emerald-500/10 border border-emerald-500/30 rounded p-2" data-testid={`smp-new-row-${i}`}>
+                              <p className="text-xs text-emerald-300 font-medium">
+                                {result.row.fullNameEn || result.row.name || "—"}{result.row.nationalId ? ` (ID: ${result.row.nationalId})` : ""}
+                              </p>
+                              {result.row.phone && <p className="text-xs text-muted-foreground">Phone: {result.row.phone}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CLEAN bucket */}
+                    {smpValidationResults.filter(r => r.status === "clean").map((result, i) => {
+                      const idx = smpValidationResults.indexOf(result);
+                      const confirmed = smpConfirmedClean.has(idx);
+                      return (
+                        <div key={i} className="bg-blue-500/10 border border-blue-500/30 rounded p-2 flex items-start justify-between gap-2" data-testid={`smp-clean-row-${i}`}>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-blue-400">CLEAN — Existing talent pool member</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {result.candidate?.fullNameEn} (ID: {result.candidate?.nationalId || "—"}) already exists. Confirming will include them under this SMP contract. Their existing profile and history will be preserved.
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant={confirmed ? "default" : "outline"}
+                            className={`text-xs h-6 shrink-0 ${confirmed ? "bg-blue-600 text-white" : "border-blue-500/40 text-blue-400"}`}
+                            onClick={() => {
+                              setSmpConfirmedClean(prev => {
+                                const next = new Set(prev);
+                                if (next.has(idx)) next.delete(idx); else next.add(idx);
+                                return next;
+                              });
+                            }}
+                            data-testid={`button-smp-confirm-clean-${i}`}
+                          >
+                            {confirmed ? "Confirmed ✓" : "Confirm"}
+                          </Button>
+                        </div>
+                      );
+                    })}
+
+                    {/* BLOCKED bucket */}
+                    {smpValidationResults.filter(r => r.status === "blocked").map((result, i) => (
+                      <div key={i} className="bg-red-500/10 border border-red-500/30 rounded p-2" data-testid={`smp-blocked-row-${i}`}>
+                        <p className="text-xs font-semibold text-red-400">BLOCKED — {result.candidate?.fullNameEn} (ID: {result.candidate?.nationalId || "—"})</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{result.blockedReason}</p>
+                        <p className="text-xs text-red-400/60 mt-1">Resolve this conflict outside the system and retry.</p>
+                      </div>
+                    ))}
+
+                    {smpValidationResults.filter(r => r.status === "blocked").length === 0 && (
+                      <p className="text-xs text-emerald-400 mt-1">✓ No blocked rows. Ready to upload once all CLEAN rows are confirmed.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {uploadError && (
               <p className="text-sm text-red-400">{uploadError}</p>
             )}
@@ -1530,7 +1732,20 @@ export default function TalentPage() {
               </Button>
               <Button
                 className="bg-primary text-primary-foreground"
-                disabled={!uploadPreview || uploadPreview.length === 0 || bulkUpload.isPending}
+                disabled={
+                  !uploadPreview ||
+                  uploadPreview.length === 0 ||
+                  bulkUpload.isPending ||
+                  // If SMP rows exist, must validate first and have no blocked rows and all clean rows confirmed
+                  (uploadPreview.some(r => (r.source || "").toLowerCase() === "smp") && (
+                    !smpValidationResults ||
+                    smpValidationResults.some(r => r.status === "blocked") ||
+                    smpValidationResults.filter(r => r.status === "clean").some((_, i) => {
+                      const idx = smpValidationResults.indexOf(smpValidationResults.filter(r => r.status === "clean")[i]);
+                      return !smpConfirmedClean.has(idx);
+                    })
+                  ))
+                }
                 onClick={() => uploadPreview && bulkUpload.mutate(uploadPreview)}
                 data-testid="button-confirm-upload"
               >

@@ -25,6 +25,7 @@ import {
   insertIdCardTemplateSchema,
   insertPrinterPluginSchema,
   insertIdCardPrintLogSchema,
+  type InsertOnboarding,
 } from "@shared/schema";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
 
@@ -134,17 +135,18 @@ export async function registerRoutes(
       if (docType === "resume") { updatePayload.resumeUrl = fileUrl; updatePayload.hasResume = true; }
       const updated = await storage.updateCandidate(id, updatePayload);
       if (!updated) return res.status(404).json({ message: "Candidate not found" });
-      const isSmp = updated.source === "smp";
       const onboardingRecords = await storage.getOnboardingRecords({ candidateId: id });
       for (const rec of onboardingRecords) {
         if (rec.status === "converted" || rec.status === "rejected") continue;
+        // Derive SMP status from onboarding linkage (applicationId === null = SMP pipeline)
+        const isSmpRec = !rec.applicationId;
         const syncPayload: Record<string, any> = {};
         if (docType === "photo") syncPayload.hasPhoto = true;
         if (docType === "nationalId") syncPayload.hasNationalId = true;
         if (docType === "iban") syncPayload.hasIban = true;
         if (Object.keys(syncPayload).length > 0) {
           const merged = { ...rec, ...syncPayload };
-          syncPayload.status = computeOnboardingStatus(merged, isSmp);
+          syncPayload.status = computeOnboardingStatus(merged, isSmpRec);
           await storage.updateOnboardingRecord(rec.id, syncPayload);
         }
       }
@@ -179,17 +181,18 @@ export async function registerRoutes(
       if (docType === "iban") { updatePayload.ibanFileUrl = null; updatePayload.hasIban = false; }
       const updated = await storage.updateCandidate(id, updatePayload);
       if (!updated) return res.status(404).json({ message: "Candidate not found" });
-      const isSmpDel = updated.source === "smp";
-      const onboardingRecords = await storage.getOnboardingRecords({ candidateId: id });
-      for (const rec of onboardingRecords) {
+      const onboardingRecordsDel = await storage.getOnboardingRecords({ candidateId: id });
+      for (const rec of onboardingRecordsDel) {
         if (rec.status === "converted" || rec.status === "rejected") continue;
+        // Derive SMP status from onboarding linkage (applicationId === null = SMP pipeline)
+        const isSmpRec = !rec.applicationId;
         const syncPayload: Record<string, any> = {};
         if (docType === "photo") syncPayload.hasPhoto = false;
         if (docType === "nationalId") syncPayload.hasNationalId = false;
         if (docType === "iban") syncPayload.hasIban = false;
         if (Object.keys(syncPayload).length > 0) {
           const merged = { ...rec, ...syncPayload };
-          syncPayload.status = computeOnboardingStatus(merged, isSmpDel);
+          syncPayload.status = computeOnboardingStatus(merged, isSmpRec);
           await storage.updateOnboardingRecord(rec.id, syncPayload);
         }
       }
@@ -788,6 +791,11 @@ export async function registerRoutes(
       if (rawCandidates.length > 1000) {
         return res.status(400).json({ message: "Maximum 1,000 candidates per bulk upload" });
       }
+      // SMP workers must use /api/candidates/smp-validate + /api/candidates/smp-commit
+      const smpRows = rawCandidates.filter((c: Record<string, unknown>) => c.source === "smp");
+      if (smpRows.length > 0) {
+        return res.status(400).json({ message: "SMP workers cannot be added via the bulk endpoint. Use the SMP validation and commit flow instead." });
+      }
       const errors: { row: number; message: string }[] = [];
       const validated: any[] = [];
       for (let i = 0; i < rawCandidates.length; i++) {
@@ -815,6 +823,253 @@ export async function registerRoutes(
         skipped: result.skipped,
         total: rawCandidates.length,
         ...(result.duplicates.length > 0 ? { duplicates: result.duplicates.slice(0, 50) } : {}),
+      });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // ─── SMP Upload Validation ────────────────────────────────────────────────
+  // Validates SMP batch rows before committing: returns NEW, CLEAN, BLOCKED buckets
+  app.post("/api/candidates/smp-validate", async (req: Request, res: Response) => {
+    try {
+      const { candidates: rows } = req.body;
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return res.status(400).json({ message: "candidates array is required" });
+      }
+
+      const results: {
+        status: "new" | "clean" | "blocked";
+        row: Record<string, string>;
+        candidate?: { id: string; fullNameEn: string; nationalId: string | null };
+        blockedReason?: string;
+      }[] = [];
+
+      for (const row of rows) {
+        const nationalId = row.nationalId?.trim();
+        if (!nationalId) {
+          results.push({ status: "new", row });
+          continue;
+        }
+
+        const existing = await storage.getCandidateByNationalId(nationalId);
+        if (!existing) {
+          results.push({ status: "new", row });
+          continue;
+        }
+
+        const candidateMeta = { id: existing.id, fullNameEn: existing.fullNameEn, nationalId: existing.nationalId ?? null };
+
+        // Check for active workforce record
+        const activeWf = await storage.getWorkforceByCandidateId(existing.id);
+        if (activeWf && activeWf.isActive) {
+          let reason: string;
+          if (activeWf.employmentType === "smp") {
+            reason = "Active SMP contract — terminate the existing SMP contract before adding to a new batch";
+          } else if (activeWf.endDate) {
+            // Individual employee with an end date set — in offboarding process
+            reason = "Employee is currently in offboarding — cannot add to SMP batch until offboarding is complete";
+          } else {
+            reason = "Active individual employee — terminate employment before adding to SMP batch";
+          }
+          results.push({ status: "blocked", row, candidate: candidateMeta, blockedReason: reason });
+          continue;
+        }
+
+        // Check for pending onboarding
+        const onboardingRecords = await storage.getOnboardingRecords({ candidateId: existing.id });
+        const activeOnboarding = onboardingRecords.find(ob => ob.status !== "converted" && ob.status !== "rejected");
+        if (activeOnboarding) {
+          results.push({ status: "blocked", row, candidate: candidateMeta, blockedReason: "In onboarding — remove from onboarding first" });
+          continue;
+        }
+
+        // Check for active interview group
+        const interviews = await storage.getInterviews({ candidateId: existing.id });
+        const scheduledInterview = interviews.find(iv => iv.status === "scheduled" || iv.status === "in_progress");
+        if (scheduledInterview) {
+          results.push({ status: "blocked", row, candidate: candidateMeta, blockedReason: "In active interview group — remove from interview group first" });
+          continue;
+        }
+
+        // Check for application under review
+        const apps = await storage.getApplications({ candidateId: existing.id });
+        const activeApp = apps.find(a => a.status === "new" || a.status === "reviewing" || a.status === "shortlisted" || a.status === "interviewed" || a.status === "offered");
+        if (activeApp) {
+          results.push({ status: "blocked", row, candidate: candidateMeta, blockedReason: "Application under review — close or reject the application first" });
+          continue;
+        }
+
+        // Clean: exists in talent DB but no active duties
+        results.push({ status: "clean", row, candidate: candidateMeta });
+      }
+
+      return res.json({ results });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // ─── SMP Commit ───────────────────────────────────────────────────────────
+  // Commits validated SMP batch: creates new candidates, creates onboarding records
+  // for CLEAN (existing) candidates, and skips BLOCKED rows.
+  // CLEAN rows MUST carry confirmed=true from the caller; any CLEAN row without
+  // explicit user confirmation is treated as skipped (server enforces this gate).
+  app.post("/api/candidates/smp-commit", async (req: Request, res: Response) => {
+    try {
+      const { results: validationResults, eventId, jobId } = req.body as {
+        results: {
+          status: "new" | "clean" | "blocked";
+          confirmed?: boolean;
+          row: Record<string, string>;
+          candidate?: { id: string; fullNameEn: string; nationalId: string | null };
+        }[];
+        eventId?: string;
+        jobId?: string;
+      };
+
+      if (!Array.isArray(validationResults) || validationResults.length === 0) {
+        return res.status(400).json({ message: "results array is required" });
+      }
+
+      // Strict CLEAN confirmation gate: any CLEAN row without confirmed=true is rejected
+      const unconfirmedClean = validationResults.filter(r => r.status === "clean" && r.confirmed !== true);
+      if (unconfirmedClean.length > 0) {
+        return res.status(400).json({
+          message: `${unconfirmedClean.length} CLEAN row(s) were not confirmed by the user. Confirm all CLEAN rows before committing.`,
+        });
+      }
+
+      const created: string[] = [];  // new candidate IDs
+      const attached: string[] = []; // existing candidate IDs added to onboarding
+      const skipped: string[] = [];  // blocked or invalid rows skipped
+
+      // Helper: build a typed SMP onboarding payload (no `as any` required)
+      const buildSmpOnboardingPayload = (candidateId: string, hasPhoto: boolean, hasNationalId: boolean, notes: string): InsertOnboarding => ({
+        candidateId,
+        eventId: eventId ?? null,
+        jobId: jobId ?? null,
+        applicationId: null,
+        hasPhoto,
+        hasIban: false,
+        hasNationalId,
+        hasMedicalFitness: false,
+        hasSignedContract: false,
+        hasEmergencyContact: false,
+        status: "pending",
+        notes,
+      });
+
+      // Helper: re-check BLOCKED conditions server-side (never trust client-side status)
+      const isBlockedServerSide = async (candidateId: string): Promise<string | null> => {
+        const activeWf = await storage.getWorkforceByCandidateId(candidateId);
+        if (activeWf && activeWf.isActive) {
+          return activeWf.employmentType === "smp"
+            ? "Currently under an active SMP contract"
+            : "Active individual employment — cannot add to SMP batch";
+        }
+        const onboardingRecords = await storage.getOnboardingRecords({ candidateId });
+        const activeOnboarding = onboardingRecords.find(ob => ob.status !== "converted" && ob.status !== "rejected");
+        if (activeOnboarding) {
+          return "In active onboarding — remove from onboarding first";
+        }
+        const interviews = await storage.getInterviews({ candidateId });
+        const scheduledInterview = interviews.find(iv => iv.status === "scheduled" || iv.status === "in_progress");
+        if (scheduledInterview) {
+          return "In active interview group";
+        }
+        const apps = await storage.getApplications({ candidateId });
+        const activeApp = apps.find(a => ["new", "reviewing", "shortlisted", "interviewed", "offered"].includes(a.status));
+        if (activeApp) {
+          return "Application under review";
+        }
+        return null;
+      }
+
+      for (const result of validationResults) {
+        if (result.status === "blocked") {
+          skipped.push(result.candidate?.id ?? result.row.nationalId ?? "?");
+          continue;
+        }
+
+        if (result.status === "clean" && result.candidate) {
+          // CLEAN (confirmed=true already verified above): re-validate server-side before attaching
+          const candidateId = result.candidate.id;
+          const blockReason = await isBlockedServerSide(candidateId);
+          if (blockReason) {
+            skipped.push(candidateId);
+            continue; // reject: conditions changed between validate and commit
+          }
+          // Attach to SMP batch via onboarding record
+          const existingObs = await storage.getOnboardingRecords({ candidateId });
+          const alreadyActive = existingObs.find(r => r.status !== "converted" && r.status !== "rejected");
+          if (!alreadyActive) {
+            const candidateData = await storage.getCandidate(candidateId);
+            await storage.createOnboardingRecord(buildSmpOnboardingPayload(
+              candidateId,
+              candidateData?.hasPhoto ?? false,
+              candidateData?.hasNationalId ?? false,
+              "Added via SMP batch upload (CLEAN match — existing talent DB member)",
+            ));
+          }
+          attached.push(candidateId);
+          continue;
+        }
+
+        if (result.status === "new") {
+          // NEW: check nationalId doesn't now exist (race condition guard)
+          const row = result.row;
+          if (row.nationalId) {
+            const maybeExisting = await storage.getCandidateByNationalId(row.nationalId.trim());
+            if (maybeExisting) {
+              // Became a CLEAN candidate between validate and commit — treat as CLEAN
+              // Race-condition CLEAN rows do not require client confirmation; re-validate server-side instead
+              const blockReason = await isBlockedServerSide(maybeExisting.id);
+              if (blockReason) {
+                skipped.push(row.nationalId);
+                continue;
+              }
+              const existingObs = await storage.getOnboardingRecords({ candidateId: maybeExisting.id });
+              const alreadyActive = existingObs.find(r => r.status !== "converted" && r.status !== "rejected");
+              if (!alreadyActive) {
+                await storage.createOnboardingRecord(buildSmpOnboardingPayload(
+                  maybeExisting.id,
+                  maybeExisting.hasPhoto ?? false,
+                  maybeExisting.hasNationalId ?? false,
+                  "Added via SMP batch upload (race-condition CLEAN match)",
+                ));
+              }
+              attached.push(maybeExisting.id);
+              continue;
+            }
+          }
+          try {
+            const parsed = insertCandidateSchema.parse({
+              fullNameEn: row.fullNameEn || row.name || "",
+              nationalId:  row.nationalId || null,
+              phone:        row.phone || null,
+              source:       "smp",
+              profileCompleted: false,
+            });
+            const newCandidate = await storage.createCandidate(parsed);
+            await storage.createOnboardingRecord(buildSmpOnboardingPayload(
+              newCandidate.id,
+              false,
+              false,
+              "Added via SMP batch upload (NEW — created fresh)",
+            ));
+            created.push(newCandidate.id);
+          } catch (parseErr) {
+            skipped.push(row.nationalId ?? row.fullNameEn ?? "?");
+          }
+        }
+      }
+
+      return res.json({
+        created: created.length,
+        attached: attached.length,
+        skipped: skipped.length,
+        message: `SMP batch committed: ${created.length} new, ${attached.length} existing attached, ${skipped.length} blocked/skipped.`,
       });
     } catch (err) {
       return handleError(res, err);
@@ -1000,6 +1255,59 @@ export async function registerRoutes(
   app.post("/api/applications", async (req: Request, res: Response) => {
     try {
       const data = insertApplicationSchema.parse(req.body);
+
+      // ── SMP reverse gate (source-agnostic, workforce-record-authoritative) ────
+      // Block individual job applications for candidates who are:
+      //   1. Currently active SMP workers, or
+      //   2. In a pending onboarding and their workforce linkage (any record) is SMP.
+      // Classification is determined from workforce records, NOT candidate.source.
+      if (data.candidateId) {
+        // 1. Active SMP workforce record
+        const activeWf = await storage.getWorkforceByCandidateId(data.candidateId);
+        if (activeWf && activeWf.isActive && activeWf.employmentType === "smp") {
+          return res.status(409).json({
+            message: "Cannot submit individual job application: this candidate is currently registered as an active SMP worker. Remove them from the SMP contract first.",
+          });
+        }
+
+        // 2. Pending onboarding + SMP pipeline linkage (workforce-record-authoritative)
+        //    Check all workforce records for SMP linkage. For brand-new SMP candidates
+        //    who have no workforce record yet (pre-conversion stage), also check if any
+        //    prior SMP record exists — if a candidate entered via SMP batch and has a
+        //    pending onboarding, they are in the SMP pipeline.
+        const allWfRecords = await storage.getAllWorkforceByCandidateId(data.candidateId);
+        // hasSmpLinkage: true if this candidate has any SMP employment history
+        const hasSmpLinkage = allWfRecords.some(r => r.employmentType === "smp");
+        if (hasSmpLinkage) {
+          const onboardingRecords = await storage.getOnboardingRecords({ candidateId: data.candidateId });
+          const pendingOnboarding = onboardingRecords.find(
+            ob => ob.status !== "converted" && ob.status !== "rejected"
+          );
+          if (pendingOnboarding) {
+            return res.status(409).json({
+              message: "Cannot submit individual job application: this candidate is in an active SMP onboarding pipeline. Complete or reject the SMP onboarding first.",
+            });
+          }
+        }
+        // Edge case: brand-new SMP entrant with no prior workforce record yet.
+        // For these candidates, we check for a pending onboarding with no applicationId
+        // (SMP onboardings are always created without a job application linkage).
+        if (!hasSmpLinkage && allWfRecords.length === 0) {
+          const onboardingRecords = await storage.getOnboardingRecords({ candidateId: data.candidateId });
+          const pendingSmpOnboarding = onboardingRecords.find(
+            ob =>
+              ob.status !== "converted" &&
+              ob.status !== "rejected" &&
+              !ob.applicationId // SMP onboardings have no job application linkage
+          );
+          if (pendingSmpOnboarding) {
+            return res.status(409).json({
+              message: "Cannot submit individual job application: this candidate is in an active SMP onboarding pipeline. Complete or reject the SMP onboarding first.",
+            });
+          }
+        }
+      }
+
       const app_ = await storage.createApplication(data);
       return res.status(201).json(app_);
     } catch (err) {
@@ -1158,7 +1466,11 @@ export async function registerRoutes(
 
   app.post("/api/onboarding/bulk-convert", async (req: Request, res: Response) => {
     try {
-      const { ids, startDate, eventId, salary } = req.body;
+      // employmentType can be explicitly provided for the whole batch, or derived
+      // per-record from the onboarding record's applicationId:
+      //   applicationId === null → SMP onboarding → employmentType = "smp"
+      //   applicationId !== null → individual job application → employmentType = "individual"
+      const { ids, startDate, eventId, salary, employmentType: batchEmploymentType } = req.body;
       if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "ids array is required" });
       if (!startDate) return res.status(400).json({ message: "startDate is required" });
       const uniqueIds = [...new Set(ids as string[])];
@@ -1166,9 +1478,20 @@ export async function registerRoutes(
       const errors: { id: string; message: string }[] = [];
       for (const id of uniqueIds) {
         try {
+          // Determine employmentType per-record if not provided at batch level
+          let resolvedEmploymentType: "individual" | "smp" | undefined = undefined;
+          if (batchEmploymentType === "smp" || batchEmploymentType === "individual") {
+            resolvedEmploymentType = batchEmploymentType;
+          } else {
+            // Derive from onboarding record: no applicationId = SMP pipeline
+            const ob = await storage.getOnboardingRecord(id);
+            if (ob) {
+              resolvedEmploymentType = ob.applicationId ? "individual" : "smp";
+            }
+          }
           const wf = await storage.convertOnboardingToEmployee(
             id,
-            { startDate, eventId, salary },
+            { startDate, eventId, salary, employmentType: resolvedEmploymentType },
             (req as any).userId,
           );
           results.push(wf);
@@ -1208,7 +1531,9 @@ export async function registerRoutes(
           data.hasPhoto = candidate.hasPhoto ?? false;
           data.hasIban = candidate.hasIban ?? false;
           data.hasNationalId = candidate.hasNationalId ?? false;
-          const isSmp = candidate.source === "smp";
+          // Derive SMP from onboarding linkage context: applicationId === null = SMP pipeline.
+          // This is authoritative and source-agnostic.
+          const isSmp = !data.applicationId;
           data.status = computeOnboardingStatus(data as any, isSmp);
         }
       }
@@ -1232,8 +1557,8 @@ export async function registerRoutes(
         if (current && current.status !== "converted" && current.status !== "rejected") {
           const merged = { ...current, ...data };
           if (!isRejection) {
-            const cand = await storage.getCandidate(current.candidateId);
-            const isSmp = cand?.source === "smp";
+            // Derive SMP from onboarding record's applicationId (authoritative, source-agnostic)
+            const isSmp = !current.applicationId;
             data.status = computeOnboardingStatus(merged, isSmp);
           }
         }
@@ -1264,11 +1589,31 @@ export async function registerRoutes(
 
   app.post("/api/onboarding/:id/convert", async (req: Request, res: Response) => {
     try {
-      const { startDate, eventId, salary } = req.body as Record<string, string>;
+      const { startDate, eventId, salary, employmentType: clientEmploymentType } = req.body as Record<string, string>;
       if (!startDate) return res.status(400).json({ message: "startDate is required" });
+
+      // Derive employmentType from onboarding context when not explicitly provided.
+      // This matches bulk-convert behavior: applicationId === null → SMP pipeline.
+      let resolvedEmploymentType: "individual" | "smp" | undefined =
+        clientEmploymentType === "smp" ? "smp" :
+        clientEmploymentType === "individual" ? "individual" :
+        undefined;
+
+      if (!resolvedEmploymentType) {
+        const ob = await storage.getOnboardingRecord(req.params.id);
+        if (ob) {
+          resolvedEmploymentType = ob.applicationId ? "individual" : "smp";
+        }
+      }
+
       const workforce = await storage.convertOnboardingToEmployee(
         req.params.id,
-        { startDate, eventId: eventId || undefined, salary: salary && salary.trim() !== "" ? salary : undefined },
+        {
+          startDate,
+          eventId: eventId || undefined,
+          salary: salary && salary.trim() !== "" ? salary : undefined,
+          employmentType: resolvedEmploymentType,
+        },
         (req as any).userId,
       );
       return res.status(201).json(workforce);
@@ -1314,6 +1659,15 @@ export async function registerRoutes(
     try {
       const record = await storage.getWorkforceByCandidateId(req.params.candidateId);
       return res.json(record ?? null);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.get("/api/workforce/all-by-candidate/:candidateId", async (req: Request, res: Response) => {
+    try {
+      const records = await storage.getAllWorkforceByCandidateId(req.params.candidateId);
+      return res.json(records);
     } catch (err) {
       return handleError(res, err);
     }
@@ -1371,9 +1725,11 @@ export async function registerRoutes(
 
   app.post("/api/workforce/reinstate", async (req: Request, res: Response) => {
     try {
-      const { nationalId, startDate, eventId, salary, jobId } = req.body as Record<string, string>;
+      const { nationalId, startDate, eventId, salary, jobId, employmentType } = req.body as Record<string, string>;
       if (!nationalId || !startDate) return res.status(400).json({ message: "nationalId and startDate are required" });
-      const record = await storage.reinstateEmployee(nationalId, { startDate, eventId, salary, jobId });
+      const resolvedEmploymentType: "individual" | "smp" | undefined =
+        employmentType === "smp" ? "smp" : employmentType === "individual" ? "individual" : undefined;
+      const record = await storage.reinstateEmployee(nationalId, { startDate, eventId, salary, jobId, employmentType: resolvedEmploymentType });
       return res.status(201).json(record);
     } catch (err) {
       return handleError(res, err);
@@ -1788,7 +2144,8 @@ export async function registerRoutes(
           if (ob.status === "converted" || ob.status === "rejected") { results.push({ onboardingId: obId, success: false, error: "Already converted or rejected" }); continue; }
           const candidate = await storage.getCandidate(ob.candidateId);
           if (!candidate) { results.push({ onboardingId: obId, success: false, error: "Candidate not found" }); continue; }
-          if (candidate.source === "smp") { results.push({ onboardingId: obId, success: false, error: "SMP workers do not get contracts" }); continue; }
+          // SMP onboardings have no applicationId — they do not get individual contracts
+          if (!ob.applicationId) { results.push({ onboardingId: obId, success: false, error: "SMP workers do not get contracts" }); continue; }
 
           const existing = await storage.getCandidateContracts({ onboardingId: ob.id });
           const pending = existing.find(c => c.status !== "signed");
@@ -1843,8 +2200,8 @@ export async function registerRoutes(
       if (contract.onboardingId) {
         const ob = await storage.getOnboardingRecord(contract.onboardingId);
         if (ob) {
-          const candidate = await storage.getCandidate(ob.candidateId);
-          const isSmp = candidate?.source === "smp";
+          // Derive SMP from onboarding linkage (applicationId === null = SMP pipeline)
+          const isSmp = !ob.applicationId;
           const rec = { ...ob, hasSignedContract: true };
           const newStatus = computeOnboardingStatus(rec, isSmp);
           await storage.updateOnboardingRecord(contract.onboardingId, {
