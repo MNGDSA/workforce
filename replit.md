@@ -374,6 +374,32 @@ RETURN TO POOL
 - Sync-age warning triggers after 24 hours without a successful sync (alerts employee or supervisor before records are at risk)
 - Factory reset / lost device risk acknowledged: offline records are unrecoverable if device is lost before sync
 
+---
+
+### Asset Management (PLANNED)
+
+**Concept:** A catalogue of physical assets that can be assigned to employees, with monetary values attached. Upon offboarding, employees either return the asset or the value is deducted from their payment (individuals) or from the SMP settlement (SMP workers).
+
+**Asset Catalogue (admin-defined):**
+- Admin creates asset types with a name and a monetary value (e.g. Uniform = 100 SR, Radio = 50 SR, Access Badge = 25 SR)
+- Assets are reusable definitions — not tied to a specific employee until assigned
+
+**Asset Assignment:**
+- At any point during employment (typically at onboarding or start of event), one or more assets are assigned to an employee
+- Each assignment records: asset type, value at time of assignment, assigned date, assigned by (admin user)
+- An employee can have multiple assets assigned simultaneously
+
+**Offboarding Resolution:**
+- When an employee enters offboarding, their assigned assets appear as a checklist
+- For each asset, the admin marks: Returned or Not Returned
+- Not-returned assets are flagged as deductions
+- For individual employees: deduction applied to their final payroll calculation
+- For SMP workers: deduction applied to the SMP company settlement for that contract
+
+**Schema needed:**
+- `assets` table: id, name, description, value (decimal), category, isActive, createdAt
+- `employeeAssets` table: id, workforceId (FK), assetId (FK), assignedAt, assignedBy (FK → users), returnedAt (nullable), isReturned (boolean), deductionApplied (boolean), notes
+
 **Work Schedule section (to be built in web app first):**
 - Shift assignment per employee
 - Workday calendar (weekly/monthly view)
