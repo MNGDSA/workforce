@@ -76,3 +76,90 @@ The system employs a modern, full-stack architecture.
 - **PostgreSQL**: The primary database for all persistent data storage.
 - **AWS Rekognition or Azure Face API**: Planned for the Mobile Attendance App for facial recognition and liveness detection.
 - **Zebra Browser Print SDK and Evolis Premium Suite plugins**: Planned for direct printing capabilities within the Employee ID Cards feature.
+
+---
+
+## DigitalOcean PreProd / Production Deployment Notes
+
+> Full source: `attached_assets/DO-Deployment-Guide_1775338207310.md` — read it when deployment time comes.
+
+### Architecture
+```
+Replit (Dev) → GitHub (main branch) → DO App Platform
+                                          ├── Web Service (Express serves API + Vite static build)
+                                          ├── Managed PostgreSQL
+                                          └── DO Spaces (object storage, S3-compatible)
+```
+Push to `github main` → triggers auto-redeploy on DO.
+
+### GitHub Push Protocol (from Replit)
+The remote is named **`github`**, not `origin`. The integration token expires — always refresh before pushing:
+```javascript
+// Run in code_execution sandbox:
+const conns = await listConnections('github');
+const token = conns[0].settings.access_token;
+// Then: git remote set-url github https://x-access-token:{token}@github.com/ORG/REPO.git
+// Then: git push github main
+```
+
+### #1 Blocker — SSL Fix for DO Managed PostgreSQL
+DO injects `DATABASE_URL` with `?sslmode=require`. The `pg` driver interprets this as `verify-full` and throws `self-signed certificate in certificate chain`. Fix in both `server/db.ts` and `drizzle.config.ts`:
+```typescript
+function getConnectionString() {
+  const url = process.env.DATABASE_URL || "";
+  return url.replace(/[\?&]sslmode=[^&]*/, "").replace(/\?$/, "");
+}
+// In Pool / dbCredentials:
+ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
+```
+
+### Express Requirements for DO
+- Must read `PORT` from env: `const port = parseInt(process.env.PORT || "8080");`
+- Must serve the Vite build and provide SPA fallback:
+```typescript
+app.use(express.static(path.join(__dirname, "../public")));
+app.get("*", (req, res) => {
+  if (!req.path.startsWith("/api")) res.sendFile(path.join(__dirname, "../public/index.html"));
+});
+```
+
+### File Storage: Replit Object Storage → DO Spaces
+Replit's `DEFAULT_OBJECT_STORAGE_BUCKET_ID` does not exist on DO. Replace with **DO Spaces** (S3-compatible, use `@aws-sdk/client-s3`). Abstract the storage layer via env var — dev uses Replit, prod uses Spaces. **CORS on the Space is mandatory** or browser downloads will fail.
+
+Required DO Spaces env vars: `SPACES_ENDPOINT`, `SPACES_BUCKET`, `SPACES_KEY`, `SPACES_SECRET`, `SPACES_REGION`.
+
+### Required Environment Variables on DO
+| Variable | Notes |
+|----------|-------|
+| `DATABASE_URL` | Auto-injected if DB attached — must apply SSL fix above |
+| `NODE_ENV` | Set to `production` |
+| `SESSION_SECRET` | 64-char random hex — set permanently, never rotate or sessions break on each deploy |
+| `PORT` | Auto-injected by DO — app must read from env |
+| `SPACES_*` (5 vars) | DO Spaces credentials |
+| All SMS/API keys | Copy from Replit secrets |
+
+Generate SESSION_SECRET: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`
+
+### Public Routes Must Come Before Auth Middleware
+Candidate portal and public job listings must be registered before `requireAuth` or unauthenticated users are blocked.
+
+### Session Cookie Settings for HTTPS
+```typescript
+cookie: { secure: true, httpOnly: true, sameSite: "lax", maxAge: 86400000 }
+```
+
+### Startup Schema Safety Net
+Alongside `drizzle-kit push` at build time, add an `ensureTables()` function running raw `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE ADD COLUMN IF NOT EXISTS` before `app.listen()`. Guards against schema drift without requiring manual migrations.
+
+### Debugging on DO
+Check **Runtime Logs** first — most failures (SSL, missing env vars, port) happen at startup, not at build time. Build Logs only show compile/install errors.
+
+### Key Lessons (from the full guide)
+1. SSL strip is mandatory — `rejectUnauthorized: false` in production
+2. `SESSION_SECRET` must be permanent — sessions break on every redeploy otherwise
+3. Replit Object Storage ≠ DO Spaces — abstract the storage layer before deploying
+4. Remote is named `github` not `origin` — always refresh the token before pushing
+5. Read `PORT` from env — hardcoded ports prevent DO from routing traffic
+6. Public routes must be registered before auth middleware
+7. Check Runtime Logs first, not Build Logs
+8. Add `ensureTables()` startup safety net alongside Drizzle push
