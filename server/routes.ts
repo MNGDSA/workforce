@@ -1796,7 +1796,8 @@ export async function registerRoutes(
 
           const nationalId = String(row["National ID/Iqama"] ?? row["National ID"] ?? "").trim();
           if (nationalId !== "") {
-            if (!/^\d{9,12}$/.test(nationalId)) rowErrors.push(`National ID/Iqama "${nationalId}" must be 9–12 digits (numbers only)`);
+            if (!/^[12]\d{9}$/.test(nationalId))
+              rowErrors.push(`National ID/Iqama "${nationalId}" must be exactly 10 digits and start with 1 (Saudi ID) or 2 (Iqama)`);
             else candUpdate.nationalId = nationalId;
           }
 
