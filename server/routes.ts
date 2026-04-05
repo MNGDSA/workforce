@@ -1749,30 +1749,68 @@ export async function registerRoutes(
         try {
           // Fields to update on the workforce record
           const wfUpdate: Record<string, any> = {};
+          const rowErrors: string[] = [];
+
+          // Salary — must be a positive number
           const salary = String(row["Salary (SAR)"] ?? row["Salary"] ?? "").trim();
-          if (salary !== "") wfUpdate.salary = salary;
+          if (salary !== "") {
+            const salaryNum = Number(salary);
+            if (isNaN(salaryNum) || salaryNum < 0) rowErrors.push(`Salary "${salary}" is not a valid number`);
+            else wfUpdate.salary = salary;
+          }
 
+          // Start Date — must be YYYY-MM-DD
           const startDate = String(row["Start Date"] ?? "").trim();
-          if (startDate !== "") wfUpdate.startDate = startDate;
+          if (startDate !== "") {
+            const dateStr = startDate.length === 5 && !isNaN(Number(startDate))
+              ? new Date(Math.round((Number(startDate) - 25569) * 86400 * 1000)).toISOString().slice(0, 10)
+              : startDate;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || isNaN(Date.parse(dateStr)))
+              rowErrors.push(`Start Date "${startDate}" must be in YYYY-MM-DD format`);
+            else wfUpdate.startDate = dateStr;
+          }
 
+          // Notes — no special validation, just length cap
           const notes = String(row["Notes"] ?? "").trim();
-          if (notes !== "") wfUpdate.notes = notes;
+          if (notes !== "") {
+            if (notes.length > 2000) rowErrors.push("Notes exceed maximum 2,000 characters");
+            else wfUpdate.notes = notes;
+          }
 
+          // Event — must exactly match an existing event name
           const eventName = String(row["Event"] ?? "").trim();
           if (eventName !== "") {
             const eventId = eventsByName[eventName.toLowerCase()];
             if (eventId) wfUpdate.eventId = eventId;
-            else { results.push({ employeeNumber, status: "error", reason: `Event "${eventName}" not found` }); continue; }
+            else rowErrors.push(`Event "${eventName}" does not match any existing event. Check the "Events (Reference)" sheet for valid names.`);
           }
 
           // Fields to update on the candidate record
           const candUpdate: Record<string, any> = {};
+
           const fullName = String(row["Full Name"] ?? "").trim();
-          if (fullName !== "") candUpdate.fullNameEn = fullName;
+          if (fullName !== "") {
+            if (fullName.length < 2) rowErrors.push("Full Name must be at least 2 characters");
+            else candUpdate.fullNameEn = fullName;
+          }
+
           const nationalId = String(row["National ID/Iqama"] ?? row["National ID"] ?? "").trim();
-          if (nationalId !== "") candUpdate.nationalId = nationalId;
+          if (nationalId !== "") {
+            if (!/^\d{9,12}$/.test(nationalId)) rowErrors.push(`National ID/Iqama "${nationalId}" must be 9–12 digits (numbers only)`);
+            else candUpdate.nationalId = nationalId;
+          }
+
           const phone = String(row["Phone"] ?? "").trim();
-          if (phone !== "") candUpdate.phone = phone;
+          if (phone !== "") {
+            const cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
+            if (!/^\+?\d{9,15}$/.test(cleanPhone)) rowErrors.push(`Phone "${phone}" is not a valid phone number`);
+            else candUpdate.phone = cleanPhone;
+          }
+
+          if (rowErrors.length > 0) {
+            results.push({ employeeNumber, status: "error", reason: rowErrors.join(" | ") });
+            continue;
+          }
 
           if (Object.keys(wfUpdate).length > 0) await storage.updateWorkforceRecord(worker.id, wfUpdate);
           if (Object.keys(candUpdate).length > 0) await storage.updateCandidate(worker.candidateId, candUpdate);
