@@ -27,6 +27,7 @@ import {
   Clock,
   ChevronsLeft,
   ChevronsRight,
+  Package,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -62,10 +63,11 @@ const topNavItems = [
   { href: "/payroll",   icon: Wallet,          label: "Payroll" },
 ];
 
-const workforcePaths = ["/workforce", "/schedules"];
+const workforcePaths = ["/workforce", "/schedules", "/assets"];
 const workforceSubItems = [
-  { href: "/workforce", icon: Users,  label: "Employees" },
-  { href: "/schedules", icon: Clock,  label: "Schedules & Shifts" },
+  { href: "/workforce", icon: Users,   label: "Employees" },
+  { href: "/schedules", icon: Clock,   label: "Schedules & Shifts" },
+  { href: "/assets",    icon: Package, label: "Assets" },
 ];
 
 const settingsPaths = ["/settings", "/automation", "/id-cards"];

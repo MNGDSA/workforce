@@ -74,6 +74,12 @@ import {
   type InsertScheduleAssignment,
   type AttendanceRecord,
   type InsertAttendanceRecord,
+  assets,
+  employeeAssets,
+  type Asset,
+  type InsertAsset,
+  type EmployeeAsset,
+  type InsertEmployeeAsset,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull } from "drizzle-orm";
 
@@ -284,6 +290,21 @@ export interface IStorage {
   upsertAttendanceRecord(data: InsertAttendanceRecord): Promise<AttendanceRecord>;
   deleteAttendanceRecord(id: string): Promise<boolean>;
   getWorkedDaySummary(workforceIds: string[], dateFrom: string, dateTo: string): Promise<Array<{ workforceId: string; workedDays: number; absentDays: number; lateDays: number; halfDays: number; excusedDays: number; totalScheduledDays: number }>>;
+
+  // Assets
+  getAssets(includeInactive?: boolean): Promise<Asset[]>;
+  getAsset(id: string): Promise<Asset | undefined>;
+  createAsset(data: InsertAsset): Promise<Asset>;
+  updateAsset(id: string, data: Partial<InsertAsset>): Promise<Asset | undefined>;
+  deleteAsset(id: string): Promise<boolean>;
+
+  // Employee Assets
+  getEmployeeAssets(filters?: { workforceId?: string; status?: string; assetId?: string }): Promise<EmployeeAsset[]>;
+  getEmployeeAsset(id: string): Promise<EmployeeAsset | undefined>;
+  assignAsset(data: InsertEmployeeAsset): Promise<EmployeeAsset>;
+  updateEmployeeAsset(id: string, data: Partial<InsertEmployeeAsset>): Promise<EmployeeAsset | undefined>;
+  deleteEmployeeAsset(id: string): Promise<boolean>;
+  getUnreturnedAssetsForWorker(workforceId: string): Promise<Array<EmployeeAsset & { asset: Asset }>>;
 
   // Dashboard
   getDashboardStats(): Promise<{
@@ -1177,6 +1198,87 @@ export class DatabaseStorage implements IStorage {
       .from(notifications)
       .where(and(eq(notifications.recipientId, recipientId), eq(notifications.status, "pending")));
     return Number(row.value);
+  }
+
+  // ─── Assets ─────────────────────────────────────────────────────────────────
+  async getAssets(includeInactive = false): Promise<Asset[]> {
+    const rows = await db
+      .select()
+      .from(assets)
+      .where(includeInactive ? undefined : eq(assets.isActive, true))
+      .orderBy(asc(assets.name));
+    return rows;
+  }
+
+  async getAsset(id: string): Promise<Asset | undefined> {
+    const [row] = await db.select().from(assets).where(eq(assets.id, id));
+    return row;
+  }
+
+  async createAsset(data: InsertAsset): Promise<Asset> {
+    const [row] = await db.insert(assets).values(data).returning();
+    return row;
+  }
+
+  async updateAsset(id: string, data: Partial<InsertAsset>): Promise<Asset | undefined> {
+    const [row] = await db
+      .update(assets)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(assets.id, id))
+      .returning();
+    return row;
+  }
+
+  async deleteAsset(id: string): Promise<boolean> {
+    const result = await db.delete(assets).where(eq(assets.id, id)).returning({ id: assets.id });
+    return result.length > 0;
+  }
+
+  // ─── Employee Assets ─────────────────────────────────────────────────────────
+  async getEmployeeAssets(filters?: { workforceId?: string; status?: string; assetId?: string }): Promise<EmployeeAsset[]> {
+    const conditions = [];
+    if (filters?.workforceId) conditions.push(eq(employeeAssets.workforceId, filters.workforceId));
+    if (filters?.assetId) conditions.push(eq(employeeAssets.assetId, filters.assetId));
+    if (filters?.status) conditions.push(eq(employeeAssets.status, filters.status as any));
+    const rows = await db
+      .select()
+      .from(employeeAssets)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(employeeAssets.createdAt));
+    return rows;
+  }
+
+  async getEmployeeAsset(id: string): Promise<EmployeeAsset | undefined> {
+    const [row] = await db.select().from(employeeAssets).where(eq(employeeAssets.id, id));
+    return row;
+  }
+
+  async assignAsset(data: InsertEmployeeAsset): Promise<EmployeeAsset> {
+    const [row] = await db.insert(employeeAssets).values(data).returning();
+    return row;
+  }
+
+  async updateEmployeeAsset(id: string, data: Partial<InsertEmployeeAsset>): Promise<EmployeeAsset | undefined> {
+    const [row] = await db
+      .update(employeeAssets)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(employeeAssets.id, id))
+      .returning();
+    return row;
+  }
+
+  async deleteEmployeeAsset(id: string): Promise<boolean> {
+    const result = await db.delete(employeeAssets).where(eq(employeeAssets.id, id)).returning({ id: employeeAssets.id });
+    return result.length > 0;
+  }
+
+  async getUnreturnedAssetsForWorker(workforceId: string): Promise<Array<EmployeeAsset & { asset: Asset }>> {
+    const rows = await db
+      .select({ ea: employeeAssets, a: assets })
+      .from(employeeAssets)
+      .innerJoin(assets, eq(employeeAssets.assetId, assets.id))
+      .where(and(eq(employeeAssets.workforceId, workforceId), eq(employeeAssets.status, "assigned")));
+    return rows.map(r => ({ ...r.ea, asset: r.a }));
   }
 
   // ─── Dashboard ──────────────────────────────────────────────────────────────

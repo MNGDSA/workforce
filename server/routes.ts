@@ -30,6 +30,8 @@ import {
   insertScheduleAssignmentSchema,
   insertAttendanceRecordSchema,
   type InsertOnboarding,
+  insertAssetSchema,
+  insertEmployeeAssetSchema,
 } from "@shared/schema";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
 
@@ -2802,6 +2804,98 @@ export async function registerRoutes(
       if (!assignment) return res.json(null);
       const template = await storage.getScheduleTemplate(assignment.templateId);
       return res.json({ assignment, template: template ?? null });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Assets ──────────────────────────────────────────────────────────────────
+  app.get("/api/assets", async (req: Request, res: Response) => {
+    try {
+      const includeInactive = req.query.includeInactive === "true";
+      const rows = await storage.getAssets(includeInactive);
+      return res.json(rows);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/assets", async (req: Request, res: Response) => {
+    try {
+      const data = insertAssetSchema.parse(req.body);
+      const row = await storage.createAsset(data);
+      return res.status(201).json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/assets/:id", async (req: Request, res: Response) => {
+    try {
+      const row = await storage.getAsset(req.params.id);
+      if (!row) return res.status(404).json({ message: "Asset not found" });
+      return res.json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/assets/:id", async (req: Request, res: Response) => {
+    try {
+      const data = insertAssetSchema.partial().parse(req.body);
+      const row = await storage.updateAsset(req.params.id, data);
+      if (!row) return res.status(404).json({ message: "Asset not found" });
+      return res.json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.delete("/api/assets/:id", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteAsset(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Asset not found" });
+      return res.status(204).end();
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Employee Assets ─────────────────────────────────────────────────────────
+  app.get("/api/employee-assets", async (req: Request, res: Response) => {
+    try {
+      const { workforceId, status, assetId } = req.query as { workforceId?: string; status?: string; assetId?: string };
+      const rows = await storage.getEmployeeAssets({ workforceId, status, assetId });
+      return res.json(rows);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/employee-assets", async (req: Request, res: Response) => {
+    try {
+      const data = insertEmployeeAssetSchema.parse(req.body);
+      const row = await storage.assignAsset(data);
+      return res.status(201).json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/employee-assets/:id", async (req: Request, res: Response) => {
+    try {
+      const row = await storage.getEmployeeAsset(req.params.id);
+      if (!row) return res.status(404).json({ message: "Assignment not found" });
+      return res.json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/employee-assets/:id", async (req: Request, res: Response) => {
+    try {
+      const existing = await storage.getEmployeeAsset(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Assignment not found" });
+      const data = insertEmployeeAssetSchema.partial().parse(req.body);
+      const row = await storage.updateEmployeeAsset(req.params.id, data);
+      return res.json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.delete("/api/employee-assets/:id", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteEmployeeAsset(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Assignment not found" });
+      return res.status(204).end();
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/employee-assets/worker/:workforceId/unreturned", async (req: Request, res: Response) => {
+    try {
+      const rows = await storage.getUnreturnedAssetsForWorker(req.params.workforceId);
+      return res.json(rows);
     } catch (err) { return handleError(res, err); }
   });
 

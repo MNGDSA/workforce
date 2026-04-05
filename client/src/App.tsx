@@ -29,6 +29,7 @@ import OnboardingPage from "@/pages/onboarding";
 import IdCardsPage from "@/pages/id-cards";
 import LegalPage from "@/pages/legal-page";
 import SchedulesPage from "@/pages/schedules";
+import AssetsPage from "@/pages/assets";
 
 function Router() {
   return (
@@ -58,6 +59,7 @@ function Router() {
       <Route path="/onboarding" component={OnboardingPage} />
       <Route path="/id-cards" component={IdCardsPage} />
       <Route path="/schedules" component={SchedulesPage} />
+      <Route path="/assets" component={AssetsPage} />
       <Route path="/candidate-portal" component={() => (
         <ProfileSetupGate><CandidatePortal /></ProfileSetupGate>
       )} />

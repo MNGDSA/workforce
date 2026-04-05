@@ -1008,6 +1008,70 @@ export const insertAttendanceRecordSchema = createInsertSchema(attendanceRecords
 export type InsertAttendanceRecord = z.infer<typeof insertAttendanceRecordSchema>;
 export type AttendanceRecord = typeof attendanceRecords.$inferSelect;
 
+// ─── Assets ─────────────────────────────────────────────────────────────────
+export const assets = pgTable(
+  "assets",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    name: text("name").notNull(),
+    description: text("description"),
+    category: text("category"),
+    price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    nameIdx: index("assets_name_idx").on(t.name),
+  })
+);
+
+export const employeeAssetStatusEnum = pgEnum("employee_asset_status", [
+  "assigned",
+  "returned",
+  "not_returned",
+]);
+
+export const employeeAssets = pgTable(
+  "employee_assets",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    assetId: varchar("asset_id")
+      .notNull()
+      .references(() => assets.id),
+    workforceId: varchar("workforce_id")
+      .notNull()
+      .references(() => workforce.id),
+    assignedAt: text("assigned_at").notNull(),
+    returnedAt: text("returned_at"),
+    status: employeeAssetStatusEnum("status").notNull().default("assigned"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    assetIdx: index("employee_assets_asset_idx").on(t.assetId),
+    workforceIdx: index("employee_assets_workforce_idx").on(t.workforceId),
+    statusIdx: index("employee_assets_status_idx").on(t.status),
+  })
+);
+
+export const insertAssetSchema = createInsertSchema(assets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertAsset = z.infer<typeof insertAssetSchema>;
+export type Asset = typeof assets.$inferSelect;
+
+export const insertEmployeeAssetSchema = createInsertSchema(employeeAssets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertEmployeeAsset = z.infer<typeof insertEmployeeAssetSchema>;
+export type EmployeeAsset = typeof employeeAssets.$inferSelect;
+
 // ─── Query Params Types ─────────────────────────────────────────────────────
 export const candidateQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
