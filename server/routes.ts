@@ -77,6 +77,22 @@ const upload = multer({
   },
 });
 
+const uploadXlsx = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname);
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if ([".xlsx", ".xls"].includes(ext)) cb(null, true);
+    else cb(new Error(`Only .xlsx or .xls files are accepted here`));
+  },
+});
+
 function handleError(res: Response, err: unknown) {
   console.error(err);
   if (err instanceof z.ZodError) {
@@ -1719,7 +1735,7 @@ export async function registerRoutes(
   });
 
   // ─── Bulk Update via Excel upload ────────────────────────────────────────
-  app.post("/api/workforce/bulk-update", upload.single("file"), async (req: Request, res: Response) => {
+  app.post("/api/workforce/bulk-update", uploadXlsx.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
