@@ -34,7 +34,7 @@ import {
   insertEmployeeAssetSchema,
 } from "@shared/schema";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
-import * as XLSX from "xlsx";
+import XLSX from "xlsx";
 
 function validateProfileCompleteness(candidate: Record<string, any>): string[] {
   const missing: string[] = [];
