@@ -36,6 +36,28 @@ import {
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
 import XLSX from "xlsx";
 
+async function logAudit(req: Request, params: {
+  action: string;
+  entityType?: string;
+  entityId?: string;
+  employeeNumber?: string;
+  subjectName?: string;
+  description: string;
+  metadata?: Record<string, any>;
+}) {
+  try {
+    const actorId = (req as any).userId ?? null;
+    let actorName = "System";
+    if (actorId) {
+      const user = await storage.getUser(actorId);
+      if (user) actorName = (user as any).fullName ?? (user as any).username ?? "Unknown";
+    }
+    await storage.createAuditLog({ actorId, actorName, ...params });
+  } catch (e) {
+    console.error("[audit] Failed to log:", e);
+  }
+}
+
 function validateProfileCompleteness(candidate: Record<string, any>): string[] {
   const missing: string[] = [];
   if (!candidate.fullNameEn) missing.push("Full Name");
@@ -1522,6 +1544,14 @@ export async function registerRoutes(
           errors.push({ id, message: e?.message || "conversion failed" });
         }
       }
+      if (results.length > 0) {
+        await logAudit(req, {
+          action: "workforce.bulk_converted",
+          entityType: "workforce",
+          description: `Bulk-converted ${results.length} of ${uniqueIds.length} candidate(s) to employees`,
+          metadata: { converted: results.length, failed: errors.length, total: uniqueIds.length },
+        });
+      }
       const status = results.length === 0 && errors.length > 0 ? 422 : results.length > 0 ? 201 : 200;
       return res.status(status).json({ converted: results.length, errors, total: uniqueIds.length });
     } catch (err) {
@@ -1561,6 +1591,15 @@ export async function registerRoutes(
         }
       }
       const record = await storage.createOnboardingRecord(data);
+      const candidate = data.candidateId ? await storage.getCandidate(data.candidateId) : null;
+      await logAudit(req, {
+        action: "onboarding.admit",
+        entityType: "onboarding",
+        entityId: record.id,
+        subjectName: candidate?.fullNameEn ?? undefined,
+        description: `Admitted "${candidate?.fullNameEn ?? data.candidateId}" to onboarding`,
+        metadata: { candidateId: data.candidateId },
+      });
       return res.status(201).json(record);
     } catch (err) {
       return handleError(res, err);
@@ -1639,6 +1678,15 @@ export async function registerRoutes(
         },
         (req as any).userId,
       );
+      await logAudit(req, {
+        action: "workforce.converted",
+        entityType: "workforce",
+        entityId: workforce.id,
+        employeeNumber: (workforce as any).employeeNumber ?? undefined,
+        subjectName: (workforce as any).fullNameEn ?? undefined,
+        description: `Converted "${(workforce as any).fullNameEn ?? req.params.id}" to employee #${(workforce as any).employeeNumber ?? "—"}`,
+        metadata: { startDate, eventId, salary, employmentType: resolvedEmploymentType },
+      });
       return res.status(201).json(workforce);
     } catch (err) {
       return handleError(res, err);
@@ -1726,8 +1774,34 @@ export async function registerRoutes(
       for (const key of allowed) {
         if (key in req.body) data[key] = req.body[key];
       }
+      const before = await storage.getWorkforceEmployee(req.params.id);
       const record = await storage.updateWorkforceRecord(req.params.id, data);
       if (!record) return res.status(404).json({ message: "Employee not found" });
+      // Build a human-readable diff description
+      const changes: string[] = [];
+      if (before) {
+        if (data.salary !== undefined && String(data.salary) !== String((before as any).salary ?? "")) {
+          changes.push(`salary from ${(before as any).salary ?? "—"} to ${data.salary} SAR`);
+        }
+        if (data.isActive !== undefined && data.isActive !== (before as any).isActive) {
+          changes.push(`status → ${data.isActive ? "active" : "inactive"}`);
+        }
+        if (data.eventId !== undefined) changes.push(`event updated`);
+        if (data.notes !== undefined) changes.push(`notes updated`);
+        if (data.endDate !== undefined) changes.push(`end date → ${data.endDate}`);
+        if (data.performanceScore !== undefined) changes.push(`performance score → ${data.performanceScore}`);
+      }
+      const subjectName = (record as any).fullNameEn ?? undefined;
+      const empNum = (record as any).employeeNumber ?? undefined;
+      await logAudit(req, {
+        action: "workforce.updated",
+        entityType: "workforce",
+        entityId: req.params.id,
+        employeeNumber: empNum,
+        subjectName,
+        description: `Updated employee #${empNum ?? "—"} "${subjectName ?? req.params.id}"${changes.length > 0 ? ": " + changes.join(", ") : ""}`,
+        metadata: { changes: data },
+      });
       return res.json(record);
     } catch (err) {
       return handleError(res, err);
@@ -1831,6 +1905,14 @@ export async function registerRoutes(
       const updated = results.filter(r => r.status === "updated").length;
       const errors = results.filter(r => r.status === "error");
       const skipped = results.filter(r => r.status === "skipped").length;
+      if (updated > 0) {
+        await logAudit(req, {
+          action: "workforce.bulk_updated",
+          entityType: "workforce",
+          description: `Bulk-updated ${updated} of ${rows.length} employee(s) via Excel upload (${skipped} skipped, ${errors.length} errors)`,
+          metadata: { updated, skipped, errors: errors.length, total: rows.length },
+        });
+      }
       return res.json({ updated, skipped, errors, total: rows.length, results });
     } catch (err) {
       return handleError(res, err);
@@ -1843,6 +1925,17 @@ export async function registerRoutes(
       if (!endDate) return res.status(400).json({ message: "endDate is required" });
       const record = await storage.terminateEmployee(req.params.id, { endDate, terminationReason });
       if (!record) return res.status(404).json({ message: "Employee not found" });
+      const empNum = (record as any).employeeNumber ?? undefined;
+      const subjectName = (record as any).fullNameEn ?? undefined;
+      await logAudit(req, {
+        action: "workforce.terminated",
+        entityType: "workforce",
+        entityId: req.params.id,
+        employeeNumber: empNum,
+        subjectName,
+        description: `Terminated employee #${empNum ?? "—"} "${subjectName ?? req.params.id}"${terminationReason ? ` — reason: ${terminationReason}` : ""}`,
+        metadata: { endDate, terminationReason },
+      });
       return res.json(record);
     } catch (err) {
       return handleError(res, err);
@@ -1856,6 +1949,17 @@ export async function registerRoutes(
       const resolvedEmploymentType: "individual" | "smp" | undefined =
         employmentType === "smp" ? "smp" : employmentType === "individual" ? "individual" : undefined;
       const record = await storage.reinstateEmployee(nationalId, { startDate, eventId, salary, jobId, employmentType: resolvedEmploymentType });
+      const empNum = (record as any).employeeNumber ?? undefined;
+      const subjectName = (record as any).fullNameEn ?? undefined;
+      await logAudit(req, {
+        action: "workforce.reinstated",
+        entityType: "workforce",
+        entityId: (record as any).id,
+        employeeNumber: empNum,
+        subjectName,
+        description: `Reinstated employee #${empNum ?? "—"} "${subjectName ?? nationalId}" (National ID: ${nationalId})`,
+        metadata: { nationalId, startDate, eventId, salary, employmentType: resolvedEmploymentType },
+      });
       return res.status(201).json(record);
     } catch (err) {
       return handleError(res, err);
@@ -2804,6 +2908,19 @@ export async function registerRoutes(
         }
       }
       const row = await storage.createScheduleAssignment(data);
+      const emp = data.workforceId ? await storage.getWorkforceEmployee(data.workforceId) : null;
+      const template = data.templateId ? await storage.getScheduleTemplate(data.templateId) : null;
+      const empNum = emp?.employeeNumber ?? undefined;
+      const subjectName = emp?.fullNameEn ?? undefined;
+      await logAudit(req, {
+        action: "schedule.assigned",
+        entityType: "schedule",
+        entityId: row.id,
+        employeeNumber: empNum,
+        subjectName,
+        description: `Assigned schedule "${(template as any)?.name ?? data.templateId}" to employee #${empNum ?? "—"} "${subjectName ?? data.workforceId}" from ${data.startDate}`,
+        metadata: { templateId: data.templateId, workforceId: data.workforceId, startDate: data.startDate, endDate },
+      });
       return res.status(201).json(row);
     } catch (err) { return handleError(res, err); }
   });
@@ -2890,6 +3007,18 @@ export async function registerRoutes(
       if (!existing) return res.status(404).json({ message: "Attendance record not found" });
       const data = insertAttendanceRecordSchema.partial().parse(req.body);
       const row = await storage.upsertAttendanceRecord({ ...existing, ...data });
+      const emp = existing.workforceId ? await storage.getWorkforceEmployee(existing.workforceId) : null;
+      const empNum = emp?.employeeNumber ?? undefined;
+      const subjectName = emp?.fullNameEn ?? undefined;
+      await logAudit(req, {
+        action: "attendance.corrected",
+        entityType: "attendance",
+        entityId: req.params.id,
+        employeeNumber: empNum,
+        subjectName,
+        description: `Manually corrected attendance of employee #${empNum ?? "—"} "${subjectName ?? existing.workforceId}" on ${existing.date ?? "—"} → ${data.status ?? existing.status}`,
+        metadata: { date: existing.date, oldStatus: existing.status, newStatus: data.status },
+      });
       return res.json(row);
     } catch (err) { return handleError(res, err); }
   });
@@ -2982,6 +3111,19 @@ export async function registerRoutes(
     try {
       const data = insertEmployeeAssetSchema.parse(req.body);
       const row = await storage.assignAsset(data);
+      const emp = data.workforceId ? await storage.getWorkforceEmployee(data.workforceId) : null;
+      const asset = data.assetId ? await storage.getAsset(data.assetId) : null;
+      const empNum = emp?.employeeNumber ?? undefined;
+      const subjectName = emp?.fullNameEn ?? undefined;
+      await logAudit(req, {
+        action: "assets.assigned",
+        entityType: "assets",
+        entityId: row.id,
+        employeeNumber: empNum,
+        subjectName,
+        description: `Assigned asset "${(asset as any)?.name ?? data.assetId}" to employee #${empNum ?? "—"} "${subjectName ?? data.workforceId}"`,
+        metadata: { assetId: data.assetId, workforceId: data.workforceId },
+      });
       return res.status(201).json(row);
     } catch (err) { return handleError(res, err); }
   });
@@ -3000,6 +3142,22 @@ export async function registerRoutes(
       if (!existing) return res.status(404).json({ message: "Assignment not found" });
       const data = insertEmployeeAssetSchema.partial().parse(req.body);
       const row = await storage.updateEmployeeAsset(req.params.id, data);
+      const emp = existing.workforceId ? await storage.getWorkforceEmployee(existing.workforceId) : null;
+      const asset = existing.assetId ? await storage.getAsset(existing.assetId) : null;
+      const empNum = emp?.employeeNumber ?? undefined;
+      const subjectName = emp?.fullNameEn ?? undefined;
+      const isReturn = data.status === "returned";
+      await logAudit(req, {
+        action: isReturn ? "assets.returned" : "assets.updated",
+        entityType: "assets",
+        entityId: req.params.id,
+        employeeNumber: empNum,
+        subjectName,
+        description: isReturn
+          ? `Returned asset "${(asset as any)?.name ?? existing.assetId}" from employee #${empNum ?? "—"} "${subjectName ?? existing.workforceId}"`
+          : `Updated asset assignment "${(asset as any)?.name ?? existing.assetId}" for employee #${empNum ?? "—"} "${subjectName ?? existing.workforceId}"`,
+        metadata: { assetId: existing.assetId, workforceId: existing.workforceId, newStatus: data.status },
+      });
       return res.json(row);
     } catch (err) { return handleError(res, err); }
   });
@@ -3016,6 +3174,21 @@ export async function registerRoutes(
     try {
       const rows = await storage.getUnreturnedAssetsForWorker(req.params.workforceId);
       return res.json(rows);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Audit Logs ───────────────────────────────────────────────────────────────
+  app.get("/api/audit-logs", async (req: Request, res: Response) => {
+    try {
+      const { page, limit, search, entityType, actorId } = req.query as Record<string, string>;
+      const result = await storage.getAuditLogs({
+        page: page ? parseInt(page) : 1,
+        limit: limit ? Math.min(parseInt(limit), 200) : 50,
+        search: search || undefined,
+        entityType: entityType || undefined,
+        actorId: actorId || undefined,
+      });
+      return res.json(result);
     } catch (err) { return handleError(res, err); }
   });
 

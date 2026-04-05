@@ -1072,6 +1072,32 @@ export const insertEmployeeAssetSchema = createInsertSchema(employeeAssets).omit
 export type InsertEmployeeAsset = z.infer<typeof insertEmployeeAssetSchema>;
 export type EmployeeAsset = typeof employeeAssets.$inferSelect;
 
+// ─── Audit Logs ─────────────────────────────────────────────────────────────
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    actorId: varchar("actor_id").references(() => users.id, { onDelete: "set null" }),
+    actorName: varchar("actor_name", { length: 255 }),
+    action: varchar("action", { length: 100 }).notNull(),
+    entityType: varchar("entity_type", { length: 50 }),
+    entityId: varchar("entity_id"),
+    employeeNumber: varchar("employee_number", { length: 50 }),
+    subjectName: varchar("subject_name", { length: 255 }),
+    description: text("description").notNull(),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    createdAtIdx: index("audit_logs_created_at_idx").on(t.createdAt),
+    actorIdx: index("audit_logs_actor_idx").on(t.actorId),
+    entityTypeIdx: index("audit_logs_entity_type_idx").on(t.entityType),
+  })
+);
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+export type AuditLog = typeof auditLogs.$inferSelect;
+
 // ─── Query Params Types ─────────────────────────────────────────────────────
 export const candidateQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

@@ -80,10 +80,17 @@ import {
   type InsertAsset,
   type EmployeeAsset,
   type InsertEmployeeAsset,
+  auditLogs,
+  type AuditLog,
+  type InsertAuditLog,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull } from "drizzle-orm";
 
 export interface IStorage {
+  // Audit Logs
+  createAuditLog(data: InsertAuditLog): Promise<AuditLog>;
+  getAuditLogs(params?: { page?: number; limit?: number; search?: string; entityType?: string; actorId?: string }): Promise<{ data: AuditLog[]; total: number }>;
+
   // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -2073,6 +2080,35 @@ export class DatabaseStorage implements IStorage {
       else if (r.status === "excused") entry.excusedDays += n;
     }
     return workforceIds.map(wid => ({ workforceId: wid, ...map[wid] }));
+  }
+
+  async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {
+    const [row] = await db.insert(auditLogs).values(data).returning();
+    return row;
+  }
+
+  async getAuditLogs(params?: { page?: number; limit?: number; search?: string; entityType?: string; actorId?: string }): Promise<{ data: AuditLog[]; total: number }> {
+    const page = params?.page ?? 1;
+    const limit = params?.limit ?? 50;
+    const offset = (page - 1) * limit;
+    const conditions = [];
+    if (params?.entityType) conditions.push(eq(auditLogs.entityType, params.entityType));
+    if (params?.actorId) conditions.push(eq(auditLogs.actorId, params.actorId));
+    if (params?.search) {
+      const s = `%${params.search.toLowerCase()}%`;
+      conditions.push(or(
+        sql`LOWER(${auditLogs.description}) LIKE ${s}`,
+        sql`LOWER(${auditLogs.actorName}) LIKE ${s}`,
+        sql`LOWER(${auditLogs.employeeNumber}) LIKE ${s}`,
+        sql`LOWER(${auditLogs.subjectName}) LIKE ${s}`,
+      )!);
+    }
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const [data, [{ cnt }]] = await Promise.all([
+      db.select().from(auditLogs).where(where).orderBy(desc(auditLogs.createdAt)).limit(limit).offset(offset),
+      db.select({ cnt: count() }).from(auditLogs).where(where),
+    ]);
+    return { data, total: Number(cnt) };
   }
 }
 

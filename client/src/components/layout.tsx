@@ -28,6 +28,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Package,
+  ScrollText,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -78,8 +79,9 @@ const settingsSubItems = [
 ];
 
 const bottomNavItems = [
-  { href: "/reports",       icon: BarChart3, label: "Reports" },
-  { href: "/documentation", icon: BookOpen,  label: "Documentation" },
+  { href: "/reports",       icon: BarChart3,   label: "Reports" },
+  { href: "/audit-log",     icon: ScrollText,  label: "Audit Log" },
+  { href: "/documentation", icon: BookOpen,    label: "Documentation" },
 ];
 
 export default function DashboardLayout({ children }: LayoutProps) {

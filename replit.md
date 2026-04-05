@@ -138,6 +138,30 @@ Required DO Spaces env vars: `SPACES_ENDPOINT`, `SPACES_BUCKET`, `SPACES_KEY`, `
 | `SPACES_*` (5 vars) | DO Spaces credentials |
 | All SMS/API keys | Copy from Replit secrets |
 
+## Audit Log System
+
+A comprehensive audit trail capturing every significant backoffice action.
+
+**Database**: `audit_logs` table with columns: `id`, `actorId`, `actorName`, `action`, `entityType`, `entityId`, `employeeNumber`, `subjectName`, `description`, `metadata` (JSONB), `createdAt`.
+
+**Instrumented Actions**:
+- `onboarding.admit` — Candidate admitted to onboarding
+- `workforce.converted` — Single convert to employee
+- `workforce.bulk_converted` — Bulk convert
+- `workforce.updated` — Employee field update (with field-level diff: salary from/to, status, notes, event, end date, performance)
+- `workforce.bulk_updated` — Excel bulk update
+- `workforce.terminated` — Employee termination (with reason)
+- `workforce.reinstated` — Employee reinstatement
+- `attendance.corrected` — Manual attendance correction
+- `assets.assigned` / `assets.returned` / `assets.updated` — Asset lifecycle
+- `schedule.assigned` — Schedule template assignment
+
+**API**: `GET /api/audit-logs` with pagination (`page`, `limit`), `search`, `entityType`, `actorId` filters.
+
+**Frontend**: `/audit-log` page in sidebar under Reports section — activity feed with actor avatar, action badge, description, employee number chip, timestamp, entity-type filter tabs, full-text search, and pagination.
+
+**Helper**: `logAudit(req, params)` async function in routes.ts — fire-and-forget (never breaks main operation on failure). Resolves actor name via `storage.getUser(actorId)`.
+
 Generate SESSION_SECRET: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`
 
 ### Public Routes Must Come Before Auth Middleware

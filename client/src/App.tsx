@@ -30,6 +30,7 @@ import IdCardsPage from "@/pages/id-cards";
 import LegalPage from "@/pages/legal-page";
 import SchedulesPage from "@/pages/schedules";
 import AssetsPage from "@/pages/assets";
+import AuditLogPage from "@/pages/audit-log";
 
 function Router() {
   return (
@@ -60,6 +61,7 @@ function Router() {
       <Route path="/id-cards" component={IdCardsPage} />
       <Route path="/schedules" component={SchedulesPage} />
       <Route path="/assets" component={AssetsPage} />
+      <Route path="/audit-log" component={AuditLogPage} />
       <Route path="/candidate-portal" component={() => (
         <ProfileSetupGate><CandidatePortal /></ProfileSetupGate>
       )} />
