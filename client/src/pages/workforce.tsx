@@ -888,14 +888,14 @@ export default function WorkforcePage() {
       "Employee #": e.employeeNumber,
       "Full Name": e.fullNameEn ?? "",
       "National ID/Iqama (read-only)": e.nationalId ?? "",
-      "Phone": e.phone ?? "",
+      "Phone (read-only)": e.phone ?? "",
       "Salary (SAR)": e.salary ? Number(e.salary) : "",
       "Start Date": e.startDate ?? "",
       "Event": e.eventName ?? "",
       "Notes": "",
     }));
     if (rows.length === 0) {
-      rows.push({ "Employee #": "C000001", "Full Name": "Example Name", "National ID/Iqama (read-only)": "1000000000", "Phone": "0500000000", "Salary (SAR)": 4000, "Start Date": "2026-01-01", "Event": "", "Notes": "" });
+      rows.push({ "Employee #": "C000001", "Full Name": "Example Name", "National ID/Iqama (read-only)": "1000000000", "Phone (read-only)": "0500000000", "Salary (SAR)": 4000, "Start Date": "2026-01-01", "Event": "", "Notes": "" });
     }
     const ws = XLSX.utils.json_to_sheet(rows);
     // Set column widths

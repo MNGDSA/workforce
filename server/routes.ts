@@ -1812,12 +1812,7 @@ export async function registerRoutes(
 
           // National ID is intentionally excluded from bulk update — change it per-employee via the detail dialog
 
-          const phone = String(row["Phone"] ?? "").trim();
-          const cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
-          if (cleanPhone !== "" && cleanPhone !== (worker.phone ?? "")) {
-            if (!/^\+?\d{9,15}$/.test(cleanPhone)) rowErrors.push(`Phone "${phone}" is not a valid phone number`);
-            else candUpdate.phone = cleanPhone;
-          }
+          // Phone is intentionally excluded from bulk update — it is OTP-verified and must be changed per-employee at profile level
 
           if (rowErrors.length > 0) {
             results.push({ employeeNumber, status: "error", reason: rowErrors.join(" | ") });
