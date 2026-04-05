@@ -57,6 +57,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import DashboardLayout from "@/components/layout";
 
 interface Asset {
   id: string;
@@ -260,6 +261,7 @@ export default function AssetsPage() {
   ];
 
   return (
+    <DashboardLayout>
     <div className="space-y-6">
 
       {/* ─── Header ──────────────────────────────────────────────────────────── */}
@@ -821,5 +823,6 @@ export default function AssetsPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </DashboardLayout>
   );
 }
