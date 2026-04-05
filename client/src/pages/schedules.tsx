@@ -804,7 +804,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
     const now = new Date();
     const d = new Date(now);
     const day = d.getDay();
-    const diff = (day === 0 ? -6 : 1 - day);
+    const diff = -day;
     d.setDate(d.getDate() + diff + weekOffset * 7);
     d.setHours(0, 0, 0, 0);
     return d;
@@ -842,7 +842,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
     const template = templateById[assignment.templateId];
     if (!template) return undefined;
     const d = new Date(date + "T00:00:00");
-    const dayIndex = (d.getDay() + 6) % 7;
+    const dayIndex = d.getDay();
     const dayKey = (DAYS[dayIndex] + "ShiftId") as keyof ScheduleTemplate;
     const shiftId = template[dayKey] as string | null;
     return shiftId ? shiftById[shiftId] : undefined;
@@ -1232,7 +1232,7 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
     const template = templateById[assignment.templateId];
     if (!template) return undefined;
     const d = new Date(date + "T00:00:00");
-    const dayIndex = (d.getDay() + 6) % 7;
+    const dayIndex = d.getDay();
     const dayKey = (DAYS[dayIndex] + "ShiftId") as keyof ScheduleTemplate;
     const shiftId = template[dayKey] as string | null;
     return shiftId ? shiftById[shiftId] : undefined;
