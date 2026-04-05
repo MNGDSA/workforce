@@ -53,6 +53,10 @@ import {
   FileSpreadsheet,
   FileText,
   Printer,
+  Upload,
+  CheckCircle2,
+  X,
+  AlertCircle,
 } from "lucide-react";
 import {
   Table,
@@ -846,6 +850,13 @@ export default function WorkforcePage() {
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [printingIds, setPrintingIds] = useState<Set<string>>(new Set());
   const [printProgress, setPrintProgress] = useState<{ total: number; done: number } | null>(null);
+  const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false);
+  const [bulkUpdateFile, setBulkUpdateFile] = useState<File | null>(null);
+  const [bulkUpdateLoading, setBulkUpdateLoading] = useState(false);
+  const [bulkUpdateResult, setBulkUpdateResult] = useState<{
+    updated: number; skipped: number; total: number;
+    errors: { employeeNumber: string; reason: string }[];
+  } | null>(null);
 
   const { data: employees = [], isLoading } = useQuery<Employee[]>({
     queryKey: ["/api/workforce", search, statusFilter],
@@ -864,6 +875,60 @@ export default function WorkforcePage() {
     queryFn: () => apiRequest("GET", "/api/workforce/stats").then(r => r.json()),
     refetchInterval: 15000,
   });
+
+  const { data: allEventsForBulk = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/events"],
+    queryFn: () => apiRequest("GET", "/api/events").then(r => r.json()),
+  });
+
+  async function downloadBulkTemplate() {
+    const XLSX = await import("xlsx");
+    const source = employees.length > 0 ? employees : [];
+    const rows = source.map(e => ({
+      "Employee #": e.employeeNumber,
+      "Full Name": e.fullNameEn ?? "",
+      "National ID/Iqama": e.nationalId ?? "",
+      "Phone": e.phone ?? "",
+      "Salary (SAR)": e.salary ? Number(e.salary) : "",
+      "Start Date": e.startDate ?? "",
+      "Event": e.eventName ?? "",
+      "Notes": "",
+    }));
+    if (rows.length === 0) {
+      rows.push({ "Employee #": "C000001", "Full Name": "Example Name", "National ID/Iqama": "1000000000", "Phone": "0500000000", "Salary (SAR)": 4000, "Start Date": "2026-01-01", "Event": "", "Notes": "" });
+    }
+    const ws = XLSX.utils.json_to_sheet(rows);
+    // Set column widths
+    ws["!cols"] = [{ wch: 12 }, { wch: 28 }, { wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 24 }, { wch: 32 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Employees");
+    // Add Events reference sheet
+    if (allEventsForBulk.length > 0) {
+      const evSheet = XLSX.utils.json_to_sheet(allEventsForBulk.map(ev => ({ "Event Name": ev.name })));
+      XLSX.utils.book_append_sheet(wb, evSheet, "Events (Reference)");
+    }
+    XLSX.writeFile(wb, `workforce_bulk_update_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast({ title: "Template downloaded", description: "Edit the file and upload it back to apply updates." });
+  }
+
+  async function handleBulkUpdateSubmit() {
+    if (!bulkUpdateFile) return;
+    setBulkUpdateLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", bulkUpdateFile);
+      const res = await fetch("/api/workforce/bulk-update", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? "Upload failed");
+      setBulkUpdateResult(data);
+      qc.invalidateQueries({ queryKey: ["/api/workforce"] });
+      qc.invalidateQueries({ queryKey: ["/api/workforce/stats"] });
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+    } finally {
+      setBulkUpdateLoading(false);
+    }
+  }
 
   const employeeIds = useMemo(() => employees.map(e => e.id), [employees]);
   const { data: lastPrintDates = {} } = useQuery<Record<string, string | null>>({
@@ -1037,6 +1102,16 @@ export default function WorkforcePage() {
             <h1 className="text-3xl font-display font-bold text-white tracking-tight" data-testid="text-page-title">Workforce Management</h1>
             <p className="text-muted-foreground mt-1">Manage your employees and details.</p>
           </div>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <Button
+              variant="outline"
+              className="h-11 border-border text-foreground font-bold uppercase tracking-wide text-xs gap-2"
+              data-testid="button-bulk-update"
+              onClick={() => { setBulkUpdateOpen(true); setBulkUpdateFile(null); setBulkUpdateResult(null); }}
+            >
+              <Upload className="h-4 w-4" />
+              Mass Update
+            </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -1066,6 +1141,7 @@ export default function WorkforcePage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1322,6 +1398,133 @@ export default function WorkforcePage() {
         }}
         onPrintCard={(emp) => handlePrintIdCards([emp])}
       />
+
+      {/* ── Bulk Mass Update Dialog ─────────────────────────────────────────── */}
+      <Dialog open={bulkUpdateOpen} onOpenChange={o => { if (!o) { setBulkUpdateOpen(false); setBulkUpdateResult(null); setBulkUpdateFile(null); } }}>
+        <DialogContent className="bg-card border-border text-foreground max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-display text-lg flex items-center gap-2">
+              <Upload className="h-5 w-5 text-primary" />
+              Mass Employee Update
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground text-sm">
+              Download the template, edit employee data in Excel, then upload to apply changes in bulk.
+            </DialogDescription>
+          </DialogHeader>
+
+          {!bulkUpdateResult ? (
+            <div className="space-y-5 mt-1">
+              {/* Step 1 */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-bold">1</span>
+                  Download Template
+                </div>
+                <div className="bg-muted/30 border border-border/50 rounded-md p-3 text-sm text-muted-foreground">
+                  The template is pre-filled with all current employees. Editable columns: <span className="text-foreground font-medium">Full Name, National ID/Iqama, Phone, Salary, Start Date, Event, Notes</span>. A second sheet lists valid Event names.
+                </div>
+                <Button variant="outline" className="w-full gap-2 border-primary/40 text-primary hover:bg-primary/10" onClick={downloadBulkTemplate} data-testid="button-download-template">
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Download Bulk Update Template (.xlsx)
+                </Button>
+              </div>
+
+              {/* Step 2 */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-bold">2</span>
+                  Upload Modified File
+                </div>
+                <label
+                  htmlFor="bulk-update-file"
+                  className="flex flex-col items-center justify-center gap-2 w-full h-28 border-2 border-dashed border-border/60 rounded-md cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors text-muted-foreground text-sm"
+                  data-testid="label-bulk-upload"
+                >
+                  {bulkUpdateFile ? (
+                    <>
+                      <FileSpreadsheet className="h-6 w-6 text-emerald-400" />
+                      <span className="font-medium text-foreground">{bulkUpdateFile.name}</span>
+                      <span className="text-xs">{(bulkUpdateFile.size / 1024).toFixed(1)} KB — click to change</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-6 w-6" />
+                      <span>Click to select your modified Excel file</span>
+                      <span className="text-xs">.xlsx or .xls</span>
+                    </>
+                  )}
+                </label>
+                <input
+                  id="bulk-update-file"
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  data-testid="input-bulk-update-file"
+                  onChange={e => setBulkUpdateFile(e.target.files?.[0] ?? null)}
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end pt-1">
+                <Button variant="outline" className="border-border" onClick={() => setBulkUpdateOpen(false)}>Cancel</Button>
+                <Button
+                  data-testid="button-submit-bulk-update"
+                  disabled={!bulkUpdateFile || bulkUpdateLoading}
+                  onClick={handleBulkUpdateSubmit}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+                >
+                  {bulkUpdateLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing…</> : <><Upload className="h-4 w-4" /> Apply Updates</>}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            /* Results */
+            <div className="space-y-4 mt-1">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-emerald-950/30 border border-emerald-700/40 rounded-md p-3 text-center">
+                  <p className="text-2xl font-bold text-emerald-400">{bulkUpdateResult.updated}</p>
+                  <p className="text-xs text-emerald-300/70 mt-0.5">Updated</p>
+                </div>
+                <div className="bg-muted/20 border border-border/40 rounded-md p-3 text-center">
+                  <p className="text-2xl font-bold text-muted-foreground">{bulkUpdateResult.skipped}</p>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">Skipped</p>
+                </div>
+                <div className={`rounded-md p-3 text-center border ${bulkUpdateResult.errors.length > 0 ? "bg-red-950/30 border-red-700/40" : "bg-muted/20 border-border/40"}`}>
+                  <p className={`text-2xl font-bold ${bulkUpdateResult.errors.length > 0 ? "text-red-400" : "text-muted-foreground"}`}>{bulkUpdateResult.errors.length}</p>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">Errors</p>
+                </div>
+              </div>
+
+              {bulkUpdateResult.errors.length > 0 && (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-red-400 flex items-center gap-1.5"><AlertCircle className="h-3.5 w-3.5" /> Rows with errors</p>
+                  {bulkUpdateResult.errors.map((e, i) => (
+                    <div key={i} className="flex items-start gap-2 text-sm bg-red-950/20 border border-red-800/30 rounded p-2">
+                      <span className="font-mono text-xs text-red-300 shrink-0 mt-0.5">{e.employeeNumber}</span>
+                      <span className="text-red-200/80">{e.reason}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {bulkUpdateResult.updated > 0 && (
+                <div className="flex items-center gap-2 text-sm text-emerald-400">
+                  <CheckCircle2 className="h-4 w-4" />
+                  {bulkUpdateResult.updated} employee{bulkUpdateResult.updated !== 1 ? "s" : ""} successfully updated out of {bulkUpdateResult.total} rows processed.
+                </div>
+              )}
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" className="border-border" onClick={() => { setBulkUpdateResult(null); setBulkUpdateFile(null); }}>
+                  Upload Another File
+                </Button>
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setBulkUpdateOpen(false)}>
+                  Done
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

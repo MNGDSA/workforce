@@ -34,6 +34,7 @@ import {
   insertEmployeeAssetSchema,
 } from "@shared/schema";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
+import * as XLSX from "xlsx";
 
 function validateProfileCompleteness(candidate: Record<string, any>): string[] {
   const missing: string[] = [];
@@ -1712,6 +1713,80 @@ export async function registerRoutes(
       const record = await storage.updateWorkforceRecord(req.params.id, data);
       if (!record) return res.status(404).json({ message: "Employee not found" });
       return res.json(record);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // ─── Bulk Update via Excel upload ────────────────────────────────────────
+  app.post("/api/workforce/bulk-update", upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+      const wb = XLSX.readFile(req.file.path);
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: "" });
+      fs.unlinkSync(req.file.path);
+
+      if (rows.length === 0) return res.status(400).json({ message: "Excel file is empty" });
+      if (rows.length > 5000) return res.status(400).json({ message: "Maximum 5,000 rows per upload" });
+
+      // Fetch all workforce records and events for lookups
+      const allWorkers = await storage.getWorkforce({});
+      const allEvents = await storage.getEvents({});
+      const eventsByName: Record<string, string> = {};
+      for (const ev of allEvents) eventsByName[ev.name.trim().toLowerCase()] = ev.id;
+
+      const results: { employeeNumber: string; status: "updated" | "skipped" | "error"; reason?: string }[] = [];
+
+      for (const row of rows) {
+        const employeeNumber = String(row["Employee #"] ?? row["Employee Number"] ?? "").trim();
+        if (!employeeNumber) { results.push({ employeeNumber: "(blank)", status: "skipped", reason: "Missing Employee #" }); continue; }
+
+        const worker = allWorkers.find(w => w.employeeNumber === employeeNumber);
+        if (!worker) { results.push({ employeeNumber, status: "error", reason: "Employee not found" }); continue; }
+
+        try {
+          // Fields to update on the workforce record
+          const wfUpdate: Record<string, any> = {};
+          const salary = String(row["Salary (SAR)"] ?? row["Salary"] ?? "").trim();
+          if (salary !== "") wfUpdate.salary = salary;
+
+          const startDate = String(row["Start Date"] ?? "").trim();
+          if (startDate !== "") wfUpdate.startDate = startDate;
+
+          const notes = String(row["Notes"] ?? "").trim();
+          if (notes !== "") wfUpdate.notes = notes;
+
+          const eventName = String(row["Event"] ?? "").trim();
+          if (eventName !== "") {
+            const eventId = eventsByName[eventName.toLowerCase()];
+            if (eventId) wfUpdate.eventId = eventId;
+            else { results.push({ employeeNumber, status: "error", reason: `Event "${eventName}" not found` }); continue; }
+          }
+
+          // Fields to update on the candidate record
+          const candUpdate: Record<string, any> = {};
+          const fullName = String(row["Full Name"] ?? "").trim();
+          if (fullName !== "") candUpdate.fullNameEn = fullName;
+          const nationalId = String(row["National ID/Iqama"] ?? row["National ID"] ?? "").trim();
+          if (nationalId !== "") candUpdate.nationalId = nationalId;
+          const phone = String(row["Phone"] ?? "").trim();
+          if (phone !== "") candUpdate.phone = phone;
+
+          if (Object.keys(wfUpdate).length > 0) await storage.updateWorkforceRecord(worker.id, wfUpdate);
+          if (Object.keys(candUpdate).length > 0) await storage.updateCandidate(worker.candidateId, candUpdate);
+
+          results.push({ employeeNumber, status: "updated" });
+        } catch (e: any) {
+          results.push({ employeeNumber, status: "error", reason: e?.message ?? "Unknown error" });
+        }
+      }
+
+      const updated = results.filter(r => r.status === "updated").length;
+      const errors = results.filter(r => r.status === "error");
+      const skipped = results.filter(r => r.status === "skipped").length;
+      return res.json({ updated, skipped, errors, total: rows.length, results });
     } catch (err) {
       return handleError(res, err);
     }
