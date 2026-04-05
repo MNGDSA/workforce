@@ -136,6 +136,10 @@ function getStatusInfo(status: string) {
   return ATTENDANCE_STATUSES.find(s => s.value === status) ?? ATTENDANCE_STATUSES[0];
 }
 
+function localDateStr(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function formatTime(t: string) {
   if (!t) return "";
   const [h, m] = t.split(":");
@@ -427,7 +431,7 @@ function AssignScheduleDialog({
   const { toast } = useToast();
   const qc = useQueryClient();
   const [templateId, setTemplateId] = useState("");
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(localDateStr());
   const [endDate, setEndDate] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(preselectedIds ?? []));
   const [search, setSearch] = useState("");
@@ -793,7 +797,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
   const [monthOffset, setMonthOffset] = useState(0);
   const [rosterView, setRosterView] = useState<"week" | "month">("week");
   const [endAssignId, setEndAssignId] = useState<string | null>(null);
-  const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState(localDateStr());
 
   const { data: assignments = [] } = useQuery<ScheduleAssignment[]>({
     queryKey: ["/api/schedule-assignments"],
@@ -814,7 +818,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
     return DAYS.map((_, i) => {
       const d = new Date(weekStart);
       d.setDate(d.getDate() + i);
-      return d.toISOString().slice(0, 10);
+      return localDateStr(d);
     });
   }, [weekStart]);
 
@@ -877,7 +881,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
     const days: string[] = [];
     const d = new Date(monthStart);
     while (d.getMonth() === monthStart.getMonth()) {
-      days.push(d.toISOString().slice(0, 10));
+      days.push(localDateStr(d));
       d.setDate(d.getDate() + 1);
     }
     return days;
@@ -1026,7 +1030,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
                 <th className="text-left text-zinc-400 py-2 px-3 font-medium min-w-[140px] sticky left-0 bg-card z-10">Employee</th>
                 {monthDates.map(date => {
                   const d = new Date(date + "T00:00:00");
-                  const today = new Date().toISOString().slice(0, 10);
+                  const today = localDateStr();
                   return (
                     <th
                       key={date}
@@ -1125,13 +1129,13 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
   const { toast } = useToast();
   const qc = useQueryClient();
   const [view, setView] = useState<"daily" | "summary">("daily");
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState(localDateStr());
   const [summaryFrom, setSummaryFrom] = useState(() => {
     const d = new Date();
     d.setDate(1);
-    return d.toISOString().slice(0, 10);
+    return localDateStr(d);
   });
-  const [summaryTo, setSummaryTo] = useState(new Date().toISOString().slice(0, 10));
+  const [summaryTo, setSummaryTo] = useState(localDateStr());
   const [saving, setSaving] = useState(false);
 
   const { data: assignments = [] } = useQuery<ScheduleAssignment[]>({
