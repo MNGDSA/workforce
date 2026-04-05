@@ -113,7 +113,7 @@ type WorkedDaySummary = {
   totalScheduledDays: number;
 };
 
-const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
+const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
 type Day = typeof DAYS[number];
 const DAY_LABELS: Record<Day, string> = {
   monday: "Mon", tuesday: "Tue", wednesday: "Wed", thursday: "Thu",
