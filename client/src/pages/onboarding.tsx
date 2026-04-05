@@ -1257,12 +1257,12 @@ export default function OnboardingPage() {
   const [admitSearch, setAdmitSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [admitPage, setAdmitPage] = useState(1);
-  const [convertForm, setConvertForm] = useState({ startDate: "", salary: "" });
+  const [convertForm, setConvertForm] = useState({ startDate: "", salary: "", eventId: "" });
   const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
   const [pendingDeleteDoc, setPendingDeleteDoc] = useState<{ candidateId: string; docType: string; label: string } | null>(null);
   const [docPreview, setDocPreview] = useState<{ url: string; label: string; isImage: boolean } | null>(null);
   const [bulkConvertOpen, setBulkConvertOpen] = useState(false);
-  const [bulkConvertForm, setBulkConvertForm] = useState({ startDate: "", salary: "" });
+  const [bulkConvertForm, setBulkConvertForm] = useState({ startDate: "", salary: "", eventId: "" });
   const [bulkContractOpen, setBulkContractOpen] = useState(false);
   const [bulkContractTemplateId, setBulkContractTemplateId] = useState("");
   const [eventFilter, setEventFilter] = useState("all");
@@ -1354,7 +1354,7 @@ export default function OnboardingPage() {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
       setConvertRecord(null);
-      setConvertForm({ startDate: "", salary: "" });
+      setConvertForm({ startDate: "", salary: "", eventId: "" });
       toast({ title: "Successfully converted to employee!", description: "Employee record created." });
     },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
@@ -1367,7 +1367,7 @@ export default function OnboardingPage() {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
       setBulkConvertOpen(false);
-      setBulkConvertForm({ startDate: "", salary: "" });
+      setBulkConvertForm({ startDate: "", salary: "", eventId: "" });
       const errCount = data.errors?.length ?? 0;
       toast({
         title: `${data.converted} employee${data.converted !== 1 ? "s" : ""} created`,
@@ -1716,6 +1716,7 @@ export default function OnboardingPage() {
                           setConvertForm({
                             startDate: rec.startDate ?? "",
                             salary: "",
+                            eventId: rec.eventId ?? "",
                           });
                         }}
                       >
@@ -2108,6 +2109,22 @@ export default function OnboardingPage() {
 
             <div className="grid gap-3">
               <div className="space-y-1.5">
+                <Label className="text-zinc-400 text-sm">Event <span className="text-red-400">*</span></Label>
+                <Select
+                  value={convertForm.eventId}
+                  onValueChange={v => setConvertForm(f => ({ ...f, eventId: v }))}
+                >
+                  <SelectTrigger data-testid="select-convert-event" className="bg-zinc-900 border-zinc-700 text-white">
+                    <SelectValue placeholder="Select an event…" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
+                    {eventsList.map(ev => (
+                      <SelectItem key={ev.id} value={ev.id} className="text-white focus:bg-zinc-800">{ev.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
                 <Label className="text-zinc-400 text-sm">Start Date <span className="text-red-400">*</span></Label>
                 <DatePickerField
                   data-testid="input-convert-startdate"
@@ -2139,7 +2156,7 @@ export default function OnboardingPage() {
               </Button>
               <Button
                 data-testid="button-confirm-convert"
-                disabled={!convertForm.startDate || convertMutation.isPending}
+                disabled={!convertForm.startDate || !convertForm.eventId || convertMutation.isPending}
                 onClick={() => convertRecord && convertMutation.mutate({
                   id: convertRecord.id,
                   body: convertForm,
@@ -2172,7 +2189,23 @@ export default function OnboardingPage() {
             </div>
             <div className="space-y-3">
               <div>
-                <Label className="text-zinc-300 text-sm">Start Date *</Label>
+                <Label className="text-zinc-300 text-sm">Event <span className="text-red-400">*</span></Label>
+                <Select
+                  value={bulkConvertForm.eventId}
+                  onValueChange={v => setBulkConvertForm(f => ({ ...f, eventId: v }))}
+                >
+                  <SelectTrigger data-testid="select-bulk-event" className="bg-zinc-900 border-zinc-700 text-white mt-1">
+                    <SelectValue placeholder="Select an event…" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
+                    {eventsList.map(ev => (
+                      <SelectItem key={ev.id} value={ev.id} className="text-white focus:bg-zinc-800">{ev.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-zinc-300 text-sm">Start Date <span className="text-red-400">*</span></Label>
                 <DatePickerField
                   data-testid="input-bulk-start-date"
                   value={bulkConvertForm.startDate}
@@ -2198,7 +2231,7 @@ export default function OnboardingPage() {
               </Button>
               <Button
                 data-testid="button-confirm-bulk-convert"
-                disabled={!bulkConvertForm.startDate || bulkConvertMutation.isPending}
+                disabled={!bulkConvertForm.startDate || !bulkConvertForm.eventId || bulkConvertMutation.isPending}
                 onClick={() => {
                   const readyIds = records.filter(r => r.status === "ready").map(r => r.id);
                   bulkConvertMutation.mutate({ ids: readyIds, ...bulkConvertForm });

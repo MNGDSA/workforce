@@ -269,6 +269,8 @@ function EmployeeDetailDialog({
   const [salaryValue, setSalaryValue] = useState("");
   const [notesValue, setNotesValue] = useState("");
   const [editNotes, setEditNotes] = useState(false);
+  const [editEvent, setEditEvent] = useState(false);
+  const [eventValue, setEventValue] = useState("");
   const [terminateOpen, setTerminateOpen] = useState(false);
   const [terminateForm, setTerminateForm] = useState({ endDate: "", reason: "" });
   const [assignScheduleOpen, setAssignScheduleOpen] = useState(false);
@@ -280,6 +282,12 @@ function EmployeeDetailDialog({
     queryKey: ["/api/workforce/history", employee?.nationalId],
     queryFn: () => apiRequest("GET", `/api/workforce/history/${employee!.nationalId}`).then(r => r.json()),
     enabled: open && !!employee?.nationalId && tab === "history",
+  });
+
+  const { data: eventsList = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/events"],
+    queryFn: () => apiRequest("GET", "/api/events").then(r => r.json()),
+    enabled: open,
   });
 
   const { data: scheduleTemplates = [] } = useQuery<ScheduleTemplateWithDays[]>({
@@ -426,7 +434,38 @@ function EmployeeDetailDialog({
                 <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="National ID" value={employee.nationalId ?? "—"} mono />
                 <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label="Phone" value={employee.phone ?? "—"} />
                 <InfoRow icon={<Briefcase className="h-3.5 w-3.5" />} label="Job Title" value={employee.jobTitle ?? "—"} />
-                <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label="Event" value={employee.eventName ?? "—"} />
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500 text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Event</span>
+                    {employee.isActive && !editEvent && (
+                      <Button variant="ghost" size="sm" className="h-5 text-[11px] text-primary px-1" onClick={() => { setEditEvent(true); setEventValue(employee.eventId ?? ""); }}>
+                        {employee.eventId ? "Change" : "Assign"}
+                      </Button>
+                    )}
+                  </div>
+                  {editEvent ? (
+                    <div className="flex gap-2">
+                      <Select value={eventValue} onValueChange={setEventValue}>
+                        <SelectTrigger data-testid="select-employee-event" className="bg-zinc-900 border-zinc-700 text-white h-8 text-sm flex-1">
+                          <SelectValue placeholder="Select event…" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
+                          {eventsList.map(ev => (
+                            <SelectItem key={ev.id} value={ev.id} className="text-white focus:bg-zinc-800">{ev.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" className="h-8 bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white" disabled={updateMutation.isPending || !eventValue} onClick={() => updateMutation.mutate({ eventId: eventValue }, { onSuccess: () => setEditEvent(false) })}>
+                        {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-8 border-zinc-700" onClick={() => setEditEvent(false)}>Cancel</Button>
+                    </div>
+                  ) : (
+                    <p className="text-white text-sm" data-testid="text-employee-event">
+                      {employee.eventName ?? <span className="text-amber-400 text-xs italic">⚠ No event assigned</span>}
+                    </p>
+                  )}
+                </div>
                 <InfoRow icon={<Clock className="h-3.5 w-3.5" />} label="Start Date" value={formatDate(employee.startDate)} />
                 {!employee.isActive && (
                   <>

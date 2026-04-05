@@ -1704,7 +1704,7 @@ export async function registerRoutes(
 
   app.patch("/api/workforce/:id", async (req: Request, res: Response) => {
     try {
-      const allowed = ["salary", "notes", "endDate", "supervisorId", "performanceScore", "isActive"];
+      const allowed = ["salary", "notes", "endDate", "supervisorId", "performanceScore", "isActive", "eventId"];
       const data: Record<string, any> = {};
       for (const key of allowed) {
         if (key in req.body) data[key] = req.body[key];
