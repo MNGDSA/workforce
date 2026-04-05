@@ -1772,7 +1772,7 @@ export async function registerRoutes(
           if (salary !== "") {
             const salaryNum = Number(salary);
             if (isNaN(salaryNum) || salaryNum < 0) rowErrors.push(`Salary "${salary}" is not a valid number`);
-            else wfUpdate.salary = salary;
+            else if (String(salaryNum) !== String(parseFloat(worker.salary ?? ""))) wfUpdate.salary = salary;
           }
 
           // Start Date — must be YYYY-MM-DD
@@ -1783,7 +1783,7 @@ export async function registerRoutes(
               : startDate;
             if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || isNaN(Date.parse(dateStr)))
               rowErrors.push(`Start Date "${startDate}" must be in YYYY-MM-DD format`);
-            else wfUpdate.startDate = dateStr;
+            else if (dateStr !== (worker.startDate ?? "")) wfUpdate.startDate = dateStr;
           }
 
           // Notes — no special validation, just length cap
@@ -1805,21 +1805,21 @@ export async function registerRoutes(
           const candUpdate: Record<string, any> = {};
 
           const fullName = String(row["Full Name"] ?? "").trim();
-          if (fullName !== "") {
+          if (fullName !== "" && fullName !== (worker.fullNameEn ?? "")) {
             if (fullName.length < 2) rowErrors.push("Full Name must be at least 2 characters");
             else candUpdate.fullNameEn = fullName;
           }
 
           const nationalId = String(row["National ID/Iqama"] ?? row["National ID"] ?? "").trim();
-          if (nationalId !== "") {
+          if (nationalId !== "" && nationalId !== (worker.nationalId ?? "")) {
             if (!/^[12]\d{9}$/.test(nationalId))
               rowErrors.push(`National ID/Iqama "${nationalId}" must be exactly 10 digits and start with 1 (Saudi ID) or 2 (Iqama)`);
             else candUpdate.nationalId = nationalId;
           }
 
           const phone = String(row["Phone"] ?? "").trim();
-          if (phone !== "") {
-            const cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
+          const cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
+          if (cleanPhone !== "" && cleanPhone !== (worker.phone ?? "")) {
             if (!/^\+?\d{9,15}$/.test(cleanPhone)) rowErrors.push(`Phone "${phone}" is not a valid phone number`);
             else candUpdate.phone = cleanPhone;
           }
