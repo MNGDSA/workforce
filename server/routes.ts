@@ -1810,12 +1810,7 @@ export async function registerRoutes(
             else candUpdate.fullNameEn = fullName;
           }
 
-          const nationalId = String(row["National ID/Iqama"] ?? row["National ID"] ?? "").trim();
-          if (nationalId !== "" && nationalId !== (worker.nationalId ?? "")) {
-            if (!/^[12]\d{9}$/.test(nationalId))
-              rowErrors.push(`National ID/Iqama "${nationalId}" must be exactly 10 digits and start with 1 (Saudi ID) or 2 (Iqama)`);
-            else candUpdate.nationalId = nationalId;
-          }
+          // National ID is intentionally excluded from bulk update — change it per-employee via the detail dialog
 
           const phone = String(row["Phone"] ?? "").trim();
           const cleanPhone = phone.replace(/[\s\-\(\)]/g, "");

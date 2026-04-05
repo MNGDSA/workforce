@@ -887,7 +887,7 @@ export default function WorkforcePage() {
     const rows = source.map(e => ({
       "Employee #": e.employeeNumber,
       "Full Name": e.fullNameEn ?? "",
-      "National ID/Iqama": e.nationalId ?? "",
+      "National ID/Iqama (read-only)": e.nationalId ?? "",
       "Phone": e.phone ?? "",
       "Salary (SAR)": e.salary ? Number(e.salary) : "",
       "Start Date": e.startDate ?? "",
@@ -895,7 +895,7 @@ export default function WorkforcePage() {
       "Notes": "",
     }));
     if (rows.length === 0) {
-      rows.push({ "Employee #": "C000001", "Full Name": "Example Name", "National ID/Iqama": "1000000000", "Phone": "0500000000", "Salary (SAR)": 4000, "Start Date": "2026-01-01", "Event": "", "Notes": "" });
+      rows.push({ "Employee #": "C000001", "Full Name": "Example Name", "National ID/Iqama (read-only)": "1000000000", "Phone": "0500000000", "Salary (SAR)": 4000, "Start Date": "2026-01-01", "Event": "", "Notes": "" });
     }
     const ws = XLSX.utils.json_to_sheet(rows);
     // Set column widths
