@@ -192,7 +192,7 @@ function ShiftFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-md">
+      <DialogContent className="bg-card border-border text-foreground max-w-md">
         <DialogHeader>
           <DialogTitle>{initial ? "Edit Shift" : "New Shift"}</DialogTitle>
           <DialogDescription className="sr-only">Define a shift type with times and color</DialogDescription>
@@ -205,7 +205,7 @@ function ShiftFormDialog({
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
               placeholder="e.g. Morning Shift"
-              className="bg-zinc-900 border-zinc-700 text-white"
+              className="bg-background border-input text-foreground"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -216,7 +216,7 @@ function ShiftFormDialog({
                 type="time"
                 value={form.startTime}
                 onChange={e => setForm(f => ({ ...f, startTime: e.target.value }))}
-                className="bg-zinc-900 border-zinc-700 text-white"
+                className="bg-background border-input text-foreground"
               />
             </div>
             <div className="space-y-1.5">
@@ -226,7 +226,7 @@ function ShiftFormDialog({
                 type="time"
                 value={form.endTime}
                 onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))}
-                className="bg-zinc-900 border-zinc-700 text-white"
+                className="bg-background border-input text-foreground"
               />
             </div>
           </div>
@@ -238,12 +238,12 @@ function ShiftFormDialog({
                 type="color"
                 value={form.color}
                 onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
-                className="h-9 w-16 rounded border border-zinc-700 bg-zinc-900 cursor-pointer"
+                className="h-9 w-16 rounded border border-input bg-background cursor-pointer"
               />
               <Input
                 value={form.color}
                 onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
-                className="bg-zinc-900 border-zinc-700 text-white font-mono uppercase flex-1"
+                className="bg-background border-input text-foreground font-mono uppercase flex-1"
                 maxLength={7}
               />
             </div>
@@ -326,7 +326,7 @@ function TemplateFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-lg">
+      <DialogContent className="bg-card border-border text-foreground max-w-lg">
         <DialogHeader>
           <DialogTitle>{initial ? "Edit Schedule Template" : "New Schedule Template"}</DialogTitle>
           <DialogDescription className="sr-only">Define a weekly schedule pattern</DialogDescription>
@@ -339,19 +339,19 @@ function TemplateFormDialog({
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
               placeholder="e.g. Standard Work Week"
-              className="bg-zinc-900 border-zinc-700 text-white"
+              className="bg-background border-input text-foreground"
             />
           </div>
           <div className="space-y-2">
             <Label className="text-zinc-400 text-xs uppercase tracking-wider">Weekly Pattern</Label>
-            <div className="border border-zinc-800 rounded-lg overflow-hidden">
+            <div className="border border-border/50 rounded-lg overflow-hidden">
               {DAYS.map((day, idx) => {
                 const shiftId = form[day];
                 const shift = shiftId ? shiftById[shiftId] : undefined;
                 return (
                   <div
                     key={day}
-                    className={`flex items-center gap-3 px-3 py-2 ${idx < DAYS.length - 1 ? "border-b border-zinc-800" : ""}`}
+                    className={`flex items-center gap-3 px-3 py-2 ${idx < DAYS.length - 1 ? "border-b border-border/40" : ""}`}
                   >
                     <span className="text-xs font-medium text-zinc-400 w-8">{DAY_LABELS[day]}</span>
                     <Select
@@ -360,7 +360,7 @@ function TemplateFormDialog({
                     >
                       <SelectTrigger
                         data-testid={`select-shift-${day}`}
-                        className="h-7 text-xs bg-zinc-900 border-zinc-700 text-white flex-1"
+                        className="h-7 text-xs bg-background border-input text-foreground flex-1"
                       >
                         <SelectValue>
                           {shift ? (
@@ -373,7 +373,7 @@ function TemplateFormDialog({
                           )}
                         </SelectValue>
                       </SelectTrigger>
-                      <SelectContent className="bg-zinc-900 border-zinc-700">
+                      <SelectContent className="bg-popover border-border">
                         <SelectItem value="off" className="text-zinc-400 text-xs">Day Off</SelectItem>
                         {shifts.map(s => (
                           <SelectItem key={s.id} value={s.id} className="text-xs">
@@ -460,7 +460,7 @@ function AssignScheduleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-xl max-h-[85vh] flex flex-col">
+      <DialogContent className="bg-card border-border text-foreground max-w-xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Assign Schedule</DialogTitle>
           <DialogDescription className="sr-only">Assign a schedule template to employees</DialogDescription>
@@ -470,10 +470,10 @@ function AssignScheduleDialog({
             <div className="space-y-1.5">
               <Label className="text-zinc-400 text-xs uppercase tracking-wider">Schedule Template</Label>
               <Select value={templateId} onValueChange={setTemplateId}>
-                <SelectTrigger data-testid="select-assign-template" className="bg-zinc-900 border-zinc-700 text-white">
+                <SelectTrigger data-testid="select-assign-template" className="bg-background border-input text-foreground">
                   <SelectValue placeholder="Select template..." />
                 </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-700">
+                <SelectContent className="bg-popover border-border">
                   {templates.map(t => (
                     <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                   ))}
@@ -487,7 +487,7 @@ function AssignScheduleDialog({
                 type="date"
                 value={startDate}
                 onChange={e => setStartDate(e.target.value)}
-                className="bg-zinc-900 border-zinc-700 text-white"
+                className="bg-background border-input text-foreground"
               />
             </div>
           </div>
@@ -499,7 +499,7 @@ function AssignScheduleDialog({
               value={endDate}
               min={startDate}
               onChange={e => setEndDate(e.target.value)}
-              className="bg-zinc-900 border-zinc-700 text-white"
+              className="bg-background border-input text-foreground"
             />
           </div>
           <div className="space-y-2">
@@ -516,14 +516,14 @@ function AssignScheduleDialog({
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search employees..."
-              className="bg-zinc-900 border-zinc-700 text-white text-sm h-8"
+              className="bg-background border-input text-foreground text-sm h-8"
             />
-            <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800 max-h-64 overflow-y-auto">
+            <div className="border border-border/50 rounded-lg divide-y divide-border/30 max-h-64 overflow-y-auto">
               {filtered.map(emp => (
                 <label
                   key={emp.id}
                   data-testid={`checkbox-assign-${emp.id}`}
-                  className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-zinc-900/50"
+                  className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-muted/10"
                 >
                   <input
                     type="checkbox"
@@ -545,7 +545,7 @@ function AssignScheduleDialog({
             </div>
           </div>
         </div>
-        <div className="flex gap-2 justify-end pt-2 border-t border-zinc-800 mt-2">
+        <div className="flex gap-2 justify-end pt-2 border-t border-border/40 mt-2">
           <Button variant="outline" className="border-zinc-700" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button
             data-testid="button-confirm-assign"
@@ -605,7 +605,7 @@ function ShiftsTab({ shifts }: { shifts: Shift[] }) {
             <div
               key={shift.id}
               data-testid={`card-shift-${shift.id}`}
-              className="border border-zinc-800 rounded-lg p-4 bg-zinc-900/50 flex items-start justify-between gap-3"
+              className="border border-border/50 rounded-lg p-4 bg-muted/[0.06] flex items-start justify-between gap-3"
             >
               <div className="flex items-center gap-3">
                 <div className="w-3 h-10 rounded-full flex-shrink-0" style={{ backgroundColor: shift.color }} />
@@ -646,7 +646,7 @@ function ShiftsTab({ shifts }: { shifts: Shift[] }) {
         <ShiftFormDialog open={!!editTarget} onOpenChange={v => !v && setEditTarget(null)} initial={editTarget} onSaved={() => setEditTarget(null)} />
       )}
       <Dialog open={!!deleteId} onOpenChange={v => !v && setDeleteId(null)}>
-        <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-sm">
+        <DialogContent className="bg-card border-border text-foreground max-w-sm">
           <DialogHeader>
             <DialogTitle>Delete Shift</DialogTitle>
             <DialogDescription className="text-zinc-400">This will permanently delete the shift type. Employees currently on this shift may be affected.</DialogDescription>
@@ -723,8 +723,8 @@ function TemplatesTab({ shifts, templates }: { shifts: Shift[]; templates: Sched
               thursday: "thursdayShiftId", friday: "fridayShiftId", saturday: "saturdayShiftId", sunday: "sundayShiftId",
             };
             return (
-              <div key={tpl.id} data-testid={`card-template-${tpl.id}`} className="border border-zinc-800 rounded-lg bg-zinc-900/50">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+              <div key={tpl.id} data-testid={`card-template-${tpl.id}`} className="border border-border/50 rounded-lg bg-muted/[0.06]">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
                   <div className="font-semibold text-white">{tpl.name}</div>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-white" onClick={() => setEditTarget(tpl)} data-testid={`button-edit-template-${tpl.id}`}>
@@ -735,7 +735,7 @@ function TemplatesTab({ shifts, templates }: { shifts: Shift[]; templates: Sched
                     </Button>
                   </div>
                 </div>
-                <div className="grid grid-cols-7 divide-x divide-zinc-800 p-3 gap-1">
+                <div className="grid grid-cols-7 divide-x divide-border/30 p-3 gap-1">
                   {days.map(day => {
                     const shiftId = tpl[dayKeys[day]] as string | null;
                     const shift = shiftId ? shiftById[shiftId] : undefined;
@@ -747,7 +747,7 @@ function TemplatesTab({ shifts, templates }: { shifts: Shift[]; templates: Sched
                             <span className="text-[9px] font-bold" style={{ color: shift.color }}>{shift.name.slice(0, 3)}</span>
                           </div>
                         ) : (
-                          <div className="w-full rounded py-1 bg-zinc-800/50 flex items-center justify-center">
+                          <div className="w-full rounded py-1 bg-muted/20 flex items-center justify-center">
                             <span className="text-[9px] text-zinc-600">off</span>
                           </div>
                         )}
@@ -766,7 +766,7 @@ function TemplatesTab({ shifts, templates }: { shifts: Shift[]; templates: Sched
         <TemplateFormDialog open={!!editTarget} onOpenChange={v => !v && setEditTarget(null)} initial={editTarget} shifts={shifts} onSaved={() => setEditTarget(null)} />
       )}
       <Dialog open={!!deleteId} onOpenChange={v => !v && setDeleteId(null)}>
-        <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-sm">
+        <DialogContent className="bg-card border-border text-foreground max-w-sm">
           <DialogHeader>
             <DialogTitle>Delete Template</DialogTitle>
             <DialogDescription className="text-zinc-400">This will permanently delete the schedule template.</DialogDescription>
@@ -887,7 +887,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <div className="flex rounded-md overflow-hidden border border-zinc-800 bg-zinc-900/50">
+          <div className="flex rounded-md overflow-hidden border border-border/50 bg-muted/20">
             <button
               onClick={() => setRosterView("week")}
               className={`text-xs font-semibold py-1.5 px-3 transition-colors ${rosterView === "week" ? "bg-[hsl(155,45%,45%)] text-white" : "text-zinc-400 hover:text-white"}`}
@@ -948,7 +948,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-xs">
             <thead>
-              <tr className="border-b border-zinc-800">
+              <tr className="border-b border-border/40">
                 <th className="text-left text-zinc-400 py-2 px-3 font-medium min-w-[160px]">Employee</th>
                 {DAYS.map((day, i) => (
                   <th key={day} className="text-center text-zinc-400 py-2 px-2 font-medium min-w-[80px]">
@@ -969,7 +969,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
                   const activeAssignment = assignments.find(a => a.workforceId === emp.id && a.endDate == null);
                   const template = activeAssignment ? templateById[activeAssignment.templateId] : undefined;
                   return (
-                    <tr key={emp.id} className="border-b border-zinc-800/50 hover:bg-zinc-900/30" data-testid={`row-roster-${emp.id}`}>
+                    <tr key={emp.id} className="border-b border-border/30 hover:bg-muted/[0.08]" data-testid={`row-roster-${emp.id}`}>
                       <td className="py-2 px-3">
                         <div className="font-medium text-white">{emp.fullNameEn ?? "—"}</div>
                         <div className="text-[10px] text-primary font-mono">{emp.employeeNumber}</div>
@@ -1022,8 +1022,8 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-xs">
             <thead>
-              <tr className="border-b border-zinc-800">
-                <th className="text-left text-zinc-400 py-2 px-3 font-medium min-w-[140px] sticky left-0 bg-zinc-950 z-10">Employee</th>
+              <tr className="border-b border-border/40">
+                <th className="text-left text-zinc-400 py-2 px-3 font-medium min-w-[140px] sticky left-0 bg-card z-10">Employee</th>
                 {monthDates.map(date => {
                   const d = new Date(date + "T00:00:00");
                   const today = new Date().toISOString().slice(0, 10);
@@ -1046,8 +1046,8 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
                 </tr>
               ) : (
                 activeEmployees.map(emp => (
-                  <tr key={emp.id} className="border-b border-zinc-800/50 hover:bg-zinc-900/30" data-testid={`row-roster-month-${emp.id}`}>
-                    <td className="py-1.5 px-3 sticky left-0 bg-zinc-950 z-10">
+                  <tr key={emp.id} className="border-b border-border/30 hover:bg-muted/[0.08]" data-testid={`row-roster-month-${emp.id}`}>
+                    <td className="py-1.5 px-3 sticky left-0 bg-card z-10">
                       <div className="font-medium text-white truncate max-w-[120px]">{emp.fullNameEn ?? "—"}</div>
                       <div className="text-[9px] text-primary font-mono">{emp.employeeNumber}</div>
                     </td>
@@ -1085,7 +1085,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
         onAssigned={() => {}}
       />
       <Dialog open={!!endAssignId} onOpenChange={v => !v && setEndAssignId(null)}>
-        <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-sm">
+        <DialogContent className="bg-card border-border text-foreground max-w-sm">
           <DialogHeader>
             <DialogTitle>End Schedule Assignment</DialogTitle>
             <DialogDescription className="text-zinc-400">Choose the date to end this assignment. History will be preserved.</DialogDescription>
@@ -1098,7 +1098,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
                 type="date"
                 value={endDate}
                 onChange={e => setEndDate(e.target.value)}
-                className="bg-zinc-900 border-zinc-700 text-white"
+                className="bg-background border-input text-foreground"
               />
             </div>
           </div>
@@ -1245,7 +1245,7 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex rounded-md overflow-hidden border border-zinc-800 bg-zinc-900/50">
+        <div className="flex rounded-md overflow-hidden border border-border/50 bg-muted/20">
           <button
             onClick={() => setView("daily")}
             className={`text-xs font-semibold py-2 px-4 transition-colors ${view === "daily" ? "bg-[hsl(155,45%,45%)] text-white" : "text-zinc-400 hover:text-white"}`}
@@ -1268,7 +1268,7 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
               type="date"
               value={selectedDate}
               onChange={e => setSelectedDate(e.target.value)}
-              className="bg-zinc-900 border-zinc-700 text-white h-8 text-xs"
+              className="bg-background border-input text-foreground h-8 text-xs"
             />
             <Button
               data-testid="button-save-attendance"
@@ -1290,7 +1290,7 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
               type="date"
               value={summaryFrom}
               onChange={e => setSummaryFrom(e.target.value)}
-              className="bg-zinc-900 border-zinc-700 text-white h-8 text-xs"
+              className="bg-background border-input text-foreground h-8 text-xs"
             />
             <Label className="text-zinc-400 text-xs">To</Label>
             <Input
@@ -1298,7 +1298,7 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
               type="date"
               value={summaryTo}
               onChange={e => setSummaryTo(e.target.value)}
-              className="bg-zinc-900 border-zinc-700 text-white h-8 text-xs"
+              className="bg-background border-input text-foreground h-8 text-xs"
             />
           </div>
         )}
@@ -1313,10 +1313,10 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
               <p className="text-xs mt-1">Employees with a day-off or no assignment on this day are excluded.</p>
             </div>
           ) : (
-            <div className="border border-zinc-800 rounded-lg overflow-hidden">
+            <div className="border border-border/50 rounded-lg overflow-hidden">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-zinc-800 hover:bg-transparent">
+                  <TableRow className="border-border/40 hover:bg-transparent">
                     <TableHead className="text-zinc-400">Employee</TableHead>
                     <TableHead className="text-zinc-400">Scheduled Shift</TableHead>
                     <TableHead className="text-zinc-400">Status</TableHead>
@@ -1333,7 +1333,7 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
                     const clockInValue = localClockIn[emp.id] !== undefined ? localClockIn[emp.id] : (existing?.clockIn ?? "");
                     const clockOutValue = localClockOut[emp.id] !== undefined ? localClockOut[emp.id] : (existing?.clockOut ?? "");
                     return (
-                      <TableRow key={emp.id} className="border-zinc-800 hover:bg-zinc-900/30" data-testid={`row-attendance-${emp.id}`}>
+                      <TableRow key={emp.id} className="border-border/30 hover:bg-muted/[0.08]" data-testid={`row-attendance-${emp.id}`}>
                         <TableCell>
                           <div className="font-medium text-white text-sm">{emp.fullNameEn ?? "—"}</div>
                           <div className="text-[10px] text-primary font-mono">{emp.employeeNumber}</div>
@@ -1352,7 +1352,7 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
                             >
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="bg-zinc-900 border-zinc-700">
+                            <SelectContent className="bg-popover border-border">
                               {ATTENDANCE_STATUSES.map(s => (
                                 <SelectItem key={s.value} value={s.value} className="text-xs">
                                   {s.label}
@@ -1368,7 +1368,7 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
                             value={clockInValue}
                             onChange={e => setLocalClockIn(prev => ({ ...prev, [emp.id]: e.target.value }))}
                             placeholder={formatTime(shift.startTime)}
-                            className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs w-[100px]"
+                            className="bg-background border-input text-foreground h-7 text-xs w-[100px]"
                           />
                         </TableCell>
                         <TableCell>
@@ -1378,7 +1378,7 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
                             value={clockOutValue}
                             onChange={e => setLocalClockOut(prev => ({ ...prev, [emp.id]: e.target.value }))}
                             placeholder={formatTime(shift.endTime)}
-                            className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs w-[100px]"
+                            className="bg-background border-input text-foreground h-7 text-xs w-[100px]"
                           />
                         </TableCell>
                       </TableRow>
@@ -1399,10 +1399,10 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
               <p>No attendance data for selected period.</p>
             </div>
           ) : (
-            <div className="border border-zinc-800 rounded-lg overflow-hidden">
+            <div className="border border-border/50 rounded-lg overflow-hidden">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-zinc-800 hover:bg-transparent">
+                  <TableRow className="border-border/40 hover:bg-transparent">
                     <TableHead className="text-zinc-400">Employee</TableHead>
                     <TableHead className="text-zinc-400 text-center">Worked</TableHead>
                     <TableHead className="text-zinc-400 text-center">Absent</TableHead>
@@ -1414,7 +1414,7 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
                 </TableHeader>
                 <TableBody>
                   {summaryData.map(row => (
-                    <TableRow key={row.workforceId} className="border-zinc-800 hover:bg-zinc-900/30" data-testid={`row-summary-${row.workforceId}`}>
+                    <TableRow key={row.workforceId} className="border-border/30 hover:bg-muted/[0.08]" data-testid={`row-summary-${row.workforceId}`}>
                       <TableCell>
                         <div className="font-medium text-white text-sm">{row.fullNameEn ?? "—"}</div>
                         <div className="text-[10px] text-primary font-mono">{row.employeeNumber}</div>
@@ -1477,7 +1477,7 @@ export default function SchedulesPage() {
           <p className="text-zinc-400 text-sm mt-1">Manage shift definitions, schedule templates, employee rosters, and attendance tracking.</p>
         </div>
 
-        <div className="flex rounded-md overflow-hidden border border-zinc-800 bg-zinc-900/50 w-fit">
+        <div className="flex rounded-md overflow-hidden border border-border/50 bg-muted/20 w-fit">
           {TABS.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
@@ -1492,7 +1492,7 @@ export default function SchedulesPage() {
           ))}
         </div>
 
-        <Card className="bg-zinc-950 border-zinc-800">
+        <Card className="bg-card border-border">
           <CardContent className="pt-6">
             {loading ? (
               <div className="flex items-center justify-center py-16 gap-3 text-zinc-500">
