@@ -205,7 +205,7 @@ function GlobalSearch() {
         onChange={e => setQuery(e.target.value)}
         onKeyDown={onKeyDown}
         onFocus={() => { if (query.length > 0) { setOpen(true); updateRect(); } }}
-        placeholder="Search…  ⌘K"
+        placeholder="Search candidates, employees, events, jobs…"
         className="pl-10 pr-10 bg-muted/30 border-border focus-visible:ring-primary/20 h-9 rounded-sm"
         autoComplete="off"
       />
