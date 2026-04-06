@@ -825,39 +825,36 @@ export default function AuthPage() {
         </div>
       </div>
 
-      {/* ── Right Column: Animated gradient ───────────────────── */}
-      <div className="hidden lg:block relative overflow-hidden border-l border-white/5" style={{ background: "hsl(155,55%,4%)" }}>
+      {/* ── Right Column: Aurora effect ────────────────────────── */}
+      <div className="hidden lg:block relative overflow-hidden border-l border-white/5" style={{ background: "hsl(155,60%,3%)" }}>
 
-        {/* Blob 1 — deep forest green, anchored top-left */}
-        <div className="login-blob-1 absolute rounded-full pointer-events-none" style={{
-          width: 640, height: 640, top: "-18%", left: "-22%",
-          background: "radial-gradient(circle at center, hsl(155,65%,26%) 0%, hsl(155,55%,12%) 45%, transparent 70%)",
-          filter: "blur(90px)",
+        {/* Aurora orb 1 — primary forest green */}
+        <div className="aurora-orb-1 aurora-orb pointer-events-none" style={{
+          boxShadow: "0 0 220px 220px hsl(155,72%,28%)",
+          opacity: 0.78,
         }} />
 
-        {/* Blob 2 — teal-green, anchored bottom-right */}
-        <div className="login-blob-2 absolute rounded-full pointer-events-none" style={{
-          width: 520, height: 520, bottom: "-16%", right: "-16%",
-          background: "radial-gradient(circle at center, hsl(168,60%,20%) 0%, hsl(168,50%,9%) 45%, transparent 70%)",
-          filter: "blur(80px)",
+        {/* Aurora orb 2 — teal-cyan green */}
+        <div className="aurora-orb-2 aurora-orb pointer-events-none" style={{
+          boxShadow: "0 0 180px 180px hsl(168,68%,22%)",
+          opacity: 0.7,
         }} />
 
-        {/* Blob 3 — bright emerald accent, centre-right */}
-        <div className="login-blob-3 absolute rounded-full pointer-events-none" style={{
-          width: 380, height: 380, top: "38%", left: "42%",
-          background: "radial-gradient(circle at center, hsl(145,58%,32%) 0%, hsl(145,48%,14%) 50%, transparent 72%)",
-          filter: "blur(65px)",
+        {/* Aurora orb 3 — bright emerald */}
+        <div className="aurora-orb-3 aurora-orb pointer-events-none" style={{
+          boxShadow: "0 0 150px 150px hsl(145,62%,34%)",
+          opacity: 0.65,
         }} />
 
-        {/* Subtle dot-grid texture */}
+        {/* Fine noise overlay for filmic grain */}
+        <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{
+          backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E\")",
+          backgroundSize: "200px 200px",
+        }} />
+
+        {/* Vignette — keeps edges deep and dark */}
         <div className="absolute inset-0 pointer-events-none" style={{
-          backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px)",
-          backgroundSize: "32px 32px",
-        }} />
-
-        {/* Vignette — pulls edges back into deep black-green */}
-        <div className="absolute inset-0 pointer-events-none" style={{
-          background: "radial-gradient(ellipse at 50% 50%, transparent 35%, hsl(155,55%,2%) 100%)",
+          background: "radial-gradient(ellipse at 50% 50%, transparent 30%, hsl(155,60%,2%) 100%)",
         }} />
 
       </div>

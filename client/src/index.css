@@ -124,28 +124,38 @@
   display: none;
 }
 
-/* ── Login page animated gradient blobs ─────────────────────────── */
-@keyframes blob-1 {
-  0%, 100% { transform: translate(0px, 0px)    scale(1);    }
-  25%       { transform: translate(60px, -90px) scale(1.07); }
-  50%       { transform: translate(-55px, 70px) scale(0.93); }
-  75%       { transform: translate(85px, 55px)  scale(1.04); }
+/* ── Login page Aurora effect ────────────────────────────────────── */
+@keyframes aurora-1 {
+  0%, 100% { top: 10%;  left: 15%; }
+  25%       { top: 70%;  left: 75%; }
+  50%       { top: 85%;  left: 35%; }
+  75%       { top: 25%;  left: 80%; }
 }
-@keyframes blob-2 {
-  0%, 100% { transform: translate(0px, 0px)     scale(1);    }
-  25%       { transform: translate(-75px, 65px)  scale(0.93); }
-  50%       { transform: translate(65px, -55px)  scale(1.07); }
-  75%       { transform: translate(-55px, -75px) scale(0.97); }
+@keyframes aurora-2 {
+  0%, 100% { top: 80%;  left: 70%; }
+  25%       { top: 15%;  left: 25%; }
+  50%       { top: 45%;  left: 5%;  }
+  75%       { top: 65%;  left: 55%; }
 }
-@keyframes blob-3 {
-  0%, 100% { transform: translate(0px, 0px)   scale(1);    }
-  33%       { transform: translate(95px, -65px) scale(1.09); }
-  66%       { transform: translate(-75px, 85px) scale(0.91); }
+@keyframes aurora-3 {
+  0%, 100% { top: 45%;  left: 55%; }
+  33%       { top: 5%;   left: 85%; }
+  66%       { top: 90%;  left: 20%; }
+}
+@keyframes aurora-hue {
+  0%, 100% { filter: hue-rotate(0deg)   brightness(1);   }
+  50%       { filter: hue-rotate(28deg)  brightness(1.12); }
 }
 
-.login-blob-1 { animation: blob-1 14s ease-in-out infinite; }
-.login-blob-2 { animation: blob-2 19s ease-in-out infinite; }
-.login-blob-3 { animation: blob-3 24s ease-in-out infinite; }
+.aurora-orb {
+  position: absolute;
+  width: 0;
+  height: 0;
+  animation: aurora-hue 18s ease-in-out infinite;
+}
+.aurora-orb-1 { animation: aurora-1 16s ease-in-out infinite, aurora-hue 18s ease-in-out infinite; }
+.aurora-orb-2 { animation: aurora-2 22s ease-in-out infinite, aurora-hue 24s ease-in-out infinite; }
+.aurora-orb-3 { animation: aurora-3 28s ease-in-out infinite, aurora-hue 20s ease-in-out infinite; }
 
 @keyframes marquee {
   0%   { transform: translateX(0); }
