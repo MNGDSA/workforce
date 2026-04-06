@@ -1,19 +1,28 @@
 /**
- * App Reset Script
+ * App Reset Script  —  with DB Sweep
  * ─────────────────────────────────────────────────────────────────────────────
- * Wipes all operational/transactional data back to a clean slate while
- * preserving the three demo login credentials:
+ * Phase 1 — DB SWEEP
+ *   Queries the live database for every table in the public schema and
+ *   compares against two known lists:
+ *     KEEP_TABLES     → configuration / reference tables, never wiped
+ *     KNOWN_WIPE      → transactional tables, always wiped
+ *   Any table found in the DB that is NOT on either list is flagged as
+ *   "newly discovered" and is automatically added to the wipe.
+ *   This means the reset stays correct as the schema grows without
+ *   requiring manual edits to this file.
  *
- *   Super Admin  — 1000000001 / 0500000001 / password123
- *   Candidate    — 2000000002 / 0500000002 / password123
- *   Recruiter    — 1000000003 / 0500000003 / password123
+ * Phase 2 — WIPE
+ *   Dynamically truncates every non-config table with CASCADE.
+ *   Removes all non-demo users.
  *
- * Kept intact (configuration / reference data):
- *   business_units, system_settings, sms_plugins, printer_plugins,
- *   contract_templates, id_card_templates, question_sets, automation_rules
+ * Phase 3 — RE-SEED
+ *   Restores the three demo login accounts, automation rules,
+ *   demo events, and demo job postings.
  *
- * After wiping, the seed is re-run so the demo events and job postings are
- * restored to their original state.
+ * Demo credentials preserved:
+ *   Super Admin  —  1000000001 / 0500000001 / password123
+ *   Candidate    —  2000000002 / 0500000002 / password123
+ *   Recruiter    —  1000000003 / 0500000003 / password123
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -22,53 +31,139 @@ import { sql } from "drizzle-orm";
 import { users, automationRules, events, jobPostings } from "@shared/schema";
 import bcrypt from "bcryptjs";
 
+// ─── Tables that are NEVER wiped (config / reference data) ───────────────────
+const KEEP_TABLES = new Set([
+  "users",             // wiped selectively (demo accounts kept)
+  "business_units",
+  "system_settings",
+  "sms_plugins",
+  "printer_plugins",
+  "contract_templates",
+  "id_card_templates",
+  "question_sets",
+]);
+
+// ─── Tables we know should be wiped (used only for reporting "known vs new") ──
+const KNOWN_WIPE = new Set([
+  "audit_logs",
+  "notifications",
+  "otp_verifications",
+  "id_card_print_logs",
+  "attendance_records",
+  "schedule_assignments",
+  "schedule_templates",
+  "shifts",
+  "employee_assets",
+  "assets",
+  "candidate_contracts",
+  "interviews",
+  "onboarding",
+  "applications",
+  "workforce",
+  "job_postings",
+  "events",
+  "smp_contracts",
+  "candidates",
+  "automation_rules",
+]);
+
 const DEMO_NATIONAL_IDS = ["1000000001", "2000000002", "1000000003"];
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function sweep(): Promise<string[]> {
+  console.log("\n━━━  PHASE 1 — DB SWEEP  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+  // Get every table in the public schema
+  const result = await db.execute<{ table_name: string }>(sql`
+    SELECT table_name
+    FROM   information_schema.tables
+    WHERE  table_schema = 'public'
+    AND    table_type   = 'BASE TABLE'
+    ORDER  BY table_name
+  `);
+
+  const allTables = (result.rows as { table_name: string }[]).map((r) => r.table_name);
+
+  // Row counts for each table
+  const counts: Record<string, number> = {};
+  for (const t of allTables) {
+    const r = await db.execute<{ n: string }>(
+      sql`SELECT COUNT(*)::int AS n FROM ${sql.raw(`"${t}"`)}`
+    );
+    counts[t] = Number((r.rows as { n: string }[])[0]?.n ?? 0);
+  }
+
+  const keepList:      string[] = [];
+  const knownWipe:     string[] = [];
+  const newlyDetected: string[] = [];
+
+  for (const t of allTables) {
+    if (KEEP_TABLES.has(t))     keepList.push(t);
+    else if (KNOWN_WIPE.has(t)) knownWipe.push(t);
+    else                         newlyDetected.push(t);
+  }
+
+  console.log(`\n  Tables found in DB: ${allTables.length}`);
+
+  console.log("\n  KEPT (config / reference):");
+  for (const t of keepList)
+    console.log(`    ✓ ${t.padEnd(28)} ${counts[t]} row(s)`);
+
+  console.log("\n  WIPE — known transactional:");
+  for (const t of knownWipe)
+    console.log(`    ✗ ${t.padEnd(28)} ${counts[t]} row(s)`);
+
+  if (newlyDetected.length > 0) {
+    console.log("\n  WIPE — ⚠️  newly detected tables (not in original KNOWN_WIPE list):");
+    for (const t of newlyDetected)
+      console.log(`    ✗ ${t.padEnd(28)} ${counts[t]} row(s)  ← auto-added to wipe`);
+  } else {
+    console.log("\n  ✓  No new tables detected — schema matches expected.");
+  }
+
+  // Return the full list of tables to truncate (known + newly detected)
+  return [...knownWipe, ...newlyDetected];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function reset() {
   console.log("🔄  Starting app reset…");
 
-  // ── Step 1: Truncate all transactional / operational tables ──────────────
-  // CASCADE handles FK dependencies automatically.
-  await db.execute(sql`
-    TRUNCATE
-      audit_logs,
-      notifications,
-      otp_verifications,
-      id_card_print_logs,
-      attendance_records,
-      schedule_assignments,
-      schedule_templates,
-      shifts,
-      employee_assets,
-      assets,
-      candidate_contracts,
-      interviews,
-      onboarding,
-      applications,
-      workforce,
-      job_postings,
-      events,
-      smp_contracts,
-      candidates,
-      automation_rules
-    CASCADE
-  `);
-  console.log("✓  Transactional tables cleared");
+  // ── Phase 1: Sweep ────────────────────────────────────────────────────────
+  const toWipe = await sweep();
 
-  // ── Step 2: Remove non-demo users ────────────────────────────────────────
-  await db.execute(
+  // ── Phase 2: Wipe ─────────────────────────────────────────────────────────
+  console.log("\n━━━  PHASE 2 — WIPE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+  if (toWipe.length > 0) {
+    const tableList = toWipe.map((t) => `"${t}"`).join(", ");
+    await db.execute(sql`TRUNCATE ${sql.raw(tableList)} CASCADE`);
+    console.log(`  ✓  Truncated ${toWipe.length} tables`);
+  } else {
+    console.log("  (nothing to truncate)");
+  }
+
+  // Remove non-demo users
+  const deleted = await db.execute(
     sql`DELETE FROM users WHERE national_id NOT IN (${sql.join(
       DEMO_NATIONAL_IDS.map((id) => sql`${id}`),
       sql`, `
-    )})`
+    )}) RETURNING national_id`
   );
-  console.log("✓  Non-demo users removed");
+  const removedCount = (deleted.rows as unknown[]).length;
+  if (removedCount > 0)
+    console.log(`  ✓  Removed ${removedCount} non-demo user(s)`);
+  else
+    console.log("  ✓  No non-demo users to remove");
 
-  // ── Step 3: Re-seed automation rules ────────────────────────────────────
-  const adminPassword   = await bcrypt.hash("password123", 12);
+  // ── Phase 3: Re-seed ──────────────────────────────────────────────────────
+  console.log("\n━━━  PHASE 3 — RE-SEED  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+  const adminPassword     = await bcrypt.hash("password123", 12);
   const candidatePassword = await bcrypt.hash("password123", 12);
 
-  // Ensure all three demo users exist (in case one was missing)
   await db
     .insert(users)
     .values([
@@ -101,7 +196,7 @@ async function reset() {
       },
     ])
     .onConflictDoNothing();
-  console.log("✓  Demo users verified / restored");
+  console.log("  ✓  Demo users verified / restored");
 
   await db
     .insert(automationRules)
@@ -148,9 +243,8 @@ async function reset() {
       },
     ])
     .onConflictDoNothing();
-  console.log("✓  Automation rules restored");
+  console.log("  ✓  Automation rules restored");
 
-  // ── Step 4: Re-seed demo events + job postings ───────────────────────────
   const insertedEvents = await db
     .insert(events)
     .values([
@@ -281,13 +375,13 @@ async function reset() {
         skills: ["translation", "multilingual", "cultural sensitivity"],
       },
     ]);
-    console.log("✓  Demo events + job postings restored");
+    console.log("  ✓  Demo events + job postings restored");
   }
 
-  console.log("\n✅  App reset complete — clean slate with demo credentials restored.");
+  console.log("\n✅  Reset complete — clean slate with demo credentials.");
   console.log("   Super Admin  →  1000000001 / 0500000001 / password123");
   console.log("   Candidate    →  2000000002 / 0500000002 / password123");
-  console.log("   Recruiter    →  1000000003 / 0500000003 / password123");
+  console.log("   Recruiter    →  1000000003 / 0500000003 / password123\n");
 }
 
 reset().catch((e) => {
