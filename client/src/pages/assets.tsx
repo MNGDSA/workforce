@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, createPortal } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,11 @@ import {
   PackageCheck,
   PackageX,
   Filter,
+  Lock,
+  SquareCheck,
+  Square,
+  X,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -120,6 +125,14 @@ export default function AssetsPage() {
   const [empSearch, setEmpSearch] = useState("");
   const [deleteAssignId, setDeleteAssignId] = useState<string | null>(null);
 
+  // ─── Confirmation dialogs ───────────────────────────────────────────────────
+  const [confirmReturn, setConfirmReturn] = useState<{ id: string; assetName: string; empName: string } | null>(null);
+  const [confirmLost, setConfirmLost] = useState<{ id: string; assetName: string; empName: string; price: string } | null>(null);
+
+  // ─── Bulk selection ─────────────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDialog, setBulkDialog] = useState<{ status: "returned" | "not_returned"; count: number; totalValue: number } | null>(null);
+
   // ─── Queries ───────────────────────────────────────────────────────────────
   const { data: assetList = [], isLoading: loadingAssets } = useQuery<Asset[]>({
     queryKey: ["/api/assets"],
@@ -168,6 +181,18 @@ export default function AssetsPage() {
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const bulkStatusMut = useMutation({
+    mutationFn: ({ ids, status }: { ids: string[]; status: "returned" | "not_returned" }) =>
+      apiRequest("POST", "/api/employee-assets/bulk-status", { ids, status }).then(r => r.json()),
+    onSuccess: (_, { status }) => {
+      qc.invalidateQueries({ queryKey: ["/api/employee-assets"] });
+      setSelectedIds(new Set());
+      setBulkDialog(null);
+      toast({ title: `${selectedIds.size} assignment(s) marked as ${status === "returned" ? "Returned" : "Not Returned"}` });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   // ─── Derived data ──────────────────────────────────────────────────────────
   const filteredAssets = useMemo(() =>
     assetList.filter(a =>
@@ -213,16 +238,22 @@ export default function AssetsPage() {
     setAssetDialog({ open: true, editing: a });
   }
   function submitAsset() {
-    const payload = {
-      name: assetForm.name.trim(),
-      description: assetForm.description.trim() || null,
-      category: assetForm.category || null,
-      price: assetForm.price,
-      isActive: assetForm.isActive,
-    };
     if (assetDialog.editing) {
+      const payload = {
+        name: assetForm.name.trim(),
+        description: assetForm.description.trim() || null,
+        category: assetForm.category || null,
+        isActive: assetForm.isActive,
+      };
       updateAsset.mutate({ id: assetDialog.editing.id, data: payload });
     } else {
+      const payload = {
+        name: assetForm.name.trim(),
+        description: assetForm.description.trim() || null,
+        category: assetForm.category || null,
+        price: assetForm.price,
+        isActive: assetForm.isActive,
+      };
       createAsset.mutate(payload);
     }
   }
@@ -235,11 +266,51 @@ export default function AssetsPage() {
       status: "assigned",
     });
   }
-  function markReturned(id: string) {
-    updateAssignment.mutate({ id, data: { status: "returned", returnedAt: localDate() } });
+
+  function requestReturn(ea: EmployeeAsset) {
+    const asset = assetMap.get(ea.assetId);
+    const emp = workforceMap.get(ea.workforceId);
+    setConfirmReturn({ id: ea.id, assetName: asset?.name ?? "Asset", empName: emp?.fullNameEn ?? `#${emp?.employeeNumber}` });
   }
-  function markNotReturned(id: string) {
-    updateAssignment.mutate({ id, data: { status: "not_returned" } });
+  function requestLost(ea: EmployeeAsset) {
+    const asset = assetMap.get(ea.assetId);
+    const emp = workforceMap.get(ea.workforceId);
+    setConfirmLost({ id: ea.id, assetName: asset?.name ?? "Asset", empName: emp?.fullNameEn ?? `#${emp?.employeeNumber}`, price: asset?.price ?? "0" });
+  }
+  function doMarkReturned() {
+    if (!confirmReturn) return;
+    updateAssignment.mutate({ id: confirmReturn.id, data: { status: "returned", returnedAt: localDate() } });
+    setConfirmReturn(null);
+  }
+  function doMarkLost() {
+    if (!confirmLost) return;
+    updateAssignment.mutate({ id: confirmLost.id, data: { status: "not_returned" } });
+    setConfirmLost(null);
+  }
+
+  // ─── Bulk selection helpers ─────────────────────────────────────────────────
+  const selectableIds = useMemo(() => filteredAssignments.filter(ea => ea.status === "assigned").map(ea => ea.id), [filteredAssignments]);
+  const allSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
+  const someSelected = selectedIds.size > 0;
+
+  function toggleRow(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function toggleAll() {
+    if (allSelected) {
+      setSelectedIds(prev => { const next = new Set(prev); selectableIds.forEach(id => next.delete(id)); return next; });
+    } else {
+      setSelectedIds(prev => new Set([...prev, ...selectableIds]));
+    }
+  }
+  function openBulkDialog(status: "returned" | "not_returned") {
+    const selected = filteredAssignments.filter(ea => selectedIds.has(ea.id));
+    const totalValue = selected.reduce((sum, ea) => sum + parseFloat(assetMap.get(ea.assetId)?.price ?? "0"), 0);
+    setBulkDialog({ status, count: selected.length, totalValue });
   }
 
   // ─── Stats ─────────────────────────────────────────────────────────────────
@@ -261,6 +332,7 @@ export default function AssetsPage() {
   ];
 
   return (
+    <>
     <DashboardLayout>
     <div className="space-y-6">
 
@@ -448,7 +520,19 @@ export default function AssetsPage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-border/50 hover:bg-transparent">
-                  <TableHead className={`${TH} pl-5`}>Employee</TableHead>
+                  <TableHead className="pl-4 w-10">
+                    <button
+                      onClick={toggleAll}
+                      className="flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                      data-testid="checkbox-select-all"
+                      title={allSelected ? "Deselect all" : "Select all assigned"}
+                    >
+                      {allSelected
+                        ? <SquareCheck className="h-4 w-4 text-primary" />
+                        : <Square className="h-4 w-4" />}
+                    </button>
+                  </TableHead>
+                  <TableHead className={`${TH}`}>Employee</TableHead>
                   <TableHead className={TH}>Type</TableHead>
                   <TableHead className={TH}>Asset</TableHead>
                   <TableHead className={`${TH} text-right`}>Price (SAR)</TableHead>
@@ -461,11 +545,11 @@ export default function AssetsPage() {
               <TableBody>
                 {loadingAssign ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-14 text-muted-foreground">Loading…</TableCell>
+                    <TableCell colSpan={9} className="text-center py-14 text-muted-foreground">Loading…</TableCell>
                   </TableRow>
                 ) : filteredAssignments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-14">
+                    <TableCell colSpan={9} className="text-center py-14">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <PackageCheck className="h-8 w-8 opacity-30" />
                         <span className="text-sm">No assignments found</span>
@@ -477,9 +561,33 @@ export default function AssetsPage() {
                   const asset = assetMap.get(ea.assetId);
                   const sc = statusConfig[ea.status];
                   const StatusIcon = sc.icon;
+                  const isSelectable = ea.status === "assigned";
+                  const isChecked = selectedIds.has(ea.id);
                   return (
-                    <TableRow key={ea.id} data-testid={`row-assignment-${ea.id}`} className="border-border/30 hover:bg-muted/[0.08] transition-colors">
-                      <TableCell className="pl-5">
+                    <TableRow
+                      key={ea.id}
+                      data-testid={`row-assignment-${ea.id}`}
+                      className={cn(
+                        "border-border/30 hover:bg-muted/[0.08] transition-colors",
+                        isChecked && "bg-primary/[0.04]"
+                      )}
+                    >
+                      <TableCell className="pl-4 w-10">
+                        {isSelectable ? (
+                          <button
+                            onClick={() => toggleRow(ea.id)}
+                            className="flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
+                            data-testid={`checkbox-row-${ea.id}`}
+                          >
+                            {isChecked
+                              ? <SquareCheck className="h-4 w-4 text-primary" />
+                              : <Square className="h-4 w-4" />}
+                          </button>
+                        ) : (
+                          <span className="block w-4 h-4" />
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <div className="font-medium text-foreground">{emp?.fullNameEn ?? "—"}</div>
                         <div className="text-xs text-muted-foreground font-mono">{emp?.employeeNumber ?? ""}</div>
                       </TableCell>
@@ -518,7 +626,7 @@ export default function AssetsPage() {
                               <Button
                                 variant="ghost" size="sm"
                                 className="h-7 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-sm"
-                                onClick={() => markReturned(ea.id)}
+                                onClick={() => requestReturn(ea)}
                                 data-testid={`button-return-${ea.id}`}
                               >
                                 <RotateCcw className="h-3 w-3 mr-1" />
@@ -527,7 +635,7 @@ export default function AssetsPage() {
                               <Button
                                 variant="ghost" size="sm"
                                 className="h-7 px-2 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-sm"
-                                onClick={() => markNotReturned(ea.id)}
+                                onClick={() => requestLost(ea)}
                                 data-testid={`button-not-returned-${ea.id}`}
                               >
                                 <PackageX className="h-3 w-3 mr-1" />
@@ -590,20 +698,37 @@ export default function AssetsPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="asset-price">Price (SAR) <span className="text-red-400">*</span></Label>
-                <Input
-                  id="asset-price"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={assetForm.price}
-                  onChange={e => setAssetForm(f => ({ ...f, price: e.target.value }))}
-                  className="rounded-sm"
-                  data-testid="input-asset-price"
-                />
+                <Label htmlFor="asset-price">
+                  Price (SAR)
+                  {!assetDialog.editing && <span className="text-red-400"> *</span>}
+                </Label>
+                {assetDialog.editing ? (
+                  <div className="flex items-center gap-2 h-9 px-3 rounded-sm border border-border/50 bg-muted/30 text-sm text-muted-foreground" data-testid="display-asset-price">
+                    <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                    <span className="font-mono font-semibold text-foreground">{parseFloat(assetForm.price || "0").toLocaleString("en", { minimumFractionDigits: 2 })}</span>
+                    <span className="text-xs text-muted-foreground/60 ml-auto">Locked</span>
+                  </div>
+                ) : (
+                  <Input
+                    id="asset-price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={assetForm.price}
+                    onChange={e => setAssetForm(f => ({ ...f, price: e.target.value }))}
+                    className="rounded-sm"
+                    data-testid="input-asset-price"
+                  />
+                )}
               </div>
             </div>
+            {assetDialog.editing && (
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                <Lock className="h-3 w-3 shrink-0" />
+                Asset price is locked after creation and cannot be changed.
+              </p>
+            )}
 
             <div className="space-y-1.5">
               <Label htmlFor="asset-desc">Description</Label>
@@ -655,7 +780,7 @@ export default function AssetsPage() {
             <Button
               className="rounded-sm"
               onClick={submitAsset}
-              disabled={!assetForm.name.trim() || !assetForm.price || isPending}
+              disabled={!assetForm.name.trim() || (!assetDialog.editing && !assetForm.price) || isPending}
               data-testid="button-save-asset"
             >
               {isPending ? "Saving…" : assetDialog.editing ? "Save Changes" : "Create Asset"}
@@ -822,7 +947,138 @@ export default function AssetsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ─── Return Confirmation ──────────────────────────────────────────────── */}
+      <AlertDialog open={!!confirmReturn} onOpenChange={o => !o && setConfirmReturn(null)}>
+        <AlertDialogContent className="bg-card border-border text-foreground rounded-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Asset Return</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              Mark <span className="font-semibold text-foreground">"{confirmReturn?.assetName}"</span> as returned
+              by <span className="font-semibold text-foreground">{confirmReturn?.empName}</span>?
+              This will record today as the return date.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-sm">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-sm bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={doMarkReturned}
+              data-testid="button-confirm-return"
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Confirm Return
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─── Lost / Not Returned Confirmation ────────────────────────────────── */}
+      <AlertDialog open={!!confirmLost} onOpenChange={o => !o && setConfirmLost(null)}>
+        <AlertDialogContent className="bg-card border-border text-foreground rounded-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark Asset as Lost?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              Mark <span className="font-semibold text-foreground">"{confirmLost?.assetName}"</span> as not returned
+              by <span className="font-semibold text-foreground">{confirmLost?.empName}</span>?
+              {confirmLost?.price && parseFloat(confirmLost.price) > 0 && (
+                <> This asset is valued at <span className="font-semibold text-red-400">SAR {parseFloat(confirmLost.price).toLocaleString("en", { minimumFractionDigits: 2 })}</span> and may be deducted from their settlement.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-sm">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-sm bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              onClick={doMarkLost}
+              data-testid="button-confirm-lost"
+            >
+              <PackageX className="h-4 w-4 mr-2" />
+              Mark as Lost
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─── Bulk Status Confirmation ─────────────────────────────────────────── */}
+      <AlertDialog open={!!bulkDialog} onOpenChange={o => !o && setBulkDialog(null)}>
+        <AlertDialogContent className="bg-card border-border text-foreground rounded-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {bulkDialog?.status === "returned" ? "Mark All as Returned?" : "Mark All as Lost?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              You are about to update <span className="font-semibold text-foreground">{bulkDialog?.count} assignment(s)</span> with
+              a total asset value of <span className="font-semibold text-foreground">SAR {(bulkDialog?.totalValue ?? 0).toLocaleString("en", { minimumFractionDigits: 2 })}</span>.
+              {bulkDialog?.status === "not_returned" && (
+                <> Assets marked as not returned may be deducted from employee settlements.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-sm">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={cn(
+                "rounded-sm",
+                bulkDialog?.status === "returned"
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  : "bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              )}
+              onClick={() => bulkDialog && bulkStatusMut.mutate({ ids: Array.from(selectedIds), status: bulkDialog.status })}
+              disabled={bulkStatusMut.isPending}
+              data-testid="button-confirm-bulk"
+            >
+              {bulkStatusMut.isPending
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing…</>
+                : bulkDialog?.status === "returned"
+                  ? <><RotateCcw className="h-4 w-4 mr-2" /> Confirm — Mark Returned</>
+                  : <><PackageX className="h-4 w-4 mr-2" /> Confirm — Mark Lost</>}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
     </DashboardLayout>
+
+    {/* ─── Floating Bulk Action Bar ─────────────────────────────────────────── */}
+    {someSelected && createPortal(
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 bg-card border border-border shadow-2xl rounded-lg px-5 py-3 animate-in slide-in-from-bottom-4">
+        <span className="text-sm font-medium text-foreground">
+          <span className="text-primary font-bold">{selectedIds.size}</span> assignment{selectedIds.size !== 1 ? "s" : ""} selected
+        </span>
+        <div className="w-px h-4 bg-border" />
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 rounded-sm h-8"
+          onClick={() => openBulkDialog("returned")}
+          data-testid="button-bulk-mark-returned"
+        >
+          <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+          Mark Returned
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-red-500/40 text-red-400 hover:bg-red-500/10 rounded-sm h-8"
+          onClick={() => openBulkDialog("not_returned")}
+          data-testid="button-bulk-mark-lost"
+        >
+          <PackageX className="h-3.5 w-3.5 mr-1.5" />
+          Mark Lost
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+          onClick={() => setSelectedIds(new Set())}
+          data-testid="button-clear-selection"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>,
+      document.body
+    )}
+    </>
   );
 }

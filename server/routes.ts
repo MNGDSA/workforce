@@ -3083,7 +3083,10 @@ export async function registerRoutes(
 
   app.patch("/api/assets/:id", async (req: Request, res: Response) => {
     try {
-      const data = insertAssetSchema.partial().parse(req.body);
+      if ("price" in req.body)
+        return res.status(400).json({ message: "Asset price cannot be changed after creation" });
+      const { price: _price, ...rest } = req.body;
+      const data = insertAssetSchema.partial().omit({ price: true }).parse(rest);
       const row = await storage.updateAsset(req.params.id, data);
       if (!row) return res.status(404).json({ message: "Asset not found" });
       return res.json(row);
@@ -3279,6 +3282,25 @@ export async function registerRoutes(
         metadata: { assetId: existing.assetId, assetPrice: (asset as any)?.price },
       });
       return res.json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/employee-assets/bulk-status", async (req: Request, res: Response) => {
+    try {
+      const { ids, status } = req.body as { ids: string[]; status: "returned" | "not_returned" };
+      if (!Array.isArray(ids) || ids.length === 0)
+        return res.status(400).json({ message: "ids must be a non-empty array" });
+      if (!status || !["returned", "not_returned"].includes(status))
+        return res.status(400).json({ message: "status must be 'returned' or 'not_returned'" });
+      const count = await storage.bulkUpdateAssetStatus(ids, status);
+      await logAudit(req, {
+        action: "assets.bulk_updated",
+        entityType: "assets",
+        entityId: "bulk",
+        description: `Bulk-marked ${ids.length} assignment(s) as "${status.replace("_", " ")}"`,
+        metadata: { ids, status, count },
+      });
+      return res.json({ updated: count });
     } catch (err) { return handleError(res, err); }
   });
 

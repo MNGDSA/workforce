@@ -173,6 +173,7 @@ export interface IStorage {
   confirmAssetReturn(assetId: string, status: "returned" | "not_returned", confirmedBy?: string): Promise<EmployeeAsset>;
   waiveAssetDeduction(assetId: string, waivedBy: string): Promise<EmployeeAsset>;
   bulkConfirmAssets(workforceId: string, status: "returned" | "not_returned", confirmedBy?: string): Promise<number>;
+  bulkUpdateAssetStatus(ids: string[], status: "returned" | "not_returned"): Promise<number>;
 
   // Automation Rules
   getAutomationRules(): Promise<AutomationRule[]>;
@@ -2307,6 +2308,20 @@ export class DatabaseStorage implements IStorage {
       })
       .where(and(eq(employeeAssets.workforceId, workforceId), eq(employeeAssets.status, "assigned")));
     return (result as any).rowCount ?? 0;
+  }
+
+  async bulkUpdateAssetStatus(ids: string[], status: "returned" | "not_returned"): Promise<number> {
+    if (ids.length === 0) return 0;
+    const now = new Date();
+    const result = await db
+      .update(employeeAssets)
+      .set({
+        status,
+        returnedAt: status === "returned" ? now.toISOString().slice(0, 10) : null,
+        updatedAt: now,
+      })
+      .where(inArray(employeeAssets.id, ids));
+    return (result as any).rowCount ?? ids.length;
   }
 
   async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {
