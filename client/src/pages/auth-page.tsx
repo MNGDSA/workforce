@@ -593,20 +593,17 @@ export default function AuthPage() {
               {(() => {
                 const BASE = "https://raw.githubusercontent.com/TanStack/tanstack.com/main/public/logos/";
                 const logos = [
-                  { name: "Google",      file: "google.svg"      },
-                  { name: "Apple",       file: "apple.svg"       },
-                  { name: "Microsoft",   file: "microsoft.svg"   },
-                  { name: "Amazon",      file: "amazon.svg"      },
-                  { name: "Walmart",     file: "walmart.svg"     },
-                  { name: "Uber",        file: "uber.svg"        },
-                  { name: "Intuit",      file: "intuit.svg"      },
-                  { name: "Salesforce",  file: "salesforce.svg"  },
-                  { name: "Cisco",       file: "cisco.svg"       },
-                  { name: "HP",          file: "hp.svg"          },
-                  { name: "DocuSign",    file: "docusign.svg"    },
-                  { name: "Nordstrom",   file: "nordstrom.svg"   },
-                  { name: "Yahoo",       file: "yahoo.svg"       },
-                  { name: "Ticketmaster",file: "ticketmaster.svg"},
+                  { name: "Google",    file: "google.svg"    },
+                  { name: "Apple",     file: "apple.svg"     },
+                  { name: "Microsoft", file: "microsoft.svg" },
+                  { name: "Amazon",    file: "amazon.svg"    },
+                  { name: "Walmart",   file: "walmart.svg"   },
+                  { name: "Uber",      file: "uber.svg"      },
+                  { name: "Salesforce",file: "salesforce.svg"},
+                  { name: "Cisco",     file: "cisco.svg"     },
+                  { name: "HP",        file: "hp.svg"        },
+                  { name: "DocuSign",  file: "docusign.svg"  },
+                  { name: "Yahoo",     file: "yahoo.svg"     },
                 ];
                 const items = [...logos, ...logos];
                 return (
@@ -627,7 +624,7 @@ export default function AuthPage() {
                             title={logo.name}
                             loading="lazy"
                             decoding="async"
-                            className="max-w-20 max-h-8 w-full h-auto object-contain opacity-40 grayscale hover:opacity-90 hover:grayscale-0 transition-all duration-200 invert select-none"
+                            className="max-w-20 max-h-8 w-full h-auto object-contain opacity-60 hover:opacity-100 transition-all duration-200 select-none"
                           />
                         ))}
                       </div>
