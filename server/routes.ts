@@ -1791,8 +1791,8 @@ export async function registerRoutes(
         if (data.endDate !== undefined) changes.push(`end date → ${data.endDate}`);
         if (data.performanceScore !== undefined) changes.push(`performance score → ${data.performanceScore}`);
       }
-      const subjectName = (record as any).fullNameEn ?? undefined;
-      const empNum = (record as any).employeeNumber ?? undefined;
+      const subjectName = before?.fullNameEn ?? (record as any).fullNameEn ?? undefined;
+      const empNum = before?.employeeNumber ?? (record as any).employeeNumber ?? undefined;
       await logAudit(req, {
         action: "workforce.updated",
         entityType: "workforce",
