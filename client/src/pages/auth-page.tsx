@@ -591,11 +591,24 @@ export default function AuthPage() {
 
               {/* ── Trusted-by marquee ── */}
               {(() => {
-                const orgs = [
-                  "Aramco", "Saudia", "STC", "NEOM", "SABIC",
-                  "AlRajhi", "Almarai", "Ma'aden", "Saudi Post", "Misk", "KACST",
+                const BASE = "https://raw.githubusercontent.com/TanStack/tanstack.com/main/public/logos/";
+                const logos = [
+                  { name: "Google",      file: "google.svg"      },
+                  { name: "Apple",       file: "apple.svg"       },
+                  { name: "Microsoft",   file: "microsoft.svg"   },
+                  { name: "Amazon",      file: "amazon.svg"      },
+                  { name: "Walmart",     file: "walmart.svg"     },
+                  { name: "Uber",        file: "uber.svg"        },
+                  { name: "Intuit",      file: "intuit.svg"      },
+                  { name: "Salesforce",  file: "salesforce.svg"  },
+                  { name: "Cisco",       file: "cisco.svg"       },
+                  { name: "HP",          file: "hp.svg"          },
+                  { name: "DocuSign",    file: "docusign.svg"    },
+                  { name: "Nordstrom",   file: "nordstrom.svg"   },
+                  { name: "Yahoo",       file: "yahoo.svg"       },
+                  { name: "Ticketmaster",file: "ticketmaster.svg"},
                 ];
-                const items = [...orgs, ...orgs];
+                const items = [...logos, ...logos];
                 return (
                   <div className="mt-6 space-y-2">
                     <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest font-semibold text-center">
@@ -605,14 +618,17 @@ export default function AuthPage() {
                       className="overflow-hidden"
                       style={{ maskImage: "linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)" }}
                     >
-                      <div className="flex gap-5 animate-marquee w-max">
-                        {items.map((name, i) => (
-                          <span
+                      <div className="flex items-center gap-8 animate-marquee w-max">
+                        {items.map((logo, i) => (
+                          <img
                             key={i}
-                            className="inline-flex items-center px-3 py-1.5 border border-primary/10 rounded-sm bg-muted/20 text-muted-foreground/50 font-semibold text-[11px] tracking-wide whitespace-nowrap select-none hover:text-muted-foreground hover:border-primary/30 hover:bg-muted/40 transition-all duration-200 cursor-default"
-                          >
-                            {name}
-                          </span>
+                            src={`${BASE}${logo.file}`}
+                            alt={logo.name}
+                            title={logo.name}
+                            loading="lazy"
+                            decoding="async"
+                            className="max-w-20 max-h-8 w-full h-auto object-contain opacity-40 grayscale hover:opacity-90 hover:grayscale-0 transition-all duration-200 invert select-none"
+                          />
                         ))}
                       </div>
                     </div>
