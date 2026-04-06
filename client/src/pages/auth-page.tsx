@@ -598,8 +598,6 @@ export default function AuthPage() {
                   { name: "Microsoft", file: "microsoft.svg", nudge: 0  },
                   { name: "Amazon",    file: "amazon.svg",    nudge: 5  },
                   { name: "Walmart",   file: "walmart.svg",   nudge: 0  },
-                  { name: "Uber",      file: "uber.svg",      nudge: 0  },
-                  { name: "Salesforce",file: "salesforce.svg",nudge: 0  },
                   { name: "Cisco",     file: "cisco.svg",     nudge: 0  },
                   { name: "HP",        file: "hp.svg",        nudge: 0  },
                   { name: "DocuSign",  file: "docusign.svg",  nudge: 0  },
