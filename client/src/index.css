@@ -157,6 +157,24 @@
 .aurora-orb-2 { animation: aurora-2 22s ease-in-out infinite, aurora-hue 24s ease-in-out infinite; }
 .aurora-orb-3 { animation: aurora-3 28s ease-in-out infinite, aurora-hue 20s ease-in-out infinite; }
 
+/* ── Rising particles ──────────────────────────────────────────── */
+@keyframes particle-float {
+  0%   { transform: translateY(0)      scale(1);   opacity: 0;   }
+  6%   { opacity: 0.5; }
+  94%  { opacity: 0.5; }
+  100% { transform: translateY(-100vh) scale(0.4); opacity: 0;   }
+}
+
+/* ── Ghost rings ───────────────────────────────────────────────── */
+@keyframes ring-cw  { from { transform: translate(-50%,-50%) rotate(0deg);   } to { transform: translate(-50%,-50%) rotate(360deg);  } }
+@keyframes ring-ccw { from { transform: translate(-50%,-50%) rotate(0deg);   } to { transform: translate(-50%,-50%) rotate(-360deg); } }
+
+/* ── Brand wordmark shimmer ────────────────────────────────────── */
+@keyframes wordmark-pulse {
+  0%, 100% { opacity: 0.055; }
+  50%       { opacity: 0.10;  }
+}
+
 @keyframes marquee {
   0%   { transform: translateX(0); }
   100% { transform: translateX(-50%); }

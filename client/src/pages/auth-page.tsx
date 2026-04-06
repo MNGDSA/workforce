@@ -828,33 +828,97 @@ export default function AuthPage() {
       {/* ── Right Column: Aurora effect ────────────────────────── */}
       <div className="hidden lg:block relative overflow-hidden border-l border-white/5" style={{ background: "hsl(155,60%,3%)" }}>
 
-        {/* Aurora orb 1 — primary forest green */}
-        <div className="aurora-orb-1 aurora-orb pointer-events-none" style={{
-          boxShadow: "0 0 220px 220px hsl(155,72%,28%)",
-          opacity: 0.78,
+        {/* ── Layer 1: Aurora orbs ── */}
+        <div className="aurora-orb-1 aurora-orb pointer-events-none" style={{ boxShadow: "0 0 220px 220px hsl(155,72%,28%)", opacity: 0.78 }} />
+        <div className="aurora-orb-2 aurora-orb pointer-events-none" style={{ boxShadow: "0 0 180px 180px hsl(168,68%,22%)", opacity: 0.70 }} />
+        <div className="aurora-orb-3 aurora-orb pointer-events-none" style={{ boxShadow: "0 0 150px 150px hsl(145,62%,34%)", opacity: 0.65 }} />
+
+        {/* ── Layer 2: Rising particles ── */}
+        {([
+          { left: "7%",  size: 2, dur: 11, delay: -2  },
+          { left: "14%", size: 3, dur: 15, delay: -7  },
+          { left: "21%", size: 2, dur: 9,  delay: -4  },
+          { left: "29%", size: 4, dur: 18, delay: -11 },
+          { left: "38%", size: 2, dur: 13, delay: -1  },
+          { left: "46%", size: 3, dur: 10, delay: -8  },
+          { left: "54%", size: 2, dur: 16, delay: -5  },
+          { left: "63%", size: 3, dur: 12, delay: -3  },
+          { left: "71%", size: 2, dur: 14, delay: -9  },
+          { left: "79%", size: 4, dur: 17, delay: -6  },
+          { left: "87%", size: 2, dur: 10, delay: -13 },
+          { left: "94%", size: 3, dur: 19, delay: -2  },
+        ] as { left: string; size: number; dur: number; delay: number }[]).map((p, i) => (
+          <div key={i} className="absolute rounded-full pointer-events-none" style={{
+            width: p.size, height: p.size,
+            left: p.left, bottom: 0,
+            background: "white",
+            animation: `particle-float ${p.dur}s ${p.delay}s linear infinite`,
+            opacity: 0,
+          }} />
+        ))}
+
+        {/* ── Layer 3: Ghost orbital rings ── */}
+        <div className="absolute pointer-events-none" style={{
+          width: 520, height: 520,
+          top: "50%", left: "50%",
+          border: "1px solid rgba(255,255,255,0.055)",
+          borderRadius: "50%",
+          animation: "ring-cw 70s linear infinite",
+        }} />
+        <div className="absolute pointer-events-none" style={{
+          width: 720, height: 720,
+          top: "50%", left: "50%",
+          border: "1px solid rgba(255,255,255,0.030)",
+          borderRadius: "50%",
+          animation: "ring-ccw 95s linear infinite",
+        }} />
+        <div className="absolute pointer-events-none" style={{
+          width: 920, height: 920,
+          top: "50%", left: "50%",
+          border: "1px solid rgba(255,255,255,0.018)",
+          borderRadius: "50%",
+          animation: "ring-cw 130s linear infinite",
         }} />
 
-        {/* Aurora orb 2 — teal-cyan green */}
-        <div className="aurora-orb-2 aurora-orb pointer-events-none" style={{
-          boxShadow: "0 0 180px 180px hsl(168,68%,22%)",
-          opacity: 0.7,
-        }} />
+        {/* ── Layer 4: Centered brand watermark ── */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none z-10">
 
-        {/* Aurora orb 3 — bright emerald */}
-        <div className="aurora-orb-3 aurora-orb pointer-events-none" style={{
-          boxShadow: "0 0 150px 150px hsl(145,62%,34%)",
-          opacity: 0.65,
-        }} />
+          {/* Three-stripe logo mark */}
+          <div className="flex flex-col gap-[6px] mb-10" style={{ opacity: 0.18 }}>
+            <div className="bg-white rounded-[1px]" style={{ width: 56, height: 5 }} />
+            <div className="bg-white rounded-[1px]" style={{ width: 38, height: 5, marginLeft: 10 }} />
+            <div className="bg-white rounded-[1px]" style={{ width: 46, height: 5, marginLeft: 4 }} />
+          </div>
 
-        {/* Fine noise overlay for filmic grain */}
-        <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{
-          backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E\")",
+          {/* Wordmark — ghosted, pulses gently with the aurora */}
+          <div className="font-display font-black tracking-[0.18em] leading-none text-white"
+            style={{ fontSize: "clamp(3.5rem,7vw,6.5rem)", animation: "wordmark-pulse 8s ease-in-out infinite" }}>
+            WORKFORCE
+          </div>
+
+          {/* Thin rule */}
+          <div className="mt-7 mb-6" style={{ width: 48, height: 1, background: "rgba(255,255,255,0.15)" }} />
+
+          {/* Company tagline */}
+          <div className="text-center" style={{ opacity: 0.22 }}>
+            <p className="font-display text-white uppercase tracking-[0.28em] text-[0.65rem] font-semibold">
+              Luxury Carts Company Ltd.
+            </p>
+            <p className="text-white/70 uppercase tracking-[0.22em] text-[0.55rem] mt-2 font-medium">
+              Masjid Al-Haram · Makkah Operations
+            </p>
+          </div>
+        </div>
+
+        {/* ── Layer 5: Noise grain ── */}
+        <div className="absolute inset-0 pointer-events-none opacity-[0.035]" style={{
+          backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
           backgroundSize: "200px 200px",
         }} />
 
-        {/* Vignette — keeps edges deep and dark */}
+        {/* ── Layer 6: Vignette ── */}
         <div className="absolute inset-0 pointer-events-none" style={{
-          background: "radial-gradient(ellipse at 50% 50%, transparent 30%, hsl(155,60%,2%) 100%)",
+          background: "radial-gradient(ellipse at 50% 50%, transparent 28%, hsl(155,60%,2%) 100%)",
         }} />
 
       </div>
