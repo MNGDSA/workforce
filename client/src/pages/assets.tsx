@@ -1,4 +1,5 @@
-import { useState, useMemo, createPortal } from "react";
+import { useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -308,7 +309,11 @@ export default function AssetsPage() {
     }
   }
   function openBulkDialog(status: "returned" | "not_returned") {
-    const selected = filteredAssignments.filter(ea => selectedIds.has(ea.id));
+    // Derive count/value from the exact IDs being submitted, not just the current filter view
+    const allAssignmentsMap = new Map(assignments.map(ea => [ea.id, ea]));
+    const selected = Array.from(selectedIds)
+      .map(id => allAssignmentsMap.get(id))
+      .filter((ea): ea is EmployeeAsset => ea !== undefined);
     const totalValue = selected.reduce((sum, ea) => sum + parseFloat(assetMap.get(ea.assetId)?.price ?? "0"), 0);
     setBulkDialog({ status, count: selected.length, totalValue });
   }
