@@ -591,17 +591,17 @@ export default function AuthPage() {
 
               {/* ── Trusted-by marquee ── */}
               {(() => {
-                const BASE = "https://raw.githubusercontent.com/TanStack/tanstack.com/main/public/logos/";
+                const GH = "https://raw.githubusercontent.com/TanStack/tanstack.com/main/public/logos/";
                 const logos = [
-                  { name: "Google",    file: "google.svg",    nudge: 0  },
-                  { name: "Apple",     file: "apple.svg",     nudge: 0  },
-                  { name: "Microsoft", file: "microsoft.svg", nudge: 0  },
-                  { name: "Amazon",    file: "amazon.svg",    nudge: 5  },
-                  { name: "Walmart",   file: "walmart.svg",   nudge: 0  },
-                  { name: "Cisco",     file: "cisco.svg",     nudge: 0  },
-                  { name: "HP",        file: "hp.svg",        nudge: 0  },
-                  { name: "DocuSign",  file: "docusign.svg",  nudge: 0  },
-                  { name: "Yahoo",     file: "yahoo.svg",     nudge: 0  },
+                  { name: "Google",    url: "https://cdn.simpleicons.org/google",  nudge: 0 },
+                  { name: "Apple",     url: `${GH}apple.svg`,                      nudge: 0 },
+                  { name: "Microsoft", url: `${GH}microsoft.svg`,                  nudge: 0 },
+                  { name: "Amazon",    url: `${GH}amazon.svg`,                     nudge: 5 },
+                  { name: "Walmart",   url: `${GH}walmart.svg`,                    nudge: 0 },
+                  { name: "Cisco",     url: `${GH}cisco.svg`,                      nudge: 0 },
+                  { name: "HP",        url: "/logos/hp-flat.svg",                  nudge: 0 },
+                  { name: "DocuSign",  url: `${GH}docusign.svg`,                   nudge: 0 },
+                  { name: "Yahoo",     url: "/logos/yahoo-flat.svg",               nudge: 0 },
                 ];
                 const items = [...logos, ...logos];
                 return (
@@ -617,7 +617,7 @@ export default function AuthPage() {
                         {items.map((logo, i) => (
                           <div key={i} className="group flex items-center gap-2 opacity-50 hover:opacity-100 transition-all duration-200 select-none">
                             <img
-                              src={`${BASE}${logo.file}`}
+                              src={logo.url}
                               alt={logo.name}
                               title={logo.name}
                               loading="lazy"
