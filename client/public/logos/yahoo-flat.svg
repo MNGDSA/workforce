@@ -1,3 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130 40" fill="none">
-  <text x="2" y="32" font-family="Arial Black, Arial, sans-serif" font-size="32" font-weight="900" fill="#6001D2" letter-spacing="-1">yahoo!</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 226 56">
+  <text
+    x="0" y="44"
+    font-family="'Arial Black','Arial Rounded MT Bold','Arial',sans-serif"
+    font-weight="900"
+    font-size="48"
+    fill="#5F01D1"
+    letter-spacing="-1"
+  >yahoo!</text>
 </svg>
