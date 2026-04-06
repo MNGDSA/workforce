@@ -201,7 +201,8 @@ function OffboardingSheet({ emp, events, onClose }: {
 
   const readiness = getReadiness(emp, settlement);
   const pendingAssets = settlement?.assetChecklist.filter(a => a.status === "assigned").length ?? 0;
-  const activeEvents = events.filter(e => e.status !== "archived" && e.endDate > new Date().toISOString().slice(0, 10));
+  const today = new Date().toISOString().slice(0, 10);
+  const activeEvents = events.filter(e => e.status !== "archived" && (e.endDate == null || e.endDate > today));
 
   return createPortal(
     <div className="fixed inset-0 z-[9998] flex">

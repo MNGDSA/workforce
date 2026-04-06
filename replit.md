@@ -48,6 +48,7 @@ The system employs a modern, full-stack architecture.
 - **Candidate Table Decisions**: Candidates are primarily identified by `national_id`. `skills`, `languages`, `certifications`, `tags` are array columns. `metadata` uses JSONB for extensibility. Composite indexes are used for common query patterns. Bulk inserts are batched for performance.
 - **Data Integrity Policy**: Strict policy against `onConflictDoNothing()` to ensure explicit handling of duplicates and uniqueness validation for business keys.
 - **Soft Delete Policy**: Events and Candidates are never hard-deleted; instead, `archivedAt` timestamps are used for soft deletion, preserving all linked records.
+- **Events Table**: Events are the central entity around which all workforce, individuals, and SMP settlements revolve. Events have an `eventType` column (`duration_based` | `ongoing`). Duration-based events have a fixed `endDate`; Ongoing events have `endDate = NULL` and no auto offboarding eligibility.
 
 **Authentication**:
 - Session-based authentication using `bcryptjs` for password hashing.

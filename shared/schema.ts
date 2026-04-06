@@ -230,14 +230,17 @@ export const candidates = pgTable(
 );
 
 // ─── Events ─────────────────────────────────────────────────────────────────
+export const eventTypeEnum = pgEnum("event_type", ["duration_based", "ongoing"]);
+
 export const events = pgTable(
   "events",
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
     name: text("name").notNull(),
     description: text("description"),
+    eventType: eventTypeEnum("event_type").notNull().default("duration_based"),
     startDate: text("start_date").notNull(),
-    endDate: text("end_date").notNull(),
+    endDate: text("end_date"),
     status: eventStatusEnum("status").notNull().default("upcoming"),
     targetHeadcount: integer("target_headcount").notNull().default(0),
     filledPositions: integer("filled_positions").notNull().default(0),
@@ -547,6 +550,8 @@ export const insertEventSchema = createInsertSchema(events).omit({
   archivedAt: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  endDate: z.string().optional().nullable(),
 });
 
 export const insertJobPostingSchema = createInsertSchema(jobPostings).omit({

@@ -29,6 +29,8 @@ import {
   DollarSign,
   Target,
   Clock,
+  Infinity,
+  CalendarRange,
 } from "lucide-react";
 import {
   Table,
@@ -74,8 +76,9 @@ const statusStyles: Record<string, string> = {
 const createEventSchema = z.object({
   name: z.string().min(3, "Event name is required"),
   description: z.string().optional(),
-  startDate: z.string().min(1, "Start date is required"),
-  endDate: z.string().min(1, "End date is required"),
+  eventType: z.enum(["duration_based", "ongoing"]),
+  startDate: z.string().min(1, "Event start date is required"),
+  endDate: z.string().optional(),
   region: z.string().optional(),
   targetHeadcount: z.coerce.number().int().min(0).default(0),
   budget: z.coerce.number().optional(),
@@ -104,6 +107,7 @@ function CreateEventDialog({
     defaultValues: {
       name: "",
       description: "",
+      eventType: "duration_based",
       startDate: "",
       endDate: "",
       region: "",
@@ -112,6 +116,8 @@ function CreateEventDialog({
       status: "upcoming",
     },
   });
+
+  const watchedEventType = form.watch("eventType");
 
   const createEvent = useMutation({
     mutationFn: (data: CreateEventForm) =>
@@ -195,15 +201,65 @@ function CreateEventDialog({
             </div>
 
             <div className="w-full h-px bg-border" />
+
+            {/* ── Event Type ──────────────────────────────────────────── */}
+            <FormField
+              control={form.control}
+              name="eventType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                    Event Type <span className="text-primary">*</span>
+                  </FormLabel>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      data-testid="radio-event-type-duration"
+                      onClick={() => { field.onChange("duration_based"); form.setValue("endDate", ""); }}
+                      className={`flex items-center gap-2.5 h-11 px-3 rounded-sm border text-sm font-medium transition-all ${
+                        field.value === "duration_based"
+                          ? "border-primary bg-primary/10 text-white"
+                          : "border-border bg-muted/20 text-muted-foreground hover:border-border/80"
+                      }`}
+                    >
+                      <CalendarRange className="h-4 w-4 shrink-0" />
+                      <div className="text-left">
+                        <div className="text-xs font-semibold">Duration Based</div>
+                        <div className="text-[10px] opacity-70 font-normal">Has a fixed end date</div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="radio-event-type-ongoing"
+                      onClick={() => { field.onChange("ongoing"); form.setValue("endDate", ""); }}
+                      className={`flex items-center gap-2.5 h-11 px-3 rounded-sm border text-sm font-medium transition-all ${
+                        field.value === "ongoing"
+                          ? "border-primary bg-primary/10 text-white"
+                          : "border-border bg-muted/20 text-muted-foreground hover:border-border/80"
+                      }`}
+                    >
+                      <Infinity className="h-4 w-4 shrink-0" />
+                      <div className="text-left">
+                        <div className="text-xs font-semibold">Ongoing</div>
+                        <div className="text-[10px] opacity-70 font-normal">No fixed end date</div>
+                      </div>
+                    </button>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* ── Timeline ────────────────────────────────────────────── */}
             <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Timeline</p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className={`grid gap-4 ${watchedEventType === "duration_based" ? "grid-cols-2" : "grid-cols-1"}`}>
               <FormField
                 control={form.control}
                 name="startDate"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                      Start Date <span className="text-primary">*</span>
+                      Event Start Date <span className="text-primary">*</span>
                     </FormLabel>
                     <FormControl>
                       <DatePickerField
@@ -217,27 +273,35 @@ function CreateEventDialog({
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="endDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                      End Date <span className="text-primary">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <DatePickerField
-                        value={field.value}
-                        onChange={field.onChange}
-                        className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
-                        data-testid="input-event-end-date"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {watchedEventType === "duration_based" && (
+                <FormField
+                  control={form.control}
+                  name="endDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                        End Date
+                      </FormLabel>
+                      <FormControl>
+                        <DatePickerField
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                          className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
+                          data-testid="input-event-end-date"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </div>
+            {watchedEventType === "ongoing" && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5 -mt-2">
+                <Infinity className="h-3 w-3 text-primary" />
+                This event has no fixed end date. Workers can be offboarded manually at any time.
+              </p>
+            )}
 
             <DialogFooter className="pt-1 flex gap-2 sm:justify-between">
               <Button
@@ -328,14 +392,29 @@ function ViewEventDialog({ event, open, onOpenChange }: { event: Event | null; o
               <p className="text-white text-sm" data-testid="view-event-description">{event.description}</p>
             </div>
           )}
+          <div className="flex items-center gap-2">
+            {event.eventType === "ongoing" ? (
+              <Badge variant="outline" className="border-primary/40 text-primary bg-primary/10 font-medium gap-1">
+                <Infinity className="h-3 w-3" /> Ongoing
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-border text-muted-foreground font-medium gap-1">
+                <CalendarRange className="h-3 w-3" /> Duration Based
+              </Badge>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> Start Date</p>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> Event Start Date</p>
               <p className="text-white text-sm">{event.startDate}</p>
             </div>
             <div>
               <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><Clock className="h-3 w-3" /> End Date</p>
-              <p className="text-white text-sm">{event.endDate}</p>
+              {event.endDate ? (
+                <p className="text-white text-sm">{event.endDate}</p>
+              ) : (
+                <p className="text-muted-foreground text-sm flex items-center gap-1"><Infinity className="h-3 w-3" /> Ongoing</p>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -387,14 +466,17 @@ function EditEventDialog({ event, open, onOpenChange }: { event: Event | null; o
     values: event ? {
       name: event.name,
       description: event.description ?? "",
+      eventType: (event.eventType ?? "duration_based") as "duration_based" | "ongoing",
       startDate: event.startDate,
-      endDate: event.endDate,
+      endDate: event.endDate ?? "",
       region: event.region ?? "",
       targetHeadcount: event.targetHeadcount,
       budget: event.budget != null ? Number(event.budget) : undefined,
       status: event.status as "upcoming" | "active",
     } : undefined,
   });
+
+  const watchedEventType = form.watch("eventType");
 
   const updateEvent = useMutation({
     mutationFn: (data: CreateEventForm) =>
@@ -434,23 +516,64 @@ function EditEventDialog({ event, open, onOpenChange }: { event: Event | null; o
               </FormItem>
             )} />
             <div className="w-full h-px bg-border" />
+
+            {/* ── Event Type ─────────────────────────────────────── */}
+            <FormField control={form.control} name="eventType" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Event Type <span className="text-primary">*</span></FormLabel>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" data-testid="edit-radio-event-type-duration"
+                    onClick={() => { field.onChange("duration_based"); form.setValue("endDate", ""); }}
+                    className={`flex items-center gap-2.5 h-11 px-3 rounded-sm border text-sm font-medium transition-all ${field.value === "duration_based" ? "border-primary bg-primary/10 text-white" : "border-border bg-muted/20 text-muted-foreground hover:border-border/80"}`}
+                  >
+                    <CalendarRange className="h-4 w-4 shrink-0" />
+                    <div className="text-left">
+                      <div className="text-xs font-semibold">Duration Based</div>
+                      <div className="text-[10px] opacity-70 font-normal">Has a fixed end date</div>
+                    </div>
+                  </button>
+                  <button type="button" data-testid="edit-radio-event-type-ongoing"
+                    onClick={() => { field.onChange("ongoing"); form.setValue("endDate", ""); }}
+                    className={`flex items-center gap-2.5 h-11 px-3 rounded-sm border text-sm font-medium transition-all ${field.value === "ongoing" ? "border-primary bg-primary/10 text-white" : "border-border bg-muted/20 text-muted-foreground hover:border-border/80"}`}
+                  >
+                    <Infinity className="h-4 w-4 shrink-0" />
+                    <div className="text-left">
+                      <div className="text-xs font-semibold">Ongoing</div>
+                      <div className="text-[10px] opacity-70 font-normal">No fixed end date</div>
+                    </div>
+                  </button>
+                </div>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            {/* ── Timeline ────────────────────────────────────────── */}
             <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Timeline</p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className={`grid gap-4 ${watchedEventType === "duration_based" ? "grid-cols-2" : "grid-cols-1"}`}>
               <FormField control={form.control} name="startDate" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Start Date <span className="text-primary">*</span></FormLabel>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Event Start Date <span className="text-primary">*</span></FormLabel>
                   <FormControl><DatePickerField value={field.value} onChange={field.onChange} className="h-10 bg-muted/30 border-border rounded-sm" data-testid="edit-event-start-date" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
-              <FormField control={form.control} name="endDate" render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">End Date <span className="text-primary">*</span></FormLabel>
-                  <FormControl><DatePickerField value={field.value} onChange={field.onChange} className="h-10 bg-muted/30 border-border rounded-sm" data-testid="edit-event-end-date" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+              {watchedEventType === "duration_based" && (
+                <FormField control={form.control} name="endDate" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">End Date</FormLabel>
+                    <FormControl><DatePickerField value={field.value ?? ""} onChange={field.onChange} className="h-10 bg-muted/30 border-border rounded-sm" data-testid="edit-event-end-date" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
             </div>
+            {watchedEventType === "ongoing" && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5 -mt-2">
+                <Infinity className="h-3 w-3 text-primary" />
+                This event has no fixed end date. Workers can be offboarded manually at any time.
+              </p>
+            )}
+
             <DialogFooter className="pt-1 flex gap-2 sm:justify-between">
               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground">Cancel</Button>
               <Button type="submit" className="bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs" disabled={updateEvent.isPending} data-testid="button-save-event">
@@ -626,7 +749,14 @@ export default function EventsPage() {
                     return (
                       <TableRow key={evt.id} className="border-border hover:bg-muted/20" data-testid={`row-event-${evt.id}`}>
                         <TableCell>
-                          <div className="font-medium text-white">{evt.name}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-white">{evt.name}</span>
+                            {evt.eventType === "ongoing" && (
+                              <Badge variant="outline" className="border-primary/30 text-primary bg-primary/10 text-[10px] font-medium gap-0.5 px-1.5 h-4">
+                                <Infinity className="h-2.5 w-2.5" /> Ongoing
+                              </Badge>
+                            )}
+                          </div>
                           {evt.description && (
                             <div className="text-xs text-muted-foreground mt-0.5 max-w-[260px] truncate">
                               {evt.description}
@@ -634,10 +764,16 @@ export default function EventsPage() {
                           )}
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-medium text-white">{evt.endDate}</span>
-                          </div>
+                          {evt.endDate ? (
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm font-medium text-white">{evt.endDate}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Infinity className="h-3 w-3 text-primary" /> No end date
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
                           <span className="text-sm text-muted-foreground">{evt.region ?? "—"}</span>
