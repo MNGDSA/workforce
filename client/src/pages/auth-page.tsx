@@ -825,39 +825,41 @@ export default function AuthPage() {
         </div>
       </div>
 
-      {/* ── Right Column: Visual ──────────────────────────────── */}
-      <div className="hidden lg:flex relative bg-muted items-center justify-center overflow-hidden border-l border-border/50">
-        <div className="absolute inset-0 bg-gradient-to-br from-background/80 via-background/40 to-transparent z-10" />
-        <div className="absolute inset-0 bg-[url('/login-bg.png')] bg-cover bg-center" />
+      {/* ── Right Column: Animated gradient ───────────────────── */}
+      <div className="hidden lg:block relative overflow-hidden border-l border-white/5" style={{ background: "hsl(155,55%,4%)" }}>
 
-        <div className="relative z-20 max-w-lg p-12 backdrop-blur-md bg-background/30 border border-white/10 rounded-sm shadow-2xl animate-in slide-in-from-right-8 duration-1000 fade-in delay-200">
-          <div className="w-12 h-1 bg-primary mb-6" />
-          <h2 className="font-display text-3xl font-bold text-white mb-4 leading-tight">
-            Seamlessly Manage Your Seasonal Workforce
-          </h2>
-          <p className="text-white/80 text-lg leading-relaxed">
-            Advanced scheduling, automated onboarding, and real-time performance tracking for high-volume hiring events.
-          </p>
+        {/* Blob 1 — deep forest green, anchored top-left */}
+        <div className="login-blob-1 absolute rounded-full pointer-events-none" style={{
+          width: 640, height: 640, top: "-18%", left: "-22%",
+          background: "radial-gradient(circle at center, hsl(155,65%,26%) 0%, hsl(155,55%,12%) 45%, transparent 70%)",
+          filter: "blur(90px)",
+        }} />
 
-          <div className="grid grid-cols-2 gap-4 mt-8 pt-8 border-t border-white/10">
-            <div>
-              <div className="text-3xl font-display font-bold text-white">70K+</div>
-              <div className="text-sm text-white/60 uppercase tracking-wider font-medium mt-1">Candidate Scale</div>
-            </div>
-            <div>
-              <div className="text-3xl font-display font-bold text-white">24/7</div>
-              <div className="text-sm text-white/60 uppercase tracking-wider font-medium mt-1">System Uptime</div>
-            </div>
-            <div>
-              <div className="text-3xl font-display font-bold text-white">98%</div>
-              <div className="text-sm text-white/60 uppercase tracking-wider font-medium mt-1">Efficiency Rate</div>
-            </div>
-            <div>
-              <div className="text-3xl font-display font-bold text-white">SA</div>
-              <div className="text-sm text-white/60 uppercase tracking-wider font-medium mt-1">Saudi Compliant</div>
-            </div>
-          </div>
-        </div>
+        {/* Blob 2 — teal-green, anchored bottom-right */}
+        <div className="login-blob-2 absolute rounded-full pointer-events-none" style={{
+          width: 520, height: 520, bottom: "-16%", right: "-16%",
+          background: "radial-gradient(circle at center, hsl(168,60%,20%) 0%, hsl(168,50%,9%) 45%, transparent 70%)",
+          filter: "blur(80px)",
+        }} />
+
+        {/* Blob 3 — bright emerald accent, centre-right */}
+        <div className="login-blob-3 absolute rounded-full pointer-events-none" style={{
+          width: 380, height: 380, top: "38%", left: "42%",
+          background: "radial-gradient(circle at center, hsl(145,58%,32%) 0%, hsl(145,48%,14%) 50%, transparent 72%)",
+          filter: "blur(65px)",
+        }} />
+
+        {/* Subtle dot-grid texture */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px)",
+          backgroundSize: "32px 32px",
+        }} />
+
+        {/* Vignette — pulls edges back into deep black-green */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          background: "radial-gradient(ellipse at 50% 50%, transparent 35%, hsl(155,55%,2%) 100%)",
+        }} />
+
       </div>
     </div>
   );

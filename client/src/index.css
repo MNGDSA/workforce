@@ -124,6 +124,29 @@
   display: none;
 }
 
+/* ── Login page animated gradient blobs ─────────────────────────── */
+@keyframes blob-1 {
+  0%, 100% { transform: translate(0px, 0px)    scale(1);    }
+  25%       { transform: translate(60px, -90px) scale(1.07); }
+  50%       { transform: translate(-55px, 70px) scale(0.93); }
+  75%       { transform: translate(85px, 55px)  scale(1.04); }
+}
+@keyframes blob-2 {
+  0%, 100% { transform: translate(0px, 0px)     scale(1);    }
+  25%       { transform: translate(-75px, 65px)  scale(0.93); }
+  50%       { transform: translate(65px, -55px)  scale(1.07); }
+  75%       { transform: translate(-55px, -75px) scale(0.97); }
+}
+@keyframes blob-3 {
+  0%, 100% { transform: translate(0px, 0px)   scale(1);    }
+  33%       { transform: translate(95px, -65px) scale(1.09); }
+  66%       { transform: translate(-75px, 85px) scale(0.91); }
+}
+
+.login-blob-1 { animation: blob-1 14s ease-in-out infinite; }
+.login-blob-2 { animation: blob-2 19s ease-in-out infinite; }
+.login-blob-3 { animation: blob-3 24s ease-in-out infinite; }
+
 @keyframes marquee {
   0%   { transform: translateX(0); }
   100% { transform: translateX(-50%); }
