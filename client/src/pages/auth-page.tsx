@@ -593,17 +593,17 @@ export default function AuthPage() {
               {(() => {
                 const BASE = "https://raw.githubusercontent.com/TanStack/tanstack.com/main/public/logos/";
                 const logos = [
-                  { name: "Google",    file: "google.svg"    },
-                  { name: "Apple",     file: "apple.svg"     },
-                  { name: "Microsoft", file: "microsoft.svg" },
-                  { name: "Amazon",    file: "amazon.svg"    },
-                  { name: "Walmart",   file: "walmart.svg"   },
-                  { name: "Uber",      file: "uber.svg"      },
-                  { name: "Salesforce",file: "salesforce.svg"},
-                  { name: "Cisco",     file: "cisco.svg"     },
-                  { name: "HP",        file: "hp.svg"        },
-                  { name: "DocuSign",  file: "docusign.svg"  },
-                  { name: "Yahoo",     file: "yahoo.svg"     },
+                  { name: "Google",    file: "google.svg",    nudge: 0  },
+                  { name: "Apple",     file: "apple.svg",     nudge: 0  },
+                  { name: "Microsoft", file: "microsoft.svg", nudge: 0  },
+                  { name: "Amazon",    file: "amazon.svg",    nudge: 5  },
+                  { name: "Walmart",   file: "walmart.svg",   nudge: 0  },
+                  { name: "Uber",      file: "uber.svg",      nudge: 0  },
+                  { name: "Salesforce",file: "salesforce.svg",nudge: 0  },
+                  { name: "Cisco",     file: "cisco.svg",     nudge: 0  },
+                  { name: "HP",        file: "hp.svg",        nudge: 0  },
+                  { name: "DocuSign",  file: "docusign.svg",  nudge: 0  },
+                  { name: "Yahoo",     file: "yahoo.svg",     nudge: 0  },
                 ];
                 const items = [...logos, ...logos];
                 return (
@@ -624,6 +624,7 @@ export default function AuthPage() {
                               title={logo.name}
                               loading="lazy"
                               decoding="async"
+                              style={logo.nudge ? { transform: `translateY(${logo.nudge}px)` } : undefined}
                               className="max-w-24 max-h-10 w-full h-auto object-contain grayscale group-hover:grayscale-0 transition-all duration-200"
                             />
                             {logo.name === "Microsoft" && (
