@@ -599,7 +599,7 @@ export default function AuthPage() {
                 return (
                   <div className="mt-6 space-y-2">
                     <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest font-semibold text-center">
-                      Trusted by leading organisations
+                      Utilizes Technologies used by
                     </p>
                     <div
                       className="overflow-hidden"
