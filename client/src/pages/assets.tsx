@@ -185,11 +185,12 @@ export default function AssetsPage() {
   const bulkStatusMut = useMutation({
     mutationFn: ({ ids, status }: { ids: string[]; status: "returned" | "not_returned" }) =>
       apiRequest("POST", "/api/employee-assets/bulk-status", { ids, status }).then(r => r.json()),
-    onSuccess: (_, { status }) => {
+    onSuccess: (data, { ids, status }) => {
       qc.invalidateQueries({ queryKey: ["/api/employee-assets"] });
       setSelectedIds(new Set());
       setBulkDialog(null);
-      toast({ title: `${selectedIds.size} assignment(s) marked as ${status === "returned" ? "Returned" : "Not Returned"}` });
+      const count = data?.updated ?? ids.length;
+      toast({ title: `${count} assignment(s) marked as ${status === "returned" ? "Returned" : "Not Returned"}` });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
