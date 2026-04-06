@@ -3177,6 +3177,132 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
+  // ─── Offboarding ──────────────────────────────────────────────────────────────
+
+  app.get("/api/offboarding", async (req: Request, res: Response) => {
+    try {
+      const employees = await storage.getOffboardingEmployees();
+      return res.json(employees);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/offboarding/:id/settlement", async (req: Request, res: Response) => {
+    try {
+      const settlement = await storage.getOffboardingSettlement(req.params.id);
+      return res.json(settlement);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/offboarding/:id/start", async (req: Request, res: Response) => {
+    try {
+      const actorId = (req as any).userId ?? undefined;
+      const record = await storage.startOffboarding(req.params.id, actorId);
+      if (!record) return res.status(404).json({ message: "Employee not found" });
+      await logAudit(req, {
+        action: "offboarding.started",
+        entityType: "offboarding",
+        entityId: req.params.id,
+        employeeNumber: record.employeeNumber ?? undefined,
+        description: `Started offboarding for employee #${record.employeeNumber ?? "—"}`,
+      });
+      return res.json(record);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/offboarding/:id/complete", async (req: Request, res: Response) => {
+    try {
+      const actorId = (req as any).userId ?? undefined;
+      const emp = await storage.getWorkforceEmployee(req.params.id);
+      const settlement = await storage.getOffboardingSettlement(req.params.id);
+      const record = await storage.completeOffboarding(req.params.id, actorId);
+      await logAudit(req, {
+        action: "offboarding.completed",
+        entityType: "offboarding",
+        entityId: req.params.id,
+        employeeNumber: record.employeeNumber ?? undefined,
+        subjectName: emp?.fullNameEn ?? undefined,
+        description: `Completed offboarding for employee #${record.employeeNumber ?? "—"} "${emp?.fullNameEn ?? "—"}". Net settlement: ${settlement?.netSettlement ?? 0} SAR`,
+        metadata: { netSettlement: settlement?.netSettlement, totalDeductions: settlement?.totalDeductions },
+      });
+      return res.json(record);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/offboarding/:id/reassign-event", async (req: Request, res: Response) => {
+    try {
+      const { eventId } = req.body as { eventId: string };
+      if (!eventId) return res.status(400).json({ message: "eventId is required" });
+      const emp = await storage.getWorkforceEmployee(req.params.id);
+      const record = await storage.reassignEmployeeEvent(req.params.id, eventId);
+      const newEvent = await storage.getEvents({});
+      const ev = newEvent.find(e => e.id === eventId);
+      await logAudit(req, {
+        action: "offboarding.reassigned",
+        entityType: "offboarding",
+        entityId: req.params.id,
+        employeeNumber: (emp as any)?.employeeNumber ?? undefined,
+        subjectName: (emp as any)?.fullNameEn ?? undefined,
+        description: `Reassigned employee #${(emp as any)?.employeeNumber ?? "—"} "${(emp as any)?.fullNameEn ?? "—"}" to event "${ev?.name ?? eventId}" — exited offboarding`,
+        metadata: { newEventId: eventId, newEventName: ev?.name },
+      });
+      return res.json(record);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/employee-assets/:id/confirm", async (req: Request, res: Response) => {
+    try {
+      const { status } = req.body as { status: "returned" | "not_returned" };
+      if (!status || !["returned", "not_returned"].includes(status))
+        return res.status(400).json({ message: "status must be 'returned' or 'not_returned'" });
+      const actorId = (req as any).userId ?? undefined;
+      const row = await storage.confirmAssetReturn(req.params.id, status, actorId);
+      return res.json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/employee-assets/:id/waive-deduction", async (req: Request, res: Response) => {
+    try {
+      const actorId = (req as any).userId;
+      if (!actorId) return res.status(401).json({ message: "Authentication required" });
+      const existing = await storage.getEmployeeAsset(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Asset assignment not found" });
+      const row = await storage.waiveAssetDeduction(req.params.id, actorId);
+      const emp = existing.workforceId ? await storage.getWorkforceEmployee(existing.workforceId) : null;
+      const asset = existing.assetId ? await storage.getAsset(existing.assetId) : null;
+      await logAudit(req, {
+        action: "assets.deduction_waived",
+        entityType: "assets",
+        entityId: req.params.id,
+        employeeNumber: emp?.employeeNumber ?? undefined,
+        subjectName: emp?.fullNameEn ?? undefined,
+        description: `IRREVERSIBLE: Waived deduction for asset "${(asset as any)?.name ?? existing.assetId}" (${(asset as any)?.price ?? 0} SAR) for employee #${emp?.employeeNumber ?? "—"} "${emp?.fullNameEn ?? "—"}"`,
+        metadata: { assetId: existing.assetId, assetPrice: (asset as any)?.price },
+      });
+      return res.json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/employee-assets/bulk-confirm", async (req: Request, res: Response) => {
+    try {
+      const { workforceId, status } = req.body as { workforceId: string; status: "returned" | "not_returned" };
+      if (!workforceId || !status || !["returned", "not_returned"].includes(status))
+        return res.status(400).json({ message: "workforceId and valid status are required" });
+      const actorId = (req as any).userId ?? undefined;
+      const count = await storage.bulkConfirmAssets(workforceId, status, actorId);
+      const emp = await storage.getWorkforceEmployee(workforceId);
+      await logAudit(req, {
+        action: "assets.bulk_confirmed",
+        entityType: "assets",
+        entityId: workforceId,
+        employeeNumber: emp?.employeeNumber ?? undefined,
+        subjectName: emp?.fullNameEn ?? undefined,
+        description: `Bulk-confirmed ${count} asset(s) as "${status.replace("_", " ")}" for employee #${emp?.employeeNumber ?? "—"} "${emp?.fullNameEn ?? "—"}"`,
+        metadata: { status, count },
+      });
+      return res.json({ confirmed: count });
+    } catch (err) { return handleError(res, err); }
+  });
+
   // ─── Audit Logs ───────────────────────────────────────────────────────────────
   app.get("/api/audit-logs", async (req: Request, res: Response) => {
     try {

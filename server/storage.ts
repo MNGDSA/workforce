@@ -164,6 +164,16 @@ export interface IStorage {
   getWorkforceStats(): Promise<{ total: number; active: number; terminated: number }>;
   generateEmployeeNumber(): Promise<string>;
 
+  // Offboarding
+  getOffboardingEmployees(): Promise<any[]>;
+  getOffboardingSettlement(workforceId: string): Promise<any>;
+  startOffboarding(workforceId: string, startedBy?: string): Promise<any>;
+  completeOffboarding(workforceId: string, completedBy?: string): Promise<any>;
+  reassignEmployeeEvent(workforceId: string, eventId: string): Promise<any>;
+  confirmAssetReturn(assetId: string, status: "returned" | "not_returned", confirmedBy?: string): Promise<EmployeeAsset>;
+  waiveAssetDeduction(assetId: string, waivedBy: string): Promise<EmployeeAsset>;
+  bulkConfirmAssets(workforceId: string, status: "returned" | "not_returned", confirmedBy?: string): Promise<number>;
+
   // Automation Rules
   getAutomationRules(): Promise<AutomationRule[]>;
   updateAutomationRule(id: string, data: Partial<InsertAutomationRule>): Promise<AutomationRule | undefined>;
@@ -2080,6 +2090,223 @@ export class DatabaseStorage implements IStorage {
       else if (r.status === "excused") entry.excusedDays += n;
     }
     return workforceIds.map(wid => ({ workforceId: wid, ...map[wid] }));
+  }
+
+  // ─── Offboarding ────────────────────────────────────────────────────────────
+
+  async getOffboardingEmployees(): Promise<any[]> {
+    const today = new Date().toISOString().slice(0, 10);
+    // Auto-eligible: active + event ended + not yet completed offboarding
+    // In-progress: explicitly started
+    const rows = await db
+      .select({
+        id: workforce.id,
+        employeeNumber: workforce.employeeNumber,
+        candidateId: workforce.candidateId,
+        salary: workforce.salary,
+        startDate: workforce.startDate,
+        endDate: workforce.endDate,
+        eventId: workforce.eventId,
+        isActive: workforce.isActive,
+        offboardingStatus: workforce.offboardingStatus,
+        offboardingStartedAt: workforce.offboardingStartedAt,
+        offboardingCompletedAt: workforce.offboardingCompletedAt,
+        employmentType: workforce.employmentType,
+        notes: workforce.notes,
+        fullNameEn: candidates.fullNameEn,
+        nationalId: candidates.nationalId,
+        phone: candidates.phone,
+        photoUrl: candidates.photoUrl,
+        eventName: events.name,
+        eventEndDate: events.endDate,
+        eventStartDate: events.startDate,
+      })
+      .from(workforce)
+      .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
+      .leftJoin(events, eq(workforce.eventId, events.id))
+      .where(
+        and(
+          eq(workforce.isActive, true),
+          sql`(
+            ${workforce.offboardingStatus} = 'in_progress'
+            OR (
+              ${workforce.offboardingStatus} IS NULL
+              AND ${events.endDate} IS NOT NULL
+              AND ${events.endDate} < ${today}
+            )
+          )`
+        )
+      )
+      .orderBy(desc(workforce.createdAt));
+    return rows;
+  }
+
+  async getOffboardingSettlement(workforceId: string): Promise<any> {
+    const emp = await this.getWorkforceEmployee(workforceId);
+    if (!emp) throw new Error("Employee not found");
+
+    const today = new Date().toISOString().slice(0, 10);
+    const start = emp.startDate ?? today;
+    const end = emp.endDate ?? today;
+    const startMs = new Date(start).getTime();
+    const endMs = new Date(end).getTime();
+    const calendarDays = Math.max(0, Math.round((endMs - startMs) / 86400000) + 1);
+    const salary = parseFloat(emp.salary ?? "0");
+    const dailyRate = salary / 30;
+    const grossPay = Math.round(calendarDays * dailyRate * 100) / 100;
+
+    // Asset deductions: not_returned and not waived
+    const empAssets = await this.getEmployeeAssets({ workforceId });
+    const allAssets = await this.getAssets(true);
+    const assetMap: Record<string, any> = {};
+    for (const a of allAssets) assetMap[a.id] = a;
+
+    const deductions: any[] = [];
+    let totalDeductions = 0;
+    for (const ea of empAssets) {
+      if (ea.status === "not_returned" && ea.deductionWaived !== true) {
+        const assetData = assetMap[ea.assetId];
+        const price = parseFloat(assetData?.price ?? "0");
+        deductions.push({
+          assetId: ea.assetId,
+          employeeAssetId: ea.id,
+          assetName: assetData?.name ?? "Unknown Asset",
+          price,
+          deductionWaived: ea.deductionWaived,
+        });
+        totalDeductions += price;
+      }
+    }
+
+    const netSettlement = Math.max(0, grossPay - totalDeductions);
+
+    // Attendance summary for the period
+    const attendanceRows = await this.getAttendanceForEmployee(workforceId, start, end);
+    const workedDays = attendanceRows.reduce((sum, r) => {
+      if (r.status === "present" || r.status === "late") return sum + 1;
+      if (r.status === "half_day") return sum + 0.5;
+      return sum;
+    }, 0);
+    const absentDays = attendanceRows.filter(r => r.status === "absent").length;
+    const loggedDays = attendanceRows.length;
+
+    // All assets with confirmation status
+    const assetChecklist = empAssets.map(ea => ({
+      ...ea,
+      assetName: assetMap[ea.assetId]?.name ?? "Unknown",
+      assetPrice: parseFloat(assetMap[ea.assetId]?.price ?? "0"),
+      assetCategory: assetMap[ea.assetId]?.category ?? null,
+    }));
+    const allAssetsConfirmed = assetChecklist.every(ea => ea.status !== "assigned");
+
+    return {
+      employee: emp,
+      period: { start, end, calendarDays },
+      salary: { monthly: salary, daily: Math.round(dailyRate * 100) / 100, gross: grossPay },
+      attendance: { workedDays, absentDays, loggedDays, total: attendanceRows.length },
+      deductions,
+      totalDeductions: Math.round(totalDeductions * 100) / 100,
+      netSettlement: Math.round(netSettlement * 100) / 100,
+      assetChecklist,
+      allAssetsConfirmed,
+    };
+  }
+
+  async startOffboarding(workforceId: string, startedBy?: string): Promise<any> {
+    const [updated] = await db
+      .update(workforce)
+      .set({ offboardingStatus: "in_progress", offboardingStartedAt: new Date(), updatedAt: new Date() })
+      .where(eq(workforce.id, workforceId))
+      .returning();
+    return updated;
+  }
+
+  async completeOffboarding(workforceId: string, completedBy?: string): Promise<any> {
+    // Verify all assets are confirmed
+    const assets = await this.getEmployeeAssets({ workforceId });
+    const unconfirmed = assets.filter(a => a.status === "assigned");
+    if (unconfirmed.length > 0) throw new Error(`${unconfirmed.length} asset(s) still need confirmation before completing offboarding`);
+
+    const [wf] = await db.select().from(workforce).where(eq(workforce.id, workforceId));
+    if (!wf) throw new Error("Employee not found");
+
+    const [updated] = await db
+      .update(workforce)
+      .set({ offboardingStatus: "completed", offboardingCompletedAt: new Date(), isActive: false, updatedAt: new Date() })
+      .where(eq(workforce.id, workforceId))
+      .returning();
+
+    // Release back to talent pool: remove hired status
+    const otherActive = await db
+      .select({ id: workforce.id })
+      .from(workforce)
+      .where(and(eq(workforce.candidateId, wf.candidateId), eq(workforce.isActive, true)))
+      .limit(1);
+    if (otherActive.length === 0) {
+      await db.update(candidates).set({ status: "active", updatedAt: new Date() }).where(eq(candidates.id, wf.candidateId));
+    }
+
+    return updated;
+  }
+
+  async reassignEmployeeEvent(workforceId: string, eventId: string): Promise<any> {
+    const [updated] = await db
+      .update(workforce)
+      .set({
+        eventId,
+        offboardingStatus: null,
+        offboardingStartedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(workforce.id, workforceId))
+      .returning();
+    return updated;
+  }
+
+  async confirmAssetReturn(assetId: string, status: "returned" | "not_returned", confirmedBy?: string): Promise<EmployeeAsset> {
+    const now = new Date();
+    const [updated] = await db
+      .update(employeeAssets)
+      .set({
+        status,
+        confirmedAt: now,
+        confirmedBy: confirmedBy ?? null,
+        returnedAt: status === "returned" ? now.toISOString().slice(0, 10) : null,
+        updatedAt: now,
+      })
+      .where(eq(employeeAssets.id, assetId))
+      .returning();
+    return updated;
+  }
+
+  async waiveAssetDeduction(assetId: string, waivedBy: string): Promise<EmployeeAsset> {
+    // Fetch current status - must be not_returned
+    const [existing] = await db.select().from(employeeAssets).where(eq(employeeAssets.id, assetId));
+    if (!existing) throw new Error("Asset assignment not found");
+    if (existing.status !== "not_returned") throw new Error("Can only waive deductions for unreturned assets");
+    if (existing.deductionWaived === true) throw new Error("Deduction has already been waived — this action is irreversible");
+
+    const [updated] = await db
+      .update(employeeAssets)
+      .set({ deductionWaived: true, deductionWaivedBy: waivedBy, deductionWaivedAt: new Date(), updatedAt: new Date() })
+      .where(eq(employeeAssets.id, assetId))
+      .returning();
+    return updated;
+  }
+
+  async bulkConfirmAssets(workforceId: string, status: "returned" | "not_returned", confirmedBy?: string): Promise<number> {
+    const now = new Date();
+    const result = await db
+      .update(employeeAssets)
+      .set({
+        status,
+        confirmedAt: now,
+        confirmedBy: confirmedBy ?? null,
+        returnedAt: status === "returned" ? now.toISOString().slice(0, 10) : null,
+        updatedAt: now,
+      })
+      .where(and(eq(employeeAssets.workforceId, workforceId), eq(employeeAssets.status, "assigned")));
+    return (result as any).rowCount ?? 0;
   }
 
   async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {

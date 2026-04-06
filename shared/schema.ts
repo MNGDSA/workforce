@@ -449,6 +449,9 @@ export const workforce = pgTable(
     supervisorId: varchar("supervisor_id").references(() => users.id),
     performanceScore: decimal("performance_score", { precision: 3, scale: 2 }),
     notes: text("notes"),
+    offboardingStatus: text("offboarding_status"), // "in_progress" | "completed" | null
+    offboardingStartedAt: timestamp("offboarding_started_at"),
+    offboardingCompletedAt: timestamp("offboarding_completed_at"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
   },
@@ -457,6 +460,7 @@ export const workforce = pgTable(
     eventIdx: index("workforce_event_idx").on(t.eventId),
     activeIdx: index("workforce_active_idx").on(t.isActive),
     empNumIdx: index("workforce_emp_num_idx").on(t.employeeNumber),
+    offboardingIdx: index("workforce_offboarding_idx").on(t.offboardingStatus),
   })
 );
 
@@ -1046,6 +1050,11 @@ export const employeeAssets = pgTable(
     returnedAt: text("returned_at"),
     status: employeeAssetStatusEnum("status").notNull().default("assigned"),
     notes: text("notes"),
+    confirmedAt: timestamp("confirmed_at"),
+    confirmedBy: varchar("confirmed_by"),
+    deductionWaived: boolean("deduction_waived"), // null=undecided, true=waived (non-deductible), false=will deduct
+    deductionWaivedBy: varchar("deduction_waived_by"),
+    deductionWaivedAt: timestamp("deduction_waived_at"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
   },

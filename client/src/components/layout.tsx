@@ -64,11 +64,12 @@ const topNavItems = [
   { href: "/payroll",   icon: Wallet,          label: "Payroll" },
 ];
 
-const workforcePaths = ["/workforce", "/schedules", "/assets"];
+const workforcePaths = ["/workforce", "/schedules", "/assets", "/offboarding"];
 const workforceSubItems = [
-  { href: "/workforce", icon: Users,   label: "Employees" },
-  { href: "/schedules", icon: Clock,   label: "Schedules & Shifts" },
-  { href: "/assets",    icon: Package, label: "Assets" },
+  { href: "/workforce",   icon: Users,   label: "Employees" },
+  { href: "/schedules",   icon: Clock,   label: "Schedules & Shifts" },
+  { href: "/assets",      icon: Package, label: "Assets" },
+  { href: "/offboarding", icon: LogOut,  label: "Offboarding" },
 ];
 
 const settingsPaths = ["/settings", "/automation", "/id-cards"];
