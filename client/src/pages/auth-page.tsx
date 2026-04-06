@@ -595,7 +595,7 @@ export default function AuthPage() {
                 const logos = [
                   { name: "Google",    url: "https://cdn.simpleicons.org/google",  nudge: 0 },
                   { name: "Apple",     url: `${GH}apple.svg`,                      nudge: 0 },
-                  { name: "Microsoft", url: `${GH}microsoft.svg`,                  nudge: 0 },
+                  { name: "Microsoft", url: "/logos/microsoft-full.svg",            nudge: 0 },
                   { name: "Amazon",    url: `${GH}amazon.svg`,                     nudge: 5 },
                   { name: "Walmart",   url: `${GH}walmart.svg`,                    nudge: 0 },
                   { name: "Cisco",     url: `${GH}cisco.svg`,                      nudge: 0 },
@@ -622,12 +622,9 @@ export default function AuthPage() {
                               title={logo.name}
                               loading="lazy"
                               decoding="async"
-                              style={logo.nudge ? { transform: `translateY(${logo.nudge}px)` } : undefined}
-                              className="max-w-24 max-h-10 w-full h-auto object-contain grayscale group-hover:grayscale-0 transition-all duration-200"
+                              className="max-h-8 w-auto object-contain grayscale group-hover:grayscale-0 transition-all duration-200"
+                              style={{ ...(logo.nudge ? { transform: `translateY(${logo.nudge}px)` } : {}), maxWidth: logo.name === "Microsoft" ? "160px" : "96px" }}
                             />
-                            {logo.name === "Microsoft" && (
-                              <span className="text-white font-semibold text-sm tracking-tight whitespace-nowrap">Microsoft</span>
-                            )}
                           </div>
                         ))}
                       </div>
