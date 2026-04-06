@@ -615,17 +615,21 @@ export default function AuthPage() {
                       className="overflow-hidden"
                       style={{ maskImage: "linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)" }}
                     >
-                      <div className="flex items-center gap-8 animate-marquee w-max">
+                      <div className="flex items-center gap-10 animate-marquee w-max py-3">
                         {items.map((logo, i) => (
-                          <img
-                            key={i}
-                            src={`${BASE}${logo.file}`}
-                            alt={logo.name}
-                            title={logo.name}
-                            loading="lazy"
-                            decoding="async"
-                            className="max-w-20 max-h-8 w-full h-auto object-contain opacity-60 hover:opacity-100 transition-all duration-200 select-none"
-                          />
+                          <div key={i} className="flex items-center gap-2 opacity-60 hover:opacity-100 transition-all duration-200 select-none">
+                            <img
+                              src={`${BASE}${logo.file}`}
+                              alt={logo.name}
+                              title={logo.name}
+                              loading="lazy"
+                              decoding="async"
+                              className="max-w-24 max-h-10 w-full h-auto object-contain"
+                            />
+                            {logo.name === "Microsoft" && (
+                              <span className="text-white font-semibold text-sm tracking-tight whitespace-nowrap">Microsoft</span>
+                            )}
+                          </div>
                         ))}
                       </div>
                     </div>
