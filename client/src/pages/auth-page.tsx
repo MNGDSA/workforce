@@ -283,7 +283,7 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-[30%_70%] bg-background font-sans text-foreground overflow-hidden">
+    <div className="min-h-screen grid lg:grid-cols-[40%_60%] bg-background font-sans text-foreground overflow-hidden">
       {/* ── Left Column: Form ─────────────────────────────────── */}
       <div className="flex flex-col justify-center items-center p-8 lg:p-12 relative z-10">
         <div className="w-full max-w-md space-y-8 animate-in slide-in-from-left-8 duration-700 fade-in">
