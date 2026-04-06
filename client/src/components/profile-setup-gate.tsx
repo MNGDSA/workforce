@@ -137,6 +137,8 @@ const step2Schema = z.object({
   currentRole:         z.string().optional(),
   emergencyContactName:  z.string().min(2, "Emergency contact name is required"),
   emergencyContactPhone: z.string().min(7, "Emergency contact phone is required"),
+  ibanAccountFirstName: z.string().min(1, "First name as on debit card is required"),
+  ibanAccountLastName:  z.string().min(1, "Last name as on debit card is required"),
   ibanNumber:          z.string().min(1, "IBAN number is required"),
 }).superRefine((d, ctx) => {
   if (d.hasChronicDiseases && !d.chronicDiseases?.trim()) {
@@ -364,9 +366,11 @@ function Step2Form({
       isEmployedElsewhere: defaults.isEmployedElsewhere ?? false,
       currentEmployer:     defaults.currentEmployer     ?? "",
       currentRole:         defaults.currentRole         ?? "",
-      emergencyContactName:  defaults.emergencyContactName ?? "",
+      emergencyContactName:  defaults.emergencyContactName  ?? "",
       emergencyContactPhone: defaults.emergencyContactPhone ?? "",
-      ibanNumber:          defaults.ibanNumber           ?? "",
+      ibanAccountFirstName: defaults.ibanAccountFirstName  ?? "",
+      ibanAccountLastName:  defaults.ibanAccountLastName   ?? "",
+      ibanNumber:          defaults.ibanNumber             ?? "",
     },
   });
 
@@ -431,6 +435,35 @@ function Step2Form({
             Bank Details
           </Label>
           <p className="text-xs text-muted-foreground mt-0.5">Your Saudi IBAN number for salary transfers.</p>
+
+          {/* Account holder name warning */}
+          <div className="flex items-start gap-2 rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2.5">
+            <span className="mt-0.5 text-red-400 shrink-0">⚠</span>
+            <p className="text-xs text-red-400 leading-relaxed font-medium">
+              Enter your first name and last name as shown on your debit card or funds transfer to your account will be blocked by the bank.
+            </p>
+          </div>
+
+          {/* First / Last name as on debit card */}
+          <div className="grid grid-cols-2 gap-4">
+            <FieldWrapper label="First Name (as on debit card)" required error={errors.ibanAccountFirstName?.message}>
+              <Input
+                {...register("ibanAccountFirstName")}
+                placeholder="e.g. Mohammed"
+                className="bg-muted/30 border-border"
+                data-testid="input-iban-first-name"
+              />
+            </FieldWrapper>
+            <FieldWrapper label="Last Name (as on debit card)" required error={errors.ibanAccountLastName?.message}>
+              <Input
+                {...register("ibanAccountLastName")}
+                placeholder="e.g. Al-Harbi"
+                className="bg-muted/30 border-border"
+                data-testid="input-iban-last-name"
+              />
+            </FieldWrapper>
+          </div>
+
           <FieldWrapper label="IBAN Number" required error={errors.ibanNumber?.message}>
             <Input
               {...register("ibanNumber", {
@@ -674,6 +707,8 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
       currentRole:         s2data.currentRole || null,
       emergencyContactName:  s2data.emergencyContactName || null,
       emergencyContactPhone: s2data.emergencyContactPhone || null,
+      ibanAccountFirstName: s2data.ibanAccountFirstName?.trim() || null,
+      ibanAccountLastName:  s2data.ibanAccountLastName?.trim()  || null,
       ibanNumber:          s2data.ibanNumber?.trim() || null,
       educationLevel:      d.educationLevel,
       major:               d.major || null,

@@ -187,6 +187,8 @@ export const candidates = pgTable(
     emergencyContactPhone: text("emergency_contact_phone"),
     // Financial
     ibanNumber: text("iban_number"),
+    ibanAccountFirstName: text("iban_account_first_name"),
+    ibanAccountLastName:  text("iban_account_last_name"),
     expectedSalary: decimal("expected_salary", { precision: 10, scale: 2 }),
     // Status & Ratings
     status: candidateStatusEnum("status").notNull().default("active"),
