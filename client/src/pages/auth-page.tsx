@@ -617,14 +617,14 @@ export default function AuthPage() {
                     >
                       <div className="flex items-center gap-10 animate-marquee w-max py-3">
                         {items.map((logo, i) => (
-                          <div key={i} className="flex items-center gap-2 opacity-60 hover:opacity-100 transition-all duration-200 select-none">
+                          <div key={i} className="group flex items-center gap-2 opacity-50 hover:opacity-100 transition-all duration-200 select-none">
                             <img
                               src={`${BASE}${logo.file}`}
                               alt={logo.name}
                               title={logo.name}
                               loading="lazy"
                               decoding="async"
-                              className="max-w-24 max-h-10 w-full h-auto object-contain"
+                              className="max-w-24 max-h-10 w-full h-auto object-contain grayscale group-hover:grayscale-0 transition-all duration-200"
                             />
                             {logo.name === "Microsoft" && (
                               <span className="text-white font-semibold text-sm tracking-tight whitespace-nowrap">Microsoft</span>
