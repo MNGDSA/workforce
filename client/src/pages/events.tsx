@@ -31,6 +31,10 @@ import {
   Clock,
   Infinity,
   CalendarRange,
+  XCircle,
+  RefreshCw,
+  AlertTriangle,
+  RotateCcw,
 } from "lucide-react";
 import {
   Table,
@@ -54,6 +58,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Form,
   FormControl,
@@ -589,12 +603,16 @@ function EditEventDialog({ event, open, onOpenChange }: { event: Event | null; o
 }
 
 export default function EventsPage() {
+  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [viewEvent, setViewEvent] = useState<Event | null>(null);
   const [editEvent, setEditEvent] = useState<Event | null>(null);
+  const [closeConfirmEvent, setCloseConfirmEvent] = useState<Event | null>(null);
+  const [reopenConfirmEvent, setReopenConfirmEvent] = useState<Event | null>(null);
+  const [reopenReason, setReopenReason] = useState("");
 
   const { data: eventsList = [], isLoading } = useQuery<Event[]>({
     queryKey: ["/api/events", showArchived],
@@ -605,6 +623,30 @@ export default function EventsPage() {
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       apiRequest("PATCH", `/api/events/${id}`, { status }).then((r) => r.json()),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/events"] }),
+  });
+
+  const closeEvent = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/events/${id}/close`).then(r => r.json()),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      const name = closeConfirmEvent?.name ?? "Event";
+      setCloseConfirmEvent(null);
+      toast({ title: `"${name}" closed`, description: "Workers with completed service periods will appear in the offboarding queue." });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to close event.", variant: "destructive" }),
+  });
+
+  const reopenEvent = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
+      apiRequest("POST", `/api/events/${id}/reopen`, { reason }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      const name = reopenConfirmEvent?.name ?? "Event";
+      setReopenConfirmEvent(null);
+      setReopenReason("");
+      toast({ title: `"${name}" reopened`, description: "Event is now active again." });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to reopen event.", variant: "destructive" }),
   });
 
   const archiveEvent = useMutation({
@@ -819,17 +861,30 @@ export default function EventsPage() {
                               <DropdownMenuItem onClick={() => setEditEvent(evt)} data-testid={`button-edit-event-${evt.id}`}>
                                 <Pencil className="mr-2 h-4 w-4" /> Edit Event
                               </DropdownMenuItem>
-                              {(evt.status === "upcoming" || evt.status === "active") && (
+                              {(evt.status === "upcoming" || evt.status === "active" || evt.status === "closed") && !evt.archivedAt && (
                                 <>
                                   <DropdownMenuSeparator />
                                   {evt.status === "upcoming" && (
-                                    <DropdownMenuItem onClick={() => updateStatus.mutate({ id: evt.id, status: "active" })}>
-                                      Activate
+                                    <DropdownMenuItem onClick={() => updateStatus.mutate({ id: evt.id, status: "active" })} data-testid={`button-activate-event-${evt.id}`}>
+                                      <RefreshCw className="mr-2 h-4 w-4" /> Activate
                                     </DropdownMenuItem>
                                   )}
                                   {evt.status === "active" && (
-                                    <DropdownMenuItem onClick={() => updateStatus.mutate({ id: evt.id, status: "closed" })}>
-                                      Close Event
+                                    <DropdownMenuItem
+                                      className="text-red-400 focus:text-red-400"
+                                      onClick={() => setCloseConfirmEvent(evt)}
+                                      data-testid={`button-close-event-${evt.id}`}
+                                    >
+                                      <XCircle className="mr-2 h-4 w-4" /> Close Event
+                                    </DropdownMenuItem>
+                                  )}
+                                  {evt.status === "closed" && (
+                                    <DropdownMenuItem
+                                      className="text-green-400 focus:text-green-400"
+                                      onClick={() => { setReopenConfirmEvent(evt); setReopenReason(""); }}
+                                      data-testid={`button-reopen-event-${evt.id}`}
+                                    >
+                                      <RotateCcw className="mr-2 h-4 w-4" /> Reopen Event
                                     </DropdownMenuItem>
                                   )}
                                 </>
@@ -864,6 +919,109 @@ export default function EventsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Close Event confirmation ─────────────────────────────────────────── */}
+      <AlertDialog open={!!closeConfirmEvent} onOpenChange={(v) => { if (!v) setCloseConfirmEvent(null); }}>
+        <AlertDialogContent className="bg-card border-border max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white font-display flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-red-400" />
+              Close Event?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-muted-foreground">
+                <p>
+                  You are about to close <span className="text-white font-medium">"{closeConfirmEvent?.name}"</span>.
+                </p>
+                <div className="bg-red-500/5 border border-red-500/20 rounded-sm p-3 space-y-1.5 text-xs">
+                  <p className="text-red-400 font-semibold uppercase tracking-wider">Impact Warning</p>
+                  <ul className="space-y-1 list-disc list-inside text-muted-foreground">
+                    <li>All active workers assigned to this event will become eligible for offboarding</li>
+                    <li>Payroll cycles referencing this event will be finalised</li>
+                    <li>New workers cannot be assigned to a closed event</li>
+                    <li>This action is recorded in the audit log</li>
+                  </ul>
+                </div>
+                <p className="text-xs">You can reopen the event later if needed.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="border-border rounded-sm"
+              data-testid="button-cancel-close-event"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white rounded-sm"
+              disabled={closeEvent.isPending}
+              onClick={() => closeConfirmEvent && closeEvent.mutate(closeConfirmEvent.id)}
+              data-testid="button-confirm-close-event"
+            >
+              {closeEvent.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
+              Close Event
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Reopen Event confirmation ────────────────────────────────────────── */}
+      <AlertDialog open={!!reopenConfirmEvent} onOpenChange={(v) => { if (!v) { setReopenConfirmEvent(null); setReopenReason(""); } }}>
+        <AlertDialogContent className="bg-card border-border max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white font-display flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-green-400" />
+              Reopen Event?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-muted-foreground">
+                <p>
+                  You are about to reopen <span className="text-white font-medium">"{reopenConfirmEvent?.name}"</span> and set it back to <span className="text-white">Active</span>.
+                </p>
+                <div className="bg-amber-500/5 border border-amber-500/20 rounded-sm p-3 space-y-1.5 text-xs">
+                  <p className="text-amber-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5" /> Note
+                  </p>
+                  <ul className="space-y-1 list-disc list-inside text-muted-foreground">
+                    <li>Employees already in the offboarding queue will remain there</li>
+                    <li>Workers can be assigned to this event again</li>
+                    <li>This action is recorded in the audit log</li>
+                  </ul>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-white">Reason for reopening (optional)</p>
+                  <Input
+                    value={reopenReason}
+                    onChange={e => setReopenReason(e.target.value)}
+                    placeholder="e.g. Event dates extended, error correction..."
+                    className="h-9 bg-muted/30 border-border rounded-sm text-sm"
+                    data-testid="input-reopen-reason"
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="border-border rounded-sm"
+              data-testid="button-cancel-reopen-event"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-green-700 hover:bg-green-800 text-white rounded-sm"
+              disabled={reopenEvent.isPending}
+              onClick={() => reopenConfirmEvent && reopenEvent.mutate({ id: reopenConfirmEvent.id, reason: reopenReason || undefined })}
+              data-testid="button-confirm-reopen-event"
+            >
+              {reopenEvent.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
+              Reopen Event
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </DashboardLayout>
   );
 }

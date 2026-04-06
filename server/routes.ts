@@ -1163,6 +1163,45 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/events/:id/close", async (req: Request, res: Response) => {
+    try {
+      const actorId = (req as any).userId ?? undefined;
+      const evt = await storage.closeEvent(req.params.id);
+      if (!evt) return res.status(404).json({ message: "Event not found" });
+      await storage.createAuditLog({
+        actorId,
+        action: "event.closed",
+        entityType: "event",
+        entityId: evt.id,
+        description: `Event "${evt.name}" was manually closed`,
+        metadata: { eventName: evt.name, endDate: evt.endDate },
+      });
+      return res.json(evt);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/events/:id/reopen", async (req: Request, res: Response) => {
+    try {
+      const actorId = (req as any).userId ?? undefined;
+      const { reason } = req.body as { reason?: string };
+      const evt = await storage.reopenEvent(req.params.id);
+      if (!evt) return res.status(404).json({ message: "Event not found" });
+      await storage.createAuditLog({
+        actorId,
+        action: "event.reopened",
+        entityType: "event",
+        entityId: evt.id,
+        description: `Event "${evt.name}" was reopened${reason ? ` — ${reason}` : ""}`,
+        metadata: { eventName: evt.name, reason: reason ?? null },
+      });
+      return res.json(evt);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   app.post("/api/events/:id/archive", async (req: Request, res: Response) => {
     try {
       const evt = await storage.archiveEvent(req.params.id);

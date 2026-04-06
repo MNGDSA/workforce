@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { storage } from "./storage";
 
 const app = express();
 const httpServer = createServer(app);
@@ -100,4 +101,19 @@ app.use((req, res, next) => {
       log(`serving on port ${port}`);
     },
   );
+
+  // ─── Scheduled: auto-close expired duration-based events ──────────────────
+  async function runAutoCloseExpiredEvents() {
+    try {
+      const result = await storage.autoCloseExpiredEvents();
+      if (result.count > 0) {
+        log(`Auto-closed ${result.count} expired event(s): ${result.names.join(", ")}`, "scheduler");
+      }
+    } catch (err) {
+      log(`Auto-close scheduler error: ${err}`, "scheduler");
+    }
+  }
+  // Run once at startup, then every 24 hours
+  runAutoCloseExpiredEvents();
+  setInterval(runAutoCloseExpiredEvents, 24 * 60 * 60 * 1000);
 })();

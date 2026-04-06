@@ -122,8 +122,11 @@ export interface IStorage {
   getEvent(id: string): Promise<Event | undefined>;
   createEvent(event: InsertEvent): Promise<Event>;
   updateEvent(id: string, data: Partial<InsertEvent>): Promise<Event | undefined>;
+  closeEvent(id: string): Promise<Event | undefined>;
+  reopenEvent(id: string): Promise<Event | undefined>;
   archiveEvent(id: string): Promise<Event | undefined>;
   unarchiveEvent(id: string): Promise<Event | undefined>;
+  autoCloseExpiredEvents(): Promise<{ count: number; names: string[] }>;
   countJobPostingsByEvent(eventId: string): Promise<number>;
 
   // Job Postings
@@ -679,6 +682,22 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async closeEvent(id: string): Promise<Event | undefined> {
+    const [updated] = await db.update(events)
+      .set({ status: "closed", updatedAt: new Date() })
+      .where(and(eq(events.id, id), isNull(events.archivedAt)))
+      .returning();
+    return updated;
+  }
+
+  async reopenEvent(id: string): Promise<Event | undefined> {
+    const [updated] = await db.update(events)
+      .set({ status: "active", updatedAt: new Date() })
+      .where(and(eq(events.id, id), isNull(events.archivedAt)))
+      .returning();
+    return updated;
+  }
+
   async archiveEvent(id: string): Promise<Event | undefined> {
     const [updated] = await db.update(events).set({ archivedAt: new Date(), updatedAt: new Date() }).where(and(eq(events.id, id), isNull(events.archivedAt))).returning();
     return updated;
@@ -687,6 +706,21 @@ export class DatabaseStorage implements IStorage {
   async unarchiveEvent(id: string): Promise<Event | undefined> {
     const [updated] = await db.update(events).set({ archivedAt: null, updatedAt: new Date() }).where(and(eq(events.id, id), isNotNull(events.archivedAt))).returning();
     return updated;
+  }
+
+  async autoCloseExpiredEvents(): Promise<{ count: number; names: string[] }> {
+    const today = new Date().toISOString().slice(0, 10);
+    const expired = await db.update(events)
+      .set({ status: "closed", updatedAt: new Date() })
+      .where(and(
+        eq(events.eventType, "duration_based"),
+        isNull(events.archivedAt),
+        sql`${events.status} IN ('upcoming', 'active')`,
+        sql`${events.endDate} IS NOT NULL`,
+        sql`${events.endDate} < ${today}`,
+      ))
+      .returning({ id: events.id, name: events.name });
+    return { count: expired.length, names: expired.map(e => e.name) };
   }
 
   async countJobPostingsByEvent(eventId: string): Promise<number> {
