@@ -87,6 +87,14 @@ import {
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull } from "drizzle-orm";
 
 export interface IStorage {
+  // Global Search
+  globalSearch(query: string): Promise<{
+    candidates: { id: string; title: string; subtitle: string; href: string }[];
+    employees: { id: string; title: string; subtitle: string; href: string }[];
+    events: { id: string; title: string; subtitle: string; href: string }[];
+    jobs: { id: string; title: string; subtitle: string; href: string }[];
+  }>;
+
   // Audit Logs
   createAuditLog(data: InsertAuditLog): Promise<AuditLog>;
   getAuditLogs(params?: { page?: number; limit?: number; search?: string; entityType?: string; actorId?: string }): Promise<{ data: AuditLog[]; total: number }>;
@@ -2361,6 +2369,91 @@ export class DatabaseStorage implements IStorage {
   async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {
     const [row] = await db.insert(auditLogs).values(data).returning();
     return row;
+  }
+
+  async globalSearch(query: string): Promise<{
+    candidates: { id: string; title: string; subtitle: string; href: string }[];
+    employees: { id: string; title: string; subtitle: string; href: string }[];
+    events: { id: string; title: string; subtitle: string; href: string }[];
+    jobs: { id: string; title: string; subtitle: string; href: string }[];
+  }> {
+    const q = `%${query.toLowerCase()}%`;
+
+    const [rawCandidates, rawEmployees, rawEvents, rawJobs] = await Promise.all([
+      // Candidates by name, nationalId, or phone
+      db.select({
+        id: candidates.id,
+        fullNameEn: candidates.fullNameEn,
+        nationalId: candidates.nationalId,
+        phone: candidates.phone,
+      }).from(candidates)
+        .where(or(
+          sql`LOWER(${candidates.fullNameEn}) LIKE ${q}`,
+          sql`LOWER(COALESCE(${candidates.nationalId}, '')) LIKE ${q}`,
+          sql`LOWER(COALESCE(${candidates.phone}, '')) LIKE ${q}`,
+        ))
+        .limit(6),
+
+      // Workforce (employees) by employeeNumber or candidate name
+      db.select({
+        id: workforce.id,
+        employeeNumber: workforce.employeeNumber,
+        fullNameEn: candidates.fullNameEn,
+        jobId: workforce.jobId,
+      }).from(workforce)
+        .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
+        .where(or(
+          sql`LOWER(${workforce.employeeNumber}) LIKE ${q}`,
+          sql`LOWER(COALESCE(${candidates.fullNameEn}, '')) LIKE ${q}`,
+        ))
+        .limit(6),
+
+      // Events by name
+      db.select({
+        id: events.id,
+        name: events.name,
+        status: events.status,
+        eventType: events.eventType,
+      }).from(events)
+        .where(sql`LOWER(${events.name}) LIKE ${q}`)
+        .limit(6),
+
+      // Jobs by title
+      db.select({
+        id: jobPostings.id,
+        title: jobPostings.title,
+        status: jobPostings.status,
+      }).from(jobPostings)
+        .where(sql`LOWER(${jobPostings.title}) LIKE ${q}`)
+        .limit(6),
+    ]);
+
+    return {
+      candidates: rawCandidates.map(c => ({
+        id: c.id,
+        title: c.fullNameEn ?? "(Unknown)",
+        subtitle: c.nationalId ?? c.phone ?? "No ID",
+        href: `/talent?highlight=${c.id}`,
+      })),
+      employees: rawEmployees.map(e => ({
+        id: e.id,
+        title: e.fullNameEn ?? e.employeeNumber,
+        subtitle: `Employee #${e.employeeNumber}`,
+        href: `/workforce?highlight=${e.id}`,
+      })),
+      events: rawEvents.map(ev => ({
+        id: ev.id,
+        title: ev.name,
+        subtitle: ev.status.charAt(0).toUpperCase() + ev.status.slice(1) + (ev.eventType === "ongoing" ? " · Ongoing" : ""),
+        href: `/events`,
+      })),
+      jobs: rawJobs.map(j => ({
+        id: j.id,
+        title: j.title,
+        subtitle: j.status.charAt(0).toUpperCase() + j.status.slice(1),
+        href: `/job-posting`,
+      })),
+    };
   }
 
   async getAuditLogs(params?: { page?: number; limit?: number; search?: string; entityType?: string; actorId?: string }): Promise<{ data: AuditLog[]; total: number }> {

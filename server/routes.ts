@@ -3364,6 +3364,18 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
+  // ─── Global Search ────────────────────────────────────────────────────────────
+  app.get("/api/search", async (req: Request, res: Response) => {
+    try {
+      const { q } = req.query as { q?: string };
+      if (!q || q.trim().length < 2) {
+        return res.json({ candidates: [], employees: [], events: [], jobs: [] });
+      }
+      const result = await storage.globalSearch(q.trim());
+      return res.json(result);
+    } catch (err) { return handleError(res, err); }
+  });
+
   // ─── Audit Logs ───────────────────────────────────────────────────────────────
   app.get("/api/audit-logs", async (req: Request, res: Response) => {
     try {

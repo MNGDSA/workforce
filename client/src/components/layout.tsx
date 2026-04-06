@@ -29,6 +29,9 @@ import {
   ChevronsRight,
   Package,
   ScrollText,
+  User,
+  CalendarCheck,
+  Loader2,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -40,9 +43,242 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { createPortal } from "react-dom";
+import { useDebounce } from "@/hooks/use-debounce";
+import { apiRequest } from "@/lib/queryClient";
+
+// ─── Global Search ─────────────────────────────────────────────────────────────
+type SearchResult = { id: string; title: string; subtitle: string; href: string };
+type SearchResults = {
+  candidates: SearchResult[];
+  employees: SearchResult[];
+  events: SearchResult[];
+  jobs: SearchResult[];
+};
+
+const CATEGORY_META = {
+  candidates: { label: "Candidates", icon: User,          color: "text-blue-400"   },
+  employees:  { label: "Employees",  icon: Users,         color: "text-emerald-400" },
+  events:     { label: "Events",     icon: CalendarCheck, color: "text-violet-400"  },
+  jobs:       { label: "Jobs",       icon: Briefcase,     color: "text-amber-400"   },
+} as const;
+
+function GlobalSearch() {
+  const [, setLocation] = useLocation();
+  const [query, setQuery]       = useState("");
+  const [open, setOpen]         = useState(false);
+  const [activeIdx, setActive]  = useState(-1);
+  const inputRef  = useRef<HTMLInputElement>(null);
+  const wrapRef   = useRef<HTMLDivElement>(null);
+  const [dropRect, setDropRect] = useState<DOMRect | null>(null);
+
+  const debouncedQ = useDebounce(query, 200);
+  const shouldFetch = debouncedQ.trim().length >= 2;
+
+  const { data, isFetching } = useQuery<SearchResults>({
+    queryKey: ["/api/search", debouncedQ],
+    queryFn: async () => {
+      const r = await apiRequest("GET", `/api/search?q=${encodeURIComponent(debouncedQ)}`);
+      return r.json();
+    },
+    enabled: shouldFetch,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    placeholderData: (prev) => prev,
+  });
+
+  // flat ordered list of all results for keyboard nav
+  const flatItems: SearchResult[] = useMemo(() => {
+    if (!data) return [];
+    return [
+      ...data.candidates,
+      ...data.employees,
+      ...data.events,
+      ...data.jobs,
+    ];
+  }, [data]);
+
+  const hasResults = flatItems.length > 0;
+
+  const totalCount = flatItems.length;
+
+  // Update dropdown position when open
+  const updateRect = useCallback(() => {
+    if (wrapRef.current) setDropRect(wrapRef.current.getBoundingClientRect());
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      updateRect();
+      window.addEventListener("scroll", updateRect, true);
+      window.addEventListener("resize", updateRect);
+      return () => {
+        window.removeEventListener("scroll", updateRect, true);
+        window.removeEventListener("resize", updateRect);
+      };
+    }
+  }, [open, updateRect]);
+
+  // Reset active index when results change
+  useEffect(() => { setActive(-1); }, [debouncedQ]);
+
+  // Open on type
+  useEffect(() => {
+    if (query.length > 0) setOpen(true);
+    else { setOpen(false); setActive(-1); }
+  }, [query]);
+
+  // Global ⌘K / Ctrl+K shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        inputRef.current?.focus();
+        inputRef.current?.select();
+        setOpen(true);
+        updateRect();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [updateRect]);
+
+  // Click-outside to close
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const navigate = (href: string) => {
+    setOpen(false);
+    setQuery("");
+    setLocation(href);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!open) return;
+    if (e.key === "Escape") { setOpen(false); inputRef.current?.blur(); return; }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActive(i => Math.min(i + 1, flatItems.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive(i => Math.max(i - 1, -1));
+    } else if (e.key === "Enter" && activeIdx >= 0 && flatItems[activeIdx]) {
+      e.preventDefault();
+      navigate(flatItems[activeIdx].href);
+    }
+  };
+
+  // build grouped structure preserving order for rendering but tracking flat index
+  const grouped = useMemo(() => {
+    if (!data) return [];
+    let idx = 0;
+    return (Object.keys(CATEGORY_META) as (keyof typeof CATEGORY_META)[])
+      .filter(k => data[k].length > 0)
+      .map(k => {
+        const items = data[k].map(r => ({ ...r, flatIdx: idx++ }));
+        return { key: k, items };
+      });
+  }, [data]);
+
+  const showDropdown = open && shouldFetch;
+
+  return (
+    <div ref={wrapRef} className="relative hidden md:block w-96">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
+      {isFetching && shouldFetch && (
+        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground animate-spin" />
+      )}
+      <Input
+        ref={inputRef}
+        data-testid="input-global-search"
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        onKeyDown={onKeyDown}
+        onFocus={() => { if (query.length > 0) { setOpen(true); updateRect(); } }}
+        placeholder="Search…  ⌘K"
+        className="pl-10 pr-10 bg-muted/30 border-border focus-visible:ring-primary/20 h-9 rounded-sm"
+        autoComplete="off"
+      />
+
+      {showDropdown && createPortal(
+        <div
+          style={{
+            position: "fixed",
+            top: (dropRect?.bottom ?? 0) + 6,
+            left: dropRect?.left ?? 0,
+            width: dropRect?.width ?? 384,
+            zIndex: 9999,
+          }}
+          className="bg-popover border border-border rounded-md shadow-2xl overflow-hidden"
+        >
+          {isFetching && !hasResults ? (
+            <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Searching…
+            </div>
+          ) : !hasResults ? (
+            <div className="px-4 py-3 text-sm text-muted-foreground">
+              No results for <span className="font-medium text-foreground">"{debouncedQ}"</span>
+            </div>
+          ) : (
+            <div className="max-h-[420px] overflow-y-auto py-1">
+              {grouped.map(({ key, items }) => {
+                const meta = CATEGORY_META[key];
+                const Icon = meta.icon;
+                return (
+                  <div key={key}>
+                    <div className="px-3 pt-2 pb-0.5 flex items-center gap-1.5">
+                      <Icon className={cn("h-3 w-3", meta.color)} />
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {meta.label}
+                      </span>
+                    </div>
+                    {items.map(item => {
+                      const isActive = item.flatIdx === activeIdx;
+                      return (
+                        <button
+                          key={item.id}
+                          data-testid={`search-result-${key}-${item.id}`}
+                          onMouseEnter={() => setActive(item.flatIdx)}
+                          onMouseDown={e => { e.preventDefault(); navigate(item.href); }}
+                          className={cn(
+                            "w-full text-left px-4 py-2 flex flex-col gap-0.5 transition-colors",
+                            isActive ? "bg-primary/10 text-foreground" : "hover:bg-muted/50 text-foreground"
+                          )}
+                        >
+                          <span className="text-sm font-medium leading-tight truncate">{item.title}</span>
+                          <span className="text-[11px] text-muted-foreground leading-tight truncate">{item.subtitle}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+              <div className="border-t border-border mt-1 px-3 py-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+                <span>{totalCount} result{totalCount !== 1 ? "s" : ""}</span>
+                <span className="ml-auto flex items-center gap-2">
+                  <kbd className="border border-border rounded px-1 py-0.5 text-[9px] font-mono">↑↓</kbd> navigate
+                  <kbd className="border border-border rounded px-1 py-0.5 text-[9px] font-mono">↵</kbd> open
+                  <kbd className="border border-border rounded px-1 py-0.5 text-[9px] font-mono">esc</kbd> close
+                </span>
+              </div>
+            </div>
+          )}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -423,13 +659,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
                 </SheetContent>
               </Sheet>
 
-              <div className="relative hidden md:block w-96">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search candidates, jobs, or schedules..."
-                  className="pl-10 bg-muted/30 border-border focus-visible:ring-primary/20 h-9 rounded-sm"
-                />
-              </div>
+              <GlobalSearch />
             </div>
 
             <div className="flex items-center gap-4">
