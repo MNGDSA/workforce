@@ -2044,10 +2044,20 @@ export async function registerRoutes(
 
   app.post("/api/workforce/reinstate", async (req: Request, res: Response) => {
     try {
-      const { nationalId, startDate, eventId, salary, jobId, smpCompanyId, employmentType } = req.body as Record<string, string>;
+      const { nationalId, startDate, eventId, salary, jobId, smpCompanyId } = req.body as Record<string, string>;
       if (!nationalId || !startDate) return res.status(400).json({ message: "nationalId and startDate are required" });
+
+      // Derive employment type from the most recent persisted workforce record for this national ID.
+      // This prevents clients from forging type to bypass smpCompanyId requirement.
+      const history = await storage.getAllWorkforceByCandidateId(
+        await storage.getCandidateByNationalId(nationalId).then(c => c?.id ?? ""),
+      );
+      const latestRecord = history[0];
       const resolvedEmploymentType: "individual" | "smp" | undefined =
-        employmentType === "smp" ? "smp" : employmentType === "individual" ? "individual" : undefined;
+        latestRecord?.employmentType === "smp" ? "smp" :
+        latestRecord?.employmentType === "individual" ? "individual" :
+        undefined;
+
       // SMP workers must be linked to a company
       if (resolvedEmploymentType === "smp" && !smpCompanyId) {
         return res.status(400).json({ message: "smpCompanyId is required for SMP workers" });

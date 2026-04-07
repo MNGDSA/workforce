@@ -229,7 +229,20 @@ export interface IStorage {
   createSMPCompany(data: InsertSMPCompany): Promise<SMPCompany>;
   updateSMPCompany(id: string, data: Partial<InsertSMPCompany>): Promise<SMPCompany | undefined>;
   deleteSMPCompany(id: string): Promise<boolean>;
-  getSMPCompanyWorkers(smpCompanyId: string): Promise<any[]>;
+  getSMPCompanyWorkers(smpCompanyId: string): Promise<{
+    id: string;
+    employeeNumber: string;
+    startDate: string | null;
+    endDate: string | null;
+    isActive: boolean;
+    salary: string | null;
+    fullNameEn: string | null;
+    fullNameAr: string | null;
+    nationalId: string | null;
+    phone: string | null;
+    photoUrl: string | null;
+    candidateId: string;
+  }[]>;
 
   // Question Sets
   getQuestionSets(): Promise<QuestionSet[]>;
@@ -1598,7 +1611,20 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
-  async getSMPCompanyWorkers(smpCompanyId: string): Promise<any[]> {
+  async getSMPCompanyWorkers(smpCompanyId: string): Promise<{
+    id: string;
+    employeeNumber: string;
+    startDate: string | null;
+    endDate: string | null;
+    isActive: boolean;
+    salary: string | null;
+    fullNameEn: string | null;
+    fullNameAr: string | null;
+    nationalId: string | null;
+    phone: string | null;
+    photoUrl: string | null;
+    candidateId: string;
+  }[]> {
     const rows = await db
       .select({
         id: workforce.id,
