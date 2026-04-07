@@ -155,8 +155,6 @@ const step2Schema = z.object({
   }
   if (!/^SA\d{22}$/.test(d.ibanNumber.trim())) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "IBAN must be SA followed by 22 digits (24 characters total)", path: ["ibanNumber"] });
-  } else if (!d.ibanBankName?.trim()) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Bank not recognised — please check your IBAN and try again", path: ["ibanNumber"] });
   }
 });
 
