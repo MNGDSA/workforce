@@ -198,6 +198,14 @@ export interface IStorage {
   markNotificationRead(id: string): Promise<boolean>;
   getUnreadCount(recipientId: string): Promise<number>;
 
+  // Admin Alerts (broadcast, in-app, recipientId=null)
+  getAdminAlerts(limit?: number): Promise<Notification[]>;
+  createAdminAlert(subject: string, body: string, metadata?: Record<string, unknown>): Promise<Notification>;
+  markAdminAlertRead(id: string): Promise<boolean>;
+  markAllAdminAlertsRead(): Promise<number>;
+  countUnreadAdminAlerts(): Promise<number>;
+  getEventDateAlerts(): Promise<{ starting: Array<{ id: string; name: string; startDate: string; daysAway: number }>; ending: Array<{ id: string; name: string; endDate: string; daysAway: number }> }>;
+
   // Business Units
   getBusinessUnits(): Promise<BusinessUnit[]>;
   getBusinessUnit(id: string): Promise<BusinessUnit | undefined>;
@@ -1287,6 +1295,95 @@ export class DatabaseStorage implements IStorage {
       .from(notifications)
       .where(and(eq(notifications.recipientId, recipientId), eq(notifications.status, "pending")));
     return Number(row.value);
+  }
+
+  // ─── Admin Alerts (broadcast in-app, recipientId IS NULL) ───────────────────
+  async getAdminAlerts(limit = 50): Promise<Notification[]> {
+    return db
+      .select()
+      .from(notifications)
+      .where(and(isNull(notifications.recipientId), eq(notifications.type, "in_app")))
+      .orderBy(desc(notifications.createdAt))
+      .limit(limit);
+  }
+
+  async createAdminAlert(subject: string, body: string, metadata?: Record<string, unknown>): Promise<Notification> {
+    const [created] = await db
+      .insert(notifications)
+      .values({ type: "in_app", status: "pending", subject, body, metadata: metadata ?? null })
+      .returning();
+    return created;
+  }
+
+  async markAdminAlertRead(id: string): Promise<boolean> {
+    const result = await db
+      .update(notifications)
+      .set({ status: "read", readAt: new Date() })
+      .where(and(eq(notifications.id, id), isNull(notifications.recipientId)));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async markAllAdminAlertsRead(): Promise<number> {
+    const result = await db
+      .update(notifications)
+      .set({ status: "read", readAt: new Date() })
+      .where(and(isNull(notifications.recipientId), eq(notifications.type, "in_app"), eq(notifications.status, "pending")));
+    return result.rowCount ?? 0;
+  }
+
+  async countUnreadAdminAlerts(): Promise<number> {
+    const [row] = await db
+      .select({ value: count() })
+      .from(notifications)
+      .where(and(isNull(notifications.recipientId), eq(notifications.type, "in_app"), eq(notifications.status, "pending")));
+    return Number(row.value);
+  }
+
+  async getEventDateAlerts(): Promise<{ starting: Array<{ id: string; name: string; startDate: string; daysAway: number }>; ending: Array<{ id: string; name: string; endDate: string; daysAway: number }> }> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const plus3 = new Date(today); plus3.setDate(today.getDate() + 3);
+    const todayStr = today.toISOString().split("T")[0];
+    const plus3Str = plus3.toISOString().split("T")[0];
+
+    const rows = await db
+      .select({ id: events.id, name: events.name, startDate: events.startDate, endDate: events.endDate, status: events.status })
+      .from(events)
+      .where(or(
+        and(
+          sql`${events.startDate} >= ${todayStr}`,
+          sql`${events.startDate} <= ${plus3Str}`,
+          sql`${events.status} IN ('upcoming', 'active')`
+        ),
+        and(
+          sql`${events.endDate} IS NOT NULL`,
+          sql`${events.endDate} >= ${todayStr}`,
+          sql`${events.endDate} <= ${plus3Str}`,
+          sql`${events.status} = 'active'`
+        )
+      ));
+
+    const starting: Array<{ id: string; name: string; startDate: string; daysAway: number }> = [];
+    const ending: Array<{ id: string; name: string; endDate: string; daysAway: number }> = [];
+
+    for (const r of rows) {
+      if (r.startDate) {
+        const sd = new Date(r.startDate); sd.setHours(0,0,0,0);
+        const daysAway = Math.round((sd.getTime() - today.getTime()) / 86400000);
+        if (daysAway >= 0 && daysAway <= 3) {
+          starting.push({ id: r.id, name: r.name, startDate: r.startDate, daysAway });
+        }
+      }
+      if (r.endDate) {
+        const ed = new Date(r.endDate); ed.setHours(0,0,0,0);
+        const daysAway = Math.round((ed.getTime() - today.getTime()) / 86400000);
+        if (daysAway >= 0 && daysAway <= 3) {
+          ending.push({ id: r.id, name: r.name, endDate: r.endDate, daysAway });
+        }
+      }
+    }
+
+    return { starting, ending };
   }
 
   // ─── Assets ─────────────────────────────────────────────────────────────────

@@ -44,11 +44,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { createPortal } from "react-dom";
 import { useDebounce } from "@/hooks/use-debounce";
 import { apiRequest } from "@/lib/queryClient";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { CalendarPlus, CalendarMinus, AlertCircle, CheckCheck, X as XIcon } from "lucide-react";
 
 // ─── Global Search ─────────────────────────────────────────────────────────────
 type SearchResult = { id: string; title: string; subtitle: string; href: string };
@@ -320,6 +323,233 @@ const bottomNavItems = [
   { href: "/audit-log",     icon: ScrollText,  label: "Audit Log" },
   { href: "/documentation", icon: BookOpen,    label: "Documentation" },
 ];
+
+// ─── Bell Notification Center ─────────────────────────────────────────────────
+type DateAlert = { id: string; name: string; startDate?: string; endDate?: string; daysAway: number };
+type ActivityAlert = { id: string; subject: string; body: string; createdAt: string; status: string };
+type EventAlertsPayload = {
+  dateAlerts: { starting: DateAlert[]; ending: DateAlert[] };
+  activityLog: ActivityAlert[];
+  unreadCount: number;
+};
+
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function BellNotificationCenter() {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelRect, setPanelRect] = useState<{ top: number; right: number } | null>(null);
+  const qc = useQueryClient();
+
+  const { data } = useQuery<EventAlertsPayload>({
+    queryKey: ["/api/admin/event-alerts"],
+    queryFn: async () => {
+      const r = await apiRequest("GET", "/api/admin/event-alerts");
+      return r.json();
+    },
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const markRead = useMutation({
+    mutationFn: (id: string) => apiRequest("PATCH", `/api/admin/alerts/${id}/read`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/event-alerts"] }),
+  });
+
+  const markAllRead = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/alerts/read-all"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/event-alerts"] }),
+  });
+
+  const dateAlertCount = (data?.dateAlerts.starting.length ?? 0) + (data?.dateAlerts.ending.length ?? 0);
+  const totalBadge = dateAlertCount + (data?.unreadCount ?? 0);
+
+  const updatePanelPos = useCallback(() => {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPanelRect({ top: r.bottom + 8, right: window.innerWidth - r.right });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    updatePanelPos();
+    window.addEventListener("resize", updatePanelPos);
+    return () => window.removeEventListener("resize", updatePanelPos);
+  }, [open, updatePanelPos]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClickOutside(e: MouseEvent) {
+      if (
+        panelRef.current && !panelRef.current.contains(e.target as Node) &&
+        btnRef.current && !btnRef.current.contains(e.target as Node)
+      ) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        data-testid="bell-notifications"
+        onClick={() => { setOpen((v) => !v); updatePanelPos(); }}
+        className="relative p-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/50 transition-colors"
+      >
+        <Bell className="h-5 w-5" />
+        {totalBadge > 0 && (
+          <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-white leading-none">
+            {totalBadge > 99 ? "99+" : totalBadge}
+          </span>
+        )}
+      </button>
+
+      {open && panelRect && createPortal(
+        <div
+          ref={panelRef}
+          style={{ position: "fixed", top: panelRect.top, right: panelRect.right, zIndex: 9999 }}
+          className="w-96 bg-popover border border-border rounded-md shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <Bell className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold text-foreground">Notifications</span>
+              {totalBadge > 0 && (
+                <Badge variant="destructive" className="h-5 px-1.5 text-[10px]">{totalBadge}</Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              {(data?.unreadCount ?? 0) > 0 && (
+                <button
+                  onClick={() => markAllRead.mutate()}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted/50 transition-colors"
+                >
+                  <CheckCheck className="h-3.5 w-3.5" />
+                  Mark all read
+                </button>
+              )}
+              <button
+                onClick={() => setOpen(false)}
+                className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-muted/50 transition-colors"
+              >
+                <XIcon className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <ScrollArea className="max-h-[440px]">
+            {/* Event Date Alerts */}
+            {dateAlertCount > 0 && (
+              <div>
+                <div className="px-4 py-2 bg-muted/30 border-b border-border">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Event Alerts
+                  </span>
+                </div>
+                {data?.dateAlerts.starting.map((ev) => (
+                  <div key={`start-${ev.id}`} className="flex items-start gap-3 px-4 py-3 border-b border-border/50 bg-amber-500/5 hover:bg-muted/30 transition-colors">
+                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500/15">
+                      <CalendarPlus className="h-3.5 w-3.5 text-amber-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-foreground leading-snug">
+                        {ev.daysAway === 0 ? "Starting today" : ev.daysAway === 1 ? "Starting tomorrow" : `Starting in ${ev.daysAway} days`}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">"{ev.name}"</p>
+                      {ev.startDate && <p className="text-[10px] text-muted-foreground/70 mt-0.5">{ev.startDate}</p>}
+                    </div>
+                    <Badge variant="outline" className="shrink-0 text-[10px] border-amber-500/40 text-amber-500">
+                      +{ev.daysAway}d
+                    </Badge>
+                  </div>
+                ))}
+                {data?.dateAlerts.ending.map((ev) => (
+                  <div key={`end-${ev.id}`} className="flex items-start gap-3 px-4 py-3 border-b border-border/50 bg-rose-500/5 hover:bg-muted/30 transition-colors">
+                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-500/15">
+                      <CalendarMinus className="h-3.5 w-3.5 text-rose-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-foreground leading-snug">
+                        {ev.daysAway === 0 ? "Ending today" : ev.daysAway === 1 ? "Ending tomorrow" : `Ending in ${ev.daysAway} days`}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">"{ev.name}"</p>
+                      {ev.endDate && <p className="text-[10px] text-muted-foreground/70 mt-0.5">{ev.endDate}</p>}
+                    </div>
+                    <Badge variant="outline" className="shrink-0 text-[10px] border-rose-500/40 text-rose-500">
+                      -{ev.daysAway}d
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Activity Log */}
+            {(data?.activityLog.length ?? 0) > 0 && (
+              <div>
+                <div className="px-4 py-2 bg-muted/30 border-b border-border">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Recent Activity
+                  </span>
+                </div>
+                {data?.activityLog.map((n) => (
+                  <div
+                    key={n.id}
+                    onClick={() => { if (n.status === "pending") markRead.mutate(n.id); }}
+                    className={cn(
+                      "flex items-start gap-3 px-4 py-3 border-b border-border/50 transition-colors cursor-pointer",
+                      n.status === "pending" ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-muted/30"
+                    )}
+                  >
+                    <div className={cn(
+                      "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                      n.status === "pending" ? "bg-primary/15" : "bg-muted"
+                    )}>
+                      <AlertCircle className={cn("h-3.5 w-3.5", n.status === "pending" ? "text-primary" : "text-muted-foreground")} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className={cn("text-xs leading-snug", n.status === "pending" ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>
+                          {n.subject}
+                        </p>
+                        {n.status === "pending" && (
+                          <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{n.body}</p>
+                      <p className="text-[10px] text-muted-foreground/60 mt-1">{timeAgo(n.createdAt)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Empty state */}
+            {dateAlertCount === 0 && (data?.activityLog.length ?? 0) === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                <Bell className="h-8 w-8 text-muted-foreground/30 mb-3" />
+                <p className="text-sm text-muted-foreground font-medium">All clear</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">No events starting or ending soon</p>
+              </div>
+            )}
+          </ScrollArea>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
 
 export default function DashboardLayout({ children }: LayoutProps) {
   const [location, setLocation] = useLocation();
@@ -663,10 +893,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
             </div>
 
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
-                <Bell className="h-5 w-5" />
-                <span className="absolute top-2 right-2 h-2 w-2 bg-primary rounded-full animate-pulse" />
-              </Button>
+              <BellNotificationCenter />
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

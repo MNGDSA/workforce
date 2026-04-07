@@ -108,6 +108,13 @@ app.use((req, res, next) => {
       const result = await storage.autoActivateUpcomingEvents();
       if (result.count > 0) {
         log(`Auto-activated ${result.count} event(s): ${result.names.join(", ")}`, "scheduler");
+        for (const name of result.names) {
+          await storage.createAdminAlert(
+            "Event automatically activated",
+            `"${name}" has reached its start date and is now active.`,
+            { action: "auto_activated" }
+          );
+        }
       }
     } catch (err) {
       log(`Auto-activate scheduler error: ${err}`, "scheduler");
@@ -120,15 +127,54 @@ app.use((req, res, next) => {
       const result = await storage.autoCloseExpiredEvents();
       if (result.count > 0) {
         log(`Auto-closed ${result.count} expired event(s): ${result.names.join(", ")}`, "scheduler");
+        for (const name of result.names) {
+          await storage.createAdminAlert(
+            "Event automatically closed",
+            `"${name}" has passed its end date and has been closed automatically.`,
+            { action: "auto_closed" }
+          );
+        }
       }
     } catch (err) {
       log(`Auto-close scheduler error: ${err}`, "scheduler");
     }
   }
 
-  // Run both once at startup, then every 24 hours
+  // ─── Scheduled: create bell alerts for events starting/ending in ≤3 days ──
+  async function runEventDateAlertScheduler() {
+    try {
+      const { starting, ending } = await storage.getEventDateAlerts();
+      const today = new Date().toISOString().split("T")[0];
+
+      for (const ev of starting) {
+        const label = ev.daysAway === 0 ? "today" : ev.daysAway === 1 ? "tomorrow" : `in ${ev.daysAway} days`;
+        await storage.createAdminAlert(
+          `Event starting ${label}`,
+          `"${ev.name}" is scheduled to start ${label} (${ev.startDate}).`,
+          { eventId: ev.id, action: "starting_soon", daysAway: ev.daysAway, alertDate: today }
+        );
+      }
+      for (const ev of ending) {
+        const label = ev.daysAway === 0 ? "today" : ev.daysAway === 1 ? "tomorrow" : `in ${ev.daysAway} days`;
+        await storage.createAdminAlert(
+          `Event ending ${label}`,
+          `"${ev.name}" is scheduled to end ${label} (${ev.endDate}).`,
+          { eventId: ev.id, action: "ending_soon", daysAway: ev.daysAway, alertDate: today }
+        );
+      }
+      if (starting.length + ending.length > 0) {
+        log(`Date alerts: ${starting.length} starting, ${ending.length} ending within 3 days`, "scheduler");
+      }
+    } catch (err) {
+      log(`Date alert scheduler error: ${err}`, "scheduler");
+    }
+  }
+
+  // Run all three once at startup, then every 24 hours
   runAutoActivateUpcomingEvents();
   runAutoCloseExpiredEvents();
+  runEventDateAlertScheduler();
   setInterval(runAutoActivateUpcomingEvents, 24 * 60 * 60 * 1000);
   setInterval(runAutoCloseExpiredEvents, 24 * 60 * 60 * 1000);
+  setInterval(runEventDateAlertScheduler, 24 * 60 * 60 * 1000);
 })();

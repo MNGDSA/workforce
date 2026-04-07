@@ -1146,6 +1146,11 @@ export async function registerRoutes(
     try {
       const data = insertEventSchema.parse(req.body);
       const evt = await storage.createEvent(data);
+      storage.createAdminAlert(
+        "New event created",
+        `"${evt.name}" has been created${evt.startDate ? ` — starts ${evt.startDate}` : ""}.`,
+        { eventId: evt.id, action: "created" }
+      ).catch(() => {});
       return res.status(201).json(evt);
     } catch (err) {
       return handleError(res, err);
@@ -1176,6 +1181,11 @@ export async function registerRoutes(
         description: `Event "${evt.name}" was manually closed`,
         metadata: { eventName: evt.name, endDate: evt.endDate },
       });
+      storage.createAdminAlert(
+        "Event closed",
+        `"${evt.name}" has been manually closed.`,
+        { eventId: evt.id, action: "closed" }
+      ).catch(() => {});
       return res.json(evt);
     } catch (err) {
       return handleError(res, err);
@@ -1196,6 +1206,11 @@ export async function registerRoutes(
         description: `Event "${evt.name}" was reopened${reason ? ` — ${reason}` : ""}`,
         metadata: { eventName: evt.name, reason: reason ?? null },
       });
+      storage.createAdminAlert(
+        "Event reopened",
+        `"${evt.name}" has been reopened${reason ? ` — ${reason}` : ""}.`,
+        { eventId: evt.id, action: "reopened" }
+      ).catch(() => {});
       return res.json(evt);
     } catch (err) {
       return handleError(res, err);
@@ -1206,6 +1221,11 @@ export async function registerRoutes(
     try {
       const evt = await storage.archiveEvent(req.params.id);
       if (!evt) return res.status(404).json({ message: "Event not found" });
+      storage.createAdminAlert(
+        "Event archived",
+        `"${evt.name}" has been archived.`,
+        { eventId: evt.id, action: "archived" }
+      ).catch(() => {});
       return res.json(evt);
     } catch (err) {
       return handleError(res, err);
@@ -1216,6 +1236,11 @@ export async function registerRoutes(
     try {
       const evt = await storage.unarchiveEvent(req.params.id);
       if (!evt) return res.status(404).json({ message: "Event not found" });
+      storage.createAdminAlert(
+        "Event unarchived",
+        `"${evt.name}" has been unarchived and restored to active.`,
+        { eventId: evt.id, action: "unarchived" }
+      ).catch(() => {});
       return res.json(evt);
     } catch (err) {
       return handleError(res, err);
@@ -2075,6 +2100,39 @@ export async function registerRoutes(
     try {
       const count = await storage.getUnreadCount(req.params.recipientId);
       return res.json({ count });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // ─── Admin Bell Alerts ────────────────────────────────────────────────────
+  app.get("/api/admin/event-alerts", async (_req: Request, res: Response) => {
+    try {
+      const [dateAlerts, activityLog, unreadCount] = await Promise.all([
+        storage.getEventDateAlerts(),
+        storage.getAdminAlerts(50),
+        storage.countUnreadAdminAlerts(),
+      ]);
+      return res.json({ dateAlerts, activityLog, unreadCount });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.patch("/api/admin/alerts/:id/read", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.markAdminAlertRead(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Alert not found" });
+      return res.json({ success: true });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/admin/alerts/read-all", async (_req: Request, res: Response) => {
+    try {
+      const count = await storage.markAllAdminAlertsRead();
+      return res.json({ marked: count });
     } catch (err) {
       return handleError(res, err);
     }
