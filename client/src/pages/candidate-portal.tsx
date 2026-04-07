@@ -142,13 +142,13 @@ function getNavItems(mode: PortalMode): NavKey[] {
       return ["dashboard", "history"];
     case "candidate":
     default:
-      return ["dashboard", "jobs", "documents"];
+      return ["jobs"];
   }
 }
 
 const NAV_LABELS: Record<NavKey, string> = {
   dashboard: "Dashboard",
-  jobs: "My Jobs",
+  jobs: "Job Opportunities",
   documents: "Documents",
   contract: "My Contract",
   payslips: "Payslips",
@@ -962,6 +962,12 @@ export default function CandidatePortal() {
   const portalMode = resolvePortalMode(candidateProfile, activeWorkforceRecord, allWorkforceRecords);
   const navItems = getNavItems(portalMode);
   const isSmp = portalMode === "employee_smp" || portalMode === "former_smp";
+
+  useEffect(() => {
+    if (!navItems.includes(activeNav)) {
+      setActiveNav(navItems[0] ?? "jobs");
+    }
+  }, [portalMode]);
   const isEmployee = portalMode === "employee_individual" || portalMode === "employee_smp";
   const isFormer = portalMode === "former_individual" || portalMode === "former_smp";
   const mostRecentRecord = allWorkforceRecords[0] ?? null;
