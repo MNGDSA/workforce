@@ -175,7 +175,7 @@ export interface IStorage {
   createWorkforceRecord(record: InsertWorkforce): Promise<WorkforceRecord>;
   updateWorkforceRecord(id: string, data: Partial<InsertWorkforce>): Promise<WorkforceRecord | undefined>;
   terminateEmployee(id: string, data: { endDate: string; terminationReason?: string }): Promise<WorkforceRecord | undefined>;
-  reinstateEmployee(nationalId: string, data: { startDate: string; eventId?: string; salary?: string; jobId?: string; employmentType?: "individual" | "smp" }): Promise<WorkforceRecord>;
+  reinstateEmployee(nationalId: string, data: { startDate: string; eventId?: string; salary?: string; jobId?: string; employmentType?: "individual" | "smp"; smpCompanyId?: string }): Promise<WorkforceRecord>;
   getWorkforceStats(): Promise<{ total: number; active: number; terminated: number }>;
   generateEmployeeNumber(): Promise<string>;
 
@@ -1215,7 +1215,7 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async reinstateEmployee(nationalId: string, data: { startDate: string; eventId?: string; salary?: string; jobId?: string; employmentType?: "individual" | "smp" }): Promise<WorkforceRecord> {
+  async reinstateEmployee(nationalId: string, data: { startDate: string; eventId?: string; salary?: string; jobId?: string; employmentType?: "individual" | "smp"; smpCompanyId?: string }): Promise<WorkforceRecord> {
     const prevRecords = await db
       .select({ employeeNumber: workforce.employeeNumber })
       .from(workforce)
@@ -1238,6 +1238,7 @@ export class DatabaseStorage implements IStorage {
       startDate: data.startDate,
       isActive: true,
       employmentType: data.employmentType ?? "individual",
+      smpCompanyId: data.smpCompanyId ?? undefined,
     }).returning();
 
     await db.update(candidates).set({ status: "hired", updatedAt: new Date() }).where(eq(candidates.id, cand.id));

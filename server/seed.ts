@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, automationRules, events, jobPostings } from "@shared/schema";
+import { users, automationRules, events, jobPostings, smpCompanies } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { sql } from "drizzle-orm";
 
@@ -228,6 +228,43 @@ async function seed() {
         },
       ])
       .onConflictDoNothing();
+  }
+
+  // ─── SMP Companies ────────────────────────────────────────────────────────
+  const existingSmpCompanies = await db.select({ id: smpCompanies.id }).from(smpCompanies).limit(1);
+  if (existingSmpCompanies.length === 0) {
+    await db.insert(smpCompanies).values([
+      {
+        name: "Al-Rashidi Manpower Services",
+        commercialRegistration: "4030123456",
+        contactPerson: "Ahmed Al-Rashidi",
+        contactPhone: "0512345678",
+        contactEmail: "contact@alrashidi.com.sa",
+        region: "Mecca",
+        notes: "Primary SMP partner for Hajj season staffing. Specializes in crowd management and guidance services.",
+        isActive: true,
+      },
+      {
+        name: "Najd Labor Solutions Co.",
+        commercialRegistration: "1010987654",
+        contactPerson: "Khalid Al-Najdi",
+        contactPhone: "0551234567",
+        contactEmail: "ops@najdlabor.sa",
+        region: "Riyadh",
+        notes: "Provides general labor workforce for seasonal operations.",
+        isActive: true,
+      },
+      {
+        name: "Jeddah Staffing Partners Ltd.",
+        commercialRegistration: "4030567890",
+        contactPerson: "Fatima Al-Zahrani",
+        contactPhone: "0561234567",
+        contactEmail: "info@jeddahstaffing.com",
+        region: "Jeddah",
+        notes: "Specialized in hospitality and transport sector staffing.",
+        isActive: false,
+      },
+    ]);
   }
 
   console.log("✅ Seed complete!");

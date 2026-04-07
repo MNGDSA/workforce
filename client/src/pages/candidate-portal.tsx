@@ -588,7 +588,7 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
                       <> → {new Date(rec.endDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</>
                     )}
                   </span>
-                  {rec.salary && (
+                  {rec.salary && rec.employmentType !== "smp" && (
                     <span className="flex items-center gap-1">
                       <Banknote className="h-3 w-3" />
                       {Number(rec.salary).toLocaleString()} SAR/mo

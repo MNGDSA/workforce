@@ -889,10 +889,15 @@ export default function WorkforcePage() {
     queryFn: () => apiRequest("GET", "/api/events").then(r => r.json()),
   });
 
+  const { data: allSmpCompaniesForBulk = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/smp-companies"],
+    queryFn: () => apiRequest("GET", "/api/smp-companies").then(r => r.json()),
+  });
+
   async function downloadBulkTemplate() {
     const XLSX = await import("xlsx");
     const source = employees.length > 0 ? employees : [];
-    const rows = source.map(e => ({
+    const rows = source.map((e: any) => ({
       "Employee #": e.employeeNumber,
       "Full Name": e.fullNameEn ?? "",
       "National ID/Iqama (read-only)": e.nationalId ?? "",
@@ -900,20 +905,26 @@ export default function WorkforcePage() {
       "Salary (SAR)": e.salary ? Number(e.salary) : "",
       "Start Date": e.startDate ?? "",
       "Event": e.eventName ?? "",
+      "SMP Company": "",
       "Notes": "",
     }));
     if (rows.length === 0) {
-      rows.push({ "Employee #": "C000001", "Full Name": "Example Name", "National ID/Iqama (read-only)": "1000000000", "Phone (read-only)": "0500000000", "Salary (SAR)": 4000, "Start Date": "2026-01-01", "Event": "", "Notes": "" });
+      rows.push({ "Employee #": "C000001", "Full Name": "Example Name", "National ID/Iqama (read-only)": "1000000000", "Phone (read-only)": "0500000000", "Salary (SAR)": 4000, "Start Date": "2026-01-01", "Event": "", "SMP Company": "", "Notes": "" });
     }
     const ws = XLSX.utils.json_to_sheet(rows);
     // Set column widths
-    ws["!cols"] = [{ wch: 12 }, { wch: 28 }, { wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 24 }, { wch: 32 }];
+    ws["!cols"] = [{ wch: 12 }, { wch: 28 }, { wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 24 }, { wch: 28 }, { wch: 32 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Employees");
     // Add Events reference sheet
     if (allEventsForBulk.length > 0) {
       const evSheet = XLSX.utils.json_to_sheet(allEventsForBulk.map(ev => ({ "Event Name": ev.name })));
       XLSX.utils.book_append_sheet(wb, evSheet, "Events (Reference)");
+    }
+    // Add SMP Companies reference sheet
+    if (allSmpCompaniesForBulk.length > 0) {
+      const smpSheet = XLSX.utils.json_to_sheet(allSmpCompaniesForBulk.map((c: any) => ({ "Company Name": c.name, "Active": c.isActive ? "Yes" : "No" })));
+      XLSX.utils.book_append_sheet(wb, smpSheet, "SMP Companies (Reference)");
     }
     XLSX.writeFile(wb, `workforce_bulk_update_${new Date().toISOString().slice(0, 10)}.xlsx`);
     toast({ title: "Template downloaded", description: "Edit the file and upload it back to apply updates." });

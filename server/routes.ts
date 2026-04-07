@@ -1887,11 +1887,14 @@ export async function registerRoutes(
       if (rows.length === 0) return res.status(400).json({ message: "Excel file is empty" });
       if (rows.length > 5000) return res.status(400).json({ message: "Maximum 5,000 rows per upload" });
 
-      // Fetch all workforce records and events for lookups
+      // Fetch all workforce records, events, and SMP companies for lookups
       const allWorkers = await storage.getWorkforce({});
       const allEvents = await storage.getEvents({});
       const eventsByName: Record<string, string> = {};
       for (const ev of allEvents) eventsByName[ev.name.trim().toLowerCase()] = ev.id;
+      const allSmpCompanies = await storage.getSMPCompanies();
+      const smpByName: Record<string, string> = {};
+      for (const c of allSmpCompanies) smpByName[c.name.trim().toLowerCase()] = c.id;
 
       const results: { employeeNumber: string; status: "updated" | "skipped" | "error"; reason?: string }[] = [];
 
@@ -1939,6 +1942,14 @@ export async function registerRoutes(
             const eventId = eventsByName[eventName.toLowerCase()];
             if (eventId) wfUpdate.eventId = eventId;
             else rowErrors.push(`Event "${eventName}" does not match any existing event. Check the "Events (Reference)" sheet for valid names.`);
+          }
+
+          // SMP Company — link by name (for SMP employment type workers)
+          const smpCompanyName = String(row["SMP Company"] ?? row["SMP Company Name"] ?? "").trim();
+          if (smpCompanyName !== "") {
+            const smpId = smpByName[smpCompanyName.toLowerCase()];
+            if (smpId) wfUpdate.smpCompanyId = smpId;
+            else rowErrors.push(`SMP Company "${smpCompanyName}" not found. Check SMP Companies list for valid names.`);
           }
 
           // Fields to update on the candidate record
@@ -2010,11 +2021,11 @@ export async function registerRoutes(
 
   app.post("/api/workforce/reinstate", async (req: Request, res: Response) => {
     try {
-      const { nationalId, startDate, eventId, salary, jobId, employmentType } = req.body as Record<string, string>;
+      const { nationalId, startDate, eventId, salary, jobId, smpCompanyId, employmentType } = req.body as Record<string, string>;
       if (!nationalId || !startDate) return res.status(400).json({ message: "nationalId and startDate are required" });
       const resolvedEmploymentType: "individual" | "smp" | undefined =
         employmentType === "smp" ? "smp" : employmentType === "individual" ? "individual" : undefined;
-      const record = await storage.reinstateEmployee(nationalId, { startDate, eventId, salary, jobId, employmentType: resolvedEmploymentType });
+      const record = await storage.reinstateEmployee(nationalId, { startDate, eventId, salary, jobId, smpCompanyId: smpCompanyId || undefined, employmentType: resolvedEmploymentType });
       const empNum = (record as any).employeeNumber ?? undefined;
       const subjectName = (record as any).fullNameEn ?? undefined;
       await logAudit(req, {
