@@ -221,7 +221,7 @@ export interface IStorage {
   // SMP Documents
   getSMPDocuments(smpCompanyId: string): Promise<SMPDocument[]>;
   createSMPDocument(data: InsertSMPDocument): Promise<SMPDocument>;
-  deleteSMPDocument(id: string): Promise<boolean>;
+  deleteSMPDocument(id: string, smpCompanyId?: string): Promise<boolean>;
 
   // SMP Companies
   getSMPCompanies(): Promise<SMPCompany[]>;
@@ -1561,8 +1561,11 @@ export class DatabaseStorage implements IStorage {
     return doc;
   }
 
-  async deleteSMPDocument(id: string): Promise<boolean> {
-    const result = await db.delete(smpDocuments).where(eq(smpDocuments.id, id)).returning();
+  async deleteSMPDocument(id: string, smpCompanyId?: string): Promise<boolean> {
+    const condition = smpCompanyId
+      ? and(eq(smpDocuments.id, id), eq(smpDocuments.smpCompanyId, smpCompanyId))
+      : eq(smpDocuments.id, id);
+    const result = await db.delete(smpDocuments).where(condition).returning();
     return result.length > 0;
   }
 

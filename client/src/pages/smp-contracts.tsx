@@ -310,7 +310,7 @@ function DocumentVault({ company, events }: { company: SMPCompany; events: { id:
           ref={fileInputRef}
           type="file"
           multiple
-          accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.txt"
+          accept=".pdf,.jpg,.jpeg,.png,.webp"
           className="hidden"
           onChange={handleFileChange}
         />

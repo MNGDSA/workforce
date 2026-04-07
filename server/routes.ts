@@ -2391,7 +2391,7 @@ export async function registerRoutes(
 
   app.delete("/api/smp-companies/:companyId/documents/:docId", async (req: Request, res: Response) => {
     try {
-      const ok = await storage.deleteSMPDocument(req.params.docId);
+      const ok = await storage.deleteSMPDocument(req.params.docId, req.params.companyId);
       if (!ok) return res.status(404).json({ message: "Document not found" });
       return res.status(204).send();
     } catch (err) {
