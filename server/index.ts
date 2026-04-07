@@ -102,6 +102,18 @@ app.use((req, res, next) => {
     },
   );
 
+  // ─── Scheduled: auto-activate upcoming events on/after start date ─────────
+  async function runAutoActivateUpcomingEvents() {
+    try {
+      const result = await storage.autoActivateUpcomingEvents();
+      if (result.count > 0) {
+        log(`Auto-activated ${result.count} event(s): ${result.names.join(", ")}`, "scheduler");
+      }
+    } catch (err) {
+      log(`Auto-activate scheduler error: ${err}`, "scheduler");
+    }
+  }
+
   // ─── Scheduled: auto-close expired duration-based events ──────────────────
   async function runAutoCloseExpiredEvents() {
     try {
@@ -113,7 +125,10 @@ app.use((req, res, next) => {
       log(`Auto-close scheduler error: ${err}`, "scheduler");
     }
   }
-  // Run once at startup, then every 24 hours
+
+  // Run both once at startup, then every 24 hours
+  runAutoActivateUpcomingEvents();
   runAutoCloseExpiredEvents();
+  setInterval(runAutoActivateUpcomingEvents, 24 * 60 * 60 * 1000);
   setInterval(runAutoCloseExpiredEvents, 24 * 60 * 60 * 1000);
 })();

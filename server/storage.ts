@@ -135,6 +135,7 @@ export interface IStorage {
   archiveEvent(id: string): Promise<Event | undefined>;
   unarchiveEvent(id: string): Promise<Event | undefined>;
   autoCloseExpiredEvents(): Promise<{ count: number; names: string[] }>;
+  autoActivateUpcomingEvents(): Promise<{ count: number; names: string[] }>;
   countJobPostingsByEvent(eventId: string): Promise<number>;
 
   // Job Postings
@@ -736,6 +737,20 @@ export class DatabaseStorage implements IStorage {
       ))
       .returning({ id: events.id, name: events.name });
     return { count: expired.length, names: expired.map(e => e.name) };
+  }
+
+  async autoActivateUpcomingEvents(): Promise<{ count: number; names: string[] }> {
+    const today = new Date().toISOString().slice(0, 10);
+    const activated = await db.update(events)
+      .set({ status: "active", updatedAt: new Date() })
+      .where(and(
+        isNull(events.archivedAt),
+        eq(events.status, "upcoming"),
+        sql`${events.startDate} IS NOT NULL`,
+        sql`${events.startDate} <= ${today}`,
+      ))
+      .returning({ id: events.id, name: events.name });
+    return { count: activated.length, names: activated.map(e => e.name) };
   }
 
   async countJobPostingsByEvent(eventId: string): Promise<number> {
