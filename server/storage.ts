@@ -1178,6 +1178,7 @@ export class DatabaseStorage implements IStorage {
         createdAt: workforce.createdAt,
         eventName: events.name,
         jobTitle: jobPostings.title,
+        employmentType: workforce.employmentType,
       })
       .from(workforce)
       .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
