@@ -1257,7 +1257,7 @@ export default function OnboardingPage() {
   const [admitSearch, setAdmitSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [admitPage, setAdmitPage] = useState(1);
-  const [convertForm, setConvertForm] = useState({ startDate: "", salary: "", eventId: "" });
+  const [convertForm, setConvertForm] = useState({ startDate: "", salary: "", eventId: "", smpCompanyId: "" });
   const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
   const [pendingDeleteDoc, setPendingDeleteDoc] = useState<{ candidateId: string; docType: string; label: string } | null>(null);
   const [docPreview, setDocPreview] = useState<{ url: string; label: string; isImage: boolean } | null>(null);
@@ -1354,7 +1354,7 @@ export default function OnboardingPage() {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
       setConvertRecord(null);
-      setConvertForm({ startDate: "", salary: "", eventId: "" });
+      setConvertForm({ startDate: "", salary: "", eventId: "", smpCompanyId: "" });
       toast({ title: "Successfully converted to employee!", description: "Employee record created." });
     },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
@@ -1381,6 +1381,12 @@ export default function OnboardingPage() {
   const { data: activeTemplates = [] } = useQuery<ContractTemplate[]>({
     queryKey: ["/api/contract-templates"],
     select: (data: ContractTemplate[]) => data.filter(t => t.status === "active"),
+  });
+
+  const { data: smpCompanies = [] } = useQuery<{ id: string; name: string; isActive: boolean }[]>({
+    queryKey: ["/api/smp-companies"],
+    queryFn: () => apiRequest("GET", "/api/smp-companies").then(r => r.json()),
+    select: (data: any[]) => data.filter((c: any) => c.isActive),
   });
 
   const bulkContractMutation = useMutation({
@@ -2133,6 +2139,24 @@ export default function OnboardingPage() {
                   className="bg-zinc-900 border-zinc-700 text-white"
                 />
               </div>
+              {/* SMP Company selector — shown only for SMP candidates (no applicationId) */}
+              {convertRecord && !convertRecord.applicationId && (
+                <div className="space-y-1.5">
+                  <Label className="text-zinc-400 text-sm">SMP Company</Label>
+                  <select
+                    data-testid="select-convert-smp-company"
+                    value={convertForm.smpCompanyId}
+                    onChange={e => setConvertForm(f => ({ ...f, smpCompanyId: e.target.value }))}
+                    className="w-full h-10 bg-zinc-900 border border-zinc-700 rounded-md px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
+                  >
+                    <option value="" className="bg-zinc-900 text-zinc-400">None (unlinked)</option>
+                    {smpCompanies.map(c => (
+                      <option key={c.id} value={c.id} className="bg-zinc-900 text-white">{c.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-zinc-500">Optionally link this worker to an SMP company.</p>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label className="text-zinc-400 text-sm">Monthly Salary (SAR)</Label>
                 <Input
@@ -2159,7 +2183,7 @@ export default function OnboardingPage() {
                 disabled={!convertForm.startDate || !convertForm.eventId || convertMutation.isPending}
                 onClick={() => convertRecord && convertMutation.mutate({
                   id: convertRecord.id,
-                  body: convertForm,
+                  body: { ...convertForm, smpCompanyId: convertForm.smpCompanyId || undefined },
                 })}
                 className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white gap-2"
               >

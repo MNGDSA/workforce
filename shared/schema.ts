@@ -260,7 +260,7 @@ export const events = pgTable(
   })
 );
 
-// ─── SMP Contracts ──────────────────────────────────────────────────────────
+// ─── SMP Contracts (legacy — kept for backward compat) ──────────────────────
 export const smpContractTypeEnum = pgEnum("smp_contract_type", ["fixed_term", "open_ended", "project_based"]);
 
 export const smpContracts = pgTable(
@@ -280,6 +280,30 @@ export const smpContracts = pgTable(
   },
   (t) => ({
     contractNumberIdx: uniqueIndex("smp_contracts_number_idx").on(t.contractNumber),
+  })
+);
+
+// ─── SMP Companies (master entity — replaces smp_contracts for new flows) ───
+export const smpCompanies = pgTable(
+  "smp_companies",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    name: text("name").notNull(),
+    commercialRegistration: varchar("commercial_registration", { length: 50 }),
+    contactPerson: text("contact_person"),
+    contactPhone: text("contact_phone"),
+    contactEmail: text("contact_email"),
+    region: text("region"),
+    notes: text("notes"),
+    isActive: boolean("is_active").notNull().default(true),
+    // Document vault — array of {name, url, uploadedAt, size}
+    documents: jsonb("documents").notNull().default(sql`'[]'::jsonb`),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    nameIdx: index("smp_companies_name_idx").on(t.name),
+    activeIdx: index("smp_companies_active_idx").on(t.isActive),
   })
 );
 
@@ -447,6 +471,8 @@ export const workforce = pgTable(
       .references(() => candidates.id),
     jobId: varchar("job_id").references(() => jobPostings.id),
     eventId: varchar("event_id").references(() => events.id),
+    // SMP company snapshot — set at deployment, nullable for individual workers
+    smpCompanyId: varchar("smp_company_id").references(() => smpCompanies.id, { onDelete: "set null" }),
     employmentType: employmentTypeEnum("employment_type").notNull().default("individual"),
     salary: decimal("salary", { precision: 10, scale: 2 }),
     startDate: text("start_date").notNull(),
@@ -661,6 +687,14 @@ export const insertSMPContractSchema = createInsertSchema(smpContracts).omit({
 });
 export type InsertSMPContract = z.infer<typeof insertSMPContractSchema>;
 export type SMPContract = typeof smpContracts.$inferSelect;
+
+export const insertSMPCompanySchema = createInsertSchema(smpCompanies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertSMPCompany = z.infer<typeof insertSMPCompanySchema>;
+export type SMPCompany = typeof smpCompanies.$inferSelect;
 
 export const insertSmsPluginSchema = createInsertSchema(smsPlugins).omit({
   id: true,

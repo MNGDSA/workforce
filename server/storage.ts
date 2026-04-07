@@ -12,6 +12,7 @@ import {
   notifications,
   businessUnits,
   smpContracts,
+  smpCompanies,
   questionSets,
   smsPlugins,
   otpVerifications,
@@ -54,6 +55,8 @@ import {
   type InsertBusinessUnit,
   type SMPContract,
   type InsertSMPContract,
+  type SMPCompany,
+  type InsertSMPCompany,
   type QuestionSet,
   type InsertQuestionSet,
   type SmsPlugin,
@@ -215,12 +218,20 @@ export interface IStorage {
   // Users (admin management)
   listUsers(): Promise<User[]>;
 
-  // SMP Contracts
+  // SMP Contracts (legacy)
   getSMPContracts(): Promise<SMPContract[]>;
   getSMPContract(id: string): Promise<SMPContract | undefined>;
   createSMPContract(data: InsertSMPContract): Promise<SMPContract>;
   updateSMPContract(id: string, data: Partial<InsertSMPContract>): Promise<SMPContract | undefined>;
   deleteSMPContract(id: string): Promise<boolean>;
+
+  // SMP Companies
+  getSMPCompanies(): Promise<SMPCompany[]>;
+  getSMPCompany(id: string): Promise<SMPCompany | undefined>;
+  createSMPCompany(data: InsertSMPCompany): Promise<SMPCompany>;
+  updateSMPCompany(id: string, data: Partial<InsertSMPCompany>): Promise<SMPCompany | undefined>;
+  deleteSMPCompany(id: string): Promise<boolean>;
+  getSMPCompanyWorkers(smpCompanyId: string): Promise<any[]>;
 
   // Question Sets
   getQuestionSets(): Promise<QuestionSet[]>;
@@ -235,7 +246,7 @@ export interface IStorage {
   createOnboardingRecord(data: InsertOnboarding): Promise<OnboardingRecord>;
   updateOnboardingRecord(id: string, data: Partial<InsertOnboarding>): Promise<OnboardingRecord | undefined>;
   deleteOnboardingRecord(id: string): Promise<boolean>;
-  convertOnboardingToEmployee(id: string, employmentData: { startDate: string; eventId?: string; salary?: string; employmentType?: "individual" | "smp" }, convertedBy?: string): Promise<WorkforceRecord>;
+  convertOnboardingToEmployee(id: string, employmentData: { startDate: string; eventId?: string; salary?: string; employmentType?: "individual" | "smp"; smpCompanyId?: string }, convertedBy?: string): Promise<WorkforceRecord>;
 
   // SMS Plugins
   getSmsPlugins(): Promise<SmsPlugin[]>;
@@ -1528,7 +1539,7 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(users).orderBy(asc(users.fullName));
   }
 
-  // ─── SMP Contracts ────────────────────────────────────────────────────────
+  // ─── SMP Contracts (legacy) ────────────────────────────────────────────────
   async getSMPContracts(): Promise<SMPContract[]> {
     return db.select().from(smpContracts).orderBy(desc(smpContracts.createdAt));
   }
@@ -1555,6 +1566,58 @@ export class DatabaseStorage implements IStorage {
   async deleteSMPContract(id: string): Promise<boolean> {
     const result = await db.delete(smpContracts).where(eq(smpContracts.id, id)).returning();
     return result.length > 0;
+  }
+
+  // ─── SMP Companies ─────────────────────────────────────────────────────────
+  async getSMPCompanies(): Promise<SMPCompany[]> {
+    return db.select().from(smpCompanies).orderBy(desc(smpCompanies.createdAt));
+  }
+
+  async getSMPCompany(id: string): Promise<SMPCompany | undefined> {
+    const [c] = await db.select().from(smpCompanies).where(eq(smpCompanies.id, id));
+    return c;
+  }
+
+  async createSMPCompany(data: InsertSMPCompany): Promise<SMPCompany> {
+    const [c] = await db.insert(smpCompanies).values(data).returning();
+    return c;
+  }
+
+  async updateSMPCompany(id: string, data: Partial<InsertSMPCompany>): Promise<SMPCompany | undefined> {
+    const [c] = await db
+      .update(smpCompanies)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(smpCompanies.id, id))
+      .returning();
+    return c;
+  }
+
+  async deleteSMPCompany(id: string): Promise<boolean> {
+    const result = await db.delete(smpCompanies).where(eq(smpCompanies.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getSMPCompanyWorkers(smpCompanyId: string): Promise<any[]> {
+    const rows = await db
+      .select({
+        id: workforce.id,
+        employeeNumber: workforce.employeeNumber,
+        startDate: workforce.startDate,
+        endDate: workforce.endDate,
+        isActive: workforce.isActive,
+        salary: workforce.salary,
+        fullNameEn: candidates.fullNameEn,
+        fullNameAr: candidates.fullNameAr,
+        nationalId: candidates.nationalId,
+        phone: candidates.phone,
+        photoUrl: candidates.photoUrl,
+        candidateId: workforce.candidateId,
+      })
+      .from(workforce)
+      .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
+      .where(eq(workforce.smpCompanyId, smpCompanyId))
+      .orderBy(desc(workforce.createdAt));
+    return rows;
   }
 
   // ─── Question Sets ─────────────────────────────────────────────────────────
@@ -1623,7 +1686,7 @@ export class DatabaseStorage implements IStorage {
 
   async convertOnboardingToEmployee(
     id: string,
-    employmentData: { startDate: string; eventId?: string; salary?: string; employmentType?: "individual" | "smp" },
+    employmentData: { startDate: string; eventId?: string; salary?: string; employmentType?: "individual" | "smp"; smpCompanyId?: string },
     convertedBy?: string,
   ): Promise<WorkforceRecord> {
     const rec = await this.getOnboardingRecord(id);
@@ -1656,6 +1719,7 @@ export class DatabaseStorage implements IStorage {
       candidateId: rec.candidateId,
       jobId: rec.jobId ?? undefined,
       eventId: employmentData.eventId ?? rec.eventId ?? undefined,
+      smpCompanyId: employmentData.smpCompanyId ?? undefined,
       employmentType: derivedEmploymentType,
       salary: employmentData.salary && employmentData.salary.trim() !== "" ? employmentData.salary : undefined,
       startDate: employmentData.startDate,

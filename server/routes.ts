@@ -19,6 +19,7 @@ import {
   insertUserSchema,
   insertBusinessUnitSchema,
   insertSMPContractSchema,
+  insertSMPCompanySchema,
   insertQuestionSetSchema,
   insertContractTemplateSchema,
   candidateQuerySchema,
@@ -1579,7 +1580,7 @@ export async function registerRoutes(
       // per-record from the onboarding record's applicationId:
       //   applicationId === null → SMP onboarding → employmentType = "smp"
       //   applicationId !== null → individual job application → employmentType = "individual"
-      const { ids, startDate, eventId, salary, employmentType: batchEmploymentType } = req.body;
+      const { ids, startDate, eventId, salary, smpCompanyId, employmentType: batchEmploymentType } = req.body;
       if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "ids array is required" });
       if (!startDate) return res.status(400).json({ message: "startDate is required" });
       const uniqueIds = [...new Set(ids as string[])];
@@ -1600,7 +1601,7 @@ export async function registerRoutes(
           }
           const wf = await storage.convertOnboardingToEmployee(
             id,
-            { startDate, eventId, salary, employmentType: resolvedEmploymentType },
+            { startDate, eventId, salary, smpCompanyId, employmentType: resolvedEmploymentType },
             (req as any).userId,
           );
           results.push(wf);
@@ -1715,7 +1716,7 @@ export async function registerRoutes(
 
   app.post("/api/onboarding/:id/convert", async (req: Request, res: Response) => {
     try {
-      const { startDate, eventId, salary, employmentType: clientEmploymentType } = req.body as Record<string, string>;
+      const { startDate, eventId, salary, smpCompanyId, employmentType: clientEmploymentType } = req.body as Record<string, string>;
       if (!startDate) return res.status(400).json({ message: "startDate is required" });
 
       // Derive employmentType from onboarding context when not explicitly provided.
@@ -1738,6 +1739,7 @@ export async function registerRoutes(
           startDate,
           eventId: eventId || undefined,
           salary: salary && salary.trim() !== "" ? salary : undefined,
+          smpCompanyId: smpCompanyId || undefined,
           employmentType: resolvedEmploymentType,
         },
         (req as any).userId,
@@ -2291,6 +2293,72 @@ export async function registerRoutes(
     try {
       const ok = await storage.deleteSMPContract(req.params.id);
       if (!ok) return res.status(404).json({ message: "Contract not found" });
+      return res.status(204).send();
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // ─── SMP Companies ─────────────────────────────────────────────────────────
+  app.get("/api/smp-companies", async (_req: Request, res: Response) => {
+    try {
+      const companies = await storage.getSMPCompanies();
+      return res.json(companies);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.get("/api/smp-companies/:id", async (req: Request, res: Response) => {
+    try {
+      const company = await storage.getSMPCompany(req.params.id);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      return res.json(company);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.get("/api/smp-companies/:id/workers", async (req: Request, res: Response) => {
+    try {
+      const workers = await storage.getSMPCompanyWorkers(req.params.id);
+      return res.json(workers);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/smp-companies", async (req: Request, res: Response) => {
+    try {
+      const data = insertSMPCompanySchema.parse(req.body);
+      const company = await storage.createSMPCompany(data);
+      await logAudit(req, {
+        action: "smp_company.created",
+        entityType: "smp_company",
+        entityId: company.id,
+        description: `SMP company created: ${company.name}`,
+      });
+      return res.status(201).json(company);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.patch("/api/smp-companies/:id", async (req: Request, res: Response) => {
+    try {
+      const data = insertSMPCompanySchema.partial().parse(req.body);
+      const company = await storage.updateSMPCompany(req.params.id, data);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      return res.json(company);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.delete("/api/smp-companies/:id", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteSMPCompany(req.params.id);
+      if (!ok) return res.status(404).json({ message: "Company not found" });
       return res.status(204).send();
     } catch (err) {
       return handleError(res, err);

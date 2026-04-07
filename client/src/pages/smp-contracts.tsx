@@ -1,79 +1,77 @@
 import * as XLSX from "xlsx";
 import DashboardLayout from "@/components/layout";
-import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState, useRef } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import {
   Search,
   Plus,
   Loader2,
-  FileDown,
   Upload,
   ChevronRight,
-  FileSpreadsheet,
   Trash2,
   CheckCircle2,
-  Calendar,
   Users,
+  Building2,
+  FileText,
+  Download,
+  Eye,
+  Phone,
+  Mail,
+  MapPin,
+  X,
+  FolderOpen,
+  FilePlus,
+  AlertCircle,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import type { SMPContract } from "@shared/schema";
 import { KSA_REGIONS } from "@shared/schema";
+import type { SMPCompany } from "@shared/schema";
+import { createPortal } from "react-dom";
 
-const smpSchema = z.object({
-  contractNumber: z.string().min(1, "Contract number is required"),
-  contractorName: z.string().min(2, "Contractor name is required"),
-  contractType: z.enum(["fixed_term", "open_ended", "project_based"]),
-  region: z.string().min(1, "Region is required"),
-  startDate: z.string().min(1, "Start date is required"),
-  endDate: z.string().min(1, "End date is required"),
-  notes: z.string().optional(),
-});
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-type SMPForm = z.infer<typeof smpSchema>;
+type CompanyDoc = {
+  name: string;
+  url: string;
+  uploadedAt: string;
+  size?: number;
+};
 
-function CreateSMPContractDialog({
+type WorkerRow = {
+  id: string;
+  employeeNumber: string;
+  fullNameEn: string | null;
+  fullNameAr: string | null;
+  nationalId: string | null;
+  phone: string | null;
+  photoUrl: string | null;
+  startDate: string;
+  endDate: string | null;
+  isActive: boolean;
+  salary: string | null;
+  candidateId: string;
+};
+
+// ─── Create Company Dialog ────────────────────────────────────────────────────
+
+function CreateCompanyDialog({
   open,
   onOpenChange,
 }: {
@@ -81,507 +79,776 @@ function CreateSMPContractDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
+  const [saving, setSaving] = useState(false);
 
-  const createContract = useMutation({
-    mutationFn: (data: SMPForm) =>
-      apiRequest("POST", "/api/smp-contracts", data).then((r) => r.json()),
-    onSuccess: (created: SMPContract) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/smp-contracts"] });
-      toast({ title: "SMP Contract created", description: `Contract ${created.contractNumber} has been created.` });
-      form.reset();
+  const [form, setForm] = useState({
+    name: "",
+    commercialRegistration: "",
+    contactPerson: "",
+    contactPhone: "",
+    contactEmail: "",
+    region: "",
+    notes: "",
+  });
+
+  function reset() {
+    setForm({ name: "", commercialRegistration: "", contactPerson: "", contactPhone: "", contactEmail: "", region: "", notes: "" });
+  }
+
+  const mutation = useMutation({
+    mutationFn: (data: typeof form) =>
+      apiRequest("POST", "/api/smp-companies", data).then((r) => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/smp-companies"] });
+      toast({ title: "SMP company created" });
+      reset();
       onOpenChange(false);
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to create contract.", variant: "destructive" });
-    },
+    onError: () => toast({ title: "Error", description: "Failed to create company.", variant: "destructive" }),
   });
 
-  const form = useForm<SMPForm>({
-    resolver: zodResolver(smpSchema),
-    defaultValues: {
-      contractNumber: `SMP-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`,
-      contractorName: "",
-      contractType: "fixed_term",
-      region: "",
-      startDate: "",
-      endDate: "",
-      notes: "",
-    },
-  });
-
-  function onSubmit(data: SMPForm) {
-    createContract.mutate(data);
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.name.trim()) return toast({ title: "Company name is required", variant: "destructive" });
+    mutation.mutate(form);
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl bg-card border-border">
+    <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
+      <DialogContent className="max-w-xl bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="text-white font-display text-xl">Create SMP Contract</DialogTitle>
-          <p className="text-muted-foreground text-sm">Manpower Plan — define contractor terms and workforce allocation.</p>
+          <DialogTitle className="text-white font-display text-xl">Create SMP Company</DialogTitle>
+          <DialogDescription className="text-muted-foreground text-sm">
+            Sub-Manpower Provider company — register a company and link its workers via deployment.
+          </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 border-b border-border pb-2">Contract Identity</p>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField control={form.control} name="contractNumber" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-white text-sm">Contract Number</FormLabel>
-                    <FormControl>
-                      <Input {...field} className="bg-muted/30 border-border font-mono text-xs" data-testid="input-smp-contract-number" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="contractType" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-white text-sm">Contract Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="bg-muted/30 border-border" data-testid="select-smp-contract-type">
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="fixed_term">Fixed Term</SelectItem>
-                        <SelectItem value="open_ended">Open Ended</SelectItem>
-                        <SelectItem value="project_based">Project Based</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )} />
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-1.5">
+            <Label className="text-white text-sm">Company Name <span className="text-red-400">*</span></Label>
+            <Input
+              value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              placeholder="e.g. Al-Rashidi Manpower Services"
+              className="bg-muted/30 border-border"
+              data-testid="input-smp-name"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-white text-sm">Commercial Registration</Label>
+              <Input
+                value={form.commercialRegistration}
+                onChange={e => setForm(f => ({ ...f, commercialRegistration: e.target.value }))}
+                placeholder="e.g. 4030123456"
+                className="bg-muted/30 border-border font-mono text-xs"
+                data-testid="input-smp-cr"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-white text-sm">Region</Label>
+              <select
+                value={form.region}
+                onChange={e => setForm(f => ({ ...f, region: e.target.value }))}
+                className="w-full h-10 bg-muted/30 border border-border rounded-sm px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
+                data-testid="select-smp-region"
+              >
+                <option value="" className="bg-card text-muted-foreground">Select region…</option>
+                {KSA_REGIONS.map(r => <option key={r} value={r} className="bg-card text-white">{r}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="border-t border-border pt-4 space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Contact Info</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-white text-sm">Contact Person</Label>
+                <Input
+                  value={form.contactPerson}
+                  onChange={e => setForm(f => ({ ...f, contactPerson: e.target.value }))}
+                  placeholder="e.g. Ahmed Al-Rashidi"
+                  className="bg-muted/30 border-border"
+                  data-testid="input-smp-contact-person"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-white text-sm">Contact Phone</Label>
+                <Input
+                  value={form.contactPhone}
+                  onChange={e => setForm(f => ({ ...f, contactPhone: e.target.value }))}
+                  placeholder="e.g. 0512345678"
+                  className="bg-muted/30 border-border"
+                  data-testid="input-smp-contact-phone"
+                />
               </div>
             </div>
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 border-b border-border pb-2">Contractor</p>
-              <FormField control={form.control} name="contractorName" render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-white text-sm">Contractor Name</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="e.g. Al-Rashidi Services Co." className="bg-muted/30 border-border" data-testid="input-smp-contractor" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+            <div className="space-y-1.5">
+              <Label className="text-white text-sm">Contact Email</Label>
+              <Input
+                type="email"
+                value={form.contactEmail}
+                onChange={e => setForm(f => ({ ...f, contactEmail: e.target.value }))}
+                placeholder="e.g. contact@company.com"
+                className="bg-muted/30 border-border"
+                data-testid="input-smp-contact-email"
+              />
             </div>
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 border-b border-border pb-2">Scope & Terms</p>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField control={form.control} name="region" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-white text-sm">Region</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="bg-muted/30 border-border" data-testid="select-smp-region">
-                          <SelectValue placeholder="Select region" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {KSA_REGIONS.map((r) => (
-                          <SelectItem key={r} value={r}>{r}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <div />
-                <FormField control={form.control} name="startDate" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-white text-sm">Start Date</FormLabel>
-                    <FormControl>
-                      <DatePickerField value={field.value} onChange={field.onChange} className="bg-muted/30 border-border" data-testid="input-smp-start-date" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="endDate" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-white text-sm">End Date</FormLabel>
-                    <FormControl>
-                      <DatePickerField value={field.value} onChange={field.onChange} className="bg-muted/30 border-border" data-testid="input-smp-end-date" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-              </div>
-            </div>
-            <FormField control={form.control} name="notes" render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-white text-sm">Notes & Remarks</FormLabel>
-                <FormControl>
-                  <Textarea {...field} placeholder="Any special terms, conditions, or remarks..." className="bg-muted/30 border-border resize-none" rows={3} data-testid="textarea-smp-notes" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )} />
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground">
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createContract.isPending} className="bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs" data-testid="button-submit-smp">
-                {createContract.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                Create Contract
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-white text-sm">Notes</Label>
+            <Textarea
+              value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              placeholder="Any additional notes or remarks…"
+              className="bg-muted/30 border-border resize-none"
+              rows={2}
+              data-testid="textarea-smp-notes"
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => { reset(); onOpenChange(false); }} className="text-muted-foreground">
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={mutation.isPending}
+              className="bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
+              data-testid="button-submit-smp"
+            >
+              {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+              Create Company
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
 }
 
-type CandidateRow = {
-  fullNameEn: string;
-  fullNameAr: string;
-  nationalId: string;
-  phone: string;
-  email: string;
-  city: string;
-  nationality: string;
-  jobTitle: string;
-  notes: string;
-};
+// ─── Document Vault ────────────────────────────────────────────────────────────
 
-const TEMPLATE_HEADERS = [
-  "Full Name (EN)",
-  "Full Name (AR)",
-  "National ID",
-  "Phone",
-  "Email",
-  "City",
-  "Nationality",
-  "Job Title",
-  "Notes",
-];
+function DocumentVault({ company }: { company: SMPCompany }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<CompanyDoc | null>(null);
 
-const TEMPLATE_ROWS: string[][] = [
-  ["Ahmed Al-Ghamdi", "أحمد الغامدي", "1012345678", "0501234567", "ahmed@example.com", "Makkah", "Saudi", "Ramadan 2026", ""],
-  ["Sara Al-Zahrani", "سارة الزهراني", "1087654321", "0557654321", "sara@example.com", "Jeddah", "Saudi", "Hajj 2026", "BLS certified"],
-];
+  const docs: CompanyDoc[] = Array.isArray(company.documents) ? (company.documents as CompanyDoc[]) : [];
 
-function parseCSV(text: string): CandidateRow[] {
-  const lines = text.trim().split("\n").filter(Boolean);
-  if (lines.length < 2) return [];
-  const rows: CandidateRow[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(",").map((c) => c.replace(/^"|"$/g, "").trim());
-    rows.push({
-      fullNameEn: cols[0] ?? "",
-      fullNameAr: cols[1] ?? "",
-      nationalId: cols[2] ?? "",
-      phone: cols[3] ?? "",
-      email: cols[4] ?? "",
-      city: cols[5] ?? "",
-      nationality: cols[6] ?? "",
-      jobTitle: cols[7] ?? "",
-      notes: cols[8] ?? "",
-    });
+  const patchDocs = useMutation({
+    mutationFn: (documents: CompanyDoc[]) =>
+      apiRequest("PATCH", `/api/smp-companies/${company.id}`, { documents }).then(r => r.json()),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/smp-companies"] }),
+    onError: () => toast({ title: "Error", description: "Failed to update documents.", variant: "destructive" }),
+  });
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const newDocs: CompanyDoc[] = [];
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch("/api/upload", { method: "POST", body: formData });
+        if (!res.ok) throw new Error(`Upload failed for ${file.name}`);
+        const { url } = await res.json();
+        newDocs.push({
+          name: file.name,
+          url,
+          uploadedAt: new Date().toISOString(),
+          size: file.size,
+        });
+      }
+      patchDocs.mutate([...docs, ...newDocs]);
+      toast({ title: `${newDocs.length} document${newDocs.length !== 1 ? "s" : ""} uploaded` });
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err?.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
-  return rows.filter((r) => r.fullNameEn || r.nationalId);
-}
 
-function parseExcel(buffer: ArrayBuffer): CandidateRow[] {
-  const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rawRows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "" });
-  if (rawRows.length < 2) return [];
-  const rows: CandidateRow[] = [];
-  for (let i = 1; i < rawRows.length; i++) {
-    const cols = rawRows[i].map((v) => String(v ?? "").trim());
-    rows.push({
-      fullNameEn: cols[0] ?? "",
-      fullNameAr: cols[1] ?? "",
-      nationalId: cols[2] ?? "",
-      phone: cols[3] ?? "",
-      email: cols[4] ?? "",
-      city: cols[5] ?? "",
-      nationality: cols[6] ?? "",
-      jobTitle: cols[7] ?? "",
-      notes: cols[8] ?? "",
-    });
+  function removeDoc(idx: number) {
+    patchDocs.mutate(docs.filter((_, i) => i !== idx));
   }
-  return rows.filter((r) => r.fullNameEn || r.nationalId);
+
+  function formatSize(bytes?: number) {
+    if (!bytes) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  const isImage = (url: string) => /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(url);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <FolderOpen className="h-4 w-4 text-primary" />
+          <span className="text-sm font-medium text-white">Document Vault</span>
+          {docs.length > 0 && (
+            <Badge className="text-[10px] bg-primary/15 text-primary border-0">{docs.length}</Badge>
+          )}
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-border text-xs gap-1.5 h-7"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          data-testid="button-upload-docs"
+        >
+          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FilePlus className="h-3.5 w-3.5" />}
+          Upload
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.txt"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+      </div>
+
+      {docs.length === 0 ? (
+        <div
+          className="border border-dashed border-border rounded-sm p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+          onClick={() => fileInputRef.current?.click()}
+          data-testid="dropzone-docs"
+        >
+          <Upload className="h-6 w-6 text-muted-foreground/40 mx-auto mb-2" />
+          <p className="text-xs text-muted-foreground">No documents yet. Click to upload contracts, licenses, or other files.</p>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {docs.map((doc, idx) => (
+            <div
+              key={idx}
+              className="flex items-center gap-3 px-3 py-2 rounded-sm bg-muted/10 border border-border hover:bg-muted/20 transition-colors"
+              data-testid={`row-doc-${idx}`}
+            >
+              <FileText className="h-4 w-4 text-primary shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-white truncate">{doc.name}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {new Date(doc.uploadedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                  {doc.size ? ` · ${formatSize(doc.size)}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-white"
+                  onClick={() => setPreviewDoc(doc)}
+                  data-testid={`button-preview-doc-${idx}`}
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                </Button>
+                <a href={doc.url} download={doc.name} target="_blank" rel="noopener noreferrer">
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-white" data-testid={`button-download-doc-${idx}`}>
+                    <Download className="h-3.5 w-3.5" />
+                  </Button>
+                </a>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-red-400"
+                  onClick={() => removeDoc(idx)}
+                  data-testid={`button-remove-doc-${idx}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Preview portal */}
+      {previewDoc && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4" onClick={() => setPreviewDoc(null)}>
+          <div className="bg-card border border-border rounded-lg max-w-3xl w-full max-h-[85vh] overflow-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <span className="text-sm font-medium text-white">{previewDoc.name}</span>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setPreviewDoc(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="p-4">
+              {isImage(previewDoc.url) ? (
+                <img src={previewDoc.url} alt={previewDoc.name} className="max-w-full rounded" />
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  <FileText className="h-12 w-12 mx-auto mb-3 text-muted-foreground/40" />
+                  <p className="text-sm">Preview not available for this file type.</p>
+                  <a href={previewDoc.url} download={previewDoc.name} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" variant="outline" className="border-border mt-3 gap-2">
+                      <Download className="h-3.5 w-3.5" />
+                      Download File
+                    </Button>
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
 }
 
-function downloadCSV(filename: string, headers: string[], rows: string[][]) {
-  const csv = [headers, ...rows]
-    .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
-    .join("\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+// ─── Workers List ─────────────────────────────────────────────────────────────
+
+function WorkersList({ companyId }: { companyId: string }) {
+  const { data: workers = [], isLoading } = useQuery<WorkerRow[]>({
+    queryKey: ["/api/smp-companies", companyId, "workers"],
+    queryFn: () => apiRequest("GET", `/api/smp-companies/${companyId}/workers`).then(r => r.json()),
+    refetchInterval: 30000,
+  });
+
+  const active = workers.filter(w => w.isActive);
+  const inactive = workers.filter(w => !w.isActive);
+
+  function exportToExcel() {
+    const rows = workers.map(w => ({
+      "Employee No.": w.employeeNumber,
+      "Full Name": w.fullNameEn ?? "",
+      "National ID": w.nationalId ?? "",
+      "Phone": w.phone ?? "",
+      "Start Date": w.startDate,
+      "End Date": w.endDate ?? "",
+      "Status": w.isActive ? "Active" : "Terminated",
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Workers");
+    XLSX.writeFile(wb, `smp-workers-${companyId}.xlsx`);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Users className="h-4 w-4 text-primary" />
+          <span className="text-sm font-medium text-white">Deployed Workers</span>
+          <Badge className="text-[10px] bg-primary/15 text-primary border-0">{workers.length}</Badge>
+        </div>
+        {workers.length > 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-border text-xs gap-1.5 h-7"
+            onClick={exportToExcel}
+            data-testid="button-export-workers"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export
+          </Button>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-6">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+        </div>
+      ) : workers.length === 0 ? (
+        <div className="text-center py-8 border border-dashed border-border rounded-sm">
+          <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+          <p className="text-xs text-muted-foreground">
+            No workers deployed yet. When converting SMP candidates to employees, select this company to link them here.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {active.length > 0 && (
+            <>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Active ({active.length})</p>
+              {active.map(w => (
+                <WorkerCard key={w.id} worker={w} />
+              ))}
+            </>
+          )}
+          {inactive.length > 0 && (
+            <>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mt-3">Terminated ({inactive.length})</p>
+              {inactive.map(w => (
+                <WorkerCard key={w.id} worker={w} />
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
-function SMPContractSheet({
-  contract,
+function WorkerCard({ worker }: { worker: WorkerRow }) {
+  return (
+    <div
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-sm border transition-colors ${
+        worker.isActive
+          ? "bg-muted/10 border-border hover:bg-muted/20"
+          : "bg-muted/5 border-border/50 opacity-60"
+      }`}
+      data-testid={`row-worker-${worker.id}`}
+    >
+      <Avatar className="h-8 w-8 border border-border shrink-0">
+        <AvatarFallback className="bg-primary/20 text-primary text-[10px]">
+          {(worker.fullNameEn ?? "?").split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium text-white truncate">{worker.fullNameEn ?? "Unknown"}</p>
+          {worker.isActive
+            ? <Badge className="text-[9px] bg-emerald-900/40 text-emerald-400 border-0 shrink-0">Active</Badge>
+            : <Badge className="text-[9px] bg-zinc-800 text-zinc-400 border-0 shrink-0">Terminated</Badge>
+          }
+        </div>
+        <p className="text-[11px] text-muted-foreground font-mono">
+          #{worker.employeeNumber}
+          {worker.nationalId ? ` · ${worker.nationalId}` : ""}
+        </p>
+      </div>
+      <div className="text-[11px] text-muted-foreground text-right shrink-0">
+        <p>{worker.startDate}</p>
+        {worker.endDate && <p className="text-red-400/70">{worker.endDate}</p>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Company Sheet ────────────────────────────────────────────────────────────
+
+function CompanySheet({
+  company,
   open,
   onOpenChange,
 }: {
-  contract: SMPContract | null;
+  company: SMPCompany | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
+  const qc = useQueryClient();
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState<Partial<SMPCompany>>({});
+  const [activeTab, setActiveTab] = useState<"info" | "docs" | "workers">("info");
 
-  const patchEmployees = useMutation({
-    mutationFn: (rows: CandidateRow[]) =>
-      apiRequest("PATCH", `/api/smp-contracts/${contract!.id}`, { employees: rows }).then((r) => r.json()),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/smp-contracts"] }),
-    onError: () => toast({ title: "Error", description: "Failed to save employees.", variant: "destructive" }),
+  const updateMutation = useMutation({
+    mutationFn: (data: Partial<SMPCompany>) =>
+      apiRequest("PATCH", `/api/smp-companies/${company!.id}`, data).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/smp-companies"] });
+      setEditMode(false);
+      toast({ title: "Company updated" });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to update company.", variant: "destructive" }),
   });
 
-  if (!contract) return null;
+  const deleteMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", `/api/smp-companies/${company!.id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/smp-companies"] });
+      onOpenChange(false);
+      toast({ title: "Company deleted" });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to delete company.", variant: "destructive" }),
+  });
 
-  const candidates: CandidateRow[] = (contract.employees as CandidateRow[] | null) ?? [];
+  if (!company) return null;
 
-  function handleDownloadTemplate() {
-    downloadCSV("smp-candidates-template.csv", TEMPLATE_HEADERS, TEMPLATE_ROWS);
-    toast({ title: "Template downloaded", description: "Fill in the template and upload it below." });
+  const docs: CompanyDoc[] = Array.isArray(company.documents) ? (company.documents as CompanyDoc[]) : [];
+
+  function startEdit() {
+    setEditForm({
+      name: company!.name,
+      commercialRegistration: company!.commercialRegistration ?? "",
+      contactPerson: company!.contactPerson ?? "",
+      contactPhone: company!.contactPhone ?? "",
+      contactEmail: company!.contactEmail ?? "",
+      region: company!.region ?? "",
+      notes: company!.notes ?? "",
+    });
+    setEditMode(true);
   }
 
-  function handleExport() {
-    if (candidates.length === 0) return;
-    const rows = candidates.map((c) => [
-      c.fullNameEn, c.fullNameAr, c.nationalId, c.phone,
-      c.email, c.city, c.nationality, c.jobTitle, c.notes,
-    ]);
-    downloadCSV(`smp-candidates-${contract!.contractNumber}.csv`, TEMPLATE_HEADERS, rows);
-    toast({ title: "Export ready", description: `${candidates.length} candidates exported.` });
-  }
-
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    const isExcel = /\.(xlsx|xls)$/i.test(file.name);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      let parsed: CandidateRow[] = [];
-      if (isExcel) {
-        parsed = parseExcel(ev.target?.result as ArrayBuffer);
-      } else {
-        parsed = parseCSV(ev.target?.result as string);
-      }
-      if (parsed.length === 0) {
-        toast({ title: "No data found", description: "Make sure the file matches the template format.", variant: "destructive" });
-      } else {
-        patchEmployees.mutate([...candidates, ...parsed]);
-        toast({ title: `${parsed.length} candidates uploaded`, description: `Added to contract ${contract!.contractNumber}.` });
-      }
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    };
-    if (isExcel) {
-      reader.readAsArrayBuffer(file);
-    } else {
-      reader.readAsText(file);
-    }
-  }
-
-  function removeCandidate(idx: number) {
-    patchEmployees.mutate(candidates.filter((_, i) => i !== idx));
-  }
+  const tabClass = (t: string) =>
+    `px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer ${
+      activeTab === t
+        ? "text-primary border-b-2 border-primary"
+        : "text-muted-foreground hover:text-white border-b-2 border-transparent"
+    }`;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-3xl bg-card border-border flex flex-col p-0 overflow-hidden">
+    <Sheet open={open} onOpenChange={(v) => { if (!v) { setEditMode(false); setActiveTab("info"); } onOpenChange(v); }}>
+      <SheetContent side="right" className="w-full sm:max-w-2xl bg-card border-border flex flex-col p-0 overflow-hidden">
+        {/* Header */}
         <SheetHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div>
-              <SheetTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
-                <code className="text-sm font-mono bg-primary/10 text-primary px-2 py-1 rounded">{contract.contractNumber}</code>
-                <span>{contract.contractorName}</span>
-              </SheetTitle>
-              <div className="text-muted-foreground mt-1.5 flex items-center gap-3 flex-wrap text-xs">
-                <span className="capitalize">{contract.contractType.replace(/_/g, " ")}</span>
-                <span>·</span>
-                <span>{contract.region}</span>
-                <span>·</span>
-                <span>{contract.startDate} → {contract.endDate}</span>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-sm bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                <Building2 className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <SheetTitle className="font-display text-xl font-bold text-white leading-tight">
+                  {company.name}
+                </SheetTitle>
+                <div className="text-muted-foreground mt-1 flex items-center gap-2 flex-wrap text-xs">
+                  {company.commercialRegistration && (
+                    <span className="font-mono bg-muted/20 px-1.5 py-0.5 rounded text-[11px]">CR {company.commercialRegistration}</span>
+                  )}
+                  {company.region && (
+                    <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {company.region}</span>
+                  )}
+                  <Badge className={`text-[10px] border-0 ${company.isActive ? "bg-emerald-900/40 text-emerald-400" : "bg-zinc-800 text-zinc-400"}`}>
+                    {company.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
               </div>
             </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-border text-xs shrink-0"
+              onClick={editMode ? () => setEditMode(false) : startEdit}
+              data-testid="button-edit-company"
+            >
+              {editMode ? "Cancel" : "Edit"}
+            </Button>
           </div>
-          <div className="flex items-center gap-2 mt-4 flex-wrap">
-            <Button size="sm" variant="outline" className="border-border gap-1.5 text-xs" onClick={handleDownloadTemplate} data-testid="button-download-template">
-              <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-400" />
-              Download Template
-            </Button>
-            <Button size="sm" variant="outline" className="border-border gap-1.5 text-xs" onClick={() => fileInputRef.current?.click()} disabled={uploading} data-testid="button-upload-candidates">
-              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-              Upload Candidates
-            </Button>
-            <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileChange} />
-            <Button size="sm" variant="outline" className="border-border gap-1.5 text-xs" onClick={handleExport} disabled={candidates.length === 0} data-testid="button-export-candidates">
-              <FileDown className="h-3.5 w-3.5" />
-              Export Excel
-            </Button>
-            <div className="ml-auto flex items-center gap-1.5 text-sm">
-              <Users className="h-4 w-4 text-primary" />
-              <span className="text-white font-bold">{candidates.length}</span>
-              <span className="text-muted-foreground">candidate{candidates.length !== 1 ? "s" : ""}</span>
-            </div>
+          {/* Tabs */}
+          <div className="flex border-b border-border mt-2 -mb-4">
+            <button className={tabClass("info")} onClick={() => setActiveTab("info")} data-testid="tab-info">Info</button>
+            <button className={tabClass("docs")} onClick={() => setActiveTab("docs")} data-testid="tab-docs">
+              Documents {docs.length > 0 && `(${docs.length})`}
+            </button>
+            <button className={tabClass("workers")} onClick={() => setActiveTab("workers")} data-testid="tab-workers">Workers</button>
           </div>
         </SheetHeader>
-        <div className="flex-1 overflow-y-auto">
-          {candidates.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-center px-6">
-              <div
-                className="border-2 border-dashed border-border rounded-sm p-10 w-full max-w-sm cursor-pointer hover:border-primary/50 transition-colors"
-                onClick={() => fileInputRef.current?.click()}
-                data-testid="dropzone-upload"
-              >
-                <Upload className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-                <p className="text-white font-medium mb-1">Upload candidate list</p>
-                <p className="text-muted-foreground text-sm mb-4">CSV or Excel format · Use the template above</p>
-                <Button size="sm" variant="outline" className="border-border text-xs gap-1.5">
-                  <Upload className="h-3.5 w-3.5" />
-                  Choose File
-                </Button>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {activeTab === "info" && (
+            editMode ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2 space-y-1.5">
+                    <Label className="text-white text-sm">Company Name *</Label>
+                    <Input
+                      value={editForm.name ?? ""}
+                      onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                      className="bg-muted/30 border-border"
+                      data-testid="input-edit-name"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-white text-sm">Commercial Registration</Label>
+                    <Input
+                      value={editForm.commercialRegistration ?? ""}
+                      onChange={e => setEditForm(f => ({ ...f, commercialRegistration: e.target.value }))}
+                      className="bg-muted/30 border-border font-mono text-xs"
+                      data-testid="input-edit-cr"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-white text-sm">Region</Label>
+                    <select
+                      value={editForm.region ?? ""}
+                      onChange={e => setEditForm(f => ({ ...f, region: e.target.value }))}
+                      className="w-full h-10 bg-muted/30 border border-border rounded-sm px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
+                      data-testid="select-edit-region"
+                    >
+                      <option value="" className="bg-card text-muted-foreground">Select region…</option>
+                      {KSA_REGIONS.map(r => <option key={r} value={r} className="bg-card text-white">{r}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-white text-sm">Contact Person</Label>
+                    <Input
+                      value={editForm.contactPerson ?? ""}
+                      onChange={e => setEditForm(f => ({ ...f, contactPerson: e.target.value }))}
+                      className="bg-muted/30 border-border"
+                      data-testid="input-edit-contact-person"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-white text-sm">Contact Phone</Label>
+                    <Input
+                      value={editForm.contactPhone ?? ""}
+                      onChange={e => setEditForm(f => ({ ...f, contactPhone: e.target.value }))}
+                      className="bg-muted/30 border-border"
+                      data-testid="input-edit-contact-phone"
+                    />
+                  </div>
+                  <div className="col-span-2 space-y-1.5">
+                    <Label className="text-white text-sm">Contact Email</Label>
+                    <Input
+                      type="email"
+                      value={editForm.contactEmail ?? ""}
+                      onChange={e => setEditForm(f => ({ ...f, contactEmail: e.target.value }))}
+                      className="bg-muted/30 border-border"
+                      data-testid="input-edit-contact-email"
+                    />
+                  </div>
+                  <div className="col-span-2 space-y-1.5">
+                    <Label className="text-white text-sm">Notes</Label>
+                    <Textarea
+                      value={editForm.notes ?? ""}
+                      onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
+                      className="bg-muted/30 border-border resize-none"
+                      rows={3}
+                      data-testid="textarea-edit-notes"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 justify-between pt-2">
+                  <Button
+                    variant="outline"
+                    className="border-red-900/60 text-red-400 hover:bg-red-950/40 text-xs gap-1.5"
+                    onClick={() => deleteMutation.mutate()}
+                    disabled={deleteMutation.isPending}
+                    data-testid="button-delete-company"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete Company
+                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="border-border text-xs" onClick={() => setEditMode(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      className="bg-primary text-primary-foreground text-xs font-bold"
+                      onClick={() => updateMutation.mutate(editForm)}
+                      disabled={updateMutation.isPending || !editForm.name?.trim()}
+                      data-testid="button-save-company"
+                    >
+                      {updateMutation.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+                      Save Changes
+                    </Button>
+                  </div>
+                </div>
               </div>
-              <p className="text-muted-foreground/50 text-xs mt-4">
-                No candidates yet. Download the template, fill it in, then upload.
-              </p>
-            </div>
-          ) : (
-            <div>
-              <div className="flex items-center gap-6 px-6 py-3 border-b border-border bg-muted/10 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-                  {candidates.length} total candidates
-                </span>
-                <span>{Array.from(new Set(candidates.map((c) => c.city))).filter(Boolean).length} cities</span>
-                <span>{Array.from(new Set(candidates.map((c) => c.jobTitle))).filter(Boolean).length} job titles</span>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  {company.contactPerson && (
+                    <InfoRow icon={<Users className="h-4 w-4" />} label="Contact Person" value={company.contactPerson} />
+                  )}
+                  {company.contactPhone && (
+                    <InfoRow icon={<Phone className="h-4 w-4" />} label="Phone" value={company.contactPhone} />
+                  )}
+                  {company.contactEmail && (
+                    <InfoRow icon={<Mail className="h-4 w-4" />} label="Email" value={company.contactEmail} />
+                  )}
+                  {company.region && (
+                    <InfoRow icon={<MapPin className="h-4 w-4" />} label="Region" value={company.region} />
+                  )}
+                </div>
+                {company.notes && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Notes</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{company.notes}</p>
+                  </div>
+                )}
+                <div className="text-[11px] text-muted-foreground pt-2 border-t border-border">
+                  Created {new Date(company.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                </div>
               </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left">
-                    <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Candidate</th>
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">ID / Phone</th>
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Job Title</th>
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">City</th>
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {candidates.map((c, idx) => (
-                    <tr key={idx} className="hover:bg-muted/20 transition-colors" data-testid={`row-smp-candidate-${idx}`}>
-                      <td className="px-6 py-2.5">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-7 w-7 border border-border shrink-0">
-                            {(c as any).photoUrl && <AvatarImage src={(c as any).photoUrl} alt={c.fullNameEn} className="object-cover" />}
-                            <AvatarFallback className="bg-primary/20 text-primary text-[10px]">
-                              {c.fullNameEn.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?"}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0">
-                            <div className="font-medium text-white truncate text-sm">{c.fullNameEn || "—"}</div>
-                            {c.fullNameAr && <div className="text-xs text-muted-foreground truncate" dir="rtl">{c.fullNameAr}</div>}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5 hidden md:table-cell">
-                        <div className="text-xs text-muted-foreground space-y-0.5">
-                          {c.nationalId && <div className="font-mono">{c.nationalId}</div>}
-                          {c.phone && <div>{c.phone}</div>}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5 hidden lg:table-cell">
-                        <span className="text-xs text-muted-foreground">{c.jobTitle || "—"}</span>
-                      </td>
-                      <td className="px-4 py-2.5 hidden md:table-cell">
-                        <span className="text-xs text-muted-foreground">{c.city || "—"}</span>
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-red-400"
-                          onClick={() => removeCandidate(idx)}
-                          data-testid={`button-remove-candidate-${idx}`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            )
           )}
+
+          {activeTab === "docs" && <DocumentVault company={company} />}
+          {activeTab === "workers" && <WorkersList companyId={company.id} />}
         </div>
       </SheetContent>
     </Sheet>
   );
 }
 
-export default function SMPContractsPage() {
-  const [search, setSearch] = useState("");
-  const [smpOpen, setSmpOpen] = useState(false);
-  const [selectedSmp, setSelectedSmp] = useState<SMPContract | null>(null);
-  const [smpSheetOpen, setSmpSheetOpen] = useState(false);
+function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-2.5 p-3 rounded-sm bg-muted/10 border border-border">
+      <span className="text-primary mt-0.5 shrink-0">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">{label}</p>
+        <p className="text-sm text-white truncate">{value}</p>
+      </div>
+    </div>
+  );
+}
 
-  const { data: smpContracts = [], isLoading } = useQuery<SMPContract[]>({
-    queryKey: ["/api/smp-contracts"],
-    queryFn: () => apiRequest("GET", "/api/smp-contracts").then((r) => r.json()),
+// ─── Main Page ─────────────────────────────────────────────────────────────────
+
+export default function SMPCompaniesPage() {
+  const [search, setSearch] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState<SMPCompany | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  const { data: companies = [], isLoading } = useQuery<SMPCompany[]>({
+    queryKey: ["/api/smp-companies"],
+    queryFn: () => apiRequest("GET", "/api/smp-companies").then((r) => r.json()),
   });
 
-  const filtered = smpContracts.filter(
-    (c) => !search || c.contractorName.toLowerCase().includes(search.toLowerCase()) || c.contractNumber.toLowerCase().includes(search.toLowerCase())
+  const filtered = companies.filter(
+    (c) => !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
+      (c.commercialRegistration ?? "").toLowerCase().includes(search.toLowerCase()) ||
+      (c.contactPerson ?? "").toLowerCase().includes(search.toLowerCase())
   );
+
+  const activeCount = companies.filter(c => c.isActive).length;
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white tracking-tight">SMP Contracts</h1>
-            <p className="text-muted-foreground mt-1">Manage Sub-Manpower Provider contracts and workforce allocation.</p>
+            <h1 className="text-3xl font-display font-bold text-white tracking-tight">SMP Companies</h1>
+            <p className="text-muted-foreground mt-1">Sub-Manpower Provider companies — manage partners and their deployed workers.</p>
           </div>
           <Button
             className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
             data-testid="button-create-smp"
-            onClick={() => setSmpOpen(true)}
+            onClick={() => setCreateOpen(true)}
           >
             <Plus className="mr-2 h-4 w-4" />
-            Create SMP Contract
+            Add SMP Company
           </Button>
         </div>
 
-        <CreateSMPContractDialog open={smpOpen} onOpenChange={setSmpOpen} />
-        <SMPContractSheet
-          contract={selectedSmp ? (smpContracts.find((c) => c.id === selectedSmp.id) ?? selectedSmp) : null}
-          open={smpSheetOpen}
-          onOpenChange={setSmpSheetOpen}
+        <CreateCompanyDialog open={createOpen} onOpenChange={setCreateOpen} />
+        <CompanySheet
+          company={selectedCompany ? (companies.find(c => c.id === selectedCompany.id) ?? selectedCompany) : null}
+          open={sheetOpen}
+          onOpenChange={setSheetOpen}
         />
 
+        {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="bg-card border-border shadow-sm border-l-4 border-l-amber-500">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Contracts</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Companies</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-contracts">{smpContracts.length}</div>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-companies">{companies.length}</div>
             </CardContent>
           </Card>
           <Card className="bg-card border-border shadow-sm border-l-4 border-l-primary">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Workers</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Active</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-workers">
-                {smpContracts.reduce((sum, c) => sum + ((c.employees as unknown[]) ?? []).length, 0)}
-              </div>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-active-companies">{activeCount}</div>
             </CardContent>
           </Card>
           <Card className="bg-card border-border shadow-sm border-l-4 border-l-blue-500">
@@ -590,17 +857,18 @@ export default function SMPContractsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-4xl font-bold font-display text-white" data-testid="stat-regions">
-                {new Set(smpContracts.map(c => c.region).filter(Boolean)).size}
+                {new Set(companies.map(c => c.region).filter(Boolean)).size}
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-4 items-center bg-card p-4 rounded-sm border border-border">
+        {/* Search */}
+        <div className="flex items-center bg-card p-4 rounded-sm border border-border">
           <div className="relative flex-1 w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
-              placeholder="Search by contractor name or contract number..."
+              placeholder="Search by company name, CR number, or contact person…"
               className="pl-10 h-12 bg-muted/30 border-border focus-visible:ring-primary/20 text-base"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -609,84 +877,93 @@ export default function SMPContractsPage() {
           </div>
         </div>
 
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-lg font-display text-white">Contracts</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <Calendar className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                <p className="text-muted-foreground font-medium">No SMP contracts found</p>
-                <p className="text-muted-foreground/60 text-sm mt-1">Click "Create SMP Contract" to add one</p>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="text-muted-foreground">Contract No.</TableHead>
-                    <TableHead className="text-muted-foreground">Contractor</TableHead>
-                    <TableHead className="text-muted-foreground hidden md:table-cell">Type</TableHead>
-                    <TableHead className="text-muted-foreground hidden md:table-cell">Region</TableHead>
-                    <TableHead className="text-muted-foreground hidden lg:table-cell">Start Date</TableHead>
-                    <TableHead className="text-muted-foreground hidden lg:table-cell">End Date</TableHead>
-                    <TableHead className="text-muted-foreground hidden lg:table-cell">Workers</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((contract) => (
-                    <TableRow
-                      key={contract.id}
-                      className="border-border hover:bg-muted/20 cursor-pointer"
-                      data-testid={`row-smp-${contract.id}`}
-                      onClick={() => { setSelectedSmp(contract); setSmpSheetOpen(true); }}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <code className="font-mono text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-                            {contract.contractNumber}
-                          </code>
-                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-white font-medium text-sm">{contract.contractorName}</span>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <Badge variant="outline" className="border-border text-muted-foreground font-normal capitalize text-xs">
-                          {contract.contractType.replace(/_/g, " ")}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <span className="text-sm text-muted-foreground">{contract.region || "—"}</span>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="text-sm text-white">{contract.startDate || "—"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="text-sm text-white">{contract.endDate || "—"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <span className="text-sm font-medium text-white">{((contract.employees as unknown[]) ?? []).length}</span>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+        {/* Company Grid */}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-sm">
+            <Building2 className="h-12 w-12 text-muted-foreground/30 mb-4" />
+            <p className="text-muted-foreground font-medium">
+              {search ? "No companies match your search" : "No SMP companies yet"}
+            </p>
+            {!search && (
+              <p className="text-muted-foreground/60 text-sm mt-1">Click "Add SMP Company" to register your first partner</p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {filtered.map((company) => (
+              <CompanyCard
+                key={company.id}
+                company={company}
+                onClick={() => { setSelectedCompany(company); setSheetOpen(true); }}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </DashboardLayout>
+  );
+}
+
+function CompanyCard({ company, onClick }: { company: SMPCompany; onClick: () => void }) {
+  const docs: CompanyDoc[] = Array.isArray(company.documents) ? (company.documents as CompanyDoc[]) : [];
+
+  return (
+    <div
+      className="bg-card border border-border rounded-sm p-4 hover:border-primary/40 cursor-pointer transition-all group"
+      onClick={onClick}
+      data-testid={`card-smp-${company.id}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-10 w-10 rounded-sm bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+            <Building2 className="h-5 w-5 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-white truncate group-hover:text-primary transition-colors">{company.name}</p>
+            {company.commercialRegistration && (
+              <p className="text-[11px] text-muted-foreground font-mono">CR {company.commercialRegistration}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <Badge className={`text-[10px] border-0 ${company.isActive ? "bg-emerald-900/40 text-emerald-400" : "bg-zinc-800 text-zinc-400"}`}>
+            {company.isActive ? "Active" : "Inactive"}
+          </Badge>
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40" />
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-1">
+        {company.contactPerson && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Users className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{company.contactPerson}</span>
+          </div>
+        )}
+        {company.contactPhone && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Phone className="h-3.5 w-3.5 shrink-0" />
+            <span>{company.contactPhone}</span>
+          </div>
+        )}
+        {company.region && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5 shrink-0" />
+            <span>{company.region}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-border flex items-center gap-3 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <FileText className="h-3 w-3" />
+          {docs.length} doc{docs.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+    </div>
   );
 }
