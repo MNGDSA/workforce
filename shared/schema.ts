@@ -260,50 +260,45 @@ export const events = pgTable(
   })
 );
 
-// ─── SMP Contracts (legacy — kept for backward compat) ──────────────────────
-export const smpContractTypeEnum = pgEnum("smp_contract_type", ["fixed_term", "open_ended", "project_based"]);
-
-export const smpContracts = pgTable(
-  "smp_contracts",
-  {
-    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-    contractNumber: text("contract_number").notNull().unique(),
-    contractorName: text("contractor_name").notNull(),
-    contractType: smpContractTypeEnum("contract_type").notNull().default("fixed_term"),
-    region: text("region").notNull(),
-    startDate: text("start_date").notNull(),
-    endDate: text("end_date").notNull(),
-    notes: text("notes"),
-    employees: jsonb("employees").default([]),
-    createdAt: timestamp("created_at").notNull().default(sql`now()`),
-    updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
-  },
-  (t) => ({
-    contractNumberIdx: uniqueIndex("smp_contracts_number_idx").on(t.contractNumber),
-  })
-);
-
-// ─── SMP Companies (master entity — replaces smp_contracts for new flows) ───
+// ─── SMP Companies (master entity) ──────────────────────────────────────────
 export const smpCompanies = pgTable(
   "smp_companies",
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
     name: text("name").notNull(),
-    commercialRegistration: varchar("commercial_registration", { length: 50 }),
+    crNumber: varchar("cr_number", { length: 50 }),
     contactPerson: text("contact_person"),
     contactPhone: text("contact_phone"),
     contactEmail: text("contact_email"),
+    bankName: text("bank_name"),
+    bankIban: varchar("bank_iban", { length: 34 }),
     region: text("region"),
     notes: text("notes"),
     isActive: boolean("is_active").notNull().default(true),
-    // Document vault — array of {name, url, uploadedAt, size}
-    documents: jsonb("documents").notNull().default(sql`'[]'::jsonb`),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
   },
   (t) => ({
     nameIdx: index("smp_companies_name_idx").on(t.name),
     activeIdx: index("smp_companies_active_idx").on(t.isActive),
+  })
+);
+
+// ─── SMP Documents (document vault per company) ──────────────────────────────
+export const smpDocuments = pgTable(
+  "smp_documents",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    smpCompanyId: varchar("smp_company_id").notNull().references(() => smpCompanies.id, { onDelete: "cascade" }),
+    fileUrl: text("file_url").notNull(),
+    fileName: text("file_name").notNull(),
+    description: text("description"),
+    eventId: varchar("event_id").references(() => events.id, { onDelete: "set null" }),
+    uploadedAt: timestamp("uploaded_at").notNull().default(sql`now()`),
+    uploadedBy: varchar("uploaded_by").references(() => users.id, { onDelete: "set null" }),
+  },
+  (t) => ({
+    companyIdx: index("smp_documents_company_idx").on(t.smpCompanyId),
   })
 );
 
@@ -680,14 +675,6 @@ export type Notification = typeof notifications.$inferSelect;
 export type InsertQuestionSet = z.infer<typeof insertQuestionSetSchema>;
 export type QuestionSet = typeof questionSets.$inferSelect;
 
-export const insertSMPContractSchema = createInsertSchema(smpContracts).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-export type InsertSMPContract = z.infer<typeof insertSMPContractSchema>;
-export type SMPContract = typeof smpContracts.$inferSelect;
-
 export const insertSMPCompanySchema = createInsertSchema(smpCompanies).omit({
   id: true,
   createdAt: true,
@@ -695,6 +682,13 @@ export const insertSMPCompanySchema = createInsertSchema(smpCompanies).omit({
 });
 export type InsertSMPCompany = z.infer<typeof insertSMPCompanySchema>;
 export type SMPCompany = typeof smpCompanies.$inferSelect;
+
+export const insertSMPDocumentSchema = createInsertSchema(smpDocuments).omit({
+  id: true,
+  uploadedAt: true,
+});
+export type InsertSMPDocument = z.infer<typeof insertSMPDocumentSchema>;
+export type SMPDocument = typeof smpDocuments.$inferSelect;
 
 export const insertSmsPluginSchema = createInsertSchema(smsPlugins).omit({
   id: true,

@@ -18,8 +18,8 @@ import {
   insertNotificationSchema,
   insertUserSchema,
   insertBusinessUnitSchema,
-  insertSMPContractSchema,
   insertSMPCompanySchema,
+  insertSMPDocumentSchema,
   insertQuestionSetSchema,
   insertContractTemplateSchema,
   candidateQuerySchema,
@@ -1599,6 +1599,11 @@ export async function registerRoutes(
               resolvedEmploymentType = ob.applicationId ? "individual" : "smp";
             }
           }
+          // SMP workers must be linked to a company
+          if (resolvedEmploymentType === "smp" && !smpCompanyId) {
+            errors.push({ id, message: "smpCompanyId is required for SMP workers" });
+            continue;
+          }
           const wf = await storage.convertOnboardingToEmployee(
             id,
             { startDate, eventId, salary, smpCompanyId, employmentType: resolvedEmploymentType },
@@ -1726,11 +1731,17 @@ export async function registerRoutes(
         clientEmploymentType === "individual" ? "individual" :
         undefined;
 
+      let ob: any = null;
       if (!resolvedEmploymentType) {
-        const ob = await storage.getOnboardingRecord(req.params.id);
+        ob = await storage.getOnboardingRecord(req.params.id);
         if (ob) {
           resolvedEmploymentType = ob.applicationId ? "individual" : "smp";
         }
+      }
+
+      // SMP workers must be linked to a company
+      if (resolvedEmploymentType === "smp" && !smpCompanyId) {
+        return res.status(400).json({ message: "smpCompanyId is required for SMP workers" });
       }
 
       const workforce = await storage.convertOnboardingToEmployee(
@@ -2025,6 +2036,10 @@ export async function registerRoutes(
       if (!nationalId || !startDate) return res.status(400).json({ message: "nationalId and startDate are required" });
       const resolvedEmploymentType: "individual" | "smp" | undefined =
         employmentType === "smp" ? "smp" : employmentType === "individual" ? "individual" : undefined;
+      // SMP workers must be linked to a company
+      if (resolvedEmploymentType === "smp" && !smpCompanyId) {
+        return res.status(400).json({ message: "smpCompanyId is required for SMP workers" });
+      }
       const record = await storage.reinstateEmployee(nationalId, { startDate, eventId, salary, jobId, smpCompanyId: smpCompanyId || undefined, employmentType: resolvedEmploymentType });
       const empNum = (record as any).employeeNumber ?? undefined;
       const subjectName = (record as any).fullNameEn ?? undefined;
@@ -2259,57 +2274,6 @@ export async function registerRoutes(
     }
   });
 
-  // ─── SMP Contracts ──────────────────────────────────────────────────────────
-  app.get("/api/smp-contracts", async (_req: Request, res: Response) => {
-    try {
-      const contracts = await storage.getSMPContracts();
-      return res.json(contracts);
-    } catch (err) {
-      return handleError(res, err);
-    }
-  });
-
-  app.get("/api/smp-contracts/:id", async (req: Request, res: Response) => {
-    try {
-      const contract = await storage.getSMPContract(req.params.id);
-      if (!contract) return res.status(404).json({ message: "Contract not found" });
-      return res.json(contract);
-    } catch (err) {
-      return handleError(res, err);
-    }
-  });
-
-  app.post("/api/smp-contracts", async (req: Request, res: Response) => {
-    try {
-      const data = insertSMPContractSchema.parse(req.body);
-      const contract = await storage.createSMPContract(data);
-      return res.status(201).json(contract);
-    } catch (err) {
-      return handleError(res, err);
-    }
-  });
-
-  app.patch("/api/smp-contracts/:id", async (req: Request, res: Response) => {
-    try {
-      const data = insertSMPContractSchema.partial().parse(req.body);
-      const contract = await storage.updateSMPContract(req.params.id, data);
-      if (!contract) return res.status(404).json({ message: "Contract not found" });
-      return res.json(contract);
-    } catch (err) {
-      return handleError(res, err);
-    }
-  });
-
-  app.delete("/api/smp-contracts/:id", async (req: Request, res: Response) => {
-    try {
-      const ok = await storage.deleteSMPContract(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Contract not found" });
-      return res.status(204).send();
-    } catch (err) {
-      return handleError(res, err);
-    }
-  });
-
   // ─── SMP Companies ─────────────────────────────────────────────────────────
   app.get("/api/smp-companies", async (_req: Request, res: Response) => {
     try {
@@ -2370,6 +2334,44 @@ export async function registerRoutes(
     try {
       const ok = await storage.deleteSMPCompany(req.params.id);
       if (!ok) return res.status(404).json({ message: "Company not found" });
+      return res.status(204).send();
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // SMP Documents (sub-routes under SMP Companies)
+  app.get("/api/smp-companies/:id/documents", async (req: Request, res: Response) => {
+    try {
+      const docs = await storage.getSMPDocuments(req.params.id);
+      return res.json(docs);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/smp-companies/:id/documents", async (req: Request, res: Response) => {
+    try {
+      const { fileUrl, fileName, description, eventId } = req.body;
+      if (!fileUrl || !fileName) return res.status(400).json({ message: "fileUrl and fileName are required" });
+      const doc = await storage.createSMPDocument({
+        smpCompanyId: req.params.id,
+        fileUrl,
+        fileName,
+        description: description || undefined,
+        eventId: eventId || undefined,
+        uploadedBy: (req as any).userId ?? undefined,
+      });
+      return res.status(201).json(doc);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.delete("/api/smp-companies/:companyId/documents/:docId", async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteSMPDocument(req.params.docId);
+      if (!ok) return res.status(404).json({ message: "Document not found" });
       return res.status(204).send();
     } catch (err) {
       return handleError(res, err);

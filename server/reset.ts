@@ -62,7 +62,7 @@ const KNOWN_WIPE = new Set([
   "workforce",
   "job_postings",
   "events",
-  "smp_contracts",
+  "smp_documents",
   "smp_companies",
   "candidates",
   "automation_rules",

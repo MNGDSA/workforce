@@ -2139,22 +2139,22 @@ export default function OnboardingPage() {
                   className="bg-zinc-900 border-zinc-700 text-white"
                 />
               </div>
-              {/* SMP Company selector — shown only for SMP candidates (no applicationId) */}
+              {/* SMP Company selector — required for SMP candidates (no applicationId) */}
               {convertRecord && !convertRecord.applicationId && (
                 <div className="space-y-1.5">
-                  <Label className="text-zinc-400 text-sm">SMP Company</Label>
+                  <Label className="text-zinc-400 text-sm">SMP Company <span className="text-red-400">*</span></Label>
                   <select
                     data-testid="select-convert-smp-company"
                     value={convertForm.smpCompanyId}
                     onChange={e => setConvertForm(f => ({ ...f, smpCompanyId: e.target.value }))}
                     className="w-full h-10 bg-zinc-900 border border-zinc-700 rounded-md px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
                   >
-                    <option value="" className="bg-zinc-900 text-zinc-400">None (unlinked)</option>
+                    <option value="" className="bg-zinc-900 text-zinc-400">— Select SMP company —</option>
                     {smpCompanies.map(c => (
                       <option key={c.id} value={c.id} className="bg-zinc-900 text-white">{c.name}</option>
                     ))}
                   </select>
-                  <p className="text-[11px] text-zinc-500">Optionally link this worker to an SMP company.</p>
+                  <p className="text-[11px] text-red-400/70">Required — SMP workers must be linked to a company.</p>
                 </div>
               )}
               <div className="space-y-1.5">
@@ -2180,7 +2180,12 @@ export default function OnboardingPage() {
               </Button>
               <Button
                 data-testid="button-confirm-convert"
-                disabled={!convertForm.startDate || !convertForm.eventId || convertMutation.isPending}
+                disabled={
+                  !convertForm.startDate ||
+                  !convertForm.eventId ||
+                  (convertRecord && !convertRecord.applicationId && !convertForm.smpCompanyId) ||
+                  convertMutation.isPending
+                }
                 onClick={() => convertRecord && convertMutation.mutate({
                   id: convertRecord.id,
                   body: { ...convertForm, smpCompanyId: convertForm.smpCompanyId || undefined },

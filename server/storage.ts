@@ -11,8 +11,8 @@ import {
   automationRules,
   notifications,
   businessUnits,
-  smpContracts,
   smpCompanies,
+  smpDocuments,
   questionSets,
   smsPlugins,
   otpVerifications,
@@ -53,10 +53,10 @@ import {
   type InsertNotification,
   type BusinessUnit,
   type InsertBusinessUnit,
-  type SMPContract,
-  type InsertSMPContract,
   type SMPCompany,
   type InsertSMPCompany,
+  type SMPDocument,
+  type InsertSMPDocument,
   type QuestionSet,
   type InsertQuestionSet,
   type SmsPlugin,
@@ -176,7 +176,7 @@ export interface IStorage {
   updateWorkforceRecord(id: string, data: Partial<InsertWorkforce>): Promise<WorkforceRecord | undefined>;
   terminateEmployee(id: string, data: { endDate: string; terminationReason?: string }): Promise<WorkforceRecord | undefined>;
   reinstateEmployee(nationalId: string, data: { startDate: string; eventId?: string; salary?: string; jobId?: string; employmentType?: "individual" | "smp"; smpCompanyId?: string }): Promise<WorkforceRecord>;
-  getWorkforceStats(): Promise<{ total: number; active: number; terminated: number }>;
+  getWorkforceStats(): Promise<{ total: number; active: number; terminated: number; smpWorkers: number }>;
   generateEmployeeNumber(): Promise<string>;
 
   // Offboarding
@@ -218,12 +218,10 @@ export interface IStorage {
   // Users (admin management)
   listUsers(): Promise<User[]>;
 
-  // SMP Contracts (legacy)
-  getSMPContracts(): Promise<SMPContract[]>;
-  getSMPContract(id: string): Promise<SMPContract | undefined>;
-  createSMPContract(data: InsertSMPContract): Promise<SMPContract>;
-  updateSMPContract(id: string, data: Partial<InsertSMPContract>): Promise<SMPContract | undefined>;
-  deleteSMPContract(id: string): Promise<boolean>;
+  // SMP Documents
+  getSMPDocuments(smpCompanyId: string): Promise<SMPDocument[]>;
+  createSMPDocument(data: InsertSMPDocument): Promise<SMPDocument>;
+  deleteSMPDocument(id: string): Promise<boolean>;
 
   // SMP Companies
   getSMPCompanies(): Promise<SMPCompany[]>;
@@ -1246,15 +1244,17 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async getWorkforceStats(): Promise<{ total: number; active: number; terminated: number }> {
+  async getWorkforceStats(): Promise<{ total: number; active: number; terminated: number; smpWorkers: number }> {
     const [total] = await db.select({ value: count() }).from(workforce);
     const [activeRow] = await db.select({ value: count() }).from(workforce).where(eq(workforce.isActive, true));
     const [terminatedRow] = await db.select({ value: count() }).from(workforce).where(eq(workforce.isActive, false));
+    const [smpRow] = await db.select({ value: count() }).from(workforce).where(eq(workforce.employmentType, "smp"));
 
     return {
       total: Number(total.value),
       active: Number(activeRow.value),
       terminated: Number(terminatedRow.value),
+      smpWorkers: Number(smpRow.value),
     };
   }
 
@@ -1540,32 +1540,20 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(users).orderBy(asc(users.fullName));
   }
 
-  // ─── SMP Contracts (legacy) ────────────────────────────────────────────────
-  async getSMPContracts(): Promise<SMPContract[]> {
-    return db.select().from(smpContracts).orderBy(desc(smpContracts.createdAt));
+  // ─── SMP Documents ─────────────────────────────────────────────────────────
+  async getSMPDocuments(smpCompanyId: string): Promise<SMPDocument[]> {
+    return db.select().from(smpDocuments)
+      .where(eq(smpDocuments.smpCompanyId, smpCompanyId))
+      .orderBy(desc(smpDocuments.uploadedAt));
   }
 
-  async getSMPContract(id: string): Promise<SMPContract | undefined> {
-    const [c] = await db.select().from(smpContracts).where(eq(smpContracts.id, id));
-    return c;
+  async createSMPDocument(data: InsertSMPDocument): Promise<SMPDocument> {
+    const [doc] = await db.insert(smpDocuments).values(data).returning();
+    return doc;
   }
 
-  async createSMPContract(data: InsertSMPContract): Promise<SMPContract> {
-    const [c] = await db.insert(smpContracts).values(data).returning();
-    return c;
-  }
-
-  async updateSMPContract(id: string, data: Partial<InsertSMPContract>): Promise<SMPContract | undefined> {
-    const [c] = await db
-      .update(smpContracts)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(smpContracts.id, id))
-      .returning();
-    return c;
-  }
-
-  async deleteSMPContract(id: string): Promise<boolean> {
-    const result = await db.delete(smpContracts).where(eq(smpContracts.id, id)).returning();
+  async deleteSMPDocument(id: string): Promise<boolean> {
+    const result = await db.delete(smpDocuments).where(eq(smpDocuments.id, id)).returning();
     return result.length > 0;
   }
 

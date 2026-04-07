@@ -16,7 +16,6 @@ import {
   Upload,
   ChevronRight,
   Trash2,
-  CheckCircle2,
   Users,
   Building2,
   FileText,
@@ -28,7 +27,9 @@ import {
   X,
   FolderOpen,
   FilePlus,
-  AlertCircle,
+  Banknote,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -40,19 +41,13 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { KSA_REGIONS } from "@shared/schema";
-import type { SMPCompany } from "@shared/schema";
+import type { SMPCompany, SMPDocument } from "@shared/schema";
 import { createPortal } from "react-dom";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-type CompanyDoc = {
-  name: string;
-  url: string;
-  uploadedAt: string;
-  size?: number;
-};
 
 type WorkerRow = {
   id: string;
@@ -80,21 +75,22 @@ function CreateCompanyDialog({
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [saving, setSaving] = useState(false);
 
-  const [form, setForm] = useState({
+  const emptyForm = {
     name: "",
-    commercialRegistration: "",
+    crNumber: "",
     contactPerson: "",
     contactPhone: "",
     contactEmail: "",
+    bankName: "",
+    bankIban: "",
     region: "",
     notes: "",
-  });
+  };
 
-  function reset() {
-    setForm({ name: "", commercialRegistration: "", contactPerson: "", contactPhone: "", contactEmail: "", region: "", notes: "" });
-  }
+  const [form, setForm] = useState(emptyForm);
+
+  function reset() { setForm(emptyForm); }
 
   const mutation = useMutation({
     mutationFn: (data: typeof form) =>
@@ -120,10 +116,10 @@ function CreateCompanyDialog({
         <DialogHeader>
           <DialogTitle className="text-white font-display text-xl">Create SMP Company</DialogTitle>
           <DialogDescription className="text-muted-foreground text-sm">
-            Sub-Manpower Provider company — register a company and link its workers via deployment.
+            Sub-Manpower Provider company — register a partner company and link its deployed workers.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <Label className="text-white text-sm">Company Name <span className="text-red-400">*</span></Label>
             <Input
@@ -136,10 +132,10 @@ function CreateCompanyDialog({
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label className="text-white text-sm">Commercial Registration</Label>
+              <Label className="text-white text-sm">CR Number</Label>
               <Input
-                value={form.commercialRegistration}
-                onChange={e => setForm(f => ({ ...f, commercialRegistration: e.target.value }))}
+                value={form.crNumber}
+                onChange={e => setForm(f => ({ ...f, crNumber: e.target.value }))}
                 placeholder="e.g. 4030123456"
                 className="bg-muted/30 border-border font-mono text-xs"
                 data-testid="input-smp-cr"
@@ -147,74 +143,57 @@ function CreateCompanyDialog({
             </div>
             <div className="space-y-1.5">
               <Label className="text-white text-sm">Region</Label>
-              <select
-                value={form.region}
-                onChange={e => setForm(f => ({ ...f, region: e.target.value }))}
-                className="w-full h-10 bg-muted/30 border border-border rounded-sm px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
-                data-testid="select-smp-region"
-              >
-                <option value="" className="bg-card text-muted-foreground">Select region…</option>
-                {KSA_REGIONS.map(r => <option key={r} value={r} className="bg-card text-white">{r}</option>)}
-              </select>
+              <Select value={form.region} onValueChange={v => setForm(f => ({ ...f, region: v }))}>
+                <SelectTrigger className="bg-muted/30 border-border text-white" data-testid="select-smp-region">
+                  <SelectValue placeholder="Select region…" />
+                </SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  {KSA_REGIONS.map(r => <SelectItem key={r} value={r} className="text-white">{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           </div>
+
           <div className="border-t border-border pt-4 space-y-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Contact Info</p>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-white text-sm">Contact Person</Label>
-                <Input
-                  value={form.contactPerson}
-                  onChange={e => setForm(f => ({ ...f, contactPerson: e.target.value }))}
-                  placeholder="e.g. Ahmed Al-Rashidi"
-                  className="bg-muted/30 border-border"
-                  data-testid="input-smp-contact-person"
-                />
+                <Input value={form.contactPerson} onChange={e => setForm(f => ({ ...f, contactPerson: e.target.value }))} placeholder="e.g. Ahmed Al-Rashidi" className="bg-muted/30 border-border" data-testid="input-smp-contact-person" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-white text-sm">Contact Phone</Label>
-                <Input
-                  value={form.contactPhone}
-                  onChange={e => setForm(f => ({ ...f, contactPhone: e.target.value }))}
-                  placeholder="e.g. 0512345678"
-                  className="bg-muted/30 border-border"
-                  data-testid="input-smp-contact-phone"
-                />
+                <Input value={form.contactPhone} onChange={e => setForm(f => ({ ...f, contactPhone: e.target.value }))} placeholder="e.g. 0512345678" className="bg-muted/30 border-border" data-testid="input-smp-contact-phone" />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label className="text-white text-sm">Contact Email</Label>
-              <Input
-                type="email"
-                value={form.contactEmail}
-                onChange={e => setForm(f => ({ ...f, contactEmail: e.target.value }))}
-                placeholder="e.g. contact@company.com"
-                className="bg-muted/30 border-border"
-                data-testid="input-smp-contact-email"
-              />
+              <Input type="email" value={form.contactEmail} onChange={e => setForm(f => ({ ...f, contactEmail: e.target.value }))} placeholder="e.g. contact@company.com" className="bg-muted/30 border-border" data-testid="input-smp-contact-email" />
             </div>
           </div>
+
+          <div className="border-t border-border pt-4 space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Banking Info</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-white text-sm">Bank Name</Label>
+                <Input value={form.bankName} onChange={e => setForm(f => ({ ...f, bankName: e.target.value }))} placeholder="e.g. Al Rajhi Bank" className="bg-muted/30 border-border" data-testid="input-smp-bank-name" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-white text-sm">Bank IBAN</Label>
+                <Input value={form.bankIban} onChange={e => setForm(f => ({ ...f, bankIban: e.target.value.toUpperCase() }))} placeholder="SA…" className="bg-muted/30 border-border font-mono text-xs" data-testid="input-smp-bank-iban" />
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-1.5">
             <Label className="text-white text-sm">Notes</Label>
-            <Textarea
-              value={form.notes}
-              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-              placeholder="Any additional notes or remarks…"
-              className="bg-muted/30 border-border resize-none"
-              rows={2}
-              data-testid="textarea-smp-notes"
-            />
+            <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any additional notes…" className="bg-muted/30 border-border resize-none" rows={2} data-testid="textarea-smp-notes" />
           </div>
+
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => { reset(); onOpenChange(false); }} className="text-muted-foreground">
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={mutation.isPending}
-              className="bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
-              data-testid="button-submit-smp"
-            >
+            <Button type="button" variant="ghost" onClick={() => { reset(); onOpenChange(false); }} className="text-muted-foreground">Cancel</Button>
+            <Button type="submit" disabled={mutation.isPending} className="bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs" data-testid="button-submit-smp">
               {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
               Create Company
             </Button>
@@ -227,20 +206,35 @@ function CreateCompanyDialog({
 
 // ─── Document Vault ────────────────────────────────────────────────────────────
 
-function DocumentVault({ company }: { company: SMPCompany }) {
+function DocumentVault({ company, events }: { company: SMPCompany; events: { id: string; name: string }[] }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [previewDoc, setPreviewDoc] = useState<CompanyDoc | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<SMPDocument | null>(null);
+  const [description, setDescription] = useState("");
+  const [eventId, setEventId] = useState("");
 
-  const docs: CompanyDoc[] = Array.isArray(company.documents) ? (company.documents as CompanyDoc[]) : [];
+  const { data: docs = [], isLoading } = useQuery<SMPDocument[]>({
+    queryKey: ["/api/smp-companies", company.id, "documents"],
+    queryFn: () => apiRequest("GET", `/api/smp-companies/${company.id}/documents`).then(r => r.json()),
+  });
 
-  const patchDocs = useMutation({
-    mutationFn: (documents: CompanyDoc[]) =>
-      apiRequest("PATCH", `/api/smp-companies/${company.id}`, { documents }).then(r => r.json()),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/smp-companies"] }),
-    onError: () => toast({ title: "Error", description: "Failed to update documents.", variant: "destructive" }),
+  const createDocMutation = useMutation({
+    mutationFn: (data: { fileUrl: string; fileName: string; description?: string; eventId?: string }) =>
+      apiRequest("POST", `/api/smp-companies/${company.id}/documents`, data).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/smp-companies", company.id, "documents"] });
+    },
+    onError: () => toast({ title: "Failed to save document record", variant: "destructive" }),
+  });
+
+  const deleteDocMutation = useMutation({
+    mutationFn: (docId: string) => apiRequest("DELETE", `/api/smp-companies/${company.id}/documents/${docId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/smp-companies", company.id, "documents"] });
+    },
+    onError: () => toast({ title: "Failed to delete document", variant: "destructive" }),
   });
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -248,22 +242,22 @@ function DocumentVault({ company }: { company: SMPCompany }) {
     if (!files.length) return;
     setUploading(true);
     try {
-      const newDocs: CompanyDoc[] = [];
       for (const file of files) {
         const formData = new FormData();
         formData.append("file", file);
         const res = await fetch("/api/upload", { method: "POST", body: formData });
         if (!res.ok) throw new Error(`Upload failed for ${file.name}`);
         const { url } = await res.json();
-        newDocs.push({
-          name: file.name,
-          url,
-          uploadedAt: new Date().toISOString(),
-          size: file.size,
+        await createDocMutation.mutateAsync({
+          fileUrl: url,
+          fileName: file.name,
+          description: description.trim() || undefined,
+          eventId: (eventId && eventId !== "_none") ? eventId : undefined,
         });
       }
-      patchDocs.mutate([...docs, ...newDocs]);
-      toast({ title: `${newDocs.length} document${newDocs.length !== 1 ? "s" : ""} uploaded` });
+      toast({ title: `${files.length} document${files.length !== 1 ? "s" : ""} uploaded` });
+      setDescription("");
+      setEventId("");
     } catch (err: any) {
       toast({ title: "Upload failed", description: err?.message, variant: "destructive" });
     } finally {
@@ -272,39 +266,45 @@ function DocumentVault({ company }: { company: SMPCompany }) {
     }
   }
 
-  function removeDoc(idx: number) {
-    patchDocs.mutate(docs.filter((_, i) => i !== idx));
-  }
-
-  function formatSize(bytes?: number) {
-    if (!bytes) return "";
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
   const isImage = (url: string) => /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(url);
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <FolderOpen className="h-4 w-4 text-primary" />
-          <span className="text-sm font-medium text-white">Document Vault</span>
-          {docs.length > 0 && (
-            <Badge className="text-[10px] bg-primary/15 text-primary border-0">{docs.length}</Badge>
-          )}
+    <div className="space-y-4">
+      {/* Upload area */}
+      <div className="space-y-2 border border-border rounded-sm p-3 bg-muted/5">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Upload Document</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="col-span-2">
+            <Input
+              placeholder="Description (optional)"
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              className="bg-muted/30 border-border text-sm"
+              data-testid="input-doc-description"
+            />
+          </div>
+          <div className="col-span-2">
+            <Select value={eventId} onValueChange={setEventId}>
+              <SelectTrigger className="bg-muted/30 border-border text-white text-sm" data-testid="select-doc-event">
+                <SelectValue placeholder="Tag to event (optional)…" />
+              </SelectTrigger>
+              <SelectContent className="bg-card border-border">
+                <SelectItem value="_none" className="text-muted-foreground">No event tag</SelectItem>
+                {events.map(ev => <SelectItem key={ev.id} value={ev.id} className="text-white">{ev.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <Button
           size="sm"
           variant="outline"
-          className="border-border text-xs gap-1.5 h-7"
+          className="border-border text-xs gap-1.5 w-full"
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
           data-testid="button-upload-docs"
         >
           {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FilePlus className="h-3.5 w-3.5" />}
-          Upload
+          {uploading ? "Uploading…" : "Choose & Upload File"}
         </Button>
         <input
           ref={fileInputRef}
@@ -316,83 +316,71 @@ function DocumentVault({ company }: { company: SMPCompany }) {
         />
       </div>
 
-      {docs.length === 0 ? (
-        <div
-          className="border border-dashed border-border rounded-sm p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
-          onClick={() => fileInputRef.current?.click()}
-          data-testid="dropzone-docs"
-        >
-          <Upload className="h-6 w-6 text-muted-foreground/40 mx-auto mb-2" />
-          <p className="text-xs text-muted-foreground">No documents yet. Click to upload contracts, licenses, or other files.</p>
-        </div>
-      ) : (
-        <div className="space-y-1.5">
-          {docs.map((doc, idx) => (
-            <div
-              key={idx}
-              className="flex items-center gap-3 px-3 py-2 rounded-sm bg-muted/10 border border-border hover:bg-muted/20 transition-colors"
-              data-testid={`row-doc-${idx}`}
-            >
-              <FileText className="h-4 w-4 text-primary shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-white truncate">{doc.name}</p>
-                <p className="text-[11px] text-muted-foreground">
-                  {new Date(doc.uploadedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                  {doc.size ? ` · ${formatSize(doc.size)}` : ""}
-                </p>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-muted-foreground hover:text-white"
-                  onClick={() => setPreviewDoc(doc)}
-                  data-testid={`button-preview-doc-${idx}`}
-                >
-                  <Eye className="h-3.5 w-3.5" />
-                </Button>
-                <a href={doc.url} download={doc.name} target="_blank" rel="noopener noreferrer">
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-white" data-testid={`button-download-doc-${idx}`}>
-                    <Download className="h-3.5 w-3.5" />
+      {/* Document list */}
+      <div className="space-y-1.5">
+        {isLoading ? (
+          <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>
+        ) : docs.length === 0 ? (
+          <div className="text-center py-6 border border-dashed border-border rounded-sm">
+            <FolderOpen className="h-6 w-6 text-muted-foreground/40 mx-auto mb-2" />
+            <p className="text-xs text-muted-foreground">No documents yet.</p>
+          </div>
+        ) : (
+          docs.map((doc) => {
+            const ev = events.find(e => e.id === doc.eventId);
+            return (
+              <div
+                key={doc.id}
+                className="flex items-center gap-3 px-3 py-2 rounded-sm bg-muted/10 border border-border hover:bg-muted/20 transition-colors"
+                data-testid={`row-doc-${doc.id}`}
+              >
+                <FileText className="h-4 w-4 text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white truncate">{doc.fileName}</p>
+                  <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                    <span>{new Date(doc.uploadedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                    {doc.description && <span className="text-zinc-400">· {doc.description}</span>}
+                    {ev && <Badge className="text-[9px] bg-blue-900/30 text-blue-400 border-0">{ev.name}</Badge>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-white" onClick={() => setPreviewDoc(doc)} data-testid={`button-preview-doc-${doc.id}`}>
+                    <Eye className="h-3.5 w-3.5" />
                   </Button>
-                </a>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-muted-foreground hover:text-red-400"
-                  onClick={() => removeDoc(idx)}
-                  data-testid={`button-remove-doc-${idx}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                  <a href={doc.fileUrl} download={doc.fileName} target="_blank" rel="noopener noreferrer">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-white" data-testid={`button-download-doc-${doc.id}`}>
+                      <Download className="h-3.5 w-3.5" />
+                    </Button>
+                  </a>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-400" onClick={() => deleteDocMutation.mutate(doc.id)} disabled={deleteDocMutation.isPending} data-testid={`button-remove-doc-${doc.id}`}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            );
+          })
+        )}
+      </div>
 
       {/* Preview portal */}
       {previewDoc && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4" onClick={() => setPreviewDoc(null)}>
           <div className="bg-card border border-border rounded-lg max-w-3xl w-full max-h-[85vh] overflow-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-              <span className="text-sm font-medium text-white">{previewDoc.name}</span>
+              <span className="text-sm font-medium text-white">{previewDoc.fileName}</span>
               <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setPreviewDoc(null)}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
             <div className="p-4">
-              {isImage(previewDoc.url) ? (
-                <img src={previewDoc.url} alt={previewDoc.name} className="max-w-full rounded" />
+              {isImage(previewDoc.fileUrl) ? (
+                <img src={previewDoc.fileUrl} alt={previewDoc.fileName} className="max-w-full rounded" />
               ) : (
                 <div className="text-center py-12 text-muted-foreground">
                   <FileText className="h-12 w-12 mx-auto mb-3 text-muted-foreground/40" />
                   <p className="text-sm">Preview not available for this file type.</p>
-                  <a href={previewDoc.url} download={previewDoc.name} target="_blank" rel="noopener noreferrer">
-                    <Button size="sm" variant="outline" className="border-border mt-3 gap-2">
-                      <Download className="h-3.5 w-3.5" />
-                      Download File
-                    </Button>
+                  <a href={previewDoc.fileUrl} download={previewDoc.fileName} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" variant="outline" className="border-border mt-3 gap-2"><Download className="h-3.5 w-3.5" />Download File</Button>
                   </a>
                 </div>
               )}
@@ -442,46 +430,31 @@ function WorkersList({ companyId }: { companyId: string }) {
           <Badge className="text-[10px] bg-primary/15 text-primary border-0">{workers.length}</Badge>
         </div>
         {workers.length > 0 && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-border text-xs gap-1.5 h-7"
-            onClick={exportToExcel}
-            data-testid="button-export-workers"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Export
+          <Button size="sm" variant="outline" className="border-border text-xs gap-1.5 h-7" onClick={exportToExcel} data-testid="button-export-workers">
+            <Download className="h-3.5 w-3.5" />Export
           </Button>
         )}
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-6">
-          <Loader2 className="h-5 w-5 animate-spin text-primary" />
-        </div>
+        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
       ) : workers.length === 0 ? (
         <div className="text-center py-8 border border-dashed border-border rounded-sm">
           <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-          <p className="text-xs text-muted-foreground">
-            No workers deployed yet. When converting SMP candidates to employees, select this company to link them here.
-          </p>
+          <p className="text-xs text-muted-foreground">No workers deployed yet. When converting SMP candidates to employees, select this company to link them here.</p>
         </div>
       ) : (
         <div className="space-y-2">
           {active.length > 0 && (
             <>
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Active ({active.length})</p>
-              {active.map(w => (
-                <WorkerCard key={w.id} worker={w} />
-              ))}
+              {active.map(w => <WorkerCard key={w.id} worker={w} />)}
             </>
           )}
           {inactive.length > 0 && (
             <>
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mt-3">Terminated ({inactive.length})</p>
-              {inactive.map(w => (
-                <WorkerCard key={w.id} worker={w} />
-              ))}
+              {inactive.map(w => <WorkerCard key={w.id} worker={w} />)}
             </>
           )}
         </div>
@@ -493,11 +466,7 @@ function WorkersList({ companyId }: { companyId: string }) {
 function WorkerCard({ worker }: { worker: WorkerRow }) {
   return (
     <div
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-sm border transition-colors ${
-        worker.isActive
-          ? "bg-muted/10 border-border hover:bg-muted/20"
-          : "bg-muted/5 border-border/50 opacity-60"
-      }`}
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-sm border transition-colors ${worker.isActive ? "bg-muted/10 border-border hover:bg-muted/20" : "bg-muted/5 border-border/50 opacity-60"}`}
       data-testid={`row-worker-${worker.id}`}
     >
       <Avatar className="h-8 w-8 border border-border shrink-0">
@@ -510,13 +479,9 @@ function WorkerCard({ worker }: { worker: WorkerRow }) {
           <p className="text-sm font-medium text-white truncate">{worker.fullNameEn ?? "Unknown"}</p>
           {worker.isActive
             ? <Badge className="text-[9px] bg-emerald-900/40 text-emerald-400 border-0 shrink-0">Active</Badge>
-            : <Badge className="text-[9px] bg-zinc-800 text-zinc-400 border-0 shrink-0">Terminated</Badge>
-          }
+            : <Badge className="text-[9px] bg-zinc-800 text-zinc-400 border-0 shrink-0">Terminated</Badge>}
         </div>
-        <p className="text-[11px] text-muted-foreground font-mono">
-          #{worker.employeeNumber}
-          {worker.nationalId ? ` · ${worker.nationalId}` : ""}
-        </p>
+        <p className="text-[11px] text-muted-foreground font-mono">#{worker.employeeNumber}{worker.nationalId ? ` · ${worker.nationalId}` : ""}</p>
       </div>
       <div className="text-[11px] text-muted-foreground text-right shrink-0">
         <p>{worker.startDate}</p>
@@ -532,10 +497,12 @@ function CompanySheet({
   company,
   open,
   onOpenChange,
+  events,
 }: {
   company: SMPCompany | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  events: { id: string; name: string }[];
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -564,17 +531,26 @@ function CompanySheet({
     onError: () => toast({ title: "Error", description: "Failed to delete company.", variant: "destructive" }),
   });
 
-  if (!company) return null;
+  const toggleActiveMutation = useMutation({
+    mutationFn: () => apiRequest("PATCH", `/api/smp-companies/${company!.id}`, { isActive: !company!.isActive }).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/smp-companies"] });
+      toast({ title: `Company ${company!.isActive ? "deactivated" : "activated"}` });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to toggle status.", variant: "destructive" }),
+  });
 
-  const docs: CompanyDoc[] = Array.isArray(company.documents) ? (company.documents as CompanyDoc[]) : [];
+  if (!company) return null;
 
   function startEdit() {
     setEditForm({
       name: company!.name,
-      commercialRegistration: company!.commercialRegistration ?? "",
+      crNumber: company!.crNumber ?? "",
       contactPerson: company!.contactPerson ?? "",
       contactPhone: company!.contactPhone ?? "",
       contactEmail: company!.contactEmail ?? "",
+      bankName: company!.bankName ?? "",
+      bankIban: company!.bankIban ?? "",
       region: company!.region ?? "",
       notes: company!.notes ?? "",
     });
@@ -599,38 +575,39 @@ function CompanySheet({
                 <Building2 className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <SheetTitle className="font-display text-xl font-bold text-white leading-tight">
-                  {company.name}
-                </SheetTitle>
+                <SheetTitle className="font-display text-xl font-bold text-white leading-tight">{company.name}</SheetTitle>
                 <div className="text-muted-foreground mt-1 flex items-center gap-2 flex-wrap text-xs">
-                  {company.commercialRegistration && (
-                    <span className="font-mono bg-muted/20 px-1.5 py-0.5 rounded text-[11px]">CR {company.commercialRegistration}</span>
+                  {company.crNumber && (
+                    <span className="font-mono bg-muted/20 px-1.5 py-0.5 rounded text-[11px]">CR {company.crNumber}</span>
                   )}
-                  {company.region && (
-                    <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {company.region}</span>
-                  )}
+                  {company.region && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {company.region}</span>}
                   <Badge className={`text-[10px] border-0 ${company.isActive ? "bg-emerald-900/40 text-emerald-400" : "bg-zinc-800 text-zinc-400"}`}>
                     {company.isActive ? "Active" : "Inactive"}
                   </Badge>
                 </div>
               </div>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-border text-xs shrink-0"
-              onClick={editMode ? () => setEditMode(false) : startEdit}
-              data-testid="button-edit-company"
-            >
-              {editMode ? "Cancel" : "Edit"}
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="icon"
+                variant="ghost"
+                className={`h-8 w-8 ${company.isActive ? "text-emerald-400 hover:text-emerald-300" : "text-zinc-500 hover:text-zinc-300"}`}
+                onClick={() => toggleActiveMutation.mutate()}
+                disabled={toggleActiveMutation.isPending}
+                title={company.isActive ? "Deactivate" : "Activate"}
+                data-testid="button-toggle-active"
+              >
+                {company.isActive ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5" />}
+              </Button>
+              <Button size="sm" variant="outline" className="border-border text-xs" onClick={editMode ? () => setEditMode(false) : startEdit} data-testid="button-edit-company">
+                {editMode ? "Cancel" : "Edit"}
+              </Button>
+            </div>
           </div>
           {/* Tabs */}
           <div className="flex border-b border-border mt-2 -mb-4">
             <button className={tabClass("info")} onClick={() => setActiveTab("info")} data-testid="tab-info">Info</button>
-            <button className={tabClass("docs")} onClick={() => setActiveTab("docs")} data-testid="tab-docs">
-              Documents {docs.length > 0 && `(${docs.length})`}
-            </button>
+            <button className={tabClass("docs")} onClick={() => setActiveTab("docs")} data-testid="tab-docs">Documents</button>
             <button className={tabClass("workers")} onClick={() => setActiveTab("workers")} data-testid="tab-workers">Workers</button>
           </div>
         </SheetHeader>
@@ -643,96 +620,56 @@ function CompanySheet({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2 space-y-1.5">
                     <Label className="text-white text-sm">Company Name *</Label>
-                    <Input
-                      value={editForm.name ?? ""}
-                      onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
-                      className="bg-muted/30 border-border"
-                      data-testid="input-edit-name"
-                    />
+                    <Input value={editForm.name ?? ""} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} className="bg-muted/30 border-border" data-testid="input-edit-name" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-white text-sm">Commercial Registration</Label>
-                    <Input
-                      value={editForm.commercialRegistration ?? ""}
-                      onChange={e => setEditForm(f => ({ ...f, commercialRegistration: e.target.value }))}
-                      className="bg-muted/30 border-border font-mono text-xs"
-                      data-testid="input-edit-cr"
-                    />
+                    <Label className="text-white text-sm">CR Number</Label>
+                    <Input value={editForm.crNumber ?? ""} onChange={e => setEditForm(f => ({ ...f, crNumber: e.target.value }))} className="bg-muted/30 border-border font-mono text-xs" data-testid="input-edit-cr" />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-white text-sm">Region</Label>
-                    <select
-                      value={editForm.region ?? ""}
-                      onChange={e => setEditForm(f => ({ ...f, region: e.target.value }))}
-                      className="w-full h-10 bg-muted/30 border border-border rounded-sm px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
-                      data-testid="select-edit-region"
-                    >
-                      <option value="" className="bg-card text-muted-foreground">Select region…</option>
-                      {KSA_REGIONS.map(r => <option key={r} value={r} className="bg-card text-white">{r}</option>)}
-                    </select>
+                    <Select value={editForm.region ?? ""} onValueChange={v => setEditForm(f => ({ ...f, region: v }))}>
+                      <SelectTrigger className="bg-muted/30 border-border text-white" data-testid="select-edit-region">
+                        <SelectValue placeholder="Select region…" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-card border-border">
+                        {KSA_REGIONS.map(r => <SelectItem key={r} value={r} className="text-white">{r}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-white text-sm">Contact Person</Label>
-                    <Input
-                      value={editForm.contactPerson ?? ""}
-                      onChange={e => setEditForm(f => ({ ...f, contactPerson: e.target.value }))}
-                      className="bg-muted/30 border-border"
-                      data-testid="input-edit-contact-person"
-                    />
+                    <Input value={editForm.contactPerson ?? ""} onChange={e => setEditForm(f => ({ ...f, contactPerson: e.target.value }))} className="bg-muted/30 border-border" data-testid="input-edit-contact-person" />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-white text-sm">Contact Phone</Label>
-                    <Input
-                      value={editForm.contactPhone ?? ""}
-                      onChange={e => setEditForm(f => ({ ...f, contactPhone: e.target.value }))}
-                      className="bg-muted/30 border-border"
-                      data-testid="input-edit-contact-phone"
-                    />
+                    <Input value={editForm.contactPhone ?? ""} onChange={e => setEditForm(f => ({ ...f, contactPhone: e.target.value }))} className="bg-muted/30 border-border" data-testid="input-edit-contact-phone" />
                   </div>
                   <div className="col-span-2 space-y-1.5">
                     <Label className="text-white text-sm">Contact Email</Label>
-                    <Input
-                      type="email"
-                      value={editForm.contactEmail ?? ""}
-                      onChange={e => setEditForm(f => ({ ...f, contactEmail: e.target.value }))}
-                      className="bg-muted/30 border-border"
-                      data-testid="input-edit-contact-email"
-                    />
+                    <Input type="email" value={editForm.contactEmail ?? ""} onChange={e => setEditForm(f => ({ ...f, contactEmail: e.target.value }))} className="bg-muted/30 border-border" data-testid="input-edit-contact-email" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-white text-sm">Bank Name</Label>
+                    <Input value={editForm.bankName ?? ""} onChange={e => setEditForm(f => ({ ...f, bankName: e.target.value }))} className="bg-muted/30 border-border" data-testid="input-edit-bank-name" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-white text-sm">Bank IBAN</Label>
+                    <Input value={editForm.bankIban ?? ""} onChange={e => setEditForm(f => ({ ...f, bankIban: e.target.value.toUpperCase() }))} className="bg-muted/30 border-border font-mono text-xs" data-testid="input-edit-bank-iban" />
                   </div>
                   <div className="col-span-2 space-y-1.5">
                     <Label className="text-white text-sm">Notes</Label>
-                    <Textarea
-                      value={editForm.notes ?? ""}
-                      onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
-                      className="bg-muted/30 border-border resize-none"
-                      rows={3}
-                      data-testid="textarea-edit-notes"
-                    />
+                    <Textarea value={editForm.notes ?? ""} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} className="bg-muted/30 border-border resize-none" rows={3} data-testid="textarea-edit-notes" />
                   </div>
                 </div>
                 <div className="flex gap-2 justify-between pt-2">
-                  <Button
-                    variant="outline"
-                    className="border-red-900/60 text-red-400 hover:bg-red-950/40 text-xs gap-1.5"
-                    onClick={() => deleteMutation.mutate()}
-                    disabled={deleteMutation.isPending}
-                    data-testid="button-delete-company"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete Company
+                  <Button variant="outline" className="border-red-900/60 text-red-400 hover:bg-red-950/40 text-xs gap-1.5" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending} data-testid="button-delete-company">
+                    <Trash2 className="h-3.5 w-3.5" />Delete Company
                   </Button>
                   <div className="flex gap-2">
-                    <Button variant="outline" className="border-border text-xs" onClick={() => setEditMode(false)}>
-                      Cancel
-                    </Button>
-                    <Button
-                      className="bg-primary text-primary-foreground text-xs font-bold"
-                      onClick={() => updateMutation.mutate(editForm)}
-                      disabled={updateMutation.isPending || !editForm.name?.trim()}
-                      data-testid="button-save-company"
-                    >
-                      {updateMutation.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
-                      Save Changes
+                    <Button variant="outline" className="border-border text-xs" onClick={() => setEditMode(false)}>Cancel</Button>
+                    <Button className="bg-primary text-primary-foreground text-xs font-bold" onClick={() => updateMutation.mutate(editForm)} disabled={updateMutation.isPending || !editForm.name?.trim()} data-testid="button-save-company">
+                      {updateMutation.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}Save Changes
                     </Button>
                   </div>
                 </div>
@@ -740,18 +677,12 @@ function CompanySheet({
             ) : (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                  {company.contactPerson && (
-                    <InfoRow icon={<Users className="h-4 w-4" />} label="Contact Person" value={company.contactPerson} />
-                  )}
-                  {company.contactPhone && (
-                    <InfoRow icon={<Phone className="h-4 w-4" />} label="Phone" value={company.contactPhone} />
-                  )}
-                  {company.contactEmail && (
-                    <InfoRow icon={<Mail className="h-4 w-4" />} label="Email" value={company.contactEmail} />
-                  )}
-                  {company.region && (
-                    <InfoRow icon={<MapPin className="h-4 w-4" />} label="Region" value={company.region} />
-                  )}
+                  {company.contactPerson && <InfoRow icon={<Users className="h-4 w-4" />} label="Contact Person" value={company.contactPerson} />}
+                  {company.contactPhone && <InfoRow icon={<Phone className="h-4 w-4" />} label="Phone" value={company.contactPhone} />}
+                  {company.contactEmail && <InfoRow icon={<Mail className="h-4 w-4" />} label="Email" value={company.contactEmail} />}
+                  {company.region && <InfoRow icon={<MapPin className="h-4 w-4" />} label="Region" value={company.region} />}
+                  {company.bankName && <InfoRow icon={<Banknote className="h-4 w-4" />} label="Bank" value={company.bankName} />}
+                  {company.bankIban && <InfoRow icon={<Banknote className="h-4 w-4" />} label="IBAN" value={company.bankIban} />}
                 </div>
                 {company.notes && (
                   <div className="space-y-1">
@@ -765,8 +696,7 @@ function CompanySheet({
               </div>
             )
           )}
-
-          {activeTab === "docs" && <DocumentVault company={company} />}
+          {activeTab === "docs" && <DocumentVault company={company} events={events} />}
           {activeTab === "workers" && <WorkersList companyId={company.id} />}
         </div>
       </SheetContent>
@@ -799,9 +729,20 @@ export default function SMPCompaniesPage() {
     queryFn: () => apiRequest("GET", "/api/smp-companies").then((r) => r.json()),
   });
 
+  const { data: events = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/events"],
+    queryFn: () => apiRequest("GET", "/api/events").then(r => r.json()),
+  });
+
+  // Total SMP workers across all companies
+  const { data: workforceStats } = useQuery<{ total: number; active: number; terminated: number; smpWorkers: number }>({
+    queryKey: ["/api/workforce/stats"],
+    queryFn: () => apiRequest("GET", "/api/workforce/stats").then(r => r.json()),
+  });
+
   const filtered = companies.filter(
     (c) => !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
-      (c.commercialRegistration ?? "").toLowerCase().includes(search.toLowerCase()) ||
+      (c.crNumber ?? "").toLowerCase().includes(search.toLowerCase()) ||
       (c.contactPerson ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
@@ -816,13 +757,8 @@ export default function SMPCompaniesPage() {
             <h1 className="text-3xl font-display font-bold text-white tracking-tight">SMP Companies</h1>
             <p className="text-muted-foreground mt-1">Sub-Manpower Provider companies — manage partners and their deployed workers.</p>
           </div>
-          <Button
-            className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
-            data-testid="button-create-smp"
-            onClick={() => setCreateOpen(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add SMP Company
+          <Button className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs" data-testid="button-create-smp" onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />Add SMP Company
           </Button>
         </div>
 
@@ -831,10 +767,11 @@ export default function SMPCompaniesPage() {
           company={selectedCompany ? (companies.find(c => c.id === selectedCompany.id) ?? selectedCompany) : null}
           open={sheetOpen}
           onOpenChange={setSheetOpen}
+          events={events}
         />
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="bg-card border-border shadow-sm border-l-4 border-l-amber-500">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Companies</CardTitle>
@@ -845,7 +782,7 @@ export default function SMPCompaniesPage() {
           </Card>
           <Card className="bg-card border-border shadow-sm border-l-4 border-l-primary">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Active</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Active Companies</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-4xl font-bold font-display text-white" data-testid="stat-active-companies">{activeCount}</div>
@@ -853,7 +790,17 @@ export default function SMPCompaniesPage() {
           </Card>
           <Card className="bg-card border-border shadow-sm border-l-4 border-l-blue-500">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Regions</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total SMP Workers</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-smp-workers">
+                {workforceStats?.smpWorkers ?? 0}
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border shadow-sm border-l-4 border-l-zinc-500">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Regions Covered</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-4xl font-bold font-display text-white" data-testid="stat-regions">
@@ -909,8 +856,6 @@ export default function SMPCompaniesPage() {
 }
 
 function CompanyCard({ company, onClick }: { company: SMPCompany; onClick: () => void }) {
-  const docs: CompanyDoc[] = Array.isArray(company.documents) ? (company.documents as CompanyDoc[]) : [];
-
   return (
     <div
       className="bg-card border border-border rounded-sm p-4 hover:border-primary/40 cursor-pointer transition-all group"
@@ -924,9 +869,7 @@ function CompanyCard({ company, onClick }: { company: SMPCompany; onClick: () =>
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-white truncate group-hover:text-primary transition-colors">{company.name}</p>
-            {company.commercialRegistration && (
-              <p className="text-[11px] text-muted-foreground font-mono">CR {company.commercialRegistration}</p>
-            )}
+            {company.crNumber && <p className="text-[11px] text-muted-foreground font-mono">CR {company.crNumber}</p>}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
@@ -956,13 +899,12 @@ function CompanyCard({ company, onClick }: { company: SMPCompany; onClick: () =>
             <span>{company.region}</span>
           </div>
         )}
-      </div>
-
-      <div className="mt-3 pt-3 border-t border-border flex items-center gap-3 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <FileText className="h-3 w-3" />
-          {docs.length} doc{docs.length !== 1 ? "s" : ""}
-        </span>
+        {company.bankName && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Banknote className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{company.bankName}</span>
+          </div>
+        )}
       </div>
     </div>
   );
