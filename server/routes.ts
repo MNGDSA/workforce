@@ -1746,13 +1746,15 @@ export async function registerRoutes(
         return res.status(400).json({ message: "smpCompanyId is required for SMP workers" });
       }
 
+      // Enforce: individual workers must have null smpCompanyId regardless of what client sends
+      const resolvedSmpCompanyId = resolvedEmploymentType === "smp" ? (smpCompanyId || undefined) : undefined;
       const workforce = await storage.convertOnboardingToEmployee(
         req.params.id,
         {
           startDate,
           eventId: eventId || undefined,
           salary: salary && salary.trim() !== "" ? salary : undefined,
-          smpCompanyId: smpCompanyId || undefined,
+          smpCompanyId: resolvedSmpCompanyId,
           employmentType: resolvedEmploymentType,
         },
         (req as any).userId,
@@ -1957,12 +1959,15 @@ export async function registerRoutes(
             else rowErrors.push(`Event "${eventName}" does not match any existing event. Check the "Events (Reference)" sheet for valid names.`);
           }
 
-          // SMP Company — link by name (for SMP employment type workers).
-          // Immutable for inactive (historical) records: smpCompanyId cannot be changed
-          // after a record is terminated to preserve audit trail integrity.
+          // SMP Company — link by name (for SMP employment type workers only).
+          // Guards:
+          //   1. Must be an SMP-type worker (individual workers cannot have smpCompanyId)
+          //   2. Immutable for inactive (historical) records to preserve audit trail integrity
           const smpCompanyName = String(row["SMP Company"] ?? row["SMP Company Name"] ?? "").trim();
           if (smpCompanyName !== "") {
-            if (!worker.isActive) {
+            if (worker.employmentType !== "smp") {
+              rowErrors.push(`SMP Company cannot be set on individual-type workers (employee #${worker.employeeNumber})`);
+            } else if (!worker.isActive) {
               rowErrors.push(`SMP Company cannot be changed for terminated records (employee #${worker.employeeNumber})`);
             } else {
               const smpId = smpByName[smpCompanyName.toLowerCase()];
@@ -2048,7 +2053,9 @@ export async function registerRoutes(
       if (resolvedEmploymentType === "smp" && !smpCompanyId) {
         return res.status(400).json({ message: "smpCompanyId is required for SMP workers" });
       }
-      const record = await storage.reinstateEmployee(nationalId, { startDate, eventId, salary, jobId, smpCompanyId: smpCompanyId || undefined, employmentType: resolvedEmploymentType });
+      // Enforce: individual workers must have null smpCompanyId regardless of what client sends
+      const resolvedSmpCompanyId = resolvedEmploymentType === "smp" ? (smpCompanyId || undefined) : undefined;
+      const record = await storage.reinstateEmployee(nationalId, { startDate, eventId, salary, jobId, smpCompanyId: resolvedSmpCompanyId, employmentType: resolvedEmploymentType });
       const empNum = (record as any).employeeNumber ?? undefined;
       const subjectName = (record as any).fullNameEn ?? undefined;
       await logAudit(req, {
