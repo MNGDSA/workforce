@@ -104,6 +104,8 @@ type Employee = {
   iban?: string | null;
   ibanBankName?: string | null;
   ibanBankCode?: string | null;
+  employmentType?: string | null;
+  smpCompanyId?: string | null;
 };
 
 type WorkHistory = {
@@ -285,6 +287,8 @@ function EmployeeDetailDialog({
   const [eventValue, setEventValue] = useState("");
   const [terminateOpen, setTerminateOpen] = useState(false);
   const [terminateForm, setTerminateForm] = useState({ endDate: "", reason: "" });
+  const [reinstateOpen, setReinstateOpen] = useState(false);
+  const [reinstateForm, setReinstateForm] = useState({ startDate: "", eventId: "", salary: "", smpCompanyId: "" });
   const [assignScheduleOpen, setAssignScheduleOpen] = useState(false);
   const [scheduleTemplateId, setScheduleTemplateId] = useState("");
   const [scheduleStartDate, setScheduleStartDate] = useState(new Date().toISOString().slice(0, 10));
@@ -379,6 +383,27 @@ function EmployeeDetailDialog({
       onOpenChange(false);
       onUpdated();
       toast({ title: "Employee terminated" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const { data: smpCompanies = [] } = useQuery<{ id: string; name: string; isActive: boolean }[]>({
+    queryKey: ["/api/smp-companies"],
+    queryFn: () => apiRequest("GET", "/api/smp-companies").then(r => r.json()),
+    select: (data: { id: string; name: string; isActive: boolean }[]) => data.filter(c => c.isActive),
+    enabled: open,
+  });
+
+  const reinstateMutation = useMutation({
+    mutationFn: (data: { nationalId: string; startDate: string; eventId?: string; salary?: string; smpCompanyId?: string; employmentType?: string }) =>
+      apiRequest("POST", "/api/workforce/reinstate", data).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/workforce"] });
+      setReinstateOpen(false);
+      setReinstateForm({ startDate: "", eventId: "", salary: "", smpCompanyId: "" });
+      onOpenChange(false);
+      onUpdated();
+      toast({ title: "Employee reinstated" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -564,10 +589,10 @@ function EmployeeDetailDialog({
                 )}
               </div>
 
-              {employee.isActive && (
-                <>
-                  <Separator className="bg-zinc-800" />
-                  <div className="flex justify-end gap-2">
+              <>
+                <Separator className="bg-zinc-800" />
+                <div className="flex justify-end gap-2 flex-wrap">
+                  {employee.isActive && (
                     <Button
                       variant="outline"
                       className="gap-1.5"
@@ -580,6 +605,8 @@ function EmployeeDetailDialog({
                     >
                       <Printer className="h-4 w-4" /> Print ID Card
                     </Button>
+                  )}
+                  {employee.isActive ? (
                     <Button
                       variant="outline"
                       className="border-red-800 text-red-400 hover:bg-red-950/30 hover:text-red-300 gap-1.5"
@@ -588,9 +615,21 @@ function EmployeeDetailDialog({
                     >
                       <UserX className="h-4 w-4" /> Terminate Employee
                     </Button>
-                  </div>
-                </>
-              )}
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="border-emerald-800 text-emerald-400 hover:bg-emerald-950/30 hover:text-emerald-300 gap-1.5"
+                      onClick={() => {
+                        setReinstateForm({ startDate: "", eventId: "", salary: employee.salary ?? "", smpCompanyId: employee.smpCompanyId ?? "" });
+                        setReinstateOpen(true);
+                      }}
+                      data-testid="button-reinstate-employee"
+                    >
+                      <CheckCircle2 className="h-4 w-4" /> Reinstate Employee
+                    </Button>
+                  )}
+                </div>
+              </>
             </div>
           )}
 
@@ -815,6 +854,97 @@ function EmployeeDetailDialog({
                 className="bg-red-600 hover:bg-red-700 text-white gap-2"
               >
                 {terminateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><UserX className="h-4 w-4" /> Confirm Termination</>}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reinstateOpen} onOpenChange={setReinstateOpen}>
+        <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-lg flex items-center gap-2 text-emerald-400">
+              <CheckCircle2 className="h-5 w-5" />
+              Reinstate Employee
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400 text-sm">
+              Re-activate {employee.fullNameEn ?? "this employee"} ({employee.employeeNumber}) with a new employment period.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label className="text-zinc-400 text-sm">Start Date <span className="text-red-400">*</span></Label>
+              <DatePickerField
+                data-testid="input-reinstate-startdate"
+                value={reinstateForm.startDate}
+                onChange={v => setReinstateForm(f => ({ ...f, startDate: v }))}
+                className="bg-zinc-900 border-zinc-700 text-white"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-zinc-400 text-sm">Event</Label>
+              <Select value={reinstateForm.eventId} onValueChange={v => setReinstateForm(f => ({ ...f, eventId: v }))}>
+                <SelectTrigger data-testid="select-reinstate-event" className="bg-zinc-900 border-zinc-700 text-white">
+                  <SelectValue placeholder="Select event…" />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
+                  {eventsList.map(ev => (
+                    <SelectItem key={ev.id} value={ev.id} className="text-white focus:bg-zinc-800">{ev.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {employee.employmentType === "smp" && (
+              <div className="space-y-1.5">
+                <Label className="text-zinc-400 text-sm">SMP Company <span className="text-red-400">*</span></Label>
+                <select
+                  data-testid="select-reinstate-smp-company"
+                  value={reinstateForm.smpCompanyId}
+                  onChange={e => setReinstateForm(f => ({ ...f, smpCompanyId: e.target.value }))}
+                  className="w-full h-10 bg-zinc-900 border border-zinc-700 rounded-md px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
+                >
+                  <option value="" className="bg-zinc-900 text-zinc-400">— Select SMP company —</option>
+                  {smpCompanies.map(c => (
+                    <option key={c.id} value={c.id} className="bg-zinc-900 text-white">{c.name}</option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-red-400/70">Required — SMP workers must be linked to a company.</p>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-zinc-400 text-sm">Monthly Salary (SAR)</Label>
+              <Input
+                data-testid="input-reinstate-salary"
+                type="number"
+                placeholder="e.g. 4500"
+                value={reinstateForm.salary}
+                onChange={e => setReinstateForm(f => ({ ...f, salary: e.target.value }))}
+                className="bg-zinc-900 border-zinc-700 text-white"
+              />
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button variant="outline" className="border-zinc-700 text-zinc-300" onClick={() => setReinstateOpen(false)}>Cancel</Button>
+              <Button
+                data-testid="button-confirm-reinstate"
+                disabled={
+                  !reinstateForm.startDate ||
+                  (employee.employmentType === "smp" && !reinstateForm.smpCompanyId) ||
+                  reinstateMutation.isPending
+                }
+                onClick={() => {
+                  if (!employee.nationalId) return;
+                  reinstateMutation.mutate({
+                    nationalId: employee.nationalId,
+                    startDate: reinstateForm.startDate,
+                    eventId: reinstateForm.eventId || undefined,
+                    salary: reinstateForm.salary || undefined,
+                    smpCompanyId: reinstateForm.smpCompanyId || undefined,
+                    employmentType: employee.employmentType ?? undefined,
+                  });
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+              >
+                {reinstateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="h-4 w-4" /> Confirm Reinstate</>}
               </Button>
             </div>
           </div>

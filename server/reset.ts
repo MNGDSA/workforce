@@ -27,8 +27,8 @@
  */
 
 import { db } from "./db";
-import { sql } from "drizzle-orm";
-import { users, automationRules, events, jobPostings } from "@shared/schema";
+import { sql, eq } from "drizzle-orm";
+import { users, automationRules, events, jobPostings, smpCompanies, candidates, workforce } from "@shared/schema";
 import bcrypt from "bcryptjs";
 
 // ─── Tables that are NEVER wiped (config / reference data) ───────────────────
@@ -377,6 +377,107 @@ async function reset() {
       },
     ]);
     console.log("  ✓  Demo events + job postings restored");
+  }
+
+  // ── Restore SMP Companies + Demo Workforce Linkage ─────────────────────────
+  const existingSmpCompanies = await db.select({ id: smpCompanies.id }).from(smpCompanies).limit(1);
+  if (existingSmpCompanies.length === 0) {
+    const insertedCompanies = await db.insert(smpCompanies).values([
+      {
+        name: "Al-Rashidi Manpower Services",
+        crNumber: "4030123456",
+        contactPerson: "Ahmed Al-Rashidi",
+        contactPhone: "0512345678",
+        contactEmail: "contact@alrashidi.com.sa",
+        bankName: "Al Rajhi Bank",
+        bankIban: "SA4420000001234567891234",
+        region: "Mecca",
+        notes: "Primary SMP partner for Hajj season staffing.",
+        isActive: true,
+      },
+      {
+        name: "Najd Labor Solutions Co.",
+        crNumber: "1010987654",
+        contactPerson: "Khalid Al-Najdi",
+        contactPhone: "0551234567",
+        contactEmail: "ops@najdlabor.sa",
+        bankName: "Saudi National Bank",
+        bankIban: "SA6280000000608010167519",
+        region: "Riyadh",
+        notes: "Provides general labor workforce for seasonal operations.",
+        isActive: true,
+      },
+      {
+        name: "Jeddah Staffing Partners Ltd.",
+        crNumber: "4030567890",
+        contactPerson: "Fatima Al-Zahrani",
+        contactPhone: "0561234567",
+        contactEmail: "info@jeddahstaffing.com",
+        bankName: "Riyad Bank",
+        bankIban: "SA8420000002480040105576",
+        region: "Jeddah",
+        notes: "Specialized in hospitality and transport sector staffing.",
+        isActive: false,
+      },
+    ]).returning({ id: smpCompanies.id, name: smpCompanies.name });
+
+    // Create demo SMP workforce records linked to the companies
+    const rashidiCompany = insertedCompanies.find(c => c.name.includes("Rashidi"));
+    const najdCompany = insertedCompanies.find(c => c.name.includes("Najd"));
+
+    if (rashidiCompany && najdCompany) {
+      const smpCandidates = await db.insert(candidates).values([
+        {
+          nationalId: "3000000001",
+          fullNameEn: "Mohammed Al-Rashidi",
+          fullNameAr: "محمد الرشيدي",
+          phone: "0531000001",
+          email: "m.rashidi@example.com",
+          gender: "male" as const,
+          nationality: "saudi" as const,
+          status: "hired" as const,
+        },
+        {
+          nationalId: "3000000002",
+          fullNameEn: "Abdullah Al-Najdi",
+          fullNameAr: "عبدالله النجدي",
+          phone: "0531000002",
+          email: "a.najdi@example.com",
+          gender: "male" as const,
+          nationality: "saudi" as const,
+          status: "hired" as const,
+        },
+      ]).returning({ id: candidates.id });
+
+      const [hajjEvent] = await db.select({ id: events.id }).from(events).where(eq(events.name, "Hajj 1447")).limit(1);
+      const eventId = hajjEvent?.id ?? undefined;
+
+      await db.insert(workforce).values([
+        {
+          candidateId: smpCandidates[0].id,
+          employeeNumber: "SMP-001",
+          startDate: "2025-06-01",
+          salary: "4000",
+          isActive: true,
+          employmentType: "smp" as const,
+          smpCompanyId: rashidiCompany.id,
+          eventId,
+        },
+        {
+          candidateId: smpCandidates[1].id,
+          employeeNumber: "SMP-002",
+          startDate: "2025-06-01",
+          endDate: "2025-08-01",
+          salary: "3800",
+          isActive: false,
+          terminationReason: "End of season",
+          employmentType: "smp" as const,
+          smpCompanyId: najdCompany.id,
+          eventId,
+        },
+      ]);
+    }
+    console.log("  ✓  SMP companies + demo SMP workforce restored");
   }
 
   console.log("\n✅  Reset complete — clean slate with demo credentials.");

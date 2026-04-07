@@ -1,7 +1,7 @@
 import { db } from "./db";
-import { users, automationRules, events, jobPostings, smpCompanies } from "@shared/schema";
+import { users, automationRules, events, jobPostings, smpCompanies, candidates, workforce } from "@shared/schema";
 import bcrypt from "bcryptjs";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 
 async function seed() {
   console.log("🌱 Seeding database...");
@@ -271,6 +271,69 @@ async function seed() {
         isActive: false,
       },
     ]);
+  }
+
+  // ─── SMP Workforce Linkage ────────────────────────────────────────────────
+  // Create demo SMP candidates + workforce records linked to the seeded companies.
+  const smpCompanyRows = await db.select({ id: smpCompanies.id, name: smpCompanies.name }).from(smpCompanies).limit(3);
+  const rashidiCompany = smpCompanyRows.find(c => c.name.includes("Rashidi"));
+  const najdCompany = smpCompanyRows.find(c => c.name.includes("Najd"));
+
+  const existingSmpWorkers = await db.select({ id: workforce.id }).from(workforce).where(eq(workforce.employmentType, "smp")).limit(1);
+  if (existingSmpWorkers.length === 0 && rashidiCompany && najdCompany) {
+    // Create two SMP demo candidates
+    const smpCandidates = await db.insert(candidates).values([
+      {
+        nationalId: "3000000001",
+        fullNameEn: "Mohammed Al-Rashidi",
+        fullNameAr: "محمد الرشيدي",
+        phone: "0531000001",
+        email: "m.rashidi@example.com",
+        gender: "male",
+        nationality: "saudi" as const,
+        status: "hired",
+      },
+      {
+        nationalId: "3000000002",
+        fullNameEn: "Abdullah Al-Najdi",
+        fullNameAr: "عبدالله النجدي",
+        phone: "0531000002",
+        email: "a.najdi@example.com",
+        gender: "male" as const,
+        nationality: "saudi" as const,
+        status: "hired",
+      },
+    ]).returning({ id: candidates.id });
+
+    // Fetch the Hajj event
+    const [hajjEvent] = await db.select({ id: events.id }).from(events).where(eq(events.name, "Hajj 1447")).limit(1);
+    const eventId = hajjEvent?.id ?? null;
+
+    // Create workforce records linked to SMP companies
+    await db.insert(workforce).values([
+      {
+        candidateId: smpCandidates[0].id,
+        employeeNumber: "SMP-001",
+        startDate: "2025-06-01",
+        salary: "4000",
+        isActive: true,
+        employmentType: "smp",
+        smpCompanyId: rashidiCompany.id,
+        eventId: eventId,
+      },
+      {
+        candidateId: smpCandidates[1].id,
+        employeeNumber: "SMP-002",
+        startDate: "2025-06-01",
+        endDate: "2025-08-01",
+        salary: "3800",
+        isActive: false,
+        terminationReason: "End of season",
+        employmentType: "smp",
+        smpCompanyId: najdCompany.id,
+        eventId: eventId,
+      },
+    ]).onConflictDoNothing();
   }
 
   console.log("✅ Seed complete!");

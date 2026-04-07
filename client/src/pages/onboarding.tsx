@@ -1262,7 +1262,7 @@ export default function OnboardingPage() {
   const [pendingDeleteDoc, setPendingDeleteDoc] = useState<{ candidateId: string; docType: string; label: string } | null>(null);
   const [docPreview, setDocPreview] = useState<{ url: string; label: string; isImage: boolean } | null>(null);
   const [bulkConvertOpen, setBulkConvertOpen] = useState(false);
-  const [bulkConvertForm, setBulkConvertForm] = useState({ startDate: "", salary: "", eventId: "" });
+  const [bulkConvertForm, setBulkConvertForm] = useState({ startDate: "", salary: "", eventId: "", smpCompanyId: "" });
   const [bulkContractOpen, setBulkContractOpen] = useState(false);
   const [bulkContractTemplateId, setBulkContractTemplateId] = useState("");
   const [eventFilter, setEventFilter] = useState("all");
@@ -1367,7 +1367,7 @@ export default function OnboardingPage() {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
       setBulkConvertOpen(false);
-      setBulkConvertForm({ startDate: "", salary: "", eventId: "" });
+      setBulkConvertForm({ startDate: "", salary: "", eventId: "", smpCompanyId: "" });
       const errCount = data.errors?.length ?? 0;
       toast({
         title: `${data.converted} employee${data.converted !== 1 ? "s" : ""} created`,
@@ -2216,63 +2216,91 @@ export default function OnboardingPage() {
                 <p className="text-xs text-emerald-400/70">All prerequisites verified</p>
               </div>
             </div>
-            <div className="space-y-3">
-              <div>
-                <Label className="text-zinc-300 text-sm">Event <span className="text-red-400">*</span></Label>
-                <Select
-                  value={bulkConvertForm.eventId}
-                  onValueChange={v => setBulkConvertForm(f => ({ ...f, eventId: v }))}
-                >
-                  <SelectTrigger data-testid="select-bulk-event" className="bg-zinc-900 border-zinc-700 text-white mt-1">
-                    <SelectValue placeholder="Select an event…" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
-                    {eventsList.map(ev => (
-                      <SelectItem key={ev.id} value={ev.id} className="text-white focus:bg-zinc-800">{ev.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-zinc-300 text-sm">Start Date <span className="text-red-400">*</span></Label>
-                <DatePickerField
-                  data-testid="input-bulk-start-date"
-                  value={bulkConvertForm.startDate}
-                  onChange={v => setBulkConvertForm(f => ({ ...f, startDate: v }))}
-                  className="bg-zinc-900 border-zinc-700 text-white mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-zinc-300 text-sm">Monthly Salary (SAR)</Label>
-                <Input
-                  data-testid="input-bulk-salary"
-                  type="number"
-                  placeholder="e.g. 4500"
-                  value={bulkConvertForm.salary}
-                  onChange={e => setBulkConvertForm(f => ({ ...f, salary: e.target.value }))}
-                  className="bg-zinc-900 border-zinc-700 text-white mt-1"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setBulkConvertOpen(false)} className="border-zinc-700 text-zinc-300">
-                Cancel
-              </Button>
-              <Button
-                data-testid="button-confirm-bulk-convert"
-                disabled={!bulkConvertForm.startDate || !bulkConvertForm.eventId || bulkConvertMutation.isPending}
-                onClick={() => {
-                  const readyIds = records.filter(r => r.status === "ready").map(r => r.id);
-                  bulkConvertMutation.mutate({ ids: readyIds, ...bulkConvertForm });
-                }}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
-              >
-                {bulkConvertMutation.isPending
-                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Converting...</>
-                  : <><UserCheck className="h-4 w-4" /> Convert {stats.ready} Employees</>
-                }
-              </Button>
-            </div>
+            {(() => {
+              const readyRecords = records.filter(r => r.status === "ready");
+              const hasSmpReady = readyRecords.some(r => !r.applicationId);
+              return (
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-zinc-300 text-sm">Event <span className="text-red-400">*</span></Label>
+                    <Select
+                      value={bulkConvertForm.eventId}
+                      onValueChange={v => setBulkConvertForm(f => ({ ...f, eventId: v }))}
+                    >
+                      <SelectTrigger data-testid="select-bulk-event" className="bg-zinc-900 border-zinc-700 text-white mt-1">
+                        <SelectValue placeholder="Select an event…" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
+                        {eventsList.map(ev => (
+                          <SelectItem key={ev.id} value={ev.id} className="text-white focus:bg-zinc-800">{ev.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-zinc-300 text-sm">Start Date <span className="text-red-400">*</span></Label>
+                    <DatePickerField
+                      data-testid="input-bulk-start-date"
+                      value={bulkConvertForm.startDate}
+                      onChange={v => setBulkConvertForm(f => ({ ...f, startDate: v }))}
+                      className="bg-zinc-900 border-zinc-700 text-white mt-1"
+                    />
+                  </div>
+                  {hasSmpReady && (
+                    <div>
+                      <Label className="text-zinc-300 text-sm">SMP Company <span className="text-red-400">*</span></Label>
+                      <select
+                        data-testid="select-bulk-smp-company"
+                        value={bulkConvertForm.smpCompanyId}
+                        onChange={e => setBulkConvertForm(f => ({ ...f, smpCompanyId: e.target.value }))}
+                        className="w-full h-10 bg-zinc-900 border border-zinc-700 rounded-md px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none mt-1"
+                      >
+                        <option value="" className="bg-zinc-900 text-zinc-400">— Select SMP company —</option>
+                        {smpCompanies.map(c => (
+                          <option key={c.id} value={c.id} className="bg-zinc-900 text-white">{c.name}</option>
+                        ))}
+                      </select>
+                      <p className="text-[11px] text-red-400/70 mt-1">Required for SMP candidates in this batch.</p>
+                    </div>
+                  )}
+                  <div>
+                    <Label className="text-zinc-300 text-sm">Monthly Salary (SAR)</Label>
+                    <Input
+                      data-testid="input-bulk-salary"
+                      type="number"
+                      placeholder="e.g. 4500"
+                      value={bulkConvertForm.salary}
+                      onChange={e => setBulkConvertForm(f => ({ ...f, salary: e.target.value }))}
+                      className="bg-zinc-900 border-zinc-700 text-white mt-1"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="outline" onClick={() => setBulkConvertOpen(false)} className="border-zinc-700 text-zinc-300">
+                      Cancel
+                    </Button>
+                    <Button
+                      data-testid="button-confirm-bulk-convert"
+                      disabled={
+                        !bulkConvertForm.startDate ||
+                        !bulkConvertForm.eventId ||
+                        (hasSmpReady && !bulkConvertForm.smpCompanyId) ||
+                        bulkConvertMutation.isPending
+                      }
+                      onClick={() => {
+                        const readyIds = readyRecords.map(r => r.id);
+                        bulkConvertMutation.mutate({ ids: readyIds, ...bulkConvertForm });
+                      }}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                    >
+                      {bulkConvertMutation.isPending
+                        ? <><Loader2 className="h-4 w-4 animate-spin" /> Converting...</>
+                        : <><UserCheck className="h-4 w-4" /> Convert {stats.ready} Employees</>
+                      }
+                    </Button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </DialogContent>
       </Dialog>

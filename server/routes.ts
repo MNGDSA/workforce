@@ -1955,12 +1955,18 @@ export async function registerRoutes(
             else rowErrors.push(`Event "${eventName}" does not match any existing event. Check the "Events (Reference)" sheet for valid names.`);
           }
 
-          // SMP Company — link by name (for SMP employment type workers)
+          // SMP Company — link by name (for SMP employment type workers).
+          // Immutable for inactive (historical) records: smpCompanyId cannot be changed
+          // after a record is terminated to preserve audit trail integrity.
           const smpCompanyName = String(row["SMP Company"] ?? row["SMP Company Name"] ?? "").trim();
           if (smpCompanyName !== "") {
-            const smpId = smpByName[smpCompanyName.toLowerCase()];
-            if (smpId) wfUpdate.smpCompanyId = smpId;
-            else rowErrors.push(`SMP Company "${smpCompanyName}" not found. Check SMP Companies list for valid names.`);
+            if (!worker.isActive) {
+              rowErrors.push(`SMP Company cannot be changed for terminated records (employee #${worker.employeeNumber})`);
+            } else {
+              const smpId = smpByName[smpCompanyName.toLowerCase()];
+              if (smpId) wfUpdate.smpCompanyId = smpId;
+              else rowErrors.push(`SMP Company "${smpCompanyName}" not found. Check SMP Companies list for valid names.`);
+            }
           }
 
           // Fields to update on the candidate record
