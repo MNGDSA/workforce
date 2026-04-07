@@ -1044,11 +1044,15 @@ export class DatabaseStorage implements IStorage {
         ibanBankCode: candidates.ibanBankCode,
         eventName: events.name,
         jobTitle: jobPostings.title,
+        employmentType: workforce.employmentType,
+        smpCompanyId: workforce.smpCompanyId,
+        smpCompanyName: smpCompanies.name,
       })
       .from(workforce)
       .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
       .leftJoin(events, eq(workforce.eventId, events.id))
       .leftJoin(jobPostings, eq(workforce.jobId, jobPostings.id))
+      .leftJoin(smpCompanies, eq(workforce.smpCompanyId, smpCompanies.id))
       .where(where)
       .orderBy(desc(workforce.createdAt));
     return rows;
@@ -1081,11 +1085,15 @@ export class DatabaseStorage implements IStorage {
         ibanBankCode: candidates.ibanBankCode,
         eventName: events.name,
         jobTitle: jobPostings.title,
+        employmentType: workforce.employmentType,
+        smpCompanyId: workforce.smpCompanyId,
+        smpCompanyName: smpCompanies.name,
       })
       .from(workforce)
       .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
       .leftJoin(events, eq(workforce.eventId, events.id))
       .leftJoin(jobPostings, eq(workforce.jobId, jobPostings.id))
+      .leftJoin(smpCompanies, eq(workforce.smpCompanyId, smpCompanies.id))
       .where(eq(workforce.id, id));
     return row;
   }

@@ -1604,9 +1604,11 @@ export async function registerRoutes(
             errors.push({ id, message: "smpCompanyId is required for SMP workers" });
             continue;
           }
+          // Only pass smpCompanyId for SMP workers — individual workers must have it null
+          const resolvedSmpCompanyId = resolvedEmploymentType === "smp" ? smpCompanyId : undefined;
           const wf = await storage.convertOnboardingToEmployee(
             id,
-            { startDate, eventId, salary, smpCompanyId, employmentType: resolvedEmploymentType },
+            { startDate, eventId, salary, smpCompanyId: resolvedSmpCompanyId, employmentType: resolvedEmploymentType },
             (req as any).userId,
           );
           results.push(wf);
@@ -2338,6 +2340,13 @@ export async function registerRoutes(
 
   app.delete("/api/smp-companies/:id", async (req: Request, res: Response) => {
     try {
+      // Block deletion if the company has linked workforce records (active or historical)
+      const workers = await storage.getSMPCompanyWorkers(req.params.id);
+      if (workers.length > 0) {
+        return res.status(409).json({
+          message: `Cannot delete: ${workers.length} workforce record${workers.length !== 1 ? "s" : ""} are linked to this company. Deactivate the company instead.`,
+        });
+      }
       const ok = await storage.deleteSMPCompany(req.params.id);
       if (!ok) return res.status(404).json({ message: "Company not found" });
       return res.status(204).send();

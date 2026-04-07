@@ -106,6 +106,7 @@ type Employee = {
   ibanBankCode?: string | null;
   employmentType?: string | null;
   smpCompanyId?: string | null;
+  smpCompanyName?: string | null;
 };
 
 type WorkHistory = {
@@ -1019,7 +1020,7 @@ export default function WorkforcePage() {
     queryFn: () => apiRequest("GET", "/api/events").then(r => r.json()),
   });
 
-  const { data: allSmpCompaniesForBulk = [] } = useQuery<{ id: string; name: string }[]>({
+  const { data: allSmpCompaniesForBulk = [] } = useQuery<{ id: string; name: string; isActive: boolean }[]>({
     queryKey: ["/api/smp-companies"],
     queryFn: () => apiRequest("GET", "/api/smp-companies").then(r => r.json()),
   });
@@ -1035,7 +1036,7 @@ export default function WorkforcePage() {
       "Salary (SAR)": e.salary ? Number(e.salary) : "",
       "Start Date": e.startDate ?? "",
       "Event": e.eventName ?? "",
-      "SMP Company": "",
+      "SMP Company": e.employmentType === "smp" ? (e.smpCompanyName ?? "") : "",
       "Notes": "",
     }));
     if (rows.length === 0) {
@@ -1053,7 +1054,7 @@ export default function WorkforcePage() {
     }
     // Add SMP Companies reference sheet
     if (allSmpCompaniesForBulk.length > 0) {
-      const smpSheet = XLSX.utils.json_to_sheet(allSmpCompaniesForBulk.map((c: any) => ({ "Company Name": c.name, "Active": c.isActive ? "Yes" : "No" })));
+      const smpSheet = XLSX.utils.json_to_sheet(allSmpCompaniesForBulk.map(c => ({ "Company Name": c.name, "Active": c.isActive ? "Yes" : "No" })));
       XLSX.utils.book_append_sheet(wb, smpSheet, "SMP Companies (Reference)");
     }
     XLSX.writeFile(wb, `workforce_bulk_update_${new Date().toISOString().slice(0, 10)}.xlsx`);
