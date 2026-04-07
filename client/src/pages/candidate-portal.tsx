@@ -679,7 +679,7 @@ function ContractSection({
         <FileText className="h-8 w-8 text-muted-foreground" />
         <div>
           <div className="text-sm font-medium text-zinc-400">No Contract Available</div>
-          <div className="text-xs text-muted-foreground">Your employment contract will appear here once generated.</div>
+          <div className="text-xs text-muted-foreground">Your employment contract will appear here for signing prior to your employment.</div>
         </div>
       </div>
     );
