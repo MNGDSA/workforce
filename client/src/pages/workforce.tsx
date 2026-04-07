@@ -1028,7 +1028,7 @@ export default function WorkforcePage() {
   async function downloadBulkTemplate() {
     const XLSX = await import("xlsx");
     const source = employees.length > 0 ? employees : [];
-    const rows = source.map((e: any) => ({
+    const rows = source.map(e => ({
       "Employee #": e.employeeNumber,
       "Full Name": e.fullNameEn ?? "",
       "National ID/Iqama (read-only)": e.nationalId ?? "",
@@ -1036,11 +1036,11 @@ export default function WorkforcePage() {
       "Salary (SAR)": e.salary ? Number(e.salary) : "",
       "Start Date": e.startDate ?? "",
       "Event": e.eventName ?? "",
-      "SMP Company": e.employmentType === "smp" ? (e.smpCompanyName ?? "") : "",
+      "SMP Company Name": e.employmentType === "smp" ? (e.smpCompanyName ?? "") : "",
       "Notes": "",
     }));
     if (rows.length === 0) {
-      rows.push({ "Employee #": "C000001", "Full Name": "Example Name", "National ID/Iqama (read-only)": "1000000000", "Phone (read-only)": "0500000000", "Salary (SAR)": 4000, "Start Date": "2026-01-01", "Event": "", "SMP Company": "", "Notes": "" });
+      rows.push({ "Employee #": "C000001", "Full Name": "Example Name", "National ID/Iqama (read-only)": "1000000000", "Phone (read-only)": "0500000000", "Salary (SAR)": 4000, "Start Date": "2026-01-01", "Event": "", "SMP Company Name": "", "Notes": "" });
     }
     const ws = XLSX.utils.json_to_sheet(rows);
     // Set column widths

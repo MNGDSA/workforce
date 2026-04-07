@@ -1299,7 +1299,7 @@ export default function OnboardingPage() {
   const { data: adminUsers = [] } = useQuery<{ id: string; fullName: string }[]>({
     queryKey: ["/api/users"],
     queryFn: () => apiRequest("GET", "/api/users").then(r => r.json()),
-    select: (data: any[]) => data.map((u: any) => ({ id: u.id, fullName: u.fullName })),
+    select: (data: { id: string; fullName: string; [key: string]: unknown }[]) => data.map(u => ({ id: u.id, fullName: u.fullName })),
   });
   const getAdminName = useCallback((id: string | null | undefined) => {
     if (!id) return null;
@@ -1386,7 +1386,7 @@ export default function OnboardingPage() {
   const { data: smpCompanies = [] } = useQuery<{ id: string; name: string; isActive: boolean }[]>({
     queryKey: ["/api/smp-companies"],
     queryFn: () => apiRequest("GET", "/api/smp-companies").then(r => r.json()),
-    select: (data: any[]) => data.filter((c: any) => c.isActive),
+    select: (data: { id: string; name: string; isActive: boolean }[]) => data.filter(c => c.isActive),
   });
 
   const bulkContractMutation = useMutation({

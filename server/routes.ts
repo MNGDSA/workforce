@@ -1733,9 +1733,8 @@ export async function registerRoutes(
         clientEmploymentType === "individual" ? "individual" :
         undefined;
 
-      let ob: any = null;
       if (!resolvedEmploymentType) {
-        ob = await storage.getOnboardingRecord(req.params.id);
+        const ob = await storage.getOnboardingRecord(req.params.id);
         if (ob) {
           resolvedEmploymentType = ob.applicationId ? "individual" : "smp";
         }
@@ -1963,7 +1962,7 @@ export async function registerRoutes(
           // Guards:
           //   1. Must be an SMP-type worker (individual workers cannot have smpCompanyId)
           //   2. Immutable for inactive (historical) records to preserve audit trail integrity
-          const smpCompanyName = String(row["SMP Company"] ?? row["SMP Company Name"] ?? "").trim();
+          const smpCompanyName = String(row["SMP Company Name"] ?? row["SMP Company"] ?? "").trim();
           if (smpCompanyName !== "") {
             if (worker.employmentType !== "smp") {
               rowErrors.push(`SMP Company cannot be set on individual-type workers (employee #${worker.employeeNumber})`);
