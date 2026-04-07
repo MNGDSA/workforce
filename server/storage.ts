@@ -240,6 +240,7 @@ export interface IStorage {
   // OTP Verifications
   createOtpVerification(phone: string, code: string, expiresAt: Date): Promise<OtpVerification>;
   getLatestOtpVerification(phone: string): Promise<OtpVerification | undefined>;
+  getOtpVerificationById(id: string): Promise<OtpVerification | undefined>;
   incrementOtpAttempts(id: string): Promise<void>;
   markOtpVerified(id: string): Promise<void>;
   markOtpUsedForRegistration(id: string): Promise<void>;
@@ -1609,6 +1610,15 @@ export class DatabaseStorage implements IStorage {
       .from(otpVerifications)
       .where(eq(otpVerifications.phone, phone))
       .orderBy(desc(otpVerifications.createdAt))
+      .limit(1);
+    return otp;
+  }
+
+  async getOtpVerificationById(id: string): Promise<OtpVerification | undefined> {
+    const [otp] = await db
+      .select()
+      .from(otpVerifications)
+      .where(eq(otpVerifications.id, id))
       .limit(1);
     return otp;
   }

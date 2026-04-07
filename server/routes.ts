@@ -418,10 +418,10 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Password must be at least 8 characters" });
       }
 
-      // Validate OTP
+      // Validate OTP — look up by ID directly to avoid stale-phone-lookup bug
       const normalizedPhone = phone.trim().replace(/\s+/g, "");
-      const otp = await storage.getLatestOtpVerification(normalizedPhone);
-      if (!otp || otp.id !== otpId) {
+      const otp = await storage.getOtpVerificationById(otpId);
+      if (!otp || otp.phone !== normalizedPhone) {
         return res.status(400).json({ message: "Invalid OTP session. Please verify your phone again." });
       }
       if (!otp.verifiedAt) {
@@ -595,8 +595,8 @@ export async function registerRoutes(
         return res.status(404).json({ message: "No account found." });
       }
 
-      const otp = await storage.getLatestOtpVerification(user.phone);
-      if (!otp || otp.id !== otpId) {
+      const otp = await storage.getOtpVerificationById(otpId);
+      if (!otp || otp.phone !== user.phone) {
         return res.status(400).json({ message: "Invalid OTP session. Please verify again." });
       }
       if (!otp.verifiedAt) {
