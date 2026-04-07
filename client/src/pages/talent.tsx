@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/layout";
+import { resolveSaudiBank } from "@/lib/saudi-banks";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -332,6 +333,8 @@ function CandidateProfileSheet({
       educationLevel: matchOption(c.educationLevel, EDU_OPTIONS),
       major: c.major ?? "",
       ibanNumber: c.ibanNumber ?? "",
+      ibanBankName: (c as any).ibanBankName ?? "",
+      ibanBankCode: (c as any).ibanBankCode ?? "",
       emergencyContactName: c.emergencyContactName ?? "",
       emergencyContactPhone: c.emergencyContactPhone ?? "",
     });
@@ -356,6 +359,10 @@ function CandidateProfileSheet({
       educationLevel: form.educationLevel || null,
       major: form.educationLevel === "University and higher" ? (form.major || null) : null,
       ibanNumber: form.ibanNumber || null,
+      ...(() => {
+        const bank = resolveSaudiBank(form.ibanNumber || "");
+        return { ibanBankName: bank?.ibanBankName || null, ibanBankCode: bank?.ibanBankCode || null };
+      })(),
       emergencyContactName: form.emergencyContactName || null,
       emergencyContactPhone: form.emergencyContactPhone || null,
     });
@@ -575,14 +582,36 @@ function CandidateProfileSheet({
           <div>
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">IBAN</h4>
             {editing ? (
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <Input value={form.ibanNumber} onChange={e => setField("ibanNumber", e.target.value.toUpperCase())} placeholder="SA0000000000000000000000" maxLength={24} className="h-9 bg-muted/30 border-border text-sm font-mono" data-testid="edit-iban" />
                 {form.ibanNumber && !form.ibanNumber.match(/^SA\d{22}$/) && (
                   <p className="text-[11px] text-amber-400">IBAN must be SA followed by 22 digits (24 chars total)</p>
                 )}
+                {(() => {
+                  const bank = resolveSaudiBank(form.ibanNumber || "");
+                  return bank ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground mb-0.5">Bank Name</p>
+                        <Input value={bank.ibanBankName} readOnly className="h-8 bg-muted/10 border-border text-xs text-muted-foreground cursor-not-allowed" data-testid="view-bank-name" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground mb-0.5">Bank Code</p>
+                        <Input value={bank.ibanBankCode} readOnly className="h-8 bg-muted/10 border-border text-xs text-muted-foreground cursor-not-allowed font-mono" data-testid="view-bank-code" />
+                      </div>
+                    </div>
+                  ) : form.ibanNumber?.length >= 6 ? (
+                    <p className="text-[11px] text-amber-400">Bank not recognised</p>
+                  ) : null;
+                })()}
               </div>
             ) : (
-              <p className="text-sm text-white font-mono">{c.ibanNumber || "—"}</p>
+              <div className="space-y-1">
+                <p className="text-sm text-white font-mono">{(c as any).ibanNumber || "—"}</p>
+                {(c as any).ibanBankName && (
+                  <p className="text-xs text-muted-foreground">{(c as any).ibanBankName} <span className="font-mono text-primary ml-1">{(c as any).ibanBankCode}</span></p>
+                )}
+              </div>
             )}
           </div>
 

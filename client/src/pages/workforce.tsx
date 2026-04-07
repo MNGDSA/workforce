@@ -102,6 +102,8 @@ type Employee = {
   eventName: string | null;
   jobTitle: string | null;
   iban?: string | null;
+  ibanBankName?: string | null;
+  ibanBankCode?: string | null;
 };
 
 type WorkHistory = {
@@ -134,7 +136,7 @@ function formatDate(iso: string | null | undefined) {
 }
 
 function exportToCSV(employees: Employee[]) {
-  const headers = ["Employee #", "Full Name", "National ID", "Phone", "Job Title", "Event", "Salary (SAR)", "Start Date", "End Date", "Status", "Termination Reason"];
+  const headers = ["Employee #", "Full Name", "National ID", "Phone", "Job Title", "Event", "Salary (SAR)", "IBAN", "Bank Name", "Bank Code", "Start Date", "End Date", "Status", "Termination Reason"];
   const rows = employees.map(e => [
     e.employeeNumber,
     e.fullNameEn ?? "",
@@ -143,6 +145,9 @@ function exportToCSV(employees: Employee[]) {
     e.jobTitle ?? "",
     e.eventName ?? "",
     e.salary ? Number(e.salary).toString() : "",
+    e.iban ?? "",
+    e.ibanBankName ?? "",
+    e.ibanBankCode ?? "",
     e.startDate ?? "",
     e.endDate ?? "",
     e.isActive ? "Active" : "Terminated",
@@ -168,6 +173,9 @@ async function exportToExcel(employees: Employee[]) {
     "Job Title": e.jobTitle ?? "",
     "Event": e.eventName ?? "",
     "Salary (SAR)": e.salary ? Number(e.salary) : "",
+    "IBAN": e.iban ?? "",
+    "Bank Name": e.ibanBankName ?? "",
+    "Bank Code": e.ibanBankCode ?? "",
     "Start Date": e.startDate ?? "",
     "End Date": e.endDate ?? "",
     "Status": e.isActive ? "Active" : "Terminated",

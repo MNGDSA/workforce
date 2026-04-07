@@ -1,4 +1,4 @@
-import { useState, ReactNode } from "react";
+import { useState, useEffect, ReactNode } from "react";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useLocation } from "wouter";
 import { useForm, Controller } from "react-hook-form";
@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { resolveSaudiBank } from "@/lib/saudi-banks";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -140,6 +141,8 @@ const step2Schema = z.object({
   ibanAccountFirstName: z.string().min(1, "First name as on debit card is required"),
   ibanAccountLastName:  z.string().min(1, "Last name as on debit card is required"),
   ibanNumber:          z.string().min(1, "IBAN number is required"),
+  ibanBankName:        z.string().optional(),
+  ibanBankCode:        z.string().optional(),
 }).superRefine((d, ctx) => {
   if (d.hasChronicDiseases && !d.chronicDiseases?.trim()) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please describe your condition(s)", path: ["chronicDiseases"] });
@@ -371,11 +374,20 @@ function Step2Form({
       ibanAccountFirstName: defaults.ibanAccountFirstName  ?? "",
       ibanAccountLastName:  defaults.ibanAccountLastName   ?? "",
       ibanNumber:          defaults.ibanNumber             ?? "",
+      ibanBankName:        defaults.ibanBankName           ?? "",
+      ibanBankCode:        defaults.ibanBankCode           ?? "",
     },
   });
 
   const hasChronic    = watch("hasChronicDiseases");
   const isEmployed    = watch("isEmployedElsewhere");
+  const ibanValue     = watch("ibanNumber");
+
+  useEffect(() => {
+    const resolved = resolveSaudiBank(ibanValue || "");
+    setValue("ibanBankName", resolved?.ibanBankName ?? "");
+    setValue("ibanBankCode", resolved?.ibanBankCode ?? "");
+  }, [ibanValue, setValue]);
 
   return (
     <form onSubmit={handleSubmit(onNext)} className="space-y-10">
@@ -479,6 +491,31 @@ function Step2Form({
             />
             <p className="text-[11px] text-muted-foreground mt-1">SA followed by 22 digits (24 characters total)</p>
           </FieldWrapper>
+
+          {/* Auto-detected bank info */}
+          <div className="grid grid-cols-2 gap-4">
+            <FieldWrapper label="Bank Name" error={undefined}>
+              <Input
+                value={watch("ibanBankName") || ""}
+                readOnly
+                placeholder="Auto-detected from IBAN"
+                className="bg-muted/10 border-border text-muted-foreground cursor-not-allowed select-none"
+                data-testid="input-bank-name"
+              />
+            </FieldWrapper>
+            <FieldWrapper label="Bank Code" error={undefined}>
+              <Input
+                value={watch("ibanBankCode") || ""}
+                readOnly
+                placeholder="Auto-detected"
+                className="bg-muted/10 border-border text-muted-foreground cursor-not-allowed select-none font-mono"
+                data-testid="input-bank-code"
+              />
+            </FieldWrapper>
+          </div>
+          {watch("ibanNumber") && watch("ibanNumber").length >= 6 && !watch("ibanBankName") && (
+            <p className="text-[11px] text-amber-400">Bank not recognised — please verify your IBAN</p>
+          )}
         </div>
       )}
 
@@ -710,6 +747,8 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
       ibanAccountFirstName: s2data.ibanAccountFirstName?.trim() || null,
       ibanAccountLastName:  s2data.ibanAccountLastName?.trim()  || null,
       ibanNumber:          s2data.ibanNumber?.trim() || null,
+      ibanBankName:        s2data.ibanBankName?.trim() || null,
+      ibanBankCode:        s2data.ibanBankCode?.trim() || null,
       educationLevel:      d.educationLevel,
       major:               d.major || null,
       languages:           langs,

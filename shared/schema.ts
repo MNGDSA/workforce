@@ -189,6 +189,8 @@ export const candidates = pgTable(
     ibanNumber: text("iban_number"),
     ibanAccountFirstName: text("iban_account_first_name"),
     ibanAccountLastName:  text("iban_account_last_name"),
+    ibanBankName: text("iban_bank_name"),
+    ibanBankCode: text("iban_bank_code"),
     expectedSalary: decimal("expected_salary", { precision: 10, scale: 2 }),
     // Status & Ratings
     status: candidateStatusEnum("status").notNull().default("active"),

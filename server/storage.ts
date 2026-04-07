@@ -620,6 +620,10 @@ export class DatabaseStorage implements IStorage {
       nationality: candidates.nationality,
       nationalId: candidates.nationalId,
       ibanNumber: candidates.ibanNumber,
+      ibanBankName: candidates.ibanBankName,
+      ibanBankCode: candidates.ibanBankCode,
+      ibanAccountFirstName: candidates.ibanAccountFirstName,
+      ibanAccountLastName: candidates.ibanAccountLastName,
       gender: candidates.gender,
       dateOfBirth: candidates.dateOfBirth,
       educationLevel: candidates.educationLevel,
@@ -631,12 +635,14 @@ export class DatabaseStorage implements IStorage {
       .where(isNull(candidates.archivedAt))
       .orderBy(desc(candidates.createdAt));
 
-    const headers = ["ID", "Full Name (EN)", "Full Name (AR)", "Classification", "Status", "Phone", "Email", "City", "Region", "Nationality", "National ID", "IBAN", "Gender", "Date of Birth", "Education", "Major", "Experience (Yrs)", "Created At"];
+    const headers = ["ID", "Full Name (EN)", "Full Name (AR)", "Classification", "Status", "Phone", "Email", "City", "Region", "Nationality", "National ID", "IBAN", "Bank Name", "Bank Code", "IBAN Account First Name", "IBAN Account Last Name", "Gender", "Date of Birth", "Education", "Major", "Experience (Yrs)", "Created At"];
     const rows = data.map(r => [
       r.id, r.fullNameEn || "", r.fullNameAr || "",
       r.source || "individual", r.status, r.phone || "", r.email || "",
       r.city || "", r.region || "", r.nationality || "", r.nationalId || "",
-      r.ibanNumber || "", r.gender || "", r.dateOfBirth || "",
+      r.ibanNumber || "", r.ibanBankName || "", r.ibanBankCode || "",
+      r.ibanAccountFirstName || "", r.ibanAccountLastName || "",
+      r.gender || "", r.dateOfBirth || "",
       r.educationLevel || "", r.major || "", r.experienceYears ?? "",
       r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : "",
     ]);
@@ -1001,6 +1007,9 @@ export class DatabaseStorage implements IStorage {
         phone: candidates.phone,
         photoUrl: candidates.photoUrl,
         candidateStatus: candidates.status,
+        iban: candidates.ibanNumber,
+        ibanBankName: candidates.ibanBankName,
+        ibanBankCode: candidates.ibanBankCode,
         eventName: events.name,
         jobTitle: jobPostings.title,
       })
@@ -1036,6 +1045,8 @@ export class DatabaseStorage implements IStorage {
         phone: candidates.phone,
         photoUrl: candidates.photoUrl,
         iban: candidates.ibanNumber,
+        ibanBankName: candidates.ibanBankName,
+        ibanBankCode: candidates.ibanBankCode,
         eventName: events.name,
         jobTitle: jobPostings.title,
       })
@@ -1071,6 +1082,8 @@ export class DatabaseStorage implements IStorage {
         phone: candidates.phone,
         photoUrl: candidates.photoUrl,
         iban: candidates.ibanNumber,
+        ibanBankName: candidates.ibanBankName,
+        ibanBankCode: candidates.ibanBankCode,
         eventName: events.name,
         jobTitle: jobPostings.title,
       })
