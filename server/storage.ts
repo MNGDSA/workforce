@@ -708,7 +708,21 @@ export class DatabaseStorage implements IStorage {
     if (!params?.includeArchived) {
       conditions.push(isNull(events.archivedAt));
     }
-    return db.select().from(events).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(events.createdAt));
+    const eventsData = await db.select().from(events)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(events.createdAt));
+
+    if (eventsData.length === 0) return eventsData;
+
+    const eventIds = eventsData.map(e => e.id).filter(Boolean) as string[];
+    const counts = await db
+      .select({ eventId: workforce.eventId, total: count() })
+      .from(workforce)
+      .where(and(inArray(workforce.eventId, eventIds), eq(workforce.isActive, true)))
+      .groupBy(workforce.eventId);
+    const countMap = Object.fromEntries(counts.map(c => [c.eventId!, Number(c.total)]));
+
+    return eventsData.map(e => ({ ...e, filledPositions: countMap[e.id] ?? 0 }));
   }
 
   async getEvent(id: string): Promise<Event | undefined> {

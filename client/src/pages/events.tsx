@@ -94,7 +94,7 @@ const createEventSchema = z.object({
   startDate: z.string().min(1, "Event start date is required"),
   endDate: z.string().optional(),
   region: z.string().optional(),
-  targetHeadcount: z.coerce.number().int().min(0).default(0),
+  targetHeadcount: z.coerce.number().int().min(1, "Target headcount must be at least 1"),
   budget: z.coerce.number().optional(),
   status: z.enum(["upcoming", "active"]),
 }).superRefine((data, ctx) => {
@@ -129,7 +129,7 @@ function CreateEventDialog({
       startDate: "",
       endDate: "",
       region: "",
-      targetHeadcount: 0,
+      targetHeadcount: undefined as unknown as number,
       budget: undefined,
       status: "upcoming",
     },
@@ -320,6 +320,31 @@ function CreateEventDialog({
                 This event has no fixed end date. Workers can be offboarded manually at any time.
               </p>
             )}
+
+            {/* ── Headcount ───────────────────────────────────────────── */}
+            <FormField
+              control={form.control}
+              name="targetHeadcount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                    Target Headcount <span className="text-primary">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      placeholder="e.g. 500"
+                      {...field}
+                      onChange={e => field.onChange(Number(e.target.value))}
+                      className="h-10 bg-muted/30 border-border rounded-sm"
+                      data-testid="input-event-headcount"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <DialogFooter className="pt-1 flex gap-2 sm:justify-between">
               <Button
@@ -591,6 +616,23 @@ function EditEventDialog({ event, open, onOpenChange }: { event: Event | null; o
                 This event has no fixed end date. Workers can be offboarded manually at any time.
               </p>
             )}
+
+            {/* ── Headcount ─────────────────────────────────────────── */}
+            <FormField control={form.control} name="targetHeadcount" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Target Headcount <span className="text-primary">*</span></FormLabel>
+                <FormControl>
+                  <Input
+                    type="number" min={1} placeholder="e.g. 500"
+                    {...field}
+                    onChange={e => field.onChange(Number(e.target.value))}
+                    className="h-10 bg-muted/30 border-border rounded-sm"
+                    data-testid="edit-event-headcount"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
 
             <DialogFooter className="pt-1 flex gap-2 sm:justify-between">
               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground">Cancel</Button>
