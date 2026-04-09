@@ -97,6 +97,10 @@ const createEventSchema = z.object({
   targetHeadcount: z.coerce.number().int().min(0).default(0),
   budget: z.coerce.number().optional(),
   status: z.enum(["upcoming", "active"]),
+}).superRefine((data, ctx) => {
+  if (data.eventType === "duration_based" && !data.endDate) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "End date is required", path: ["endDate"] });
+  }
 });
 
 type CreateEventForm = z.infer<typeof createEventSchema>;
@@ -294,7 +298,7 @@ function CreateEventDialog({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                        End Date
+                        End Date <span className="text-red-400">*</span>
                       </FormLabel>
                       <FormControl>
                         <DatePickerField
@@ -574,7 +578,7 @@ function EditEventDialog({ event, open, onOpenChange }: { event: Event | null; o
               {watchedEventType === "duration_based" && (
                 <FormField control={form.control} name="endDate" render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">End Date</FormLabel>
+                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">End Date <span className="text-red-400">*</span></FormLabel>
                     <FormControl><DatePickerField value={field.value ?? ""} onChange={field.onChange} className="h-10 bg-muted/30 border-border rounded-sm" data-testid="edit-event-end-date" /></FormControl>
                     <FormMessage />
                   </FormItem>
