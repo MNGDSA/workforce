@@ -48,7 +48,6 @@ import {
   UserCheck,
   Save,
   CheckCircle2,
-  ThumbsUp,
   AlertTriangle,
   Filter,
 } from "lucide-react";
@@ -531,14 +530,6 @@ function ApplicantsSheet({
     return matchesSearch && matchesStatus;
   });
 
-  // ── Single-row status mutation ────────────────────────────────────────────
-  const updateStatus = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) =>
-      apiRequest("PATCH", `/api/applications/${id}`, { status }).then((r) => r.json()),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/applications", job?.id] }),
-    onError: () => toast({ title: "Update failed", variant: "destructive" }),
-  });
-
   // ── Bulk status mutation ──────────────────────────────────────────────────
   const bulkUpdate = useMutation({
     mutationFn: (updates: { id: string; status: string }[]) =>
@@ -752,7 +743,6 @@ function ApplicantsSheet({
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">Contact</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden sm:table-cell">Applied</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Actions</th>
                   {hasQuestions && (
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Answers</th>
                   )}
@@ -799,27 +789,6 @@ function ApplicantsSheet({
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
                             {new Date(app.appliedAt).toLocaleDateString("en-SA")}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1">
-                            {app.status !== "shortlisted" && app.status !== "hired" && app.status !== "rejected" && (
-                              <button
-                                onClick={() => updateStatus.mutate({ id: app.id, status: "shortlisted" })}
-                                disabled={updateStatus.isPending}
-                                title="Shortlist"
-                                className="p-1.5 rounded-sm text-blue-400 hover:bg-blue-500/15 transition-colors"
-                                data-testid={`button-shortlist-${app.id}`}
-                              >
-                                <ThumbsUp className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                            {app.status === "rejected" && (
-                              <span className="text-xs text-muted-foreground/40 italic">Rejected</span>
-                            )}
-                            {app.status === "hired" && (
-                              <span className="text-xs text-emerald-400/60 italic">Hired</span>
-                            )}
                           </div>
                         </td>
                         {hasQuestions && (
