@@ -484,7 +484,7 @@ export default function JobPostingDetailPage() {
                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">Contact</th>
                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden sm:table-cell">Applied</th>
-                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Actions</th>
+                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground text-center">Actions</th>
                         {hasQuestions && (
                           <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Answers</th>
                         )}
@@ -533,8 +533,8 @@ export default function JobPostingDetailPage() {
                                   {new Date(app.appliedAt).toLocaleDateString("en-SA")}
                                 </div>
                               </td>
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-1">
+                              <td className="px-4 py-3 text-center">
+                                <div className="flex items-center justify-center gap-1">
                                   {app.status !== "shortlisted" && app.status !== "hired" && app.status !== "rejected" && (
                                     <button
                                       onClick={() => updateStatus.mutate({ id: app.id, status: "shortlisted" })}
