@@ -166,6 +166,23 @@ A comprehensive audit trail capturing every significant backoffice action.
 
 Generate SESSION_SECRET: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`
 
+### Mobile App (Expo / React Native)
+Located in `mobile/` directory — a standalone Expo project for seasonal worker attendance. Not run inside Replit; intended for `npx expo start` on a local machine or EAS Build for device deployment.
+
+**Key files:**
+- `mobile/App.tsx` — Root component with screen-based navigation
+- `mobile/src/services/api.ts` — API client + SecureStore auth
+- `mobile/src/services/database.ts` — SQLite offline attendance storage
+- `mobile/src/services/sync.ts` — Background sync engine (30s interval, exponential backoff)
+- `mobile/src/screens/` — Login, Home, Capture (camera+GPS), History, Map, Privacy
+- `mobile/src/theme/` — Matches web app design tokens (dark forest green, Space Grotesk/Inter)
+
+**Features:** Selfie check-in with face guide overlay, GPS verification, offline-first SQLite, auto-sync, Google Maps geofence zones, privacy policy screen.
+
+**Dependencies:** expo ~52, expo-camera, expo-location, expo-sqlite, expo-secure-store, react-native-maps, date-fns.
+
+**Connects to:** `POST /api/attendance-mobile/submit` (multipart photo+GPS), `GET /api/geofence-zones`, `POST /api/auth/login`.
+
 ### Public Routes Must Come Before Auth Middleware
 Candidate portal and public job listings must be registered before `requireAuth` or unauthenticated users are blocked.
 

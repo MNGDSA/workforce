@@ -1,0 +1,69 @@
+{
+  "expo": {
+    "name": "WORKFORCE",
+    "slug": "workforce-attendance",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./src/assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a1a14"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.luxurycarts.workforce",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Used to capture attendance selfie for identity verification at your work site.",
+        "NSLocationWhenInUseUsageDescription": "Used to confirm you are at the authorized work site when marking attendance.",
+        "NSFaceIDUsageDescription": "Used for secure app authentication."
+      },
+      "config": {
+        "googleMapsApiKey": "YOUR_GOOGLE_MAPS_IOS_API_KEY"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/adaptive-icon.png",
+        "backgroundColor": "#0a1a14"
+      },
+      "package": "com.luxurycarts.workforce",
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_GOOGLE_MAPS_ANDROID_API_KEY"
+        }
+      }
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Used to capture attendance selfie for identity verification."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Used to confirm you are at the authorized work site."
+        }
+      ],
+      "expo-font",
+      "expo-secure-store",
+      "expo-sqlite",
+      "expo-crypto"
+    ],
+    "scheme": "workforce",
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
+    }
+  }
+}
