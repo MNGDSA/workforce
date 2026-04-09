@@ -210,7 +210,7 @@ export async function approveSubmission(
       )
     );
 
-  let linkedRecordId = submission.linkedAttendanceRecordId;
+  let linkedRecordId: string;
 
   if (existing.length === 0) {
     const [record] = await db
@@ -226,6 +226,8 @@ export async function approveSubmission(
       })
       .returning();
     linkedRecordId = record.id;
+  } else {
+    linkedRecordId = existing[0].id;
   }
 
   await db

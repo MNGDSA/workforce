@@ -178,6 +178,20 @@ export default function InboxPage() {
     onError: () => toast({ title: "Failed to dismiss item", variant: "destructive" }),
   });
 
+  const approveAttendanceMut = useMutation({
+    mutationFn: (params: { entityId: string; notes?: string }) =>
+      apiRequest("POST", `/api/attendance-mobile/submissions/${params.entityId}/approve`, { notes: params.notes }),
+    onSuccess: () => { invalidateInbox(); setExpandedId(null); setActionNotes(""); toast({ title: "Attendance approved & verified" }); },
+    onError: () => toast({ title: "Failed to approve attendance", variant: "destructive" }),
+  });
+
+  const rejectAttendanceMut = useMutation({
+    mutationFn: (params: { entityId: string; notes?: string }) =>
+      apiRequest("POST", `/api/attendance-mobile/submissions/${params.entityId}/reject`, { notes: params.notes }),
+    onSuccess: () => { invalidateInbox(); setExpandedId(null); setActionNotes(""); toast({ title: "Attendance rejected" }); },
+    onError: () => toast({ title: "Failed to reject attendance", variant: "destructive" }),
+  });
+
   const bulkResolveMut = useMutation({
     mutationFn: (ids: string[]) => apiRequest("POST", "/api/inbox/bulk-resolve", { ids }),
     onSuccess: () => { invalidateInbox(); setSelected(new Set()); toast({ title: "Items resolved" }); },
@@ -503,25 +517,51 @@ export default function InboxPage() {
                             />
                           </div>
                           <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              className="gap-1.5"
-                              onClick={() => resolveMut.mutate({ id: item.id, notes: actionNotes || undefined })}
-                              disabled={resolveMut.isPending}
-                              data-testid={`button-resolve-${item.id}`}
-                            >
-                              <CheckCircle2 className="h-4 w-4" /> Resolve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1.5"
-                              onClick={() => dismissMut.mutate({ id: item.id, notes: actionNotes || undefined })}
-                              disabled={dismissMut.isPending}
-                              data-testid={`button-dismiss-${item.id}`}
-                            >
-                              <XCircle className="h-4 w-4" /> Dismiss
-                            </Button>
+                            {item.type === "attendance_verification" && item.entityId ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                                  onClick={() => approveAttendanceMut.mutate({ entityId: item.entityId!, notes: actionNotes || undefined })}
+                                  disabled={approveAttendanceMut.isPending}
+                                  data-testid={`button-approve-attendance-${item.id}`}
+                                >
+                                  <CheckCircle2 className="h-4 w-4" /> Approve Attendance
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1.5 border-red-600/50 text-red-400 hover:bg-red-600/10"
+                                  onClick={() => rejectAttendanceMut.mutate({ entityId: item.entityId!, notes: actionNotes || undefined })}
+                                  disabled={rejectAttendanceMut.isPending}
+                                  data-testid={`button-reject-attendance-${item.id}`}
+                                >
+                                  <XCircle className="h-4 w-4" /> Reject Attendance
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <Button
+                                  size="sm"
+                                  className="gap-1.5"
+                                  onClick={() => resolveMut.mutate({ id: item.id, notes: actionNotes || undefined })}
+                                  disabled={resolveMut.isPending}
+                                  data-testid={`button-resolve-${item.id}`}
+                                >
+                                  <CheckCircle2 className="h-4 w-4" /> Resolve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1.5"
+                                  onClick={() => dismissMut.mutate({ id: item.id, notes: actionNotes || undefined })}
+                                  disabled={dismissMut.isPending}
+                                  data-testid={`button-dismiss-${item.id}`}
+                                >
+                                  <XCircle className="h-4 w-4" /> Dismiss
+                                </Button>
+                              </>
+                            )}
                             {item.actionUrl && (
                               <Button
                                 size="sm"

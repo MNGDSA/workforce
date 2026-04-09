@@ -17,11 +17,11 @@ export async function compareFaces(
   const secretKey = process.env.AWS_SECRET_ACCESS_KEY;
 
   if (!accessKey || !secretKey) {
-    console.warn("[Rekognition] AWS credentials not configured — using stub mode (random confidence 70-99%)");
-    const stubConfidence = Math.round((70 + Math.random() * 29) * 100) / 100;
+    console.warn("[Rekognition] AWS credentials not configured — flagging for manual review");
     return {
-      confidence: stubConfidence,
-      matched: stubConfidence >= 95,
+      confidence: 0,
+      matched: false,
+      error: "rekognition_unavailable",
     };
   }
 
