@@ -1773,6 +1773,13 @@ export class DatabaseStorage implements IStorage {
       updatedAt: new Date(),
     }).where(eq(candidates.id, rec.candidateId));
 
+    if (rec.applicationId) {
+      await db.update(applications).set({
+        status: "hired",
+        updatedAt: new Date(),
+      }).where(eq(applications.id, rec.applicationId));
+    }
+
     return workforceRec;
   }
 
