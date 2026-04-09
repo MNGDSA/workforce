@@ -32,6 +32,7 @@ import {
   User,
   CalendarCheck,
   Loader2,
+  Inbox,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -300,6 +301,7 @@ const recruitmentItems: { href: string; icon: React.ElementType; label: string }
 
 const topNavItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/inbox",     icon: Inbox,           label: "HR Inbox" },
   { href: "/payroll",   icon: Wallet,          label: "Payroll" },
 ];
 
@@ -587,6 +589,13 @@ export default function DashboardLayout({ children }: LayoutProps) {
     queryKey: ["/api/me"],
   });
 
+  const { data: inboxCount } = useQuery<{ count: number }>({
+    queryKey: ["/api/inbox/count"],
+    queryFn: () => apiRequest("GET", "/api/inbox/count").then(r => r.json()),
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+
   const displayName: string =
     sessionUser?.fullNameEn || sessionUser?.fullName || sessionUser?.name ||
     meUser?.fullName || meUser?.name || "Admin User";
@@ -617,18 +626,20 @@ export default function DashboardLayout({ children }: LayoutProps) {
     label,
     isActive,
     sub = false,
+    badge,
   }: {
     href: string;
     icon: React.ElementType;
     label: string;
     isActive: boolean;
     sub?: boolean;
+    badge?: number;
   }) => {
     const btn = (
       <Link href={href}>
         <button
           className={cn(
-            "w-full flex items-center rounded-sm text-sm font-medium transition-all duration-200 group",
+            "w-full flex items-center rounded-sm text-sm font-medium transition-all duration-200 group relative",
             collapsed ? "justify-center px-0 py-3" : sub ? "gap-3 px-3 py-2.5" : "gap-3 px-4 py-3",
             !collapsed && !sub && "border-l-2",
             isActive
@@ -636,12 +647,23 @@ export default function DashboardLayout({ children }: LayoutProps) {
               : cn("text-muted-foreground hover:bg-muted/50 hover:text-foreground", !collapsed && !sub && "border-transparent")
           )}
         >
-          <Icon className={cn(
-            "shrink-0",
-            sub && !collapsed ? "h-4 w-4" : "h-5 w-5",
-            isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
-          )} />
-          {!collapsed && <span>{label}</span>}
+          <span className="relative shrink-0">
+            <Icon className={cn(
+              sub && !collapsed ? "h-4 w-4" : "h-5 w-5",
+              isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+            )} />
+            {collapsed && badge != null && badge > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[8px] font-bold text-white leading-none">
+                {badge > 99 ? "99+" : badge}
+              </span>
+            )}
+          </span>
+          {!collapsed && <span className="flex-1">{label}</span>}
+          {!collapsed && badge != null && badge > 0 && (
+            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-white leading-none">
+              {badge > 99 ? "99+" : badge}
+            </span>
+          )}
         </button>
       </Link>
     );
@@ -738,6 +760,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
             icon={item.icon}
             label={item.label}
             isActive={location === item.href}
+            badge={item.href === "/inbox" ? inboxCount?.count : undefined}
           />
         ))}
 

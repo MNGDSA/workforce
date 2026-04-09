@@ -86,6 +86,9 @@ import {
   auditLogs,
   type AuditLog,
   type InsertAuditLog,
+  inboxItems,
+  type InboxItem,
+  type InsertInboxItem,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte } from "drizzle-orm";
 
@@ -374,6 +377,16 @@ export interface IStorage {
   updateEmployeeAsset(id: string, data: Partial<InsertEmployeeAsset>): Promise<EmployeeAsset | undefined>;
   deleteEmployeeAsset(id: string): Promise<boolean>;
   getUnreturnedAssetsForWorker(workforceId: string): Promise<Array<EmployeeAsset & { asset: Asset }>>;
+
+  // Inbox Items
+  getInboxItems(params?: { status?: string; type?: string; priority?: string; page?: number; limit?: number; search?: string }): Promise<{ data: InboxItem[]; total: number }>;
+  getInboxItem(id: string): Promise<InboxItem | undefined>;
+  createInboxItem(data: InsertInboxItem): Promise<InboxItem>;
+  resolveInboxItem(id: string, resolvedBy: string): Promise<InboxItem | undefined>;
+  dismissInboxItem(id: string, resolvedBy: string): Promise<InboxItem | undefined>;
+  bulkResolveInboxItems(ids: string[], resolvedBy: string): Promise<number>;
+  bulkDismissInboxItems(ids: string[], resolvedBy: string): Promise<number>;
+  countOpenInboxItems(): Promise<number>;
 
   // Dashboard
   getDashboardStats(): Promise<{
@@ -2731,6 +2744,81 @@ export class DatabaseStorage implements IStorage {
       db.select({ cnt: count() }).from(auditLogs).where(where),
     ]);
     return { data, total: Number(cnt) };
+  }
+
+  // ─── Inbox Items ────────────────────────────────────────────────────────────
+  async getInboxItems(params?: { status?: string; type?: string; priority?: string; page?: number; limit?: number; search?: string }): Promise<{ data: InboxItem[]; total: number }> {
+    const page = params?.page ?? 1;
+    const limit = params?.limit ?? 50;
+    const offset = (page - 1) * limit;
+    const conditions = [];
+    if (params?.status) conditions.push(eq(inboxItems.status, params.status as any));
+    if (params?.type) conditions.push(eq(inboxItems.type, params.type as any));
+    if (params?.priority) conditions.push(eq(inboxItems.priority, params.priority as any));
+    if (params?.search) {
+      const s = `%${params.search.toLowerCase()}%`;
+      conditions.push(or(
+        sql`LOWER(${inboxItems.title}) LIKE ${s}`,
+        sql`LOWER(${inboxItems.body}) LIKE ${s}`,
+      )!);
+    }
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const [data, [{ cnt }]] = await Promise.all([
+      db.select().from(inboxItems).where(where).orderBy(desc(inboxItems.createdAt)).limit(limit).offset(offset),
+      db.select({ cnt: count() }).from(inboxItems).where(where),
+    ]);
+    return { data, total: Number(cnt) };
+  }
+
+  async getInboxItem(id: string): Promise<InboxItem | undefined> {
+    const [item] = await db.select().from(inboxItems).where(eq(inboxItems.id, id));
+    return item;
+  }
+
+  async createInboxItem(data: InsertInboxItem): Promise<InboxItem> {
+    const [item] = await db.insert(inboxItems).values(data).returning();
+    return item;
+  }
+
+  async resolveInboxItem(id: string, resolvedBy: string): Promise<InboxItem | undefined> {
+    const [item] = await db
+      .update(inboxItems)
+      .set({ status: "resolved", resolvedBy, resolvedAt: new Date() })
+      .where(and(eq(inboxItems.id, id), eq(inboxItems.status, "open")))
+      .returning();
+    return item;
+  }
+
+  async dismissInboxItem(id: string, resolvedBy: string): Promise<InboxItem | undefined> {
+    const [item] = await db
+      .update(inboxItems)
+      .set({ status: "dismissed", resolvedBy, resolvedAt: new Date() })
+      .where(and(eq(inboxItems.id, id), eq(inboxItems.status, "open")))
+      .returning();
+    return item;
+  }
+
+  async bulkResolveInboxItems(ids: string[], resolvedBy: string): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await db
+      .update(inboxItems)
+      .set({ status: "resolved", resolvedBy, resolvedAt: new Date() })
+      .where(and(inArray(inboxItems.id, ids), eq(inboxItems.status, "open")));
+    return (result as any).rowCount ?? ids.length;
+  }
+
+  async bulkDismissInboxItems(ids: string[], resolvedBy: string): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await db
+      .update(inboxItems)
+      .set({ status: "dismissed", resolvedBy, resolvedAt: new Date() })
+      .where(and(inArray(inboxItems.id, ids), eq(inboxItems.status, "open")));
+    return (result as any).rowCount ?? ids.length;
+  }
+
+  async countOpenInboxItems(): Promise<number> {
+    const [{ cnt }] = await db.select({ cnt: count() }).from(inboxItems).where(eq(inboxItems.status, "open"));
+    return Number(cnt);
   }
 }
 

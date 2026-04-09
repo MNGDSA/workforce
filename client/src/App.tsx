@@ -32,6 +32,7 @@ import SchedulesPage from "@/pages/schedules";
 import AssetsPage from "@/pages/assets";
 import AuditLogPage from "@/pages/audit-log";
 import OffboardingPage from "@/pages/offboarding";
+import InboxPage from "@/pages/inbox";
 
 function Router() {
   return (
@@ -64,6 +65,7 @@ function Router() {
       <Route path="/assets" component={AssetsPage} />
       <Route path="/offboarding" component={OffboardingPage} />
       <Route path="/audit-log" component={AuditLogPage} />
+      <Route path="/inbox" component={InboxPage} />
       <Route path="/candidate-portal" component={() => (
         <ProfileSetupGate><CandidatePortal /></ProfileSetupGate>
       )} />

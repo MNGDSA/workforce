@@ -44,7 +44,7 @@ The system employs a modern, full-stack architecture.
 
 **Database**:
 - PostgreSQL, managed with Drizzle ORM.
-- **Schema Design**: Tables are optimized for MAANG-scale with appropriate indexing for 70,000+ candidates. Key tables include `users`, `candidates`, `events`, `job_postings`, `applications`, `interviews`, `workforce`, `smp_contracts`, `automation_rules`, `notifications`, and tables for ID card management.
+- **Schema Design**: Tables are optimized for MAANG-scale with appropriate indexing for 70,000+ candidates. Key tables include `users`, `candidates`, `events`, `job_postings`, `applications`, `interviews`, `workforce`, `smp_contracts`, `automation_rules`, `notifications`, `inbox_items`, and tables for ID card management.
 - **Candidate Table Decisions**: Candidates are primarily identified by `national_id`. `skills`, `languages`, `certifications`, `tags` are array columns. `metadata` uses JSONB for extensibility. Composite indexes are used for common query patterns. Bulk inserts are batched for performance.
 - **Data Integrity Policy**: Strict policy against `onConflictDoNothing()` to ensure explicit handling of duplicates and uniqueness validation for business keys.
 - **Soft Delete Policy**: Events and Candidates are never hard-deleted; instead, `archivedAt` timestamps are used for soft deletion, preserving all linked records.

@@ -1140,6 +1140,60 @@ export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: tru
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
 
+// ─── Inbox Items ─────────────────────────────────────────────────────────────
+export const inboxItemTypeEnum = pgEnum("inbox_item_type", [
+  "document_review",
+  "application_review",
+  "onboarding_action",
+  "contract_action",
+  "offboarding_action",
+  "schedule_conflict",
+  "asset_return",
+  "candidate_flag",
+  "event_alert",
+  "system",
+]);
+
+export const inboxItemPriorityEnum = pgEnum("inbox_item_priority", [
+  "low",
+  "medium",
+  "high",
+  "urgent",
+]);
+
+export const inboxItemStatusEnum = pgEnum("inbox_item_status", [
+  "open",
+  "resolved",
+  "dismissed",
+]);
+
+export const inboxItems = pgTable("inbox_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: inboxItemTypeEnum("type").notNull(),
+  priority: inboxItemPriorityEnum("priority").notNull().default("medium"),
+  status: inboxItemStatusEnum("status").notNull().default("open"),
+  title: text("title").notNull(),
+  body: text("body"),
+  entityType: varchar("entity_type", { length: 64 }),
+  entityId: varchar("entity_id", { length: 128 }),
+  actionUrl: text("action_url"),
+  assignedTo: varchar("assigned_to", { length: 128 }),
+  resolvedBy: varchar("resolved_by", { length: 128 }),
+  resolvedAt: timestamp("resolved_at"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  statusIdx: index("inbox_items_status_idx").on(t.status),
+  typeIdx: index("inbox_items_type_idx").on(t.type),
+  priorityIdx: index("inbox_items_priority_idx").on(t.priority),
+  createdAtIdx: index("inbox_items_created_at_idx").on(t.createdAt),
+  entityIdx: index("inbox_items_entity_idx").on(t.entityType, t.entityId),
+}));
+
+export const insertInboxItemSchema = createInsertSchema(inboxItems).omit({ id: true, createdAt: true, resolvedAt: true, resolvedBy: true });
+export type InsertInboxItem = z.infer<typeof insertInboxItemSchema>;
+export type InboxItem = typeof inboxItems.$inferSelect;
+
 // ─── Query Params Types ─────────────────────────────────────────────────────
 export const candidateQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

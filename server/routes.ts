@@ -3575,5 +3575,87 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
+  // ─── Inbox Items ──────────────────────────────────────────────────────────────
+  const inboxQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    status: z.enum(["open", "resolved", "dismissed"]).optional(),
+    type: z.enum(["document_review", "application_review", "onboarding_action", "contract_action", "offboarding_action", "schedule_conflict", "asset_return", "candidate_flag", "event_alert", "system"]).optional(),
+    priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+    search: z.string().optional(),
+  });
+
+  app.get("/api/inbox", async (req: Request, res: Response) => {
+    try {
+      const params = inboxQuerySchema.parse(req.query);
+      const result = await storage.getInboxItems(params);
+      return res.json(result);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/inbox/count", async (_req: Request, res: Response) => {
+    try {
+      const count = await storage.countOpenInboxItems();
+      return res.json({ count });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/inbox/:id", async (req: Request, res: Response) => {
+    try {
+      const item = await storage.getInboxItem(req.params.id);
+      if (!item) return res.status(404).json({ message: "Inbox item not found" });
+      return res.json(item);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/inbox", async (req: Request, res: Response) => {
+    try {
+      const { insertInboxItemSchema } = await import("@shared/schema");
+      const data = insertInboxItemSchema.parse(req.body);
+      const item = await storage.createInboxItem(data);
+      return res.status(201).json(item);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/inbox/:id/resolve", async (req: Request, res: Response) => {
+    try {
+      const resolvedBy = (req as any).userId ?? "system";
+      const item = await storage.resolveInboxItem(req.params.id, resolvedBy);
+      if (!item) return res.status(404).json({ message: "Inbox item not found" });
+      await logAudit(req, { action: "inbox_resolve", entityType: "inbox_item", entityId: item.id, description: `Resolved inbox item: ${item.title}` });
+      return res.json(item);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/inbox/:id/dismiss", async (req: Request, res: Response) => {
+    try {
+      const resolvedBy = (req as any).userId ?? "system";
+      const item = await storage.dismissInboxItem(req.params.id, resolvedBy);
+      if (!item) return res.status(404).json({ message: "Inbox item not found" });
+      await logAudit(req, { action: "inbox_dismiss", entityType: "inbox_item", entityId: item.id, description: `Dismissed inbox item: ${item.title}` });
+      return res.json(item);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  const inboxBulkSchema = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) });
+
+  app.post("/api/inbox/bulk-resolve", async (req: Request, res: Response) => {
+    try {
+      const { ids } = inboxBulkSchema.parse(req.body);
+      const resolvedBy = (req as any).userId ?? "system";
+      const count = await storage.bulkResolveInboxItems(ids, resolvedBy);
+      return res.json({ resolved: count });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/inbox/bulk-dismiss", async (req: Request, res: Response) => {
+    try {
+      const { ids } = inboxBulkSchema.parse(req.body);
+      const resolvedBy = (req as any).userId ?? "system";
+      const count = await storage.bulkDismissInboxItems(ids, resolvedBy);
+      return res.json({ dismissed: count });
+    } catch (err) { return handleError(res, err); }
+  });
+
   return httpServer;
 }
