@@ -41,6 +41,7 @@ import {
   RefreshCw,
   Clipboard,
   Eye,
+  History,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -91,13 +92,14 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
   dismissed: { label: "Dismissed", color: "bg-muted text-muted-foreground border-border" },
 };
 
-type TabValue = "all" | "pending" | "resolved" | "dismissed";
+type TabValue = "all" | "pending" | "resolved" | "dismissed" | "history";
 
 const TABS: { value: TabValue; label: string; icon: React.ElementType }[] = [
   { value: "all", label: "All", icon: ListFilter },
   { value: "pending", label: "Pending", icon: Clock },
   { value: "resolved", label: "Resolved", icon: CheckCircle2 },
   { value: "dismissed", label: "Dismissed", icon: XCircle },
+  { value: "history", label: "History", icon: History },
 ];
 
 function timeAgo(iso: string) {
@@ -132,20 +134,26 @@ export default function InboxPage() {
   const [actionNotes, setActionNotes] = useState("");
   const limit = 20;
 
+  const statusForApi = tab === "all" || tab === "history" ? undefined : tab;
+
   const queryParams = new URLSearchParams();
   queryParams.set("page", String(page));
   queryParams.set("limit", String(limit));
-  if (tab !== "all") queryParams.set("status", tab);
+  if (statusForApi) queryParams.set("status", statusForApi);
   if (typeFilter !== "all") queryParams.set("type", typeFilter);
   if (priorityFilter !== "all") queryParams.set("priority", priorityFilter);
   if (search.trim()) queryParams.set("search", search.trim());
   queryParams.set("sortBy", sortBy);
   queryParams.set("sortOrder", sortOrder);
 
-  const { data, isLoading } = useQuery<{ data: InboxItem[]; total: number }>({
+  const { data: rawData, isLoading } = useQuery<{ data: InboxItem[]; total: number }>({
     queryKey: ["/api/inbox", page, tab, typeFilter, priorityFilter, search, sortBy, sortOrder],
     queryFn: () => apiRequest("GET", `/api/inbox?${queryParams.toString()}`).then(r => r.json()),
   });
+
+  const data = tab === "history" && rawData
+    ? { data: rawData.data.filter(i => i.status !== "pending"), total: rawData.data.filter(i => i.status !== "pending").length }
+    : rawData;
 
   const { data: countData } = useQuery<{ count: number }>({
     queryKey: ["/api/inbox/count"],
@@ -350,7 +358,7 @@ export default function InboxPage() {
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <InboxIcon className="h-12 w-12 text-muted-foreground/30 mb-4" />
             <h3 className="text-lg font-semibold text-foreground" data-testid="text-inbox-empty">
-              {tab === "pending" ? "All clear" : tab === "all" ? "No items" : `No ${tab} items`}
+              {tab === "pending" ? "All clear" : tab === "all" ? "No items" : tab === "history" ? "No history" : `No ${tab} items`}
             </h3>
             <p className="text-sm text-muted-foreground mt-1">
               {tab === "pending" ? "No pending items require your attention." : "No inbox items match your current filters."}
@@ -416,7 +424,13 @@ export default function InboxPage() {
                         </Badge>
                       </div>
 
-                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                      {item.body && !isExpanded && (
+                        <p className="text-xs text-muted-foreground truncate mt-0.5" data-testid={`text-inbox-summary-${item.id}`}>
+                          {item.body.length > 120 ? item.body.slice(0, 120) + "…" : item.body}
+                        </p>
+                      )}
+
+                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5">
                         <span>{typeMeta.label}</span>
                         <span>·</span>
                         <span>{timeAgo(item.createdAt)}</span>
