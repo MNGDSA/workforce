@@ -69,6 +69,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { resolveSaudiBank } from "@/lib/saudi-banks";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1002,6 +1003,7 @@ export default function CandidatePortal() {
   const [profileEduLevel, setProfileEduLevel] = useState("");
   const [profileMajor,    setProfileMajor]    = useState("");
   const [profileRegion,   setProfileRegion]   = useState("");
+  const [ibanValue,      setIbanValue]       = useState("");
   const [pwCurrent,  setPwCurrent]  = useState("");
   const [pwNew,      setPwNew]      = useState("");
   const [pwConfirm,  setPwConfirm]  = useState("");
@@ -1009,6 +1011,7 @@ export default function CandidatePortal() {
   const [showPwNew,  setShowPwNew]  = useState(false);
 
   const EDU_OPTIONS = ["High School and below", "University and higher"] as const;
+  const detectedBank = resolveSaudiBank(ibanValue);
 
   function normalizeTags(raw: string): string[] {
     return raw.split(/[،,;|/\t\r\n]+/).map(s => s.trim()).filter(Boolean);
@@ -1054,6 +1057,7 @@ export default function CandidatePortal() {
       setProfileEduLevel(String(candidateProfile.educationLevel ?? ""));
       setProfileMajor(String(candidateProfile.major ?? ""));
       setProfileRegion(String(candidateProfile.region ?? ""));
+      setIbanValue(String(candidateProfile.ibanNumber ?? ""));
     }
     if (!open) { setPwCurrent(""); setPwNew(""); setPwConfirm(""); }
     setProfileOpen(open);
@@ -1080,14 +1084,18 @@ export default function CandidatePortal() {
     }
 
     if (!isSmp) {
-      if (!raw.ibanNumber || !String(raw.ibanNumber).trim()) {
+      const iban = ibanValue.trim().toUpperCase();
+      if (!iban) {
         toast({ title: "IBAN Required", description: "Please enter your Saudi IBAN number for salary transfers.", variant: "destructive" });
         return;
       }
-      if (!/^SA\d{22}$/.test(String(raw.ibanNumber))) {
+      if (!/^SA\d{22}$/.test(iban)) {
         toast({ title: "Invalid IBAN", description: "IBAN must be SA followed by 22 digits (24 characters total)", variant: "destructive" });
         return;
       }
+      raw.ibanNumber   = iban;
+      raw.ibanBankName = detectedBank?.ibanBankName ?? null;
+      raw.ibanBankCode = detectedBank?.ibanBankCode ?? null;
     }
     saveProfile.mutate(raw);
   }
@@ -1754,15 +1762,36 @@ export default function CandidatePortal() {
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-white">IBAN Number <span className="text-red-400">*</span></label>
                     <Input
-                      name="ibanNumber"
-                      defaultValue={String(candidateProfile?.ibanNumber ?? "")}
+                      value={ibanValue}
+                      onChange={e => setIbanValue(e.target.value.toUpperCase())}
                       placeholder="SA0000000000000000000000"
                       maxLength={24}
-                      required
-                      className="bg-background border-border font-mono"
+                      className="bg-background border-border font-mono uppercase"
                       data-testid="input-iban"
                     />
                     <p className="text-xs text-muted-foreground">Saudi IBAN: SA followed by 22 digits (24 characters total)</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-muted-foreground">Bank Name</label>
+                      <Input
+                        value={detectedBank?.ibanBankName ?? ""}
+                        readOnly
+                        placeholder="Auto-detected from IBAN"
+                        className="bg-muted/10 border-border text-muted-foreground cursor-not-allowed"
+                        data-testid="input-bank-name"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-muted-foreground">Bank Code</label>
+                      <Input
+                        value={detectedBank?.ibanBankCode ?? ""}
+                        readOnly
+                        placeholder="Auto-detected"
+                        className="bg-muted/10 border-border text-muted-foreground cursor-not-allowed font-mono"
+                        data-testid="input-bank-code"
+                      />
+                    </div>
                   </div>
                 </div>
               </>
