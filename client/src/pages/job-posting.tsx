@@ -619,7 +619,6 @@ function ApplicantsSheet({
             <SheetTitle className="font-display text-xl font-bold text-white">{job.title}</SheetTitle>
             <div className="text-muted-foreground mt-1 flex items-center gap-3 flex-wrap text-sm">
               {job.region && <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{job.region}</span>}
-              <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" />{job.openings} openings</span>
               <Badge variant="outline" className={`border-0 text-xs ${statusStyles[job.status] ?? "bg-muted text-muted-foreground"}`}>
                 {statusLabel[job.status] ?? job.status}
               </Badge>
@@ -937,7 +936,7 @@ export default function JobPostingPage() {
     },
   });
 
-  const stats = jobStats as { total: number; active: number; draft: number; filled: number; totalOpenings: number } | undefined;
+  const stats = jobStats as { total: number; active: number; draft: number; filled: number } | undefined;
 
   const filtered = jobs.filter(j => {
     const matchSearch = !search || j.title.toLowerCase().includes(search.toLowerCase()) || (j.location ?? "").toLowerCase().includes(search.toLowerCase());
@@ -987,14 +986,6 @@ export default function JobPostingPage() {
             </CardHeader>
             <CardContent>
               <div className="text-4xl font-bold font-display text-muted-foreground" data-testid="stat-draft-jobs">{stats?.draft ?? "—"}</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Openings</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-openings">{stats?.totalOpenings?.toLocaleString() ?? "—"}</div>
             </CardContent>
           </Card>
         </div>
@@ -1072,7 +1063,6 @@ export default function JobPostingPage() {
                     <TableHead className="text-muted-foreground">Job Title</TableHead>
                     <TableHead className="text-muted-foreground hidden md:table-cell">Location</TableHead>
                     <TableHead className="text-muted-foreground hidden md:table-cell">Type</TableHead>
-                    <TableHead className="text-muted-foreground hidden lg:table-cell">Openings</TableHead>
                     <TableHead className="text-muted-foreground hidden lg:table-cell">Salary Range</TableHead>
                     <TableHead className="text-muted-foreground">Status</TableHead>
                     <TableHead className="text-muted-foreground hidden md:table-cell">Posted</TableHead>
@@ -1117,12 +1107,6 @@ export default function JobPostingPage() {
                         >
                           {job.type === "seasonal_part_time" ? "Seasonal PT" : "Seasonal FT"}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <div className="flex items-center gap-1 text-sm text-white">
-                          <Users className="h-3 w-3 text-muted-foreground" />
-                          {job.openings.toLocaleString()}
-                        </div>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
                         {job.salaryMin && job.salaryMax ? (

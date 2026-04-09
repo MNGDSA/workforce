@@ -33,7 +33,6 @@ type JobPosting = {
   type: string;
   salaryMin?: string;
   salaryMax?: string;
-  openings: number;
   status: string;
   deadline?: string;
   skills?: string[];
@@ -203,12 +202,6 @@ export default function JobDetailPage() {
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CalendarDays className="h-4 w-4 text-primary/70 shrink-0" />
                 <span>Apply by {job.deadline}</span>
-              </div>
-            )}
-            {job.openings > 0 && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Users className="h-4 w-4 text-primary/70 shrink-0" />
-                <span>{job.openings} opening{job.openings !== 1 ? "s" : ""}</span>
               </div>
             )}
           </div>

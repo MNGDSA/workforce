@@ -148,7 +148,7 @@ export interface IStorage {
   updateJobPosting(id: string, data: Partial<InsertJobPosting>): Promise<JobPosting | undefined>;
   archiveJobPosting(id: string): Promise<boolean>;
   unarchiveJobPosting(id: string): Promise<boolean>;
-  getJobStats(): Promise<{ total: number; active: number; draft: number; filled: number; totalOpenings: number }>;
+  getJobStats(): Promise<{ total: number; active: number; draft: number; filled: number }>;
 
   // Applications
   getApplications(params?: { jobId?: string; candidateId?: string; status?: string }): Promise<Application[]>;
@@ -836,12 +836,9 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
-  async getJobStats(): Promise<{ total: number; active: number; draft: number; filled: number; totalOpenings: number }> {
+  async getJobStats(): Promise<{ total: number; active: number; draft: number; filled: number }> {
     const notArchived = isNull(jobPostings.archivedAt);
-    const [stats] = await db.select({
-      total: count(),
-      totalOpenings: sql<number>`coalesce(sum(${jobPostings.openings}), 0)`,
-    }).from(jobPostings).where(notArchived);
+    const [stats] = await db.select({ total: count() }).from(jobPostings).where(notArchived);
 
     const [activeRow] = await db.select({ value: count() }).from(jobPostings).where(and(eq(jobPostings.status, "active"), notArchived));
     const [draftRow] = await db.select({ value: count() }).from(jobPostings).where(and(eq(jobPostings.status, "draft"), notArchived));
@@ -852,7 +849,6 @@ export class DatabaseStorage implements IStorage {
       active: Number(activeRow.value),
       draft: Number(draftRow.value),
       filled: Number(filledRow.value),
-      totalOpenings: Number(stats.totalOpenings),
     };
   }
 

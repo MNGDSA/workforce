@@ -328,7 +328,6 @@ export const jobPostings = pgTable(
     type: text("type").notNull().default("seasonal_full_time"),
     salaryMin: decimal("salary_min", { precision: 10, scale: 2 }),
     salaryMax: decimal("salary_max", { precision: 10, scale: 2 }),
-    openings: integer("openings").notNull().default(1),
     status: jobStatusEnum("status").notNull().default("draft"),
     eventId: varchar("event_id").notNull().references(() => events.id),
     postedBy: varchar("posted_by").references(() => users.id),

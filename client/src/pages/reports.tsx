@@ -34,7 +34,6 @@ type JobsStats = {
   active: number;
   draft: number;
   filled: number;
-  totalOpenings: number;
 };
 
 type InterviewStats = {
@@ -209,7 +208,6 @@ export default function ReportsPage() {
       ["Jobs", "Total Jobs", String(jobsStats?.total ?? 0)],
       ["Jobs", "Active", String(jobsStats?.active ?? 0)],
       ["Jobs", "Filled", String(jobsStats?.filled ?? 0)],
-      ["Jobs", "Total Openings", String(jobsStats?.totalOpenings ?? 0)],
     ];
     const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -231,7 +229,6 @@ export default function ReportsPage() {
       ["Active Events",      dashStats?.activeEvents     ?? 0],
       ["Scheduled Interviews",dashStats?.scheduledInterviews ?? 0],
       ["Total Jobs",          jobsStats?.total             ?? 0],
-      ["Total Openings",      jobsStats?.totalOpenings     ?? 0],
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(overviewData), "Overview");
 
@@ -265,7 +262,6 @@ export default function ReportsPage() {
       ["Active",        jobsStats?.active        ?? 0],
       ["Draft",         jobsStats?.draft         ?? 0],
       ["Filled",        jobsStats?.filled        ?? 0],
-      ["Total Openings",jobsStats?.totalOpenings ?? 0],
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(jobsData), "Jobs");
 
@@ -331,7 +327,7 @@ export default function ReportsPage() {
           <StatCard icon={Users}          label="Total Candidates"   value={dashStats?.totalCandidates ?? 0}    sub="Registered in system"      color="text-blue-400" />
           <StatCard icon={Briefcase}      label="Open Positions"     value={dashStats?.openPositions ?? 0}      sub={`of ${jobsStats?.total ?? 0} total jobs`} color="text-primary" />
           <StatCard icon={CalendarCheck2} label="Active Events"     value={dashStats?.activeEvents ?? 0}      sub="Hiring events"            color="text-amber-400" />
-          <StatCard icon={TrendingUp}     label="Total Openings"     value={jobsStats?.totalOpenings ?? 0}      sub="Across all active jobs"    color="text-emerald-400" />
+          <StatCard icon={TrendingUp}     label="Filled Jobs"        value={jobsStats?.filled ?? 0}             sub="Across all jobs"           color="text-emerald-400" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -409,7 +405,7 @@ export default function ReportsPage() {
                 <Briefcase className="h-4 w-4 text-primary" />
                 Job Openings
               </CardTitle>
-              <CardDescription>{jobsStats?.total ?? 0} jobs · {jobsStats?.totalOpenings ?? 0} total seats</CardDescription>
+              <CardDescription>{jobsStats?.total ?? 0} jobs</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-3">
@@ -417,7 +413,6 @@ export default function ReportsPage() {
                   { label: "Active",   value: jobsStats?.active ?? 0,  color: "text-emerald-400", bg: "bg-emerald-500/10", Icon: Star },
                   { label: "Draft",    value: jobsStats?.draft ?? 0,   color: "text-amber-400",   bg: "bg-amber-500/10",   Icon: Clock },
                   { label: "Filled",   value: jobsStats?.filled ?? 0,  color: "text-blue-400",    bg: "bg-blue-500/10",    Icon: CheckCircle2 },
-                  { label: "Openings", value: jobsStats?.totalOpenings ?? 0, color: "text-primary", bg: "bg-primary/10", Icon: UserCheck },
                 ].map(({ label, value, color, bg, Icon }) => (
                   <div key={label} className={`rounded-lg p-3 ${bg} border border-border flex items-center gap-3`}>
                     <Icon className={`h-5 w-5 shrink-0 ${color}`} />

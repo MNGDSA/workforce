@@ -45,7 +45,6 @@ type JobPosting = {
   type: string;
   salaryMin?: string;
   salaryMax?: string;
-  openings: number;
   status: string;
   deadline?: string;
   skills?: string[];
@@ -340,10 +339,6 @@ export default function JobPostingDetailPage() {
                       <span>{job.region}</span>
                     </div>
                   )}
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Users className="h-4 w-4 shrink-0" />
-                    <span>{job.openings} opening{job.openings !== 1 ? "s" : ""}</span>
-                  </div>
                   {salary && (
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Banknote className="h-4 w-4 shrink-0" />
