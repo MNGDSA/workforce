@@ -48,9 +48,9 @@ import {
   UserCheck,
   Save,
   CheckCircle2,
-  XCircle,
-  Star,
+  ThumbsUp,
   AlertTriangle,
+  Filter,
 } from "lucide-react";
 import { useRef } from "react";
 import {
@@ -483,6 +483,8 @@ function ApplicantsSheet({
 }) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [appSearch, setAppSearch] = useState("");
+  const [appStatusFilter, setAppStatusFilter] = useState<string>("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -515,6 +517,19 @@ function ApplicantsSheet({
   });
   const questions: ExportQuestion[] = (questionSet?.questions ?? []) as ExportQuestion[];
   const hasQuestions = questions.length > 0;
+
+  // ── Search + filter ──────────────────────────────────────────────────────
+  const filteredApplications = applications.filter(app => {
+    const candidate = candidateMap[app.candidateId];
+    const q = appSearch.trim().toLowerCase();
+    const matchesSearch = !q
+      || candidate?.fullNameEn?.toLowerCase().includes(q)
+      || candidate?.nationalId?.includes(q)
+      || candidate?.phone?.includes(q)
+      || candidate?.email?.toLowerCase().includes(q);
+    const matchesStatus = appStatusFilter === "all" || app.status === appStatusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   // ── Single-row status mutation ────────────────────────────────────────────
   const updateStatus = useMutation({
@@ -680,6 +695,39 @@ function ApplicantsSheet({
           </div>
         )}
 
+        {/* Search + Status filter bar */}
+        {applications.length > 0 && (
+          <div className="px-6 py-3 border-b border-border flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={appSearch}
+                onChange={e => setAppSearch(e.target.value)}
+                placeholder="Search name, ID, phone, email…"
+                className="pl-8 h-8 text-sm bg-muted/20 border-border"
+                data-testid="input-applicant-search"
+              />
+            </div>
+            <div className="flex items-center gap-1 flex-wrap">
+              <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              {["all", "new", "shortlisted", "interviewed", "hired", "rejected"].map(s => (
+                <button
+                  key={s}
+                  onClick={() => setAppStatusFilter(s)}
+                  className={`px-2 py-0.5 rounded-sm text-xs font-medium transition-colors border ${
+                    appStatusFilter === s
+                      ? "bg-primary border-primary text-primary-foreground"
+                      : "bg-muted/20 border-border text-muted-foreground hover:border-primary/40"
+                  }`}
+                  data-testid={`filter-status-${s}`}
+                >
+                  {s === "all" ? `All (${applications.length})` : `${s} (${applications.filter(a => a.status === s).length})`}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
@@ -690,6 +738,12 @@ function ApplicantsSheet({
               <Users className="h-12 w-12 text-muted-foreground/30 mb-4" />
               <p className="text-muted-foreground font-medium">No applicants yet</p>
               <p className="text-muted-foreground/60 text-sm mt-1">Applications submitted via the candidate portal will appear here</p>
+            </div>
+          ) : filteredApplications.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center px-6">
+              <Search className="h-10 w-10 text-muted-foreground/30 mb-3" />
+              <p className="text-muted-foreground font-medium">No results</p>
+              <p className="text-muted-foreground/60 text-sm mt-1">Try a different name, ID, or status filter</p>
             </div>
           ) : (
             <table className="w-full">
@@ -706,7 +760,7 @@ function ApplicantsSheet({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {applications.map((app) => {
+                {filteredApplications.map((app) => {
                   const candidate = candidateMap[app.candidateId];
                   const answers = app.questionSetAnswers?.answers ?? {};
                   const hasAnswers = Object.keys(answers).length > 0;
@@ -758,7 +812,7 @@ function ApplicantsSheet({
                                 className="p-1.5 rounded-sm text-blue-400 hover:bg-blue-500/15 transition-colors"
                                 data-testid={`button-shortlist-${app.id}`}
                               >
-                                <Star className="h-3.5 w-3.5" />
+                                <ThumbsUp className="h-3.5 w-3.5" />
                               </button>
                             )}
                             {(app.status === "shortlisted" || app.status === "interviewed") && (
@@ -770,17 +824,6 @@ function ApplicantsSheet({
                                 data-testid={`button-hire-${app.id}`}
                               >
                                 <CheckCircle2 className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                            {app.status !== "rejected" && app.status !== "hired" && (
-                              <button
-                                onClick={() => updateStatus.mutate({ id: app.id, status: "rejected" })}
-                                disabled={updateStatus.isPending}
-                                title="Not Shortlisted"
-                                className="p-1.5 rounded-sm text-muted-foreground hover:bg-destructive/15 hover:text-destructive transition-colors"
-                                data-testid={`button-reject-${app.id}`}
-                              >
-                                <XCircle className="h-3.5 w-3.5" />
                               </button>
                             )}
                             {(app.status === "hired" || app.status === "rejected") && (
