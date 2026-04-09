@@ -5,7 +5,7 @@ import {
   clearSession,
   login as apiLogin,
   setLogoutCallback,
-  getSessionToken,
+  isSessionValid,
 } from '../services/api';
 import { clearEncryptionKey } from '../services/encryption';
 import { purgeAllLocalData } from '../services/database';
@@ -28,7 +28,7 @@ export function useAuth() {
     workforceRecord: null,
   });
 
-  const tokenCheckInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sessionCheckInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const forceLogout = useCallback(async () => {
     setState({
@@ -46,8 +46,8 @@ export function useAuth() {
 
   const loadSession = useCallback(async () => {
     try {
-      const token = await getSessionToken();
-      if (!token) {
+      const valid = await isSessionValid();
+      if (!valid) {
         setState({
           isLoading: false,
           isAuthenticated: false,
@@ -96,17 +96,17 @@ export function useAuth() {
 
   useEffect(() => {
     if (state.isAuthenticated) {
-      tokenCheckInterval.current = setInterval(async () => {
-        const token = await getSessionToken();
-        if (!token) {
+      sessionCheckInterval.current = setInterval(async () => {
+        const valid = await isSessionValid();
+        if (!valid) {
           forceLogout();
         }
       }, 60000);
     }
     return () => {
-      if (tokenCheckInterval.current) {
-        clearInterval(tokenCheckInterval.current);
-        tokenCheckInterval.current = null;
+      if (sessionCheckInterval.current) {
+        clearInterval(sessionCheckInterval.current);
+        sessionCheckInterval.current = null;
       }
     };
   }, [state.isAuthenticated, forceLogout]);

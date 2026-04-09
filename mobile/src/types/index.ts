@@ -41,6 +41,24 @@ export interface ShiftInfo {
   templateName: string;
 }
 
+export interface ScheduleAssignment {
+  id: string;
+  templateId: string;
+  shiftName: string;
+  startTime: string;
+  endTime: string;
+}
+
+export interface ScheduleTemplate {
+  id: string;
+  name: string;
+}
+
+export interface ScheduleResponse {
+  assignment: ScheduleAssignment | null;
+  template: ScheduleTemplate | null;
+}
+
 export interface GeofenceZone {
   id: string;
   name: string;
@@ -74,18 +92,6 @@ export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'verified' | 'flagge
 export interface LoginResponse {
   user: User;
   candidate: Candidate | null;
-  token: string;
-}
-
-export interface SubmitResponse {
-  submission: {
-    id: string;
-    status: string;
-  };
-  verification: {
-    status: string;
-    flagReason: string | null;
-  } | null;
 }
 
 export interface UploadResult {
@@ -93,7 +99,7 @@ export interface UploadResult {
   verification: { status: string; flagReason: string | null } | null;
 }
 
-export type AttendanceStatus = 'not_marked' | 'pending' | 'syncing' | 'synced' | 'verified' | 'flagged';
+export type AttendanceStatus = 'not_marked' | 'pending' | 'syncing' | 'synced' | 'verified' | 'flagged' | 'failed';
 
 export interface SqliteRow {
   id: string;

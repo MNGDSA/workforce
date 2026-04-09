@@ -1,4 +1,5 @@
 import * as Network from 'expo-network';
+import * as FileSystem from 'expo-file-system';
 import {
   getPendingSubmissions,
   updateSubmissionSyncStatus,
@@ -6,8 +7,8 @@ import {
   purgeOldSyncedSubmissions,
   checkDuplicateDate,
 } from './database';
-import { uploadAttendancePhoto, getWorkforceData } from './api';
-import { ApiError } from './api';
+import { uploadAttendancePhoto, getWorkforceData, ApiError } from './api';
+import { decryptFile } from './encryption';
 import type { SyncStatus, UploadResult } from '../types';
 
 const MAX_RETRIES = 5;
@@ -95,9 +96,18 @@ export async function syncPendingSubmissions(): Promise<{ synced: number; failed
         await updateSubmissionSyncStatus(submission.id, 'syncing');
         notifyListeners();
 
+        let uploadPath = submission.photoPath;
+        if (submission.photoPath.endsWith('.enc')) {
+          const tempDir = `${FileSystem.cacheDirectory}sync_temp/`;
+          await FileSystem.makeDirectoryAsync(tempDir, { intermediates: true });
+          const tempPath = `${tempDir}${Date.now()}.jpg`;
+          await decryptFile(submission.photoPath, tempPath);
+          uploadPath = tempPath;
+        }
+
         const result: UploadResult = await uploadAttendancePhoto(
           workforceId,
-          submission.photoPath,
+          uploadPath,
           submission.gpsLat,
           submission.gpsLng,
           submission.gpsAccuracy,
@@ -116,6 +126,10 @@ export async function syncPendingSubmissions(): Promise<{ synced: number; failed
           flagReason: verification?.flagReason ?? null,
           syncedAt: new Date().toISOString(),
         });
+
+        if (uploadPath !== submission.photoPath) {
+          await FileSystem.deleteAsync(uploadPath, { idempotent: true }).catch(() => {});
+        }
 
         synced++;
         notifyListeners();

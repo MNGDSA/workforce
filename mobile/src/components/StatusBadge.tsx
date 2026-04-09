@@ -46,6 +46,19 @@ const STATUS_CONFIG: Record<AttendanceStatus, {
     bgColor: 'rgba(239, 68, 68, 0.15)',
     icon: 'alert-circle',
   },
+  failed: {
+    label: 'Failed',
+    color: colors.error,
+    bgColor: 'rgba(239, 68, 68, 0.1)',
+    icon: 'close-circle',
+  },
+};
+
+const FALLBACK_CONFIG = {
+  label: 'Unknown',
+  color: colors.textMuted,
+  bgColor: 'rgba(107, 138, 122, 0.15)',
+  icon: 'help-circle-outline' as keyof typeof Ionicons.glyphMap,
 };
 
 interface Props {
@@ -54,7 +67,7 @@ interface Props {
 }
 
 export default function StatusBadge({ status, size = 'md' }: Props) {
-  const config = STATUS_CONFIG[status];
+  const config = STATUS_CONFIG[status] ?? FALLBACK_CONFIG;
   const iconSize = size === 'sm' ? 12 : size === 'lg' ? 18 : 14;
   const fontSize = size === 'sm' ? 10 : size === 'lg' ? 14 : 12;
   const paddingH = size === 'sm' ? spacing.sm : size === 'lg' ? spacing.lg : spacing.md;

@@ -18,6 +18,7 @@ import { colors, fonts, spacing, borderRadius } from '../theme';
 import FaceGuideOverlay from '../components/FaceGuideOverlay';
 import { saveSubmission } from '../services/database';
 import { syncPendingSubmissions } from '../services/sync';
+import { encryptFile } from '../services/encryption';
 import { format } from 'date-fns';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -129,8 +130,12 @@ export default function CaptureScreen({ workforceId, onComplete, onCancel }: Pro
       const timestamp = captureTimestamp.toISOString();
       const localDir = `${FileSystem.documentDirectory}attendance/`;
       await FileSystem.makeDirectoryAsync(localDir, { intermediates: true });
-      const localPath = `${localDir}${Date.now()}.jpg`;
-      await FileSystem.copyAsync({ from: photoUri, to: localPath });
+      const fileId = Date.now();
+      const tempPath = `${localDir}${fileId}_temp.jpg`;
+      const localPath = `${localDir}${fileId}.enc`;
+      await FileSystem.copyAsync({ from: photoUri, to: tempPath });
+      await encryptFile(tempPath, localPath);
+      await FileSystem.deleteAsync(tempPath, { idempotent: true });
 
       await saveSubmission({
         workforceId,

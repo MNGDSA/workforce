@@ -6,17 +6,18 @@ import type {
   LoginResponse,
   GeofenceZone,
   ShiftInfo,
+  ScheduleResponse,
   UploadResult,
   FormDataPhoto,
 } from '../types';
 
 const API_BASE_URL_KEY = 'workforce_api_url';
-const SESSION_TOKEN_KEY = 'workforce_session';
-const TOKEN_EXPIRY_KEY = 'workforce_token_expiry';
 const USER_DATA_KEY = 'workforce_user';
 const WORKFORCE_DATA_KEY = 'workforce_record';
+const CREDENTIALS_KEY = 'workforce_credentials';
+const SESSION_EXPIRY_KEY = 'workforce_session_expiry';
 
-const TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000;
+const SESSION_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
 let baseUrl = '';
 let logoutCallback: (() => void) | null = null;
@@ -37,25 +38,36 @@ export async function setBaseUrl(url: string): Promise<void> {
   await SecureStore.setItemAsync(API_BASE_URL_KEY, baseUrl);
 }
 
-export async function getSessionToken(): Promise<string | null> {
-  const expiry = await SecureStore.getItemAsync(TOKEN_EXPIRY_KEY);
+async function storeCredentials(identifier: string, password: string): Promise<void> {
+  await SecureStore.setItemAsync(CREDENTIALS_KEY, JSON.stringify({ identifier, password }));
+  const expiry = String(Date.now() + SESSION_LIFETIME_MS);
+  await SecureStore.setItemAsync(SESSION_EXPIRY_KEY, expiry);
+}
+
+async function getStoredCredentials(): Promise<{ identifier: string; password: string } | null> {
+  const expiry = await SecureStore.getItemAsync(SESSION_EXPIRY_KEY);
   if (expiry && Date.now() > parseInt(expiry, 10)) {
     await clearSession();
     logoutCallback?.();
     return null;
   }
-  return SecureStore.getItemAsync(SESSION_TOKEN_KEY);
+  const raw = await SecureStore.getItemAsync(CREDENTIALS_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as { identifier: string; password: string };
+  } catch {
+    return null;
+  }
 }
 
-export async function setSessionToken(token: string): Promise<void> {
-  await SecureStore.setItemAsync(SESSION_TOKEN_KEY, token);
-  const expiryTime = String(Date.now() + TOKEN_LIFETIME_MS);
-  await SecureStore.setItemAsync(TOKEN_EXPIRY_KEY, expiryTime);
+export async function isSessionValid(): Promise<boolean> {
+  const creds = await getStoredCredentials();
+  return creds !== null;
 }
 
 export async function clearSession(): Promise<void> {
-  await SecureStore.deleteItemAsync(SESSION_TOKEN_KEY);
-  await SecureStore.deleteItemAsync(TOKEN_EXPIRY_KEY);
+  await SecureStore.deleteItemAsync(CREDENTIALS_KEY);
+  await SecureStore.deleteItemAsync(SESSION_EXPIRY_KEY);
   await SecureStore.deleteItemAsync(USER_DATA_KEY);
   await SecureStore.deleteItemAsync(WORKFORCE_DATA_KEY);
 }
@@ -104,7 +116,6 @@ export async function apiRequest<T>(
   options?: { timeout?: number; formData?: boolean }
 ): Promise<T> {
   const url = `${await getBaseUrl()}${path}`;
-  const token = await getSessionToken();
   const timeout = options?.timeout || 15000;
 
   const controller = new AbortController();
@@ -112,7 +123,6 @@ export async function apiRequest<T>(
 
   try {
     const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
 
     let fetchBody: BodyInit | undefined;
     if (options?.formData && body instanceof FormData) {
@@ -127,6 +137,7 @@ export async function apiRequest<T>(
       headers,
       body: fetchBody,
       signal: controller.signal,
+      credentials: 'include',
     });
 
     if (response.status === 401) {
@@ -152,10 +163,7 @@ export async function login(identifier: string, password: string): Promise<Login
     'POST', '/api/auth/login', { identifier, password }
   );
 
-  if (result.token) {
-    await setSessionToken(result.token);
-  }
-
+  await storeCredentials(identifier, password);
   await storeUserData({ user: result.user, candidate: result.candidate });
 
   if (result.candidate) {
@@ -177,6 +185,21 @@ export async function login(identifier: string, password: string): Promise<Login
   return result;
 }
 
+export async function revalidateSession(): Promise<boolean> {
+  const creds = await getStoredCredentials();
+  if (!creds) return false;
+
+  try {
+    await apiRequest<LoginResponse>(
+      'POST', '/api/auth/login', { identifier: creds.identifier, password: creds.password }
+    );
+    return true;
+  } catch {
+    await clearSession();
+    return false;
+  }
+}
+
 export async function uploadAttendancePhoto(
   workforceId: string,
   photoUri: string,
@@ -185,6 +208,8 @@ export async function uploadAttendancePhoto(
   gpsAccuracy: number | null,
   clientTimestamp: string
 ): Promise<UploadResult> {
+  await revalidateSession();
+
   const formData = new FormData();
   formData.append('workforceId', workforceId);
   formData.append('gpsLat', String(gpsLat));
@@ -213,7 +238,18 @@ export async function fetchGeofenceZones(): Promise<GeofenceZone[]> {
 
 export async function fetchShiftInfo(workforceId: string): Promise<ShiftInfo | null> {
   try {
-    return await apiRequest<ShiftInfo>('GET', `/api/portal/schedule/${workforceId}`);
+    const response = await apiRequest<ScheduleResponse>(
+      'GET', `/api/portal/schedule/${workforceId}`
+    );
+
+    if (!response || !response.assignment) return null;
+
+    return {
+      shiftName: response.assignment.shiftName || 'Shift',
+      startTime: response.assignment.startTime || '',
+      endTime: response.assignment.endTime || '',
+      templateName: response.template?.name || '',
+    };
   } catch {
     return null;
   }
