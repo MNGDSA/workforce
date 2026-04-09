@@ -1162,7 +1162,7 @@ export const inboxItemPriorityEnum = pgEnum("inbox_item_priority", [
 ]);
 
 export const inboxItemStatusEnum = pgEnum("inbox_item_status", [
-  "open",
+  "pending",
   "resolved",
   "dismissed",
 ]);
@@ -1171,7 +1171,7 @@ export const inboxItems = pgTable("inbox_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   type: inboxItemTypeEnum("type").notNull(),
   priority: inboxItemPriorityEnum("priority").notNull().default("medium"),
-  status: inboxItemStatusEnum("status").notNull().default("open"),
+  status: inboxItemStatusEnum("status").notNull().default("pending"),
   title: text("title").notNull(),
   body: text("body"),
   entityType: varchar("entity_type", { length: 64 }),
@@ -1180,6 +1180,7 @@ export const inboxItems = pgTable("inbox_items", {
   assignedTo: varchar("assigned_to", { length: 128 }),
   resolvedBy: varchar("resolved_by", { length: 128 }),
   resolvedAt: timestamp("resolved_at"),
+  resolutionNotes: text("resolution_notes"),
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
@@ -1190,7 +1191,7 @@ export const inboxItems = pgTable("inbox_items", {
   entityIdx: index("inbox_items_entity_idx").on(t.entityType, t.entityId),
 }));
 
-export const insertInboxItemSchema = createInsertSchema(inboxItems).omit({ id: true, createdAt: true, resolvedAt: true, resolvedBy: true });
+export const insertInboxItemSchema = createInsertSchema(inboxItems).omit({ id: true, createdAt: true, resolvedAt: true, resolvedBy: true, resolutionNotes: true });
 export type InsertInboxItem = z.infer<typeof insertInboxItemSchema>;
 export type InboxItem = typeof inboxItems.$inferSelect;
 

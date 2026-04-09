@@ -546,6 +546,18 @@ function BellNotificationCenter() {
               </div>
             )}
           </ScrollArea>
+
+          <div className="border-t border-border px-4 py-2.5">
+            <Link href="/inbox">
+              <button
+                data-testid="link-bell-to-inbox"
+                onClick={() => setOpen(false)}
+                className="w-full text-center text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+              >
+                View all in HR Inbox →
+              </button>
+            </Link>
+          </div>
         </div>,
         document.body
       )}

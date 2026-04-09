@@ -382,8 +382,8 @@ export interface IStorage {
   getInboxItems(params?: { status?: string; type?: string; priority?: string; page?: number; limit?: number; search?: string }): Promise<{ data: InboxItem[]; total: number }>;
   getInboxItem(id: string): Promise<InboxItem | undefined>;
   createInboxItem(data: InsertInboxItem): Promise<InboxItem>;
-  resolveInboxItem(id: string, resolvedBy: string): Promise<InboxItem | undefined>;
-  dismissInboxItem(id: string, resolvedBy: string): Promise<InboxItem | undefined>;
+  resolveInboxItem(id: string, resolvedBy: string, resolutionNotes?: string): Promise<InboxItem | undefined>;
+  dismissInboxItem(id: string, resolvedBy: string, resolutionNotes?: string): Promise<InboxItem | undefined>;
   bulkResolveInboxItems(ids: string[], resolvedBy: string): Promise<number>;
   bulkDismissInboxItems(ids: string[], resolvedBy: string): Promise<number>;
   countOpenInboxItems(): Promise<number>;
@@ -2752,9 +2752,9 @@ export class DatabaseStorage implements IStorage {
     const limit = params?.limit ?? 50;
     const offset = (page - 1) * limit;
     const conditions = [];
-    if (params?.status) conditions.push(eq(inboxItems.status, params.status as any));
-    if (params?.type) conditions.push(eq(inboxItems.type, params.type as any));
-    if (params?.priority) conditions.push(eq(inboxItems.priority, params.priority as any));
+    if (params?.status) conditions.push(sql`${inboxItems.status} = ${params.status}`);
+    if (params?.type) conditions.push(sql`${inboxItems.type} = ${params.type}`);
+    if (params?.priority) conditions.push(sql`${inboxItems.priority} = ${params.priority}`);
     if (params?.search) {
       const s = `%${params.search.toLowerCase()}%`;
       conditions.push(or(
@@ -2780,46 +2780,69 @@ export class DatabaseStorage implements IStorage {
     return item;
   }
 
-  async resolveInboxItem(id: string, resolvedBy: string): Promise<InboxItem | undefined> {
+  async resolveInboxItem(id: string, resolvedBy: string, resolutionNotes?: string): Promise<InboxItem | undefined> {
     const [item] = await db
       .update(inboxItems)
-      .set({ status: "resolved", resolvedBy, resolvedAt: new Date() })
-      .where(and(eq(inboxItems.id, id), eq(inboxItems.status, "open")))
+      .set({ status: "resolved", resolvedBy, resolvedAt: new Date(), resolutionNotes: resolutionNotes ?? null })
+      .where(and(eq(inboxItems.id, id), eq(inboxItems.status, "pending")))
       .returning();
     return item;
   }
 
-  async dismissInboxItem(id: string, resolvedBy: string): Promise<InboxItem | undefined> {
+  async dismissInboxItem(id: string, resolvedBy: string, resolutionNotes?: string): Promise<InboxItem | undefined> {
     const [item] = await db
       .update(inboxItems)
-      .set({ status: "dismissed", resolvedBy, resolvedAt: new Date() })
-      .where(and(eq(inboxItems.id, id), eq(inboxItems.status, "open")))
+      .set({ status: "dismissed", resolvedBy, resolvedAt: new Date(), resolutionNotes: resolutionNotes ?? null })
+      .where(and(eq(inboxItems.id, id), eq(inboxItems.status, "pending")))
       .returning();
     return item;
   }
 
   async bulkResolveInboxItems(ids: string[], resolvedBy: string): Promise<number> {
     if (ids.length === 0) return 0;
-    const result = await db
+    const updated = await db
       .update(inboxItems)
       .set({ status: "resolved", resolvedBy, resolvedAt: new Date() })
-      .where(and(inArray(inboxItems.id, ids), eq(inboxItems.status, "open")));
-    return (result as any).rowCount ?? ids.length;
+      .where(and(inArray(inboxItems.id, ids), eq(inboxItems.status, "pending")))
+      .returning({ id: inboxItems.id });
+    return updated.length;
   }
 
   async bulkDismissInboxItems(ids: string[], resolvedBy: string): Promise<number> {
     if (ids.length === 0) return 0;
-    const result = await db
+    const updated = await db
       .update(inboxItems)
       .set({ status: "dismissed", resolvedBy, resolvedAt: new Date() })
-      .where(and(inArray(inboxItems.id, ids), eq(inboxItems.status, "open")));
-    return (result as any).rowCount ?? ids.length;
+      .where(and(inArray(inboxItems.id, ids), eq(inboxItems.status, "pending")))
+      .returning({ id: inboxItems.id });
+    return updated.length;
   }
 
   async countOpenInboxItems(): Promise<number> {
-    const [{ cnt }] = await db.select({ cnt: count() }).from(inboxItems).where(eq(inboxItems.status, "open"));
+    const [{ cnt }] = await db.select({ cnt: count() }).from(inboxItems).where(eq(inboxItems.status, "pending"));
     return Number(cnt);
   }
 }
 
 export const storage = new DatabaseStorage();
+
+export async function createInboxItem(
+  type: InsertInboxItem["type"],
+  title: string,
+  body?: string,
+  metadata?: Record<string, unknown>,
+  priority: InsertInboxItem["priority"] = "medium",
+  opts?: { entityType?: string; entityId?: string; actionUrl?: string; assignedTo?: string }
+): Promise<InboxItem> {
+  return storage.createInboxItem({
+    type,
+    title,
+    body: body ?? null,
+    priority,
+    metadata: metadata ?? null,
+    entityType: opts?.entityType ?? null,
+    entityId: opts?.entityId ?? null,
+    actionUrl: opts?.actionUrl ?? null,
+    assignedTo: opts?.assignedTo ?? null,
+  });
+}

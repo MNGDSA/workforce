@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -23,7 +24,6 @@ import {
   FileText,
   UserCheck,
   ClipboardList,
-  AlertTriangle,
   Calendar,
   Package,
   Flag,
@@ -31,8 +31,12 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   ArrowUpRight,
   Filter,
+  History,
+  Clock,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -49,6 +53,7 @@ type InboxItem = {
   assignedTo: string | null;
   resolvedBy: string | null;
   resolvedAt: string | null;
+  resolutionNotes: string | null;
   metadata: Record<string, any> | null;
   createdAt: string;
 };
@@ -74,7 +79,7 @@ const PRIORITY_META: Record<string, { label: string; color: string; dotColor: st
 };
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
-  open: { label: "Open", color: "bg-primary/10 text-primary border-primary/30" },
+  pending: { label: "Pending", color: "bg-primary/10 text-primary border-primary/30" },
   resolved: { label: "Resolved", color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
   dismissed: { label: "Dismissed", color: "bg-muted text-muted-foreground border-border" },
 };
@@ -91,28 +96,39 @@ function timeAgo(iso: string) {
   return `${Math.floor(days / 30)}mo ago`;
 }
 
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-SA", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 export default function InboxPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [, setLocation] = useLocation();
   const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState("open");
+  const [tab, setTab] = useState<"pending" | "history">("pending");
   const [typeFilter, setTypeFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [actionNotes, setActionNotes] = useState("");
   const limit = 20;
+
+  const statusFilter = tab === "pending" ? "pending" : undefined;
 
   const queryParams = new URLSearchParams();
   queryParams.set("page", String(page));
   queryParams.set("limit", String(limit));
-  if (statusFilter !== "all") queryParams.set("status", statusFilter);
+  if (statusFilter) queryParams.set("status", statusFilter);
+  if (tab === "history") {
+    queryParams.set("page", String(page));
+  }
   if (typeFilter !== "all") queryParams.set("type", typeFilter);
   if (priorityFilter !== "all") queryParams.set("priority", priorityFilter);
   if (search.trim()) queryParams.set("search", search.trim());
 
   const { data, isLoading } = useQuery<{ data: InboxItem[]; total: number }>({
-    queryKey: ["/api/inbox", page, statusFilter, typeFilter, priorityFilter, search],
+    queryKey: ["/api/inbox", page, tab, typeFilter, priorityFilter, search],
     queryFn: () => apiRequest("GET", `/api/inbox?${queryParams.toString()}`).then(r => r.json()),
   });
 
@@ -128,14 +144,14 @@ export default function InboxPage() {
   };
 
   const resolveMut = useMutation({
-    mutationFn: (id: string) => apiRequest("PATCH", `/api/inbox/${id}/resolve`),
-    onSuccess: () => { invalidateInbox(); toast({ title: "Item resolved" }); },
+    mutationFn: (params: { id: string; notes?: string }) => apiRequest("PATCH", `/api/inbox/${params.id}/resolve`, { notes: params.notes }),
+    onSuccess: () => { invalidateInbox(); setExpandedId(null); setActionNotes(""); toast({ title: "Item resolved" }); },
     onError: () => toast({ title: "Failed to resolve item", variant: "destructive" }),
   });
 
   const dismissMut = useMutation({
-    mutationFn: (id: string) => apiRequest("PATCH", `/api/inbox/${id}/dismiss`),
-    onSuccess: () => { invalidateInbox(); toast({ title: "Item dismissed" }); },
+    mutationFn: (params: { id: string; notes?: string }) => apiRequest("PATCH", `/api/inbox/${params.id}/dismiss`, { notes: params.notes }),
+    onSuccess: () => { invalidateInbox(); setExpandedId(null); setActionNotes(""); toast({ title: "Item dismissed" }); },
     onError: () => toast({ title: "Failed to dismiss item", variant: "destructive" }),
   });
 
@@ -156,6 +172,8 @@ export default function InboxPage() {
   const totalPages = Math.ceil(total / limit);
   const openCount = countData?.count ?? 0;
 
+  const pendingItems = items.filter(i => i.status === "pending");
+
   const toggleSelect = (id: string) => {
     setSelected(prev => {
       const next = new Set(prev);
@@ -165,11 +183,17 @@ export default function InboxPage() {
     });
   };
 
-  const openItems = items.filter(i => i.status === "open");
-
   const toggleAll = () => {
-    if (selected.size === openItems.length && openItems.length > 0) setSelected(new Set());
-    else setSelected(new Set(openItems.map(i => i.id)));
+    if (selected.size === pendingItems.length && pendingItems.length > 0) setSelected(new Set());
+    else setSelected(new Set(pendingItems.map(i => i.id)));
+  };
+
+  const switchTab = (newTab: "pending" | "history") => {
+    setTab(newTab);
+    setPage(1);
+    setSelected(new Set());
+    setExpandedId(null);
+    setActionNotes("");
   };
 
   return (
@@ -184,9 +208,41 @@ export default function InboxPage() {
           </div>
           {openCount > 0 && (
             <Badge variant="destructive" className="text-sm px-3 py-1" data-testid="badge-inbox-open-count">
-              {openCount} open
+              {openCount} pending
             </Badge>
           )}
+        </div>
+
+        <div className="flex items-center gap-1 border-b border-border">
+          <button
+            data-testid="tab-pending"
+            onClick={() => switchTab("pending")}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              tab === "pending"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Clock className="h-4 w-4" />
+            Pending
+            {openCount > 0 && (
+              <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-white">
+                {openCount}
+              </span>
+            )}
+          </button>
+          <button
+            data-testid="tab-history"
+            onClick={() => switchTab("history")}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              tab === "history"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <History className="h-4 w-4" />
+            History
+          </button>
         </div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -204,17 +260,6 @@ export default function InboxPage() {
             <div className="flex items-center gap-1.5">
               <Filter className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
-            <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setPage(1); setSelected(new Set()); }}>
-              <SelectTrigger className="h-9 w-[120px] rounded-sm text-xs" data-testid="select-inbox-status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="open">Open</SelectItem>
-                <SelectItem value="resolved">Resolved</SelectItem>
-                <SelectItem value="dismissed">Dismissed</SelectItem>
-              </SelectContent>
-            </Select>
             <Select value={typeFilter} onValueChange={v => { setTypeFilter(v); setPage(1); setSelected(new Set()); }}>
               <SelectTrigger className="h-9 w-[160px] rounded-sm text-xs" data-testid="select-inbox-type">
                 <SelectValue />
@@ -241,7 +286,7 @@ export default function InboxPage() {
           </div>
         </div>
 
-        {selected.size > 0 && (
+        {selected.size > 0 && tab === "pending" && (
           <div className="flex items-center gap-3 px-4 py-2 bg-muted/50 border border-border rounded-sm">
             <span className="text-sm text-muted-foreground">{selected.size} selected</span>
             <Button
@@ -274,45 +319,56 @@ export default function InboxPage() {
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <InboxIcon className="h-12 w-12 text-muted-foreground/30 mb-4" />
-            <h3 className="text-lg font-semibold text-foreground" data-testid="text-inbox-empty">All clear</h3>
-            <p className="text-sm text-muted-foreground mt-1">No inbox items match your current filters.</p>
+            <h3 className="text-lg font-semibold text-foreground" data-testid="text-inbox-empty">
+              {tab === "pending" ? "All clear" : "No history yet"}
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              {tab === "pending" ? "No pending items require your attention." : "Resolved and dismissed items will appear here."}
+            </p>
           </div>
         ) : (
           <div className="space-y-2">
-            <div className="flex items-center gap-3 px-4 py-1">
-              <Checkbox
-                checked={selected.size === openItems.length && openItems.length > 0}
-                onCheckedChange={toggleAll}
-                data-testid="checkbox-select-all"
-              />
-              <span className="text-xs text-muted-foreground">
-                {total} item{total !== 1 ? "s" : ""} total
-              </span>
-            </div>
+            {tab === "pending" && (
+              <div className="flex items-center gap-3 px-4 py-1">
+                <Checkbox
+                  checked={selected.size === pendingItems.length && pendingItems.length > 0}
+                  onCheckedChange={toggleAll}
+                  data-testid="checkbox-select-all"
+                />
+                <span className="text-xs text-muted-foreground">
+                  {total} item{total !== 1 ? "s" : ""} total
+                </span>
+              </div>
+            )}
 
             {items.map(item => {
               const typeMeta = TYPE_META[item.type] ?? TYPE_META.system;
               const priorityMeta = PRIORITY_META[item.priority] ?? PRIORITY_META.medium;
-              const statusMeta = STATUS_META[item.status] ?? STATUS_META.open;
+              const statusMeta = STATUS_META[item.status] ?? STATUS_META.pending;
               const Icon = typeMeta.icon;
-              const isOpen = item.status === "open";
+              const isPending = item.status === "pending";
+              const isExpanded = expandedId === item.id;
 
               return (
                 <Card
                   key={item.id}
                   data-testid={`card-inbox-item-${item.id}`}
-                  className={`p-4 border-border transition-colors hover:bg-muted/30 ${!isOpen ? "opacity-60" : ""}`}
+                  className={`border-border transition-colors ${!isPending ? "opacity-60" : ""} ${isExpanded ? "ring-1 ring-primary/30" : ""}`}
                 >
-                  <div className="flex items-start gap-3">
+                  <div
+                    className="flex items-start gap-3 p-4 cursor-pointer hover:bg-muted/30 transition-colors"
+                    onClick={() => { setExpandedId(isExpanded ? null : item.id); setActionNotes(""); }}
+                  >
                     <div className="flex items-center gap-3 pt-0.5">
-                      {isOpen && (
+                      {isPending && tab === "pending" && (
                         <Checkbox
                           checked={selected.has(item.id)}
                           onCheckedChange={() => toggleSelect(item.id)}
+                          onClick={e => e.stopPropagation()}
                           data-testid={`checkbox-inbox-${item.id}`}
                         />
                       )}
-                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted/50`}>
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted/50">
                         <Icon className={`h-4 w-4 ${typeMeta.color}`} />
                       </div>
                     </div>
@@ -329,10 +385,6 @@ export default function InboxPage() {
                         </Badge>
                       </div>
 
-                      {item.body && (
-                        <p className="text-xs text-muted-foreground line-clamp-2 mb-1.5">{item.body}</p>
-                      )}
-
                       <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
                         <span>{typeMeta.label}</span>
                         <span>·</span>
@@ -347,43 +399,114 @@ export default function InboxPage() {
                     </div>
 
                     <div className="flex items-center gap-1 shrink-0">
-                      {item.actionUrl && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 w-8 p-0"
-                          onClick={() => setLocation(item.actionUrl!)}
-                          data-testid={`button-inbox-goto-${item.id}`}
-                        >
-                          <ArrowUpRight className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {isOpen && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 w-8 p-0 text-emerald-400 hover:text-emerald-300"
-                            onClick={() => resolveMut.mutate(item.id)}
-                            disabled={resolveMut.isPending}
-                            data-testid={`button-resolve-${item.id}`}
-                          >
-                            <CheckCircle2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                            onClick={() => dismissMut.mutate(item.id)}
-                            disabled={dismissMut.isPending}
-                            data-testid={`button-dismiss-${item.id}`}
-                          >
-                            <XCircle className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
+                      {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                     </div>
                   </div>
+
+                  {isExpanded && (
+                    <div className="border-t border-border px-4 py-4 bg-muted/10 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Type</span>
+                          <p className="mt-1 text-foreground">{typeMeta.label}</p>
+                        </div>
+                        <div>
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Priority</span>
+                          <p className="mt-1">
+                            <Badge variant="outline" className={`text-xs ${priorityMeta.color}`}>
+                              <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1 ${priorityMeta.dotColor}`} />
+                              {priorityMeta.label}
+                            </Badge>
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Created</span>
+                          <p className="mt-1 text-foreground">{formatDate(item.createdAt)}</p>
+                        </div>
+                        {item.entityType && (
+                          <div>
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Reference</span>
+                            <p className="mt-1 text-foreground">{item.entityType}{item.entityId ? ` #${item.entityId}` : ""}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {item.body && (
+                        <div>
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Details</span>
+                          <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">{item.body}</p>
+                        </div>
+                      )}
+
+                      {item.resolutionNotes && (
+                        <div>
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Resolution Notes</span>
+                          <p className="mt-1 text-sm text-foreground whitespace-pre-wrap bg-muted/30 rounded-sm px-3 py-2">{item.resolutionNotes}</p>
+                        </div>
+                      )}
+
+                      {isPending && (
+                        <div className="space-y-3 pt-2 border-t border-border/50">
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Notes (optional)</label>
+                            <Textarea
+                              data-testid={`textarea-notes-${item.id}`}
+                              value={actionNotes}
+                              onChange={e => setActionNotes(e.target.value)}
+                              placeholder="Add resolution notes..."
+                              className="mt-1 bg-muted/30 border-border text-sm min-h-[60px]"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              className="gap-1.5"
+                              onClick={() => resolveMut.mutate({ id: item.id, notes: actionNotes || undefined })}
+                              disabled={resolveMut.isPending}
+                              data-testid={`button-resolve-${item.id}`}
+                            >
+                              <CheckCircle2 className="h-4 w-4" /> Resolve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5"
+                              onClick={() => dismissMut.mutate({ id: item.id, notes: actionNotes || undefined })}
+                              disabled={dismissMut.isPending}
+                              data-testid={`button-dismiss-${item.id}`}
+                            >
+                              <XCircle className="h-4 w-4" /> Dismiss
+                            </Button>
+                            {item.actionUrl && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="gap-1.5 ml-auto"
+                                onClick={() => setLocation(item.actionUrl!)}
+                                data-testid={`button-inbox-goto-${item.id}`}
+                              >
+                                <ArrowUpRight className="h-4 w-4" /> Go to item
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {!isPending && item.actionUrl && (
+                        <div className="pt-2 border-t border-border/50">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="gap-1.5"
+                            onClick={() => setLocation(item.actionUrl!)}
+                            data-testid={`button-inbox-goto-${item.id}`}
+                          >
+                            <ArrowUpRight className="h-4 w-4" /> View related item
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </Card>
               );
             })}

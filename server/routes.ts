@@ -3579,7 +3579,7 @@ export async function registerRoutes(
   const inboxQuerySchema = z.object({
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(200).default(50),
-    status: z.enum(["open", "resolved", "dismissed"]).optional(),
+    status: z.enum(["pending", "resolved", "dismissed"]).optional(),
     type: z.enum(["document_review", "application_review", "onboarding_action", "contract_action", "offboarding_action", "schedule_conflict", "asset_return", "candidate_flag", "event_alert", "system"]).optional(),
     priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
     search: z.string().optional(),
@@ -3620,8 +3620,9 @@ export async function registerRoutes(
   app.patch("/api/inbox/:id/resolve", async (req: Request, res: Response) => {
     try {
       const resolvedBy = (req as any).userId ?? "system";
-      const item = await storage.resolveInboxItem(req.params.id, resolvedBy);
-      if (!item) return res.status(404).json({ message: "Inbox item not found" });
+      const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() || undefined : undefined;
+      const item = await storage.resolveInboxItem(req.params.id, resolvedBy, notes);
+      if (!item) return res.status(404).json({ message: "Inbox item not found or already resolved" });
       await logAudit(req, { action: "inbox_resolve", entityType: "inbox_item", entityId: item.id, description: `Resolved inbox item: ${item.title}` });
       return res.json(item);
     } catch (err) { return handleError(res, err); }
@@ -3630,8 +3631,9 @@ export async function registerRoutes(
   app.patch("/api/inbox/:id/dismiss", async (req: Request, res: Response) => {
     try {
       const resolvedBy = (req as any).userId ?? "system";
-      const item = await storage.dismissInboxItem(req.params.id, resolvedBy);
-      if (!item) return res.status(404).json({ message: "Inbox item not found" });
+      const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() || undefined : undefined;
+      const item = await storage.dismissInboxItem(req.params.id, resolvedBy, notes);
+      if (!item) return res.status(404).json({ message: "Inbox item not found or already resolved" });
       await logAudit(req, { action: "inbox_dismiss", entityType: "inbox_item", entityId: item.id, description: `Dismissed inbox item: ${item.title}` });
       return res.json(item);
     } catch (err) { return handleError(res, err); }
