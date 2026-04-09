@@ -477,7 +477,6 @@ export class DatabaseStorage implements IStorage {
     const orderCol =
       sortBy === "fullNameEn" ? candidates.fullNameEn
       : sortBy === "rating" ? candidates.rating
-      : sortBy === "experienceYears" ? candidates.experienceYears
       : sortBy === "city" ? candidates.city
       : sortBy === "source" ? candidates.source
       : sortBy === "phone" ? candidates.phone
@@ -659,14 +658,13 @@ export class DatabaseStorage implements IStorage {
       dateOfBirth: candidates.dateOfBirth,
       educationLevel: candidates.educationLevel,
       major: candidates.major,
-      experienceYears: candidates.experienceYears,
       createdAt: candidates.createdAt,
     })
       .from(candidates)
       .where(isNull(candidates.archivedAt))
       .orderBy(desc(candidates.createdAt));
 
-    const headers = ["ID", "Full Name (EN)", "Full Name (AR)", "Classification", "Status", "Phone", "Email", "City", "Region", "Nationality", "National ID", "IBAN", "Bank Name", "Bank Code", "IBAN Account First Name", "IBAN Account Last Name", "Gender", "Date of Birth", "Education", "Major", "Experience (Yrs)", "Created At"];
+    const headers = ["ID", "Full Name (EN)", "Full Name (AR)", "Classification", "Status", "Phone", "Email", "City", "Region", "Nationality", "National ID", "IBAN", "Bank Name", "Bank Code", "IBAN Account First Name", "IBAN Account Last Name", "Gender", "Date of Birth", "Education", "Major", "Created At"];
     const rows = data.map(r => [
       r.id, r.fullNameEn || "", r.fullNameAr || "",
       r.source || "individual", r.status, r.phone || "", r.email || "",
@@ -674,7 +672,7 @@ export class DatabaseStorage implements IStorage {
       r.ibanNumber || "", r.ibanBankName || "", r.ibanBankCode || "",
       r.ibanAccountFirstName || "", r.ibanAccountLastName || "",
       r.gender || "", r.dateOfBirth || "",
-      r.educationLevel || "", r.major || "", r.experienceYears ?? "",
+      r.educationLevel || "", r.major || "",
       r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : "",
     ]);
 

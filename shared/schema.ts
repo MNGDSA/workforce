@@ -169,7 +169,6 @@ export const candidates = pgTable(
     currentRole: text("current_role"),
     currentEmployer: text("current_employer"),
     isEmployedElsewhere: boolean("is_employed_elsewhere").notNull().default(false),
-    experienceYears: integer("experience_years").notNull().default(0),
     educationLevel: text("education_level"),
     university: text("university"),
     major: text("major"),
@@ -1157,7 +1156,7 @@ export const candidateQuerySchema = z.object({
   nationality: z.enum(["saudi", "non_saudi"]).optional(),
   gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),
   source: z.enum(["individual", "smp"]).optional(),
-  sortBy: z.enum(["createdAt", "fullNameEn", "rating", "experienceYears", "city", "source", "phone", "email"]).default("createdAt"),
+  sortBy: z.enum(["createdAt", "fullNameEn", "rating", "city", "source", "phone", "email"]).default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 

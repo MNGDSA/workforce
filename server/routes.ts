@@ -478,7 +478,6 @@ export async function registerRoutes(
           nationalId: nationalId.trim(),
           email: syntheticEmail,
           status: "active",
-          experienceYears: 0,
           country: "SA",
           userId: user.id,
         });
