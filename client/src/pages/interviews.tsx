@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/layout";
@@ -33,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,7 +58,6 @@ import {
   StickyNote,
   ExternalLink,
   ThumbsUp,
-  ThumbsDown,
   RotateCcw,
   Maximize2,
   ArrowLeft,
@@ -401,17 +401,6 @@ function InterviewDetailSheet({
                                 >
                                   <ThumbsUp className="h-3.5 w-3.5" />
                                 </Button>
-                                <Button
-                                  data-testid={`button-reject-candidate-${c.id}`}
-                                  size="icon"
-                                  variant="ghost"
-                                  title="Reject"
-                                  disabled={isRejected}
-                                  onClick={() => statusMutation.mutate({ appId: c.applicationId!, candidateId: c.id, status: "rejected" })}
-                                  className={`h-7 w-7 ${isRejected ? "text-red-500" : "text-muted-foreground hover:text-red-400 hover:bg-red-950/40"}`}
-                                >
-                                  <ThumbsDown className="h-3.5 w-3.5" />
-                                </Button>
                                 {(isShortlisted || isRejected) && (
                                   <Button
                                     data-testid={`button-reset-status-${c.id}`}
@@ -452,6 +441,22 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [localStatuses, setLocalStatuses] = useState<Record<string, string>>({});
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback((candidates: { id: string; applicationId: string | null; applicationStatus: string | null }[]) => {
+    const pending = candidates.filter(c => c.applicationId && (localStatuses[c.id] ?? c.applicationStatus) !== "shortlisted");
+    setSelectedIds(new Set(pending.map(c => c.id)));
+  }, [localStatuses]);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   const { data, isLoading } = useQuery<InterviewDetail>({
     queryKey: ["/api/interviews", interviewId],
@@ -470,6 +475,22 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
       toast({ title: vars.status === "shortlisted" ? "Candidate shortlisted" : vars.status === "rejected" ? "Candidate rejected" : "Status updated" });
     },
     onError: () => toast({ title: "Failed to update status", variant: "destructive" }),
+  });
+
+  const bulkShortlistMutation = useMutation({
+    mutationFn: (items: { appId: string; candidateId: string }[]) =>
+      apiRequest("POST", "/api/applications/bulk-status", {
+        updates: items.map(i => ({ id: i.appId, status: "shortlisted" })),
+      }).then(r => r.json()),
+    onSuccess: (result, items) => {
+      const updates: Record<string, string> = {};
+      items.forEach(i => { updates[i.candidateId] = "shortlisted"; });
+      setLocalStatuses(prev => ({ ...prev, ...updates }));
+      clearSelection();
+      queryClient.invalidateQueries({ queryKey: ["/api/interviews", interviewId] });
+      toast({ title: `${result.succeeded} candidate${result.succeeded !== 1 ? "s" : ""} shortlisted` });
+    },
+    onError: () => toast({ title: "Bulk shortlist failed", variant: "destructive" }),
   });
 
   const iv = data?.interview;
@@ -555,6 +576,45 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
               )}
             </div>
 
+            {/* Bulk action bar */}
+            {selectedIds.size > 0 && (
+              <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-sm bg-primary/10 border border-primary/30">
+                <span className="text-sm text-primary font-medium">
+                  {selectedIds.size} candidate{selectedIds.size !== 1 ? "s" : ""} selected
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 text-muted-foreground hover:text-white text-xs"
+                    onClick={clearSelection}
+                    data-testid="button-bulk-clear-selection"
+                  >
+                    Clear
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-8 bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 text-xs"
+                    disabled={bulkShortlistMutation.isPending}
+                    onClick={() => {
+                      const items = invitedCandidates
+                        .filter(c => selectedIds.has(c.id) && c.applicationId)
+                        .map(c => ({ appId: c.applicationId!, candidateId: c.id }));
+                      if (items.length) bulkShortlistMutation.mutate(items);
+                    }}
+                    data-testid="button-bulk-shortlist"
+                  >
+                    {bulkShortlistMutation.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <ThumbsUp className="h-3.5 w-3.5" />
+                    )}
+                    Shortlist {selectedIds.size}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center rounded-md border border-dashed border-border">
                 <Search className="h-8 w-8 text-muted-foreground/30 mb-2" />
@@ -568,7 +628,23 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                   <Table>
                     <TableHeader>
                       <TableRow className="border-border hover:bg-transparent">
-                        <TableHead className="w-12 text-center">#</TableHead>
+                        <TableHead className="w-10 pl-4">
+                          {(() => {
+                            const eligible = filtered.filter(c => c.applicationId && (localStatuses[c.id] ?? c.applicationStatus) !== "shortlisted");
+                            const allSelected = eligible.length > 0 && eligible.every(c => selectedIds.has(c.id));
+                            const someSelected = eligible.some(c => selectedIds.has(c.id));
+                            return (
+                              <Checkbox
+                                checked={allSelected}
+                                data-state={someSelected && !allSelected ? "indeterminate" : undefined}
+                                onCheckedChange={(v) => v ? selectAll(filtered) : clearSelection()}
+                                className="border-muted-foreground/40"
+                                data-testid="checkbox-select-all"
+                              />
+                            );
+                          })()}
+                        </TableHead>
+                        <TableHead className="w-10 text-center text-xs">#</TableHead>
                         <TableHead>Candidate</TableHead>
                         <TableHead>ID Number</TableHead>
                         <TableHead>Status</TableHead>
@@ -581,8 +657,26 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                         const isShortlisted = effectiveStatus === "shortlisted";
                         const isRejected = effectiveStatus === "rejected";
                         const isPending = statusMutation.isPending && (statusMutation.variables as any)?.candidateId === c.id;
+                        const isSelected = selectedIds.has(c.id);
+                        const isEligible = !!c.applicationId && !isShortlisted;
                         return (
-                          <TableRow key={c.id} className="border-border" data-testid={`fullpage-candidate-${c.id}`}>
+                          <TableRow
+                            key={c.id}
+                            className={`border-border ${isSelected ? "bg-primary/5" : ""}`}
+                            data-testid={`fullpage-candidate-${c.id}`}
+                          >
+                            <TableCell className="pl-4">
+                              {isEligible ? (
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() => toggleSelect(c.id)}
+                                  className="border-muted-foreground/40"
+                                  data-testid={`checkbox-candidate-${c.id}`}
+                                />
+                              ) : (
+                                <span className="block w-4" />
+                              )}
+                            </TableCell>
                             <TableCell className="text-center text-muted-foreground/50 font-mono text-xs">
                               {idx + 1}
                             </TableCell>
@@ -627,17 +721,6 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                                       className={`h-8 w-8 ${isShortlisted ? "text-emerald-500" : "text-muted-foreground hover:text-emerald-400 hover:bg-emerald-950/40"}`}
                                     >
                                       <ThumbsUp className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      data-testid={`fullpage-reject-${c.id}`}
-                                      size="icon"
-                                      variant="ghost"
-                                      title="Reject"
-                                      disabled={isRejected}
-                                      onClick={() => statusMutation.mutate({ appId: c.applicationId!, candidateId: c.id, status: "rejected" })}
-                                      className={`h-8 w-8 ${isRejected ? "text-red-500" : "text-muted-foreground hover:text-red-400 hover:bg-red-950/40"}`}
-                                    >
-                                      <ThumbsDown className="h-4 w-4" />
                                     </Button>
                                     {(isShortlisted || isRejected) && (
                                       <Button
