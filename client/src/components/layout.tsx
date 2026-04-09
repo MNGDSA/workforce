@@ -33,6 +33,7 @@ import {
   CalendarCheck,
   Loader2,
   Inbox,
+  MapPin,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -305,10 +306,11 @@ const topNavItems = [
   { href: "/payroll",   icon: Wallet,          label: "Payroll" },
 ];
 
-const workforcePaths = ["/workforce", "/schedules", "/assets", "/offboarding"];
+const workforcePaths = ["/workforce", "/schedules", "/geofences", "/assets", "/offboarding"];
 const workforceSubItems = [
   { href: "/workforce",   icon: Users,   label: "Employees" },
   { href: "/schedules",   icon: Clock,   label: "Schedules & Shifts" },
+  { href: "/geofences",   icon: MapPin,  label: "Geofence Zones" },
   { href: "/assets",      icon: Package, label: "Assets" },
   { href: "/offboarding", icon: LogOut,  label: "Offboarding" },
 ];

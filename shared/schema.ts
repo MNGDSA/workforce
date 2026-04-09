@@ -1198,6 +1198,83 @@ export const insertInboxItemSchema = createInsertSchema(inboxItems).omit({ id: t
 export type InsertInboxItem = z.infer<typeof insertInboxItemSchema>;
 export type InboxItem = typeof inboxItems.$inferSelect;
 
+// ─── Geofence Zones ──────────────────────────────────────────────────────────
+export const geofenceZones = pgTable(
+  "geofence_zones",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    name: text("name").notNull(),
+    centerLat: decimal("center_lat", { precision: 10, scale: 7 }).notNull(),
+    centerLng: decimal("center_lng", { precision: 10, scale: 7 }).notNull(),
+    radiusMeters: integer("radius_meters").notNull().default(500),
+    polygon: jsonb("polygon"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    activeIdx: index("geofence_zones_active_idx").on(t.isActive),
+  })
+);
+
+export const insertGeofenceZoneSchema = createInsertSchema(geofenceZones).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertGeofenceZone = z.infer<typeof insertGeofenceZoneSchema>;
+export type GeofenceZone = typeof geofenceZones.$inferSelect;
+
+// ─── Attendance Submissions (Mobile Middleware Queue) ─────────────────────────
+export const submissionStatusEnum = pgEnum("submission_status", [
+  "pending",
+  "verified",
+  "flagged",
+  "rejected",
+]);
+
+export const attendanceSubmissions = pgTable(
+  "attendance_submissions",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    workforceId: varchar("workforce_id").notNull().references(() => workforce.id, { onDelete: "cascade" }),
+    photoUrl: text("photo_url").notNull(),
+    gpsLat: decimal("gps_lat", { precision: 10, scale: 7 }).notNull(),
+    gpsLng: decimal("gps_lng", { precision: 10, scale: 7 }).notNull(),
+    gpsAccuracy: decimal("gps_accuracy", { precision: 8, scale: 2 }),
+    submittedAt: timestamp("submitted_at").notNull().default(sql`now()`),
+    status: submissionStatusEnum("status").notNull().default("pending"),
+    rekognitionConfidence: decimal("rekognition_confidence", { precision: 5, scale: 2 }),
+    gpsInsideGeofence: boolean("gps_inside_geofence"),
+    matchedGeofenceId: varchar("matched_geofence_id").references(() => geofenceZones.id, { onDelete: "set null" }),
+    flagReason: text("flag_reason"),
+    verifiedAt: timestamp("verified_at"),
+    reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at"),
+    reviewNotes: text("review_notes"),
+    linkedAttendanceRecordId: varchar("linked_attendance_record_id").references(() => attendanceRecords.id, { onDelete: "set null" }),
+    referencePhotoUrl: text("reference_photo_url"),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    workforceIdx: index("att_sub_workforce_idx").on(t.workforceId),
+    statusIdx: index("att_sub_status_idx").on(t.status),
+    submittedAtIdx: index("att_sub_submitted_at_idx").on(t.submittedAt),
+  })
+);
+
+export const insertAttendanceSubmissionSchema = createInsertSchema(attendanceSubmissions).omit({
+  id: true,
+  createdAt: true,
+  verifiedAt: true,
+  reviewedBy: true,
+  reviewedAt: true,
+  reviewNotes: true,
+  linkedAttendanceRecordId: true,
+});
+export type InsertAttendanceSubmission = z.infer<typeof insertAttendanceSubmissionSchema>;
+export type AttendanceSubmission = typeof attendanceSubmissions.$inferSelect;
+
 // ─── Query Params Types ─────────────────────────────────────────────────────
 export const candidateQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

@@ -89,6 +89,12 @@ import {
   inboxItems,
   type InboxItem,
   type InsertInboxItem,
+  geofenceZones,
+  attendanceSubmissions,
+  type GeofenceZone,
+  type InsertGeofenceZone,
+  type AttendanceSubmission,
+  type InsertAttendanceSubmission,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte } from "drizzle-orm";
 
@@ -387,6 +393,19 @@ export interface IStorage {
   bulkResolveInboxItems(ids: string[], resolvedBy: string): Promise<number>;
   bulkDismissInboxItems(ids: string[], resolvedBy: string): Promise<number>;
   countOpenInboxItems(): Promise<number>;
+
+  // Geofence Zones
+  getGeofenceZones(includeInactive?: boolean): Promise<GeofenceZone[]>;
+  getGeofenceZone(id: string): Promise<GeofenceZone | undefined>;
+  createGeofenceZone(data: InsertGeofenceZone): Promise<GeofenceZone>;
+  updateGeofenceZone(id: string, data: Partial<InsertGeofenceZone>): Promise<GeofenceZone | undefined>;
+  deleteGeofenceZone(id: string): Promise<boolean>;
+
+  // Attendance Submissions
+  getAttendanceSubmissions(filters?: { workforceId?: string; status?: string; page?: number; limit?: number }): Promise<{ data: AttendanceSubmission[]; total: number }>;
+  getAttendanceSubmission(id: string): Promise<AttendanceSubmission | undefined>;
+  createAttendanceSubmission(data: InsertAttendanceSubmission): Promise<AttendanceSubmission>;
+  updateAttendanceSubmission(id: string, data: Partial<InsertAttendanceSubmission>): Promise<AttendanceSubmission | undefined>;
 
   // Dashboard
   getDashboardStats(): Promise<{
@@ -2825,6 +2844,65 @@ export class DatabaseStorage implements IStorage {
   async countOpenInboxItems(): Promise<number> {
     const [{ cnt }] = await db.select({ cnt: count() }).from(inboxItems).where(eq(inboxItems.status, "pending"));
     return Number(cnt);
+  }
+
+  // ─── Geofence Zones ────────────────────────────────────────────────────────
+  async getGeofenceZones(includeInactive = false): Promise<GeofenceZone[]> {
+    if (includeInactive) {
+      return db.select().from(geofenceZones).orderBy(desc(geofenceZones.createdAt));
+    }
+    return db.select().from(geofenceZones).where(eq(geofenceZones.isActive, true)).orderBy(desc(geofenceZones.createdAt));
+  }
+
+  async getGeofenceZone(id: string): Promise<GeofenceZone | undefined> {
+    const [zone] = await db.select().from(geofenceZones).where(eq(geofenceZones.id, id));
+    return zone;
+  }
+
+  async createGeofenceZone(data: InsertGeofenceZone): Promise<GeofenceZone> {
+    const [zone] = await db.insert(geofenceZones).values(data).returning();
+    return zone;
+  }
+
+  async updateGeofenceZone(id: string, data: Partial<InsertGeofenceZone>): Promise<GeofenceZone | undefined> {
+    const [zone] = await db.update(geofenceZones).set({ ...data, updatedAt: new Date() }).where(eq(geofenceZones.id, id)).returning();
+    return zone;
+  }
+
+  async deleteGeofenceZone(id: string): Promise<boolean> {
+    const result = await db.delete(geofenceZones).where(eq(geofenceZones.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ─── Attendance Submissions ────────────────────────────────────────────────
+  async getAttendanceSubmissions(filters?: { workforceId?: string; status?: string; page?: number; limit?: number }): Promise<{ data: AttendanceSubmission[]; total: number }> {
+    const conditions = [];
+    if (filters?.workforceId) conditions.push(eq(attendanceSubmissions.workforceId, filters.workforceId));
+    if (filters?.status) conditions.push(eq(attendanceSubmissions.status, filters.status as any));
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const page = filters?.page ?? 1;
+    const limit = filters?.limit ?? 50;
+    const offset = (page - 1) * limit;
+
+    const [{ cnt }] = await db.select({ cnt: count() }).from(attendanceSubmissions).where(where);
+    const data = await db.select().from(attendanceSubmissions).where(where).orderBy(desc(attendanceSubmissions.submittedAt)).limit(limit).offset(offset);
+    return { data, total: Number(cnt) };
+  }
+
+  async getAttendanceSubmission(id: string): Promise<AttendanceSubmission | undefined> {
+    const [sub] = await db.select().from(attendanceSubmissions).where(eq(attendanceSubmissions.id, id));
+    return sub;
+  }
+
+  async createAttendanceSubmission(data: InsertAttendanceSubmission): Promise<AttendanceSubmission> {
+    const [sub] = await db.insert(attendanceSubmissions).values(data).returning();
+    return sub;
+  }
+
+  async updateAttendanceSubmission(id: string, data: Partial<InsertAttendanceSubmission>): Promise<AttendanceSubmission | undefined> {
+    const [sub] = await db.update(attendanceSubmissions).set(data).where(eq(attendanceSubmissions.id, id)).returning();
+    return sub;
   }
 }
 

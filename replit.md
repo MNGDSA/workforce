@@ -69,6 +69,7 @@ The system employs a modern, full-stack architecture.
 - **Profile Completeness**: Server-side validation ensures required fields are completed before a profile is marked complete.
 - **Automation Rules**: Database-backed toggleable workflows for various processes.
 - **Saudi-Specific Features**: Includes fields for National ID, Iqama, IBAN, Arabic names, and nationality (Saudi/Non-Saudi).
+- **Attendance Middleware**: Geofence zone management (CRUD with Leaflet/OSM map), mobile attendance submission API (photo + GPS), AWS Rekognition face verification stub (random 70-99% confidence when no AWS creds), verification pipeline (auto-verify if face confidence ≥95% AND GPS inside geofence, otherwise flag to HR Inbox), HR approve/reject actions with proper 404/409 status codes. Reference photo readiness indicator on employee avatars in workforce table.
 - **Planned Features**: Bilingual input (EN/AR), Employee ID Cards with a template engine, Mobile Attendance App (React Native with facial recognition and offline-first capabilities), Asset Management (tracking assignable assets and deductions), and an Employee Portal that flips from the candidate portal upon conversion.
 
 ## External Dependencies

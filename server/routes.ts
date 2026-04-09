@@ -33,6 +33,7 @@ import {
   type InsertOnboarding,
   insertAssetSchema,
   insertEmployeeAssetSchema,
+  insertGeofenceZoneSchema,
 } from "@shared/schema";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
 import XLSX from "xlsx";
@@ -3659,6 +3660,162 @@ export async function registerRoutes(
       const count = await storage.bulkDismissInboxItems(ids, resolvedBy);
       return res.json({ dismissed: count });
     } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Geofence Zones ──────────────────────────────────────────────────────────
+  app.get("/api/geofence-zones", async (_req: Request, res: Response) => {
+    try {
+      const includeInactive = _req.query.includeInactive === "true";
+      const zones = await storage.getGeofenceZones(includeInactive);
+      return res.json(zones);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/geofence-zones/:id", async (req: Request, res: Response) => {
+    try {
+      const zone = await storage.getGeofenceZone(req.params.id);
+      if (!zone) return res.status(404).json({ message: "Zone not found" });
+      return res.json(zone);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/geofence-zones", async (req: Request, res: Response) => {
+    try {
+      const data = insertGeofenceZoneSchema.parse(req.body);
+      const zone = await storage.createGeofenceZone(data);
+      await logAudit(req, { action: "create_geofence_zone", entityType: "geofence_zone", entityId: zone.id, description: `Created geofence zone "${zone.name}"` });
+      return res.status(201).json(zone);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/geofence-zones/:id", async (req: Request, res: Response) => {
+    try {
+      const updateSchema = z.object({
+        name: z.string().min(1).optional(),
+        centerLat: z.string().optional(),
+        centerLng: z.string().optional(),
+        radiusMeters: z.coerce.number().int().min(1).optional(),
+        polygon: z.any().optional(),
+        isActive: z.boolean().optional(),
+      });
+      const data = updateSchema.parse(req.body);
+      const zone = await storage.updateGeofenceZone(req.params.id, data);
+      if (!zone) return res.status(404).json({ message: "Zone not found" });
+      await logAudit(req, { action: "update_geofence_zone", entityType: "geofence_zone", entityId: zone.id, description: `Updated geofence zone "${zone.name}"` });
+      return res.json(zone);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.delete("/api/geofence-zones/:id", async (req: Request, res: Response) => {
+    try {
+      const deleted = await storage.deleteGeofenceZone(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Zone not found" });
+      await logAudit(req, { action: "delete_geofence_zone", entityType: "geofence_zone", entityId: req.params.id, description: "Deleted geofence zone" });
+      return res.json({ success: true });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Attendance Mobile Middleware ────────────────────────────────────────────
+  const { runVerificationPipeline, approveSubmission, rejectSubmission } = await import("./verification-pipeline");
+
+  app.post("/api/attendance-mobile/submit", upload.single("photo"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "Photo is required" });
+
+      const schema = z.object({
+        workforceId: z.string().min(1),
+        gpsLat: z.coerce.number().min(-90).max(90),
+        gpsLng: z.coerce.number().min(-180).max(180),
+        gpsAccuracy: z.coerce.number().optional(),
+      });
+
+      const parsed = schema.parse(req.body);
+      const photoUrl = `/uploads/${req.file.filename}`;
+
+      const submission = await storage.createAttendanceSubmission({
+        workforceId: parsed.workforceId,
+        photoUrl,
+        gpsLat: String(parsed.gpsLat),
+        gpsLng: String(parsed.gpsLng),
+        gpsAccuracy: parsed.gpsAccuracy ? String(parsed.gpsAccuracy) : null,
+        status: "pending",
+      });
+
+      let pipelineResult;
+      try {
+        pipelineResult = await runVerificationPipeline(submission.id);
+      } catch (pipeErr) {
+        console.error("[Verification Pipeline] Error:", pipeErr);
+        pipelineResult = { status: "flagged" as const, confidence: 0, gpsInside: false, flagReason: "Pipeline error" };
+        await storage.updateAttendanceSubmission(submission.id, {
+          status: "flagged",
+          flagReason: "Pipeline error: " + (pipeErr instanceof Error ? pipeErr.message : "Unknown"),
+          rekognitionConfidence: "0",
+        });
+      }
+
+      const updated = await storage.getAttendanceSubmission(submission.id);
+      return res.status(201).json({ submission: updated, verification: pipelineResult });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/attendance-mobile/submissions", async (req: Request, res: Response) => {
+    try {
+      const filters = {
+        workforceId: req.query.workforceId as string | undefined,
+        status: req.query.status as string | undefined,
+        page: req.query.page ? Number(req.query.page) : 1,
+        limit: req.query.limit ? Number(req.query.limit) : 50,
+      };
+      const result = await storage.getAttendanceSubmissions(filters);
+      return res.json(result);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/attendance-mobile/submissions/:id", async (req: Request, res: Response) => {
+    try {
+      const sub = await storage.getAttendanceSubmission(req.params.id);
+      if (!sub) return res.status(404).json({ message: "Submission not found" });
+      return res.json(sub);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/attendance-mobile/submissions/:id/approve", async (req: Request, res: Response) => {
+    try {
+      const { notes } = req.body ?? {};
+      const reviewedBy = (req as any).userId ?? "system";
+      await approveSubmission(req.params.id, reviewedBy, notes);
+      await logAudit(req, { action: "approve_attendance_submission", entityType: "attendance_submission", entityId: req.params.id, description: `Approved flagged attendance submission${notes ? `: ${notes}` : ""}` });
+      const updated = await storage.getAttendanceSubmission(req.params.id);
+      return res.json(updated);
+    } catch (err) {
+      if (err instanceof Error && (err.message.includes("not found") || err.message.includes("Not found"))) {
+        return res.status(404).json({ message: err.message });
+      }
+      if (err instanceof Error && (err.message.includes("not flagged") || err.message.includes("Only flagged"))) {
+        return res.status(409).json({ message: err.message });
+      }
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/attendance-mobile/submissions/:id/reject", async (req: Request, res: Response) => {
+    try {
+      const { notes } = req.body ?? {};
+      const reviewedBy = (req as any).userId ?? "system";
+      await rejectSubmission(req.params.id, reviewedBy, notes);
+      await logAudit(req, { action: "reject_attendance_submission", entityType: "attendance_submission", entityId: req.params.id, description: `Rejected attendance submission${notes ? `: ${notes}` : ""}` });
+      const updated = await storage.getAttendanceSubmission(req.params.id);
+      return res.json(updated);
+    } catch (err) {
+      if (err instanceof Error && (err.message.includes("not found") || err.message.includes("Not found"))) {
+        return res.status(404).json({ message: err.message });
+      }
+      if (err instanceof Error && (err.message.includes("not flagged") || err.message.includes("Only flagged"))) {
+        return res.status(409).json({ message: err.message });
+      }
+      return handleError(res, err);
+    }
   });
 
   return httpServer;

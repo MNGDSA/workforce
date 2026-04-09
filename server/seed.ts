@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, automationRules } from "@shared/schema";
+import { users, automationRules, geofenceZones } from "@shared/schema";
 import bcrypt from "bcryptjs";
 
 async function seed() {
@@ -85,6 +85,20 @@ async function seed() {
         action: "notification.send",
         isEnabled: true,
         config: { template: "offboarding_notice", daysBeforeEnd: 7 },
+      },
+    ])
+    .onConflictDoNothing();
+
+  // ─── Geofence Zones ────────────────────────────────────────────────────────
+  await db
+    .insert(geofenceZones)
+    .values([
+      {
+        name: "Masjid Al-Haram Complex",
+        centerLat: "21.4225000",
+        centerLng: "39.8262000",
+        radiusMeters: 800,
+        isActive: true,
       },
     ])
     .onConflictDoNothing();
