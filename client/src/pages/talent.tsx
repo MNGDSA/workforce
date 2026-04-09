@@ -1267,8 +1267,13 @@ export default function TalentPage() {
                     {candidates.map((candidate) => {
                       const displayStatus = getDisplayStatus(candidate);
                       return (
-                        <TableRow key={candidate.id} className={`border-border hover:bg-muted/20 ${selectedIds.has(candidate.id) ? "bg-primary/5" : ""}`} data-testid={`row-candidate-${candidate.id}`}>
-                          <TableCell className="px-2">
+                        <TableRow
+                          key={candidate.id}
+                          className={`border-border hover:bg-muted/20 cursor-pointer ${selectedIds.has(candidate.id) ? "bg-primary/5" : ""}`}
+                          data-testid={`row-candidate-${candidate.id}`}
+                          onClick={() => setProfileCandidate(candidate)}
+                        >
+                          <TableCell className="px-2" onClick={e => e.stopPropagation()}>
                             <button
                               onClick={() => toggleSelect(candidate.id)}
                               className="text-muted-foreground hover:text-white transition-colors"
@@ -1351,7 +1356,7 @@ export default function TalentPage() {
                               </span>
                             </TableCell>
                           )}
-                          <TableCell className="text-right">
+                          <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white" data-testid={`button-actions-${candidate.id}`}>

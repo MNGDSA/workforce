@@ -1001,6 +1001,7 @@ export default function CandidatePortal() {
   const [profileLangs,    setProfileLangs]    = useState("");
   const [profileEduLevel, setProfileEduLevel] = useState("");
   const [profileMajor,    setProfileMajor]    = useState("");
+  const [profileRegion,   setProfileRegion]   = useState("");
   const [pwCurrent,  setPwCurrent]  = useState("");
   const [pwNew,      setPwNew]      = useState("");
   const [pwConfirm,  setPwConfirm]  = useState("");
@@ -1052,6 +1053,7 @@ export default function CandidatePortal() {
       setProfileLangs(Array.isArray(candidateProfile.languages) ? (candidateProfile.languages as string[]).join(", ") : "");
       setProfileEduLevel(String(candidateProfile.educationLevel ?? ""));
       setProfileMajor(String(candidateProfile.major ?? ""));
+      setProfileRegion(String(candidateProfile.region ?? ""));
     }
     if (!open) { setPwCurrent(""); setPwNew(""); setPwConfirm(""); }
     setProfileOpen(open);
@@ -1070,6 +1072,12 @@ export default function CandidatePortal() {
     raw.languages      = normalizeTags(profileLangs);
     raw.educationLevel = profileEduLevel || undefined;
     raw.major          = profileEduLevel === "University and higher" ? (profileMajor || undefined) : null;
+    raw.region         = profileRegion || undefined;
+
+    if (!profileRegion) {
+      toast({ title: "Region Required", description: "Please select your region of residence.", variant: "destructive" });
+      return;
+    }
 
     if (!isSmp) {
       if (!raw.ibanNumber || !String(raw.ibanNumber).trim()) {
@@ -1720,6 +1728,19 @@ export default function CandidatePortal() {
                     className="bg-background border-border"
                     data-testid="input-city"
                   />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-white">Region <span className="text-red-400">*</span></label>
+                  <Select value={profileRegion} onValueChange={setProfileRegion}>
+                    <SelectTrigger className="bg-background border-border" data-testid="select-region">
+                      <SelectValue placeholder="Select your region" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["Riyadh", "Makkah", "Madinah", "Eastern Province", "Asir", "Tabuk", "Hail", "Northern Borders", "Jazan", "Najran", "Al Bahah", "Al Jawf", "Qassim"].map(r => (
+                        <SelectItem key={r} value={r}>{r}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>
