@@ -551,20 +551,6 @@ export default function JobPostingDetailPage() {
                                       <ThumbsUp className="h-3.5 w-3.5" />
                                     </button>
                                   )}
-                                  {(app.status === "shortlisted" || app.status === "interviewed") && (
-                                    <button
-                                      onClick={() => updateStatus.mutate({ id: app.id, status: "hired" })}
-                                      disabled={updateStatus.isPending}
-                                      title="Mark as Hired"
-                                      className="p-1.5 rounded-sm text-emerald-400 hover:bg-emerald-500/15 transition-colors"
-                                      data-testid={`button-hire-${app.id}`}
-                                    >
-                                      <CheckCircle2 className="h-3.5 w-3.5" />
-                                    </button>
-                                  )}
-                                  {(app.status === "hired" || app.status === "rejected") && (
-                                    <span className="text-xs text-muted-foreground/40 italic">Final</span>
-                                  )}
                                 </div>
                               </td>
                               {hasQuestions && (
