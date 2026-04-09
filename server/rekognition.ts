@@ -28,7 +28,8 @@ export async function compareFaces(
   try {
     const { RekognitionClient, CompareFacesCommand } = await import("@aws-sdk/client-rekognition");
     const { readFileSync } = await import("fs");
-    const { resolve } = await import("path");
+    const path = await import("path");
+    const { resolve } = path;
 
     const client = new RekognitionClient({
       region: awsRegion,
@@ -36,14 +37,20 @@ export async function compareFaces(
     });
 
     async function loadImageBytes(url: string): Promise<Uint8Array> {
-      if (url.startsWith("/uploads/")) {
-        return readFileSync(resolve("uploads", url.replace("/uploads/", "")));
+      if (!url.startsWith("/uploads/")) {
+        throw new Error("Only /uploads/ paths are allowed for face comparison");
       }
-      if (url.startsWith("http")) {
-        const resp = await fetch(url);
-        return new Uint8Array(await resp.arrayBuffer());
+      const filename = path.basename(url);
+      const allowedExts = [".jpg", ".jpeg", ".png", ".webp"];
+      const ext = path.extname(filename).toLowerCase();
+      if (!allowedExts.includes(ext)) {
+        throw new Error(`Unsupported image extension: ${ext}`);
       }
-      return readFileSync(resolve(url));
+      const safePath = resolve("uploads", filename);
+      if (!safePath.startsWith(resolve("uploads"))) {
+        throw new Error("Path traversal detected");
+      }
+      return readFileSync(safePath);
     }
 
     const [sourceBytes, targetBytes] = await Promise.all([
