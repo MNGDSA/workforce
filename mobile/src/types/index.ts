@@ -60,7 +60,7 @@ export interface AttendanceSubmission {
   gpsLng: number;
   gpsAccuracy: number | null;
   timestamp: string;
-  syncStatus: 'pending' | 'syncing' | 'synced' | 'verified' | 'flagged' | 'failed';
+  syncStatus: SyncStatus;
   serverId: string | null;
   serverStatus: string | null;
   flagReason: string | null;
@@ -69,9 +69,52 @@ export interface AttendanceSubmission {
   syncedAt: string | null;
 }
 
+export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'verified' | 'flagged' | 'failed';
+
 export interface LoginResponse {
   user: User;
   candidate: Candidate | null;
+  token: string;
+}
+
+export interface SubmitResponse {
+  submission: {
+    id: string;
+    status: string;
+  };
+  verification: {
+    status: string;
+    flagReason: string | null;
+  } | null;
+}
+
+export interface UploadResult {
+  submission: { id: string; status: string };
+  verification: { status: string; flagReason: string | null } | null;
 }
 
 export type AttendanceStatus = 'not_marked' | 'pending' | 'syncing' | 'synced' | 'verified' | 'flagged';
+
+export interface SqliteRow {
+  id: string;
+  workforce_id: string;
+  photo_path: string;
+  photo_base64: string | null;
+  gps_lat: number;
+  gps_lng: number;
+  gps_accuracy: number | null;
+  timestamp: string;
+  sync_status: string;
+  server_id: string | null;
+  server_status: string | null;
+  flag_reason: string | null;
+  retry_count: number;
+  created_at: string;
+  synced_at: string | null;
+}
+
+export interface FormDataPhoto {
+  uri: string;
+  name: string;
+  type: string;
+}

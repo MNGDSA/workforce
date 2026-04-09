@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,14 +11,22 @@ import {
 } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system';
+import * as Location from 'expo-location';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, spacing, borderRadius } from '../theme';
 import FaceGuideOverlay from '../components/FaceGuideOverlay';
-import { useLocation } from '../hooks/useLocation';
 import { saveSubmission } from '../services/database';
 import { syncPendingSubmissions } from '../services/sync';
+import { format } from 'date-fns';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+interface CapturedGps {
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+}
 
 interface Props {
   workforceId: string;
@@ -31,49 +39,94 @@ type CaptureStep = 'camera' | 'preview' | 'saving';
 export default function CaptureScreen({ workforceId, onComplete, onCancel }: Props) {
   const [step, setStep] = useState<CaptureStep>('camera');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [captureTimestamp, setCaptureTimestamp] = useState<Date | null>(null);
+  const [capturedGps, setCapturedGps] = useState<CapturedGps | null>(null);
   const [facing, setFacing] = useState<CameraType>('front');
+  const [gpsReady, setGpsReady] = useState(false);
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
-  const location = useLocation();
+  const gpsRef = useRef<CapturedGps | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        try {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+          if (mounted) {
+            const gps: CapturedGps = {
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+              accuracy: loc.coords.accuracy,
+            };
+            gpsRef.current = gps;
+            setGpsReady(true);
+          }
+        } catch {
+          if (mounted) setGpsReady(false);
+        }
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const takePhoto = useCallback(async () => {
     if (!cameraRef.current) return;
 
+    const now = new Date();
+    let gps: CapturedGps | null = gpsRef.current;
+
     try {
-      const photo = await cameraRef.current.takePictureAsync({
+      const locPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const photoPromise = cameraRef.current.takePictureAsync({
         quality: 0.8,
         base64: false,
         exif: false,
       });
 
+      const [locResult, photo] = await Promise.all([
+        locPromise.catch(() => null),
+        photoPromise,
+      ]);
+
+      if (locResult) {
+        gps = {
+          latitude: locResult.coords.latitude,
+          longitude: locResult.coords.longitude,
+          accuracy: locResult.coords.accuracy,
+        };
+        gpsRef.current = gps;
+      }
+
       if (photo?.uri) {
         setPhotoUri(photo.uri);
+        setCaptureTimestamp(now);
+        setCapturedGps(gps);
         setStep('preview');
       }
-    } catch (err) {
+    } catch {
       Alert.alert('Error', 'Failed to take photo. Please try again.');
     }
   }, []);
 
-  const retakePhoto = () => {
+  const retakePhoto = (): void => {
     setPhotoUri(null);
+    setCaptureTimestamp(null);
+    setCapturedGps(null);
     setStep('camera');
   };
 
-  const submitAttendance = async () => {
-    if (!photoUri) return;
+  const submitAttendance = async (): Promise<void> => {
+    if (!photoUri || !capturedGps || !captureTimestamp) {
+      Alert.alert('Missing Data', 'GPS location is required. Please retake the photo with GPS enabled.');
+      return;
+    }
 
     setStep('saving');
 
     try {
-      const gps = await location.getCurrentLocation();
-      if (!gps) {
-        Alert.alert('Location Required', 'Unable to get your location. Please enable GPS and try again.');
-        setStep('preview');
-        return;
-      }
-
-      const timestamp = new Date().toISOString();
+      const timestamp = captureTimestamp.toISOString();
       const localDir = `${FileSystem.documentDirectory}attendance/`;
       await FileSystem.makeDirectoryAsync(localDir, { intermediates: true });
       const localPath = `${localDir}${Date.now()}.jpg`;
@@ -83,9 +136,9 @@ export default function CaptureScreen({ workforceId, onComplete, onCancel }: Pro
         workforceId,
         photoPath: localPath,
         photoBase64: null,
-        gpsLat: gps.latitude,
-        gpsLng: gps.longitude,
-        gpsAccuracy: gps.accuracy,
+        gpsLat: capturedGps.latitude,
+        gpsLng: capturedGps.longitude,
+        gpsAccuracy: capturedGps.accuracy,
         timestamp,
       });
 
@@ -134,12 +187,12 @@ export default function CaptureScreen({ workforceId, onComplete, onCancel }: Pro
       <View style={styles.centered}>
         <ActivityIndicator color={colors.primary} size="large" />
         <Text style={styles.savingText}>Saving attendance...</Text>
-        <Text style={styles.savingSubtext}>Getting your location</Text>
+        <Text style={styles.savingSubtext}>Encrypting and storing locally</Text>
       </View>
     );
   }
 
-  if (step === 'preview' && photoUri) {
+  if (step === 'preview' && photoUri && captureTimestamp) {
     return (
       <View style={styles.container}>
         <View style={styles.previewHeader}>
@@ -150,36 +203,74 @@ export default function CaptureScreen({ workforceId, onComplete, onCancel }: Pro
           <View style={{ width: 24 }} />
         </View>
 
-        <View style={styles.previewImageContainer}>
+        <View style={styles.previewContent}>
           <Image source={{ uri: photoUri }} style={styles.previewImage} />
+
+          <View style={styles.timestampCard}>
+            <Ionicons name="time" size={16} color={colors.primary} />
+            <Text style={styles.timestampText}>
+              {format(captureTimestamp, 'EEEE, MMM d, yyyy h:mm:ss a')}
+            </Text>
+          </View>
+
+          {capturedGps ? (
+            <>
+              <View style={styles.locationInfo}>
+                <Ionicons name="location" size={16} color={colors.success} />
+                <Text style={styles.locationText}>
+                  {capturedGps.latitude.toFixed(6)}, {capturedGps.longitude.toFixed(6)}
+                  {capturedGps.accuracy ? ` (${'\u00B1'}${Math.round(capturedGps.accuracy)}m)` : ''}
+                </Text>
+              </View>
+
+              <View style={styles.miniMapContainer}>
+                <MapView
+                  style={styles.miniMap}
+                  provider={PROVIDER_GOOGLE}
+                  initialRegion={{
+                    latitude: capturedGps.latitude,
+                    longitude: capturedGps.longitude,
+                    latitudeDelta: 0.003,
+                    longitudeDelta: 0.003,
+                  }}
+                  scrollEnabled={false}
+                  zoomEnabled={false}
+                  pitchEnabled={false}
+                  rotateEnabled={false}
+                  mapType="hybrid"
+                >
+                  <Marker
+                    coordinate={{
+                      latitude: capturedGps.latitude,
+                      longitude: capturedGps.longitude,
+                    }}
+                    title="Your Location"
+                  />
+                </MapView>
+              </View>
+            </>
+          ) : (
+            <View style={styles.locationInfo}>
+              <Ionicons name="location-outline" size={16} color={colors.error} />
+              <Text style={[styles.locationText, { color: colors.error }]}>
+                GPS not available. Please retake with location enabled.
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.previewActions}>
-          <View style={styles.locationInfo}>
-            {location.latitude ? (
-              <>
-                <Ionicons name="location" size={16} color={colors.success} />
-                <Text style={styles.locationText}>
-                  GPS: {location.latitude?.toFixed(4)}, {location.longitude?.toFixed(4)}
-                  {location.accuracy ? ` (±${Math.round(location.accuracy)}m)` : ''}
-                </Text>
-              </>
-            ) : (
-              <>
-                <Ionicons name="location-outline" size={16} color={colors.warning} />
-                <Text style={[styles.locationText, { color: colors.warning }]}>
-                  Location will be captured on submit
-                </Text>
-              </>
-            )}
-          </View>
-
           <TouchableOpacity style={styles.retakeButton} onPress={retakePhoto} testID="button-retake-photo">
             <Ionicons name="camera-reverse-outline" size={20} color={colors.text} />
             <Text style={styles.retakeButtonText}>Retake</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.submitButton} onPress={submitAttendance} testID="button-submit-attendance">
+          <TouchableOpacity
+            style={[styles.submitButton, !capturedGps && styles.buttonDisabled]}
+            onPress={submitAttendance}
+            disabled={!capturedGps}
+            testID="button-submit-attendance"
+          >
             <Ionicons name="checkmark-circle" size={22} color={colors.text} />
             <Text style={styles.submitButtonText}>Submit Attendance</Text>
           </TouchableOpacity>
@@ -197,6 +288,16 @@ export default function CaptureScreen({ workforceId, onComplete, onCancel }: Pro
           <TouchableOpacity onPress={onCancel} style={styles.cameraButton} testID="button-cancel-capture">
             <Ionicons name="close" size={28} color={colors.text} />
           </TouchableOpacity>
+          <View style={styles.gpsIndicator}>
+            <Ionicons
+              name={gpsReady ? 'location' : 'location-outline'}
+              size={14}
+              color={gpsReady ? colors.success : colors.warning}
+            />
+            <Text style={[styles.gpsText, { color: gpsReady ? colors.success : colors.warning }]}>
+              {gpsReady ? 'GPS Ready' : 'Acquiring GPS...'}
+            </Text>
+          </View>
           <TouchableOpacity
             onPress={() => setFacing(f => f === 'front' ? 'back' : 'front')}
             style={styles.cameraButton}
@@ -225,12 +326,18 @@ const styles = StyleSheet.create({
   camera: { flex: 1 },
   cameraTopBar: {
     position: 'absolute', top: 50, left: spacing.xl, right: spacing.xl,
-    flexDirection: 'row', justifyContent: 'space-between',
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
   cameraButton: {
     width: 44, height: 44, borderRadius: 22,
     backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center',
   },
+  gpsIndicator: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs, borderRadius: borderRadius.full,
+  },
+  gpsText: { fontFamily: fonts.bodySemiBold, fontSize: 11 },
   cameraBottomBar: {
     position: 'absolute', bottom: 40, left: 0, right: 0, alignItems: 'center',
   },
@@ -248,18 +355,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   previewTitle: { fontFamily: fonts.heading, fontSize: 18, color: colors.text },
-  previewImageContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xl },
-  previewImage: {
-    width: SCREEN_WIDTH - spacing.xxxl * 2, height: (SCREEN_WIDTH - spacing.xxxl * 2) * 1.33,
-    borderRadius: borderRadius.lg,
+  previewContent: {
+    flex: 1, padding: spacing.lg, gap: spacing.md,
   },
-  previewActions: { padding: spacing.xl, gap: spacing.md },
+  previewImage: {
+    width: SCREEN_WIDTH - spacing.lg * 2, height: (SCREEN_WIDTH - spacing.lg * 2) * 0.75,
+    borderRadius: borderRadius.lg, alignSelf: 'center',
+  },
+  timestampCard: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: colors.card, padding: spacing.md,
+    borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.cardBorder,
+  },
+  timestampText: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.text },
   locationInfo: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
     backgroundColor: colors.card, padding: spacing.md,
     borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.cardBorder,
   },
   locationText: { fontFamily: fonts.mono, fontSize: 11, color: colors.textSecondary, flex: 1 },
+  miniMapContainer: {
+    height: 120, borderRadius: borderRadius.md, overflow: 'hidden',
+    borderWidth: 1, borderColor: colors.cardBorder,
+  },
+  miniMap: { flex: 1 },
+  previewActions: { padding: spacing.lg, gap: spacing.md },
   retakeButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
     backgroundColor: colors.surfaceElevated, paddingVertical: spacing.md,
@@ -270,6 +390,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
     backgroundColor: colors.primary, paddingVertical: spacing.lg, borderRadius: borderRadius.md,
   },
+  buttonDisabled: { opacity: 0.4 },
   submitButtonText: { fontFamily: fonts.heading, fontSize: 16, color: colors.text },
   permissionTitle: { fontFamily: fonts.heading, fontSize: 20, color: colors.text, marginTop: spacing.xl },
   permissionText: {

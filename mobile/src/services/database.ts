@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
-import type { AttendanceSubmission } from '../types';
+import { encryptField, decryptField } from './encryption';
+import type { AttendanceSubmission, SyncStatus, SqliteRow } from '../types';
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -23,7 +24,8 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
       flag_reason TEXT,
       retry_count INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
-      synced_at TEXT
+      synced_at TEXT,
+      encrypted INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE INDEX IF NOT EXISTS idx_submissions_sync_status ON attendance_submissions(sync_status);
@@ -56,11 +58,14 @@ export async function saveSubmission(params: {
   const id = generateId();
   const now = new Date().toISOString();
 
+  const encryptedPhotoPath = await encryptField(params.photoPath);
+  const encryptedWorkforceId = await encryptField(params.workforceId);
+
   await database.runAsync(
     `INSERT INTO attendance_submissions 
-     (id, workforce_id, photo_path, photo_base64, gps_lat, gps_lng, gps_accuracy, timestamp, sync_status, retry_count, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?)`,
-    [id, params.workforceId, params.photoPath, params.photoBase64, params.gpsLat, params.gpsLng, params.gpsAccuracy, params.timestamp, now]
+     (id, workforce_id, photo_path, photo_base64, gps_lat, gps_lng, gps_accuracy, timestamp, sync_status, retry_count, created_at, encrypted)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, 1)`,
+    [id, encryptedWorkforceId, encryptedPhotoPath, params.photoBase64, params.gpsLat, params.gpsLng, params.gpsAccuracy, params.timestamp, now]
   );
 
   return {
@@ -82,41 +87,74 @@ export async function saveSubmission(params: {
   };
 }
 
+async function decryptRow(row: SqliteRow & { encrypted?: number }): Promise<AttendanceSubmission> {
+  const isEncrypted = row.encrypted === 1;
+  return {
+    id: row.id,
+    workforceId: isEncrypted ? await decryptField(row.workforce_id) : row.workforce_id,
+    photoPath: isEncrypted ? await decryptField(row.photo_path) : row.photo_path,
+    photoBase64: row.photo_base64,
+    gpsLat: row.gps_lat,
+    gpsLng: row.gps_lng,
+    gpsAccuracy: row.gps_accuracy,
+    timestamp: row.timestamp,
+    syncStatus: row.sync_status as SyncStatus,
+    serverId: row.server_id,
+    serverStatus: row.server_status,
+    flagReason: row.flag_reason,
+    retryCount: row.retry_count,
+    createdAt: row.created_at,
+    syncedAt: row.synced_at,
+  };
+}
+
 export async function getPendingSubmissions(): Promise<AttendanceSubmission[]> {
   const database = await getDatabase();
-  const rows = await database.getAllAsync<any>(
+  const rows = await database.getAllAsync<SqliteRow & { encrypted: number }>(
     `SELECT * FROM attendance_submissions WHERE sync_status IN ('pending', 'failed') ORDER BY created_at ASC`
   );
-  return rows.map(mapRow);
+  return Promise.all(rows.map(decryptRow));
 }
 
 export async function getAllSubmissions(workforceId: string, limit = 50): Promise<AttendanceSubmission[]> {
   const database = await getDatabase();
-  const rows = await database.getAllAsync<any>(
-    `SELECT * FROM attendance_submissions WHERE workforce_id = ? ORDER BY created_at DESC LIMIT ?`,
-    [workforceId, limit]
+  const rows = await database.getAllAsync<SqliteRow & { encrypted: number }>(
+    `SELECT * FROM attendance_submissions ORDER BY created_at DESC LIMIT ?`,
+    [limit]
   );
-  return rows.map(mapRow);
+  const all = await Promise.all(rows.map(decryptRow));
+  return all.filter(s => s.workforceId === workforceId);
 }
 
 export async function getTodaySubmission(workforceId: string): Promise<AttendanceSubmission | null> {
   const database = await getDatabase();
   const today = new Date().toISOString().split('T')[0];
-  const rows = await database.getAllAsync<any>(
-    `SELECT * FROM attendance_submissions WHERE workforce_id = ? AND timestamp LIKE ? ORDER BY created_at DESC LIMIT 1`,
-    [workforceId, `${today}%`]
+  const rows = await database.getAllAsync<SqliteRow & { encrypted: number }>(
+    `SELECT * FROM attendance_submissions WHERE timestamp LIKE ? ORDER BY created_at DESC LIMIT 10`,
+    [`${today}%`]
   );
-  return rows.length > 0 ? mapRow(rows[0]) : null;
+  const decrypted = await Promise.all(rows.map(decryptRow));
+  return decrypted.find(s => s.workforceId === workforceId) || null;
+}
+
+export async function checkDuplicateDate(workforceId: string, dateStr: string): Promise<boolean> {
+  const database = await getDatabase();
+  const rows = await database.getAllAsync<SqliteRow & { encrypted: number }>(
+    `SELECT * FROM attendance_submissions WHERE timestamp LIKE ? AND sync_status NOT IN ('failed') LIMIT 20`,
+    [`${dateStr}%`]
+  );
+  const decrypted = await Promise.all(rows.map(decryptRow));
+  return decrypted.some(s => s.workforceId === workforceId);
 }
 
 export async function updateSubmissionSyncStatus(
   id: string,
-  status: AttendanceSubmission['syncStatus'],
+  status: SyncStatus,
   extra?: { serverId?: string; serverStatus?: string; flagReason?: string; syncedAt?: string }
 ): Promise<void> {
   const database = await getDatabase();
   const sets: string[] = ['sync_status = ?'];
-  const values: any[] = [status];
+  const values: (string | number | null)[] = [status];
 
   if (extra?.serverId !== undefined) { sets.push('server_id = ?'); values.push(extra.serverId); }
   if (extra?.serverStatus !== undefined) { sets.push('server_status = ?'); values.push(extra.serverStatus); }
@@ -148,30 +186,15 @@ export async function purgeOldSyncedSubmissions(daysOld = 30): Promise<number> {
   return result.changes;
 }
 
+export async function purgeAllLocalData(): Promise<void> {
+  const database = await getDatabase();
+  await database.runAsync(`DELETE FROM attendance_submissions`);
+}
+
 export async function getPendingCount(): Promise<number> {
   const database = await getDatabase();
   const result = await database.getFirstAsync<{ count: number }>(
     `SELECT COUNT(*) as count FROM attendance_submissions WHERE sync_status IN ('pending', 'failed')`
   );
   return result?.count ?? 0;
-}
-
-function mapRow(row: any): AttendanceSubmission {
-  return {
-    id: row.id,
-    workforceId: row.workforce_id,
-    photoPath: row.photo_path,
-    photoBase64: row.photo_base64,
-    gpsLat: row.gps_lat,
-    gpsLng: row.gps_lng,
-    gpsAccuracy: row.gps_accuracy,
-    timestamp: row.timestamp,
-    syncStatus: row.sync_status,
-    serverId: row.server_id,
-    serverStatus: row.server_status,
-    flagReason: row.flag_reason,
-    retryCount: row.retry_count,
-    createdAt: row.created_at,
-    syncedAt: row.synced_at,
-  };
 }

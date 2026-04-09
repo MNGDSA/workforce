@@ -1,16 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, spacing, borderRadius } from '../theme';
+import { requestDataDeletion } from '../services/api';
+import { purgeAllLocalData } from '../services/database';
 
 interface Props {
   onBack: () => void;
+  onDeleteAllData?: () => void;
 }
 
 const SECTIONS = [
@@ -38,7 +43,7 @@ const SECTIONS = [
     title: 'Data Storage & Security',
     icon: 'lock-closed-outline' as const,
     items: [
-      'Photos are stored locally on your device until synced, then transmitted over encrypted connections (HTTPS/TLS)',
+      'Photos are encrypted on your device before storage using a device-specific key stored in secure enclave (SecureStore)',
       'Server-side data is stored in secure databases with access controls',
       'Facial recognition processing is performed server-side; biometric templates are not stored permanently',
       'Local attendance data is automatically purged after 30 days of successful sync',
@@ -52,7 +57,7 @@ const SECTIONS = [
       'You may request correction of inaccurate personal data',
       'You may request deletion of your data, subject to legal retention requirements',
       'You may withdraw consent for facial recognition (this may affect your ability to use the attendance system)',
-      'Contact HR department to exercise any of these rights',
+      'Use the "Request Data Deletion" button below or contact the HR department',
     ],
   },
   {
@@ -76,7 +81,80 @@ const SECTIONS = [
   },
 ];
 
-export default function PrivacyScreen({ onBack }: Props) {
+export default function PrivacyScreen({ onBack, onDeleteAllData }: Props) {
+  const [deletingLocal, setDeletingLocal] = useState(false);
+  const [requestingServerDeletion, setRequestingServerDeletion] = useState(false);
+
+  const handleDeleteLocalData = async (): Promise<void> => {
+    Alert.alert(
+      'Delete Local Data',
+      'This will permanently delete all attendance records stored on this device. Server records will not be affected. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingLocal(true);
+            try {
+              await purgeAllLocalData();
+              Alert.alert('Deleted', 'All local attendance data has been removed from this device.');
+            } catch {
+              Alert.alert('Error', 'Failed to delete local data. Please try again.');
+            } finally {
+              setDeletingLocal(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRequestServerDeletion = async (): Promise<void> => {
+    Alert.alert(
+      'Request Data Deletion',
+      'This will submit a formal request to delete all your personal data from WORKFORCE servers, including attendance records, photos, and biometric data. HR will process your request within 30 days. This may affect your employment status.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Submit Request',
+          style: 'destructive',
+          onPress: async () => {
+            setRequestingServerDeletion(true);
+            try {
+              const result = await requestDataDeletion();
+              Alert.alert('Request Submitted', result.message || 'Your data deletion request has been submitted. HR will process it within 30 days.');
+            } catch {
+              Alert.alert(
+                'Request Failed',
+                'Unable to submit the request right now. Please contact HR directly or try again when you have an internet connection.'
+              );
+            } finally {
+              setRequestingServerDeletion(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleFullDataWipe = (): void => {
+    Alert.alert(
+      'Complete Data Wipe',
+      'This will delete all local data, encryption keys, and log you out. You will need to log in again. Server data deletion must be requested separately.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Wipe & Logout',
+          style: 'destructive',
+          onPress: () => {
+            onDeleteAllData?.();
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -112,6 +190,58 @@ export default function PrivacyScreen({ onBack }: Props) {
             ))}
           </View>
         ))}
+
+        <View style={styles.dataActionsSection}>
+          <Text style={styles.dataActionsTitle}>Data Management</Text>
+
+          <TouchableOpacity
+            style={styles.dataActionButton}
+            onPress={handleDeleteLocalData}
+            disabled={deletingLocal}
+            testID="button-delete-local-data"
+          >
+            {deletingLocal ? (
+              <ActivityIndicator color={colors.warning} size="small" />
+            ) : (
+              <Ionicons name="phone-portrait-outline" size={18} color={colors.warning} />
+            )}
+            <View style={styles.dataActionTextContainer}>
+              <Text style={styles.dataActionLabel}>Delete Local Data</Text>
+              <Text style={styles.dataActionDesc}>Remove all attendance records from this device</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.dataActionButton}
+            onPress={handleRequestServerDeletion}
+            disabled={requestingServerDeletion}
+            testID="button-request-server-deletion"
+          >
+            {requestingServerDeletion ? (
+              <ActivityIndicator color={colors.error} size="small" />
+            ) : (
+              <Ionicons name="cloud-offline-outline" size={18} color={colors.error} />
+            )}
+            <View style={styles.dataActionTextContainer}>
+              <Text style={[styles.dataActionLabel, { color: colors.error }]}>Request Server Data Deletion</Text>
+              <Text style={styles.dataActionDesc}>Submit formal GDPR/privacy data deletion request</Text>
+            </View>
+          </TouchableOpacity>
+
+          {onDeleteAllData && (
+            <TouchableOpacity
+              style={[styles.dataActionButton, styles.dataActionDanger]}
+              onPress={handleFullDataWipe}
+              testID="button-full-data-wipe"
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.error} />
+              <View style={styles.dataActionTextContainer}>
+                <Text style={[styles.dataActionLabel, { color: colors.error }]}>Complete Data Wipe & Logout</Text>
+                <Text style={styles.dataActionDesc}>Delete all local data, keys, and sign out</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+        </View>
 
         <View style={styles.contact}>
           <Text style={styles.contactTitle}>Questions or Concerns?</Text>
@@ -156,6 +286,23 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary,
     flex: 1, lineHeight: 20,
   },
+  dataActionsSection: {
+    backgroundColor: colors.surfaceElevated, borderRadius: borderRadius.lg,
+    padding: spacing.lg, gap: spacing.md,
+  },
+  dataActionsTitle: { fontFamily: fonts.heading, fontSize: 16, color: colors.text, marginBottom: spacing.xs },
+  dataActionButton: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    backgroundColor: colors.card, padding: spacing.lg,
+    borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.cardBorder,
+  },
+  dataActionDanger: {
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    backgroundColor: 'rgba(239, 68, 68, 0.05)',
+  },
+  dataActionTextContainer: { flex: 1 },
+  dataActionLabel: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.text },
+  dataActionDesc: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, marginTop: 2 },
   contact: {
     backgroundColor: colors.surfaceElevated, borderRadius: borderRadius.lg,
     padding: spacing.xl, gap: spacing.sm, alignItems: 'center',

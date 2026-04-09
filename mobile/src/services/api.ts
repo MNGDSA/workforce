@@ -1,11 +1,29 @@
 import * as SecureStore from 'expo-secure-store';
+import type {
+  User,
+  Candidate,
+  WorkforceRecord,
+  LoginResponse,
+  GeofenceZone,
+  ShiftInfo,
+  UploadResult,
+  FormDataPhoto,
+} from '../types';
 
 const API_BASE_URL_KEY = 'workforce_api_url';
 const SESSION_TOKEN_KEY = 'workforce_session';
+const TOKEN_EXPIRY_KEY = 'workforce_token_expiry';
 const USER_DATA_KEY = 'workforce_user';
 const WORKFORCE_DATA_KEY = 'workforce_record';
 
+const TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000;
+
 let baseUrl = '';
+let logoutCallback: (() => void) | null = null;
+
+export function setLogoutCallback(cb: () => void): void {
+  logoutCallback = cb;
+}
 
 export async function getBaseUrl(): Promise<string> {
   if (baseUrl) return baseUrl;
@@ -20,37 +38,54 @@ export async function setBaseUrl(url: string): Promise<void> {
 }
 
 export async function getSessionToken(): Promise<string | null> {
+  const expiry = await SecureStore.getItemAsync(TOKEN_EXPIRY_KEY);
+  if (expiry && Date.now() > parseInt(expiry, 10)) {
+    await clearSession();
+    logoutCallback?.();
+    return null;
+  }
   return SecureStore.getItemAsync(SESSION_TOKEN_KEY);
 }
 
 export async function setSessionToken(token: string): Promise<void> {
   await SecureStore.setItemAsync(SESSION_TOKEN_KEY, token);
+  const expiryTime = String(Date.now() + TOKEN_LIFETIME_MS);
+  await SecureStore.setItemAsync(TOKEN_EXPIRY_KEY, expiryTime);
 }
 
 export async function clearSession(): Promise<void> {
   await SecureStore.deleteItemAsync(SESSION_TOKEN_KEY);
+  await SecureStore.deleteItemAsync(TOKEN_EXPIRY_KEY);
   await SecureStore.deleteItemAsync(USER_DATA_KEY);
   await SecureStore.deleteItemAsync(WORKFORCE_DATA_KEY);
 }
 
-export async function storeUserData(data: { user: any; candidate: any }): Promise<void> {
+export async function storeUserData(data: { user: User; candidate: Candidate | null }): Promise<void> {
   await SecureStore.setItemAsync(USER_DATA_KEY, JSON.stringify(data));
 }
 
-export async function getUserData(): Promise<{ user: any; candidate: any } | null> {
+export async function getUserData(): Promise<{ user: User; candidate: Candidate | null } | null> {
   const raw = await SecureStore.getItemAsync(USER_DATA_KEY);
   if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
+  try {
+    return JSON.parse(raw) as { user: User; candidate: Candidate | null };
+  } catch {
+    return null;
+  }
 }
 
-export async function storeWorkforceData(data: any): Promise<void> {
+export async function storeWorkforceData(data: WorkforceRecord): Promise<void> {
   await SecureStore.setItemAsync(WORKFORCE_DATA_KEY, JSON.stringify(data));
 }
 
-export async function getWorkforceData(): Promise<any | null> {
+export async function getWorkforceData(): Promise<WorkforceRecord | null> {
   const raw = await SecureStore.getItemAsync(WORKFORCE_DATA_KEY);
   if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
+  try {
+    return JSON.parse(raw) as WorkforceRecord;
+  } catch {
+    return null;
+  }
 }
 
 export class ApiError extends Error {
@@ -62,10 +97,10 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiRequest<T = any>(
+export async function apiRequest<T>(
   method: string,
   path: string,
-  body?: any,
+  body?: FormData | Record<string, unknown>,
   options?: { timeout?: number; formData?: boolean }
 ): Promise<T> {
   const url = `${await getBaseUrl()}${path}`;
@@ -79,10 +114,10 @@ export async function apiRequest<T = any>(
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    let fetchBody: any;
+    let fetchBody: BodyInit | undefined;
     if (options?.formData && body instanceof FormData) {
       fetchBody = body;
-    } else if (body) {
+    } else if (body && !(body instanceof FormData)) {
       headers['Content-Type'] = 'application/json';
       fetchBody = JSON.stringify(body);
     }
@@ -94,32 +129,42 @@ export async function apiRequest<T = any>(
       signal: controller.signal,
     });
 
+    if (response.status === 401) {
+      await clearSession();
+      logoutCallback?.();
+      throw new ApiError('Session expired. Please log in again.', 401);
+    }
+
     if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({ message: 'Request failed' }));
+      const errorBody: { message?: string } = await response.json().catch(() => ({ message: 'Request failed' }));
       throw new ApiError(errorBody.message || `HTTP ${response.status}`, response.status);
     }
 
     const text = await response.text();
-    return text ? JSON.parse(text) : ({} as T);
+    return text ? (JSON.parse(text) as T) : ({} as T);
   } finally {
     clearTimeout(timer);
   }
 }
 
-export async function login(identifier: string, password: string) {
-  const result = await apiRequest<{ user: any; candidate: any }>(
+export async function login(identifier: string, password: string): Promise<LoginResponse> {
+  const result = await apiRequest<LoginResponse>(
     'POST', '/api/auth/login', { identifier, password }
   );
 
-  await storeUserData(result);
+  if (result.token) {
+    await setSessionToken(result.token);
+  }
+
+  await storeUserData({ user: result.user, candidate: result.candidate });
 
   if (result.candidate) {
     try {
-      const workforceRecords = await apiRequest<any[]>(
+      const workforceRecords = await apiRequest<WorkforceRecord[]>(
         'GET', `/api/portal/workforce/${result.candidate.id}`
       );
       if (workforceRecords && workforceRecords.length > 0) {
-        const activeRecord = workforceRecords.find((r: any) => r.isActive);
+        const activeRecord = workforceRecords.find((r) => r.isActive);
         if (activeRecord) {
           await storeWorkforceData(activeRecord);
         }
@@ -139,7 +184,7 @@ export async function uploadAttendancePhoto(
   gpsLng: number,
   gpsAccuracy: number | null,
   clientTimestamp: string
-): Promise<any> {
+): Promise<UploadResult> {
   const formData = new FormData();
   formData.append('workforceId', workforceId);
   formData.append('gpsLat', String(gpsLat));
@@ -147,13 +192,14 @@ export async function uploadAttendancePhoto(
   if (gpsAccuracy !== null) formData.append('gpsAccuracy', String(gpsAccuracy));
   formData.append('clientTimestamp', clientTimestamp);
 
-  formData.append('photo', {
+  const photoPayload: FormDataPhoto = {
     uri: photoUri,
     name: `attendance_${Date.now()}.jpg`,
     type: 'image/jpeg',
-  } as any);
+  };
+  formData.append('photo', photoPayload as unknown as Blob);
 
-  return apiRequest(
+  return apiRequest<UploadResult>(
     'POST',
     '/api/attendance-mobile/submit',
     formData,
@@ -161,10 +207,18 @@ export async function uploadAttendancePhoto(
   );
 }
 
-export async function fetchGeofenceZones() {
-  return apiRequest<any[]>('GET', '/api/geofence-zones');
+export async function fetchGeofenceZones(): Promise<GeofenceZone[]> {
+  return apiRequest<GeofenceZone[]>('GET', '/api/geofence-zones');
 }
 
-export async function fetchShiftInfo(workforceId: string) {
-  return apiRequest<any>('GET', `/api/portal/schedule/${workforceId}`);
+export async function fetchShiftInfo(workforceId: string): Promise<ShiftInfo | null> {
+  try {
+    return await apiRequest<ShiftInfo>('GET', `/api/portal/schedule/${workforceId}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function requestDataDeletion(): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('POST', '/api/portal/data-deletion-request');
 }

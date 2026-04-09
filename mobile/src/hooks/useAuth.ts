@@ -1,11 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getUserData,
   getWorkforceData,
   clearSession,
   login as apiLogin,
+  setLogoutCallback,
+  getSessionToken,
 } from '../services/api';
-import type { User, Candidate, WorkforceRecord } from '../types';
+import { clearEncryptionKey } from '../services/encryption';
+import { purgeAllLocalData } from '../services/database';
+import type { User, Candidate, WorkforceRecord, LoginResponse } from '../types';
 
 interface AuthState {
   isLoading: boolean;
@@ -24,8 +28,36 @@ export function useAuth() {
     workforceRecord: null,
   });
 
+  const tokenCheckInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const forceLogout = useCallback(async () => {
+    setState({
+      isLoading: false,
+      isAuthenticated: false,
+      user: null,
+      candidate: null,
+      workforceRecord: null,
+    });
+  }, []);
+
+  useEffect(() => {
+    setLogoutCallback(forceLogout);
+  }, [forceLogout]);
+
   const loadSession = useCallback(async () => {
     try {
+      const token = await getSessionToken();
+      if (!token) {
+        setState({
+          isLoading: false,
+          isAuthenticated: false,
+          user: null,
+          candidate: null,
+          workforceRecord: null,
+        });
+        return;
+      }
+
       const userData = await getUserData();
       const wfData = await getWorkforceData();
 
@@ -38,6 +70,7 @@ export function useAuth() {
           workforceRecord: wfData,
         });
       } else {
+        await clearSession();
         setState({
           isLoading: false,
           isAuthenticated: false,
@@ -61,7 +94,24 @@ export function useAuth() {
     loadSession();
   }, [loadSession]);
 
-  const login = useCallback(async (identifier: string, password: string) => {
+  useEffect(() => {
+    if (state.isAuthenticated) {
+      tokenCheckInterval.current = setInterval(async () => {
+        const token = await getSessionToken();
+        if (!token) {
+          forceLogout();
+        }
+      }, 60000);
+    }
+    return () => {
+      if (tokenCheckInterval.current) {
+        clearInterval(tokenCheckInterval.current);
+        tokenCheckInterval.current = null;
+      }
+    };
+  }, [state.isAuthenticated, forceLogout]);
+
+  const login = useCallback(async (identifier: string, password: string): Promise<LoginResponse> => {
     const result = await apiLogin(identifier, password);
     const wfData = await getWorkforceData();
     setState({
@@ -85,5 +135,18 @@ export function useAuth() {
     });
   }, []);
 
-  return { ...state, login, logout, refresh: loadSession };
+  const deleteAllData = useCallback(async () => {
+    await purgeAllLocalData();
+    await clearEncryptionKey();
+    await clearSession();
+    setState({
+      isLoading: false,
+      isAuthenticated: false,
+      user: null,
+      candidate: null,
+      workforceRecord: null,
+    });
+  }, []);
+
+  return { ...state, login, logout, refresh: loadSession, deleteAllData };
 }

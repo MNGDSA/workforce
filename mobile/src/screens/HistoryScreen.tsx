@@ -24,7 +24,7 @@ interface Props {
 export default function HistoryScreen({ workforceId, onBack }: Props) {
   const [submissions, setSubmissions] = useState<AttendanceSubmission[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<AttendanceSubmission | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     const data = await getAllSubmissions(workforceId, 100);
@@ -37,77 +37,80 @@ export default function HistoryScreen({ workforceId, onBack }: Props) {
     return unsub;
   }, [loadData]);
 
-  const onRefresh = async () => {
+  const onRefresh = async (): Promise<void> => {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
   };
 
-  const renderItem = ({ item }: { item: AttendanceSubmission }) => (
-    <TouchableOpacity
-      style={styles.item}
-      onPress={() => setSelectedItem(selectedItem?.id === item.id ? null : item)}
-      testID={`history-item-${item.id}`}
-    >
-      <View style={styles.itemHeader}>
-        <View style={styles.itemLeft}>
-          <Text style={styles.itemDate}>
-            {format(new Date(item.timestamp), 'EEEE, MMM d, yyyy')}
-          </Text>
-          <Text style={styles.itemTime}>
-            {format(new Date(item.timestamp), 'h:mm:ss a')}
-          </Text>
-        </View>
-        <StatusBadge status={item.syncStatus as AttendanceStatus} size="sm" />
-      </View>
-
-      {selectedItem?.id === item.id && (
-        <View style={styles.itemDetails}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>GPS Location</Text>
-            <Text style={styles.detailValue}>
-              {item.gpsLat.toFixed(6)}, {item.gpsLng.toFixed(6)}
+  const renderItem = ({ item }: { item: AttendanceSubmission }) => {
+    const isExpanded = selectedItemId === item.id;
+    return (
+      <TouchableOpacity
+        style={styles.item}
+        onPress={() => setSelectedItemId(isExpanded ? null : item.id)}
+        testID={`history-item-${item.id}`}
+      >
+        <View style={styles.itemHeader}>
+          <View style={styles.itemLeft}>
+            <Text style={styles.itemDate}>
+              {format(new Date(item.timestamp), 'EEEE, MMM d, yyyy')}
+            </Text>
+            <Text style={styles.itemTime}>
+              {format(new Date(item.timestamp), 'h:mm:ss a')}
             </Text>
           </View>
-          {item.gpsAccuracy !== null && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Accuracy</Text>
-              <Text style={styles.detailValue}>±{Math.round(item.gpsAccuracy)}m</Text>
-            </View>
-          )}
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Sync Status</Text>
-            <Text style={styles.detailValue}>{item.syncStatus}</Text>
-          </View>
-          {item.serverId && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Server ID</Text>
-              <Text style={[styles.detailValue, styles.mono]}>{item.serverId}</Text>
-            </View>
-          )}
-          {item.flagReason && (
-            <View style={[styles.detailRow, styles.flagRow]}>
-              <Text style={styles.detailLabel}>Flag Reason</Text>
-              <Text style={[styles.detailValue, { color: colors.error }]}>{item.flagReason}</Text>
-            </View>
-          )}
-          {item.retryCount > 0 && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Retry Count</Text>
-              <Text style={styles.detailValue}>{item.retryCount}</Text>
-            </View>
-          )}
-          {item.photoPath && (
-            <Image
-              source={{ uri: item.photoPath }}
-              style={styles.thumbnail}
-              resizeMode="cover"
-            />
-          )}
+          <StatusBadge status={item.syncStatus as AttendanceStatus} size="sm" />
         </View>
-      )}
-    </TouchableOpacity>
-  );
+
+        {isExpanded && (
+          <View style={styles.itemDetails}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>GPS Location</Text>
+              <Text style={styles.detailValue}>
+                {item.gpsLat.toFixed(6)}, {item.gpsLng.toFixed(6)}
+              </Text>
+            </View>
+            {item.gpsAccuracy !== null && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Accuracy</Text>
+                <Text style={styles.detailValue}>{'\u00B1'}{Math.round(item.gpsAccuracy)}m</Text>
+              </View>
+            )}
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Sync Status</Text>
+              <Text style={styles.detailValue}>{item.syncStatus}</Text>
+            </View>
+            {item.serverId && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Server ID</Text>
+                <Text style={[styles.detailValue, styles.mono]}>{item.serverId}</Text>
+              </View>
+            )}
+            {item.flagReason && (
+              <View style={[styles.detailRow, styles.flagRow]}>
+                <Text style={styles.detailLabel}>Flag Reason</Text>
+                <Text style={[styles.detailValue, { color: colors.error }]}>{item.flagReason}</Text>
+              </View>
+            )}
+            {item.retryCount > 0 && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Retry Count</Text>
+                <Text style={styles.detailValue}>{item.retryCount}</Text>
+              </View>
+            )}
+            {item.photoPath && (
+              <Image
+                source={{ uri: item.photoPath }}
+                style={styles.thumbnail}
+                resizeMode="cover"
+              />
+            )}
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -116,7 +119,7 @@ export default function HistoryScreen({ workforceId, onBack }: Props) {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Attendance History</Text>
-        <Text style={styles.count}>{submissions.length} records</Text>
+        <Text style={styles.count} testID="text-history-count">{submissions.length} records</Text>
       </View>
 
       <FlatList

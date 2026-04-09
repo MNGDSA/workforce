@@ -13,7 +13,8 @@ import { colors, fonts, spacing, borderRadius } from '../theme';
 import StatusBadge from '../components/StatusBadge';
 import { getTodaySubmission, getPendingCount, getAllSubmissions } from '../services/database';
 import { syncPendingSubmissions, addSyncListener, isOnline } from '../services/sync';
-import type { User, WorkforceRecord, AttendanceSubmission, AttendanceStatus } from '../types';
+import { fetchShiftInfo } from '../services/api';
+import type { User, WorkforceRecord, AttendanceSubmission, AttendanceStatus, ShiftInfo } from '../types';
 import { format } from 'date-fns';
 
 interface Props {
@@ -34,6 +35,7 @@ export default function HomeScreen({
   const [recentSubmissions, setRecentSubmissions] = useState<AttendanceSubmission[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [online, setOnline] = useState(false);
+  const [shiftInfo, setShiftInfo] = useState<ShiftInfo | null>(null);
 
   const loadData = useCallback(async () => {
     if (workforceRecord?.id) {
@@ -45,6 +47,9 @@ export default function HomeScreen({
       setTodaySubmission(today);
       setPendingCount(pending);
       setRecentSubmissions(recent);
+
+      const shift = await fetchShiftInfo(workforceRecord.id);
+      if (shift) setShiftInfo(shift);
     }
     setOnline(await isOnline());
   }, [workforceRecord?.id]);
@@ -63,7 +68,7 @@ export default function HomeScreen({
   }, [loadData]);
 
   const todayStatus: AttendanceStatus = todaySubmission
-    ? todaySubmission.syncStatus as AttendanceStatus
+    ? (todaySubmission.syncStatus as AttendanceStatus)
     : 'not_marked';
 
   const displayName = user.fullName || user.username || 'Worker';
@@ -106,23 +111,42 @@ export default function HomeScreen({
           </View>
           <View style={styles.greetingText}>
             <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.name}>{displayName}</Text>
+            <Text style={styles.name} testID="text-user-name">{displayName}</Text>
             {workforceRecord && (
-              <Text style={styles.empNumber}>EMP #{workforceRecord.employeeNumber}</Text>
+              <Text style={styles.empNumber} testID="text-emp-number">EMP #{workforceRecord.employeeNumber}</Text>
             )}
           </View>
         </View>
 
         <View style={styles.dateCard}>
           <Ionicons name="calendar-outline" size={18} color={colors.primary} />
-          <Text style={styles.dateText}>{today}</Text>
+          <Text style={styles.dateText} testID="text-today-date">{today}</Text>
         </View>
+
+        {shiftInfo && (
+          <View style={styles.shiftCard}>
+            <View style={styles.shiftHeader}>
+              <Ionicons name="briefcase-outline" size={16} color={colors.primary} />
+              <Text style={styles.shiftLabel}>Today's Shift</Text>
+            </View>
+            <Text style={styles.shiftName} testID="text-shift-name">{shiftInfo.shiftName}</Text>
+            <View style={styles.shiftTimeRow}>
+              <Ionicons name="time-outline" size={14} color={colors.textMuted} />
+              <Text style={styles.shiftTime} testID="text-shift-time">
+                {shiftInfo.startTime} - {shiftInfo.endTime}
+              </Text>
+            </View>
+            {shiftInfo.templateName && (
+              <Text style={styles.shiftTemplate}>Schedule: {shiftInfo.templateName}</Text>
+            )}
+          </View>
+        )}
 
         <View style={styles.statusCard}>
           <Text style={styles.statusLabel}>Today's Attendance</Text>
           <StatusBadge status={todayStatus} size="lg" />
           {todaySubmission && (
-            <Text style={styles.statusTime}>
+            <Text style={styles.statusTime} testID="text-checkin-time">
               Marked at {format(new Date(todaySubmission.timestamp), 'h:mm a')}
             </Text>
           )}
@@ -132,11 +156,14 @@ export default function HomeScreen({
           <View style={styles.syncBanner}>
             <Ionicons name="cloud-upload-outline" size={20} color={colors.warning} />
             <View style={styles.syncBannerText}>
-              <Text style={styles.syncTitle}>{pendingCount} pending submission{pendingCount !== 1 ? 's' : ''}</Text>
+              <Text style={styles.syncTitle} testID="text-pending-count">
+                {pendingCount} pending submission{pendingCount !== 1 ? 's' : ''}
+              </Text>
               <Text style={styles.syncSubtext}>Will auto-sync when online</Text>
             </View>
             <TouchableOpacity
               style={styles.syncNowButton}
+              testID="button-sync-now"
               onPress={async () => {
                 const result = await syncPendingSubmissions();
                 if (result.synced > 0) {
@@ -161,7 +188,9 @@ export default function HomeScreen({
         {todaySubmission && workforceRecord && (
           <View style={styles.alreadyCheckedIn}>
             <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-            <Text style={styles.alreadyCheckedInText}>Attendance marked for today</Text>
+            <Text style={styles.alreadyCheckedInText} testID="text-already-checked-in">
+              Attendance marked for today
+            </Text>
           </View>
         )}
 
@@ -180,7 +209,7 @@ export default function HomeScreen({
           <View style={styles.recentSection}>
             <Text style={styles.sectionTitle}>Recent Submissions</Text>
             {recentSubmissions.slice(0, 3).map(sub => (
-              <View key={sub.id} style={styles.recentItem}>
+              <View key={sub.id} style={styles.recentItem} testID={`history-recent-${sub.id}`}>
                 <View style={styles.recentLeft}>
                   <Text style={styles.recentDate}>{format(new Date(sub.timestamp), 'MMM d, yyyy')}</Text>
                   <Text style={styles.recentTime}>{format(new Date(sub.timestamp), 'h:mm a')}</Text>
@@ -191,7 +220,7 @@ export default function HomeScreen({
           </View>
         )}
 
-        <TouchableOpacity style={styles.privacyLink} onPress={onPrivacyPolicy}>
+        <TouchableOpacity style={styles.privacyLink} onPress={onPrivacyPolicy} testID="button-privacy">
           <Ionicons name="shield-outline" size={14} color={colors.textMuted} />
           <Text style={styles.privacyLinkText}>Privacy Policy & Data Rights</Text>
         </TouchableOpacity>
@@ -246,6 +275,17 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.cardBorder,
   },
   dateText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.textSecondary },
+  shiftCard: {
+    backgroundColor: colors.card, padding: spacing.lg,
+    borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.cardBorder,
+    gap: spacing.xs,
+  },
+  shiftHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
+  shiftLabel: { fontFamily: fonts.bodySemiBold, fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1 },
+  shiftName: { fontFamily: fonts.heading, fontSize: 16, color: colors.text },
+  shiftTimeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  shiftTime: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.primary },
+  shiftTemplate: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
   statusCard: {
     backgroundColor: colors.card, padding: spacing.xl,
     borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.cardBorder,
