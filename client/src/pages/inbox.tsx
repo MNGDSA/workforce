@@ -35,8 +35,12 @@ import {
   ChevronUp,
   ArrowUpRight,
   Filter,
-  History,
   Clock,
+  ListFilter,
+  ArrowDownUp,
+  RefreshCw,
+  Clipboard,
+  Eye,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -60,6 +64,7 @@ type InboxItem = {
 
 const TYPE_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   document_review: { label: "Document Review", icon: FileText, color: "text-blue-400" },
+  document_reupload: { label: "Document Reupload", icon: RefreshCw, color: "text-blue-300" },
   application_review: { label: "Application Review", icon: ClipboardList, color: "text-indigo-400" },
   onboarding_action: { label: "Onboarding", icon: UserCheck, color: "text-emerald-400" },
   contract_action: { label: "Contract", icon: FileText, color: "text-amber-400" },
@@ -68,6 +73,8 @@ const TYPE_META: Record<string, { label: string; icon: React.ElementType; color:
   asset_return: { label: "Asset Return", icon: Package, color: "text-cyan-400" },
   candidate_flag: { label: "Candidate Flag", icon: Flag, color: "text-red-400" },
   event_alert: { label: "Event Alert", icon: Calendar, color: "text-violet-400" },
+  attendance_verification: { label: "Attendance", icon: Eye, color: "text-teal-400" },
+  general_request: { label: "General Request", icon: Clipboard, color: "text-slate-300" },
   system: { label: "System", icon: Monitor, color: "text-gray-400" },
 };
 
@@ -83,6 +90,15 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
   resolved: { label: "Resolved", color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
   dismissed: { label: "Dismissed", color: "bg-muted text-muted-foreground border-border" },
 };
+
+type TabValue = "all" | "pending" | "resolved" | "dismissed";
+
+const TABS: { value: TabValue; label: string; icon: React.ElementType }[] = [
+  { value: "all", label: "All", icon: ListFilter },
+  { value: "pending", label: "Pending", icon: Clock },
+  { value: "resolved", label: "Resolved", icon: CheckCircle2 },
+  { value: "dismissed", label: "Dismissed", icon: XCircle },
+];
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -105,30 +121,29 @@ export default function InboxPage() {
   const qc = useQueryClient();
   const [, setLocation] = useLocation();
   const [page, setPage] = useState(1);
-  const [tab, setTab] = useState<"pending" | "history">("pending");
+  const [tab, setTab] = useState<TabValue>("pending");
   const [typeFilter, setTypeFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("createdAt");
+  const [sortOrder, setSortOrder] = useState("desc");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [actionNotes, setActionNotes] = useState("");
   const limit = 20;
 
-  const statusFilter = tab === "pending" ? "pending" : undefined;
-
   const queryParams = new URLSearchParams();
   queryParams.set("page", String(page));
   queryParams.set("limit", String(limit));
-  if (statusFilter) queryParams.set("status", statusFilter);
-  if (tab === "history") {
-    queryParams.set("page", String(page));
-  }
+  if (tab !== "all") queryParams.set("status", tab);
   if (typeFilter !== "all") queryParams.set("type", typeFilter);
   if (priorityFilter !== "all") queryParams.set("priority", priorityFilter);
   if (search.trim()) queryParams.set("search", search.trim());
+  queryParams.set("sortBy", sortBy);
+  queryParams.set("sortOrder", sortOrder);
 
   const { data, isLoading } = useQuery<{ data: InboxItem[]; total: number }>({
-    queryKey: ["/api/inbox", page, tab, typeFilter, priorityFilter, search],
+    queryKey: ["/api/inbox", page, tab, typeFilter, priorityFilter, search, sortBy, sortOrder],
     queryFn: () => apiRequest("GET", `/api/inbox?${queryParams.toString()}`).then(r => r.json()),
   });
 
@@ -170,7 +185,7 @@ export default function InboxPage() {
   const items = data?.data ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / limit);
-  const openCount = countData?.count ?? 0;
+  const pendingCount = countData?.count ?? 0;
 
   const pendingItems = items.filter(i => i.status === "pending");
 
@@ -188,13 +203,15 @@ export default function InboxPage() {
     else setSelected(new Set(pendingItems.map(i => i.id)));
   };
 
-  const switchTab = (newTab: "pending" | "history") => {
+  const switchTab = (newTab: TabValue) => {
     setTab(newTab);
     setPage(1);
     setSelected(new Set());
     setExpandedId(null);
     setActionNotes("");
   };
+
+  const hasPendingInView = pendingItems.length > 0;
 
   return (
     <DashboardLayout>
@@ -206,43 +223,37 @@ export default function InboxPage() {
               Centralized action queue for HR tasks requiring attention
             </p>
           </div>
-          {openCount > 0 && (
+          {pendingCount > 0 && (
             <Badge variant="destructive" className="text-sm px-3 py-1" data-testid="badge-inbox-open-count">
-              {openCount} pending
+              {pendingCount} pending
             </Badge>
           )}
         </div>
 
         <div className="flex items-center gap-1 border-b border-border">
-          <button
-            data-testid="tab-pending"
-            onClick={() => switchTab("pending")}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              tab === "pending"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Clock className="h-4 w-4" />
-            Pending
-            {openCount > 0 && (
-              <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-white">
-                {openCount}
-              </span>
-            )}
-          </button>
-          <button
-            data-testid="tab-history"
-            onClick={() => switchTab("history")}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              tab === "history"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <History className="h-4 w-4" />
-            History
-          </button>
+          {TABS.map(t => {
+            const TabIcon = t.icon;
+            return (
+              <button
+                key={t.value}
+                data-testid={`tab-${t.value}`}
+                onClick={() => switchTab(t.value)}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  tab === t.value
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <TabIcon className="h-4 w-4" />
+                {t.label}
+                {t.value === "pending" && pendingCount > 0 && (
+                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-white">
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -283,10 +294,29 @@ export default function InboxPage() {
                 <SelectItem value="low">Low</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={`${sortBy}-${sortOrder}`} onValueChange={v => {
+              const [sb, so] = v.split("-");
+              setSortBy(sb);
+              setSortOrder(so);
+              setPage(1);
+            }}>
+              <SelectTrigger className="h-9 w-[150px] rounded-sm text-xs" data-testid="select-inbox-sort">
+                <ArrowDownUp className="h-3 w-3 mr-1 text-muted-foreground" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="createdAt-desc">Newest first</SelectItem>
+                <SelectItem value="createdAt-asc">Oldest first</SelectItem>
+                <SelectItem value="priority-desc">Priority (high→low)</SelectItem>
+                <SelectItem value="priority-asc">Priority (low→high)</SelectItem>
+                <SelectItem value="type-asc">Type (A→Z)</SelectItem>
+                <SelectItem value="type-desc">Type (Z→A)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
-        {selected.size > 0 && tab === "pending" && (
+        {selected.size > 0 && hasPendingInView && (
           <div className="flex items-center gap-3 px-4 py-2 bg-muted/50 border border-border rounded-sm">
             <span className="text-sm text-muted-foreground">{selected.size} selected</span>
             <Button
@@ -320,15 +350,15 @@ export default function InboxPage() {
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <InboxIcon className="h-12 w-12 text-muted-foreground/30 mb-4" />
             <h3 className="text-lg font-semibold text-foreground" data-testid="text-inbox-empty">
-              {tab === "pending" ? "All clear" : "No history yet"}
+              {tab === "pending" ? "All clear" : tab === "all" ? "No items" : `No ${tab} items`}
             </h3>
             <p className="text-sm text-muted-foreground mt-1">
-              {tab === "pending" ? "No pending items require your attention." : "Resolved and dismissed items will appear here."}
+              {tab === "pending" ? "No pending items require your attention." : "No inbox items match your current filters."}
             </p>
           </div>
         ) : (
           <div className="space-y-2">
-            {tab === "pending" && (
+            {hasPendingInView && (
               <div className="flex items-center gap-3 px-4 py-1">
                 <Checkbox
                   checked={selected.size === pendingItems.length && pendingItems.length > 0}
@@ -358,9 +388,10 @@ export default function InboxPage() {
                   <div
                     className="flex items-start gap-3 p-4 cursor-pointer hover:bg-muted/30 transition-colors"
                     onClick={() => { setExpandedId(isExpanded ? null : item.id); setActionNotes(""); }}
+                    data-testid={`row-inbox-${item.id}`}
                   >
                     <div className="flex items-center gap-3 pt-0.5">
-                      {isPending && tab === "pending" && (
+                      {isPending && (
                         <Checkbox
                           checked={selected.has(item.id)}
                           onCheckedChange={() => toggleSelect(item.id)}
@@ -404,7 +435,7 @@ export default function InboxPage() {
                   </div>
 
                   {isExpanded && (
-                    <div className="border-t border-border px-4 py-4 bg-muted/10 space-y-4">
+                    <div className="border-t border-border px-4 py-4 bg-muted/10 space-y-4" data-testid={`detail-inbox-${item.id}`}>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                         <div>
                           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Type</span>
@@ -412,12 +443,12 @@ export default function InboxPage() {
                         </div>
                         <div>
                           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Priority</span>
-                          <p className="mt-1">
+                          <div className="mt-1">
                             <Badge variant="outline" className={`text-xs ${priorityMeta.color}`}>
                               <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1 ${priorityMeta.dotColor}`} />
                               {priorityMeta.label}
                             </Badge>
-                          </p>
+                          </div>
                         </div>
                         <div>
                           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Created</span>

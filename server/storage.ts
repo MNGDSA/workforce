@@ -379,7 +379,7 @@ export interface IStorage {
   getUnreturnedAssetsForWorker(workforceId: string): Promise<Array<EmployeeAsset & { asset: Asset }>>;
 
   // Inbox Items
-  getInboxItems(params?: { status?: string; type?: string; priority?: string; page?: number; limit?: number; search?: string }): Promise<{ data: InboxItem[]; total: number }>;
+  getInboxItems(params?: { status?: string; type?: string; priority?: string; page?: number; limit?: number; search?: string; sortBy?: string; sortOrder?: string }): Promise<{ data: InboxItem[]; total: number }>;
   getInboxItem(id: string): Promise<InboxItem | undefined>;
   createInboxItem(data: InsertInboxItem): Promise<InboxItem>;
   resolveInboxItem(id: string, resolvedBy: string, resolutionNotes?: string): Promise<InboxItem | undefined>;
@@ -2747,7 +2747,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ─── Inbox Items ────────────────────────────────────────────────────────────
-  async getInboxItems(params?: { status?: string; type?: string; priority?: string; page?: number; limit?: number; search?: string }): Promise<{ data: InboxItem[]; total: number }> {
+  async getInboxItems(params?: { status?: string; type?: string; priority?: string; page?: number; limit?: number; search?: string; sortBy?: string; sortOrder?: string }): Promise<{ data: InboxItem[]; total: number }> {
     const page = params?.page ?? 1;
     const limit = params?.limit ?? 50;
     const offset = (page - 1) * limit;
@@ -2763,8 +2763,12 @@ export class DatabaseStorage implements IStorage {
       )!);
     }
     const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const orderFn = params?.sortOrder === "asc" ? asc : desc;
+    const orderCol = params?.sortBy === "priority" ? inboxItems.priority
+      : params?.sortBy === "type" ? inboxItems.type
+      : inboxItems.createdAt;
     const [data, [{ cnt }]] = await Promise.all([
-      db.select().from(inboxItems).where(where).orderBy(desc(inboxItems.createdAt)).limit(limit).offset(offset),
+      db.select().from(inboxItems).where(where).orderBy(orderFn(orderCol)).limit(limit).offset(offset),
       db.select({ cnt: count() }).from(inboxItems).where(where),
     ]);
     return { data, total: Number(cnt) };

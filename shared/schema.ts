@@ -1143,6 +1143,7 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 // ─── Inbox Items ─────────────────────────────────────────────────────────────
 export const inboxItemTypeEnum = pgEnum("inbox_item_type", [
   "document_review",
+  "document_reupload",
   "application_review",
   "onboarding_action",
   "contract_action",
@@ -1151,6 +1152,8 @@ export const inboxItemTypeEnum = pgEnum("inbox_item_type", [
   "asset_return",
   "candidate_flag",
   "event_alert",
+  "attendance_verification",
+  "general_request",
   "system",
 ]);
 

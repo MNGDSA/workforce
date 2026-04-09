@@ -3580,9 +3580,11 @@ export async function registerRoutes(
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(200).default(50),
     status: z.enum(["pending", "resolved", "dismissed"]).optional(),
-    type: z.enum(["document_review", "application_review", "onboarding_action", "contract_action", "offboarding_action", "schedule_conflict", "asset_return", "candidate_flag", "event_alert", "system"]).optional(),
+    type: z.enum(["document_review", "document_reupload", "application_review", "onboarding_action", "contract_action", "offboarding_action", "schedule_conflict", "asset_return", "candidate_flag", "event_alert", "attendance_verification", "general_request", "system"]).optional(),
     priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
     search: z.string().optional(),
+    sortBy: z.enum(["createdAt", "priority", "type"]).default("createdAt"),
+    sortOrder: z.enum(["asc", "desc"]).default("desc"),
   });
 
   app.get("/api/inbox", async (req: Request, res: Response) => {
