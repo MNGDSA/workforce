@@ -964,7 +964,7 @@ export class DatabaseStorage implements IStorage {
         .where(inArray(candidates.id, interview.invitedCandidateIds));
 
       // Look up the best application for each candidate (prefer most-progressed status)
-      const statusPriority: Record<string, number> = { hired: 6, shortlisted: 5, interviewed: 4, offered: 3, reviewing: 2, new: 1, rejected: 0, withdrawn: 0 };
+      const statusPriority: Record<string, number> = { hired: 6, offered: 5, interviewed: 4, shortlisted: 3, reviewing: 2, new: 1, rejected: 0, withdrawn: 0 };
       const appRows = await db.select({
         id: applications.id,
         candidateId: applications.candidateId,

@@ -426,7 +426,7 @@ function initials(name: string) {
   return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
 
-const VALID_STATUSES = ["new", "shortlisted", "interviewed", "hired", "rejected"] as const;
+const VALID_STATUSES = ["new", "shortlisted", "interviewed", "offered", "hired", "rejected"] as const;
 const BULK_FIXED_COLS = ["__app_id", "Candidate Name", "National ID", "Email", "Phone", "Current Status", "New Status"];
 
 function exportToExcel(
@@ -700,7 +700,7 @@ function ApplicantsSheet({
             </div>
             <div className="flex items-center gap-1 flex-wrap">
               <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              {["all", "new", "shortlisted", "interviewed", "hired", "rejected"].map(s => (
+              {["all", "new", "shortlisted", "interviewed", "offered", "hired", "rejected"].map(s => (
                 <button
                   key={s}
                   onClick={() => setAppStatusFilter(s)}

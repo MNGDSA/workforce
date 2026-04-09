@@ -1540,7 +1540,7 @@ export async function registerRoutes(
       const { updates } = z.object({
         updates: z.array(z.object({
           id: z.string(),
-          status: z.enum(["new", "shortlisted", "interviewed", "hired", "rejected"]),
+          status: z.enum(["new", "shortlisted", "interviewed", "offered", "hired", "rejected"]),
         })).min(1),
       }).parse(req.body);
 
@@ -2647,6 +2647,16 @@ export async function registerRoutes(
             contractSignedAt: new Date(),
             status: newStatus,
           });
+
+          // Cascade: contract signed → application status "offered"
+          // (signals candidate has committed; awaiting formal employee conversion)
+          if (ob.applicationId) {
+            const linkedApp = await storage.getApplication(ob.applicationId);
+            if (linkedApp && !["offered", "hired", "rejected"].includes(linkedApp.status)) {
+              await storage.updateApplication(ob.applicationId, { status: "offered" });
+              console.log(`[cascade] Contract ${contract.id} signed → application ${ob.applicationId} → offered`);
+            }
+          }
         }
       }
 

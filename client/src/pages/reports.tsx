@@ -20,6 +20,7 @@ import {
   Globe2,
   UserCheck,
   UserX,
+  FileText,
 } from "lucide-react";
 
 type DashboardStats = {
@@ -163,6 +164,7 @@ export default function ReportsPage() {
     new:          apps.filter((a) => a.status === "new").length,
     shortlisted:  apps.filter((a) => a.status === "shortlisted").length,
     interviewed:  apps.filter((a) => a.status === "interviewed").length,
+    offered:      apps.filter((a) => a.status === "offered").length,
     hired:        apps.filter((a) => a.status === "hired").length,
     rejected:     apps.filter((a) => a.status === "rejected").length,
   };
@@ -199,6 +201,7 @@ export default function ReportsPage() {
       ["Pipeline", "New Applications", String(appsByStatus.new)],
       ["Pipeline", "Shortlisted", String(appsByStatus.shortlisted)],
       ["Pipeline", "Interviewed", String(appsByStatus.interviewed)],
+      ["Pipeline", "Offered", String(appsByStatus.offered)],
       ["Pipeline", "Hired", String(appsByStatus.hired)],
       ["Pipeline", "Rejected", String(appsByStatus.rejected)],
       ["Interviews", "Total", String(interviewStats?.total ?? 0)],
@@ -237,6 +240,7 @@ export default function ReportsPage() {
       ["New",         appsByStatus.new,         totalApps > 0 ? +(appsByStatus.new / totalApps * 100).toFixed(1) : 0],
       ["Shortlisted", appsByStatus.shortlisted, totalApps > 0 ? +(appsByStatus.shortlisted / totalApps * 100).toFixed(1) : 0],
       ["Interviewed", appsByStatus.interviewed, totalApps > 0 ? +(appsByStatus.interviewed / totalApps * 100).toFixed(1) : 0],
+      ["Offered",     appsByStatus.offered,     totalApps > 0 ? +(appsByStatus.offered / totalApps * 100).toFixed(1) : 0],
       ["Hired",       appsByStatus.hired,       totalApps > 0 ? +(appsByStatus.hired / totalApps * 100).toFixed(1) : 0],
       ["Rejected",    appsByStatus.rejected,    totalApps > 0 ? +(appsByStatus.rejected / totalApps * 100).toFixed(1) : 0],
       ["Total",       totalApps,                100],
@@ -344,6 +348,7 @@ export default function ReportsPage() {
               <FunnelBar label="New"         count={appsByStatus.new}         total={totalApps} color="bg-blue-500"    badgeColor="bg-blue-500/20 text-blue-400 border-blue-500/30" />
               <FunnelBar label="Shortlisted" count={appsByStatus.shortlisted}  total={totalApps} color="bg-amber-500"   badgeColor="bg-amber-500/20 text-amber-400 border-amber-500/30" />
               <FunnelBar label="Interviewed" count={appsByStatus.interviewed}  total={totalApps} color="bg-purple-500"  badgeColor="bg-purple-500/20 text-purple-400 border-purple-500/30" />
+              <FunnelBar label="Offered"     count={appsByStatus.offered}      total={totalApps} color="bg-cyan-500"    badgeColor="bg-cyan-500/20 text-cyan-400 border-cyan-500/30" />
               <FunnelBar label="Hired"       count={appsByStatus.hired}        total={totalApps} color="bg-emerald-500" badgeColor="bg-emerald-500/20 text-emerald-400 border-emerald-500/30" />
               <FunnelBar label="Rejected"    count={appsByStatus.rejected}     total={totalApps} color="bg-red-500"     badgeColor="bg-red-500/20 text-red-400 border-red-500/30" />
               {totalApps === 0 && (
@@ -486,11 +491,12 @@ export default function ReportsPage() {
             <CardDescription>End-to-end funnel conversion from application to hire</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
               {[
                 { label: "Applied",    count: totalApps,                 Icon: Users,        color: "text-blue-400",    border: "border-blue-500/30" },
                 { label: "Shortlisted",count: appsByStatus.shortlisted,  Icon: Star,         color: "text-amber-400",   border: "border-amber-500/30" },
                 { label: "Interviewed",count: appsByStatus.interviewed,  Icon: CalendarCheck2, color: "text-purple-400", border: "border-purple-500/30" },
+                { label: "Offered",    count: appsByStatus.offered,      Icon: FileText,     color: "text-cyan-400",    border: "border-cyan-500/30" },
                 { label: "Hired",      count: appsByStatus.hired,        Icon: UserCheck,    color: "text-emerald-400", border: "border-emerald-500/30" },
                 { label: "Rejected",   count: appsByStatus.rejected,     Icon: UserX,        color: "text-red-400",     border: "border-red-500/30" },
               ].map(({ label, count, Icon, color, border }) => (

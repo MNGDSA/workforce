@@ -109,7 +109,7 @@ function salaryLabel(job: JobPosting) {
   return null;
 }
 
-const VALID_STATUSES = ["new", "shortlisted", "interviewed", "hired", "rejected"] as const;
+const VALID_STATUSES = ["new", "shortlisted", "interviewed", "offered", "hired", "rejected"] as const;
 const BULK_FIXED_COLS = ["__app_id", "Candidate Name", "National ID", "Email", "Phone", "Current Status", "New Status"];
 
 function exportToExcel(

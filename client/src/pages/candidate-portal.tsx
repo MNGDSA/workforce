@@ -291,6 +291,8 @@ function getApplicationBadge(deadline: string | undefined, status: string) {
   switch (status) {
     case "hired":
       return { label: "Hired", className: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 border" };
+    case "offered":
+      return { label: "Offer Extended", className: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30 border" };
     case "shortlisted":
       return { label: "Shortlisted", className: "bg-blue-500/15 text-blue-400 border-blue-500/30 border" };
     case "interviewed":
