@@ -2878,7 +2878,11 @@ export class DatabaseStorage implements IStorage {
   async getAttendanceSubmissions(filters?: { workforceId?: string; status?: string; page?: number; limit?: number }): Promise<{ data: AttendanceSubmission[]; total: number }> {
     const conditions = [];
     if (filters?.workforceId) conditions.push(eq(attendanceSubmissions.workforceId, filters.workforceId));
-    if (filters?.status) conditions.push(eq(attendanceSubmissions.status, filters.status as any));
+    if (filters?.status) {
+      const validStatuses = ["pending", "verified", "flagged", "rejected"] as const;
+      const s = filters.status as typeof validStatuses[number];
+      if (validStatuses.includes(s)) conditions.push(eq(attendanceSubmissions.status, s));
+    }
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     const page = filters?.page ?? 1;

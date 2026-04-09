@@ -18,7 +18,7 @@ export async function compareFaces(
 
   if (!accessKey || !secretKey) {
     console.warn("[Rekognition] AWS credentials not configured — using stub mode (random confidence 70-99%)");
-    const stubConfidence = Math.round(70 + Math.random() * 29 * 100) / 100;
+    const stubConfidence = Math.round((70 + Math.random() * 29) * 100) / 100;
     return {
       confidence: stubConfidence,
       matched: stubConfidence >= 95,

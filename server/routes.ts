@@ -3695,7 +3695,7 @@ export async function registerRoutes(
         centerLat: z.string().optional(),
         centerLng: z.string().optional(),
         radiusMeters: z.coerce.number().int().min(1).optional(),
-        polygon: z.any().optional(),
+        polygon: z.array(z.object({ lat: z.number(), lng: z.number() })).nullable().optional(),
         isActive: z.boolean().optional(),
       });
       const data = updateSchema.parse(req.body);
@@ -3727,6 +3727,7 @@ export async function registerRoutes(
         gpsLat: z.coerce.number().min(-90).max(90),
         gpsLng: z.coerce.number().min(-180).max(180),
         gpsAccuracy: z.coerce.number().optional(),
+        clientTimestamp: z.string().datetime().optional(),
       });
 
       const parsed = schema.parse(req.body);
@@ -3738,6 +3739,7 @@ export async function registerRoutes(
         gpsLat: String(parsed.gpsLat),
         gpsLng: String(parsed.gpsLng),
         gpsAccuracy: parsed.gpsAccuracy ? String(parsed.gpsAccuracy) : null,
+        submittedAt: parsed.clientTimestamp ? new Date(parsed.clientTimestamp) : new Date(),
         status: "pending",
       });
 

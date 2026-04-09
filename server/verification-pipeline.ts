@@ -111,8 +111,8 @@ export async function runVerificationPipeline(submissionId: string): Promise<{
   const status = isVerified ? "verified" : "flagged";
   const flagReason = flagReasons.length > 0 ? flagReasons.join("; ") : undefined;
 
-  const updateData: Record<string, any> = {
-    status,
+  const updateData: Partial<typeof attendanceSubmissions.$inferInsert> & { verifiedAt?: Date } = {
+    status: status as "verified" | "flagged",
     rekognitionConfidence: String(confidence),
     gpsInsideGeofence: gpsInside,
     matchedGeofenceId: gpsResult?.zone.id ?? null,
@@ -239,6 +239,17 @@ export async function approveSubmission(
       linkedAttendanceRecordId: linkedRecordId,
     })
     .where(eq(attendanceSubmissions.id, submissionId));
+
+  await db
+    .update(inboxItems)
+    .set({ status: "resolved", resolvedBy: reviewedBy, resolvedAt: new Date() })
+    .where(
+      and(
+        eq(inboxItems.entityType, "attendance_submission"),
+        eq(inboxItems.entityId, submissionId),
+        eq(inboxItems.status, "pending")
+      )
+    );
 }
 
 export async function rejectSubmission(
@@ -263,4 +274,15 @@ export async function rejectSubmission(
       reviewNotes: notes ?? null,
     })
     .where(eq(attendanceSubmissions.id, submissionId));
+
+  await db
+    .update(inboxItems)
+    .set({ status: "dismissed", resolvedBy: reviewedBy, resolvedAt: new Date() })
+    .where(
+      and(
+        eq(inboxItems.entityType, "attendance_submission"),
+        eq(inboxItems.entityId, submissionId),
+        eq(inboxItems.status, "pending")
+      )
+    );
 }
