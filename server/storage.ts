@@ -87,7 +87,14 @@ import {
   type AuditLog,
   type InsertAuditLog,
 } from "@shared/schema";
-import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte } from "drizzle-orm";
+
+function computeCandidateStatusFromLogin(lastLoginAt: Date | null): "active" | "inactive" {
+  if (!lastLoginAt) return "inactive";
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+  return lastLoginAt >= oneYearAgo ? "active" : "inactive";
+}
 
 export interface IStorage {
   // Global Search
@@ -139,6 +146,7 @@ export interface IStorage {
   unarchiveEvent(id: string): Promise<Event | undefined>;
   autoCloseExpiredEvents(): Promise<{ count: number; names: string[] }>;
   autoActivateUpcomingEvents(): Promise<{ count: number; names: string[] }>;
+  ageOutInactiveCandidates(): Promise<number>;
   countJobPostingsByEvent(eventId: string): Promise<number>;
 
   // Job Postings
@@ -425,7 +433,7 @@ export class DatabaseStorage implements IStorage {
     page: number;
     limit: number;
   }> {
-    const { page, limit, search, status, city, nationality, gender, sortBy, sortOrder, dormant } = query;
+    const { page, limit, search, status, city, nationality, gender, sortBy, sortOrder } = query;
     const offset = (page - 1) * limit;
 
     const conditions = [];
@@ -445,21 +453,6 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (status) conditions.push(eq(candidates.status, status as any));
-    if (dormant === "true") {
-      const oneYearAgo = new Date();
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-      conditions.push(
-        not(inArray(candidates.status, ["blocked", "hired"])),
-        or(
-          and(isNotNull(candidates.lastLoginAt), lt(candidates.lastLoginAt, oneYearAgo)),
-          and(isNull(candidates.lastLoginAt), lt(candidates.createdAt, oneYearAgo)),
-        )
-      );
-    }
-    if ((query as any).inactive === "true") {
-      conditions.push(eq(candidates.profileCompleted, false));
-      conditions.push(not(inArray(candidates.status, ["blocked", "hired"])));
-    }
     if (city) conditions.push(ilike(candidates.city, `%${city}%`));
     if (nationality) conditions.push(eq(candidates.nationality, nationality as any));
     if (gender) conditions.push(eq(candidates.gender, gender as any));
@@ -793,6 +786,22 @@ export class DatabaseStorage implements IStorage {
       ))
       .returning({ id: events.id, name: events.name });
     return { count: activated.length, names: activated.map(e => e.name) };
+  }
+
+  async ageOutInactiveCandidates(): Promise<number> {
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    const result = await db.update(candidates)
+      .set({ status: "inactive", updatedAt: new Date() })
+      .where(and(
+        eq(candidates.status, "active"),
+        or(
+          and(isNotNull(candidates.lastLoginAt), lt(candidates.lastLoginAt, oneYearAgo)),
+          isNull(candidates.lastLoginAt),
+        )
+      ))
+      .returning({ id: candidates.id });
+    return result.length;
   }
 
   async countJobPostingsByEvent(eventId: string): Promise<number> {
@@ -1237,7 +1246,9 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(workforce.candidateId, existing.candidateId), eq(workforce.isActive, true)))
       .limit(1);
     if (hasOtherActive.length === 0) {
-      await db.update(candidates).set({ status: "inactive", updatedAt: new Date() }).where(eq(candidates.id, existing.candidateId));
+      const [cand] = await db.select({ lastLoginAt: candidates.lastLoginAt }).from(candidates).where(eq(candidates.id, existing.candidateId));
+      const newStatus = computeCandidateStatusFromLogin(cand?.lastLoginAt);
+      await db.update(candidates).set({ status: newStatus, updatedAt: new Date() }).where(eq(candidates.id, existing.candidateId));
     }
 
     return updated;
@@ -2520,14 +2531,15 @@ export class DatabaseStorage implements IStorage {
       .where(eq(workforce.id, workforceId))
       .returning();
 
-    // Release back to talent pool: remove hired status
     const otherActive = await db
       .select({ id: workforce.id })
       .from(workforce)
       .where(and(eq(workforce.candidateId, wf.candidateId), eq(workforce.isActive, true)))
       .limit(1);
     if (otherActive.length === 0) {
-      await db.update(candidates).set({ status: "active", updatedAt: new Date() }).where(eq(candidates.id, wf.candidateId));
+      const [cand] = await db.select({ lastLoginAt: candidates.lastLoginAt }).from(candidates).where(eq(candidates.id, wf.candidateId));
+      const newStatus = computeCandidateStatusFromLogin(cand?.lastLoginAt);
+      await db.update(candidates).set({ status: newStatus, updatedAt: new Date() }).where(eq(candidates.id, wf.candidateId));
     }
 
     return updated;

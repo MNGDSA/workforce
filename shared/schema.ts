@@ -21,8 +21,6 @@ export const candidateStatusEnum = pgEnum("candidate_status", [
   "inactive",
   "blocked",
   "hired",
-  "rejected",
-  "pending_review",
 ]);
 
 export const genderEnum = pgEnum("gender", ["male", "female", "other", "prefer_not_to_say"]);
@@ -1147,9 +1145,7 @@ export const candidateQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(1000).default(100),
   search: z.string().optional(),
-  status: z.enum(["active", "inactive", "blocked", "hired", "rejected", "pending_review"]).optional(),
-  dormant: z.enum(["true"]).optional(),
-  inactive: z.enum(["true"]).optional(),
+  status: z.enum(["active", "inactive", "blocked", "hired"]).optional(),
   archived: z.enum(["true"]).optional(),
   city: z.string().optional(),
   nationality: z.enum(["saudi", "non_saudi"]).optional(),

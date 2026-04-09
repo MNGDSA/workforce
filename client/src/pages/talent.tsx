@@ -109,26 +109,10 @@ import { KSA_REGIONS } from "@shared/schema";
 const statusStyles: Record<string, string> = {
   active: "bg-green-500/10 text-green-500",
   inactive: "bg-gray-500/10 text-gray-400",
-  dormant: "bg-amber-500/10 text-amber-400",
   archived: "bg-slate-500/10 text-slate-400",
   blocked: "bg-red-500/10 text-red-500",
   hired: "bg-blue-500/10 text-blue-400",
-  rejected: "bg-red-500/10 text-red-400",
-  pending_review: "bg-amber-500/10 text-amber-400",
 };
-
-function getDisplayStatus(candidate: Candidate): string {
-  if ((candidate as any).archivedAt) return "archived";
-  if (candidate.status === "blocked" || candidate.status === "hired") return candidate.status;
-  if (!candidate.profileCompleted) return "inactive";
-  const lastLogin = (candidate as any).lastLoginAt;
-  const createdAt = (candidate as any).createdAt;
-  const oneYearAgo = new Date();
-  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-  if (lastLogin && new Date(lastLogin) < oneYearAgo) return "dormant";
-  if (!lastLogin && createdAt && new Date(createdAt) < oneYearAgo) return "dormant";
-  return candidate.status;
-}
 
 type SortField = "createdAt" | "fullNameEn" | "city" | "source" | "phone" | "email";
 
@@ -375,7 +359,7 @@ function CandidateProfileSheet({
   if (!candidate) return null;
   const c = candidate;
   const initials = c.fullNameEn.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
-  const displaySt = getDisplayStatus(c);
+  const displaySt = (c as any).archivedAt ? "archived" : c.status;
 
   const nidValue = editing ? form.nationalId : (c.nationalId ?? "");
   const nidLabelText = idLabel(nidValue);
@@ -704,7 +688,7 @@ export default function TalentPage() {
   const [, navigate] = useLocation();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState("active");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [sortBy, setSortBy] = useState<SortField>("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
@@ -751,9 +735,7 @@ export default function TalentPage() {
     sortBy,
     sortOrder,
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
-    ...(status && status !== "all" && status !== "dormant" && status !== "inactive" && status !== "archived" ? { status } : {}),
-    ...(status === "dormant" ? { dormant: "true" } : {}),
-    ...(status === "inactive" ? { inactive: "true" } : {}),
+    ...(status && status !== "all" && status !== "archived" ? { status } : {}),
     ...(status === "archived" ? { archived: "true" } : {}),
     ...(sourceFilter && sourceFilter !== "all" ? { source: sourceFilter } : {}),
   });
@@ -1128,7 +1110,6 @@ export default function TalentPage() {
                 <SelectItem value="inactive">Inactive</SelectItem>
                 <SelectItem value="hired">Hired</SelectItem>
                 <SelectItem value="blocked">Blocked</SelectItem>
-                <SelectItem value="dormant">Dormant</SelectItem>
                 <SelectItem value="archived">Archived</SelectItem>
               </SelectContent>
             </Select>
@@ -1265,7 +1246,7 @@ export default function TalentPage() {
                   </TableHeader>
                   <TableBody>
                     {candidates.map((candidate) => {
-                      const displayStatus = getDisplayStatus(candidate);
+                      const displayStatus = (candidate as any).archivedAt ? "archived" : candidate.status;
                       return (
                         <TableRow
                           key={candidate.id}

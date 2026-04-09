@@ -170,11 +170,24 @@ app.use((req, res, next) => {
     }
   }
 
-  // Run all three once at startup, then every 24 hours
+  async function runCandidateAgeOut() {
+    try {
+      const aged = await storage.ageOutInactiveCandidates();
+      if (aged > 0) {
+        log(`Aged out ${aged} candidate(s) to inactive (no login in 1+ year)`, "scheduler");
+      }
+    } catch (err) {
+      log(`Candidate age-out scheduler error: ${err}`, "scheduler");
+    }
+  }
+
+  // Run all once at startup, then every 24 hours
   runAutoActivateUpcomingEvents();
   runAutoCloseExpiredEvents();
   runEventDateAlertScheduler();
+  runCandidateAgeOut();
   setInterval(runAutoActivateUpcomingEvents, 24 * 60 * 60 * 1000);
   setInterval(runAutoCloseExpiredEvents, 24 * 60 * 60 * 1000);
   setInterval(runEventDateAlertScheduler, 24 * 60 * 60 * 1000);
+  setInterval(runCandidateAgeOut, 24 * 60 * 60 * 1000);
 })();

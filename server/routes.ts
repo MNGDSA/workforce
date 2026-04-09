@@ -320,8 +320,13 @@ export async function registerRoutes(
           if (!candidate.userId) {
             await storage.updateCandidate(candidate.id, { userId: user.id });
           }
-          await storage.updateCandidate(candidate.id, { lastLoginAt: new Date() });
+          const updateFields: Record<string, any> = { lastLoginAt: new Date() };
+          if (candidate.status !== "blocked" && candidate.status !== "hired") {
+            updateFields.status = "active";
+          }
+          await storage.updateCandidate(candidate.id, updateFields);
           candidate.lastLoginAt = new Date();
+          if (updateFields.status) candidate.status = updateFields.status;
         }
       }
 
