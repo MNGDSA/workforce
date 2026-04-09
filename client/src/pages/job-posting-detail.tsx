@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { Input } from "@/components/ui/input";
 import {
   ArrowLeft,
   MapPin,
@@ -22,14 +23,14 @@ import {
   FileDown,
   FileUp,
   CheckCircle2,
-  XCircle,
-  Star,
+  ThumbsUp,
   AlertTriangle,
   X,
   ChevronRight,
   UserCheck,
   Banknote,
   Clock,
+  Search,
 } from "lucide-react";
 
 type JobPosting = {
@@ -152,6 +153,7 @@ export default function JobPostingDetailPage() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [appSearch, setAppSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: job, isLoading: jobLoading } = useQuery<JobPosting>({
@@ -256,9 +258,17 @@ export default function JobPostingDetailPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  const filteredApps = statusFilter === "all"
-    ? applications
-    : applications.filter(a => a.status === statusFilter);
+  const filteredApps = applications.filter(a => {
+    const c = candidateMap[a.candidateId];
+    const q = appSearch.trim().toLowerCase();
+    const matchesSearch = !q
+      || c?.fullNameEn?.toLowerCase().includes(q)
+      || c?.nationalId?.includes(q)
+      || c?.phone?.includes(q)
+      || c?.email?.toLowerCase().includes(q);
+    const matchesStatus = statusFilter === "all" || a.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const statusCounts = applications.reduce<Record<string, number>>((acc, a) => {
     acc[a.status] = (acc[a.status] ?? 0) + 1;
@@ -388,7 +398,17 @@ export default function JobPostingDetailPage() {
           <div className="flex-1 min-w-0 space-y-4">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <h2 className="text-lg font-display font-bold text-white">Applicants</h2>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    value={appSearch}
+                    onChange={e => setAppSearch(e.target.value)}
+                    placeholder="Search name, ID, phone…"
+                    className="pl-8 h-9 w-52 text-sm bg-background border-border"
+                    data-testid="input-applicant-search"
+                  />
+                </div>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger className="w-[140px] bg-background border-border text-sm h-9" data-testid="select-status-filter">
                     <SelectValue />
@@ -528,7 +548,7 @@ export default function JobPostingDetailPage() {
                                       className="p-1.5 rounded-sm text-blue-400 hover:bg-blue-500/15 transition-colors"
                                       data-testid={`button-shortlist-${app.id}`}
                                     >
-                                      <Star className="h-3.5 w-3.5" />
+                                      <ThumbsUp className="h-3.5 w-3.5" />
                                     </button>
                                   )}
                                   {(app.status === "shortlisted" || app.status === "interviewed") && (
@@ -540,17 +560,6 @@ export default function JobPostingDetailPage() {
                                       data-testid={`button-hire-${app.id}`}
                                     >
                                       <CheckCircle2 className="h-3.5 w-3.5" />
-                                    </button>
-                                  )}
-                                  {app.status !== "rejected" && app.status !== "hired" && (
-                                    <button
-                                      onClick={() => updateStatus.mutate({ id: app.id, status: "rejected" })}
-                                      disabled={updateStatus.isPending}
-                                      title="Not Shortlisted"
-                                      className="p-1.5 rounded-sm text-muted-foreground hover:bg-destructive/15 hover:text-destructive transition-colors"
-                                      data-testid={`button-reject-${app.id}`}
-                                    >
-                                      <XCircle className="h-3.5 w-3.5" />
                                     </button>
                                   )}
                                   {(app.status === "hired" || app.status === "rejected") && (
