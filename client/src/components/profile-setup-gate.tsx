@@ -102,6 +102,12 @@ const KSA_CITIES = [
   "Hofuf", "Yanbu", "Najran", "Jazan", "Other",
 ];
 
+const KSA_REGIONS = [
+  "Riyadh", "Makkah", "Madinah", "Eastern Province", "Asir",
+  "Tabuk", "Hail", "Northern Borders", "Jazan", "Najran",
+  "Al Bahah", "Al Jawf", "Qassim",
+];
+
 const MARITAL_OPTIONS = ["Single", "Married", "Divorced", "Widowed"];
 const EDU_OPTIONS = ["High School and below", "University and higher"];
 
@@ -126,6 +132,7 @@ const step1Schema = z.object({
     return age >= 15;
   }, "Candidate must be at least 15 years old"),
   city:            z.string().min(1, "City is required"),
+  region:          z.string().min(1, "Region is required"),
   email:           z.string().email("Enter a valid email").optional().or(z.literal("")),
   maritalStatus:   z.string().min(1, "Marital status is required"),
 });
@@ -258,6 +265,7 @@ function Step1Form({
       nationalityText: defaults.nationalityText ?? "",
       dateOfBirth:     defaults.dateOfBirth ?? "",
       city:            defaults.city ?? "",
+      region:          defaults.region ?? "",
       email:           defaults.email ?? candidate.email ?? "",
       maritalStatus:   defaults.maritalStatus ?? "",
     },
@@ -320,6 +328,12 @@ function Step1Form({
           )} />
         </FieldWrapper>
       </div>
+
+      <FieldWrapper label="Region of Residence" required error={errors.region?.message}>
+        <Controller control={control} name="region" render={({ field }) => (
+          <SelectField value={field.value} onChange={field.onChange} options={KSA_REGIONS} placeholder="Select region" data-testid="select-region" />
+        )} />
+      </FieldWrapper>
 
       <FieldWrapper label="Email Address" error={errors.email?.message}>
         <Input {...register("email")} type="email" placeholder="optional" className="bg-muted/30 border-border" data-testid="input-email" />
@@ -732,6 +746,7 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
       nationality:         isNonSaudi ? "non_saudi" : "saudi",
       dateOfBirth:         s1data.dateOfBirth,
       city:                s1data.city,
+      region:              s1data.region || undefined,
       email:               s1data.email || undefined,
       maritalStatus:       s1data.maritalStatus,
       hasChronicDiseases:  s2data.hasChronicDiseases,
