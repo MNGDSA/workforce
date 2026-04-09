@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { useState, useRef, Fragment } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout";
@@ -153,6 +154,7 @@ export default function JobPostingDetailPage() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [appSearch, setAppSearch] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: job, isLoading: jobLoading } = useQuery<JobPosting>({
@@ -206,6 +208,19 @@ export default function JobPostingDetailPage() {
       });
     },
     onError: () => toast({ title: "Bulk update failed", variant: "destructive" }),
+  });
+
+  const bulkShortlist = useMutation({
+    mutationFn: (ids: string[]) =>
+      apiRequest("POST", "/api/applications/bulk-status", {
+        updates: ids.map(id => ({ id, status: "shortlisted" })),
+      }).then((r) => r.json()),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/applications", params.id] });
+      setSelectedIds(new Set());
+      toast({ title: `${data.succeeded} candidate${data.succeeded !== 1 ? "s" : ""} shortlisted` });
+    },
+    onError: () => toast({ title: "Bulk shortlist failed", variant: "destructive" }),
   });
 
   function handleImport(file: File) {
@@ -268,6 +283,25 @@ export default function JobPostingDetailPage() {
     const matchesStatus = statusFilter === "all" || a.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const eligibleApps = filteredApps.filter(
+    (a) => a.status !== "shortlisted" && a.status !== "hired" && a.status !== "rejected",
+  );
+  const eligibleIds = new Set(eligibleApps.map((a) => a.id));
+  const selectedEligible = [...selectedIds].filter((id) => eligibleIds.has(id));
+  const allEligibleSelected = eligibleApps.length > 0 && selectedEligible.length === eligibleApps.length;
+
+  function toggleSelectAll() {
+    if (allEligibleSelected) {
+      setSelectedIds((prev) => { const n = new Set(prev); eligibleApps.forEach((a) => n.delete(a.id)); return n; });
+    } else {
+      setSelectedIds((prev) => { const n = new Set(prev); eligibleApps.forEach((a) => n.add(a.id)); return n; });
+    }
+  }
+
+  function toggleOne(id: string) {
+    setSelectedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
 
   const statusCounts = applications.reduce<Record<string, number>>((acc, a) => {
     acc[a.status] = (acc[a.status] ?? 0) + 1;
@@ -480,6 +514,17 @@ export default function JobPostingDetailPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-border text-left">
+                        <th className="pl-4 pr-2 py-3 w-8">
+                          {eligibleApps.length > 0 && (
+                            <input
+                              type="checkbox"
+                              data-testid="checkbox-select-all-applicants"
+                              checked={allEligibleSelected}
+                              onChange={toggleSelectAll}
+                              className="h-3.5 w-3.5 rounded-sm accent-primary cursor-pointer"
+                            />
+                          )}
+                        </th>
                         <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Candidate</th>
                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">Contact</th>
                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
@@ -499,6 +544,17 @@ export default function JobPostingDetailPage() {
                         return (
                           <Fragment key={app.id}>
                             <tr className="hover:bg-muted/20 transition-colors" data-testid={`row-applicant-${app.id}`}>
+                              <td className="pl-4 pr-2 py-3">
+                                {eligibleIds.has(app.id) && (
+                                  <input
+                                    type="checkbox"
+                                    data-testid={`checkbox-applicant-${app.id}`}
+                                    checked={selectedIds.has(app.id)}
+                                    onChange={() => toggleOne(app.id)}
+                                    className="h-3.5 w-3.5 rounded-sm accent-primary cursor-pointer"
+                                  />
+                                )}
+                              </td>
                               <td className="px-6 py-3">
                                 <div className="flex items-center gap-3">
                                   <Avatar className="h-8 w-8 border border-border shrink-0">
@@ -572,7 +628,7 @@ export default function JobPostingDetailPage() {
                             </tr>
                             {isExpanded && hasAnswers && (
                               <tr key={`${app.id}-answers`} className="bg-muted/5">
-                                <td colSpan={hasQuestions ? 6 : 5} className="px-6 pb-4 pt-2">
+                                <td colSpan={hasQuestions ? 7 : 6} className="px-6 pb-4 pt-2">
                                   <div className="border border-border rounded-md p-4 space-y-3 bg-muted/10">
                                     <p className="text-xs text-primary font-semibold uppercase tracking-wider">
                                       Screening Answers — {questionSet?.name}
@@ -605,6 +661,35 @@ export default function JobPostingDetailPage() {
           </div>
         </div>
       </div>
+      {selectedEligible.length > 0 && createPortal(
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-5 py-3 rounded-xl border border-primary/40 bg-[hsl(155,45%,12%)] shadow-2xl shadow-black/60"
+          data-testid="bulk-shortlist-bar"
+        >
+          <span className="text-sm font-medium text-white">
+            {selectedEligible.length} candidate{selectedEligible.length !== 1 ? "s" : ""} selected
+          </span>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="text-xs text-muted-foreground hover:text-white transition-colors px-2 py-1"
+            data-testid="button-bulk-clear-selection"
+          >
+            Clear
+          </button>
+          <button
+            onClick={() => bulkShortlist.mutate(selectedEligible)}
+            disabled={bulkShortlist.isPending}
+            className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-white text-sm font-semibold transition-colors disabled:opacity-60"
+            data-testid="button-bulk-shortlist"
+          >
+            {bulkShortlist.isPending
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : <ThumbsUp className="h-3.5 w-3.5" />}
+            Shortlist {selectedEligible.length}
+          </button>
+        </div>,
+        document.body,
+      )}
     </DashboardLayout>
   );
 }
