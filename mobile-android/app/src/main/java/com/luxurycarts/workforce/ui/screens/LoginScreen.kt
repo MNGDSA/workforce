@@ -5,11 +5,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -95,42 +97,49 @@ fun LoginScreen(
             val slashMid = Color(0xFF2D9B68)
             val slashDark = Color(0xFF145E38)
 
-            Canvas(modifier = Modifier.width(48.dp).height(48.dp)) {
-                val w = size.width
-                val h = size.height
-                val slashW = w * 0.21f
-                val gap = w * 0.05f
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Canvas(modifier = Modifier.size(44.dp)) {
+                    val w = size.width
+                    val h = size.height
+                    val slashW = w * 0.16f
+                    val gap = w * 0.10f
 
-                fun drawSlash(x: Float, color: Color) {
-                    val path = Path().apply {
-                        moveTo(x + slashW * 0.6f, 0f)
-                        lineTo(x + slashW * 1.6f, 0f)
-                        lineTo(x + slashW, h)
-                        lineTo(x, h)
-                        close()
+                    fun drawSlash(x: Float, color: Color) {
+                        val path = Path().apply {
+                            moveTo(x + slashW * 0.6f, 0f)
+                            lineTo(x + slashW * 1.6f, 0f)
+                            lineTo(x + slashW, h)
+                            lineTo(x, h)
+                            close()
+                        }
+                        drawPath(path, color)
                     }
-                    drawPath(path, color)
+
+                    val totalW = slashW * 3 + gap * 2
+                    val startX = (w - totalW - slashW * 0.6f) / 2f
+                    drawSlash(startX, slashLight)
+                    drawSlash(startX + slashW + gap, slashMid)
+                    drawSlash(startX + (slashW + gap) * 2, slashDark)
                 }
 
-                val startX = w * 0.05f
-                drawSlash(startX, slashLight)
-                drawSlash(startX + slashW + gap, slashMid)
-                drawSlash(startX + (slashW + gap) * 2, slashDark)
+                Spacer(Modifier.width(12.dp))
+
+                Text(
+                    text = "WORKFORCE",
+                    fontFamily = spaceGrotesk,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 28.sp,
+                    color = TextPrimary,
+                    letterSpacing = 2.sp,
+                )
             }
 
-            Spacer(Modifier.height(8.dp))
-
             Text(
-                text = "WORKFORCE",
-                fontFamily = spaceGrotesk,
-                fontWeight = FontWeight.Bold,
-                fontSize = 28.sp,
-                color = TextPrimary,
-                letterSpacing = 2.sp,
-            )
-
-            Text(
-                text = "Attendance Management",
+                text = "Employee App",
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextMuted,
             )
