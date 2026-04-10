@@ -95,6 +95,9 @@ import {
   type InsertGeofenceZone,
   type AttendanceSubmission,
   type InsertAttendanceSubmission,
+  photoChangeRequests,
+  type PhotoChangeRequest,
+  type InsertPhotoChangeRequest,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte } from "drizzle-orm";
 
@@ -406,6 +409,12 @@ export interface IStorage {
   getAttendanceSubmission(id: string): Promise<AttendanceSubmission | undefined>;
   createAttendanceSubmission(data: InsertAttendanceSubmission): Promise<AttendanceSubmission>;
   updateAttendanceSubmission(id: string, data: Partial<InsertAttendanceSubmission>): Promise<AttendanceSubmission | undefined>;
+
+  // Photo Change Requests
+  getPhotoChangeRequests(filters?: { candidateId?: string; status?: string }): Promise<PhotoChangeRequest[]>;
+  getPhotoChangeRequest(id: string): Promise<PhotoChangeRequest | undefined>;
+  createPhotoChangeRequest(data: InsertPhotoChangeRequest): Promise<PhotoChangeRequest>;
+  updatePhotoChangeRequest(id: string, data: Partial<InsertPhotoChangeRequest> & { reviewedBy?: string; reviewedAt?: Date; reviewNotes?: string | null }): Promise<PhotoChangeRequest | undefined>;
 
   // Dashboard
   getDashboardStats(): Promise<{
@@ -2907,6 +2916,31 @@ export class DatabaseStorage implements IStorage {
   async updateAttendanceSubmission(id: string, data: Partial<InsertAttendanceSubmission>): Promise<AttendanceSubmission | undefined> {
     const [sub] = await db.update(attendanceSubmissions).set(data).where(eq(attendanceSubmissions.id, id)).returning();
     return sub;
+  }
+
+  // ─── Photo Change Requests ──────────────────────────────────────────────────
+  async getPhotoChangeRequests(filters?: { candidateId?: string; status?: string }): Promise<PhotoChangeRequest[]> {
+    const conditions: any[] = [];
+    if (filters?.candidateId) conditions.push(eq(photoChangeRequests.candidateId, filters.candidateId));
+    if (filters?.status) conditions.push(eq(photoChangeRequests.status, filters.status as any));
+    return db.select().from(photoChangeRequests)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(photoChangeRequests.createdAt));
+  }
+
+  async getPhotoChangeRequest(id: string): Promise<PhotoChangeRequest | undefined> {
+    const [req] = await db.select().from(photoChangeRequests).where(eq(photoChangeRequests.id, id));
+    return req;
+  }
+
+  async createPhotoChangeRequest(data: InsertPhotoChangeRequest): Promise<PhotoChangeRequest> {
+    const [req] = await db.insert(photoChangeRequests).values(data).returning();
+    return req;
+  }
+
+  async updatePhotoChangeRequest(id: string, data: Partial<InsertPhotoChangeRequest> & { reviewedBy?: string; reviewedAt?: Date; reviewNotes?: string | null }): Promise<PhotoChangeRequest | undefined> {
+    const [req] = await db.update(photoChangeRequests).set(data).where(eq(photoChangeRequests.id, id)).returning();
+    return req;
   }
 }
 

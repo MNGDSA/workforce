@@ -67,6 +67,10 @@ class AttendanceRepository(
                     gpsAccuracy = (submission.gpsAccuracy?.toString() ?: "0").toRequestBody("text/plain".toMediaType()),
                     timestamp = EncryptionService.decrypt(submission.encryptedTimestamp).toRequestBody("text/plain".toMediaType()),
                     photo = photoPart,
+                    mockLocationDetected = submission.mockLocationDetected.toString().toRequestBody("text/plain".toMediaType()),
+                    isEmulator = submission.isEmulator.toString().toRequestBody("text/plain".toMediaType()),
+                    locationProvider = (submission.locationProvider ?: "unknown").toRequestBody("text/plain".toMediaType()),
+                    deviceFingerprint = (submission.deviceFingerprint ?: "").toRequestBody("text/plain".toMediaType()),
                 )
 
                 if (response.isSuccessful) {

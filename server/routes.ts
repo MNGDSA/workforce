@@ -4,9 +4,11 @@ import express from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { storage } from "./storage";
+import { storage, createInboxItem } from "./storage";
+import { db } from "./db";
 import { getAuthenticatedUser, listUserRepos, getRepo, listRepoIssues, listRepoPullRequests } from "./github";
 import {
+  inboxItems,
   insertCandidateSchema,
   insertEventSchema,
   insertJobPostingSchema,
@@ -35,6 +37,7 @@ import {
   insertEmployeeAssetSchema,
   insertGeofenceZoneSchema,
 } from "@shared/schema";
+import { eq, and } from "drizzle-orm";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
 import XLSX from "xlsx";
 
@@ -175,6 +178,35 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid docType. Must be photo, nationalId, iban, or resume" });
       }
       const fileUrl = `/uploads/${req.file.filename}`;
+
+      if (docType === "photo") {
+        const candidate = await storage.getCandidate(id);
+        if (!candidate) return res.status(404).json({ message: "Candidate not found" });
+        if (candidate.hasPhoto && candidate.photoUrl) {
+          const changeRequest = await storage.createPhotoChangeRequest({
+            candidateId: id,
+            newPhotoUrl: fileUrl,
+            previousPhotoUrl: candidate.photoUrl,
+            status: "pending",
+          });
+          await createInboxItem(
+            "photo_change_request",
+            `Photo change request — ${candidate.fullNameEn ?? candidate.fullNameAr ?? "Unknown"}`,
+            `Candidate has submitted a new profile photo for review. The previous photo remains active until this request is approved.`,
+            {
+              candidateId: id,
+              changeRequestId: changeRequest.id,
+              candidateName: candidate.fullNameEn ?? candidate.fullNameAr,
+              newPhotoUrl: fileUrl,
+              previousPhotoUrl: candidate.photoUrl,
+            },
+            "high",
+            { entityType: "photo_change_request", entityId: changeRequest.id }
+          );
+          return res.json({ url: fileUrl, docType, pendingReview: true, changeRequestId: changeRequest.id, message: "Photo submitted for HR review. Your current photo remains active." });
+        }
+      }
+
       const updatePayload: Record<string, any> = {};
       if (docType === "photo") { updatePayload.photoUrl = fileUrl; updatePayload.hasPhoto = true; }
       if (docType === "nationalId") { updatePayload.hasNationalId = true; updatePayload.nationalIdFileUrl = fileUrl; }
@@ -185,7 +217,6 @@ export async function registerRoutes(
       const onboardingRecords = await storage.getOnboardingRecords({ candidateId: id });
       for (const rec of onboardingRecords) {
         if (rec.status === "converted" || rec.status === "rejected") continue;
-        // Derive SMP status from onboarding linkage (applicationId === null = SMP pipeline)
         const isSmpRec = !rec.applicationId;
         const syncPayload: Record<string, any> = {};
         if (docType === "photo") syncPayload.hasPhoto = true;
@@ -3762,11 +3793,40 @@ export async function registerRoutes(
         gpsAccuracy: z.coerce.number().optional(),
         clientTimestamp: z.string().optional(),
         timestamp: z.string().optional(),
+        mockLocationDetected: z.preprocess((v) => v === "true" || v === true, z.boolean()).optional(),
+        isEmulator: z.preprocess((v) => v === "true" || v === true, z.boolean()).optional(),
+        locationProvider: z.string().optional(),
+        deviceFingerprint: z.string().optional(),
       });
 
       const parsed = schema.parse(req.body);
       const photoUrl = `/uploads/${req.file.filename}`;
       const ts = parsed.clientTimestamp || parsed.timestamp;
+
+      if (parsed.mockLocationDetected || parsed.isEmulator) {
+        const flagReasons: string[] = [];
+        if (parsed.mockLocationDetected) flagReasons.push("Mock/fake location detected on device");
+        if (parsed.isEmulator) flagReasons.push("Android emulator detected");
+        const submission = await storage.createAttendanceSubmission({
+          workforceId: parsed.workforceId,
+          photoUrl,
+          gpsLat: String(parsed.gpsLat),
+          gpsLng: String(parsed.gpsLng),
+          gpsAccuracy: parsed.gpsAccuracy ? String(parsed.gpsAccuracy) : null,
+          submittedAt: ts ? new Date(ts) : new Date(),
+          status: "flagged",
+          flagReason: flagReasons.join("; "),
+          mockLocationDetected: parsed.mockLocationDetected ?? null,
+          isEmulator: parsed.isEmulator ?? null,
+          locationProvider: parsed.locationProvider ?? null,
+          deviceFingerprint: parsed.deviceFingerprint ?? null,
+        });
+        const updated = await storage.getAttendanceSubmission(submission.id);
+        return res.status(201).json({
+          submission: updated,
+          verification: { status: "flagged", confidence: 0, gpsInside: false, flagReason: flagReasons.join("; ") },
+        });
+      }
 
       const submission = await storage.createAttendanceSubmission({
         workforceId: parsed.workforceId,
@@ -3776,6 +3836,10 @@ export async function registerRoutes(
         gpsAccuracy: parsed.gpsAccuracy ? String(parsed.gpsAccuracy) : null,
         submittedAt: ts ? new Date(ts) : new Date(),
         status: "pending",
+        mockLocationDetected: parsed.mockLocationDetected ?? null,
+        isEmulator: parsed.isEmulator ?? null,
+        locationProvider: parsed.locationProvider ?? null,
+        deviceFingerprint: parsed.deviceFingerprint ?? null,
       });
 
       let pipelineResult;
@@ -3881,6 +3945,80 @@ export async function registerRoutes(
       }
       return handleError(res, err);
     }
+  });
+
+  // ─── Photo Change Request Endpoints ────────────────────────────────────────
+  app.get("/api/photo-change-requests", async (req: Request, res: Response) => {
+    try {
+      const filters = {
+        candidateId: req.query.candidateId as string | undefined,
+        status: req.query.status as string | undefined,
+      };
+      const requests = await storage.getPhotoChangeRequests(filters);
+      return res.json(requests);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/photo-change-requests/:id/approve", async (req: Request, res: Response) => {
+    try {
+      const { notes, reviewedBy: bodyReviewedBy } = req.body ?? {};
+      let reviewedBy = bodyReviewedBy ?? (req as any).userId;
+      if (!reviewedBy) {
+        const adminUser = await storage.getUserByUsername("admin");
+        reviewedBy = adminUser?.id ?? null;
+      }
+      if (!reviewedBy) return res.status(400).json({ message: "Reviewer identity required" });
+
+      const changeReq = await storage.getPhotoChangeRequest(req.params.id);
+      if (!changeReq) return res.status(404).json({ message: "Photo change request not found" });
+      if (changeReq.status !== "pending") return res.status(409).json({ message: "Request already reviewed" });
+
+      await storage.updateCandidate(changeReq.candidateId, { photoUrl: changeReq.newPhotoUrl, hasPhoto: true });
+
+      const updated = await storage.updatePhotoChangeRequest(req.params.id, {
+        status: "approved",
+        reviewedBy,
+        reviewedAt: new Date(),
+        reviewNotes: notes ?? null,
+      });
+
+      await db.update(inboxItems)
+        .set({ status: "resolved", resolvedBy: reviewedBy, resolvedAt: new Date(), resolutionNotes: notes ?? "Approved" })
+        .where(and(eq(inboxItems.entityType, "photo_change_request"), eq(inboxItems.entityId, req.params.id), eq(inboxItems.status, "pending")));
+
+      await logAudit(req, { action: "approve_photo_change", entityType: "photo_change_request", entityId: req.params.id, description: `Approved photo change for candidate ${changeReq.candidateId}` });
+      return res.json(updated);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/photo-change-requests/:id/reject", async (req: Request, res: Response) => {
+    try {
+      const { notes, reviewedBy: bodyReviewedBy } = req.body ?? {};
+      let reviewedBy = bodyReviewedBy ?? (req as any).userId;
+      if (!reviewedBy) {
+        const adminUser = await storage.getUserByUsername("admin");
+        reviewedBy = adminUser?.id ?? null;
+      }
+      if (!reviewedBy) return res.status(400).json({ message: "Reviewer identity required" });
+
+      const changeReq = await storage.getPhotoChangeRequest(req.params.id);
+      if (!changeReq) return res.status(404).json({ message: "Photo change request not found" });
+      if (changeReq.status !== "pending") return res.status(409).json({ message: "Request already reviewed" });
+
+      const updated = await storage.updatePhotoChangeRequest(req.params.id, {
+        status: "rejected",
+        reviewedBy,
+        reviewedAt: new Date(),
+        reviewNotes: notes ?? null,
+      });
+
+      await db.update(inboxItems)
+        .set({ status: "dismissed", resolvedBy: reviewedBy, resolvedAt: new Date(), resolutionNotes: notes ?? "Rejected" })
+        .where(and(eq(inboxItems.entityType, "photo_change_request"), eq(inboxItems.entityId, req.params.id), eq(inboxItems.status, "pending")));
+
+      await logAudit(req, { action: "reject_photo_change", entityType: "photo_change_request", entityId: req.params.id, description: `Rejected photo change for candidate ${changeReq.candidateId}` });
+      return res.json(updated);
+    } catch (err) { return handleError(res, err); }
   });
 
   return httpServer;

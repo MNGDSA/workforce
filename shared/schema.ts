@@ -1153,6 +1153,7 @@ export const inboxItemTypeEnum = pgEnum("inbox_item_type", [
   "candidate_flag",
   "event_alert",
   "attendance_verification",
+  "photo_change_request",
   "general_request",
   "system",
 ]);
@@ -1254,6 +1255,10 @@ export const attendanceSubmissions = pgTable(
     reviewNotes: text("review_notes"),
     linkedAttendanceRecordId: varchar("linked_attendance_record_id").references(() => attendanceRecords.id, { onDelete: "set null" }),
     referencePhotoUrl: text("reference_photo_url"),
+    mockLocationDetected: boolean("mock_location_detected"),
+    isEmulator: boolean("is_emulator"),
+    locationProvider: varchar("location_provider", { length: 32 }),
+    deviceFingerprint: text("device_fingerprint"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
   },
   (t) => ({
@@ -1274,6 +1279,39 @@ export const insertAttendanceSubmissionSchema = createInsertSchema(attendanceSub
 });
 export type InsertAttendanceSubmission = z.infer<typeof insertAttendanceSubmissionSchema>;
 export type AttendanceSubmission = typeof attendanceSubmissions.$inferSelect;
+
+// ─── Photo Change Requests ────────────────────────────────────────────────────
+
+export const photoChangeStatusEnum = pgEnum("photo_change_status", [
+  "pending",
+  "approved",
+  "rejected",
+]);
+
+export const photoChangeRequests = pgTable("photo_change_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  candidateId: varchar("candidate_id").notNull().references(() => candidates.id, { onDelete: "cascade" }),
+  newPhotoUrl: text("new_photo_url").notNull(),
+  previousPhotoUrl: text("previous_photo_url"),
+  status: photoChangeStatusEnum("status").notNull().default("pending"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+}, (t) => ({
+  candidateIdx: index("photo_change_candidate_idx").on(t.candidateId),
+  statusIdx: index("photo_change_status_idx").on(t.status),
+}));
+
+export const insertPhotoChangeRequestSchema = createInsertSchema(photoChangeRequests).omit({
+  id: true,
+  createdAt: true,
+  reviewedBy: true,
+  reviewedAt: true,
+  reviewNotes: true,
+});
+export type InsertPhotoChangeRequest = z.infer<typeof insertPhotoChangeRequestSchema>;
+export type PhotoChangeRequest = typeof photoChangeRequests.$inferSelect;
 
 // ─── Query Params Types ─────────────────────────────────────────────────────
 export const candidateQuerySchema = z.object({

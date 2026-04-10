@@ -99,14 +99,18 @@ export async function runVerificationPipeline(submissionId: string): Promise<{
   );
   const gpsInside = !!gpsResult;
 
+  const hasMockLocation = submission.mockLocationDetected === true;
+  const hasEmulator = submission.isEmulator === true;
   const faceOk = !faceError && confidence >= 95;
-  const isVerified = faceOk && gpsInside;
+  const isVerified = faceOk && gpsInside && !hasMockLocation && !hasEmulator;
 
   const flagReasons: string[] = [];
   if (faceError === "no_reference_photo") flagReasons.push("No reference photo on file");
   else if (faceError) flagReasons.push(`Face verification error: ${faceError}`);
   else if (confidence < 95) flagReasons.push(`Face confidence ${confidence}% (below 95% threshold)`);
   if (!gpsInside) flagReasons.push("GPS location outside all geofence zones");
+  if (hasMockLocation) flagReasons.push("Mock/fake GPS location detected on device");
+  if (hasEmulator) flagReasons.push("Android emulator detected — possible spoofing attempt");
 
   const status = isVerified ? "verified" : "flagged";
   const flagReason = flagReasons.length > 0 ? flagReasons.join("; ") : undefined;
@@ -172,6 +176,10 @@ export async function runVerificationPipeline(submissionId: string): Promise<{
         gpsLat: submission.gpsLat,
         gpsLng: submission.gpsLng,
         gpsInside,
+        mockLocationDetected: submission.mockLocationDetected,
+        isEmulator: submission.isEmulator,
+        locationProvider: submission.locationProvider,
+        deviceFingerprint: submission.deviceFingerprint,
       },
     });
   }

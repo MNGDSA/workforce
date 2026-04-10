@@ -476,6 +476,8 @@ function ProfileCompletionCard({
     inputRefs[key].current?.click();
   }, []);
 
+  const [photoPendingReview, setPhotoPendingReview] = useState(false);
+
   const uploadFile = useCallback(async (key: DocKey, file: File) => {
     setUploading((p) => ({ ...p, [key]: true }));
     try {
@@ -490,10 +492,16 @@ function ProfileCompletionCard({
         const err = await res.json().catch(() => ({ message: "Upload failed" }));
         throw new Error(err.message);
       }
-      setJustUploaded((p) => ({ ...p, [key]: file.name }));
-      queryClient.invalidateQueries({ queryKey: ["/api/candidates/profile", candidateId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] });
-      toast({ title: "File uploaded", description: `"${file.name}" saved successfully.` });
+      const body = await res.json();
+      if (key === "photo" && body.pendingReview) {
+        setPhotoPendingReview(true);
+        toast({ title: "Photo submitted for review", description: "Your new photo has been sent to HR for approval. Your current photo remains active." });
+      } else {
+        setJustUploaded((p) => ({ ...p, [key]: file.name }));
+        queryClient.invalidateQueries({ queryKey: ["/api/candidates/profile", candidateId] });
+        queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] });
+        toast({ title: "File uploaded", description: `"${file.name}" saved successfully.` });
+      }
     } catch (err: any) {
       toast({ title: "Upload failed", description: err?.message || "Please try again.", variant: "destructive" });
     } finally {
@@ -549,6 +557,7 @@ function ProfileCompletionCard({
             const done = isDone(key);
             const uploadedName = justUploaded[key];
             const hasFileUrl = !!docUrlMap[key];
+            const isPendingPhotoReview = key === "photo" && photoPendingReview;
 
             return (
               <div key={key}>
@@ -562,31 +571,37 @@ function ProfileCompletionCard({
                 />
                 <div
                   className={`flex items-center gap-3 p-2.5 rounded-md transition-all select-none
-                    ${done   ? `bg-emerald-500/10 border border-emerald-500/25 ${hasFileUrl ? "cursor-pointer hover:bg-emerald-500/15" : "cursor-default"}` : ""}
-                    ${!done && busy ? "bg-muted/20 border border-border opacity-70 cursor-wait" : ""}
-                    ${!done && !busy ? "bg-muted/20 border border-border hover:border-primary/40 hover:bg-primary/5 group cursor-pointer" : ""}
+                    ${isPendingPhotoReview ? "bg-amber-500/10 border border-amber-500/25 cursor-default" : ""}
+                    ${!isPendingPhotoReview && done ? `bg-emerald-500/10 border border-emerald-500/25 ${hasFileUrl ? "cursor-pointer hover:bg-emerald-500/15" : "cursor-default"}` : ""}
+                    ${!isPendingPhotoReview && !done && busy ? "bg-muted/20 border border-border opacity-70 cursor-wait" : ""}
+                    ${!isPendingPhotoReview && !done && !busy ? "bg-muted/20 border border-border hover:border-primary/40 hover:bg-primary/5 group cursor-pointer" : ""}
                   `}
                   onClick={() => {
+                    if (isPendingPhotoReview) return;
                     if (done && hasFileUrl) { handleDownload(key); }
                     else if (!done && !busy) { handleClick(key); }
                   }}
                   data-testid={`row-doc-${key}`}
                 >
                   <div className={`shrink-0 rounded-full p-1.5
-                    ${done ? "bg-emerald-500/20 text-emerald-500" : busy ? "bg-muted text-muted-foreground" : "bg-muted/30 text-muted-foreground group-hover:text-primary group-hover:bg-primary/10"}`}>
-                    {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : done ? <CheckCircle2 className="h-3.5 w-3.5" /> : icon}
+                    ${isPendingPhotoReview ? "bg-amber-500/20 text-amber-500" : done ? "bg-emerald-500/20 text-emerald-500" : busy ? "bg-muted text-muted-foreground" : "bg-muted/30 text-muted-foreground group-hover:text-primary group-hover:bg-primary/10"}`}>
+                    {isPendingPhotoReview ? <Clock className="h-3.5 w-3.5" /> : busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : done ? <CheckCircle2 className="h-3.5 w-3.5" /> : icon}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium leading-tight ${done ? "text-emerald-400" : "text-white"}`}>{label}</p>
-                    {done
-                      ? <p className="text-[11px] text-emerald-600 truncate flex items-center gap-1">
-                          {hasFileUrl && <Download className="h-2.5 w-2.5 inline-block" />}
-                          {uploadedName || (hasFileUrl ? "Click to view" : "Uploaded")}
+                    <p className={`text-sm font-medium leading-tight ${isPendingPhotoReview ? "text-amber-400" : done ? "text-emerald-400" : "text-white"}`}>{label}</p>
+                    {isPendingPhotoReview
+                      ? <p className="text-[11px] text-amber-600 truncate flex items-center gap-1">
+                          <Clock className="h-2.5 w-2.5 inline-block" /> New photo pending HR review
                         </p>
-                      : <p className="text-[11px] text-muted-foreground/70">{hint}</p>}
+                      : done
+                        ? <p className="text-[11px] text-emerald-600 truncate flex items-center gap-1">
+                            {hasFileUrl && <Download className="h-2.5 w-2.5 inline-block" />}
+                            {uploadedName || (hasFileUrl ? "Click to view" : "Uploaded")}
+                          </p>
+                        : <p className="text-[11px] text-muted-foreground/70">{hint}</p>}
                   </div>
                   {busy && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0" />}
-                  {done && (
+                  {done && !isPendingPhotoReview && (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleClick(key); }}
@@ -597,7 +612,7 @@ function ProfileCompletionCard({
                       <RefreshCw className="h-3.5 w-3.5" />
                     </button>
                   )}
-                  {!done && !busy && (
+                  {!done && !busy && !isPendingPhotoReview && (
                     <UploadCloud className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
                   )}
                 </div>

@@ -54,6 +54,7 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.luxurycarts.workforce.data.AttendanceDao
 import com.luxurycarts.workforce.data.AttendanceEntity
+import com.luxurycarts.workforce.services.DeviceTrustManager
 import com.luxurycarts.workforce.services.EncryptionService
 import com.luxurycarts.workforce.services.SyncWorker
 import com.luxurycarts.workforce.ui.theme.Background
@@ -209,6 +210,8 @@ fun CaptureScreen(
 
                                 val location = getLocation(context)
 
+                                val trustReport = DeviceTrustManager.generateReport(context, location.fourth)
+
                                 val encPhotoPath = photoFile.absolutePath + ".enc"
                                 EncryptionService.encryptFile(photoFile.absolutePath, encPhotoPath)
                                 photoFile.delete()
@@ -223,6 +226,10 @@ fun CaptureScreen(
                                     gpsAccuracy = location.third,
                                     encryptedPhotoPath = EncryptionService.encrypt(encPhotoPath),
                                     ownerWorkforceId = workforceId,
+                                    mockLocationDetected = trustReport.mockLocationDetected,
+                                    isEmulator = trustReport.isEmulator,
+                                    locationProvider = trustReport.locationProvider,
+                                    deviceFingerprint = trustReport.deviceFingerprint,
                                 )
                                 dao.insert(entity)
                                 SyncWorker.syncNow(context)
@@ -293,14 +300,21 @@ private suspend fun capturePhoto(imageCapture: ImageCapture, outputFile: File, c
         )
     }
 
+data class LocationResult(
+    val first: Double,
+    val second: Double,
+    val third: Float?,
+    val fourth: android.location.Location?,
+)
+
 @android.annotation.SuppressLint("MissingPermission")
-private suspend fun getLocation(context: android.content.Context): Triple<Double, Double, Float?> =
+private suspend fun getLocation(context: android.content.Context): LocationResult =
     suspendCancellableCoroutine { cont ->
         val client = LocationServices.getFusedLocationProviderClient(context)
         client.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
             .addOnSuccessListener { location ->
                 if (location != null) {
-                    cont.resume(Triple(location.latitude, location.longitude, location.accuracy))
+                    cont.resume(LocationResult(location.latitude, location.longitude, location.accuracy, location))
                 } else {
                     cont.resumeWithException(Exception("Location unavailable"))
                 }

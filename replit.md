@@ -53,8 +53,9 @@ The system employs a modern, full-stack architecture.
 - **Contract Engine**: Automated, templated contract generation, digital signing, and PDF rendering.
 - **Automation Rules**: Database-backed, toggleable workflows.
 - **Saudi-Specific Features**: Includes fields for National ID, Iqama, IBAN, Arabic names, and nationality.
-- **Attendance Middleware**: Geofence zone management (CRUD with Leaflet/OSM), mobile attendance API (photo + GPS), AWS Rekognition face verification stub, and HR inbox flagging for unverified attendance.
-- **Mobile App (Android Native)**: Developed in Kotlin with Jetpack Compose, offering selfie check-in with CameraX, GPS verification, offline-first Room DB, encrypted data storage, auto-sync, and Google Maps geofence zones.
+- **Attendance Middleware**: Geofence zone management (CRUD with Leaflet/OSM), mobile attendance API (photo + GPS), AWS Rekognition face verification, and HR inbox flagging for unverified attendance. Device trust signals (mock location, emulator detection) are sent with each submission and auto-flag suspicious activity.
+- **Photo Change Control**: First photo upload goes through normally; subsequent photo changes create a pending review request sent to HR inbox. Previous photo stays active until HR approves the new one. Schema: `photo_change_requests` table.
+- **Mobile App (Android Native)**: Developed in Kotlin with Jetpack Compose, offering selfie check-in with CameraX, GPS verification, offline-first Room DB (version 5), encrypted data storage, auto-sync, and Google Maps geofence zones. Includes `DeviceTrustManager` for emulator detection (Build fingerprint checks) and mock GPS location detection (`isFromMockProvider`/`isMock` flags).
 
 ## External Dependencies
 

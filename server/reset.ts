@@ -64,6 +64,7 @@ const KNOWN_WIPE = new Set([
   "smp_companies",
   "candidates",
   "automation_rules",
+  "photo_change_requests",
 ]);
 
 const DEMO_NATIONAL_IDS = ["1000000001", "2000000002", "1000000003"];

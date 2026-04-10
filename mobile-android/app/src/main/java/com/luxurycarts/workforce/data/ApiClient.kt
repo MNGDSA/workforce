@@ -37,6 +37,10 @@ interface ApiService {
         @Part("gpsAccuracy") gpsAccuracy: RequestBody,
         @Part("timestamp") timestamp: RequestBody,
         @Part photo: MultipartBody.Part,
+        @Part("mockLocationDetected") mockLocationDetected: RequestBody,
+        @Part("isEmulator") isEmulator: RequestBody,
+        @Part("locationProvider") locationProvider: RequestBody,
+        @Part("deviceFingerprint") deviceFingerprint: RequestBody,
     ): Response<SubmissionResponse>
 
     @GET("api/geofence-zones")
