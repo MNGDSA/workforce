@@ -1,6 +1,7 @@
 package com.luxurycarts.workforce.ui.screens
 
 import android.annotation.SuppressLint
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
@@ -153,8 +154,11 @@ private fun LeafletMapView(zones: List<GeofenceZone>, modifier: Modifier = Modif
             WebView(ctx).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
+                settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
                 webViewClient = WebViewClient()
-                loadDataWithBaseURL("https://openstreetmap.org", html, "text/html", "UTF-8", null)
+                loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
             }
         },
         modifier = modifier,
