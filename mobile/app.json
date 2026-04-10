@@ -57,7 +57,8 @@
       "expo-font",
       "expo-secure-store",
       "expo-sqlite",
-      "expo-crypto"
+      "expo-crypto",
+      "react-native-quick-crypto"
     ],
     "scheme": "workforce",
     "extra": {

@@ -73,7 +73,7 @@ export default function BiometricDisclosure({ visible, onAccept, onDecline }: Pr
             <View style={styles.bulletItem}>
               <View style={styles.bullet} />
               <Text style={styles.bulletText}>
-                All photos are encrypted on your device before storage
+                All photos are encrypted on your device using AES-256-GCM before storage
               </Text>
             </View>
             <View style={styles.bulletItem}>

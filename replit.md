@@ -179,11 +179,11 @@ Located in `mobile/` directory — a standalone Expo project for seasonal worker
 
 **Features:** Selfie check-in with face guide overlay, GPS verification, offline-first SQLite, auto-sync, Google Maps geofence zones, privacy policy screen.
 
-**Dependencies:** expo ~52, expo-camera, expo-location, expo-sqlite, expo-secure-store, react-native-maps, date-fns.
+**Dependencies:** expo ~52, expo-camera, expo-location, expo-sqlite, expo-secure-store, react-native-maps, react-native-quick-crypto, date-fns.
 
 **Connects to:** `POST /api/attendance-mobile/submit` (multipart photo+GPS), `GET /api/geofence-zones`, `POST /api/auth/login`, `GET /api/workforce/all-by-candidate/:candidateId`, `GET /api/portal/schedule/:workforceId`, `POST /api/portal/data-deletion-request`.
-**Auth contract:** Backend returns `{ user, candidate }` (no token). Mobile stores credentials in SecureStore with 24h client-side expiry. Re-authenticates before uploads.
-**Encryption:** SHA-256-derived stream cipher with HMAC integrity (fields and files). Key stored in device secure enclave via SecureStore. Photos encrypted at rest (.enc), decrypted to temp for upload, temp cleaned after sync.
+**Auth contract:** Backend returns `{ user, candidate }` (no token). Mobile stores user/candidate data (not credentials) in SecureStore with 24h client-side session expiry. Session cookie managed by fetch `credentials: 'include'`.
+**Encryption:** AES-256-GCM via react-native-quick-crypto (fields and files). 12-byte random IV + 16-byte auth tag per record. Key stored in device secure enclave via SecureStore. All sensitive SQLite fields encrypted (workforceId, photoPath, GPS, timestamp). Photos encrypted at rest (.enc), decrypted to temp for upload, temp cleaned after sync.
 
 ### Public Routes Must Come Before Auth Middleware
 Candidate portal and public job listings must be registered before `requireAuth` or unauthenticated users are blocked.

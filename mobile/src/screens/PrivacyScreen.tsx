@@ -45,7 +45,7 @@ const SECTIONS = [
     title: 'Data Storage & Security',
     icon: 'lock-closed-outline' as const,
     items: [
-      'Photos are encrypted on your device before storage using a device-specific key stored in secure enclave (SecureStore)',
+      'Photos and attendance data are encrypted on your device using AES-256-GCM with a device-specific key stored in the secure enclave (SecureStore)',
       'Server-side data is stored in secure databases with access controls',
       'Facial recognition processing is performed server-side; biometric templates are not stored permanently',
       'Local attendance data is automatically purged after 30 days of successful sync',
