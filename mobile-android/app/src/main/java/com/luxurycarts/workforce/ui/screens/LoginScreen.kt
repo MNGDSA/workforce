@@ -59,7 +59,7 @@ fun LoginScreen(
     val scope = rememberCoroutineScope()
 
     var serverUrl by remember { mutableStateOf(app.sessionManager.serverUrl.ifEmpty { "https://" }) }
-    var workforceId by remember { mutableStateOf("") }
+    var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -126,10 +126,11 @@ fun LoginScreen(
             )
 
             OutlinedTextField(
-                value = workforceId,
-                onValueChange = { workforceId = it },
-                label = { Text("Workforce ID") },
+                value = identifier,
+                onValueChange = { identifier = it },
+                label = { Text("ID Number / Phone Number") },
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 colors = fieldColors,
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth(),
@@ -153,7 +154,7 @@ fun LoginScreen(
 
             Button(
                 onClick = {
-                    if (serverUrl.isBlank() || workforceId.isBlank() || password.isBlank()) {
+                    if (serverUrl.isBlank() || identifier.isBlank() || password.isBlank()) {
                         errorMessage = "All fields are required"
                         return@Button
                     }
@@ -162,13 +163,13 @@ fun LoginScreen(
                     scope.launch {
                         try {
                             val api = ApiClient.create(serverUrl.trim())
-                            val response = api.login(LoginRequest(workforceId.trim(), password))
+                            val response = api.login(LoginRequest(identifier.trim(), password))
                             if (response.isSuccessful && response.body() != null) {
                                 val body = response.body()!!
                                 app.sessionManager.serverUrl = serverUrl.trim()
                                 app.sessionManager.userJson = Gson().toJson(body.user)
                                 app.sessionManager.candidateJson = body.candidate?.let { Gson().toJson(it) }
-                                app.sessionManager.workforceId = workforceId.trim()
+                                app.sessionManager.workforceId = identifier.trim()
                                 app.sessionManager.loginTimestamp = System.currentTimeMillis()
 
                                 var workforceRecord: WorkforceRecord? = null
