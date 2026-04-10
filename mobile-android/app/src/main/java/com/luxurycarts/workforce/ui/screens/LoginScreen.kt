@@ -28,8 +28,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -91,19 +91,31 @@ fun LoginScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             val spaceGrotesk = FontFamily(Font(R.font.space_grotesk_bold, FontWeight.Bold))
+            val slashLight = Color(0xFF7ECFA8)
+            val slashMid = Color(0xFF2D9B68)
+            val slashDark = Color(0xFF145E38)
 
-            Canvas(modifier = Modifier.width(56.dp).height(28.dp)) {
-                val stripeH = 6.dp.toPx()
-                val gap = 5.dp.toPx()
-                val totalH = stripeH * 3 + gap * 2
-                val startY = (size.height - totalH) / 2
-                for (i in 0..2) {
-                    drawRect(
-                        color = ForestGreen,
-                        topLeft = Offset(0f, startY + i * (stripeH + gap)),
-                        size = Size(size.width, stripeH),
-                    )
+            Canvas(modifier = Modifier.width(48.dp).height(48.dp)) {
+                val w = size.width
+                val h = size.height
+                val slashW = w * 0.21f
+                val gap = w * 0.05f
+
+                fun drawSlash(x: Float, color: Color) {
+                    val path = Path().apply {
+                        moveTo(x + slashW * 0.6f, 0f)
+                        lineTo(x + slashW * 1.6f, 0f)
+                        lineTo(x + slashW, h)
+                        lineTo(x, h)
+                        close()
+                    }
+                    drawPath(path, color)
                 }
+
+                val startX = w * 0.05f
+                drawSlash(startX, slashLight)
+                drawSlash(startX + slashW + gap, slashMid)
+                drawSlash(startX + (slashW + gap) * 2, slashDark)
             }
 
             Spacer(Modifier.height(8.dp))
@@ -114,7 +126,7 @@ fun LoginScreen(
                 fontWeight = FontWeight.Bold,
                 fontSize = 28.sp,
                 color = TextPrimary,
-                letterSpacing = 6.sp,
+                letterSpacing = 2.sp,
             )
 
             Text(
