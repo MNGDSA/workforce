@@ -64,20 +64,26 @@ export async function compareFaces(
       SimilarityThreshold: 70,
     });
 
+    console.log("[Rekognition] Sending CompareFaces request to", awsRegion, "source size:", sourceBytes.length, "target size:", targetBytes.length);
     const response = await client.send(command);
+    console.log("[Rekognition] Response received — FaceMatches:", response.FaceMatches?.length ?? 0, "UnmatchedFaces:", response.UnmatchedFaces?.length ?? 0);
     const topMatch = response.FaceMatches?.[0];
     const confidence = topMatch?.Similarity ?? 0;
+    console.log("[Rekognition] Top match confidence:", confidence);
 
     return {
       confidence: Math.round(confidence * 100) / 100,
       matched: confidence >= 95,
     };
   } catch (err) {
-    console.error("[Rekognition] CompareFaces error:", err);
+    const errMsg = err instanceof Error ? err.message : "rekognition_error";
+    const errName = err instanceof Error ? err.constructor.name : "Unknown";
+    console.error("[Rekognition] CompareFaces FAILED —", errName, ":", errMsg);
+    if (err instanceof Error && 'Code' in err) console.error("[Rekognition] AWS Error Code:", (err as any).Code);
     return {
       confidence: 0,
       matched: false,
-      error: err instanceof Error ? err.message : "rekognition_error",
+      error: errMsg,
     };
   }
 }
