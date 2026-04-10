@@ -14,9 +14,9 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
       workforce_id TEXT NOT NULL,
       photo_path TEXT NOT NULL,
       photo_base64 TEXT,
-      gps_lat REAL NOT NULL,
-      gps_lng REAL NOT NULL,
-      gps_accuracy REAL,
+      gps_lat TEXT NOT NULL,
+      gps_lng TEXT NOT NULL,
+      gps_accuracy TEXT,
       timestamp TEXT NOT NULL,
       sync_status TEXT NOT NULL DEFAULT 'pending',
       server_id TEXT,
@@ -60,12 +60,16 @@ export async function saveSubmission(params: {
 
   const encryptedPhotoPath = await encryptField(params.photoPath);
   const encryptedWorkforceId = await encryptField(params.workforceId);
+  const encryptedGpsLat = await encryptField(String(params.gpsLat));
+  const encryptedGpsLng = await encryptField(String(params.gpsLng));
+  const encryptedGpsAccuracy = params.gpsAccuracy !== null ? await encryptField(String(params.gpsAccuracy)) : null;
+  const encryptedTimestamp = await encryptField(params.timestamp);
 
   await database.runAsync(
     `INSERT INTO attendance_submissions 
      (id, workforce_id, photo_path, photo_base64, gps_lat, gps_lng, gps_accuracy, timestamp, sync_status, retry_count, created_at, encrypted)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, 1)`,
-    [id, encryptedWorkforceId, encryptedPhotoPath, params.photoBase64, params.gpsLat, params.gpsLng, params.gpsAccuracy, params.timestamp, now]
+    [id, encryptedWorkforceId, encryptedPhotoPath, params.photoBase64, encryptedGpsLat, encryptedGpsLng, encryptedGpsAccuracy, encryptedTimestamp, now]
   );
 
   return {
@@ -89,15 +93,22 @@ export async function saveSubmission(params: {
 
 async function decryptRow(row: SqliteRow & { encrypted?: number }): Promise<AttendanceSubmission> {
   const isEncrypted = row.encrypted === 1;
+  const workforceId = isEncrypted ? await decryptField(row.workforce_id) : row.workforce_id;
+  const photoPath = isEncrypted ? await decryptField(row.photo_path) : row.photo_path;
+  const gpsLatStr = isEncrypted ? await decryptField(row.gps_lat) : row.gps_lat;
+  const gpsLngStr = isEncrypted ? await decryptField(row.gps_lng) : row.gps_lng;
+  const gpsAccStr = row.gps_accuracy && isEncrypted ? await decryptField(row.gps_accuracy) : row.gps_accuracy;
+  const timestamp = isEncrypted ? await decryptField(row.timestamp) : row.timestamp;
+
   return {
     id: row.id,
-    workforceId: isEncrypted ? await decryptField(row.workforce_id) : row.workforce_id,
-    photoPath: isEncrypted ? await decryptField(row.photo_path) : row.photo_path,
+    workforceId,
+    photoPath,
     photoBase64: row.photo_base64,
-    gpsLat: row.gps_lat,
-    gpsLng: row.gps_lng,
-    gpsAccuracy: row.gps_accuracy,
-    timestamp: row.timestamp,
+    gpsLat: parseFloat(gpsLatStr) || 0,
+    gpsLng: parseFloat(gpsLngStr) || 0,
+    gpsAccuracy: gpsAccStr ? parseFloat(gpsAccStr) || null : null,
+    timestamp,
     syncStatus: row.sync_status as SyncStatus,
     serverId: row.server_id,
     serverStatus: row.server_status,

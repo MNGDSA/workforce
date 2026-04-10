@@ -14,7 +14,6 @@ import type {
 const API_BASE_URL_KEY = 'workforce_api_url';
 const USER_DATA_KEY = 'workforce_user';
 const WORKFORCE_DATA_KEY = 'workforce_record';
-const CREDENTIALS_KEY = 'workforce_credentials';
 const SESSION_EXPIRY_KEY = 'workforce_session_expiry';
 
 const SESSION_LIFETIME_MS = 24 * 60 * 60 * 1000;
@@ -38,35 +37,23 @@ export async function setBaseUrl(url: string): Promise<void> {
   await SecureStore.setItemAsync(API_BASE_URL_KEY, baseUrl);
 }
 
-async function storeCredentials(identifier: string, password: string): Promise<void> {
-  await SecureStore.setItemAsync(CREDENTIALS_KEY, JSON.stringify({ identifier, password }));
+async function refreshSessionExpiry(): Promise<void> {
   const expiry = String(Date.now() + SESSION_LIFETIME_MS);
   await SecureStore.setItemAsync(SESSION_EXPIRY_KEY, expiry);
 }
 
-async function getStoredCredentials(): Promise<{ identifier: string; password: string } | null> {
+export async function isSessionValid(): Promise<boolean> {
   const expiry = await SecureStore.getItemAsync(SESSION_EXPIRY_KEY);
-  if (expiry && Date.now() > parseInt(expiry, 10)) {
+  if (!expiry) return false;
+  if (Date.now() > parseInt(expiry, 10)) {
     await clearSession();
     logoutCallback?.();
-    return null;
+    return false;
   }
-  const raw = await SecureStore.getItemAsync(CREDENTIALS_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as { identifier: string; password: string };
-  } catch {
-    return null;
-  }
-}
-
-export async function isSessionValid(): Promise<boolean> {
-  const creds = await getStoredCredentials();
-  return creds !== null;
+  return true;
 }
 
 export async function clearSession(): Promise<void> {
-  await SecureStore.deleteItemAsync(CREDENTIALS_KEY);
   await SecureStore.deleteItemAsync(SESSION_EXPIRY_KEY);
   await SecureStore.deleteItemAsync(USER_DATA_KEY);
   await SecureStore.deleteItemAsync(WORKFORCE_DATA_KEY);
@@ -163,7 +150,7 @@ export async function login(identifier: string, password: string): Promise<Login
     'POST', '/api/auth/login', { identifier, password }
   );
 
-  await storeCredentials(identifier, password);
+  await refreshSessionExpiry();
   await storeUserData({ user: result.user, candidate: result.candidate });
 
   if (result.candidate) {
@@ -185,19 +172,8 @@ export async function login(identifier: string, password: string): Promise<Login
   return result;
 }
 
-export async function revalidateSession(): Promise<boolean> {
-  const creds = await getStoredCredentials();
-  if (!creds) return false;
-
-  try {
-    await apiRequest<LoginResponse>(
-      'POST', '/api/auth/login', { identifier: creds.identifier, password: creds.password }
-    );
-    return true;
-  } catch {
-    await clearSession();
-    return false;
-  }
+export async function checkSessionLocally(): Promise<boolean> {
+  return isSessionValid();
 }
 
 export async function uploadAttendancePhoto(
@@ -208,7 +184,10 @@ export async function uploadAttendancePhoto(
   gpsAccuracy: number | null,
   clientTimestamp: string
 ): Promise<UploadResult> {
-  await revalidateSession();
+  const sessionValid = await checkSessionLocally();
+  if (!sessionValid) {
+    throw new ApiError('Session expired. Please log in again.', 401);
+  }
 
   const formData = new FormData();
   formData.append('workforceId', workforceId);
@@ -255,6 +234,6 @@ export async function fetchShiftInfo(workforceId: string): Promise<ShiftInfo | n
   }
 }
 
-export async function requestDataDeletion(): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>('POST', '/api/portal/data-deletion-request');
+export async function requestDataDeletion(identifier: string, password: string): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('POST', '/api/portal/data-deletion-request', { identifier, password });
 }

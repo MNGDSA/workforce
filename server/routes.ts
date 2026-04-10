@@ -3283,15 +3283,31 @@ export async function registerRoutes(
   // ─── Portal: Data Deletion Request ──────────────────────────────────────────
   app.post("/api/portal/data-deletion-request", async (req: Request, res: Response) => {
     try {
-      if (!req.session?.userId) {
-        return res.status(401).json({ message: "Not authenticated" });
+      const { identifier, password } = req.body;
+      if (!identifier || !password) {
+        return res.status(400).json({ message: "Credentials required to confirm data deletion request" });
+      }
+      const clean = String(identifier).trim();
+      const user =
+        await storage.getUserByPhone(clean) ??
+        await storage.getUserByNationalId(clean) ??
+        await storage.getUserByEmail(clean) ??
+        await storage.getUserByUsername(clean);
+      if (!user) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+      const valid = await bcrypt.compare(password, user.password);
+      if (!valid) {
+        return res.status(401).json({ message: "Invalid credentials" });
       }
       await storage.createAuditLog({
-        userId: req.session.userId,
+        actorId: user.id,
+        actorName: user.fullName || user.username,
         action: "data_deletion_requested",
         entityType: "user",
-        entityId: String(req.session.userId),
-        details: { requestedAt: new Date().toISOString(), source: "mobile_app" },
+        entityId: user.id,
+        description: `Data deletion request submitted by ${user.fullName || user.username} via mobile app`,
+        metadata: { requestedAt: new Date().toISOString(), source: "mobile_app" },
       });
       return res.json({ message: "Data deletion request has been submitted. Our team will process it within 30 days per GDPR requirements." });
     } catch (err) { return handleError(res, err); }

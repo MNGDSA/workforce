@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  TextInput,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, spacing, borderRadius } from '../theme';
@@ -84,6 +86,9 @@ const SECTIONS = [
 export default function PrivacyScreen({ onBack, onDeleteAllData }: Props) {
   const [deletingLocal, setDeletingLocal] = useState(false);
   const [requestingServerDeletion, setRequestingServerDeletion] = useState(false);
+  const [showCredentialPrompt, setShowCredentialPrompt] = useState(false);
+  const [credIdentifier, setCredIdentifier] = useState('');
+  const [credPassword, setCredPassword] = useState('');
 
   const handleDeleteLocalData = async (): Promise<void> => {
     Alert.alert(
@@ -110,32 +115,45 @@ export default function PrivacyScreen({ onBack, onDeleteAllData }: Props) {
     );
   };
 
-  const handleRequestServerDeletion = async (): Promise<void> => {
+  const handleRequestServerDeletion = (): void => {
     Alert.alert(
       'Request Data Deletion',
-      'This will submit a formal request to delete all your personal data from WORKFORCE servers, including attendance records, photos, and biometric data. HR will process your request within 30 days. This may affect your employment status.',
+      'This will submit a formal request to delete all your personal data from WORKFORCE servers. You will need to re-enter your credentials to confirm. This may affect your employment status.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Submit Request',
+          text: 'Continue',
           style: 'destructive',
-          onPress: async () => {
-            setRequestingServerDeletion(true);
-            try {
-              const result = await requestDataDeletion();
-              Alert.alert('Request Submitted', result.message || 'Your data deletion request has been submitted. HR will process it within 30 days.');
-            } catch {
-              Alert.alert(
-                'Request Failed',
-                'Unable to submit the request right now. Please contact HR directly or try again when you have an internet connection.'
-              );
-            } finally {
-              setRequestingServerDeletion(false);
-            }
+          onPress: () => {
+            setCredIdentifier('');
+            setCredPassword('');
+            setShowCredentialPrompt(true);
           },
         },
       ]
     );
+  };
+
+  const handleSubmitDeletionRequest = async (): Promise<void> => {
+    if (!credIdentifier.trim() || !credPassword.trim()) {
+      Alert.alert('Error', 'Please enter your ID and password to confirm.');
+      return;
+    }
+    setShowCredentialPrompt(false);
+    setRequestingServerDeletion(true);
+    try {
+      const result = await requestDataDeletion(credIdentifier.trim(), credPassword);
+      Alert.alert('Request Submitted', result.message || 'Your data deletion request has been submitted. HR will process it within 30 days.');
+    } catch {
+      Alert.alert(
+        'Request Failed',
+        'Unable to submit the request. Please verify your credentials or try again when you have an internet connection.'
+      );
+    } finally {
+      setRequestingServerDeletion(false);
+      setCredIdentifier('');
+      setCredPassword('');
+    }
   };
 
   const handleFullDataWipe = (): void => {
@@ -252,6 +270,55 @@ export default function PrivacyScreen({ onBack, onDeleteAllData }: Props) {
 
         <Text style={styles.lastUpdated}>Last updated: 2024</Text>
       </ScrollView>
+
+      <Modal
+        visible={showCredentialPrompt}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCredentialPrompt(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Confirm Identity</Text>
+            <Text style={styles.modalDesc}>
+              Re-enter your credentials to confirm the data deletion request.
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="ID Number or Phone"
+              placeholderTextColor={colors.textMuted}
+              value={credIdentifier}
+              onChangeText={setCredIdentifier}
+              autoCapitalize="none"
+              testID="input-deletion-identifier"
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Password"
+              placeholderTextColor={colors.textMuted}
+              value={credPassword}
+              onChangeText={setCredPassword}
+              secureTextEntry
+              testID="input-deletion-password"
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => { setShowCredentialPrompt(false); setCredIdentifier(''); setCredPassword(''); }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSubmitButton}
+                onPress={handleSubmitDeletionRequest}
+                testID="button-confirm-deletion"
+              >
+                <Text style={styles.modalSubmitText}>Submit Request</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -315,4 +382,30 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body, fontSize: 11, color: colors.textMuted,
     textAlign: 'center', paddingBottom: spacing.xxxl,
   },
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center', alignItems: 'center', padding: spacing.xl,
+  },
+  modalContent: {
+    backgroundColor: colors.surface, borderRadius: borderRadius.lg,
+    padding: spacing.xl, width: '100%', maxWidth: 400, gap: spacing.md,
+  },
+  modalTitle: { fontFamily: fonts.heading, fontSize: 18, color: colors.text },
+  modalDesc: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
+  modalInput: {
+    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.cardBorder,
+    borderRadius: borderRadius.md, padding: spacing.md,
+    fontFamily: fonts.body, fontSize: 14, color: colors.text,
+  },
+  modalButtons: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
+  modalCancelButton: {
+    flex: 1, paddingVertical: spacing.md, borderRadius: borderRadius.md,
+    backgroundColor: colors.card, alignItems: 'center',
+  },
+  modalCancelText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.textSecondary },
+  modalSubmitButton: {
+    flex: 1, paddingVertical: spacing.md, borderRadius: borderRadius.md,
+    backgroundColor: colors.error, alignItems: 'center',
+  },
+  modalSubmitText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: '#fff' },
 });

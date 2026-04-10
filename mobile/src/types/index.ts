@@ -106,9 +106,9 @@ export interface SqliteRow {
   workforce_id: string;
   photo_path: string;
   photo_base64: string | null;
-  gps_lat: number;
-  gps_lng: number;
-  gps_accuracy: number | null;
+  gps_lat: string;
+  gps_lng: string;
+  gps_accuracy: string | null;
   timestamp: string;
   sync_status: string;
   server_id: string | null;
