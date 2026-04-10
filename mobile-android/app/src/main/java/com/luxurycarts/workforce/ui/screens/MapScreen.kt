@@ -26,7 +26,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.luxurycarts.workforce.data.ApiService
@@ -36,7 +35,6 @@ import com.luxurycarts.workforce.ui.theme.ForestGreen
 import com.luxurycarts.workforce.ui.theme.Surface
 import com.luxurycarts.workforce.ui.theme.TextMuted
 import com.luxurycarts.workforce.ui.theme.TextPrimary
-import java.io.File
 
 @Composable
 fun MapScreen(
@@ -97,7 +95,6 @@ fun MapScreen(
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun LeafletMapView(zones: List<GeofenceZone>, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
     val defaultLat = 21.4225
     val defaultLng = 39.8262
     val centerLat = zones.firstOrNull()?.centerLat?.toDoubleOrNull() ?: defaultLat
@@ -109,8 +106,8 @@ private fun LeafletMapView(zones: List<GeofenceZone>, modifier: Modifier = Modif
         """{ name: "${zone.name.replace("\"", "\\\"")}", lat: $lat, lng: $lng, radius: ${zone.radiusMeters} }"""
     }
 
-    val htmlFile = remember(zones) {
-        val html = buildString {
+    val html = remember(zones) {
+        buildString {
             append("<!DOCTYPE html>")
             append("<html><head>")
             append("<meta name='viewport' content='width=device-width, initial-scale=1.0, user-scalable=no'>")
@@ -139,9 +136,6 @@ private fun LeafletMapView(zones: List<GeofenceZone>, modifier: Modifier = Modif
             append("map.fitBounds(g.getBounds().pad(0.2));}")
             append("</script></body></html>")
         }
-        val file = File(context.cacheDir, "leaflet_map.html")
-        file.writeText(html)
-        file
     }
 
     AndroidView(
@@ -150,13 +144,9 @@ private fun LeafletMapView(zones: List<GeofenceZone>, modifier: Modifier = Modif
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                settings.cacheMode = WebSettings.LOAD_DEFAULT
                 webViewClient = WebViewClient()
-                loadUrl("file://${htmlFile.absolutePath}")
+                loadDataWithBaseURL("https://unpkg.com/", html, "text/html", "UTF-8", null)
             }
-        },
-        update = { webView ->
-            webView.loadUrl("file://${htmlFile.absolutePath}")
         },
         modifier = modifier,
     )
