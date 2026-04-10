@@ -276,7 +276,7 @@ export default function InboxPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground" data-testid="text-inbox-title">HR Inbox</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground" data-testid="text-inbox-title">Inbox</h1>
             <p className="text-sm text-muted-foreground mt-1">
               Centralized action queue for HR tasks requiring attention
             </p>

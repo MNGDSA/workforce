@@ -302,7 +302,7 @@ const recruitmentItems: { href: string; icon: React.ElementType; label: string }
 
 const topNavItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/inbox",     icon: Inbox,           label: "HR Inbox" },
+  { href: "/inbox",     icon: Inbox,           label: "Inbox" },
   { href: "/payroll",   icon: Wallet,          label: "Payroll" },
 ];
 
@@ -556,7 +556,7 @@ function BellNotificationCenter() {
                 onClick={() => setOpen(false)}
                 className="w-full text-center text-xs font-medium text-primary hover:text-primary/80 transition-colors"
               >
-                View all in HR Inbox →
+                View all in Inbox →
               </button>
             </Link>
           </div>
