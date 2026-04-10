@@ -47,7 +47,9 @@ import {
   ShieldCheck,
   ShieldAlert,
   User,
+  AlertTriangle,
 } from "lucide-react";
+import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
 
 type InboxItem = {
@@ -137,6 +139,13 @@ export default function InboxPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [actionNotes, setActionNotes] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    action: "approve" | "reject" | null;
+    entityId: string | null;
+    inboxItemId: string | null;
+  }>({ open: false, action: null, entityId: null, inboxItemId: null });
+  const [confirmNotes, setConfirmNotes] = useState("");
   const limit = 20;
 
   const statusForApi = tab === "all" || tab === "history" ? undefined : tab;
@@ -184,18 +193,40 @@ export default function InboxPage() {
   });
 
   const approveAttendanceMut = useMutation({
-    mutationFn: (params: { entityId: string; notes?: string }) =>
+    mutationFn: (params: { entityId: string; notes: string }) =>
       apiRequest("POST", `/api/attendance-mobile/submissions/${params.entityId}/approve`, { notes: params.notes }),
-    onSuccess: () => { invalidateInbox(); setExpandedId(null); setActionNotes(""); toast({ title: "Attendance approved & verified" }); },
+    onSuccess: () => {
+      invalidateInbox(); setExpandedId(null); setActionNotes("");
+      setConfirmDialog({ open: false, action: null, entityId: null, inboxItemId: null }); setConfirmNotes("");
+      toast({ title: "Attendance approved & verified" });
+    },
     onError: () => toast({ title: "Failed to approve attendance", variant: "destructive" }),
   });
 
   const rejectAttendanceMut = useMutation({
-    mutationFn: (params: { entityId: string; notes?: string }) =>
+    mutationFn: (params: { entityId: string; notes: string }) =>
       apiRequest("POST", `/api/attendance-mobile/submissions/${params.entityId}/reject`, { notes: params.notes }),
-    onSuccess: () => { invalidateInbox(); setExpandedId(null); setActionNotes(""); toast({ title: "Attendance rejected" }); },
+    onSuccess: () => {
+      invalidateInbox(); setExpandedId(null); setActionNotes("");
+      setConfirmDialog({ open: false, action: null, entityId: null, inboxItemId: null }); setConfirmNotes("");
+      toast({ title: "Attendance rejected" });
+    },
     onError: () => toast({ title: "Failed to reject attendance", variant: "destructive" }),
   });
+
+  const openConfirmDialog = (action: "approve" | "reject", entityId: string, inboxItemId: string) => {
+    setConfirmNotes("");
+    setConfirmDialog({ open: true, action, entityId, inboxItemId });
+  };
+
+  const executeConfirmAction = () => {
+    if (!confirmDialog.entityId || !confirmDialog.action || !confirmNotes.trim()) return;
+    if (confirmDialog.action === "approve") {
+      approveAttendanceMut.mutate({ entityId: confirmDialog.entityId, notes: confirmNotes.trim() });
+    } else {
+      rejectAttendanceMut.mutate({ entityId: confirmDialog.entityId, notes: confirmNotes.trim() });
+    }
+  };
 
   const bulkResolveMut = useMutation({
     mutationFn: (ids: string[]) => apiRequest("POST", "/api/inbox/bulk-resolve", { ids }),
@@ -607,23 +638,25 @@ export default function InboxPage() {
 
                       {isPending && (
                         <div className="space-y-3 pt-2 border-t border-border/50">
-                          <div>
-                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Notes (optional)</label>
-                            <Textarea
-                              data-testid={`textarea-notes-${item.id}`}
-                              value={actionNotes}
-                              onChange={e => setActionNotes(e.target.value)}
-                              placeholder="Add resolution notes..."
-                              className="mt-1 bg-muted/30 border-border text-sm min-h-[60px]"
-                            />
-                          </div>
+                          {item.type !== "attendance_verification" && (
+                            <div>
+                              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Notes (optional)</label>
+                              <Textarea
+                                data-testid={`textarea-notes-${item.id}`}
+                                value={actionNotes}
+                                onChange={e => setActionNotes(e.target.value)}
+                                placeholder="Add resolution notes..."
+                                className="mt-1 bg-muted/30 border-border text-sm min-h-[60px]"
+                              />
+                            </div>
+                          )}
                           <div className="flex items-center gap-2">
                             {item.type === "attendance_verification" && item.entityId ? (
                               <>
                                 <Button
                                   size="sm"
                                   className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-                                  onClick={() => approveAttendanceMut.mutate({ entityId: item.entityId!, notes: actionNotes || undefined })}
+                                  onClick={() => openConfirmDialog("approve", item.entityId!, item.id)}
                                   disabled={approveAttendanceMut.isPending}
                                   data-testid={`button-approve-attendance-${item.id}`}
                                 >
@@ -633,7 +666,7 @@ export default function InboxPage() {
                                   size="sm"
                                   variant="outline"
                                   className="gap-1.5 border-red-600/50 text-red-400 hover:bg-red-600/10"
-                                  onClick={() => rejectAttendanceMut.mutate({ entityId: item.entityId!, notes: actionNotes || undefined })}
+                                  onClick={() => openConfirmDialog("reject", item.entityId!, item.id)}
                                   disabled={rejectAttendanceMut.isPending}
                                   data-testid={`button-reject-attendance-${item.id}`}
                                 >
@@ -729,6 +762,82 @@ export default function InboxPage() {
           </div>
         )}
       </div>
+
+      {confirmDialog.open && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center" data-testid="dialog-confirm-attendance">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmDialog({ open: false, action: null, entityId: null, inboxItemId: null })} />
+          <div className="relative bg-card border border-border rounded-md shadow-xl w-full max-w-md mx-4 p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                confirmDialog.action === "approve" ? "bg-emerald-500/10" : "bg-red-500/10"
+              }`}>
+                {confirmDialog.action === "approve" ? (
+                  <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                ) : (
+                  <AlertTriangle className="h-5 w-5 text-red-400" />
+                )}
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-foreground">
+                  {confirmDialog.action === "approve" ? "Approve Attendance" : "Reject Attendance"}
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {confirmDialog.action === "approve"
+                    ? "This will verify the attendance record and create a clock-in entry."
+                    : "This will reject the attendance submission. The employee will need to resubmit."}
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Resolution Notes <span className="text-red-400">*</span>
+              </label>
+              <Textarea
+                data-testid="textarea-confirm-notes"
+                value={confirmNotes}
+                onChange={e => setConfirmNotes(e.target.value)}
+                placeholder={confirmDialog.action === "approve"
+                  ? "e.g., Verified identity manually, photo matches..."
+                  : "e.g., Photo does not match reference, suspected proxy attendance..."
+                }
+                className="mt-1.5 bg-muted/30 border-border text-sm min-h-[80px]"
+                autoFocus
+              />
+              {confirmNotes.trim().length === 0 && (
+                <p className="text-xs text-red-400 mt-1">Resolution notes are required</p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmDialog({ open: false, action: null, entityId: null, inboxItemId: null })}
+                data-testid="button-confirm-cancel"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                disabled={!confirmNotes.trim() || approveAttendanceMut.isPending || rejectAttendanceMut.isPending}
+                className={confirmDialog.action === "approve"
+                  ? "gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                  : "gap-1.5 bg-red-600 hover:bg-red-700"
+                }
+                onClick={executeConfirmAction}
+                data-testid="button-confirm-action"
+              >
+                {(approveAttendanceMut.isPending || rejectAttendanceMut.isPending) && (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                )}
+                {confirmDialog.action === "approve" ? "Confirm Approval" : "Confirm Rejection"}
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </DashboardLayout>
   );
 }

@@ -3819,8 +3819,13 @@ export async function registerRoutes(
 
   app.post("/api/attendance-mobile/submissions/:id/approve", async (req: Request, res: Response) => {
     try {
-      const { notes } = req.body ?? {};
-      const reviewedBy = (req as any).userId ?? "system";
+      const { notes, reviewedBy: bodyReviewedBy } = req.body ?? {};
+      let reviewedBy = bodyReviewedBy ?? (req as any).userId;
+      if (!reviewedBy) {
+        const adminUser = await storage.getUserByUsername("admin");
+        reviewedBy = adminUser?.id ?? null;
+      }
+      if (!reviewedBy) return res.status(400).json({ message: "Reviewer identity required" });
       await approveSubmission(req.params.id, reviewedBy, notes);
       await logAudit(req, { action: "approve_attendance_submission", entityType: "attendance_submission", entityId: req.params.id, description: `Approved flagged attendance submission${notes ? `: ${notes}` : ""}` });
       const updated = await storage.getAttendanceSubmission(req.params.id);
@@ -3838,8 +3843,13 @@ export async function registerRoutes(
 
   app.post("/api/attendance-mobile/submissions/:id/reject", async (req: Request, res: Response) => {
     try {
-      const { notes } = req.body ?? {};
-      const reviewedBy = (req as any).userId ?? "system";
+      const { notes, reviewedBy: bodyReviewedBy } = req.body ?? {};
+      let reviewedBy = bodyReviewedBy ?? (req as any).userId;
+      if (!reviewedBy) {
+        const adminUser = await storage.getUserByUsername("admin");
+        reviewedBy = adminUser?.id ?? null;
+      }
+      if (!reviewedBy) return res.status(400).json({ message: "Reviewer identity required" });
       await rejectSubmission(req.params.id, reviewedBy, notes);
       await logAudit(req, { action: "reject_attendance_submission", entityType: "attendance_submission", entityId: req.params.id, description: `Rejected attendance submission${notes ? `: ${notes}` : ""}` });
       const updated = await storage.getAttendanceSubmission(req.params.id);

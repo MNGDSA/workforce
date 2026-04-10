@@ -1,9 +1,7 @@
 # Event Workforce Hiring Management System
 
 ## Overview
-This project is a full-stack event-based job hiring management platform designed for Saudi Arabia operations, capable of handling 70,000+ candidates at MAANG-scale. It features a dual-interface system: an admin back-office and a candidate self-service portal. The primary purpose is to digitize and streamline the entire event-based hiring lifecycle, from candidate intake and onboarding to workforce management, particularly for high-volume recruitment during events like Ramadan and Hajj. The system aims to replace chaotic traditional paperwork with an efficient, scalable digital solution.
-
-The system supports two recruitment tracks: regular candidates applying publicly and Sub-Manpower Provider (SMP) workers whose details are bulk-uploaded by their firms. A key design principle is a unified talent pool and pipeline, treating all individuals as candidates regardless of their entry method, with SMP contracts serving as business agreements rather than separate talent pipelines.
+This project is a full-stack, MAANG-scale event-based job hiring management platform designed for Saudi Arabia, capable of managing 70,000+ candidates. It aims to digitize and streamline the entire event-based hiring lifecycle, from candidate intake and onboarding to workforce management, particularly for high-volume recruitment during events like Ramadan and Hajj. The system features a dual-interface: an admin back-office and a candidate self-service portal. It supports both public applicants and bulk-uploaded Sub-Manpower Provider (SMP) workers, unifying them into a single talent pool. The business vision is to replace chaotic traditional hiring methods with an efficient, scalable digital solution, tapping into the market for large-scale event staffing.
 
 ## User Preferences
 
@@ -30,189 +28,38 @@ For tooltip info icons, use Lucide's `Info` icon directly without wrapping it in
 The system employs a modern, full-stack architecture.
 
 **Frontend**:
-- Built with React 19, Vite, TypeScript, Tailwind CSS v4, Shadcn/UI, and TanStack Query.
-- Utilizes `wouter` for client-side routing.
-- **Design System**: "Modern Industrial" theme with a dark forest green (`HSL: 155 45% 45%`).
-  - Display Font: Space Grotesk
-  - Body Font: Inter
-  - Border Radius: 0.25rem (industrial sharp)
-- **UI/UX Decisions**: Emphasizes a consistent design, with specific patterns for modals and tooltips using portals to prevent clipping issues.
+- Built with React 19, Vite, TypeScript, Tailwind CSS v4, Shadcn/UI, and TanStack Query, using `wouter` for routing.
+- **UI/UX Decisions**: "Modern Industrial" theme with a dark forest green (`HSL: 155 45% 45%`), Space Grotesk display font, Inter body font, and 0.25rem border radius. Modals and tooltips utilize portals to prevent clipping.
 
 **Backend**:
-- Powered by Express.js and Node.js with TypeScript.
-- Handles API endpoints, authentication, and business logic.
+- Powered by Express.js and Node.js with TypeScript for API, authentication, and business logic.
 
 **Database**:
 - PostgreSQL, managed with Drizzle ORM.
-- **Schema Design**: Tables are optimized for MAANG-scale with appropriate indexing for 70,000+ candidates. Key tables include `users`, `candidates`, `events`, `job_postings`, `applications`, `interviews`, `workforce`, `smp_contracts`, `automation_rules`, `notifications`, `inbox_items`, and tables for ID card management.
-- **Candidate Table Decisions**: Candidates are primarily identified by `national_id`. `skills`, `languages`, `certifications`, `tags` are array columns. `metadata` uses JSONB for extensibility. Composite indexes are used for common query patterns. Bulk inserts are batched for performance.
-- **Data Integrity Policy**: Strict policy against `onConflictDoNothing()` to ensure explicit handling of duplicates and uniqueness validation for business keys.
-- **Soft Delete Policy**: Events and Candidates are never hard-deleted; instead, `archivedAt` timestamps are used for soft deletion, preserving all linked records.
-- **Events Table**: Events are the central entity around which all workforce, individuals, and SMP settlements revolve. Events have an `eventType` column (`duration_based` | `ongoing`). Duration-based events have a fixed `endDate`; Ongoing events have `endDate = NULL` and no auto offboarding eligibility.
+- **Schema Design**: Optimized for MAANG-scale with indexing for 70,000+ candidates. Key entities include `users`, `candidates`, `events`, `job_postings`, `applications`, `interviews`, `workforce`, `smp_contracts`, `automation_rules`, `notifications`, `inbox_items`, and ID card management.
+- **Candidate Data**: Identified by `national_id`; `skills`, `languages`, `certifications`, `tags` are array columns; `metadata` uses JSONB.
+- **Data Integrity**: Strict policy against `onConflictDoNothing()` and soft deletion (`archivedAt`) for events and candidates.
+- **Events**: Central entity, can be `duration_based` or `ongoing`.
+- **Work Schedules & Shifts**: Dedicated schema for `shifts` (catalog), `schedule_templates` (weekly patterns), `schedule_assignments` (employee assignments with history), and `attendance_records` (daily status and clock-in/out).
 
 **Authentication**:
 - Session-based authentication using `bcryptjs` for password hashing.
 
-**Database Schema — Work Schedules & Shifts**:
-- `shifts`: Catalog of shift types with name, start/end times, and color.
-- `schedule_templates`: Weekly patterns linking each day-of-week to an optional shift. Optionally linked to an event.
-- `schedule_assignments`: Employee → template assignments with date ranges, supporting history. Overlap-prevention on create (ends current assignment before creating a new one).
-- `attendance_records`: One row per employee per date with status (present/absent/late/half_day/excused), clock-in/out times, source, and unique constraint on (workforceId, date).
-
 **Core Workflow & Features**:
-- **Unified Talent Pool**: All individuals are candidates in a single pool, differentiated by source (`self` or `bulk_upload`).
+- **Unified Talent Pool**: Manages all individuals as candidates, regardless of source (`self` or `bulk_upload`).
 - **End-to-End Workflow**: Covers event setup, job postings, SMP contracts, candidate intake, interviews, onboarding, conversion to employee, workforce management, and work schedule/attendance tracking.
-- **Work Schedules & Shifts**: New module under `/schedules` (sidebar: Workforce section). Supports shift definitions (name, times, color), weekly schedule templates, employee roster grid (assign/reassign/end), daily attendance marking (Present/Absent/Late/Half Day/Excused), and summary worked-day totals. Employee detail dialog includes a Schedule tab for inline assignment and history. Employee portal read-only endpoint available at `/api/portal/schedule/:workforceId`.
-- **SMP-Specifics**: SMP workers are bulk-uploaded and skip interviews, requiring a lighter onboarding checklist (photo + national ID only). SMP contracts are assignment records, not data owners.
-- **Onboarding Pipeline**: A phased approach for document verification and contract signing, ensuring all prerequisites are met before conversion to employee.
-- **Contract Engine**: Automated contract generation and digital signing system with template management, variable injection, and PDF rendering using `jspdf`. Supports versioning and branding.
-- **Profile Completeness**: Server-side validation ensures required fields are completed before a profile is marked complete.
-- **Automation Rules**: Database-backed toggleable workflows for various processes.
-- **Saudi-Specific Features**: Includes fields for National ID, Iqama, IBAN, Arabic names, and nationality (Saudi/Non-Saudi).
-- **Attendance Middleware**: Geofence zone management (CRUD with Leaflet/OSM map), mobile attendance submission API (photo + GPS), AWS Rekognition face verification stub (random 70-99% confidence when no AWS creds), verification pipeline (auto-verify if face confidence ≥95% AND GPS inside geofence, otherwise flag to HR Inbox), HR approve/reject actions with proper 404/409 status codes. Reference photo readiness indicator on employee avatars in workforce table.
-- **Planned Features**: Bilingual input (EN/AR), Employee ID Cards with a template engine, Mobile Attendance App (React Native with facial recognition and offline-first capabilities), Asset Management (tracking assignable assets and deductions), and an Employee Portal that flips from the candidate portal upon conversion.
+- **SMP-Specifics**: Bulk-uploaded SMP workers have a lighter onboarding checklist (photo + national ID).
+- **Onboarding Pipeline**: Phased document verification and contract signing.
+- **Contract Engine**: Automated, templated contract generation, digital signing, and PDF rendering.
+- **Automation Rules**: Database-backed, toggleable workflows.
+- **Saudi-Specific Features**: Includes fields for National ID, Iqama, IBAN, Arabic names, and nationality.
+- **Attendance Middleware**: Geofence zone management (CRUD with Leaflet/OSM), mobile attendance API (photo + GPS), AWS Rekognition face verification stub, and HR inbox flagging for unverified attendance.
+- **Mobile App (Android Native)**: Developed in Kotlin with Jetpack Compose, offering selfie check-in with CameraX, GPS verification, offline-first Room DB, encrypted data storage, auto-sync, and Google Maps geofence zones.
 
 ## External Dependencies
 
 - **GitHub**: Integrated via Replit OAuth using `@replit/connectors-sdk` and `@octokit/rest` for repository interactions.
-- **PostgreSQL**: The primary database for all persistent data storage.
-- **AWS Rekognition or Azure Face API**: Planned for the Mobile Attendance App for facial recognition and liveness detection.
-- **Zebra Browser Print SDK and Evolis Premium Suite plugins**: Planned for direct printing capabilities within the Employee ID Cards feature.
-
----
-
-## DigitalOcean PreProd / Production Deployment Notes
-
-> Full source: `attached_assets/DO-Deployment-Guide_1775338207310.md` — read it when deployment time comes.
-
-### Architecture
-```
-Replit (Dev) → GitHub (main branch) → DO App Platform
-                                          ├── Web Service (Express serves API + Vite static build)
-                                          ├── Managed PostgreSQL
-                                          └── DO Spaces (object storage, S3-compatible)
-```
-Push to `github main` → triggers auto-redeploy on DO.
-
-### GitHub Push Protocol (from Replit)
-The remote is named **`github`**, not `origin`. The integration token expires — always refresh before pushing:
-```javascript
-// Run in code_execution sandbox:
-const conns = await listConnections('github');
-const token = conns[0].settings.access_token;
-// Then: git remote set-url github https://x-access-token:{token}@github.com/ORG/REPO.git
-// Then: git push github main
-```
-
-### #1 Blocker — SSL Fix for DO Managed PostgreSQL
-DO injects `DATABASE_URL` with `?sslmode=require`. The `pg` driver interprets this as `verify-full` and throws `self-signed certificate in certificate chain`. Fix in both `server/db.ts` and `drizzle.config.ts`:
-```typescript
-function getConnectionString() {
-  const url = process.env.DATABASE_URL || "";
-  return url.replace(/[\?&]sslmode=[^&]*/, "").replace(/\?$/, "");
-}
-// In Pool / dbCredentials:
-ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
-```
-
-### Express Requirements for DO
-- Must read `PORT` from env: `const port = parseInt(process.env.PORT || "8080");`
-- Must serve the Vite build and provide SPA fallback:
-```typescript
-app.use(express.static(path.join(__dirname, "../public")));
-app.get("*", (req, res) => {
-  if (!req.path.startsWith("/api")) res.sendFile(path.join(__dirname, "../public/index.html"));
-});
-```
-
-### File Storage: Replit Object Storage → DO Spaces
-Replit's `DEFAULT_OBJECT_STORAGE_BUCKET_ID` does not exist on DO. Replace with **DO Spaces** (S3-compatible, use `@aws-sdk/client-s3`). Abstract the storage layer via env var — dev uses Replit, prod uses Spaces. **CORS on the Space is mandatory** or browser downloads will fail.
-
-Required DO Spaces env vars: `SPACES_ENDPOINT`, `SPACES_BUCKET`, `SPACES_KEY`, `SPACES_SECRET`, `SPACES_REGION`.
-
-### Required Environment Variables on DO
-| Variable | Notes |
-|----------|-------|
-| `DATABASE_URL` | Auto-injected if DB attached — must apply SSL fix above |
-| `NODE_ENV` | Set to `production` |
-| `SESSION_SECRET` | 64-char random hex — set permanently, never rotate or sessions break on each deploy |
-| `PORT` | Auto-injected by DO — app must read from env |
-| `SPACES_*` (5 vars) | DO Spaces credentials |
-| All SMS/API keys | Copy from Replit secrets |
-
-## Audit Log System
-
-A comprehensive audit trail capturing every significant backoffice action.
-
-**Database**: `audit_logs` table with columns: `id`, `actorId`, `actorName`, `action`, `entityType`, `entityId`, `employeeNumber`, `subjectName`, `description`, `metadata` (JSONB), `createdAt`.
-
-**Instrumented Actions**:
-- `onboarding.admit` — Candidate admitted to onboarding
-- `workforce.converted` — Single convert to employee
-- `workforce.bulk_converted` — Bulk convert
-- `workforce.updated` — Employee field update (with field-level diff: salary from/to, status, notes, event, end date, performance)
-- `workforce.bulk_updated` — Excel bulk update
-- `workforce.terminated` — Employee termination (with reason)
-- `workforce.reinstated` — Employee reinstatement
-- `attendance.corrected` — Manual attendance correction
-- `assets.assigned` / `assets.returned` / `assets.updated` — Asset lifecycle
-- `schedule.assigned` — Schedule template assignment
-
-**API**: `GET /api/audit-logs` with pagination (`page`, `limit`), `search`, `entityType`, `actorId` filters.
-
-**Frontend**: `/audit-log` page in sidebar under Reports section — activity feed with actor avatar, action badge, description, employee number chip, timestamp, entity-type filter tabs, full-text search, and pagination.
-
-**Helper**: `logAudit(req, params)` async function in routes.ts — fire-and-forget (never breaks main operation on failure). Resolves actor name via `storage.getUser(actorId)`.
-
-Generate SESSION_SECRET: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`
-
-### Mobile App (Native Kotlin / Jetpack Compose)
-Located in `mobile-android/` directory — a native Android project. Open directly in Android Studio and hit Run. No Node.js, Expo, or React Native dependencies.
-
-**Tech stack:** Kotlin 2.0, Jetpack Compose, CameraX, Room, Retrofit, WorkManager, Google Maps Compose.
-
-**Key files:**
-- `WorkforceApp.kt` — Application class, initializes database + session
-- `ui/nav/AppNavigation.kt` — Compose Navigation graph (login → home → capture/history/map/privacy)
-- `ui/screens/` — LoginScreen, HomeScreen, CaptureScreen, HistoryScreen, MapScreen, PrivacyScreen
-- `data/AppDatabase.kt` — Room database with AttendanceEntity + DAO
-- `data/ApiClient.kt` — Retrofit API service with cookie-based session
-- `data/AttendanceRepository.kt` — Bridges API and local DB, handles sync
-- `services/EncryptionService.kt` — AES-256-GCM via Android Keystore (hardware-backed)
-- `services/SessionManager.kt` — EncryptedSharedPreferences for session data
-- `services/SyncWorker.kt` — WorkManager periodic sync (15 min intervals)
-
-**Features:** Selfie check-in with CameraX + face guide overlay, GPS verification via FusedLocationProvider, offline-first Room DB, encrypted photo storage, auto-sync via WorkManager, Google Maps geofence zones, privacy policy + data deletion request.
-
-**Build:** Gradle 8.10.2, AGP 8.7.3, compileSdk 35, minSdk 26, targetSdk 34.
-
-**Encryption:** AES-256-GCM with key in Android Keystore (hardware-backed secure enclave). All sensitive Room fields encrypted. Photos encrypted at rest (.enc), decrypted on-demand for display/upload.
-
-**Connects to:** `POST /api/attendance-mobile/submit`, `GET /api/geofence-zones`, `POST /api/auth/login`, `GET /api/workforce/all-by-candidate/:candidateId`, `POST /api/portal/data-deletion-request`.
-
-**Note:** `mobile/` (old React Native/Expo version) is still present but deprecated. Use `mobile-android/` instead.
-
-### Public Routes Must Come Before Auth Middleware
-Candidate portal and public job listings must be registered before `requireAuth` or unauthenticated users are blocked.
-
-### Session Cookie Settings for HTTPS
-```typescript
-cookie: { secure: true, httpOnly: true, sameSite: "lax", maxAge: 86400000 }
-```
-
-### Startup Schema Safety Net
-Alongside `drizzle-kit push` at build time, add an `ensureTables()` function running raw `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE ADD COLUMN IF NOT EXISTS` before `app.listen()`. Guards against schema drift without requiring manual migrations.
-
-### Debugging on DO
-Check **Runtime Logs** first — most failures (SSL, missing env vars, port) happen at startup, not at build time. Build Logs only show compile/install errors.
-
-### Key Lessons (from the full guide)
-1. SSL strip is mandatory — `rejectUnauthorized: false` in production
-2. `SESSION_SECRET` must be permanent — sessions break on every redeploy otherwise
-3. Replit Object Storage ≠ DO Spaces — abstract the storage layer before deploying
-4. Remote is named `github` not `origin` — always refresh the token before pushing
-5. Read `PORT` from env — hardcoded ports prevent DO from routing traffic
-6. Public routes must be registered before auth middleware
-7. Check Runtime Logs first, not Build Logs
-8. Add `ensureTables()` startup safety net alongside Drizzle push
-9. **Expo `app.json` plugins array** — Only list packages that provide actual config plugins (e.g., `expo-camera`, `expo-location` with permission config). Regular dependencies like `expo-font`, `expo-secure-store`, `expo-sqlite`, `expo-crypto`, `react-native-quick-crypto` must NOT be listed as plugins — they have no `app.plugin.js` and will cause `PluginError` during `npx expo prebuild`.
+- **PostgreSQL**: Primary database for all persistent data storage.
+- **AWS Rekognition or Azure Face API**: Planned for facial recognition in the Mobile Attendance App.
+- **Zebra Browser Print SDK and Evolis Premium Suite plugins**: Planned for direct printing in the Employee ID Cards feature.
+- **DigitalOcean Spaces**: Used for object storage in production environments (S3-compatible).
