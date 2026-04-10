@@ -123,7 +123,7 @@ function ZoneMap({ zones, selectedId, onSelect }: { zones: GeofenceZone[]; selec
   return (
     <div
       ref={mapRef}
-      className="w-full h-[400px] rounded-lg border border-border overflow-hidden"
+      className="w-full h-[400px] rounded-lg border border-border overflow-hidden [&_.leaflet-pane]:!z-[1] [&_.leaflet-control]:!z-[2]"
       data-testid="geofence-map"
     />
   );
