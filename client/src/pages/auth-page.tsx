@@ -593,7 +593,7 @@ export default function AuthPage() {
               {(() => {
                 const GH = "https://raw.githubusercontent.com/TanStack/tanstack.com/main/public/logos/";
                 const logos = [
-                  { name: "Google",    url: "https://cdn.simpleicons.org/google",  nudge: 0 },
+                  { name: "Google",    url: "/logos/google-g.svg",  nudge: 0 },
                   { name: "Apple",     url: `${GH}apple.svg`,                      nudge: 0 },
                   { name: "Microsoft", url: `${GH}microsoft.svg`,                  nudge: 0 },
                   { name: "Amazon",    url: `${GH}amazon.svg`,                     nudge: 5 },
