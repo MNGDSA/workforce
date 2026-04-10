@@ -63,6 +63,7 @@ import com.luxurycarts.workforce.ui.theme.TextMuted
 import com.luxurycarts.workforce.ui.theme.TextPrimary
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import android.graphics.BitmapFactory
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
@@ -192,6 +193,20 @@ fun CaptureScreen(
                             try {
                                 val photoFile = File(context.filesDir, "att_${System.currentTimeMillis()}.jpg")
                                 capturePhoto(imageCapture!!, photoFile, context)
+
+                                val fileSizeKb = photoFile.length() / 1024
+                                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                                BitmapFactory.decodeFile(photoFile.absolutePath, opts)
+                                val imgW = opts.outWidth
+                                val imgH = opts.outHeight
+
+                                if (fileSizeKb < 30 || imgW < 400 || imgH < 400) {
+                                    photoFile.delete()
+                                    errorMessage = "Photo quality too low (${imgW}×${imgH}, ${fileSizeKb}KB). Please ensure good lighting and hold steady."
+                                    isCapturing = false
+                                    return@launch
+                                }
+
                                 val location = getLocation(context)
 
                                 val encPhotoPath = photoFile.absolutePath + ".enc"

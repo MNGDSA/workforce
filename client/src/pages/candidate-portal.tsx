@@ -386,6 +386,27 @@ function ProfileCompletionCard({
       toast({ title: "File too large", description: `Maximum size is ${maxMb} MB.`, variant: "destructive" });
       return;
     }
+    if (key === "photo") {
+      const MIN_WIDTH = 400;
+      const MIN_HEIGHT = 400;
+      const MIN_FILE_KB = 30;
+      if (file.size < MIN_FILE_KB * 1024) {
+        toast({ title: "Photo too small", description: `Your photo is only ${Math.round(file.size / 1024)} KB. Please upload a clear photo of at least ${MIN_FILE_KB} KB for face verification to work properly.`, variant: "destructive" });
+        return;
+      }
+      try {
+        const dims = await new Promise<{ w: number; h: number }>((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => { resolve({ w: img.naturalWidth, h: img.naturalHeight }); URL.revokeObjectURL(img.src); };
+          img.onerror = () => { reject(new Error("Cannot read image")); URL.revokeObjectURL(img.src); };
+          img.src = URL.createObjectURL(file);
+        });
+        if (dims.w < MIN_WIDTH || dims.h < MIN_HEIGHT) {
+          toast({ title: "Photo resolution too low", description: `Your photo is ${dims.w}×${dims.h} pixels. Please upload a photo at least ${MIN_WIDTH}×${MIN_HEIGHT} pixels so face verification works properly.`, variant: "destructive" });
+          return;
+        }
+      } catch {}
+    }
     setUploading((p) => ({ ...p, [key]: true }));
     try {
       const formData = new FormData();
