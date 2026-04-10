@@ -72,7 +72,7 @@ class AttendanceRepository(
                 if (response.isSuccessful) {
                     val body = response.body()
                     val sub = body?.submission
-                    dao.updateSyncResult(submission.id, sub?.status ?: "synced", sub?.id, sub?.flagReason)
+                    dao.updateSyncResult(submission.id, sub?.status ?: "synced", sub?.id, sub?.flagReason, sub?.rekognitionConfidence)
                 } else if (response.code() == 409) {
                     dao.updateSyncResult(submission.id, "synced", null, null)
                 } else {
@@ -102,7 +102,7 @@ class AttendanceRepository(
                 for (result in results) {
                     val status = result.status ?: continue
                     if (status != "flagged") {
-                        dao.updateStatusByServerId(result.id, status, result.flagReason, result.reviewNotes)
+                        dao.updateStatusByServerId(result.id, status, result.flagReason, result.reviewNotes, result.rekognitionConfidence)
                     }
                 }
             }

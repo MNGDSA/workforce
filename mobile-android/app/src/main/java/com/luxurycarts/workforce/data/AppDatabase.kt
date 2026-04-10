@@ -29,6 +29,7 @@ data class AttendanceEntity(
     @ColumnInfo(name = "retry_count") val retryCount: Int = 0,
     @ColumnInfo(name = "owner_workforce_id") val ownerWorkforceId: String,
     @ColumnInfo(name = "review_notes") val reviewNotes: String? = null,
+    @ColumnInfo(name = "rekognition_confidence") val rekognitionConfidence: String? = null,
 )
 
 @Dao
@@ -46,8 +47,8 @@ interface AttendanceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: AttendanceEntity)
 
-    @Query("UPDATE attendance_submissions SET sync_status = :status, server_id = :serverId, flag_reason = :flagReason WHERE id = :id")
-    suspend fun updateSyncResult(id: String, status: String, serverId: String?, flagReason: String?)
+    @Query("UPDATE attendance_submissions SET sync_status = :status, server_id = :serverId, flag_reason = :flagReason, rekognition_confidence = :rekognitionConfidence WHERE id = :id")
+    suspend fun updateSyncResult(id: String, status: String, serverId: String?, flagReason: String?, rekognitionConfidence: String? = null)
 
     @Query("UPDATE attendance_submissions SET retry_count = retry_count + 1 WHERE id = :id")
     suspend fun incrementRetry(id: String)
@@ -58,14 +59,14 @@ interface AttendanceDao {
     @Query("SELECT server_id FROM attendance_submissions WHERE server_id IS NOT NULL AND sync_status IN ('flagged', 'pending_review') AND owner_workforce_id = :workforceId")
     suspend fun getServerIdsForStatusCheck(workforceId: String): List<String>
 
-    @Query("UPDATE attendance_submissions SET sync_status = :status, flag_reason = :flagReason, review_notes = :reviewNotes WHERE server_id = :serverId")
-    suspend fun updateStatusByServerId(serverId: String, status: String, flagReason: String?, reviewNotes: String?)
+    @Query("UPDATE attendance_submissions SET sync_status = :status, flag_reason = :flagReason, review_notes = :reviewNotes, rekognition_confidence = :rekognitionConfidence WHERE server_id = :serverId")
+    suspend fun updateStatusByServerId(serverId: String, status: String, flagReason: String?, reviewNotes: String?, rekognitionConfidence: String? = null)
 
     @Query("DELETE FROM attendance_submissions WHERE owner_workforce_id = :workforceId")
     suspend fun deleteAllForUser(workforceId: String)
 }
 
-@Database(entities = [AttendanceEntity::class], version = 3, exportSchema = false)
+@Database(entities = [AttendanceEntity::class], version = 4, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun attendanceDao(): AttendanceDao
 

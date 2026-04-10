@@ -203,6 +203,26 @@ private fun HistoryItem(
             HorizontalDivider(color = Border)
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 item.gpsAccuracy?.let { DetailLine("GPS Accuracy", "\u00B1${it.toInt()}m") }
+                val rekLabel = when {
+                    item.rekognitionConfidence == null && item.syncStatus == "pending" -> null
+                    item.rekognitionConfidence == null -> "Not processed"
+                    else -> {
+                        val conf = item.rekognitionConfidence.toDoubleOrNull() ?: 0.0
+                        when {
+                            conf >= 95.0 -> "Identical (${String.format("%.1f", conf)}%)"
+                            conf > 0.0 -> "Not identical (${String.format("%.1f", conf)}%)"
+                            else -> "Error"
+                        }
+                    }
+                }
+                if (rekLabel != null) {
+                    val rekColor = when {
+                        rekLabel.startsWith("Identical") -> SuccessGreen
+                        rekLabel.startsWith("Not identical") -> ErrorRed
+                        else -> TextMuted
+                    }
+                    DetailLine("Face Match", rekLabel, rekColor)
+                }
                 DetailLine("Sync Status", item.syncStatus)
                 item.serverId?.let { DetailLine("Server ID", it.toString()) }
                 item.flagReason?.let {
@@ -265,12 +285,12 @@ private fun HistoryItem(
 }
 
 @Composable
-private fun DetailLine(label: String, value: String) {
+private fun DetailLine(label: String, value: String, valueColor: androidx.compose.ui.graphics.Color = TextSecondary) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(label, style = MaterialTheme.typography.bodySmall, color = TextMuted)
-        Text(value, style = MaterialTheme.typography.bodySmall, color = TextSecondary, fontWeight = FontWeight.SemiBold)
+        Text(value, style = MaterialTheme.typography.bodySmall, color = valueColor, fontWeight = FontWeight.SemiBold)
     }
 }

@@ -71,6 +71,7 @@ data class SubmissionDetail(
     val id: String,
     val status: String,
     @SerializedName("flagReason") val flagReason: String? = null,
+    @SerializedName("rekognitionConfidence") val rekognitionConfidence: String? = null,
 )
 
 data class VerificationResult(
@@ -99,4 +100,5 @@ data class StatusCheckResult(
     val status: String?,
     @SerializedName("flagReason") val flagReason: String? = null,
     @SerializedName("reviewNotes") val reviewNotes: String? = null,
+    @SerializedName("rekognitionConfidence") val rekognitionConfidence: String? = null,
 )

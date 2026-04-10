@@ -3820,7 +3820,7 @@ export async function registerRoutes(
         limitedIds.map(async (id: string) => {
           const sub = await storage.getAttendanceSubmission(id);
           if (!sub) return { id, status: null };
-          return { id: sub.id, status: sub.status, flagReason: sub.flagReason, reviewNotes: sub.reviewNotes };
+          return { id: sub.id, status: sub.status, flagReason: sub.flagReason, reviewNotes: sub.reviewNotes, rekognitionConfidence: sub.rekognitionConfidence };
         })
       );
       return res.json(results);
