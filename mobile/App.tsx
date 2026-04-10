@@ -100,8 +100,23 @@ export default function App() {
     switch (currentScreen) {
       case 'capture':
         if (!auth.workforceRecord || !biometricConsentGiven) {
-          setCurrentScreen('home');
-          return null;
+          return (
+            <HomeScreen
+              user={auth.user!}
+              workforceRecord={auth.workforceRecord}
+              onCheckIn={() => {
+                if (!biometricConsentGiven) {
+                  setShowBiometricDisclosure(true);
+                  return;
+                }
+                navigateTo('capture');
+              }}
+              onViewHistory={() => navigateTo('history')}
+              onViewMap={() => navigateTo('map')}
+              onLogout={auth.logout}
+              onPrivacyPolicy={() => navigateTo('privacy')}
+            />
+          );
         }
         return (
           <CaptureScreen
