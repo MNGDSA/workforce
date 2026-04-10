@@ -5,7 +5,9 @@ import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -40,7 +42,8 @@ class SyncWorker(
     }
 
     companion object {
-        private const val WORK_NAME = "attendance_sync"
+        private const val PERIODIC_WORK_NAME = "attendance_sync_periodic"
+        private const val IMMEDIATE_WORK_NAME = "attendance_sync_immediate"
 
         fun schedule(context: Context) {
             val constraints = Constraints.Builder()
@@ -55,14 +58,32 @@ class SyncWorker(
                 .build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                WORK_NAME,
+                PERIODIC_WORK_NAME,
                 ExistingPeriodicWorkPolicy.KEEP,
                 request,
             )
         }
 
+        fun syncNow(context: Context) {
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+
+            val request = OneTimeWorkRequestBuilder<SyncWorker>()
+                .setConstraints(constraints)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                .build()
+
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                IMMEDIATE_WORK_NAME,
+                ExistingWorkPolicy.REPLACE,
+                request,
+            )
+        }
+
         fun cancel(context: Context) {
-            WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+            WorkManager.getInstance(context).cancelUniqueWork(PERIODIC_WORK_NAME)
+            WorkManager.getInstance(context).cancelUniqueWork(IMMEDIATE_WORK_NAME)
         }
     }
 }

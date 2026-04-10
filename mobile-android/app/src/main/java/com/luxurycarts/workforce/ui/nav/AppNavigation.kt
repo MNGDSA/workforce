@@ -95,7 +95,6 @@ fun AppNavigation() {
                 CaptureScreen(
                     workforceId = wfId,
                     dao = app.database.attendanceDao(),
-                    apiService = apiService,
                     onComplete = { navController.popBackStack() },
                     onBack = { navController.popBackStack() },
                 )

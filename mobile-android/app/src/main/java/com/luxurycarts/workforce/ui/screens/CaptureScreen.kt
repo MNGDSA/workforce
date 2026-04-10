@@ -52,11 +52,10 @@ import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
-import com.luxurycarts.workforce.data.ApiService
 import com.luxurycarts.workforce.data.AttendanceDao
 import com.luxurycarts.workforce.data.AttendanceEntity
-import com.luxurycarts.workforce.data.AttendanceRepository
 import com.luxurycarts.workforce.services.EncryptionService
+import com.luxurycarts.workforce.services.SyncWorker
 import com.luxurycarts.workforce.ui.theme.Background
 import com.luxurycarts.workforce.ui.theme.ErrorRed
 import com.luxurycarts.workforce.ui.theme.ForestGreen
@@ -75,7 +74,6 @@ import kotlin.coroutines.resumeWithException
 fun CaptureScreen(
     workforceId: String,
     dao: AttendanceDao,
-    apiService: ApiService?,
     onComplete: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -212,14 +210,7 @@ fun CaptureScreen(
                                     ownerWorkforceId = workforceId,
                                 )
                                 dao.insert(entity)
-
-                                if (apiService != null) {
-                                    try {
-                                        val repo = AttendanceRepository(dao, apiService, workforceId)
-                                        repo.syncPending()
-                                    } catch (_: Exception) {}
-                                }
-
+                                SyncWorker.syncNow(context)
                                 onComplete()
                             } catch (e: Exception) {
                                 errorMessage = e.message ?: "Capture failed"
