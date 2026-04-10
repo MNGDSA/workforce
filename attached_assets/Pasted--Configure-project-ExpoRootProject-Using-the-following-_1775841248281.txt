@@ -1,0 +1,65 @@
+> Configure project :
+[ExpoRootProject] Using the following versions:
+  - buildTools:  35.0.0
+  - minSdk:      24
+  - compileSdk:  35
+  - targetSdk:   34
+  - ndk:         26.1.10909125
+  - kotlin:      2.0.0
+  - ksp:         2.0.0-1.0.24
+
+> Configure project :app
+ ??  Applying gradle plugin 'expo-max-sdk-override-plugin'
+  [expo-max-sdk-override-plugin] This plugin will find all permissions declared with `android:maxSdkVersion`. If there exists a declaration with the `android:maxSdkVersion` annotation and another one without, the plugin will remove the annotation from the final merged manifest. In order to see a log with the changes run a clean build of the app.
+
+FAILURE: Build failed with an exception.
+
+* Where:
+Build file 'C:\Users\FaisalAlamri\Downloads\mobile\android\app\build.gradle' line: 14
+
+* What went wrong:
+A problem occurred evaluating project ':app'.
+> Cannot invoke method getAbsolutePath() on null object
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 6s
+31 actionable tasks: 3 executed, 28 up-to-date
+
+C:\Users\FaisalAlamri\Downloads\mobile\android>gradlew clean
+
+> Configure project :app
+ ??  Applying gradle plugin 'expo-max-sdk-override-plugin'
+  [expo-max-sdk-override-plugin] This plugin will find all permissions declared with `android:maxSdkVersion`. If there exists a declaration with the `android:maxSdkVersion` annotation and another one without, the plugin will remove the annotation from the final merged manifest. In order to see a log with the changes run a clean build of the app.
+
+> Configure project :
+[ExpoRootProject] Using the following versions:
+  - buildTools:  35.0.0
+  - minSdk:      24
+  - compileSdk:  35
+  - targetSdk:   34
+  - ndk:         26.1.10909125
+  - kotlin:      2.0.0
+  - ksp:         2.0.0-1.0.24
+
+FAILURE: Build failed with an exception.
+
+* Where:
+Build file 'C:\Users\FaisalAlamri\Downloads\mobile\android\app\build.gradle' line: 14
+
+* What went wrong:
+A problem occurred evaluating project ':app'.
+> Cannot invoke method getAbsolutePath() on null object
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 3s
+31 actionable tasks: 3 executed, 28 up-to-date
