@@ -1,3 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 30" fill="white">
-  <text x="0" y="24" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="bold" letter-spacing="3">HONEYWELL</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 40" fill="white">
+  <g transform="translate(0,4)">
+    <polygon points="16,0 8,16 16,32 24,16" fill="#E10600"/>
+    <polygon points="16,4 10,16 16,28 22,16" fill="white" opacity="0.15"/>
+  </g>
+  <g transform="translate(34,0)">
+    <text y="30" font-family="'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="2.5" fill="white">HONEYWELL</text>
+  </g>
 </svg>
