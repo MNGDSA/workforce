@@ -602,6 +602,7 @@ export default function AuthPage() {
                   { name: "HP",        url: "/logos/hp-flat.svg",                  nudge: 0 },
                   { name: "DocuSign",  url: `${GH}docusign.svg`,                   nudge: 0 },
                   { name: "Yahoo",     url: "/logos/yahoo-flat.svg",               nudge: 0 },
+                  { name: "Honeywell", url: "https://cdn.simpleicons.org/honeywell/white", nudge: 0 },
                 ];
                 const items = [...logos, ...logos];
                 return (
