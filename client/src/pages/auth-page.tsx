@@ -593,9 +593,9 @@ export default function AuthPage() {
               {(() => {
                 const GH = "https://raw.githubusercontent.com/TanStack/tanstack.com/main/public/logos/";
                 const logos = [
-                  { name: "Google",    url: "/logos/google-g.svg",  nudge: 0 },
+                  { name: "Google",    url: "/logos/google-g.svg",  nudge: 0, scale: 1.5 },
                   { name: "Apple",     url: `${GH}apple.svg`,                      nudge: 0 },
-                  { name: "Microsoft", url: `${GH}microsoft.svg`,                  nudge: 0 },
+                  { name: "Microsoft", url: "/logos/microsoft.svg",                nudge: 0 },
                   { name: "Amazon",    url: `${GH}amazon.svg`,                     nudge: 5 },
                   { name: "Walmart",   url: `${GH}walmart.svg`,                    nudge: 0 },
                   { name: "Cisco",     url: `${GH}cisco.svg`,                      nudge: 0 },
@@ -613,12 +613,12 @@ export default function AuthPage() {
                         title={logo.name}
                         loading="lazy"
                         decoding="async"
-                        style={logo.nudge ? { transform: `translateY(${logo.nudge}px)` } : undefined}
+                        style={{
+                          ...(logo.nudge ? { transform: `translateY(${logo.nudge}px)` } : {}),
+                          ...((logo as any).scale ? { transform: `scale(${(logo as any).scale})` } : {}),
+                        }}
                         className="max-w-24 max-h-10 w-full h-auto object-contain grayscale group-hover:grayscale-0 transition-all duration-200"
                       />
-                      {logo.name === "Microsoft" && (
-                        <span className="text-white font-semibold text-sm tracking-tight whitespace-nowrap">Microsoft</span>
-                      )}
                     </div>
                   ));
                 return (
