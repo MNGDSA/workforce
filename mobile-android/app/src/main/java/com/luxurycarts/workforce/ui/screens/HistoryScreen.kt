@@ -193,7 +193,7 @@ private fun HistoryItem(
             Column {
                 Text(dateFormatted, style = MaterialTheme.typography.bodyMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
                 if (timeFormatted != null) {
-                    Text(timeFormatted, style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                    Text("Taken: $timeFormatted", style = MaterialTheme.typography.bodySmall, color = TextMuted)
                 }
             }
             StatusBadge(status = item.syncStatus)
