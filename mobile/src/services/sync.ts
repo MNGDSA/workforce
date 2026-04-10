@@ -5,7 +5,6 @@ import {
   updateSubmissionSyncStatus,
   incrementRetryCount,
   purgeOldSyncedSubmissions,
-  checkDuplicateDate,
 } from './database';
 import { uploadAttendancePhoto, getWorkforceData, ApiError } from './api';
 import { decryptFile } from './encryption';
@@ -73,17 +72,6 @@ export async function syncPendingSubmissions(): Promise<{ synced: number; failed
           flagReason: 'Max retries exceeded',
         });
         failed++;
-        notifyListeners();
-        continue;
-      }
-
-      const dateStr = submission.timestamp.split('T')[0];
-      const alreadyExists = await checkDuplicateDate(submission.workforceId, dateStr);
-      if (alreadyExists) {
-        await updateSubmissionSyncStatus(submission.id, 'failed', {
-          flagReason: 'Duplicate: attendance already exists for this date',
-        });
-        skipped++;
         notifyListeners();
         continue;
       }

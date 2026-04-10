@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,13 @@ import {
   RefreshControl,
   Image,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, spacing, borderRadius } from '../theme';
 import StatusBadge from '../components/StatusBadge';
 import { getAllSubmissions } from '../services/database';
 import { addSyncListener } from '../services/sync';
+import { decryptFile } from '../services/encryption';
 import type { AttendanceSubmission, AttendanceStatus } from '../types';
 import { format } from 'date-fns';
 
@@ -25,6 +27,8 @@ export default function HistoryScreen({ workforceId, onBack }: Props) {
   const [submissions, setSubmissions] = useState<AttendanceSubmission[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [decryptedPhotos, setDecryptedPhotos] = useState<Record<string, string>>({});
+  const decryptingRef = useRef<Set<string>>(new Set());
 
   const loadData = useCallback(async () => {
     const data = await getAllSubmissions(workforceId, 100);
@@ -42,6 +46,26 @@ export default function HistoryScreen({ workforceId, onBack }: Props) {
     await loadData();
     setRefreshing(false);
   };
+
+  const decryptPhotoForItem = useCallback(async (item: AttendanceSubmission) => {
+    if (!item.photoPath || decryptedPhotos[item.id] || decryptingRef.current.has(item.id)) return;
+    if (!item.photoPath.endsWith('.enc')) {
+      setDecryptedPhotos(prev => ({ ...prev, [item.id]: item.photoPath }));
+      return;
+    }
+    decryptingRef.current.add(item.id);
+    try {
+      const tempDir = `${FileSystem.cacheDirectory}preview_temp/`;
+      await FileSystem.makeDirectoryAsync(tempDir, { intermediates: true });
+      const tempPath = `${tempDir}${item.id}.jpg`;
+      await decryptFile(item.photoPath, tempPath);
+      setDecryptedPhotos(prev => ({ ...prev, [item.id]: tempPath }));
+    } catch {
+      // photo may be unavailable
+    } finally {
+      decryptingRef.current.delete(item.id);
+    }
+  }, [decryptedPhotos]);
 
   const renderItem = ({ item }: { item: AttendanceSubmission }) => {
     const isExpanded = selectedItemId === item.id;
@@ -100,11 +124,22 @@ export default function HistoryScreen({ workforceId, onBack }: Props) {
               </View>
             )}
             {item.photoPath && (
-              <Image
-                source={{ uri: item.photoPath }}
-                style={styles.thumbnail}
-                resizeMode="cover"
-              />
+              decryptedPhotos[item.id] ? (
+                <Image
+                  source={{ uri: decryptedPhotos[item.id] }}
+                  style={styles.thumbnail}
+                  resizeMode="cover"
+                />
+              ) : (
+                <TouchableOpacity
+                  style={styles.loadPhotoButton}
+                  onPress={() => decryptPhotoForItem(item)}
+                  testID={`button-load-photo-${item.id}`}
+                >
+                  <Ionicons name="image-outline" size={20} color={colors.textMuted} />
+                  <Text style={styles.loadPhotoText}>Tap to view photo</Text>
+                </TouchableOpacity>
+              )
             )}
           </View>
         )}
@@ -179,6 +214,15 @@ const styles = StyleSheet.create({
   },
   thumbnail: {
     width: '100%', height: 200, borderRadius: borderRadius.md, marginTop: spacing.sm,
+  },
+  loadPhotoButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: spacing.sm, paddingVertical: spacing.lg, marginTop: spacing.sm,
+    borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border,
+    borderStyle: 'dashed',
+  },
+  loadPhotoText: {
+    fontFamily: fonts.body, fontSize: 13, color: colors.textMuted,
   },
   empty: {
     alignItems: 'center', paddingVertical: spacing.xxxl * 2, gap: spacing.md,

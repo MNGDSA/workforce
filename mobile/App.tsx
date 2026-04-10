@@ -1,3 +1,4 @@
+import './src/crypto-polyfill';
 import React, { useState, useCallback, useEffect } from 'react';
 import { StatusBar, ActivityIndicator, View, StyleSheet } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
