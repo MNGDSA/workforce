@@ -53,12 +53,7 @@
         {
           "locationWhenInUsePermission": "Used to confirm you are at the authorized work site."
         }
-      ],
-      "expo-font",
-      "expo-secure-store",
-      "expo-sqlite",
-      "expo-crypto",
-      "react-native-quick-crypto"
+      ]
     ],
     "scheme": "workforce",
     "extra": {
