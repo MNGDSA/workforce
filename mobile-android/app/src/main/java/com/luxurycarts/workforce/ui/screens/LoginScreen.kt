@@ -183,37 +183,6 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            Spacer(Modifier.height(8.dp))
-
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = "Powered by",
-                    fontFamily = spaceGrotesk,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                    color = TextMuted,
-                    letterSpacing = 1.sp,
-                )
-                Spacer(Modifier.height(6.dp))
-                Image(
-                    painter = painterResource(R.drawable.ic_aws_logo),
-                    contentDescription = "AWS Logo",
-                    modifier = Modifier.height(28.dp).wrapContentWidth(),
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Amazon AWS Rekognition",
-                    fontFamily = spaceGrotesk,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                    color = TextMuted,
-                    letterSpacing = 1.sp,
-                )
-            }
-
             errorMessage?.let {
                 Text(it, color = ErrorRed, style = MaterialTheme.typography.bodySmall)
             }
@@ -279,6 +248,37 @@ fun LoginScreen(
                 } else {
                     Text("Sign In", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = "Powered by",
+                    fontFamily = spaceGrotesk,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    color = TextMuted,
+                    letterSpacing = 1.sp,
+                )
+                Spacer(Modifier.height(6.dp))
+                Image(
+                    painter = painterResource(R.drawable.ic_aws_logo),
+                    contentDescription = "AWS Logo",
+                    modifier = Modifier.height(28.dp).wrapContentWidth(),
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Amazon AWS Rekognition",
+                    fontFamily = spaceGrotesk,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    color = TextMuted,
+                    letterSpacing = 1.sp,
+                )
             }
         }
     }
