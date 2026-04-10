@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.luxurycarts.workforce.data.ApiService
@@ -35,6 +36,7 @@ import com.luxurycarts.workforce.ui.theme.ForestGreen
 import com.luxurycarts.workforce.ui.theme.Surface
 import com.luxurycarts.workforce.ui.theme.TextMuted
 import com.luxurycarts.workforce.ui.theme.TextPrimary
+import java.io.File
 
 @Composable
 fun MapScreen(
@@ -95,6 +97,7 @@ fun MapScreen(
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun LeafletMapView(zones: List<GeofenceZone>, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
     val defaultLat = 21.4225
     val defaultLng = 39.8262
     val centerLat = zones.firstOrNull()?.centerLat?.toDoubleOrNull() ?: defaultLat
@@ -106,48 +109,40 @@ private fun LeafletMapView(zones: List<GeofenceZone>, modifier: Modifier = Modif
         """{ name: "${zone.name.replace("\"", "\\\"")}", lat: $lat, lng: $lng, radius: ${zone.radiusMeters} }"""
     }
 
-    val html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <style>
-        * { margin: 0; padding: 0; }
-        html, body, #map { width: 100%; height: 100%; }
-    </style>
-    </head>
-    <body>
-    <div id="map"></div>
-    <script>
-        var map = L.map('map').setView([$centerLat, $centerLng], 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OSM',
-            maxZoom: 19,
-        }).addTo(map);
-
-        var zones = [$zonesJs];
-        zones.forEach(function(z) {
-            L.circle([z.lat, z.lng], {
-                radius: z.radius,
-                color: '#3D8B67',
-                fillColor: '#3D8B67',
-                fillOpacity: 0.15,
-                weight: 2,
-            }).addTo(map).bindPopup('<b>' + z.name + '</b><br>Radius: ' + z.radius + 'm');
-
-            L.marker([z.lat, z.lng]).addTo(map).bindPopup('<b>' + z.name + '</b><br>Radius: ' + z.radius + 'm');
-        });
-
-        if (zones.length > 0) {
-            var group = L.featureGroup(zones.map(function(z) { return L.circle([z.lat, z.lng], { radius: z.radius }); }));
-            map.fitBounds(group.getBounds().pad(0.2));
+    val htmlFile = remember(zones) {
+        val html = buildString {
+            append("<!DOCTYPE html>")
+            append("<html><head>")
+            append("<meta name='viewport' content='width=device-width, initial-scale=1.0, user-scalable=no'>")
+            append("<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'/>")
+            append("<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>")
+            append("<style>*{margin:0;padding:0}html,body,#map{width:100%;height:100%}</style>")
+            append("</head><body>")
+            append("<div id='map'></div>")
+            append("<script>")
+            append("var map=L.map('map').setView([")
+            append(centerLat)
+            append(",")
+            append(centerLng)
+            append("],15);")
+            append("L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{")
+            append("attribution:'\\u00a9 OSM',maxZoom:19}).addTo(map);")
+            append("var zones=[")
+            append(zonesJs)
+            append("];")
+            append("zones.forEach(function(z){")
+            append("L.circle([z.lat,z.lng],{radius:z.radius,color:'#3D8B67',fillColor:'#3D8B67',fillOpacity:0.15,weight:2})")
+            append(".addTo(map).bindPopup('<b>'+z.name+'</b><br>Radius: '+z.radius+'m');")
+            append("L.marker([z.lat,z.lng]).addTo(map).bindPopup('<b>'+z.name+'</b><br>Radius: '+z.radius+'m');")
+            append("});")
+            append("if(zones.length>0){var g=L.featureGroup(zones.map(function(z){return L.circle([z.lat,z.lng],{radius:z.radius})}));")
+            append("map.fitBounds(g.getBounds().pad(0.2));}")
+            append("</script></body></html>")
         }
-    </script>
-    </body>
-    </html>
-    """.trimIndent()
+        val file = File(context.cacheDir, "leaflet_map.html")
+        file.writeText(html)
+        file
+    }
 
     AndroidView(
         factory = { ctx ->
@@ -155,11 +150,13 @@ private fun LeafletMapView(zones: List<GeofenceZone>, modifier: Modifier = Modif
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                settings.allowFileAccess = false
-                settings.allowContentAccess = false
+                settings.cacheMode = WebSettings.LOAD_DEFAULT
                 webViewClient = WebViewClient()
-                loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+                loadUrl("file://${htmlFile.absolutePath}")
             }
+        },
+        update = { webView ->
+            webView.loadUrl("file://${htmlFile.absolutePath}")
         },
         modifier = modifier,
     )
