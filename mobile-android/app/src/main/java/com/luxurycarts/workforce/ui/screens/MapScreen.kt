@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
@@ -68,6 +70,7 @@ fun MapScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .zIndex(1f)
                 .background(Surface)
                 .padding(top = 48.dp, bottom = 16.dp, start = 16.dp, end = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -93,7 +96,7 @@ fun MapScreen(
                 CircularProgressIndicator(color = ForestGreen)
             }
         } else {
-            OsmMapView(zones = zones, modifier = Modifier.fillMaxSize())
+            OsmMapView(zones = zones, modifier = Modifier.fillMaxSize().clipToBounds())
         }
     }
 }
