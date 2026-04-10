@@ -3280,6 +3280,23 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
+  // ─── Portal: Data Deletion Request ──────────────────────────────────────────
+  app.post("/api/portal/data-deletion-request", async (req: Request, res: Response) => {
+    try {
+      if (!req.session?.userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "data_deletion_requested",
+        entityType: "user",
+        entityId: String(req.session.userId),
+        details: { requestedAt: new Date().toISOString(), source: "mobile_app" },
+      });
+      return res.json({ message: "Data deletion request has been submitted. Our team will process it within 30 days per GDPR requirements." });
+    } catch (err) { return handleError(res, err); }
+  });
+
   // ─── Assets ──────────────────────────────────────────────────────────────────
   app.get("/api/assets", async (req: Request, res: Response) => {
     try {

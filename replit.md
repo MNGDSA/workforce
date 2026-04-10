@@ -181,7 +181,9 @@ Located in `mobile/` directory — a standalone Expo project for seasonal worker
 
 **Dependencies:** expo ~52, expo-camera, expo-location, expo-sqlite, expo-secure-store, react-native-maps, date-fns.
 
-**Connects to:** `POST /api/attendance-mobile/submit` (multipart photo+GPS), `GET /api/geofence-zones`, `POST /api/auth/login`.
+**Connects to:** `POST /api/attendance-mobile/submit` (multipart photo+GPS), `GET /api/geofence-zones`, `POST /api/auth/login`, `GET /api/workforce/all-by-candidate/:candidateId`, `GET /api/portal/schedule/:workforceId`, `POST /api/portal/data-deletion-request`.
+**Auth contract:** Backend returns `{ user, candidate }` (no token). Mobile stores credentials in SecureStore with 24h client-side expiry. Re-authenticates before uploads.
+**Encryption:** SHA-256-derived stream cipher with HMAC integrity (fields and files). Key stored in device secure enclave via SecureStore. Photos encrypted at rest (.enc), decrypted to temp for upload, temp cleaned after sync.
 
 ### Public Routes Must Come Before Auth Middleware
 Candidate portal and public job listings must be registered before `requireAuth` or unauthenticated users are blocked.

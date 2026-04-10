@@ -96,6 +96,38 @@ export async function decryptField(ciphertext: string): Promise<string> {
   return decoder.decode(decrypted);
 }
 
+async function computeHmac(keyHex: string, data: string): Promise<string> {
+  const innerPad = keyHex + ':inner:' + data;
+  const innerHash = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    innerPad
+  );
+  const outerPad = keyHex + ':outer:' + innerHash;
+  return Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    outerPad
+  );
+}
+
+function uint8ToBase64(bytes: Uint8Array): string {
+  const CHUNK_SIZE = 8192;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.length));
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+function base64ToUint8(b64: string): Uint8Array {
+  const binaryString = atob(b64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
 export async function encryptFile(sourcePath: string, destPath: string): Promise<void> {
   const keyHex = await getOrCreateKeyHex();
   const content = await FileSystem.readAsStringAsync(sourcePath, {
@@ -104,17 +136,15 @@ export async function encryptFile(sourcePath: string, destPath: string): Promise
 
   const iv = await Crypto.getRandomBytesAsync(16);
   const keyStream = await deriveStreamKey(keyHex, iv);
-
-  const binaryString = atob(content);
-  const dataBytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    dataBytes[i] = binaryString.charCodeAt(i);
-  }
-
+  const dataBytes = base64ToUint8(content);
   const encrypted = streamCipher(dataBytes, keyStream);
+
   const ivHex = bytesToHex(iv);
-  const encryptedBase64 = btoa(String.fromCharCode(...encrypted));
-  const combined = ivHex + '.' + encryptedBase64;
+  const encryptedBase64 = uint8ToBase64(encrypted);
+
+  const hmac = await computeHmac(keyHex, ivHex + encryptedBase64);
+
+  const combined = ivHex + '.' + encryptedBase64 + '.' + hmac;
 
   await FileSystem.writeAsStringAsync(destPath, combined, {
     encoding: FileSystem.EncodingType.UTF8,
@@ -127,23 +157,24 @@ export async function decryptFile(encryptedPath: string, destPath: string): Prom
     encoding: FileSystem.EncodingType.UTF8,
   });
 
-  const dotIndex = raw.indexOf('.');
-  if (dotIndex === -1) throw new Error('Invalid encrypted file format');
+  const firstDot = raw.indexOf('.');
+  const lastDot = raw.lastIndexOf('.');
+  if (firstDot === -1 || lastDot === firstDot) throw new Error('Invalid encrypted file format');
 
-  const ivHex = raw.substring(0, dotIndex);
-  const encryptedBase64 = raw.substring(dotIndex + 1);
+  const ivHex = raw.substring(0, firstDot);
+  const encryptedBase64 = raw.substring(firstDot + 1, lastDot);
+  const storedHmac = raw.substring(lastDot + 1);
+
+  const expectedHmac = await computeHmac(keyHex, ivHex + encryptedBase64);
+  if (storedHmac !== expectedHmac) {
+    throw new Error('File integrity check failed: data may have been tampered with');
+  }
 
   const iv = hexToBytes(ivHex);
   const keyStream = await deriveStreamKey(keyHex, iv);
-
-  const binaryString = atob(encryptedBase64);
-  const encrypted = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    encrypted[i] = binaryString.charCodeAt(i);
-  }
-
+  const encrypted = base64ToUint8(encryptedBase64);
   const decrypted = streamCipher(encrypted, keyStream);
-  const decryptedBase64 = btoa(String.fromCharCode(...decrypted));
+  const decryptedBase64 = uint8ToBase64(decrypted);
 
   await FileSystem.writeAsStringAsync(destPath, decryptedBase64, {
     encoding: FileSystem.EncodingType.Base64,

@@ -169,7 +169,7 @@ export async function login(identifier: string, password: string): Promise<Login
   if (result.candidate) {
     try {
       const workforceRecords = await apiRequest<WorkforceRecord[]>(
-        'GET', `/api/portal/workforce/${result.candidate.id}`
+        'GET', `/api/workforce/all-by-candidate/${result.candidate.id}`
       );
       if (workforceRecords && workforceRecords.length > 0) {
         const activeRecord = workforceRecords.find((r) => r.isActive);
