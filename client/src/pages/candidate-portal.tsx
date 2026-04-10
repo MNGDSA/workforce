@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { printContract } from "@/lib/print-contract";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -70,6 +71,100 @@ import { Separator } from "@/components/ui/separator";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { resolveSaudiBank } from "@/lib/saudi-banks";
+import Cropper from "react-easy-crop";
+import type { Area } from "react-easy-crop";
+
+// ─── Photo Crop Helper ───────────────────────────────────────────────────────
+
+function createCroppedImage(imageSrc: string, crop: Area, minSize = 400): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const outputSize = Math.max(minSize, crop.width, crop.height);
+      canvas.width = outputSize;
+      canvas.height = outputSize;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("Canvas not supported")); return; }
+      ctx.drawImage(img, crop.x, crop.y, crop.width, crop.height, 0, 0, outputSize, outputSize);
+      canvas.toBlob((blob) => {
+        if (!blob) { reject(new Error("Failed to create image")); return; }
+        resolve(new File([blob], "profile-photo.jpg", { type: "image/jpeg" }));
+      }, "image/jpeg", 0.92);
+    };
+    img.onerror = () => reject(new Error("Failed to load image"));
+    img.src = imageSrc;
+  });
+}
+
+function PhotoCropDialog({ open, imageSrc, onCrop, onClose }: {
+  open: boolean;
+  imageSrc: string | null;
+  onCrop: (file: File) => void;
+  onClose: () => void;
+}) {
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedArea, setCroppedArea] = useState<Area | null>(null);
+  const [processing, setProcessing] = useState(false);
+
+  if (!open || !imageSrc) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70" data-testid="photo-crop-overlay">
+      <div className="bg-card border border-border rounded-lg w-[90vw] max-w-md overflow-hidden" data-testid="photo-crop-dialog">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-white">Crop your photo</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Drag to position, scroll to zoom. The square area will be your profile photo.</p>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-white" data-testid="button-crop-close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="relative w-full" style={{ height: 360 }}>
+          <Cropper
+            image={imageSrc}
+            crop={crop}
+            zoom={zoom}
+            aspect={1}
+            onCropChange={setCrop}
+            onZoomChange={setZoom}
+            onCropComplete={(_, area) => setCroppedArea(area)}
+            cropShape="rect"
+            showGrid={false}
+          />
+        </div>
+        <div className="p-4 flex items-center gap-3">
+          <label className="text-xs text-muted-foreground shrink-0">Zoom</label>
+          <input
+            type="range" min={1} max={3} step={0.05}
+            value={zoom} onChange={(e) => setZoom(Number(e.target.value))}
+            className="flex-1 accent-emerald-600"
+            data-testid="input-crop-zoom"
+          />
+          <Button
+            size="sm"
+            disabled={!croppedArea || processing}
+            data-testid="button-crop-save"
+            onClick={async () => {
+              if (!croppedArea) return;
+              setProcessing(true);
+              try {
+                const file = await createCroppedImage(imageSrc, croppedArea);
+                onCrop(file);
+              } catch { }
+              setProcessing(false);
+            }}
+          >
+            {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Photo"}
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -352,6 +447,8 @@ function ProfileCompletionCard({
 
   const [justUploaded, setJustUploaded] = useState<Record<DocKey, string | null>>({ resume: null, nationalId: null, photo: null, iban: null });
   const [uploading, setUploading] = useState<Record<DocKey, boolean>>({ resume: false, nationalId: false, photo: false, iban: false });
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [showCropDialog, setShowCropDialog] = useState(false);
   const inputRefs = {
     resume:     useRef<HTMLInputElement>(null),
     nationalId: useRef<HTMLInputElement>(null),
@@ -379,34 +476,7 @@ function ProfileCompletionCard({
     inputRefs[key].current?.click();
   }, []);
 
-  const handleFile = useCallback(async (key: DocKey, file: File | null) => {
-    if (!file) return;
-    const maxMb = key === "photo" ? 3 : 5;
-    if (file.size > maxMb * 1024 * 1024) {
-      toast({ title: "File too large", description: `Maximum size is ${maxMb} MB.`, variant: "destructive" });
-      return;
-    }
-    if (key === "photo") {
-      const MIN_WIDTH = 400;
-      const MIN_HEIGHT = 400;
-      const MIN_FILE_KB = 30;
-      if (file.size < MIN_FILE_KB * 1024) {
-        toast({ title: "Photo too small", description: `Your photo is only ${Math.round(file.size / 1024)} KB. Please upload a clear photo of at least ${MIN_FILE_KB} KB for face verification to work properly.`, variant: "destructive" });
-        return;
-      }
-      try {
-        const dims = await new Promise<{ w: number; h: number }>((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => { resolve({ w: img.naturalWidth, h: img.naturalHeight }); URL.revokeObjectURL(img.src); };
-          img.onerror = () => { reject(new Error("Cannot read image")); URL.revokeObjectURL(img.src); };
-          img.src = URL.createObjectURL(file);
-        });
-        if (dims.w < MIN_WIDTH || dims.h < MIN_HEIGHT) {
-          toast({ title: "Photo resolution too low", description: `Your photo is ${dims.w}×${dims.h} pixels. Please upload a photo at least ${MIN_WIDTH}×${MIN_HEIGHT} pixels so face verification works properly.`, variant: "destructive" });
-          return;
-        }
-      } catch {}
-    }
+  const uploadFile = useCallback(async (key: DocKey, file: File) => {
     setUploading((p) => ({ ...p, [key]: true }));
     try {
       const formData = new FormData();
@@ -431,6 +501,26 @@ function ProfileCompletionCard({
       if (inputRefs[key].current) inputRefs[key].current!.value = "";
     }
   }, [toast, candidateId, queryClient]);
+
+  const handleFile = useCallback(async (key: DocKey, file: File | null) => {
+    if (!file) return;
+    const maxMb = key === "photo" ? 3 : 5;
+    if (file.size > maxMb * 1024 * 1024) {
+      toast({ title: "File too large", description: `Maximum size is ${maxMb} MB.`, variant: "destructive" });
+      return;
+    }
+    if (key === "photo") {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setCropImageSrc(reader.result as string);
+        setShowCropDialog(true);
+      };
+      reader.readAsDataURL(file);
+      if (inputRefs[key].current) inputRefs[key].current!.value = "";
+      return;
+    }
+    await uploadFile(key, file);
+  }, [toast, uploadFile]);
 
   return (
     <Card className="bg-card border-border">
@@ -516,6 +606,16 @@ function ProfileCompletionCard({
           })}
         </div>
       </CardContent>
+      <PhotoCropDialog
+        open={showCropDialog}
+        imageSrc={cropImageSrc}
+        onClose={() => { setShowCropDialog(false); setCropImageSrc(null); }}
+        onCrop={async (croppedFile) => {
+          setShowCropDialog(false);
+          setCropImageSrc(null);
+          await uploadFile("photo", croppedFile);
+        }}
+      />
     </Card>
   );
 }
