@@ -604,7 +604,23 @@ export default function AuthPage() {
                   { name: "Yahoo",     url: "/logos/yahoo-flat.svg",               nudge: 0 },
                   { name: "Honeywell", url: "/logos/honeywell-flat.svg", nudge: 0 },
                 ];
-                const items = [...logos, ...logos];
+                const renderLogos = (keyPrefix: string) =>
+                  logos.map((logo, i) => (
+                    <div key={`${keyPrefix}-${i}`} className="group flex items-center gap-2 opacity-50 hover:opacity-100 transition-all duration-200 select-none shrink-0">
+                      <img
+                        src={logo.url}
+                        alt={logo.name}
+                        title={logo.name}
+                        loading="lazy"
+                        decoding="async"
+                        style={logo.nudge ? { transform: `translateY(${logo.nudge}px)` } : undefined}
+                        className="max-w-24 max-h-10 w-full h-auto object-contain grayscale group-hover:grayscale-0 transition-all duration-200"
+                      />
+                      {logo.name === "Microsoft" && (
+                        <span className="text-white font-semibold text-sm tracking-tight whitespace-nowrap">Microsoft</span>
+                      )}
+                    </div>
+                  ));
                 return (
                   <div className="mt-6 space-y-2">
                     <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest font-semibold text-center">
@@ -614,23 +630,13 @@ export default function AuthPage() {
                       className="overflow-hidden"
                       style={{ maskImage: "linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)" }}
                     >
-                      <div className="flex items-center gap-10 animate-marquee w-max py-3">
-                        {items.map((logo, i) => (
-                          <div key={i} className="group flex items-center gap-2 opacity-50 hover:opacity-100 transition-all duration-200 select-none">
-                            <img
-                              src={logo.url}
-                              alt={logo.name}
-                              title={logo.name}
-                              loading="lazy"
-                              decoding="async"
-                              style={logo.nudge ? { transform: `translateY(${logo.nudge}px)` } : undefined}
-                              className="max-w-24 max-h-10 w-full h-auto object-contain grayscale group-hover:grayscale-0 transition-all duration-200"
-                            />
-                            {logo.name === "Microsoft" && (
-                              <span className="text-white font-semibold text-sm tracking-tight whitespace-nowrap">Microsoft</span>
-                            )}
-                          </div>
-                        ))}
+                      <div className="flex items-center animate-marquee w-max py-3 hover:[animation-play-state:paused]">
+                        <div className="flex items-center gap-10 shrink-0 pr-10">
+                          {renderLogos("a")}
+                        </div>
+                        <div className="flex items-center gap-10 shrink-0 pr-10" aria-hidden="true">
+                          {renderLogos("b")}
+                        </div>
                       </div>
                     </div>
                   </div>
