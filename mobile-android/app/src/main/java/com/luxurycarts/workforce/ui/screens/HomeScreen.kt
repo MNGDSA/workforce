@@ -91,7 +91,7 @@ fun HomeScreen(
                     color = TextMuted,
                 )
                 Text(
-                    user.name,
+                    user.fullName ?: user.username ?: "Worker",
                     style = MaterialTheme.typography.headlineMedium,
                     color = TextPrimary,
                     fontWeight = FontWeight.Bold,
@@ -123,9 +123,9 @@ fun HomeScreen(
             Column(modifier = Modifier.padding(20.dp)) {
                 Text("Your Details", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
                 Spacer(Modifier.height(12.dp))
-                DetailRow("Workforce ID", wfId)
-                workforceRecord?.jobTitle?.let { DetailRow("Position", it) }
-                workforceRecord?.status?.let { DetailRow("Status", it) }
+                DetailRow("Employee #", workforceRecord?.employeeNumber ?: wfId)
+                workforceRecord?.startDate?.let { DetailRow("Start Date", it) }
+                DetailRow("Status", if (workforceRecord?.isActive != false) "Active" else "Inactive")
             }
         }
 

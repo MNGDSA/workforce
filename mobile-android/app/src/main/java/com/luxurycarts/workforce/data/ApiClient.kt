@@ -23,7 +23,7 @@ interface ApiService {
     suspend fun login(@Body request: LoginRequest): Response<LoginResponse>
 
     @GET("api/workforce/all-by-candidate/{candidateId}")
-    suspend fun getWorkforceRecords(@Path("candidateId") candidateId: Int): Response<List<WorkforceRecord>>
+    suspend fun getWorkforceRecords(@Path("candidateId") candidateId: String): Response<List<WorkforceRecord>>
 
     @GET("api/portal/schedule/{workforceId}")
     suspend fun getSchedule(@Path("workforceId") workforceId: String): Response<List<ScheduleEntry>>

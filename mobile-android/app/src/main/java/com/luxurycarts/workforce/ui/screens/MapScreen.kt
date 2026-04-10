@@ -60,7 +60,7 @@ fun MapScreen(
     val defaultCenter = LatLng(21.4225, 39.8262)
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(
-            if (zones.isNotEmpty()) LatLng(zones.first().centerLat, zones.first().centerLng) else defaultCenter,
+            if (zones.isNotEmpty()) LatLng(zones.first().centerLat.toDouble(), zones.first().centerLng.toDouble()) else defaultCenter,
             15f,
         )
     }
@@ -68,7 +68,7 @@ fun MapScreen(
     LaunchedEffect(zones) {
         if (zones.isNotEmpty()) {
             cameraPositionState.position = CameraPosition.fromLatLngZoom(
-                LatLng(zones.first().centerLat, zones.first().centerLng),
+                LatLng(zones.first().centerLat.toDouble(), zones.first().centerLng.toDouble()),
                 15f,
             )
         }
@@ -113,13 +113,13 @@ fun MapScreen(
             ) {
                 zones.forEach { zone ->
                     Marker(
-                        state = MarkerState(position = LatLng(zone.centerLat, zone.centerLng)),
+                        state = MarkerState(position = LatLng(zone.centerLat.toDouble(), zone.centerLng.toDouble())),
                         title = zone.name,
-                        snippet = "Radius: ${zone.radiusMeters.toInt()}m",
+                        snippet = "Radius: ${zone.radiusMeters}m",
                     )
                     Circle(
-                        center = LatLng(zone.centerLat, zone.centerLng),
-                        radius = zone.radiusMeters,
+                        center = LatLng(zone.centerLat.toDouble(), zone.centerLng.toDouble()),
+                        radius = zone.radiusMeters.toDouble(),
                         fillColor = ForestGreen.copy(alpha = 0.15f),
                         strokeColor = ForestGreen.copy(alpha = 0.5f),
                         strokeWidth = 2f,

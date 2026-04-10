@@ -24,7 +24,7 @@ data class AttendanceEntity(
     @ColumnInfo(name = "gps_accuracy") val gpsAccuracy: Float? = null,
     @ColumnInfo(name = "encrypted_photo_path") val encryptedPhotoPath: String,
     @ColumnInfo(name = "sync_status") val syncStatus: String = "pending",
-    @ColumnInfo(name = "server_id") val serverId: Int? = null,
+    @ColumnInfo(name = "server_id") val serverId: String? = null,
     @ColumnInfo(name = "flag_reason") val flagReason: String? = null,
     @ColumnInfo(name = "retry_count") val retryCount: Int = 0,
     @ColumnInfo(name = "owner_workforce_id") val ownerWorkforceId: String,
@@ -46,7 +46,7 @@ interface AttendanceDao {
     suspend fun insert(entity: AttendanceEntity)
 
     @Query("UPDATE attendance_submissions SET sync_status = :status, server_id = :serverId, flag_reason = :flagReason WHERE id = :id")
-    suspend fun updateSyncResult(id: String, status: String, serverId: Int?, flagReason: String?)
+    suspend fun updateSyncResult(id: String, status: String, serverId: String?, flagReason: String?)
 
     @Query("UPDATE attendance_submissions SET retry_count = retry_count + 1 WHERE id = :id")
     suspend fun incrementRetry(id: String)
@@ -58,7 +58,7 @@ interface AttendanceDao {
     suspend fun deleteAllForUser(workforceId: String)
 }
 
-@Database(entities = [AttendanceEntity::class], version = 1, exportSchema = false)
+@Database(entities = [AttendanceEntity::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun attendanceDao(): AttendanceDao
 
@@ -72,7 +72,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "workforce.db",
-                ).build().also { INSTANCE = it }
+                ).fallbackToDestructiveMigration().build().also { INSTANCE = it }
             }
         }
     }

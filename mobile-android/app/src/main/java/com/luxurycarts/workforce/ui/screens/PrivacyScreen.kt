@@ -170,7 +170,7 @@ fun PrivacyScreen(
                     scope.launch {
                         try {
                             val response = apiService?.requestDataDeletion(
-                                DeletionRequest(workforceId, password, reason.ifBlank { "User requested deletion" })
+                                DeletionRequest(workforceId, password = password, reason = reason.ifBlank { "User requested deletion" })
                             )
                             if (response?.isSuccessful == true) {
                                 resultMessage = response.body()?.message ?: "Request submitted successfully"

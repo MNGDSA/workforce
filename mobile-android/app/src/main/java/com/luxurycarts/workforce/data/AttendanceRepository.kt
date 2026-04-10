@@ -71,7 +71,8 @@ class AttendanceRepository(
 
                 if (response.isSuccessful) {
                     val body = response.body()
-                    dao.updateSyncResult(submission.id, body?.status ?: "synced", body?.id, body?.flagReason)
+                    val sub = body?.submission
+                    dao.updateSyncResult(submission.id, sub?.status ?: "synced", sub?.id, sub?.flagReason)
                 } else if (response.code() == 409) {
                     dao.updateSyncResult(submission.id, "synced", null, null)
                 } else {
