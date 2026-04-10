@@ -123,7 +123,7 @@ fun HomeScreen(
             Column(modifier = Modifier.padding(20.dp)) {
                 Text("Your Details", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
                 Spacer(Modifier.height(12.dp))
-                DetailRow("Employee #", workforceRecord?.employeeNumber ?: wfId)
+                DetailRow("Employee #", workforceRecord?.employeeNumber ?: app.sessionManager.employeeNumber ?: "—")
                 workforceRecord?.startDate?.let { DetailRow("Start Date", it) }
                 DetailRow("Status", if (workforceRecord?.isActive != false) "Active" else "Inactive")
             }

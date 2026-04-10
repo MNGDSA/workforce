@@ -203,6 +203,7 @@ fun LoginScreen(
                                 }
 
                                 app.sessionManager.workforceId = workforceRecord?.id ?: body.user.id
+                                app.sessionManager.employeeNumber = workforceRecord?.employeeNumber
 
                                 onLoginSuccess(body.user, workforceRecord, api)
                             } else {

@@ -102,7 +102,7 @@ class AttendanceRepository(
                 for (result in results) {
                     val status = result.status ?: continue
                     if (status != "flagged") {
-                        dao.updateStatusByServerId(result.id, status, result.flagReason)
+                        dao.updateStatusByServerId(result.id, status, result.flagReason, result.reviewNotes)
                     }
                 }
             }

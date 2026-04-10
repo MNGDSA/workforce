@@ -28,6 +28,7 @@ data class AttendanceEntity(
     @ColumnInfo(name = "flag_reason") val flagReason: String? = null,
     @ColumnInfo(name = "retry_count") val retryCount: Int = 0,
     @ColumnInfo(name = "owner_workforce_id") val ownerWorkforceId: String,
+    @ColumnInfo(name = "review_notes") val reviewNotes: String? = null,
 )
 
 @Dao
@@ -57,14 +58,14 @@ interface AttendanceDao {
     @Query("SELECT server_id FROM attendance_submissions WHERE server_id IS NOT NULL AND sync_status IN ('flagged', 'pending_review') AND owner_workforce_id = :workforceId")
     suspend fun getServerIdsForStatusCheck(workforceId: String): List<String>
 
-    @Query("UPDATE attendance_submissions SET sync_status = :status, flag_reason = :flagReason WHERE server_id = :serverId")
-    suspend fun updateStatusByServerId(serverId: String, status: String, flagReason: String?)
+    @Query("UPDATE attendance_submissions SET sync_status = :status, flag_reason = :flagReason, review_notes = :reviewNotes WHERE server_id = :serverId")
+    suspend fun updateStatusByServerId(serverId: String, status: String, flagReason: String?, reviewNotes: String?)
 
     @Query("DELETE FROM attendance_submissions WHERE owner_workforce_id = :workforceId")
     suspend fun deleteAllForUser(workforceId: String)
 }
 
-@Database(entities = [AttendanceEntity::class], version = 2, exportSchema = false)
+@Database(entities = [AttendanceEntity::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun attendanceDao(): AttendanceDao
 

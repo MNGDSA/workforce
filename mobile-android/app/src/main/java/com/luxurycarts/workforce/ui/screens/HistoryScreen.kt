@@ -49,6 +49,7 @@ import com.luxurycarts.workforce.ui.theme.Border
 import com.luxurycarts.workforce.ui.theme.Card
 import com.luxurycarts.workforce.ui.theme.CardBorder
 import com.luxurycarts.workforce.ui.theme.ErrorRed
+import com.luxurycarts.workforce.ui.theme.SuccessGreen
 import com.luxurycarts.workforce.ui.theme.Surface
 import com.luxurycarts.workforce.ui.theme.TextMuted
 import com.luxurycarts.workforce.ui.theme.TextPrimary
@@ -198,6 +199,19 @@ private fun HistoryItem(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(ErrorRed.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                            .padding(8.dp),
+                    )
+                }
+                item.reviewNotes?.let {
+                    val isRejected = item.syncStatus.lowercase() == "rejected"
+                    val noteColor = if (isRejected) ErrorRed else SuccessGreen
+                    Text(
+                        "HR Notes: $it",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = noteColor,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(noteColor.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
                             .padding(8.dp),
                     )
                 }
