@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -32,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -179,6 +182,37 @@ fun LoginScreen(
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            Spacer(Modifier.height(8.dp))
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = "Powered by",
+                    fontFamily = spaceGrotesk,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    color = TextMuted,
+                    letterSpacing = 1.sp,
+                )
+                Spacer(Modifier.height(6.dp))
+                Image(
+                    painter = painterResource(R.drawable.ic_aws_logo),
+                    contentDescription = "AWS Logo",
+                    modifier = Modifier.height(28.dp).wrapContentWidth(),
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Amazon AWS Rekognition",
+                    fontFamily = spaceGrotesk,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    color = TextMuted,
+                    letterSpacing = 1.sp,
+                )
+            }
 
             errorMessage?.let {
                 Text(it, color = ErrorRed, style = MaterialTheme.typography.bodySmall)

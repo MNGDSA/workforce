@@ -595,7 +595,7 @@ export default function AuthPage() {
                 const logos = [
                   { name: "Google",    url: "/logos/google-g.svg",  nudge: 0, scale: 1.5 },
                   { name: "Apple",     url: `${GH}apple.svg`,                      nudge: 0 },
-                  { name: "Microsoft", url: "/logos/microsoft.svg",                nudge: 0 },
+                  { name: "Microsoft", url: "/logos/microsoft.svg",                nudge: 0, scale: 1.4 },
                   { name: "Amazon",    url: `${GH}amazon.svg`,                     nudge: 5 },
                   { name: "Walmart",   url: `${GH}walmart.svg`,                    nudge: 0 },
                   { name: "Cisco",     url: `${GH}cisco.svg`,                      nudge: 0 },
