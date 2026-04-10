@@ -203,15 +203,16 @@ private fun HistoryItem(
             HorizontalDivider(color = Border)
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 item.gpsAccuracy?.let { DetailLine("GPS Accuracy", "\u00B1${it.toInt()}m") }
+                val hasRekError = item.flagReason?.contains("Face verification error") == true
                 val rekLabel = when {
                     item.rekognitionConfidence == null && item.syncStatus == "pending" -> null
                     item.rekognitionConfidence == null -> "Not processed"
+                    hasRekError -> "Error"
                     else -> {
                         val conf = item.rekognitionConfidence.toDoubleOrNull() ?: 0.0
                         when {
                             conf >= 95.0 -> "Identical (${String.format("%.1f", conf)}%)"
-                            conf > 0.0 -> "Not identical (${String.format("%.1f", conf)}%)"
-                            else -> "Error"
+                            else -> "Not identical (${String.format("%.1f", conf)}%)"
                         }
                     }
                 }
@@ -219,6 +220,7 @@ private fun HistoryItem(
                     val rekColor = when {
                         rekLabel.startsWith("Identical") -> SuccessGreen
                         rekLabel.startsWith("Not identical") -> ErrorRed
+                        rekLabel == "Error" -> ErrorRed
                         else -> TextMuted
                     }
                     DetailLine("Face Match", rekLabel, rekColor)
