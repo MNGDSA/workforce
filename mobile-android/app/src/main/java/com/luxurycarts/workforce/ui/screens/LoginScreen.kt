@@ -192,7 +192,6 @@ fun LoginScreen(
                                 app.sessionManager.serverUrl = serverUrl.trim()
                                 app.sessionManager.userJson = Gson().toJson(body.user)
                                 app.sessionManager.candidateJson = body.candidate?.let { Gson().toJson(it) }
-                                app.sessionManager.workforceId = identifier.trim()
                                 app.sessionManager.loginTimestamp = System.currentTimeMillis()
 
                                 var workforceRecord: WorkforceRecord? = null
@@ -202,6 +201,8 @@ fun LoginScreen(
                                         workforceRecord = records.body()!!.first()
                                     }
                                 }
+
+                                app.sessionManager.workforceId = workforceRecord?.id ?: body.user.id
 
                                 onLoginSuccess(body.user, workforceRecord, api)
                             } else {
