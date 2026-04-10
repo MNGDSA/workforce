@@ -55,3 +55,8 @@ integrations = ["github:1.0.0"]
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 120000
+
+[userenv]
+
+[userenv.shared]
+AWS_REGION = "eu-central-1"
