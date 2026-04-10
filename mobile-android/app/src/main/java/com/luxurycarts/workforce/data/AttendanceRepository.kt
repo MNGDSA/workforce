@@ -87,6 +87,27 @@ class AttendanceRepository(
 
         val cutoff = LocalDate.now().minusDays(30).toString()
         dao.purgeOld(workforceId, cutoff)
+
+        refreshStatuses()
+    }
+
+    suspend fun refreshStatuses() {
+        try {
+            val serverIds = dao.getServerIdsForStatusCheck(workforceId)
+            if (serverIds.isEmpty()) return
+
+            val response = apiService.checkSubmissionStatuses(StatusCheckRequest(ids = serverIds))
+            if (response.isSuccessful) {
+                val results = response.body() ?: return
+                for (result in results) {
+                    val status = result.status ?: continue
+                    if (status != "flagged") {
+                        dao.updateStatusByServerId(result.id, status, result.flagReason)
+                    }
+                }
+            }
+        } catch (_: Exception) {
+        }
     }
 
     suspend fun clearUserData() {

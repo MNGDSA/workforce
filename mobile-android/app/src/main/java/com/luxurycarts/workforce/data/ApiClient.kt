@@ -42,6 +42,9 @@ interface ApiService {
     @GET("api/geofence-zones")
     suspend fun getGeofenceZones(): Response<List<GeofenceZone>>
 
+    @POST("api/attendance-mobile/submissions/statuses")
+    suspend fun checkSubmissionStatuses(@Body request: StatusCheckRequest): Response<List<StatusCheckResult>>
+
     @POST("api/portal/data-deletion-request")
     suspend fun requestDataDeletion(@Body request: DeletionRequest): Response<DeletionResponse>
 }

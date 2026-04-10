@@ -3809,6 +3809,24 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
+  app.post("/api/attendance-mobile/submissions/statuses", async (req: Request, res: Response) => {
+    try {
+      const { ids } = req.body ?? {};
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "ids array required" });
+      }
+      const limitedIds = ids.slice(0, 100);
+      const results = await Promise.all(
+        limitedIds.map(async (id: string) => {
+          const sub = await storage.getAttendanceSubmission(id);
+          if (!sub) return { id, status: null };
+          return { id: sub.id, status: sub.status, flagReason: sub.flagReason, reviewNotes: sub.reviewNotes };
+        })
+      );
+      return res.json(results);
+    } catch (err) { return handleError(res, err); }
+  });
+
   app.get("/api/attendance-mobile/submissions/:id", async (req: Request, res: Response) => {
     try {
       const sub = await storage.getAttendanceSubmission(req.params.id);

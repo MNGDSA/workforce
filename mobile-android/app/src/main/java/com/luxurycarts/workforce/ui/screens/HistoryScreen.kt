@@ -53,6 +53,7 @@ import com.luxurycarts.workforce.ui.theme.Surface
 import com.luxurycarts.workforce.ui.theme.TextMuted
 import com.luxurycarts.workforce.ui.theme.TextPrimary
 import com.luxurycarts.workforce.ui.theme.TextSecondary
+import com.luxurycarts.workforce.services.SyncWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -66,11 +67,15 @@ fun HistoryScreen(
     dao: AttendanceDao,
     onBack: () -> Unit,
 ) {
+    val context = LocalContext.current
     val submissions by dao.getSubmissions(workforceId).collectAsState(initial = emptyList())
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        SyncWorker.syncNow(context)
+    }
     var expandedId by remember { mutableStateOf<String?>(null) }
     val decryptedPhotos = remember { mutableStateMapOf<String, String>() }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
 
     Column(
         modifier = Modifier

@@ -89,3 +89,14 @@ data class DeletionRequest(
 data class DeletionResponse(
     val message: String,
 )
+
+data class StatusCheckRequest(
+    val ids: List<String>,
+)
+
+data class StatusCheckResult(
+    val id: String,
+    val status: String?,
+    @SerializedName("flagReason") val flagReason: String? = null,
+    @SerializedName("reviewNotes") val reviewNotes: String? = null,
+)
