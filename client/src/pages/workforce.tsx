@@ -1462,21 +1462,10 @@ export default function WorkforcePage() {
                         </TableCell>
                         <TableCell className="py-3" onClick={() => setSelectedEmployee(emp)}>
                           <div className="flex items-center gap-3">
-                            <div className="relative">
-                              <Avatar className="h-8 w-8 border border-zinc-700">
-                                <AvatarImage src={emp.photoUrl ?? undefined} />
-                                <AvatarFallback className="bg-zinc-800 text-zinc-400 text-xs">{initials}</AvatarFallback>
-                              </Avatar>
-                              {emp.photoUrl ? (
-                                <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-emerald-500 border-2 border-zinc-950 flex items-center justify-center" title="Reference photo ready" data-testid={`badge-photo-ready-${emp.id}`}>
-                                  <CheckCircle2 className="h-2 w-2 text-white" />
-                                </span>
-                              ) : (
-                                <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-amber-500 border-2 border-zinc-950 flex items-center justify-center" title="No reference photo" data-testid={`badge-photo-missing-${emp.id}`}>
-                                  <AlertCircle className="h-2 w-2 text-white" />
-                                </span>
-                              )}
-                            </div>
+                            <Avatar className="h-8 w-8 border border-zinc-700">
+                              <AvatarImage src={emp.photoUrl ?? undefined} />
+                              <AvatarFallback className="bg-zinc-800 text-zinc-400 text-xs">{initials}</AvatarFallback>
+                            </Avatar>
                             <div className="font-medium text-white text-sm">{emp.fullNameEn ?? "—"}</div>
                           </div>
                         </TableCell>
