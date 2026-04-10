@@ -190,7 +190,7 @@ fun CaptureScreen(
                         scope.launch {
                             try {
                                 val photoFile = File(context.filesDir, "att_${System.currentTimeMillis()}.jpg")
-                                capturePhoto(imageCapture!!, photoFile)
+                                capturePhoto(imageCapture!!, photoFile, context)
                                 val location = getLocation(context)
 
                                 val encPhotoPath = photoFile.absolutePath + ".enc"
@@ -259,9 +259,8 @@ fun CaptureScreen(
     }
 }
 
-private suspend fun capturePhoto(imageCapture: ImageCapture, outputFile: File) =
+private suspend fun capturePhoto(imageCapture: ImageCapture, outputFile: File, context: android.content.Context) =
     suspendCancellableCoroutine { cont ->
-        val context = outputFile.parentFile!!.let { WorkforceApp.instance }
         val options = ImageCapture.OutputFileOptions.Builder(outputFile).build()
         imageCapture.takePicture(
             options,
