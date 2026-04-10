@@ -42,6 +42,11 @@ import {
   Clipboard,
   Eye,
   History,
+  MapPin,
+  Camera,
+  ShieldCheck,
+  ShieldAlert,
+  User,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -489,6 +494,102 @@ export default function InboxPage() {
                           </div>
                         )}
                       </div>
+
+                      {item.type === "attendance_verification" && item.metadata && (
+                        <div className="space-y-4" data-testid={`attendance-review-${item.id}`}>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                <Camera className="h-3.5 w-3.5" /> Submitted Photo
+                              </span>
+                              {item.metadata.submittedPhotoUrl ? (
+                                <div className="relative rounded-md overflow-hidden border border-border bg-muted/20 aspect-[3/4] max-w-[200px]">
+                                  <img
+                                    src={item.metadata.submittedPhotoUrl}
+                                    alt="Submitted selfie"
+                                    className="w-full h-full object-cover"
+                                    data-testid={`img-submitted-photo-${item.id}`}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-center rounded-md border border-dashed border-border bg-muted/10 aspect-[3/4] max-w-[200px]">
+                                  <span className="text-xs text-muted-foreground">No photo</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                <User className="h-3.5 w-3.5" /> Reference Photo
+                              </span>
+                              {item.metadata.referencePhotoUrl ? (
+                                <div className="relative rounded-md overflow-hidden border border-border bg-muted/20 aspect-[3/4] max-w-[200px]">
+                                  <img
+                                    src={item.metadata.referencePhotoUrl}
+                                    alt="Reference photo"
+                                    className="w-full h-full object-cover"
+                                    data-testid={`img-reference-photo-${item.id}`}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-center rounded-md border border-dashed border-border bg-muted/10 aspect-[3/4] max-w-[200px]">
+                                  <span className="text-xs text-muted-foreground">No reference photo</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Confidence</span>
+                              <p className={`text-lg font-bold mt-0.5 ${
+                                (item.metadata.confidence ?? 0) >= 95 ? "text-emerald-400" :
+                                (item.metadata.confidence ?? 0) >= 70 ? "text-amber-400" : "text-red-400"
+                              }`} data-testid={`text-confidence-${item.id}`}>
+                                {item.metadata.confidence ?? 0}%
+                              </p>
+                            </div>
+                            <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">GPS Check</span>
+                              <div className="flex items-center gap-1.5 mt-1" data-testid={`text-gps-status-${item.id}`}>
+                                {item.metadata.gpsInside ? (
+                                  <>
+                                    <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                                    <span className="text-sm font-medium text-emerald-400">Inside</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <ShieldAlert className="h-4 w-4 text-red-400" />
+                                    <span className="text-sm font-medium text-red-400">Outside</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Employee</span>
+                              <p className="text-sm font-medium text-foreground mt-0.5 truncate" data-testid={`text-employee-name-${item.id}`}>
+                                {item.metadata.candidateName ?? "Unknown"}
+                              </p>
+                            </div>
+                            <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Employee #</span>
+                              <p className="text-sm font-medium text-foreground mt-0.5" data-testid={`text-employee-number-${item.id}`}>
+                                {item.metadata.employeeNumber ?? "—"}
+                              </p>
+                            </div>
+                          </div>
+
+                          {(item.metadata.gpsLat || item.metadata.gpsLng) && (
+                            <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                                <MapPin className="h-3 w-3" /> GPS Coordinates
+                              </span>
+                              <p className="text-sm text-foreground mt-0.5 font-mono" data-testid={`text-gps-coords-${item.id}`}>
+                                {Number(item.metadata.gpsLat).toFixed(6)}, {Number(item.metadata.gpsLng).toFixed(6)}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {item.body && (
                         <div>

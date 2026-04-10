@@ -3760,11 +3760,13 @@ export async function registerRoutes(
         gpsLat: z.coerce.number().min(-90).max(90),
         gpsLng: z.coerce.number().min(-180).max(180),
         gpsAccuracy: z.coerce.number().optional(),
-        clientTimestamp: z.string().datetime().optional(),
+        clientTimestamp: z.string().optional(),
+        timestamp: z.string().optional(),
       });
 
       const parsed = schema.parse(req.body);
       const photoUrl = `/uploads/${req.file.filename}`;
+      const ts = parsed.clientTimestamp || parsed.timestamp;
 
       const submission = await storage.createAttendanceSubmission({
         workforceId: parsed.workforceId,
@@ -3772,7 +3774,7 @@ export async function registerRoutes(
         gpsLat: String(parsed.gpsLat),
         gpsLng: String(parsed.gpsLng),
         gpsAccuracy: parsed.gpsAccuracy ? String(parsed.gpsAccuracy) : null,
-        submittedAt: parsed.clientTimestamp ? new Date(parsed.clientTimestamp) : new Date(),
+        submittedAt: ts ? new Date(ts) : new Date(),
         status: "pending",
       });
 
