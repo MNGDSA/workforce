@@ -59,7 +59,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Composable
@@ -164,6 +166,15 @@ private fun HistoryItem(
         item.attendanceDate
     }
 
+    val timeFormatted = try {
+        val decrypted = EncryptionService.decrypt(item.encryptedTimestamp)
+        val instant = Instant.parse(decrypted)
+        val localTime = instant.atZone(ZoneId.systemDefault()).toLocalTime()
+        localTime.format(DateTimeFormatter.ofPattern("hh:mm a"))
+    } catch (_: Exception) {
+        null
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -181,6 +192,9 @@ private fun HistoryItem(
         ) {
             Column {
                 Text(dateFormatted, style = MaterialTheme.typography.bodyMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                if (timeFormatted != null) {
+                    Text(timeFormatted, style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                }
             }
             StatusBadge(status = item.syncStatus)
         }
