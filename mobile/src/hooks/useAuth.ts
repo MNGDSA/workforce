@@ -8,7 +8,7 @@ import {
   isSessionValid,
 } from '../services/api';
 import { clearEncryptionKey } from '../services/encryption';
-import { purgeAllLocalData } from '../services/database';
+import { purgeAllLocalData, purgeUserData } from '../services/database';
 import type { User, Candidate, WorkforceRecord, LoginResponse } from '../types';
 
 interface AuthState {
@@ -125,6 +125,9 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(async () => {
+    if (state.workforceRecord?.id) {
+      await purgeUserData(state.workforceRecord.id);
+    }
     await clearSession();
     setState({
       isLoading: false,
@@ -133,7 +136,7 @@ export function useAuth() {
       candidate: null,
       workforceRecord: null,
     });
-  }, []);
+  }, [state.workforceRecord?.id]);
 
   const deleteAllData = useCallback(async () => {
     await purgeAllLocalData();

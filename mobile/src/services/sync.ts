@@ -55,11 +55,15 @@ export async function syncPendingSubmissions(): Promise<{ synced: number; failed
   let skipped = 0;
 
   try {
-    const pending = await getPendingSubmissions();
     const wf = await getWorkforceData();
-    const workforceId = wf?.id;
+    const ownerWorkforceId = wf?.id;
 
-    if (!workforceId || pending.length === 0) {
+    if (!ownerWorkforceId) {
+      return { synced: 0, failed: 0, skipped: 0 };
+    }
+
+    const pending = await getPendingSubmissions(ownerWorkforceId);
+    if (pending.length === 0) {
       return { synced: 0, failed: 0, skipped: 0 };
     }
 
@@ -74,22 +78,14 @@ export async function syncPendingSubmissions(): Promise<{ synced: number; failed
       }
 
       const dateStr = submission.timestamp.split('T')[0];
-      const alreadySynced = await checkDuplicateDate(workforceId, dateStr);
-      if (alreadySynced && submission.syncStatus === 'pending') {
-        const existingSubmissions = await getPendingSubmissions();
-        const otherSynced = existingSubmissions.some(
-          s => s.id !== submission.id &&
-            s.timestamp.startsWith(dateStr) &&
-            (s.syncStatus === 'synced' || s.syncStatus === 'verified')
-        );
-        if (otherSynced) {
-          await updateSubmissionSyncStatus(submission.id, 'failed', {
-            flagReason: 'Duplicate: attendance already synced for this date',
-          });
-          skipped++;
-          notifyListeners();
-          continue;
-        }
+      const alreadyExists = await checkDuplicateDate(submission.workforceId, dateStr);
+      if (alreadyExists) {
+        await updateSubmissionSyncStatus(submission.id, 'failed', {
+          flagReason: 'Duplicate: attendance already exists for this date',
+        });
+        skipped++;
+        notifyListeners();
+        continue;
       }
 
       try {
@@ -106,7 +102,7 @@ export async function syncPendingSubmissions(): Promise<{ synced: number; failed
         }
 
         const result: UploadResult = await uploadAttendancePhoto(
-          workforceId,
+          submission.workforceId,
           uploadPath,
           submission.gpsLat,
           submission.gpsLng,

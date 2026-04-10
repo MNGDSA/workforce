@@ -104,6 +104,8 @@ export type AttendanceStatus = 'not_marked' | 'pending' | 'syncing' | 'synced' |
 export interface SqliteRow {
   id: string;
   workforce_id: string;
+  owner_workforce_id: string;
+  attendance_date: string;
   photo_path: string;
   photo_base64: string | null;
   gps_lat: string;

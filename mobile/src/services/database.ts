@@ -12,6 +12,8 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
     CREATE TABLE IF NOT EXISTS attendance_submissions (
       id TEXT PRIMARY KEY,
       workforce_id TEXT NOT NULL,
+      owner_workforce_id TEXT NOT NULL,
+      attendance_date TEXT NOT NULL,
       photo_path TEXT NOT NULL,
       photo_base64 TEXT,
       gps_lat TEXT NOT NULL,
@@ -30,7 +32,8 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
 
     CREATE INDEX IF NOT EXISTS idx_submissions_sync_status ON attendance_submissions(sync_status);
     CREATE INDEX IF NOT EXISTS idx_submissions_created_at ON attendance_submissions(created_at);
-    CREATE INDEX IF NOT EXISTS idx_submissions_workforce_id ON attendance_submissions(workforce_id);
+    CREATE INDEX IF NOT EXISTS idx_submissions_owner ON attendance_submissions(owner_workforce_id);
+    CREATE INDEX IF NOT EXISTS idx_submissions_date ON attendance_submissions(attendance_date);
   `);
 
   return db;
@@ -57,6 +60,7 @@ export async function saveSubmission(params: {
   const database = await getDatabase();
   const id = generateId();
   const now = new Date().toISOString();
+  const attendanceDate = params.timestamp.split('T')[0];
 
   const encryptedPhotoPath = await encryptField(params.photoPath);
   const encryptedWorkforceId = await encryptField(params.workforceId);
@@ -67,9 +71,9 @@ export async function saveSubmission(params: {
 
   await database.runAsync(
     `INSERT INTO attendance_submissions 
-     (id, workforce_id, photo_path, photo_base64, gps_lat, gps_lng, gps_accuracy, timestamp, sync_status, retry_count, created_at, encrypted)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, 1)`,
-    [id, encryptedWorkforceId, encryptedPhotoPath, params.photoBase64, encryptedGpsLat, encryptedGpsLng, encryptedGpsAccuracy, encryptedTimestamp, now]
+     (id, workforce_id, owner_workforce_id, attendance_date, photo_path, photo_base64, gps_lat, gps_lng, gps_accuracy, timestamp, sync_status, retry_count, created_at, encrypted)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, 1)`,
+    [id, encryptedWorkforceId, params.workforceId, attendanceDate, encryptedPhotoPath, params.photoBase64, encryptedGpsLat, encryptedGpsLng, encryptedGpsAccuracy, encryptedTimestamp, now]
   );
 
   return {
@@ -119,10 +123,11 @@ async function decryptRow(row: SqliteRow & { encrypted?: number }): Promise<Atte
   };
 }
 
-export async function getPendingSubmissions(): Promise<AttendanceSubmission[]> {
+export async function getPendingSubmissions(ownerWorkforceId: string): Promise<AttendanceSubmission[]> {
   const database = await getDatabase();
   const rows = await database.getAllAsync<SqliteRow & { encrypted: number }>(
-    `SELECT * FROM attendance_submissions WHERE sync_status IN ('pending', 'failed') ORDER BY created_at ASC`
+    `SELECT * FROM attendance_submissions WHERE owner_workforce_id = ? AND sync_status IN ('pending', 'failed') ORDER BY created_at ASC`,
+    [ownerWorkforceId]
   );
   return Promise.all(rows.map(decryptRow));
 }
@@ -130,32 +135,30 @@ export async function getPendingSubmissions(): Promise<AttendanceSubmission[]> {
 export async function getAllSubmissions(workforceId: string, limit = 50): Promise<AttendanceSubmission[]> {
   const database = await getDatabase();
   const rows = await database.getAllAsync<SqliteRow & { encrypted: number }>(
-    `SELECT * FROM attendance_submissions ORDER BY created_at DESC LIMIT ?`,
-    [limit]
+    `SELECT * FROM attendance_submissions WHERE owner_workforce_id = ? ORDER BY created_at DESC LIMIT ?`,
+    [workforceId, limit]
   );
-  const all = await Promise.all(rows.map(decryptRow));
-  return all.filter(s => s.workforceId === workforceId);
+  return Promise.all(rows.map(decryptRow));
 }
 
 export async function getTodaySubmission(workforceId: string): Promise<AttendanceSubmission | null> {
   const database = await getDatabase();
   const today = new Date().toISOString().split('T')[0];
   const rows = await database.getAllAsync<SqliteRow & { encrypted: number }>(
-    `SELECT * FROM attendance_submissions WHERE timestamp LIKE ? ORDER BY created_at DESC LIMIT 10`,
-    [`${today}%`]
+    `SELECT * FROM attendance_submissions WHERE owner_workforce_id = ? AND attendance_date = ? ORDER BY created_at DESC LIMIT 1`,
+    [workforceId, today]
   );
-  const decrypted = await Promise.all(rows.map(decryptRow));
-  return decrypted.find(s => s.workforceId === workforceId) || null;
+  if (rows.length === 0) return null;
+  return decryptRow(rows[0]);
 }
 
 export async function checkDuplicateDate(workforceId: string, dateStr: string): Promise<boolean> {
   const database = await getDatabase();
-  const rows = await database.getAllAsync<SqliteRow & { encrypted: number }>(
-    `SELECT * FROM attendance_submissions WHERE timestamp LIKE ? AND sync_status NOT IN ('failed') LIMIT 20`,
-    [`${dateStr}%`]
+  const result = await database.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM attendance_submissions WHERE owner_workforce_id = ? AND attendance_date = ? AND sync_status NOT IN ('failed')`,
+    [workforceId, dateStr]
   );
-  const decrypted = await Promise.all(rows.map(decryptRow));
-  return decrypted.some(s => s.workforceId === workforceId);
+  return (result?.count ?? 0) > 0;
 }
 
 export async function updateSubmissionSyncStatus(
@@ -202,10 +205,19 @@ export async function purgeAllLocalData(): Promise<void> {
   await database.runAsync(`DELETE FROM attendance_submissions`);
 }
 
-export async function getPendingCount(): Promise<number> {
+export async function purgeUserData(workforceId: string): Promise<void> {
+  const database = await getDatabase();
+  await database.runAsync(
+    `DELETE FROM attendance_submissions WHERE owner_workforce_id = ?`,
+    [workforceId]
+  );
+}
+
+export async function getPendingCount(ownerWorkforceId: string): Promise<number> {
   const database = await getDatabase();
   const result = await database.getFirstAsync<{ count: number }>(
-    `SELECT COUNT(*) as count FROM attendance_submissions WHERE sync_status IN ('pending', 'failed')`
+    `SELECT COUNT(*) as count FROM attendance_submissions WHERE owner_workforce_id = ? AND sync_status IN ('pending', 'failed')`,
+    [ownerWorkforceId]
   );
   return result?.count ?? 0;
 }

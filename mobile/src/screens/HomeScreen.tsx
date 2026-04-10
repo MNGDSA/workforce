@@ -41,7 +41,7 @@ export default function HomeScreen({
     if (workforceRecord?.id) {
       const [today, pending, recent] = await Promise.all([
         getTodaySubmission(workforceRecord.id),
-        getPendingCount(),
+        getPendingCount(workforceRecord.id),
         getAllSubmissions(workforceRecord.id, 5),
       ]);
       setTodaySubmission(today);
