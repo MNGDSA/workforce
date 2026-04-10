@@ -1,6 +1,7 @@
 package com.luxurycarts.workforce.ui.screens
 
 import android.annotation.SuppressLint
+import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -35,6 +36,8 @@ import com.luxurycarts.workforce.ui.theme.ForestGreen
 import com.luxurycarts.workforce.ui.theme.Surface
 import com.luxurycarts.workforce.ui.theme.TextMuted
 import com.luxurycarts.workforce.ui.theme.TextPrimary
+import org.json.JSONArray
+import org.json.JSONObject
 
 @Composable
 fun MapScreen(
@@ -95,47 +98,17 @@ fun MapScreen(
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun LeafletMapView(zones: List<GeofenceZone>, modifier: Modifier = Modifier) {
-    val defaultLat = 21.4225
-    val defaultLng = 39.8262
-    val centerLat = zones.firstOrNull()?.centerLat?.toDoubleOrNull() ?: defaultLat
-    val centerLng = zones.firstOrNull()?.centerLng?.toDoubleOrNull() ?: defaultLng
-
-    val zonesJs = zones.joinToString(",") { zone ->
-        val lat = zone.centerLat.toDoubleOrNull() ?: defaultLat
-        val lng = zone.centerLng.toDoubleOrNull() ?: defaultLng
-        """{ name: "${zone.name.replace("\"", "\\\"")}", lat: $lat, lng: $lng, radius: ${zone.radiusMeters} }"""
-    }
-
-    val html = remember(zones) {
-        buildString {
-            append("<!DOCTYPE html>")
-            append("<html><head>")
-            append("<meta name='viewport' content='width=device-width, initial-scale=1.0, user-scalable=no'>")
-            append("<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'/>")
-            append("<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>")
-            append("<style>*{margin:0;padding:0}html,body,#map{width:100%;height:100%}</style>")
-            append("</head><body>")
-            append("<div id='map'></div>")
-            append("<script>")
-            append("var map=L.map('map').setView([")
-            append(centerLat)
-            append(",")
-            append(centerLng)
-            append("],15);")
-            append("L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{")
-            append("attribution:'\\u00a9 OSM',maxZoom:19}).addTo(map);")
-            append("var zones=[")
-            append(zonesJs)
-            append("];")
-            append("zones.forEach(function(z){")
-            append("L.circle([z.lat,z.lng],{radius:z.radius,color:'#3D8B67',fillColor:'#3D8B67',fillOpacity:0.15,weight:2})")
-            append(".addTo(map).bindPopup('<b>'+z.name+'</b><br>Radius: '+z.radius+'m');")
-            append("L.marker([z.lat,z.lng]).addTo(map).bindPopup('<b>'+z.name+'</b><br>Radius: '+z.radius+'m');")
-            append("});")
-            append("if(zones.length>0){var g=L.featureGroup(zones.map(function(z){return L.circle([z.lat,z.lng],{radius:z.radius})}));")
-            append("map.fitBounds(g.getBounds().pad(0.2));}")
-            append("</script></body></html>")
+    val zonesJson = remember(zones) {
+        val arr = JSONArray()
+        zones.forEach { zone ->
+            val obj = JSONObject()
+            obj.put("name", zone.name)
+            obj.put("lat", zone.centerLat.toDoubleOrNull() ?: 21.4225)
+            obj.put("lng", zone.centerLng.toDoubleOrNull() ?: 39.8262)
+            obj.put("radius", zone.radiusMeters)
+            arr.put(obj)
         }
+        arr.toString()
     }
 
     AndroidView(
@@ -144,8 +117,18 @@ private fun LeafletMapView(zones: List<GeofenceZone>, modifier: Modifier = Modif
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                webViewClient = WebViewClient()
-                loadDataWithBaseURL("https://unpkg.com/", html, "text/html", "UTF-8", null)
+                settings.allowFileAccess = true
+                @Suppress("DEPRECATION")
+                settings.allowUniversalAccessFromFileURLs = true
+                webChromeClient = WebChromeClient()
+                webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        super.onPageFinished(view, url)
+                        val escaped = zonesJson.replace("\\", "\\\\").replace("'", "\\'")
+                        view?.evaluateJavascript("loadZones('$escaped');", null)
+                    }
+                }
+                loadUrl("file:///android_asset/leaflet_map.html")
             }
         },
         modifier = modifier,
