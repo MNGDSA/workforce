@@ -1,0 +1,79 @@
+package com.luxurycarts.workforce.data
+
+import android.content.Context
+import androidx.room.ColumnInfo
+import androidx.room.Dao
+import androidx.room.Database
+import androidx.room.Entity
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.PrimaryKey
+import androidx.room.Query
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import kotlinx.coroutines.flow.Flow
+
+@Entity(tableName = "attendance_submissions")
+data class AttendanceEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "workforce_id") val workforceId: String,
+    @ColumnInfo(name = "attendance_date") val attendanceDate: String,
+    @ColumnInfo(name = "encrypted_timestamp") val encryptedTimestamp: String,
+    @ColumnInfo(name = "encrypted_gps_lat") val encryptedGpsLat: String,
+    @ColumnInfo(name = "encrypted_gps_lng") val encryptedGpsLng: String,
+    @ColumnInfo(name = "gps_accuracy") val gpsAccuracy: Float? = null,
+    @ColumnInfo(name = "encrypted_photo_path") val encryptedPhotoPath: String,
+    @ColumnInfo(name = "sync_status") val syncStatus: String = "pending",
+    @ColumnInfo(name = "server_id") val serverId: Int? = null,
+    @ColumnInfo(name = "flag_reason") val flagReason: String? = null,
+    @ColumnInfo(name = "retry_count") val retryCount: Int = 0,
+    @ColumnInfo(name = "owner_workforce_id") val ownerWorkforceId: String,
+)
+
+@Dao
+interface AttendanceDao {
+
+    @Query("SELECT * FROM attendance_submissions WHERE owner_workforce_id = :workforceId ORDER BY attendance_date DESC LIMIT :limit")
+    fun getSubmissions(workforceId: String, limit: Int = 100): Flow<List<AttendanceEntity>>
+
+    @Query("SELECT * FROM attendance_submissions WHERE sync_status = 'pending' AND owner_workforce_id = :workforceId ORDER BY attendance_date ASC")
+    suspend fun getPending(workforceId: String): List<AttendanceEntity>
+
+    @Query("SELECT COUNT(*) FROM attendance_submissions WHERE sync_status = 'pending' AND owner_workforce_id = :workforceId")
+    fun getPendingCount(workforceId: String): Flow<Int>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(entity: AttendanceEntity)
+
+    @Query("UPDATE attendance_submissions SET sync_status = :status, server_id = :serverId, flag_reason = :flagReason WHERE id = :id")
+    suspend fun updateSyncResult(id: String, status: String, serverId: Int?, flagReason: String?)
+
+    @Query("UPDATE attendance_submissions SET retry_count = retry_count + 1 WHERE id = :id")
+    suspend fun incrementRetry(id: String)
+
+    @Query("DELETE FROM attendance_submissions WHERE sync_status IN ('synced', 'verified') AND attendance_date < :cutoffDate AND owner_workforce_id = :workforceId")
+    suspend fun purgeOld(workforceId: String, cutoffDate: String)
+
+    @Query("DELETE FROM attendance_submissions WHERE owner_workforce_id = :workforceId")
+    suspend fun deleteAllForUser(workforceId: String)
+}
+
+@Database(entities = [AttendanceEntity::class], version = 1, exportSchema = false)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun attendanceDao(): AttendanceDao
+
+    companion object {
+        @Volatile
+        private var INSTANCE: AppDatabase? = null
+
+        fun getInstance(context: Context): AppDatabase {
+            return INSTANCE ?: synchronized(this) {
+                Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    "workforce.db",
+                ).build().also { INSTANCE = it }
+            }
+        }
+    }
+}

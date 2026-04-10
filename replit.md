@@ -166,24 +166,31 @@ A comprehensive audit trail capturing every significant backoffice action.
 
 Generate SESSION_SECRET: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`
 
-### Mobile App (Expo / React Native)
-Located in `mobile/` directory — a standalone Expo project for seasonal worker attendance. Not run inside Replit; intended for `npx expo start` on a local machine or EAS Build for device deployment.
+### Mobile App (Native Kotlin / Jetpack Compose)
+Located in `mobile-android/` directory — a native Android project. Open directly in Android Studio and hit Run. No Node.js, Expo, or React Native dependencies.
+
+**Tech stack:** Kotlin 2.0, Jetpack Compose, CameraX, Room, Retrofit, WorkManager, Google Maps Compose.
 
 **Key files:**
-- `mobile/App.tsx` — Root component with screen-based navigation
-- `mobile/src/services/api.ts` — API client + SecureStore auth
-- `mobile/src/services/database.ts` — SQLite offline attendance storage
-- `mobile/src/services/sync.ts` — Background sync engine (30s interval, exponential backoff)
-- `mobile/src/screens/` — Login, Home, Capture (camera+GPS), History, Map, Privacy
-- `mobile/src/theme/` — Matches web app design tokens (dark forest green, Space Grotesk/Inter)
+- `WorkforceApp.kt` — Application class, initializes database + session
+- `ui/nav/AppNavigation.kt` — Compose Navigation graph (login → home → capture/history/map/privacy)
+- `ui/screens/` — LoginScreen, HomeScreen, CaptureScreen, HistoryScreen, MapScreen, PrivacyScreen
+- `data/AppDatabase.kt` — Room database with AttendanceEntity + DAO
+- `data/ApiClient.kt` — Retrofit API service with cookie-based session
+- `data/AttendanceRepository.kt` — Bridges API and local DB, handles sync
+- `services/EncryptionService.kt` — AES-256-GCM via Android Keystore (hardware-backed)
+- `services/SessionManager.kt` — EncryptedSharedPreferences for session data
+- `services/SyncWorker.kt` — WorkManager periodic sync (15 min intervals)
 
-**Features:** Selfie check-in with face guide overlay, GPS verification, offline-first SQLite, auto-sync, Google Maps geofence zones, privacy policy screen.
+**Features:** Selfie check-in with CameraX + face guide overlay, GPS verification via FusedLocationProvider, offline-first Room DB, encrypted photo storage, auto-sync via WorkManager, Google Maps geofence zones, privacy policy + data deletion request.
 
-**Dependencies:** expo ~52, expo-camera, expo-location, expo-sqlite, expo-secure-store, react-native-maps, react-native-quick-crypto, date-fns.
+**Build:** Gradle 8.10.2, AGP 8.7.3, compileSdk 35, minSdk 26, targetSdk 34.
 
-**Connects to:** `POST /api/attendance-mobile/submit` (multipart photo+GPS), `GET /api/geofence-zones`, `POST /api/auth/login`, `GET /api/workforce/all-by-candidate/:candidateId`, `GET /api/portal/schedule/:workforceId`, `POST /api/portal/data-deletion-request`.
-**Auth contract:** Backend returns `{ user, candidate }` (no token). Mobile stores user/candidate data (not credentials) in SecureStore with 24h client-side session expiry. Session cookie managed by fetch `credentials: 'include'`.
-**Encryption:** AES-256-GCM via react-native-quick-crypto (fields and files). 12-byte random IV + 16-byte auth tag per record. Key stored in device secure enclave via SecureStore. All sensitive SQLite fields encrypted (workforceId, photoPath, GPS, timestamp). Photos encrypted at rest (.enc), decrypted to temp for upload, temp cleaned after sync.
+**Encryption:** AES-256-GCM with key in Android Keystore (hardware-backed secure enclave). All sensitive Room fields encrypted. Photos encrypted at rest (.enc), decrypted on-demand for display/upload.
+
+**Connects to:** `POST /api/attendance-mobile/submit`, `GET /api/geofence-zones`, `POST /api/auth/login`, `GET /api/workforce/all-by-candidate/:candidateId`, `POST /api/portal/data-deletion-request`.
+
+**Note:** `mobile/` (old React Native/Expo version) is still present but deprecated. Use `mobile-android/` instead.
 
 ### Public Routes Must Come Before Auth Middleware
 Candidate portal and public job listings must be registered before `requireAuth` or unauthenticated users are blocked.

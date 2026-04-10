@@ -1,0 +1,3 @@
+-keep class com.luxurycarts.workforce.data.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
