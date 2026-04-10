@@ -3803,31 +3803,6 @@ export async function registerRoutes(
       const photoUrl = `/uploads/${req.file.filename}`;
       const ts = parsed.clientTimestamp || parsed.timestamp;
 
-      if (parsed.mockLocationDetected || parsed.isEmulator) {
-        const flagReasons: string[] = [];
-        if (parsed.mockLocationDetected) flagReasons.push("Mock/fake location detected on device");
-        if (parsed.isEmulator) flagReasons.push("Android emulator detected");
-        const submission = await storage.createAttendanceSubmission({
-          workforceId: parsed.workforceId,
-          photoUrl,
-          gpsLat: String(parsed.gpsLat),
-          gpsLng: String(parsed.gpsLng),
-          gpsAccuracy: parsed.gpsAccuracy ? String(parsed.gpsAccuracy) : null,
-          submittedAt: ts ? new Date(ts) : new Date(),
-          status: "flagged",
-          flagReason: flagReasons.join("; "),
-          mockLocationDetected: parsed.mockLocationDetected ?? null,
-          isEmulator: parsed.isEmulator ?? null,
-          locationProvider: parsed.locationProvider ?? null,
-          deviceFingerprint: parsed.deviceFingerprint ?? null,
-        });
-        const updated = await storage.getAttendanceSubmission(submission.id);
-        return res.status(201).json({
-          submission: updated,
-          verification: { status: "flagged", confidence: 0, gpsInside: false, flagReason: flagReasons.join("; ") },
-        });
-      }
-
       const submission = await storage.createAttendanceSubmission({
         workforceId: parsed.workforceId,
         photoUrl,

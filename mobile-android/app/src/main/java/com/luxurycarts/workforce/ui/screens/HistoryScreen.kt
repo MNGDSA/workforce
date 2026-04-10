@@ -228,15 +228,25 @@ private fun HistoryItem(
                 DetailLine("Sync Status", item.syncStatus)
                 item.serverId?.let { DetailLine("Server ID", it.toString()) }
                 item.flagReason?.let {
-                    Text(
-                        "Flag: $it",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = ErrorRed,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(ErrorRed.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
-                            .padding(8.dp),
-                    )
+                    val sanitized = it.split(";")
+                        .map { r -> r.trim() }
+                        .filter { r ->
+                            !r.contains("emulator", ignoreCase = true) &&
+                            !r.contains("mock", ignoreCase = true) &&
+                            !r.contains("spoofing", ignoreCase = true)
+                        }
+                        .joinToString("; ")
+                    if (sanitized.isNotBlank()) {
+                        Text(
+                            "Flag: $sanitized",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = ErrorRed,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(ErrorRed.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                                .padding(8.dp),
+                        )
+                    }
                 }
                 item.reviewNotes?.let {
                     val isRejected = item.syncStatus.lowercase() == "rejected"
