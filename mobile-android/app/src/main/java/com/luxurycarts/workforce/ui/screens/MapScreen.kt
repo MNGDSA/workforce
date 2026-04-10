@@ -1,5 +1,8 @@
 package com.luxurycarts.workforce.ui.screens
 
+import android.annotation.SuppressLint
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,15 +25,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.Circle
-import com.google.maps.android.compose.GoogleMap
-import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerState
-import com.google.maps.android.compose.rememberCameraPositionState
+import androidx.compose.ui.viewinterop.AndroidView
 import com.luxurycarts.workforce.data.ApiService
 import com.luxurycarts.workforce.data.GeofenceZone
 import com.luxurycarts.workforce.ui.theme.Background
@@ -55,23 +51,6 @@ fun MapScreen(
             }
         } catch (_: Exception) {}
         isLoading = false
-    }
-
-    val defaultCenter = LatLng(21.4225, 39.8262)
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(
-            if (zones.isNotEmpty()) LatLng(zones.first().centerLat.toDouble(), zones.first().centerLng.toDouble()) else defaultCenter,
-            15f,
-        )
-    }
-
-    LaunchedEffect(zones) {
-        if (zones.isNotEmpty()) {
-            cameraPositionState.position = CameraPosition.fromLatLngZoom(
-                LatLng(zones.first().centerLat.toDouble(), zones.first().centerLng.toDouble()),
-                15f,
-            )
-        }
     }
 
     Column(
@@ -107,25 +86,77 @@ fun MapScreen(
                 CircularProgressIndicator(color = ForestGreen)
             }
         } else {
-            GoogleMap(
-                modifier = Modifier.fillMaxSize(),
-                cameraPositionState = cameraPositionState,
-            ) {
-                zones.forEach { zone ->
-                    Marker(
-                        state = MarkerState(position = LatLng(zone.centerLat.toDouble(), zone.centerLng.toDouble())),
-                        title = zone.name,
-                        snippet = "Radius: ${zone.radiusMeters}m",
-                    )
-                    Circle(
-                        center = LatLng(zone.centerLat.toDouble(), zone.centerLng.toDouble()),
-                        radius = zone.radiusMeters.toDouble(),
-                        fillColor = ForestGreen.copy(alpha = 0.15f),
-                        strokeColor = ForestGreen.copy(alpha = 0.5f),
-                        strokeWidth = 2f,
-                    )
-                }
-            }
+            LeafletMapView(zones = zones, modifier = Modifier.fillMaxSize())
         }
     }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun LeafletMapView(zones: List<GeofenceZone>, modifier: Modifier = Modifier) {
+    val defaultLat = 21.4225
+    val defaultLng = 39.8262
+    val centerLat = zones.firstOrNull()?.centerLat?.toDoubleOrNull() ?: defaultLat
+    val centerLng = zones.firstOrNull()?.centerLng?.toDoubleOrNull() ?: defaultLng
+
+    val zonesJs = zones.joinToString(",") { zone ->
+        val lat = zone.centerLat.toDoubleOrNull() ?: defaultLat
+        val lng = zone.centerLng.toDoubleOrNull() ?: defaultLng
+        """{ name: "${zone.name.replace("\"", "\\\"")}", lat: $lat, lng: $lng, radius: ${zone.radiusMeters} }"""
+    }
+
+    val html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { margin: 0; padding: 0; }
+        html, body, #map { width: 100%; height: 100%; }
+    </style>
+    </head>
+    <body>
+    <div id="map"></div>
+    <script>
+        var map = L.map('map').setView([$centerLat, $centerLng], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OSM',
+            maxZoom: 19,
+        }).addTo(map);
+
+        var zones = [$zonesJs];
+        zones.forEach(function(z) {
+            L.circle([z.lat, z.lng], {
+                radius: z.radius,
+                color: '#3D8B67',
+                fillColor: '#3D8B67',
+                fillOpacity: 0.15,
+                weight: 2,
+            }).addTo(map).bindPopup('<b>' + z.name + '</b><br>Radius: ' + z.radius + 'm');
+
+            L.marker([z.lat, z.lng]).addTo(map).bindPopup('<b>' + z.name + '</b><br>Radius: ' + z.radius + 'm');
+        });
+
+        if (zones.length > 0) {
+            var group = L.featureGroup(zones.map(function(z) { return L.circle([z.lat, z.lng], { radius: z.radius }); }));
+            map.fitBounds(group.getBounds().pad(0.2));
+        }
+    </script>
+    </body>
+    </html>
+    """.trimIndent()
+
+    AndroidView(
+        factory = { ctx ->
+            WebView(ctx).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                webViewClient = WebViewClient()
+                loadDataWithBaseURL("https://openstreetmap.org", html, "text/html", "UTF-8", null)
+            }
+        },
+        modifier = modifier,
+    )
 }
