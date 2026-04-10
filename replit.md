@@ -208,3 +208,4 @@ Check **Runtime Logs** first — most failures (SSL, missing env vars, port) hap
 6. Public routes must be registered before auth middleware
 7. Check Runtime Logs first, not Build Logs
 8. Add `ensureTables()` startup safety net alongside Drizzle push
+9. **Expo `app.json` plugins array** — Only list packages that provide actual config plugins (e.g., `expo-camera`, `expo-location` with permission config). Regular dependencies like `expo-font`, `expo-secure-store`, `expo-sqlite`, `expo-crypto`, `react-native-quick-crypto` must NOT be listed as plugins — they have no `app.plugin.js` and will cause `PluginError` during `npx expo prebuild`.
