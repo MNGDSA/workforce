@@ -189,23 +189,29 @@ fun LoginScreen(
                             val response = api.login(LoginRequest(identifier.trim(), password))
                             if (response.isSuccessful && response.body() != null) {
                                 val body = response.body()!!
-                                app.sessionManager.serverUrl = serverUrl.trim()
-                                app.sessionManager.userJson = Gson().toJson(body.user)
-                                app.sessionManager.candidateJson = body.candidate?.let { Gson().toJson(it) }
-                                app.sessionManager.loginTimestamp = System.currentTimeMillis()
 
-                                var workforceRecord: WorkforceRecord? = null
-                                body.candidate?.let { candidate ->
-                                    val records = api.getWorkforceRecords(candidate.id)
-                                    if (records.isSuccessful && !records.body().isNullOrEmpty()) {
-                                        workforceRecord = records.body()!!.first()
-                                    }
+                                if (body.candidate == null) {
+                                    errorMessage = "Access denied. This app is for active employees only."
+                                    return@launch
                                 }
 
-                                app.sessionManager.workforceId = workforceRecord?.id ?: body.user.id
-                                app.sessionManager.employeeNumber = workforceRecord?.employeeNumber
+                                val records = api.getWorkforceRecords(body.candidate.id)
+                                val allRecords = if (records.isSuccessful) records.body() ?: emptyList() else emptyList()
+                                val activeRecord = allRecords.firstOrNull { it.isActive }
 
-                                onLoginSuccess(body.user, workforceRecord, api)
+                                if (activeRecord == null) {
+                                    errorMessage = "Access denied. No active employment record found. Contact HR if you believe this is an error."
+                                    return@launch
+                                }
+
+                                app.sessionManager.serverUrl = serverUrl.trim()
+                                app.sessionManager.userJson = Gson().toJson(body.user)
+                                app.sessionManager.candidateJson = Gson().toJson(body.candidate)
+                                app.sessionManager.loginTimestamp = System.currentTimeMillis()
+                                app.sessionManager.workforceId = activeRecord.id
+                                app.sessionManager.employeeNumber = activeRecord.employeeNumber
+
+                                onLoginSuccess(body.user, activeRecord, api)
                             } else {
                                 errorMessage = "Invalid credentials"
                             }
