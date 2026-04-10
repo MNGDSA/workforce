@@ -30,11 +30,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.luxurycarts.workforce.R
 import com.google.gson.Gson
 import com.luxurycarts.workforce.WorkforceApp
 import com.luxurycarts.workforce.data.ApiClient
@@ -87,23 +90,31 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Canvas(modifier = Modifier.width(48.dp).height(36.dp)) {
-                val stripeH = size.height / 5
+            val spaceGrotesk = FontFamily(Font(R.font.space_grotesk_bold, FontWeight.Bold))
+
+            Canvas(modifier = Modifier.width(56.dp).height(28.dp)) {
+                val stripeH = 6.dp.toPx()
+                val gap = 5.dp.toPx()
+                val totalH = stripeH * 3 + gap * 2
+                val startY = (size.height - totalH) / 2
                 for (i in 0..2) {
                     drawRect(
                         color = ForestGreen,
-                        topLeft = Offset(0f, i * stripeH * 2),
+                        topLeft = Offset(0f, startY + i * (stripeH + gap)),
                         size = Size(size.width, stripeH),
                     )
                 }
             }
 
+            Spacer(Modifier.height(8.dp))
+
             Text(
                 text = "WORKFORCE",
-                style = MaterialTheme.typography.headlineLarge,
-                color = TextPrimary,
+                fontFamily = spaceGrotesk,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 4.sp,
+                fontSize = 28.sp,
+                color = TextPrimary,
+                letterSpacing = 6.sp,
             )
 
             Text(
