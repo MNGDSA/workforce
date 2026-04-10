@@ -261,10 +261,11 @@ fun CaptureScreen(
 
 private suspend fun capturePhoto(imageCapture: ImageCapture, outputFile: File) =
     suspendCancellableCoroutine { cont ->
+        val context = outputFile.parentFile!!.let { WorkforceApp.instance }
         val options = ImageCapture.OutputFileOptions.Builder(outputFile).build()
         imageCapture.takePicture(
             options,
-            ContextCompat.getMainExecutor(outputFile.parentFile!!),
+            ContextCompat.getMainExecutor(context),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     cont.resume(Unit)
