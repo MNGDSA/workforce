@@ -1,6 +1,25 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+
+const SECURITY_KEYWORDS = /emulator detected|mock.*location|fake.*location|spoofing/gi;
+
+function highlightSecurityFlags(text: string): React.ReactNode {
+  if (!SECURITY_KEYWORDS.test(text)) return text;
+  SECURITY_KEYWORDS.lastIndex = 0;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = SECURITY_KEYWORDS.exec(text)) !== null) {
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+    parts.push(
+      <span key={match.index} className="text-red-500 font-semibold">{match[0]}</span>
+    );
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return <>{parts}</>;
+}
 import { useToast } from "@/hooks/use-toast";
 import DashboardLayout from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -476,7 +495,7 @@ export default function InboxPage() {
 
                       {item.body && !isExpanded && (
                         <p className="text-xs text-muted-foreground truncate mt-0.5" data-testid={`text-inbox-summary-${item.id}`}>
-                          {item.body.length > 120 ? item.body.slice(0, 120) + "…" : item.body}
+                          {highlightSecurityFlags(item.body.length > 120 ? item.body.slice(0, 120) + "…" : item.body)}
                         </p>
                       )}
 
@@ -625,7 +644,7 @@ export default function InboxPage() {
                       {item.body && (
                         <div>
                           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Details</span>
-                          <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">{item.body}</p>
+                          <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">{highlightSecurityFlags(item.body)}</p>
                         </div>
                       )}
 
