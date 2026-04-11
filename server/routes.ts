@@ -2438,6 +2438,16 @@ export async function registerRoutes(
         if (data.parentPositionId === req.params.id) {
           return res.status(400).json({ message: "A position cannot be its own parent" });
         }
+        let ancestorId: string | null = parent.parentPositionId;
+        const visited = new Set<string>([req.params.id, data.parentPositionId]);
+        while (ancestorId) {
+          if (visited.has(ancestorId)) {
+            return res.status(400).json({ message: "Circular parent hierarchy detected" });
+          }
+          visited.add(ancestorId);
+          const anc = await storage.getPosition(ancestorId);
+          ancestorId = anc?.parentPositionId ?? null;
+        }
       }
       const pos = await storage.updatePosition(req.params.id, data);
       if (!pos) return res.status(404).json({ message: "Position not found" });
