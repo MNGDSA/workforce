@@ -464,6 +464,7 @@ export const workforce = pgTable(
     eventId: varchar("event_id").references(() => events.id),
     // SMP company snapshot — set at deployment, nullable for individual workers
     smpCompanyId: varchar("smp_company_id").references(() => smpCompanies.id, { onDelete: "set null" }),
+    positionId: varchar("position_id").references(() => positions.id, { onDelete: "set null" }),
     employmentType: employmentTypeEnum("employment_type").notNull().default("individual"),
     salary: decimal("salary", { precision: 10, scale: 2 }),
     startDate: text("start_date").notNull(),
@@ -1312,6 +1313,55 @@ export const insertPhotoChangeRequestSchema = createInsertSchema(photoChangeRequ
 });
 export type InsertPhotoChangeRequest = z.infer<typeof insertPhotoChangeRequestSchema>;
 export type PhotoChangeRequest = typeof photoChangeRequests.$inferSelect;
+
+// ─── Departments ─────────────────────────────────────────────────────────────
+
+export const departments = pgTable("departments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  nameAr: text("name_ar"),
+  code: varchar("code", { length: 20 }).notNull().unique(),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+}, (t) => ({
+  codeIdx: uniqueIndex("departments_code_idx").on(t.code),
+}));
+
+export const insertDepartmentSchema = createInsertSchema(departments).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;
+export type Department = typeof departments.$inferSelect;
+
+// ─── Positions ───────────────────────────────────────────────────────────────
+
+export const positions = pgTable("positions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  departmentId: varchar("department_id").notNull().references(() => departments.id, { onDelete: "restrict" }),
+  parentPositionId: varchar("parent_position_id"),
+  title: text("title").notNull(),
+  titleAr: text("title_ar"),
+  code: varchar("code", { length: 20 }).notNull().unique(),
+  description: text("description"),
+  gradeLevel: integer("grade_level"),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+}, (t) => ({
+  codeIdx: uniqueIndex("positions_code_idx").on(t.code),
+  deptIdx: index("positions_dept_idx").on(t.departmentId),
+  parentIdx: index("positions_parent_idx").on(t.parentPositionId),
+}));
+
+export const insertPositionSchema = createInsertSchema(positions).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertPosition = z.infer<typeof insertPositionSchema>;
+export type Position = typeof positions.$inferSelect;
 
 // ─── Query Params Types ─────────────────────────────────────────────────────
 export const candidateQuerySchema = z.object({

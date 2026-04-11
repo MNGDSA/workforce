@@ -36,6 +36,8 @@ import {
   insertAssetSchema,
   insertEmployeeAssetSchema,
   insertGeofenceZoneSchema,
+  insertDepartmentSchema,
+  insertPositionSchema,
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
@@ -1890,7 +1892,7 @@ export async function registerRoutes(
 
   app.patch("/api/workforce/:id", async (req: Request, res: Response) => {
     try {
-      const allowed = ["salary", "notes", "endDate", "supervisorId", "performanceScore", "isActive", "eventId"];
+      const allowed = ["salary", "notes", "endDate", "supervisorId", "performanceScore", "isActive", "eventId", "positionId"];
       const data: Record<string, any> = {};
       for (const key of allowed) {
         if (key in req.body) data[key] = req.body[key];
@@ -1908,6 +1910,7 @@ export async function registerRoutes(
           changes.push(`status → ${data.isActive ? "active" : "inactive"}`);
         }
         if (data.eventId !== undefined) changes.push(`event updated`);
+        if (data.positionId !== undefined) changes.push(`position updated`);
         if (data.notes !== undefined) changes.push(`notes updated`);
         if (data.endDate !== undefined) changes.push(`end date → ${data.endDate}`);
         if (data.performanceScore !== undefined) changes.push(`performance score → ${data.performanceScore}`);
@@ -2360,6 +2363,94 @@ export async function registerRoutes(
     } catch (err) {
       return handleError(res, err);
     }
+  });
+
+  // ─── Departments ───────────────────────────────────────────────────────────
+  app.get("/api/departments", async (req: Request, res: Response) => {
+    try {
+      const includeInactive = req.query.includeInactive === "true";
+      return res.json(await storage.getDepartments(includeInactive));
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/departments", async (req: Request, res: Response) => {
+    try {
+      const data = insertDepartmentSchema.parse(req.body);
+      const dept = await storage.createDepartment(data);
+      return res.status(201).json(dept);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/departments/:id", async (req: Request, res: Response) => {
+    try {
+      const data = insertDepartmentSchema.partial().parse(req.body);
+      const dept = await storage.updateDepartment(req.params.id, data);
+      if (!dept) return res.status(404).json({ message: "Department not found" });
+      return res.json(dept);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/departments/:id/toggle-active", async (req: Request, res: Response) => {
+    try {
+      const result = await storage.toggleDepartmentActive(req.params.id);
+      if (!result.success) return res.status(400).json({ message: result.error });
+      return res.json(result.department);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Positions ────────────────────────────────────────────────────────────
+  app.get("/api/positions", async (req: Request, res: Response) => {
+    try {
+      const { departmentId, includeInactive } = req.query;
+      if (departmentId) {
+        return res.json(await storage.getPositions(departmentId as string, includeInactive === "true"));
+      }
+      return res.json(await storage.getAllPositions(includeInactive === "true"));
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/positions", async (req: Request, res: Response) => {
+    try {
+      const data = insertPositionSchema.parse(req.body);
+      if (data.parentPositionId) {
+        const parent = await storage.getPosition(data.parentPositionId);
+        if (!parent) return res.status(400).json({ message: "Parent position not found" });
+        if (parent.departmentId !== data.departmentId) {
+          return res.status(400).json({ message: "Parent position must be in the same department" });
+        }
+      }
+      const pos = await storage.createPosition(data);
+      return res.status(201).json(pos);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/positions/:id", async (req: Request, res: Response) => {
+    try {
+      const data = insertPositionSchema.partial().parse(req.body);
+      if (data.parentPositionId) {
+        const existing = await storage.getPosition(req.params.id);
+        const parent = await storage.getPosition(data.parentPositionId);
+        if (!parent) return res.status(400).json({ message: "Parent position not found" });
+        const deptId = data.departmentId ?? existing?.departmentId;
+        if (parent.departmentId !== deptId) {
+          return res.status(400).json({ message: "Parent position must be in the same department" });
+        }
+        if (data.parentPositionId === req.params.id) {
+          return res.status(400).json({ message: "A position cannot be its own parent" });
+        }
+      }
+      const pos = await storage.updatePosition(req.params.id, data);
+      if (!pos) return res.status(404).json({ message: "Position not found" });
+      return res.json(pos);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/positions/:id/toggle-active", async (req: Request, res: Response) => {
+    try {
+      const result = await storage.togglePositionActive(req.params.id);
+      if (!result.success) return res.status(400).json({ message: result.error });
+      return res.json(result.position);
+    } catch (err) { return handleError(res, err); }
   });
 
   // ─── Users management (admin) ──────────────────────────────────────────────

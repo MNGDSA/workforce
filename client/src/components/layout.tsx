@@ -34,6 +34,7 @@ import {
   Loader2,
   Inbox,
   MapPin,
+  Building2,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -315,11 +316,12 @@ const workforceSubItems = [
   { href: "/offboarding", icon: LogOut,  label: "Offboarding" },
 ];
 
-const settingsPaths = ["/settings", "/automation", "/id-cards"];
+const settingsPaths = ["/settings", "/automation", "/id-cards", "/departments"];
 const settingsSubItems = [
-  { href: "/settings",   icon: Settings,  label: "Settings" },
-  { href: "/id-cards",   icon: CreditCard, label: "ID Cards" },
-  { href: "/automation", icon: Workflow,   label: "Rules & Automation" },
+  { href: "/settings",     icon: Settings,  label: "Settings" },
+  { href: "/departments",  icon: Building2, label: "Departments & Positions" },
+  { href: "/id-cards",     icon: CreditCard, label: "ID Cards" },
+  { href: "/automation",   icon: Workflow,   label: "Rules & Automation" },
 ];
 
 const bottomNavItems = [

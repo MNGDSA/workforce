@@ -98,6 +98,12 @@ import {
   photoChangeRequests,
   type PhotoChangeRequest,
   type InsertPhotoChangeRequest,
+  departments,
+  positions,
+  type Department,
+  type InsertDepartment,
+  type Position,
+  type InsertPosition,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte, getTableColumns } from "drizzle-orm";
 
@@ -415,6 +421,21 @@ export interface IStorage {
   getPhotoChangeRequest(id: string): Promise<PhotoChangeRequest | undefined>;
   createPhotoChangeRequest(data: InsertPhotoChangeRequest): Promise<PhotoChangeRequest>;
   updatePhotoChangeRequest(id: string, data: Partial<InsertPhotoChangeRequest> & { reviewedBy?: string; reviewedAt?: Date; reviewNotes?: string | null }): Promise<PhotoChangeRequest | undefined>;
+
+  // Departments
+  getDepartments(includeInactive?: boolean): Promise<Department[]>;
+  getDepartment(id: string): Promise<Department | undefined>;
+  createDepartment(data: InsertDepartment): Promise<Department>;
+  updateDepartment(id: string, data: Partial<InsertDepartment>): Promise<Department | undefined>;
+  toggleDepartmentActive(id: string): Promise<{ success: boolean; error?: string; department?: Department }>;
+
+  // Positions
+  getPositions(departmentId: string, includeInactive?: boolean): Promise<Position[]>;
+  getAllPositions(includeInactive?: boolean): Promise<(Position & { departmentName?: string | null })[]>;
+  getPosition(id: string): Promise<Position | undefined>;
+  createPosition(data: InsertPosition): Promise<Position>;
+  updatePosition(id: string, data: Partial<InsertPosition>): Promise<Position | undefined>;
+  togglePositionActive(id: string): Promise<{ success: boolean; error?: string; position?: Position }>;
 
   // Dashboard
   getDashboardStats(): Promise<{
@@ -1141,12 +1162,15 @@ export class DatabaseStorage implements IStorage {
         emergencyContactPhone: candidates.emergencyContactPhone,
         ibanAccountFirstName: candidates.ibanAccountFirstName,
         ibanAccountLastName: candidates.ibanAccountLastName,
+        positionId: workforce.positionId,
+        positionTitle: positions.title,
       })
       .from(workforce)
       .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
       .leftJoin(events, eq(workforce.eventId, events.id))
       .leftJoin(jobPostings, eq(workforce.jobId, jobPostings.id))
       .leftJoin(smpCompanies, eq(workforce.smpCompanyId, smpCompanies.id))
+      .leftJoin(positions, eq(workforce.positionId, positions.id))
       .where(where)
       .orderBy(desc(workforce.createdAt));
     return rows;
@@ -1200,12 +1224,15 @@ export class DatabaseStorage implements IStorage {
         emergencyContactPhone: candidates.emergencyContactPhone,
         ibanAccountFirstName: candidates.ibanAccountFirstName,
         ibanAccountLastName: candidates.ibanAccountLastName,
+        positionId: workforce.positionId,
+        positionTitle: positions.title,
       })
       .from(workforce)
       .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
       .leftJoin(events, eq(workforce.eventId, events.id))
       .leftJoin(jobPostings, eq(workforce.jobId, jobPostings.id))
       .leftJoin(smpCompanies, eq(workforce.smpCompanyId, smpCompanies.id))
+      .leftJoin(positions, eq(workforce.positionId, positions.id))
       .where(eq(workforce.id, id));
     return row;
   }
@@ -2982,6 +3009,109 @@ export class DatabaseStorage implements IStorage {
   async updatePhotoChangeRequest(id: string, data: Partial<InsertPhotoChangeRequest> & { reviewedBy?: string; reviewedAt?: Date; reviewNotes?: string | null }): Promise<PhotoChangeRequest | undefined> {
     const [req] = await db.update(photoChangeRequests).set(data).where(eq(photoChangeRequests.id, id)).returning();
     return req;
+  }
+
+  // ─── Departments ─────────────────────────────────────────────────────────────
+  async getDepartments(includeInactive?: boolean): Promise<Department[]> {
+    const conditions = includeInactive ? undefined : eq(departments.isActive, true);
+    return db.select().from(departments).where(conditions).orderBy(asc(departments.sortOrder), asc(departments.name));
+  }
+
+  async getDepartment(id: string): Promise<Department | undefined> {
+    const [dept] = await db.select().from(departments).where(eq(departments.id, id));
+    return dept;
+  }
+
+  async createDepartment(data: InsertDepartment): Promise<Department> {
+    const [dept] = await db.insert(departments).values(data).returning();
+    return dept;
+  }
+
+  async updateDepartment(id: string, data: Partial<InsertDepartment>): Promise<Department | undefined> {
+    const [dept] = await db.update(departments).set(data).where(eq(departments.id, id)).returning();
+    return dept;
+  }
+
+  async toggleDepartmentActive(id: string): Promise<{ success: boolean; error?: string; department?: Department }> {
+    const dept = await this.getDepartment(id);
+    if (!dept) return { success: false, error: "Department not found" };
+
+    if (dept.isActive) {
+      const activePositions = await db.select({ id: positions.id }).from(positions)
+        .where(and(eq(positions.departmentId, id), eq(positions.isActive, true)));
+      if (activePositions.length > 0) {
+        return { success: false, error: `Cannot deactivate: ${activePositions.length} active position(s) exist in this department. Deactivate them first.` };
+      }
+    }
+
+    const [updated] = await db.update(departments).set({ isActive: !dept.isActive }).where(eq(departments.id, id)).returning();
+    return { success: true, department: updated };
+  }
+
+  // ─── Positions ───────────────────────────────────────────────────────────────
+  async getPositions(departmentId: string, includeInactive?: boolean): Promise<Position[]> {
+    const conditions = [eq(positions.departmentId, departmentId)];
+    if (!includeInactive) conditions.push(eq(positions.isActive, true));
+    return db.select().from(positions).where(and(...conditions)).orderBy(asc(positions.sortOrder), asc(positions.title));
+  }
+
+  async getAllPositions(includeInactive?: boolean): Promise<(Position & { departmentName?: string | null })[]> {
+    const conditions = includeInactive ? undefined : eq(positions.isActive, true);
+    const rows = await db.select({
+      id: positions.id,
+      departmentId: positions.departmentId,
+      parentPositionId: positions.parentPositionId,
+      title: positions.title,
+      titleAr: positions.titleAr,
+      code: positions.code,
+      description: positions.description,
+      gradeLevel: positions.gradeLevel,
+      isActive: positions.isActive,
+      sortOrder: positions.sortOrder,
+      createdAt: positions.createdAt,
+      departmentName: departments.name,
+    }).from(positions)
+      .leftJoin(departments, eq(positions.departmentId, departments.id))
+      .where(conditions)
+      .orderBy(asc(departments.name), asc(positions.sortOrder), asc(positions.title));
+    return rows;
+  }
+
+  async getPosition(id: string): Promise<Position | undefined> {
+    const [pos] = await db.select().from(positions).where(eq(positions.id, id));
+    return pos;
+  }
+
+  async createPosition(data: InsertPosition): Promise<Position> {
+    const [pos] = await db.insert(positions).values(data).returning();
+    return pos;
+  }
+
+  async updatePosition(id: string, data: Partial<InsertPosition>): Promise<Position | undefined> {
+    const [pos] = await db.update(positions).set(data).where(eq(positions.id, id)).returning();
+    return pos;
+  }
+
+  async togglePositionActive(id: string): Promise<{ success: boolean; error?: string; position?: Position }> {
+    const pos = await this.getPosition(id);
+    if (!pos) return { success: false, error: "Position not found" };
+
+    if (pos.isActive) {
+      const activeChildren = await db.select({ id: positions.id }).from(positions)
+        .where(and(eq(positions.parentPositionId, id), eq(positions.isActive, true)));
+      if (activeChildren.length > 0) {
+        return { success: false, error: `Cannot deactivate: ${activeChildren.length} active child position(s) exist. Deactivate or reassign them first.` };
+      }
+
+      const activeEmployees = await db.select({ id: workforce.id, employeeNumber: workforce.employeeNumber }).from(workforce)
+        .where(and(eq(workforce.positionId, id), eq(workforce.isActive, true)));
+      if (activeEmployees.length > 0) {
+        return { success: false, error: `Cannot deactivate: ${activeEmployees.length} active employee(s) are assigned to this position. Reassign them first.` };
+      }
+    }
+
+    const [updated] = await db.update(positions).set({ isActive: !pos.isActive }).where(eq(positions.id, id)).returning();
+    return { success: true, position: updated };
   }
 }
 

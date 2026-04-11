@@ -36,11 +36,12 @@ The system employs a modern, full-stack architecture.
 
 **Database**:
 - PostgreSQL, managed with Drizzle ORM.
-- **Schema Design**: Optimized for MAANG-scale with indexing for 70,000+ candidates. Key entities include `users`, `candidates`, `events`, `job_postings`, `applications`, `interviews`, `workforce`, `smp_contracts`, `automation_rules`, `notifications`, `inbox_items`, and ID card management.
+- **Schema Design**: Optimized for MAANG-scale with indexing for 70,000+ candidates. Key entities include `users`, `candidates`, `events`, `job_postings`, `applications`, `interviews`, `workforce`, `smp_contracts`, `automation_rules`, `notifications`, `inbox_items`, `departments`, `positions`, and ID card management.
 - **Candidate Data**: Identified by `national_id`; `skills`, `languages`, `certifications`, `tags` are array columns; `metadata` uses JSONB.
 - **Data Integrity**: Strict policy against `onConflictDoNothing()` and soft deletion (`archivedAt`) for events and candidates.
 - **Events**: Central entity, can be `duration_based` or `ongoing`.
 - **Work Schedules & Shifts**: Dedicated schema for `shifts` (catalog), `schedule_templates` (weekly patterns), `schedule_assignments` (employee assignments with history), and `attendance_records` (daily status and clock-in/out).
+- **Departments & Positions**: Global position catalog with parent-child hierarchy within departments. Positions link to workforce records via `workforce.positionId`. Soft-delete with deactivation safety guards (blocks deactivation of positions with active employees or active children, blocks department deactivation with active positions). Settings page at `/departments`.
 
 **Authentication**:
 - Session-based authentication using `bcryptjs` for password hashing.

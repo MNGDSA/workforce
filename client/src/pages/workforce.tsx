@@ -64,6 +64,7 @@ import {
   Globe,
   User,
   Building,
+  Building2,
   ShieldAlert,
   Languages,
   Pencil,
@@ -136,6 +137,8 @@ type Employee = {
   emergencyContactPhone?: string | null;
   ibanAccountFirstName?: string | null;
   ibanAccountLastName?: string | null;
+  positionId?: string | null;
+  positionTitle?: string | null;
 };
 
 type WorkHistory = {
@@ -317,6 +320,8 @@ function EmployeeDetailDialog({
   const [editNotes, setEditNotes] = useState(false);
   const [editEvent, setEditEvent] = useState(false);
   const [eventValue, setEventValue] = useState("");
+  const [editPosition, setEditPosition] = useState(false);
+  const [positionValue, setPositionValue] = useState("");
   const [terminateOpen, setTerminateOpen] = useState(false);
   const [terminateForm, setTerminateForm] = useState({ endDate: "", reason: "" });
   const [reinstateOpen, setReinstateOpen] = useState(false);
@@ -344,6 +349,12 @@ function EmployeeDetailDialog({
   const { data: eventsList = [] } = useQuery<{ id: string; name: string }[]>({
     queryKey: ["/api/events"],
     queryFn: () => apiRequest("GET", "/api/events").then(r => r.json()),
+    enabled: open,
+  });
+
+  const { data: positionsList = [] } = useQuery<{ id: string; title: string; departmentId: string; departmentName?: string }[]>({
+    queryKey: ["/api/positions"],
+    queryFn: () => apiRequest("GET", "/api/positions").then(r => r.json()),
     enabled: open,
   });
 
@@ -408,6 +419,7 @@ function EmployeeDetailDialog({
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
       setEditSalary(false);
       setEditNotes(false);
+      setEditPosition(false);
       onUpdated();
       toast({ title: "Employee updated" });
     },
@@ -527,6 +539,39 @@ function EmployeeDetailDialog({
                 <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="National ID" value={employee.nationalId ?? "—"} mono />
                 <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label="Phone" value={employee.phone ?? "—"} />
                 <InfoRow icon={<Briefcase className="h-3.5 w-3.5" />} label="Job Title" value={employee.jobTitle ?? "—"} />
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500 text-xs flex items-center gap-1"><Building2 className="h-3 w-3" /> Position</span>
+                    {employee.isActive && !editPosition && (
+                      <Button variant="ghost" size="sm" className="h-5 text-[11px] text-primary px-1" onClick={() => { setEditPosition(true); setPositionValue(employee.positionId ?? ""); }}>
+                        {employee.positionId ? "Change" : "Assign"}
+                      </Button>
+                    )}
+                  </div>
+                  {editPosition ? (
+                    <div className="flex gap-2">
+                      <Select value={positionValue} onValueChange={setPositionValue}>
+                        <SelectTrigger data-testid="select-employee-position" className="bg-zinc-900 border-zinc-700 text-white h-8 text-sm flex-1">
+                          <SelectValue placeholder="Select position…" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
+                          <SelectItem value="__none__" className="text-zinc-400 focus:bg-zinc-800 italic">None (unassign)</SelectItem>
+                          {positionsList.filter(p => (p as any).isActive !== false).map(pos => (
+                            <SelectItem key={pos.id} value={pos.id} className="text-white focus:bg-zinc-800">{pos.title}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" className="h-8 bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ positionId: positionValue === "__none__" ? null : positionValue }, { onSuccess: () => setEditPosition(false) })}>
+                        {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-8 border-zinc-700" onClick={() => setEditPosition(false)}>Cancel</Button>
+                    </div>
+                  ) : (
+                    <p className="text-white text-sm" data-testid="text-employee-position">
+                      {employee.positionTitle ?? <span className="text-zinc-500 text-xs italic">Not assigned</span>}
+                    </p>
+                  )}
+                </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-500 text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Event</span>
@@ -1775,6 +1820,7 @@ export default function WorkforcePage() {
                         <TableCell className="hidden xl:table-cell" onClick={() => setSelectedEmployee(emp)}>
                           <div className="space-y-0.5">
                             <div className="text-sm text-white">{emp.jobTitle ?? "—"}</div>
+                            {emp.positionTitle && <div className="text-xs text-emerald-400/70">{emp.positionTitle}</div>}
                             {emp.eventName && <div className="text-xs text-primary/70">{emp.eventName}</div>}
                           </div>
                         </TableCell>
