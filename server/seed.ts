@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, candidates, automationRules, geofenceZones } from "@shared/schema";
+import { users, candidates, automationRules, geofenceZones, events, jobPostings, workforce } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 
@@ -119,6 +119,85 @@ async function seed() {
         })
         .onConflictDoNothing();
       console.log("  → Created candidate record for New Candidate (incomplete profile)");
+    }
+  }
+
+  // ─── Employee-mode Candidate (with workforce record) ─────────────────────
+  const [adminUser] = await db
+    .select()
+    .from(users)
+    .where(eq(users.nationalId, "1000000001"))
+    .limit(1);
+
+  if (candidateUser && adminUser) {
+    const [candidateRecord] = await db
+      .select()
+      .from(candidates)
+      .where(eq(candidates.userId, candidateUser.id))
+      .limit(1);
+
+    if (candidateRecord) {
+      const existingWorkforce = await db
+        .select()
+        .from(workforce)
+        .where(eq(workforce.candidateId, candidateRecord.id))
+        .limit(1);
+
+      if (existingWorkforce.length === 0) {
+        const [seededEvent] = await db
+          .insert(events)
+          .values({
+            name: "Ramadan 2026",
+            description: "Seasonal operations for Ramadan 1447H",
+            eventType: "duration_based",
+            startDate: "2026-03-01",
+            endDate: "2026-04-30",
+            status: "active",
+            targetHeadcount: 5000,
+            filledPositions: 1,
+            region: "Makkah Region",
+            createdBy: adminUser.id,
+          })
+          .onConflictDoNothing()
+          .returning();
+
+        if (seededEvent) {
+          const [seededJob] = await db
+            .insert(jobPostings)
+            .values({
+              title: "Golf Cart Operator",
+              titleAr: "مشغل عربة جولف",
+              description: "Operate golf carts for pilgrim transportation",
+              location: "Masjid Al-Haram",
+              region: "Makkah Region",
+              department: "Operations",
+              type: "seasonal_full_time",
+              salaryMin: "3500.00",
+              salaryMax: "5000.00",
+              status: "active",
+              eventId: seededEvent.id,
+              postedBy: adminUser.id,
+            })
+            .onConflictDoNothing()
+            .returning();
+
+          if (seededJob) {
+            await db
+              .insert(workforce)
+              .values({
+                employeeNumber: "E000001",
+                candidateId: candidateRecord.id,
+                jobId: seededJob.id,
+                eventId: seededEvent.id,
+                salary: "4000.00",
+                startDate: "2026-03-01",
+                isActive: true,
+              })
+              .onConflictDoNothing();
+            console.log("  → Created workforce record for Test Candidate (employee mode)");
+          }
+        }
+      }
     }
   }
 

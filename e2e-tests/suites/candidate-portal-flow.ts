@@ -3,7 +3,7 @@ export const name = "Candidate Portal Flow & Logout";
 export const testPlan = `
 ## Test Suite: Candidate Portal Flow & Logout
 
-### Test 1: Login and verify portal renders candidate content
+### Test 1: Login and verify employee-mode portal renders
 1. [New Context] Create a new browser context
 2. [Browser] Navigate to /auth
 3. [Browser] Enter "2000000002" in data-testid="input-identifier"
@@ -12,11 +12,12 @@ export const testPlan = `
 6. [Browser] Wait up to 5 seconds for navigation to /candidate-portal
 7. [Verify]
    - Assert URL is /candidate-portal
-   - Assert data-testid="text-portal-title" is visible showing "Candidate Portal"
+   - Assert data-testid="text-portal-title" is visible showing portal title
+   - Assert data-testid="badge-portal-mode" is visible (employee mode badge)
    - Assert data-testid="button-profile-menu" is visible
    - Assert the page contains the text "Test Candidate" (candidate name from seed)
 
-### Test 2: Candidate mode avatar click opens profile (not photo dialog)
+### Test 2: Employee-mode avatar click opens photo change dialog
 8. [New Context] Create a new browser context
 9. [Browser] Navigate to /auth
 10. [Browser] Enter "2000000002" in data-testid="input-identifier"
@@ -25,9 +26,9 @@ export const testPlan = `
 13. [Browser] Wait up to 5 seconds for navigation to /candidate-portal
 14. [Browser] Click data-testid="button-avatar-edit"
 15. [Verify]
-   - Assert a profile editing section or sheet opens
-   - Assert data-testid="input-firstName" is visible (profile form opened, not photo change dialog)
-   - Assert data-testid="button-save-profile" is visible
+   - In employee mode, this opens the "Change Profile Photo" dialog
+   - Assert data-testid="button-select-new-photo" is visible (photo selection button)
+   - Assert data-testid="input-photo-change-file" exists in the DOM (hidden file input)
 
 ### Test 3: Logout clears state and returns to auth
 16. [New Context] Create a new browser context
@@ -46,11 +47,13 @@ export const testPlan = `
 
 export const technicalDocs = `
 Candidate: 2000000002 / password123 -> /candidate-portal (profileCompleted=true, fullNameEn="Test Candidate")
-This is candidate mode (no workforce record), NOT employee mode.
-- data-testid="text-portal-title" shows "Candidate Portal"
-- data-testid="badge-portal-mode" is NOT rendered in candidate mode
-- Clicking data-testid="button-avatar-edit" opens profile sheet (handleProfileOpen), not photo change dialog
+This user has an ACTIVE workforce record (employeeNumber="E000001") so they are in EMPLOYEE mode.
+
+In employee mode:
+- data-testid="text-portal-title" shows portal title
+- data-testid="badge-portal-mode" IS rendered (shows "Employee" badge)
+- Clicking data-testid="button-avatar-edit" opens photo change dialog (NOT profile sheet)
+- data-testid="button-select-new-photo" and "input-photo-change-file" are available in dialog
 - Profile menu: data-testid="button-profile-menu"
 - Sign out: data-testid="menu-item-signout" -> clears localStorage and navigates to /auth
-- Profile form: input-firstName, button-save-profile
 `;

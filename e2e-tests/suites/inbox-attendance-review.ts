@@ -30,7 +30,7 @@ export const testPlan = `
    - Assert the inbox list updates
    - Assert visible items contain "attendance" or "Attendance verification" text
 
-### Test 3: Expand a pending attendance item and verify review fields
+### Test 3: Expand a pending attendance item and verify employee identity and review fields
 16. [New Context] Create a new browser context
 17. [Browser] Navigate to /auth
 18. [Browser] Enter "1000000001" in data-testid="input-identifier"
@@ -42,6 +42,8 @@ export const testPlan = `
 24. [Browser] Click the first card with data-testid starting with "row-inbox-"
 25. [Verify]
    - Assert a detail section is visible (data-testid starting with "detail-inbox-")
+   - Assert data-testid starting with "text-employee-name-" is visible (shows employee full name)
+   - Assert data-testid starting with "text-employee-number-" is visible (shows employee ID number)
    - Assert a submitted photo exists (data-testid starting with "img-submitted-photo-")
    - Assert a reference photo exists (data-testid starting with "img-reference-photo-")
    - Assert a confidence score element exists (data-testid starting with "text-confidence-")
@@ -99,13 +101,15 @@ Item elements:
 - Row card: data-testid="row-inbox-{id}" (click to expand)
 - Detail section: data-testid="detail-inbox-{id}"
 
+Employee identity fields (inside expanded detail):
+- Employee name: data-testid="text-employee-name-{id}" (shows full name)
+- Employee number: data-testid="text-employee-number-{id}" (shows employee ID)
+
 Attendance review fields (inside expanded detail):
 - Submitted photo: data-testid="img-submitted-photo-{id}"
 - Reference photo: data-testid="img-reference-photo-{id}"
 - Confidence: data-testid="text-confidence-{id}"
 - GPS status: data-testid="text-gps-status-{id}"
-- Employee name: data-testid="text-employee-name-{id}"
-- Employee number: data-testid="text-employee-number-{id}"
 - Approve: data-testid="button-approve-attendance-{id}"
 - Reject: data-testid="button-reject-attendance-{id}"
 

@@ -43,7 +43,7 @@ Results: 17 passed, 0 failed
 ========================================
 ```
 
-## Playwright E2E Suites (8 suites, 34 scenarios)
+## Playwright E2E Suites (8 suites, 37 scenarios)
 
 Every scenario uses an independent [New Context] for full isolation.
 
@@ -51,27 +51,28 @@ Every scenario uses an independent [New Context] for full isolation.
 |-------|-----------|----------------|
 | Auth Validation | 3 | Invalid login error, admin /dashboard redirect, forgot password form |
 | Candidate Portal Login | 3 | NationalId login -> /candidate-portal, phone login, invalid credentials |
-| Profile Setup Gate | 6 | Wizard shows for incomplete profile, required field enforcement blocks advance, fill all step 1 fields and advance to step 2, step 2->3 navigation, complete wizard loads portal, completed profile skips wizard |
-| Portal Main View | 4 | Portal title (NOT badge-portal-mode in candidate mode), nav items, profile dropdown, profile editing |
-| Portal Flow & Logout | 3 | Candidate Portal title, avatar click opens profile sheet (not photo dialog), logout to /auth |
-| Photo Management | 3 | Avatar edit opens profile sheet in candidate mode (not photo dialog), profile shows candidate info, avatar shows initials/photo |
-| Inbox Review | 6 | Attendance filter, expand item with photos/confidence/GPS, approve dialog with notes + cancel, reject dialog with notes + cancel, full approve with notes and status transition |
+| Profile Setup Gate | 7 | Wizard shows for incomplete profile, step 1 required field enforcement, fill all step 1 fields (firstName/lastName/gender/nationality/dob/maritalStatus/region), step 2 required field enforcement (emergency contact + IBAN), fill step 2 and advance, complete step 3 wizard, completed-profile employee skips wizard |
+| Portal Main View | 4 | Portal title + badge-portal-mode (employee mode), nav items, profile dropdown, employee card with employee number E000001 + salary |
+| Portal Flow & Logout | 3 | Employee-mode portal title + badge, avatar click opens photo change dialog (employee behavior), logout to /auth |
+| Photo Management | 4 | Employee-mode avatar edit opens Change Photo dialog with input-photo-change-file + button-select-new-photo, dialog close, profile sheet shows candidate info, employee card shows employee number |
+| Inbox Review | 6 | Attendance filter, expand item verifies employee-name + employee-number + photos + confidence + GPS, approve dialog with textarea-confirm-notes + cancel, reject dialog + cancel, full approve with notes and item resolves |
 | Geofence CRUD | 4 | Zone list with seeded data, zone details panel, create + delete zone lifecycle, empty-name validation |
 
 ## Test Data
 
-| Role | Identifier | Password | Profile Status |
-|------|-----------|----------|----------------|
-| Super Admin | 1000000001 | password123 | N/A (admin) |
-| Candidate (complete) | 2000000002 | password123 | profileCompleted=true, skips wizard, candidate mode (no workforce record) |
-| Candidate (phone) | 0500000002 | password123 | Same user as above |
-| Candidate (incomplete) | 2000000004 | password123 | profileCompleted=false, shows wizard |
+| Role | Identifier | Password | Profile Status | Mode |
+|------|-----------|----------|----------------|------|
+| Super Admin | 1000000001 | password123 | N/A (admin) | Admin |
+| Candidate (employee) | 2000000002 | password123 | profileCompleted=true | Employee (workforce record E000001, Ramadan 2026) |
+| Candidate (phone) | 0500000002 | password123 | Same as above | Employee |
+| Candidate (incomplete) | 2000000004 | password123 | profileCompleted=false | Shows wizard |
 
-## Known Limitation
+## Seed Data Dependencies
 
-Test candidate 2000000002 does not have an active workforce record, so **employee-mode
-photo management** (Change Photo dialog, pending review amber badge, input-photo-change-file,
-button-select-new-photo) cannot be tested with current seed data. Creating a workforce record
-requires dependent event and job posting records. The admin-side photo approval workflow is
-verified in the Inbox Review suite. Employee-mode-specific photo controls are documented in
-the technicalDocs of the photo management suite for future test expansion.
+Test candidate 2000000002 has a full chain:
+- User → Candidate (profileCompleted=true) → Event (Ramadan 2026) → Job (Golf Cart Operator) → Workforce (E000001, salary 4000 SAR)
+
+This enables testing:
+- Employee-mode portal badge, employee card with number + salary
+- Avatar click opens Change Profile Photo dialog (employee-only feature)
+- Photo change file input + select button (employee-only DOM elements)
