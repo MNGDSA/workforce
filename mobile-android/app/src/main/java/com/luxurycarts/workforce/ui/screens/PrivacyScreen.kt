@@ -61,6 +61,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun PrivacyScreen(
     workforceId: String,
+    userId: String,
     apiService: ApiService?,
     onBack: () -> Unit,
 ) {
@@ -86,9 +87,9 @@ fun PrivacyScreen(
     )
 
     LaunchedEffect(workforceId) {
-        if (workforceId.isNotEmpty() && apiService != null) {
+        if (workforceId.isNotEmpty() && userId.isNotEmpty() && apiService != null) {
             try {
-                val resp = apiService.getErasureStatus(workforceId)
+                val resp = apiService.getErasureStatus(workforceId, userId)
                 if (resp.isSuccessful) {
                     hasPendingRequest = resp.body()?.hasPendingRequest == true
                 }
@@ -122,7 +123,7 @@ fun PrivacyScreen(
                         scope.launch {
                             try {
                                 val response = apiService?.requestDataErasure(
-                                    ErasureRequest(workforceId, reason = reason.ifBlank { null })
+                                    ErasureRequest(workforceId, userId, reason = reason.ifBlank { null })
                                 )
                                 if (response?.isSuccessful == true) {
                                     resultMessage = response.body()?.message ?: "Request submitted successfully"

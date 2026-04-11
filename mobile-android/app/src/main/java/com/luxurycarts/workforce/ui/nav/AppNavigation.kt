@@ -145,8 +145,10 @@ fun AppNavigation() {
             }
             composable("privacy") {
                 val wfId = workforceRecord?.id ?: app.sessionManager.workforceId ?: ""
+                val uid = user?.id ?: ""
                 PrivacyScreen(
                     workforceId = wfId,
+                    userId = uid,
                     apiService = apiService,
                     onBack = { navController.popBackStack() },
                 )

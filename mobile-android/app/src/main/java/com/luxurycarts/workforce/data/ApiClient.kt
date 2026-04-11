@@ -54,7 +54,7 @@ interface ApiService {
     suspend fun requestDataErasure(@Body request: ErasureRequest): Response<ErasureResponse>
 
     @GET("api/portal/data-erasure-status")
-    suspend fun getErasureStatus(@Query("workforceId") workforceId: String): Response<ErasureStatusResponse>
+    suspend fun getErasureStatus(@Query("workforceId") workforceId: String, @Query("userId") userId: String): Response<ErasureStatusResponse>
 
     @Multipart
     @POST("api/candidates/{candidateId}/documents")

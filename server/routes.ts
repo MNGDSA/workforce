@@ -3475,18 +3475,24 @@ export async function registerRoutes(
   // ─── Portal: Data Erasure Request ───────────────────────────────────────────
   app.post("/api/portal/data-erasure-request", async (req: Request, res: Response) => {
     try {
-      const { workforceId, reason } = req.body;
-      if (!workforceId) {
-        return res.status(400).json({ message: "Workforce ID is required" });
+      const { workforceId, userId, reason } = req.body;
+      if (!workforceId || !userId) {
+        return res.status(400).json({ message: "Workforce ID and user ID are required" });
       }
+
       const wf = await storage.getWorkforceEmployee(workforceId);
       if (!wf) {
         return res.status(404).json({ message: "Employee record not found" });
       }
-      const candidate = await storage.getCandidate(wf.candidateId);
-      const employeeName = candidate?.fullNameEn || wf.employeeNumber || workforceId;
 
-      const existing = await storage.getInboxItems({ status: "pending", type: "general_request", limit: 200 });
+      const candidate = await storage.getCandidate(wf.candidateId);
+      if (!candidate || candidate.userId !== userId) {
+        return res.status(403).json({ message: "You are not authorized to submit a request for this employee record." });
+      }
+
+      const employeeName = candidate.fullNameEn || wf.employeeNumber || workforceId;
+
+      const existing = await storage.getInboxItems({ status: "pending", type: "general_request", limit: 500 });
       const hasPending = existing.data.some(item =>
         item.entityType === "workforce" && item.entityId === workforceId &&
         item.title.includes("Data Erasure Request")
@@ -3505,7 +3511,7 @@ export async function registerRoutes(
       );
 
       await storage.createAuditLog({
-        actorId: candidate?.userId || wf.candidateId,
+        actorId: userId,
         actorName: employeeName,
         action: "data_erasure_requested",
         entityType: "workforce",
@@ -3518,13 +3524,28 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
+  app.post("/api/portal/data-deletion-request", async (req: Request, res: Response) => {
+    return res.status(410).json({ message: "This endpoint has been replaced. Please update your app to the latest version." });
+  });
+
   app.get("/api/portal/data-erasure-status", async (req: Request, res: Response) => {
     try {
       const workforceId = req.query.workforceId as string;
-      if (!workforceId) {
-        return res.status(400).json({ message: "workforceId query parameter is required" });
+      const userId = req.query.userId as string;
+      if (!workforceId || !userId) {
+        return res.status(400).json({ message: "workforceId and userId query parameters are required" });
       }
-      const existing = await storage.getInboxItems({ status: "pending", type: "general_request", limit: 200 });
+
+      const wf = await storage.getWorkforceEmployee(workforceId);
+      if (!wf) {
+        return res.status(404).json({ message: "Employee record not found" });
+      }
+      const candidate = await storage.getCandidate(wf.candidateId);
+      if (!candidate || candidate.userId !== userId) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+
+      const existing = await storage.getInboxItems({ status: "pending", type: "general_request", limit: 500 });
       const pending = existing.data.find(item =>
         item.entityType === "workforce" && item.entityId === workforceId &&
         item.title.includes("Data Erasure Request")
