@@ -1,6 +1,5 @@
 package com.luxurycarts.workforce.ui.screens
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,10 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -32,9 +28,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +43,7 @@ import com.luxurycarts.workforce.data.ApiService
 import com.luxurycarts.workforce.data.LoginRequest
 import com.luxurycarts.workforce.data.User
 import com.luxurycarts.workforce.data.WorkforceRecord
+import com.luxurycarts.workforce.ui.components.WorkforceLogo
 import com.luxurycarts.workforce.ui.theme.Background
 import com.luxurycarts.workforce.ui.theme.Card
 import com.luxurycarts.workforce.ui.theme.CardBorder
@@ -96,40 +90,15 @@ fun LoginScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             val spaceGrotesk = FontFamily(Font(R.font.space_grotesk_bold, FontWeight.Bold))
-            val slashLight = Color(0xFF7ECFA8)
-            val slashMid = Color(0xFF2D9B68)
-            val slashDark = Color(0xFF145E38)
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Canvas(modifier = Modifier.size(44.dp)) {
-                    val w = size.width
-                    val h = size.height
-                    val slashW = w * 0.16f
-                    val gap = w * 0.10f
+                WorkforceLogo(size = 40.dp)
 
-                    fun drawSlash(x: Float, color: Color) {
-                        val path = Path().apply {
-                            moveTo(x + slashW * 0.6f, 0f)
-                            lineTo(x + slashW * 1.6f, 0f)
-                            lineTo(x + slashW, h)
-                            lineTo(x, h)
-                            close()
-                        }
-                        drawPath(path, color)
-                    }
-
-                    val totalW = slashW * 3 + gap * 2
-                    val startX = (w - totalW - slashW * 0.6f) / 2f
-                    drawSlash(startX, slashLight)
-                    drawSlash(startX + slashW + gap, slashMid)
-                    drawSlash(startX + (slashW + gap) * 2, slashDark)
-                }
-
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(10.dp))
 
                 Text(
                     text = "WORKFORCE",
@@ -140,12 +109,6 @@ fun LoginScreen(
                     letterSpacing = 2.sp,
                 )
             }
-
-            Text(
-                text = "Employee App",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextMuted,
-            )
 
             Spacer(Modifier.height(16.dp))
 
