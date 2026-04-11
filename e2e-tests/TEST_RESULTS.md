@@ -43,7 +43,7 @@ Results: 17 passed, 0 failed
 ========================================
 ```
 
-## Playwright E2E Suites (8 suites, 38 scenarios)
+## Playwright E2E Suites (8 suites, 35 scenarios)
 
 Every test starts with [New Context] and full login flow for complete scenario independence.
 
