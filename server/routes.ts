@@ -1645,8 +1645,8 @@ export async function registerRoutes(
   // ─── Onboarding ───────────────────────────────────────────────────────────
   app.get("/api/onboarding", async (req: Request, res: Response) => {
     try {
-      const { status, eventId } = req.query as Record<string, string>;
-      const records = await storage.getOnboardingRecords({ status, eventId });
+      const { status, eventId, candidateId } = req.query as Record<string, string>;
+      const records = await storage.getOnboardingRecords({ status, eventId, candidateId });
       return res.json(records);
     } catch (err) {
       return handleError(res, err);

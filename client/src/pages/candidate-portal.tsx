@@ -202,12 +202,14 @@ type PortalMode =
   | "employee_individual"
   | "employee_smp"
   | "former_individual"
-  | "former_smp";
+  | "former_smp"
+  | "rehiring";
 
 function resolvePortalMode(
   candidate: Record<string, unknown> | null | undefined,
   activeRecord: WorkforceRecord | null | undefined,
   allRecords: WorkforceRecord[],
+  activeOnboarding?: { id: string; status: string } | null,
 ): PortalMode {
   if (!candidate) return "candidate";
 
@@ -216,6 +218,9 @@ function resolvePortalMode(
   }
 
   if (!activeRecord && allRecords.length > 0) {
+    if (activeOnboarding) {
+      return "rehiring";
+    }
     const mostRecent = allRecords[0];
     return mostRecent.employmentType === "smp" ? "former_smp" : "former_individual";
   }
@@ -237,6 +242,8 @@ function getNavItems(mode: PortalMode): NavKey[] {
       return ["dashboard", "history", "payslips", "contract", "jobs"];
     case "former_smp":
       return ["dashboard", "history"];
+    case "rehiring":
+      return ["dashboard", "history", "contract", "jobs"];
     case "candidate":
     default:
       return ["jobs"];
@@ -1103,7 +1110,14 @@ export default function CandidatePortal() {
     enabled: !!candidateId,
   });
 
-  const portalMode = resolvePortalMode(candidateProfile, activeWorkforceRecord, allWorkforceRecords);
+  const { data: onboardingRecords = [] } = useQuery<{ id: string; status: string; applicationId: string | null }[]>({
+    queryKey: ["/api/onboarding/mine", candidateId],
+    queryFn: () => apiRequest("GET", `/api/onboarding?candidateId=${candidateId}`).then(r => r.json()),
+    enabled: !!candidateId,
+  });
+  const activeOnboarding = onboardingRecords.find(ob => ob.status !== "converted" && ob.status !== "rejected") ?? null;
+
+  const portalMode = resolvePortalMode(candidateProfile, activeWorkforceRecord, allWorkforceRecords, activeOnboarding);
   const navItems = getNavItems(portalMode);
   const isSmp = portalMode === "employee_smp" || portalMode === "former_smp";
 
@@ -1114,6 +1128,7 @@ export default function CandidatePortal() {
   }, [portalMode]);
   const isEmployee = portalMode === "employee_individual" || portalMode === "employee_smp";
   const isFormer = portalMode === "former_individual" || portalMode === "former_smp";
+  const isRehiring = portalMode === "rehiring";
   const mostRecentRecord = allWorkforceRecords[0] ?? null;
 
   const { data: pendingPhotoRequests = [] } = useQuery<{ id: string; status: string; newPhotoUrl: string }[]>({
@@ -1126,13 +1141,13 @@ export default function CandidatePortal() {
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobPosting[]>({
     queryKey: ["/api/jobs", "active"],
     queryFn: () => apiRequest("GET", "/api/jobs?status=active").then(r => r.json()),
-    enabled: portalMode === "candidate" || portalMode === "former_individual",
+    enabled: portalMode === "candidate" || portalMode === "former_individual" || portalMode === "rehiring",
   });
 
   const { data: myApplications = [], refetch: refetchApplications } = useQuery<{ jobId: string; status: string }[]>({
     queryKey: ["/api/applications/mine", candidateId],
     queryFn: () => apiRequest("GET", `/api/applications?candidateId=${candidateId}`).then(r => r.json()),
-    enabled: !!candidateId && (portalMode === "candidate" || portalMode === "former_individual"),
+    enabled: !!candidateId && (portalMode === "candidate" || portalMode === "former_individual" || portalMode === "rehiring"),
     staleTime: 0,
     refetchOnMount: true,
   });
@@ -1322,12 +1337,16 @@ export default function CandidatePortal() {
   // ── Portal mode label ────────────────────────────────────────────────────
   const portalTitle = isEmployee
     ? (isSmp ? "Employee Portal (SMP)" : "Employee Portal")
+    : isRehiring
+    ? "Rehiring in Progress"
     : isFormer
     ? (isSmp ? "Former Employee (SMP)" : "Former Employee Portal")
     : "Candidate Portal";
 
   const portalSubtitle = isEmployee
     ? (isSmp ? "Your shift schedule and work history." : "Manage your employment details and profile.")
+    : isRehiring
+    ? "You are being re-onboarded. Complete any pending steps to finalize your rehiring."
     : isFormer
     ? "Your employment has ended. Your records remain accessible."
     : "Browse open positions and manage your applications.";
@@ -1384,17 +1403,19 @@ export default function CandidatePortal() {
           <Tabs defaultValue="open">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-display font-bold text-white">
-                {isFormer ? "Reapply for Positions" : "Job Opportunities"}
+                {(isFormer || isRehiring) ? "Reapply for Positions" : "Job Opportunities"}
               </h3>
               <TabsList className="bg-muted/20">
                 <TabsTrigger value="open">Open Positions</TabsTrigger>
                 <TabsTrigger value="applied">Applied {appliedIds.size > 0 && `(${appliedIds.size})`}</TabsTrigger>
               </TabsList>
             </div>
-            {isFormer && (
+            {(isFormer || isRehiring) && (
               <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-xs text-blue-300 flex items-center gap-2">
                 <Shield className="h-4 w-4 shrink-0" />
-                Your previous employment history is preserved. You are eligible to reapply for future positions.
+                {isRehiring
+                  ? "Your rehiring is in progress. You can still browse and apply for additional positions."
+                  : "Your previous employment history is preserved. You are eligible to reapply for future positions."}
               </div>
             )}
             <TabsContent value="open" className="space-y-4">
@@ -1501,6 +1522,28 @@ export default function CandidatePortal() {
       default:
         return (
           <div className="space-y-6">
+            {/* Rehiring pipeline banner */}
+            {isRehiring && activeOnboarding && (
+              <Card className="bg-blue-500/10 border-blue-500/30">
+                <CardContent className="py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+                      <RefreshCw className="h-5 w-5 text-blue-400" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-blue-300">Rehiring in Progress</h4>
+                      <p className="text-sm text-blue-300/80">
+                        Welcome back! Your re-onboarding is underway.
+                        {activeOnboarding.status === "pending" && " Your documents are being reviewed."}
+                        {activeOnboarding.status === "in_progress" && " Please complete your pending prerequisites."}
+                        {activeOnboarding.status === "ready" && " All prerequisites are met. A contract will be sent for your review."}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Former employee banner */}
             {isFormer && mostRecentRecord && (
               <TerminationBanner record={mostRecentRecord} />
@@ -1608,8 +1651,8 @@ export default function CandidatePortal() {
               </div>
             )}
 
-            {/* Former views additional content */}
-            {isFormer && (
+            {/* Former/rehiring views additional content */}
+            {(isFormer || isRehiring) && (
               <div className="space-y-4">
                 <Card className="bg-card border-border">
                   <CardContent className="p-4 text-sm text-muted-foreground">
@@ -1719,7 +1762,7 @@ export default function CandidatePortal() {
           {/* Left sidebar: Profile card */}
           <div className="space-y-6">
             <Card className="bg-card border-border overflow-hidden">
-              <div className={`h-20 bg-gradient-to-r ${isEmployee ? (isSmp ? "from-amber-600/20 to-amber-600/5" : "from-emerald-600/20 to-emerald-600/5") : isFormer ? "from-red-600/20 to-red-600/5" : "from-primary/20 to-primary/5"}`} />
+              <div className={`h-20 bg-gradient-to-r ${isEmployee ? (isSmp ? "from-amber-600/20 to-amber-600/5" : "from-emerald-600/20 to-emerald-600/5") : isRehiring ? "from-blue-600/20 to-blue-600/5" : isFormer ? "from-red-600/20 to-red-600/5" : "from-primary/20 to-primary/5"}`} />
               <CardContent className="pt-0 -mt-10 text-center relative z-10">
                 <button
                   type="button"
@@ -1763,6 +1806,11 @@ export default function CandidatePortal() {
                     <Badge className={`mt-2 text-xs gap-1 ${isSmp ? "bg-amber-500/15 text-amber-400 border border-amber-500/30" : "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"}`}>
                       <BadgeCheck className="h-3 w-3" />
                       {isSmp ? "SMP Contract" : "Active Employee"}
+                    </Badge>
+                  )}
+                  {isRehiring && (
+                    <Badge className="mt-2 bg-blue-500/15 text-blue-400 border border-blue-500/30 text-xs gap-1">
+                      <RefreshCw className="h-3 w-3" /> Rehiring in Progress
                     </Badge>
                   )}
                   {isFormer && (
