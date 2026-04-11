@@ -3,7 +3,7 @@ export const name = "Inbox - Attendance Verification & Photo Review";
 export const testPlan = `
 ## Test Suite: Inbox - Attendance Verification & Photo Review (Admin)
 
-### Test 1: Login and navigate to Inbox, verify page structure
+### Test 1: Inbox page loads with controls
 1. [New Context] Create a new browser context
 2. [Browser] Navigate to /auth
 3. [Browser] Enter "1000000001" in data-testid="input-identifier"
@@ -12,68 +12,87 @@ export const testPlan = `
 6. [Browser] Wait for redirect to /dashboard, then navigate to /inbox
 7. [Verify]
    - Assert data-testid="text-inbox-title" shows "Inbox"
-   - Assert data-testid="select-inbox-type" is visible (type filter dropdown)
-   - Assert data-testid="select-inbox-priority" is visible (priority filter dropdown)
-   - Assert data-testid="select-inbox-sort" is visible (sort dropdown)
+   - Assert data-testid="select-inbox-type" is visible
+   - Assert data-testid="select-inbox-priority" is visible
+   - Assert data-testid="select-inbox-sort" is visible
    - Assert data-testid="tab-all" is visible
    - Assert data-testid="tab-pending" is visible
 
 ### Test 2: Filter by Attendance type
-8. [Browser] Click data-testid="select-inbox-type" and select the "Attendance" option
-9. [Verify]
-   - Assert the inbox list updates (loading completes)
-   - Assert each visible inbox item card contains text related to "attendance" or "Attendance verification"
-
-### Test 3: Switch to Pending tab and expand an attendance item
-10. [Browser] Click tab data-testid="tab-pending"
-11. [Browser] Wait for items to load
-12. [Browser] Click the first card with data-testid starting with "row-inbox-" to expand it
-13. [Verify]
-   - Assert a detail section appears with data-testid starting with "detail-inbox-"
-   - Assert the expanded item shows:
-     - A submitted photo element (data-testid starting with "img-submitted-photo-")
-     - A reference photo element (data-testid starting with "img-reference-photo-")
-     - A confidence score element (data-testid starting with "text-confidence-")
-     - A GPS status element (data-testid starting with "text-gps-status-")
-     - An Approve button (data-testid starting with "button-approve-attendance-")
-     - A Reject button (data-testid starting with "button-reject-attendance-")
-     - A resolution notes textarea (data-testid starting with "textarea-notes-")
-
-### Test 4: Click Approve, verify confirmation dialog with required notes, then cancel
-14. [Browser] Click the Approve button (data-testid starting with "button-approve-attendance-")
+8. [New Context] Create a new browser context
+9. [Browser] Navigate to /auth
+10. [Browser] Enter "1000000001" in data-testid="input-identifier"
+11. [Browser] Enter "password123" in data-testid="input-password"
+12. [Browser] Click data-testid="button-sign-in"
+13. [Browser] Wait for redirect to /dashboard, then navigate to /inbox
+14. [Browser] Click data-testid="select-inbox-type" and select "Attendance" option
 15. [Verify]
-   - Assert a confirmation dialog appears (data-testid="dialog-confirm-attendance")
-   - Assert the dialog contains a notes textarea (data-testid="textarea-confirm-notes")
-   - Assert a Cancel button exists (data-testid="button-confirm-cancel")
-   - Assert a Confirm/action button exists (data-testid="button-confirm-action")
-16. [Browser] Click the Cancel button (data-testid="button-confirm-cancel")
-17. [Verify]
-   - Assert the confirmation dialog closes (data-testid="dialog-confirm-attendance" is no longer visible)
-   - Assert we are back to the inbox list view
+   - Assert the inbox list updates
+   - Assert each visible item contains "attendance" or "Attendance verification" text
 
-### Test 5: Execute full approve workflow with notes
-18. [Browser] Click the same Approve button again (data-testid starting with "button-approve-attendance-")
-19. [Verify] Assert the confirmation dialog appears again (data-testid="dialog-confirm-attendance")
-20. [Browser] Enter "Verified by admin during E2E test" in data-testid="textarea-confirm-notes"
-21. [Browser] Click the Confirm button (data-testid="button-confirm-action")
-22. [Verify]
+### Test 3: Expand pending attendance item and verify detail fields
+16. [New Context] Create a new browser context
+17. [Browser] Navigate to /auth
+18. [Browser] Enter "1000000001" in data-testid="input-identifier"
+19. [Browser] Enter "password123" in data-testid="input-password"
+20. [Browser] Click data-testid="button-sign-in"
+21. [Browser] Wait for redirect to /dashboard, then navigate to /inbox
+22. [Browser] Click tab data-testid="tab-pending"
+23. [Browser] Wait for items to load
+24. [Browser] Click the first card with data-testid starting with "row-inbox-"
+25. [Verify]
+   - Assert a detail section appears (data-testid starting with "detail-inbox-")
+   - Assert a submitted photo element exists (data-testid starting with "img-submitted-photo-")
+   - Assert a reference photo element exists (data-testid starting with "img-reference-photo-")
+   - Assert a confidence score element exists (data-testid starting with "text-confidence-")
+   - Assert a GPS status element exists (data-testid starting with "text-gps-status-")
+   - Assert an Approve button exists (data-testid starting with "button-approve-attendance-")
+   - Assert a Reject button exists (data-testid starting with "button-reject-attendance-")
+   - Assert a resolution notes textarea exists (data-testid starting with "textarea-notes-")
+
+### Test 4: Approve triggers confirmation dialog, cancel closes it
+26. [Browser] Click the Approve button (data-testid starting with "button-approve-attendance-")
+27. [Verify]
+   - Assert data-testid="dialog-confirm-attendance" is visible (confirmation dialog)
+   - Assert data-testid="textarea-confirm-notes" is visible (required notes input)
+   - Assert data-testid="button-confirm-cancel" is visible
+   - Assert data-testid="button-confirm-action" is visible
+28. [Browser] Click data-testid="button-confirm-cancel"
+29. [Verify]
+   - Assert data-testid="dialog-confirm-attendance" is no longer visible
+
+### Test 5: Reject triggers confirmation dialog with notes requirement
+30. [Browser] Click the Reject button (data-testid starting with "button-reject-attendance-")
+31. [Verify]
+   - Assert data-testid="dialog-confirm-attendance" is visible (same confirmation dialog)
+   - Assert data-testid="textarea-confirm-notes" is visible
+   - Assert data-testid="button-confirm-action" is visible
+32. [Browser] Click data-testid="button-confirm-cancel"
+33. [Verify]
+   - Assert the dialog closes
+
+### Test 6: Full approve workflow with notes
+34. [Browser] Click the Approve button again (data-testid starting with "button-approve-attendance-")
+35. [Verify] Assert data-testid="dialog-confirm-attendance" is visible
+36. [Browser] Enter "Verified by admin during E2E test" in data-testid="textarea-confirm-notes"
+37. [Browser] Click data-testid="button-confirm-action"
+38. [Verify]
    - Assert the dialog closes
    - Assert a success toast or notification appears
-   - Assert the item is no longer in the Pending tab (it should move to Resolved)
+   - Assert the item is removed from the Pending list
 `;
 
 export const technicalDocs = `
 Login: POST /api/auth/login { identifier: "1000000001", password: "password123" }
 Inbox route: /inbox, API: GET /api/inbox
 
-The inbox contains real data: attendance_verification and photo_change_request items created
-by mobile app submissions. There are pending items available for testing.
+The inbox contains real pending attendance_verification and photo_change_request items.
 
 Tab elements:
 - data-testid="tab-all", "tab-pending", "tab-resolved", "tab-dismissed"
 
 Filter elements:
-- Type: data-testid="select-inbox-type" (attendance_verification, photo_change_request)
+- Type: data-testid="select-inbox-type" (values: attendance_verification, photo_change_request)
 - Priority: data-testid="select-inbox-priority"
 - Sort: data-testid="select-inbox-sort"
 
@@ -100,9 +119,9 @@ Photo review fields:
 
 Confirmation dialog (appears after clicking Approve or Reject):
 - Dialog container: data-testid="dialog-confirm-attendance"
-- Notes textarea: data-testid="textarea-confirm-notes"
+- Notes textarea: data-testid="textarea-confirm-notes" (required for confirmation)
 - Cancel: data-testid="button-confirm-cancel"
 - Confirm: data-testid="button-confirm-action"
 
-API for resolving: PATCH /api/inbox/:id with { status: "resolved", resolutionNotes: "..." }
+API: PATCH /api/inbox/:id/resolve or PATCH /api/inbox/:id/dismiss
 `;

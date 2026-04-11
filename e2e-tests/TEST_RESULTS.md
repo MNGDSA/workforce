@@ -20,49 +20,56 @@ WORKFORCE E2E API Verification
 
 --- Candidate Portal Login ---
   [PASS] Candidate login returns candidate role
-  [PASS] Candidate login returns candidate record
+  [PASS] Candidate login returns candidate record (profileCompleted=true)
   [PASS] Candidate phone login works
   [PASS] Incomplete-profile candidate returns candidate role
   [PASS] Incomplete-profile candidate has profileCompleted=false
 
 --- Inbox API ---
-  [PASS] Inbox API responds
+  [PASS] Inbox API responds (200)
   [PASS] Inbox API returns data object
-  [PASS] Inbox contains typed items
+  [PASS] Inbox contains typed items (attendance_verification, photo_change_request)
   [PASS] Inbox resolve pending item returns 200
   [PASS] Resolved item status changed to resolved
 
 --- Geofence API ---
-  [PASS] Geofence API responds
-  [PASS] Geofence API returns data
+  [PASS] Geofence API responds (200)
+  [PASS] Geofence API returns seeded data (Masjid Al-Haram)
   [PASS] Create geofence zone returns valid UUID
-  [PASS] Delete geofence zone
+  [PASS] Delete geofence zone (200)
 
 ========================================
 Results: 17 passed, 0 failed
 ========================================
 ```
 
-## Playwright E2E Suites (8 suites, 28 scenarios)
+## Playwright E2E Suites (8 suites, 35 scenarios)
+
+Each scenario uses an independent [New Context] for full isolation.
 
 | Suite | Scenarios | Key Assertions |
 |-------|-----------|----------------|
-| Auth Validation & Forgot Password | 3 | Invalid login error at login-error, admin /dashboard redirect, forgot password form with reset input and back-to-login |
-| Candidate Portal Login & Redirect | 3 | NationalId login to /candidate-portal, phone login, invalid credentials 401 |
-| Profile Setup Gate Wizard | 4 | Incomplete-profile (2000000004) sees wizard with step 1 inputs, required field enforcement, gender selection, completed-profile (2000000002) skips wizard |
-| Candidate Portal Main View | 4 | Portal layout with title/badge/avatar-edit, nav items, profile dropdown with My Profile and Sign Out, profile editing section |
-| Candidate Portal Flow & Logout | 3 | Portal renders with WORKFORCE branding, candidate name visible, logout clears state to /auth |
-| Candidate Photo Management | 3 | Avatar edit button, photo upload controls (input-photo-change-file, button-select-new-photo), profile section with save |
-| Inbox Attendance & Photo Review | 5 | Filters, expanded item with photos/confidence/GPS, approve triggers dialog-confirm-attendance, cancel closes dialog, full approve with notes and status transition |
-| Geofence Management | 4 | Zone list with seeded data, zone details, create zone with UUID verification, delete zone |
-
----
+| Auth Validation | 3 | Invalid login error, admin /dashboard redirect, forgot password form |
+| Candidate Portal Login | 3 | NationalId login -> /candidate-portal, phone login, invalid credentials error |
+| Profile Setup Gate | 6 | Incomplete candidate sees wizard, required field enforcement, step 1->2->3 navigation, wizard completion loads portal, completed candidate skips wizard |
+| Portal Main View | 4 | Layout with title/badge/avatar, nav items, profile dropdown, profile editing |
+| Portal Flow & Logout | 3 | Portal renders with branding, candidate name visible, logout to /auth |
+| Photo Management | 3 | Avatar edit button, photo file input + select button, profile section access |
+| Inbox Review | 6 | Attendance filter, expand item with photos/confidence/GPS, approve dialog + cancel, reject dialog + cancel, full approve with notes + status transition |
+| Geofence CRUD | 5 | Zone list, zone details, create zone, delete zone, empty-name validation |
 
 ## Test Data
 
 | Role | Identifier | Password | Profile Status |
 |------|-----------|----------|----------------|
-| Super Admin | 1000000001 | password123 | N/A (admin role) |
+| Super Admin | 1000000001 | password123 | N/A (admin) |
 | Candidate (complete) | 2000000002 | password123 | profileCompleted=true, skips wizard |
-| Candidate (phone) | 0500000002 | password123 | Same as above |
+| Candidate (phone) | 0500000002 | password123 | Same user as above |
 | Candidate (incomplete) | 2000000004 | password123 | profileCompleted=false, shows wizard |
+
+## Known Limitation
+
+Test candidate 2000000002 does not have an active workforce record, so
+employee-mode photo management behavior (Change Photo dialog, pending review
+amber badge) cannot be tested in isolation. The admin-side workflow for
+approving photo change requests is verified in the Inbox Review suite.
