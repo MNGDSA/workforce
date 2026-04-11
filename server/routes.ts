@@ -1945,6 +1945,14 @@ export async function registerRoutes(
       }
       if (Object.keys(filtered).length === 0) return res.status(400).json({ message: "No valid fields to update" });
 
+      const nullableFields = ["email", "fullNameAr", "phone", "dateOfBirth", "nationalityText",
+        "maritalStatus", "iqamaNumber", "city", "region", "educationLevel", "university", "major",
+        "ibanNumber", "ibanBankName", "ibanBankCode", "ibanAccountFirstName", "ibanAccountLastName",
+        "emergencyContactName", "emergencyContactPhone"];
+      for (const key of nullableFields) {
+        if (key in filtered && filtered[key] === "") filtered[key] = null;
+      }
+
       const data = insertCandidateSchema.partial().parse(filtered);
 
       if ("ibanNumber" in filtered) {
