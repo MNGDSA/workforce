@@ -3472,36 +3472,64 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  // ─── Portal: Data Deletion Request ──────────────────────────────────────────
-  app.post("/api/portal/data-deletion-request", async (req: Request, res: Response) => {
+  // ─── Portal: Data Erasure Request ───────────────────────────────────────────
+  app.post("/api/portal/data-erasure-request", async (req: Request, res: Response) => {
     try {
-      const { identifier, password } = req.body;
-      if (!identifier || !password) {
-        return res.status(400).json({ message: "Credentials required to confirm data deletion request" });
+      const { workforceId, reason } = req.body;
+      if (!workforceId) {
+        return res.status(400).json({ message: "Workforce ID is required" });
       }
-      const clean = String(identifier).trim();
-      const user =
-        await storage.getUserByPhone(clean) ??
-        await storage.getUserByNationalId(clean) ??
-        await storage.getUserByEmail(clean) ??
-        await storage.getUserByUsername(clean);
-      if (!user) {
-        return res.status(401).json({ message: "Invalid credentials" });
+      const wf = await storage.getWorkforceEmployee(workforceId);
+      if (!wf) {
+        return res.status(404).json({ message: "Employee record not found" });
       }
-      const valid = await bcrypt.compare(password, user.password);
-      if (!valid) {
-        return res.status(401).json({ message: "Invalid credentials" });
+      const candidate = await storage.getCandidate(wf.candidateId);
+      const employeeName = candidate?.fullNameEn || wf.employeeNumber || workforceId;
+
+      const existing = await storage.getInboxItems({ status: "pending", type: "general_request", limit: 200 });
+      const hasPending = existing.data.some(item =>
+        item.entityType === "workforce" && item.entityId === workforceId &&
+        item.title.includes("Data Erasure Request")
+      );
+      if (hasPending) {
+        return res.status(409).json({ message: "A data erasure request is already pending review for this employee." });
       }
+
+      await createInboxItem(
+        "general_request",
+        `Data Erasure Request — ${employeeName}`,
+        `Employee ${employeeName} (${wf.employeeNumber || "N/A"}) has requested erasure of their personal data.\n\nReason: ${reason || "No reason provided"}\n\nPlease review this request in accordance with company data retention policy and applicable labor regulations. Certain employment records may need to be retained per legal requirements.`,
+        { workforceId, candidateId: wf.candidateId, requestedAt: new Date().toISOString(), source: "mobile_app" },
+        "high",
+        { entityType: "workforce", entityId: workforceId }
+      );
+
       await storage.createAuditLog({
-        actorId: user.id,
-        actorName: user.fullName || user.username,
-        action: "data_deletion_requested",
-        entityType: "user",
-        entityId: user.id,
-        description: `Data deletion request submitted by ${user.fullName || user.username} via mobile app`,
-        metadata: { requestedAt: new Date().toISOString(), source: "mobile_app" },
+        actorId: candidate?.userId || wf.candidateId,
+        actorName: employeeName,
+        action: "data_erasure_requested",
+        entityType: "workforce",
+        entityId: workforceId,
+        description: `Data erasure request submitted by ${employeeName} via mobile app`,
+        metadata: { requestedAt: new Date().toISOString(), source: "mobile_app", reason: reason || null },
       });
-      return res.json({ message: "Data deletion request has been submitted. Our team will process it within 30 days per GDPR requirements." });
+
+      return res.json({ message: "Your data erasure request has been submitted and will be reviewed by HR. You will be notified once it has been processed." });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/portal/data-erasure-status", async (req: Request, res: Response) => {
+    try {
+      const workforceId = req.query.workforceId as string;
+      if (!workforceId) {
+        return res.status(400).json({ message: "workforceId query parameter is required" });
+      }
+      const existing = await storage.getInboxItems({ status: "pending", type: "general_request", limit: 200 });
+      const pending = existing.data.find(item =>
+        item.entityType === "workforce" && item.entityId === workforceId &&
+        item.title.includes("Data Erasure Request")
+      );
+      return res.json({ hasPendingRequest: !!pending, requestDate: pending?.createdAt || null });
     } catch (err) { return handleError(res, err); }
   });
 

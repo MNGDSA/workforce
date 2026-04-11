@@ -50,8 +50,11 @@ interface ApiService {
     @POST("api/attendance-mobile/submissions/statuses")
     suspend fun checkSubmissionStatuses(@Body request: StatusCheckRequest): Response<List<StatusCheckResult>>
 
-    @POST("api/portal/data-deletion-request")
-    suspend fun requestDataDeletion(@Body request: DeletionRequest): Response<DeletionResponse>
+    @POST("api/portal/data-erasure-request")
+    suspend fun requestDataErasure(@Body request: ErasureRequest): Response<ErasureResponse>
+
+    @GET("api/portal/data-erasure-status")
+    suspend fun getErasureStatus(@Query("workforceId") workforceId: String): Response<ErasureStatusResponse>
 
     @Multipart
     @POST("api/candidates/{candidateId}/documents")

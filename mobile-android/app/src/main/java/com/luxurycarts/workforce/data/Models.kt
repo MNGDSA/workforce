@@ -103,14 +103,18 @@ data class VerificationResult(
     @SerializedName("flagReason") val flagReason: String? = null,
 )
 
-data class DeletionRequest(
-    val identifier: String,
-    val password: String,
-    val reason: String,
+data class ErasureRequest(
+    @SerializedName("workforceId") val workforceId: String,
+    val reason: String? = null,
 )
 
-data class DeletionResponse(
+data class ErasureResponse(
     val message: String,
+)
+
+data class ErasureStatusResponse(
+    @SerializedName("hasPendingRequest") val hasPendingRequest: Boolean,
+    @SerializedName("requestDate") val requestDate: String? = null,
 )
 
 data class StatusCheckRequest(
