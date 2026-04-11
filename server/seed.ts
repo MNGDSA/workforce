@@ -1,6 +1,7 @@
 import { db } from "./db";
-import { users, automationRules, geofenceZones } from "@shared/schema";
+import { users, candidates, automationRules, geofenceZones } from "@shared/schema";
 import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
 
 async function seed() {
   console.log("🌱 Seeding database...");
@@ -41,6 +42,44 @@ async function seed() {
       },
     ])
     .onConflictDoNothing();
+
+  // ─── Candidate Record for Test Candidate ────────────────────────────────
+  const [candidateUser] = await db
+    .select()
+    .from(users)
+    .where(eq(users.nationalId, "2000000002"))
+    .limit(1);
+
+  if (candidateUser) {
+    const existingCandidate = await db
+      .select()
+      .from(candidates)
+      .where(eq(candidates.userId, candidateUser.id))
+      .limit(1);
+
+    if (existingCandidate.length === 0) {
+      await db
+        .insert(candidates)
+        .values({
+          userId: candidateUser.id,
+          fullNameEn: "Test Candidate",
+          fullNameAr: "مرشح تجريبي",
+          nationalId: "2000000002",
+          phone: "0500000002",
+          email: "candidate@workforce.sa",
+          gender: "male",
+          nationality: "saudi",
+          city: "Makkah",
+          region: "Makkah Region",
+          country: "SA",
+          status: "active",
+          source: "individual",
+          profileCompleted: true,
+        })
+        .onConflictDoNothing();
+      console.log("  → Created candidate record for Test Candidate");
+    }
+  }
 
   // ─── Automation Rules ─────────────────────────────────────────────────────
   await db
