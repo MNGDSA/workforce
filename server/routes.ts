@@ -598,8 +598,18 @@ export async function registerRoutes(
       if (!fullName || !phone || !nationalId || !password || !otpId) {
         return res.status(400).json({ message: "All fields including OTP verification are required" });
       }
-      if (password.length < 8) {
-        return res.status(400).json({ message: "Password must be at least 8 characters" });
+      const pwRules = [
+        { ok: password.length >= 8,              msg: "at least 8 characters" },
+        { ok: /[A-Z]/.test(password),            msg: "one uppercase letter" },
+        { ok: /[a-z]/.test(password),            msg: "one lowercase letter" },
+        { ok: /[0-9]/.test(password),            msg: "one number" },
+        { ok: /[^A-Za-z0-9]/.test(password),    msg: "one special character" },
+      ];
+      const pwFails = pwRules.filter(r => !r.ok);
+      if (pwFails.length > 0) {
+        return res.status(400).json({
+          message: `Password must contain: ${pwFails.map(f => f.msg).join(", ")}`,
+        });
       }
 
       // Validate OTP — look up by ID directly to avoid stale-phone-lookup bug
@@ -769,8 +779,18 @@ export async function registerRoutes(
       if (!nationalId || !otpId || !newPassword) {
         return res.status(400).json({ message: "National ID, OTP verification, and new password are required" });
       }
-      if (newPassword.length < 6) {
-        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      const pwRules = [
+        { ok: newPassword.length >= 8,              msg: "at least 8 characters" },
+        { ok: /[A-Z]/.test(newPassword),            msg: "one uppercase letter" },
+        { ok: /[a-z]/.test(newPassword),            msg: "one lowercase letter" },
+        { ok: /[0-9]/.test(newPassword),            msg: "one number" },
+        { ok: /[^A-Za-z0-9]/.test(newPassword),    msg: "one special character" },
+      ];
+      const pwFails = pwRules.filter(r => !r.ok);
+      if (pwFails.length > 0) {
+        return res.status(400).json({
+          message: `Password must contain: ${pwFails.map(f => f.msg).join(", ")}`,
+        });
       }
 
       const user = await storage.getUserByNationalId(nationalId.trim());
@@ -2661,6 +2681,17 @@ export async function registerRoutes(
   app.post("/api/users", async (req: Request, res: Response) => {
     try {
       const data = insertUserSchema.parse(req.body);
+      const pwRules = [
+        { ok: data.password.length >= 8,              msg: "at least 8 characters" },
+        { ok: /[A-Z]/.test(data.password),            msg: "one uppercase letter" },
+        { ok: /[a-z]/.test(data.password),            msg: "one lowercase letter" },
+        { ok: /[0-9]/.test(data.password),            msg: "one number" },
+        { ok: /[^A-Za-z0-9]/.test(data.password),    msg: "one special character" },
+      ];
+      const pwFails = pwRules.filter(r => !r.ok);
+      if (pwFails.length > 0) {
+        return res.status(400).json({ message: `Password must contain: ${pwFails.map(f => f.msg).join(", ")}` });
+      }
       const hashed = await bcrypt.hash(data.password, 10);
       const user = await storage.createUser({ ...data, password: hashed });
       return res.status(201).json({ ...user, password: undefined });

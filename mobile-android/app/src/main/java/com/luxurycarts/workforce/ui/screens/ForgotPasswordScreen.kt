@@ -299,6 +299,15 @@ fun ForgotPasswordScreen(
             }
 
             3 -> {
+                val pwRules = listOf(
+                    Pair(newPassword.length >= 8, "At least 8 characters"),
+                    Pair(newPassword.any { it.isUpperCase() }, "One uppercase letter"),
+                    Pair(newPassword.any { it.isLowerCase() }, "One lowercase letter"),
+                    Pair(newPassword.any { it.isDigit() }, "One number"),
+                    Pair(newPassword.any { !it.isLetterOrDigit() }, "One special character"),
+                )
+                val allRulesMet = pwRules.all { it.first }
+
                 OutlinedTextField(
                     value = newPassword,
                     onValueChange = { newPassword = it },
@@ -310,6 +319,30 @@ fun ForgotPasswordScreen(
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth(),
                 )
+
+                if (newPassword.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        pwRules.forEach { (met, label) ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(
+                                    text = if (met) "\u2713" else "\u2717",
+                                    color = if (met) SuccessGreen else TextMuted,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    text = label,
+                                    color = if (met) SuccessGreen else TextMuted,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                        }
+                    }
+                }
 
                 Spacer(Modifier.height(12.dp))
 
@@ -329,8 +362,8 @@ fun ForgotPasswordScreen(
 
                 Button(
                     onClick = {
-                        if (newPassword.length < 6) {
-                            errorMessage = "Password must be at least 6 characters"
+                        if (!allRulesMet) {
+                            errorMessage = "Please meet all password requirements"
                             return@Button
                         }
                         if (newPassword != confirmPassword) {
@@ -360,7 +393,7 @@ fun ForgotPasswordScreen(
                             }
                         }
                     },
-                    enabled = !isLoading,
+                    enabled = !isLoading && allRulesMet && newPassword == confirmPassword && confirmPassword.isNotEmpty(),
                     colors = ButtonDefaults.buttonColors(containerColor = ForestGreen),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth().height(48.dp),

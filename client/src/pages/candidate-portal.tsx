@@ -1284,8 +1284,21 @@ export default function CandidatePortal() {
     saveProfile.mutate(raw);
   }
 
+  const passwordRules = [
+    { test: (p: string) => p.length >= 8,           label: "At least 8 characters" },
+    { test: (p: string) => /[A-Z]/.test(p),         label: "One uppercase letter" },
+    { test: (p: string) => /[a-z]/.test(p),         label: "One lowercase letter" },
+    { test: (p: string) => /[0-9]/.test(p),         label: "One number" },
+    { test: (p: string) => /[^A-Za-z0-9]/.test(p),  label: "One special character" },
+  ];
+  const allPasswordRulesMet = passwordRules.every(r => r.test(pwNew));
+
   function handlePasswordSave(e: React.FormEvent) {
     e.preventDefault();
+    if (!allPasswordRulesMet) {
+      toast({ title: "Weak password", description: "Please meet all password requirements.", variant: "destructive" });
+      return;
+    }
     if (pwNew !== pwConfirm) {
       toast({ title: "Passwords don't match", description: "Please re-enter your new password.", variant: "destructive" });
       return;
@@ -2186,7 +2199,7 @@ export default function CandidatePortal() {
                   type={showPwNew ? "text" : "password"}
                   value={pwNew}
                   onChange={e => setPwNew(e.target.value)}
-                  placeholder="Enter new password (min 8 chars)"
+                  placeholder="Enter new password"
                   className="bg-background border-border pr-10"
                   data-testid="input-pw-new"
                 />
@@ -2194,6 +2207,16 @@ export default function CandidatePortal() {
                   {showPwNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {pwNew.length > 0 && (
+                <div className="mt-2 space-y-1 text-xs" data-testid="password-strength-rules">
+                  {passwordRules.map((rule, i) => (
+                    <div key={i} className={`flex items-center gap-1.5 ${rule.test(pwNew) ? "text-emerald-400" : "text-muted-foreground"}`}>
+                      <CheckCircle2 className={`h-3 w-3 ${rule.test(pwNew) ? "text-emerald-400" : "text-zinc-600"}`} />
+                      {rule.label}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-white">Confirm New Password</label>
@@ -2208,7 +2231,7 @@ export default function CandidatePortal() {
             </div>
             <Button
               type="submit"
-              disabled={changePassword.isPending || !pwCurrent || !pwNew || !pwConfirm}
+              disabled={changePassword.isPending || !pwCurrent || !pwNew || !pwConfirm || !allPasswordRulesMet || pwNew !== pwConfirm}
               variant="outline"
               className="w-full border-border"
               data-testid="button-change-password"

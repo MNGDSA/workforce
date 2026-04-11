@@ -400,13 +400,29 @@ export default function AuthPage() {
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                     <Input
                       type="password"
-                      placeholder="Min 8 chars, uppercase, number, symbol"
+                      placeholder="Enter new password"
                       value={resetNewPassword}
                       onChange={(e) => setResetNewPassword(e.target.value)}
                       className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm"
                       data-testid="input-reset-new-password"
                     />
                   </div>
+                  {resetNewPassword.length > 0 && (
+                    <div className="space-y-1 text-xs" data-testid="reset-password-strength-rules">
+                      {[
+                        { ok: resetNewPassword.length >= 8, label: "At least 8 characters" },
+                        { ok: /[A-Z]/.test(resetNewPassword), label: "One uppercase letter" },
+                        { ok: /[a-z]/.test(resetNewPassword), label: "One lowercase letter" },
+                        { ok: /[0-9]/.test(resetNewPassword), label: "One number" },
+                        { ok: /[^A-Za-z0-9]/.test(resetNewPassword), label: "One special character" },
+                      ].map((rule, i) => (
+                        <div key={i} className={`flex items-center gap-1.5 ${rule.ok ? "text-emerald-400" : "text-muted-foreground"}`}>
+                          <CheckCircle2 className={`h-3 w-3 ${rule.ok ? "text-emerald-400" : "text-zinc-600"}`} />
+                          {rule.label}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {resetError && (
                     <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive" data-testid="reset-error">
                       <AlertCircle className="h-4 w-4 shrink-0" />
@@ -415,7 +431,7 @@ export default function AuthPage() {
                   )}
                   <Button
                     onClick={submitNewPassword}
-                    disabled={isLoading || resetNewPassword.length < 8}
+                    disabled={isLoading || !resetNewPassword.length || !(resetNewPassword.length >= 8 && /[A-Z]/.test(resetNewPassword) && /[a-z]/.test(resetNewPassword) && /[0-9]/.test(resetNewPassword) && /[^A-Za-z0-9]/.test(resetNewPassword))}
                     className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm"
                     data-testid="button-submit-new-password"
                   >
@@ -785,9 +801,25 @@ export default function AuthPage() {
                           <FormControl>
                             <div className="relative group">
                               <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                              <Input type="password" placeholder="Min 8 chars, uppercase, number, symbol" className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm" data-testid="input-register-password" {...field} />
+                              <Input type="password" placeholder="Enter password" className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm" data-testid="input-register-password" {...field} />
                             </div>
                           </FormControl>
+                          {field.value?.length > 0 && (
+                            <div className="space-y-1 text-xs mt-2" data-testid="register-password-strength-rules">
+                              {[
+                                { ok: field.value.length >= 8, label: "At least 8 characters" },
+                                { ok: /[A-Z]/.test(field.value), label: "One uppercase letter" },
+                                { ok: /[a-z]/.test(field.value), label: "One lowercase letter" },
+                                { ok: /[0-9]/.test(field.value), label: "One number" },
+                                { ok: /[^A-Za-z0-9]/.test(field.value), label: "One special character" },
+                              ].map((rule, i) => (
+                                <div key={i} className={`flex items-center gap-1.5 ${rule.ok ? "text-emerald-400" : "text-muted-foreground"}`}>
+                                  <CheckCircle2 className={`h-3 w-3 ${rule.ok ? "text-emerald-400" : "text-zinc-600"}`} />
+                                  {rule.label}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )} />
