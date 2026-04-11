@@ -66,6 +66,8 @@ import {
   Building,
   ShieldAlert,
   Languages,
+  Pencil,
+  Save,
 } from "lucide-react";
 import {
   Table,
@@ -322,6 +324,15 @@ function EmployeeDetailDialog({
   const [scheduleStartDate, setScheduleStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [scheduleEndDate, setScheduleEndDate] = useState("");
 
+  const [editPersonal, setEditPersonal] = useState(false);
+  const [personalForm, setPersonalForm] = useState<Record<string, string>>({});
+  const [editFinancial, setEditFinancial] = useState(false);
+  const [financialForm, setFinancialForm] = useState<Record<string, string>>({});
+  const [editEmergency, setEditEmergency] = useState(false);
+  const [emergencyForm, setEmergencyForm] = useState<Record<string, string>>({});
+  const [editEducation, setEditEducation] = useState(false);
+  const [educationForm, setEducationForm] = useState<Record<string, string>>({});
+
   const { data: history = [], isLoading: historyLoading } = useQuery<WorkHistory[]>({
     queryKey: ["/api/workforce/history", employee?.nationalId],
     queryFn: () => apiRequest("GET", `/api/workforce/history/${employee!.nationalId}`).then(r => r.json()),
@@ -397,6 +408,20 @@ function EmployeeDetailDialog({
       setEditNotes(false);
       onUpdated();
       toast({ title: "Employee updated" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const profileMutation = useMutation({
+    mutationFn: (data: Record<string, any>) =>
+      apiRequest("PATCH", `/api/workforce/${employee!.id}/candidate-profile`, data).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/workforce"] });
+      setEditPersonal(false);
+      setEditFinancial(false);
+      setEditEmergency(false);
+      setEditEducation(false);
+      toast({ title: "Profile updated" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -619,28 +644,139 @@ function EmployeeDetailDialog({
 
               <Separator className="bg-zinc-800" />
               <div>
-                <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-3">
-                  <User className="h-3.5 w-3.5" /> Personal Information
-                </Label>
-                <div className="grid grid-cols-2 gap-4">
-                  {employee.fullNameAr && <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Arabic Name" value={employee.fullNameAr} />}
-                  {employee.email && <InfoRow icon={<Mail className="h-3.5 w-3.5" />} label="Email" value={employee.email} />}
-                  {employee.dateOfBirth && <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label="Date of Birth" value={formatDate(employee.dateOfBirth)} />}
-                  {employee.gender && <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Gender" value={employee.gender.charAt(0).toUpperCase() + employee.gender.slice(1)} />}
-                  {employee.nationalityText && <InfoRow icon={<Globe className="h-3.5 w-3.5" />} label="Nationality" value={employee.nationalityText} />}
-                  {employee.maritalStatus && <InfoRow icon={<Heart className="h-3.5 w-3.5" />} label="Marital Status" value={employee.maritalStatus.charAt(0).toUpperCase() + employee.maritalStatus.slice(1)} />}
-                  {employee.iqamaNumber && <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="Iqama #" value={employee.iqamaNumber} mono />}
-                  {(employee.city || employee.region) && <InfoRow icon={<MapPin className="h-3.5 w-3.5" />} label="Location" value={[employee.city, employee.region].filter(Boolean).join(", ")} />}
+                <div className="flex items-center justify-between mb-3">
+                  <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <User className="h-3.5 w-3.5" /> Personal Information
+                  </Label>
+                  {!editPersonal ? (
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500 hover:text-zinc-300" data-testid="button-edit-personal"
+                      onClick={() => {
+                        setPersonalForm({
+                          fullNameAr: employee.fullNameAr || "",
+                          email: employee.email || "",
+                          phone: employee.phone || "",
+                          dateOfBirth: employee.dateOfBirth || "",
+                          gender: employee.gender || "",
+                          nationalityText: employee.nationalityText || "",
+                          maritalStatus: employee.maritalStatus || "",
+                          iqamaNumber: employee.iqamaNumber || "",
+                          city: employee.city || "",
+                          region: employee.region || "",
+                        });
+                        setEditPersonal(true);
+                      }}
+                    ><Pencil className="h-3 w-3 mr-1" /> Edit</Button>
+                  ) : (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500" onClick={() => setEditPersonal(false)} data-testid="button-cancel-personal"><X className="h-3 w-3" /></Button>
+                      <Button size="sm" className="h-6 px-2 text-xs bg-emerald-700 hover:bg-emerald-600" data-testid="button-save-personal"
+                        disabled={profileMutation.isPending}
+                        onClick={() => profileMutation.mutate(personalForm)}
+                      ><Save className="h-3 w-3 mr-1" /> Save</Button>
+                    </div>
+                  )}
                 </div>
+                {editPersonal ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="text-zinc-500 text-xs">Arabic Name</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.fullNameAr} onChange={e => setPersonalForm(f => ({ ...f, fullNameAr: e.target.value }))} data-testid="input-personal-fullNameAr" /></div>
+                    <div><label className="text-zinc-500 text-xs">Email</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.email} onChange={e => setPersonalForm(f => ({ ...f, email: e.target.value }))} data-testid="input-personal-email" /></div>
+                    <div><label className="text-zinc-500 text-xs">Phone</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.phone} onChange={e => setPersonalForm(f => ({ ...f, phone: e.target.value }))} data-testid="input-personal-phone" /></div>
+                    <div><label className="text-zinc-500 text-xs">Date of Birth</label><Input type="date" className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.dateOfBirth} onChange={e => setPersonalForm(f => ({ ...f, dateOfBirth: e.target.value }))} data-testid="input-personal-dob" /></div>
+                    <div>
+                      <label className="text-zinc-500 text-xs">Gender</label>
+                      <Select value={personalForm.gender} onValueChange={v => setPersonalForm(f => ({ ...f, gender: v }))}>
+                        <SelectTrigger className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" data-testid="select-personal-gender"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="male">Male</SelectItem><SelectItem value="female">Female</SelectItem></SelectContent>
+                      </Select>
+                    </div>
+                    <div><label className="text-zinc-500 text-xs">Nationality</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.nationalityText} onChange={e => setPersonalForm(f => ({ ...f, nationalityText: e.target.value }))} data-testid="input-personal-nationality" /></div>
+                    <div>
+                      <label className="text-zinc-500 text-xs">Marital Status</label>
+                      <Select value={personalForm.maritalStatus} onValueChange={v => setPersonalForm(f => ({ ...f, maritalStatus: v }))}>
+                        <SelectTrigger className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" data-testid="select-personal-marital"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="single">Single</SelectItem><SelectItem value="married">Married</SelectItem><SelectItem value="divorced">Divorced</SelectItem><SelectItem value="widowed">Widowed</SelectItem></SelectContent>
+                      </Select>
+                    </div>
+                    <div><label className="text-zinc-500 text-xs">Iqama #</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700 font-mono" value={personalForm.iqamaNumber} onChange={e => setPersonalForm(f => ({ ...f, iqamaNumber: e.target.value }))} data-testid="input-personal-iqama" /></div>
+                    <div><label className="text-zinc-500 text-xs">City</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.city} onChange={e => setPersonalForm(f => ({ ...f, city: e.target.value }))} data-testid="input-personal-city" /></div>
+                    <div><label className="text-zinc-500 text-xs">Region</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.region} onChange={e => setPersonalForm(f => ({ ...f, region: e.target.value }))} data-testid="input-personal-region" /></div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    {employee.fullNameAr && <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Arabic Name" value={employee.fullNameAr} />}
+                    {employee.email && <InfoRow icon={<Mail className="h-3.5 w-3.5" />} label="Email" value={employee.email} />}
+                    {employee.phone && <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label="Phone" value={employee.phone} />}
+                    {employee.dateOfBirth && <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label="Date of Birth" value={formatDate(employee.dateOfBirth)} />}
+                    {employee.gender && <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Gender" value={employee.gender.charAt(0).toUpperCase() + employee.gender.slice(1)} />}
+                    {employee.nationalityText && <InfoRow icon={<Globe className="h-3.5 w-3.5" />} label="Nationality" value={employee.nationalityText} />}
+                    {employee.maritalStatus && <InfoRow icon={<Heart className="h-3.5 w-3.5" />} label="Marital Status" value={employee.maritalStatus.charAt(0).toUpperCase() + employee.maritalStatus.slice(1)} />}
+                    {employee.iqamaNumber && <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="Iqama #" value={employee.iqamaNumber} mono />}
+                    {(employee.city || employee.region) && <InfoRow icon={<MapPin className="h-3.5 w-3.5" />} label="Location" value={[employee.city, employee.region].filter(Boolean).join(", ")} />}
+                  </div>
+                )}
               </div>
 
-              {(employee.educationLevel || employee.skills?.length || employee.languages?.length) && (
-                <>
-                  <Separator className="bg-zinc-800" />
-                  <div>
-                    <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-3">
-                      <GraduationCap className="h-3.5 w-3.5" /> Education & Skills
-                    </Label>
+              <Separator className="bg-zinc-800" />
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <GraduationCap className="h-3.5 w-3.5" /> Education & Skills
+                  </Label>
+                  {!editEducation ? (
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500 hover:text-zinc-300" data-testid="button-edit-education"
+                      onClick={() => {
+                        setEducationForm({
+                          educationLevel: employee.educationLevel || "",
+                          university: employee.university || "",
+                          major: employee.major || "",
+                          skills: (employee.skills || []).join(", "),
+                          languages: (employee.languages || []).join(", "),
+                        });
+                        setEditEducation(true);
+                      }}
+                    ><Pencil className="h-3 w-3 mr-1" /> Edit</Button>
+                  ) : (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500" onClick={() => setEditEducation(false)} data-testid="button-cancel-education"><X className="h-3 w-3" /></Button>
+                      <Button size="sm" className="h-6 px-2 text-xs bg-emerald-700 hover:bg-emerald-600" data-testid="button-save-education"
+                        disabled={profileMutation.isPending}
+                        onClick={() => {
+                          const payload: Record<string, any> = {
+                            educationLevel: educationForm.educationLevel,
+                            university: educationForm.university,
+                            major: educationForm.major,
+                            skills: educationForm.skills ? educationForm.skills.split(",").map((s: string) => s.trim()).filter(Boolean) : [],
+                            languages: educationForm.languages ? educationForm.languages.split(",").map((s: string) => s.trim()).filter(Boolean) : [],
+                          };
+                          profileMutation.mutate(payload);
+                        }}
+                      ><Save className="h-3 w-3 mr-1" /> Save</Button>
+                    </div>
+                  )}
+                </div>
+                {editEducation ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-zinc-500 text-xs">Education Level</label>
+                      <Select value={educationForm.educationLevel} onValueChange={v => setEducationForm(f => ({ ...f, educationLevel: v }))}>
+                        <SelectTrigger className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" data-testid="select-education-level"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="High School">High School</SelectItem>
+                          <SelectItem value="Diploma">Diploma</SelectItem>
+                          <SelectItem value="Bachelor">Bachelor</SelectItem>
+                          <SelectItem value="Master">Master</SelectItem>
+                          <SelectItem value="PhD">PhD</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div><label className="text-zinc-500 text-xs">University</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={educationForm.university} onChange={e => setEducationForm(f => ({ ...f, university: e.target.value }))} data-testid="input-education-university" /></div>
+                    <div><label className="text-zinc-500 text-xs">Major</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={educationForm.major} onChange={e => setEducationForm(f => ({ ...f, major: e.target.value }))} data-testid="input-education-major" /></div>
+                    <div className="col-span-2"><label className="text-zinc-500 text-xs">Skills (comma-separated)</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" placeholder="e.g. Driving, Customer Service" value={educationForm.skills} onChange={e => setEducationForm(f => ({ ...f, skills: e.target.value }))} data-testid="input-education-skills" /></div>
+                    <div className="col-span-2"><label className="text-zinc-500 text-xs">Languages (comma-separated)</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" placeholder="e.g. Arabic, English, Urdu" value={educationForm.languages} onChange={e => setEducationForm(f => ({ ...f, languages: e.target.value }))} data-testid="input-education-languages" /></div>
+                  </div>
+                ) : (
+                  <>
                     <div className="grid grid-cols-2 gap-4">
                       {employee.educationLevel && <InfoRow icon={<GraduationCap className="h-3.5 w-3.5" />} label="Education" value={employee.educationLevel} />}
                       {employee.university && <InfoRow icon={<Building className="h-3.5 w-3.5" />} label="University" value={employee.university} />}
@@ -650,7 +786,7 @@ function EmployeeDetailDialog({
                       <div className="mt-3">
                         <span className="text-zinc-500 text-xs">Skills</span>
                         <div className="flex flex-wrap gap-1.5 mt-1">
-                          {employee.skills.map((s, i) => (
+                          {employee.skills.map((s: string, i: number) => (
                             <span key={i} className="bg-zinc-800 text-zinc-300 text-xs px-2 py-0.5 rounded">{s}</span>
                           ))}
                         </div>
@@ -660,47 +796,106 @@ function EmployeeDetailDialog({
                       <div className="mt-3">
                         <span className="text-zinc-500 text-xs">Languages</span>
                         <div className="flex flex-wrap gap-1.5 mt-1">
-                          {employee.languages.map((l, i) => (
+                          {employee.languages.map((l: string, i: number) => (
                             <span key={i} className="bg-zinc-800 text-zinc-300 text-xs px-2 py-0.5 rounded">{l}</span>
                           ))}
                         </div>
                       </div>
                     )}
-                  </div>
-                </>
-              )}
+                    {!employee.educationLevel && !employee.skills?.length && !employee.languages?.length && (
+                      <p className="text-zinc-500 text-sm">No education or skills data</p>
+                    )}
+                  </>
+                )}
+              </div>
 
-              {(employee.iban || employee.ibanBankName) && (
-                <>
-                  <Separator className="bg-zinc-800" />
-                  <div>
-                    <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-3">
-                      <CreditCard className="h-3.5 w-3.5" /> Financial Information
-                    </Label>
-                    <div className="grid grid-cols-2 gap-4">
-                      {employee.iban && <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="IBAN" value={employee.iban} mono />}
-                      {employee.ibanBankName && <InfoRow icon={<Building className="h-3.5 w-3.5" />} label="Bank Name" value={employee.ibanBankName} />}
-                      {employee.ibanBankCode && <InfoRow icon={<Hash className="h-3.5 w-3.5" />} label="Bank Code" value={employee.ibanBankCode} mono />}
-                      {employee.ibanAccountFirstName && <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Account Holder" value={`${employee.ibanAccountFirstName} ${employee.ibanAccountLastName ?? ""}`.trim()} />}
+              <Separator className="bg-zinc-800" />
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <CreditCard className="h-3.5 w-3.5" /> Financial Information
+                  </Label>
+                  {!editFinancial ? (
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500 hover:text-zinc-300" data-testid="button-edit-financial"
+                      onClick={() => {
+                        setFinancialForm({
+                          ibanNumber: employee.iban || "",
+                          ibanBankName: employee.ibanBankName || "",
+                          ibanBankCode: employee.ibanBankCode || "",
+                          ibanAccountFirstName: employee.ibanAccountFirstName || "",
+                          ibanAccountLastName: employee.ibanAccountLastName || "",
+                        });
+                        setEditFinancial(true);
+                      }}
+                    ><Pencil className="h-3 w-3 mr-1" /> Edit</Button>
+                  ) : (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500" onClick={() => setEditFinancial(false)} data-testid="button-cancel-financial"><X className="h-3 w-3" /></Button>
+                      <Button size="sm" className="h-6 px-2 text-xs bg-emerald-700 hover:bg-emerald-600" data-testid="button-save-financial"
+                        disabled={profileMutation.isPending}
+                        onClick={() => profileMutation.mutate(financialForm)}
+                      ><Save className="h-3 w-3 mr-1" /> Save</Button>
                     </div>
+                  )}
+                </div>
+                {editFinancial ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2"><label className="text-zinc-500 text-xs">IBAN</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700 font-mono" value={financialForm.ibanNumber} onChange={e => setFinancialForm(f => ({ ...f, ibanNumber: e.target.value }))} data-testid="input-financial-iban" /></div>
+                    <div><label className="text-zinc-500 text-xs">Bank Name</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={financialForm.ibanBankName} onChange={e => setFinancialForm(f => ({ ...f, ibanBankName: e.target.value }))} data-testid="input-financial-bankName" /></div>
+                    <div><label className="text-zinc-500 text-xs">Bank Code</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700 font-mono" value={financialForm.ibanBankCode} onChange={e => setFinancialForm(f => ({ ...f, ibanBankCode: e.target.value }))} data-testid="input-financial-bankCode" /></div>
+                    <div><label className="text-zinc-500 text-xs">Account First Name</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={financialForm.ibanAccountFirstName} onChange={e => setFinancialForm(f => ({ ...f, ibanAccountFirstName: e.target.value }))} data-testid="input-financial-firstName" /></div>
+                    <div><label className="text-zinc-500 text-xs">Account Last Name</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={financialForm.ibanAccountLastName} onChange={e => setFinancialForm(f => ({ ...f, ibanAccountLastName: e.target.value }))} data-testid="input-financial-lastName" /></div>
                   </div>
-                </>
-              )}
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    {employee.iban ? <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="IBAN" value={employee.iban} mono /> : null}
+                    {employee.ibanBankName ? <InfoRow icon={<Building className="h-3.5 w-3.5" />} label="Bank Name" value={employee.ibanBankName} /> : null}
+                    {employee.ibanBankCode ? <InfoRow icon={<Hash className="h-3.5 w-3.5" />} label="Bank Code" value={employee.ibanBankCode} mono /> : null}
+                    {employee.ibanAccountFirstName ? <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Account Holder" value={`${employee.ibanAccountFirstName} ${employee.ibanAccountLastName ?? ""}`.trim()} /> : null}
+                    {!employee.iban && !employee.ibanBankName && <p className="text-zinc-500 text-sm col-span-2">No financial data</p>}
+                  </div>
+                )}
+              </div>
 
-              {(employee.emergencyContactName || employee.emergencyContactPhone) && (
-                <>
-                  <Separator className="bg-zinc-800" />
-                  <div>
-                    <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-3">
-                      <ShieldAlert className="h-3.5 w-3.5" /> Emergency Contact
-                    </Label>
-                    <div className="grid grid-cols-2 gap-4">
-                      {employee.emergencyContactName && <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Contact Name" value={employee.emergencyContactName} />}
-                      {employee.emergencyContactPhone && <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label="Contact Phone" value={employee.emergencyContactPhone} />}
+              <Separator className="bg-zinc-800" />
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldAlert className="h-3.5 w-3.5" /> Emergency Contact
+                  </Label>
+                  {!editEmergency ? (
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500 hover:text-zinc-300" data-testid="button-edit-emergency"
+                      onClick={() => {
+                        setEmergencyForm({
+                          emergencyContactName: employee.emergencyContactName || "",
+                          emergencyContactPhone: employee.emergencyContactPhone || "",
+                        });
+                        setEditEmergency(true);
+                      }}
+                    ><Pencil className="h-3 w-3 mr-1" /> Edit</Button>
+                  ) : (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500" onClick={() => setEditEmergency(false)} data-testid="button-cancel-emergency"><X className="h-3 w-3" /></Button>
+                      <Button size="sm" className="h-6 px-2 text-xs bg-emerald-700 hover:bg-emerald-600" data-testid="button-save-emergency"
+                        disabled={profileMutation.isPending}
+                        onClick={() => profileMutation.mutate(emergencyForm)}
+                      ><Save className="h-3 w-3 mr-1" /> Save</Button>
                     </div>
+                  )}
+                </div>
+                {editEmergency ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="text-zinc-500 text-xs">Contact Name</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={emergencyForm.emergencyContactName} onChange={e => setEmergencyForm(f => ({ ...f, emergencyContactName: e.target.value }))} data-testid="input-emergency-name" /></div>
+                    <div><label className="text-zinc-500 text-xs">Contact Phone</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={emergencyForm.emergencyContactPhone} onChange={e => setEmergencyForm(f => ({ ...f, emergencyContactPhone: e.target.value }))} data-testid="input-emergency-phone" /></div>
                   </div>
-                </>
-              )}
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    {employee.emergencyContactName ? <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Contact Name" value={employee.emergencyContactName} /> : null}
+                    {employee.emergencyContactPhone ? <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label="Contact Phone" value={employee.emergencyContactPhone} /> : null}
+                    {!employee.emergencyContactName && !employee.emergencyContactPhone && <p className="text-zinc-500 text-sm col-span-2">No emergency contact</p>}
+                  </div>
+                )}
+              </div>
 
               <>
                 <Separator className="bg-zinc-800" />

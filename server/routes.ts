@@ -1924,6 +1924,51 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/workforce/:id/candidate-profile", async (req: Request, res: Response) => {
+    try {
+      const emp = await storage.getWorkforceEmployee(req.params.id);
+      if (!emp) return res.status(404).json({ message: "Employee not found" });
+      const candidateId = emp.candidateId;
+      if (!candidateId) return res.status(400).json({ message: "No linked candidate record" });
+
+      const allowed = [
+        "fullNameAr", "email", "phone", "dateOfBirth", "gender",
+        "nationalityText", "maritalStatus", "iqamaNumber", "city", "region",
+        "educationLevel", "university", "major", "skills", "languages",
+        "ibanNumber", "ibanBankName", "ibanBankCode",
+        "ibanAccountFirstName", "ibanAccountLastName",
+        "emergencyContactName", "emergencyContactPhone",
+      ];
+      const data: Record<string, any> = {};
+      for (const key of allowed) {
+        if (key in req.body) data[key] = req.body[key] ?? null;
+      }
+      if (Object.keys(data).length === 0) return res.status(400).json({ message: "No valid fields to update" });
+
+      if ("ibanNumber" in data) {
+        data.hasIban = !!data.ibanNumber;
+      }
+
+      const candidate = await storage.updateCandidate(candidateId, data);
+      if (!candidate) return res.status(404).json({ message: "Candidate not found" });
+
+      await logAudit(req, {
+        action: "candidate.profile_updated_via_workforce",
+        entityType: "candidate",
+        entityId: candidateId,
+        employeeNumber: emp.employeeNumber,
+        subjectName: emp.fullNameEn,
+        description: `Updated candidate profile for employee #${emp.employeeNumber} "${emp.fullNameEn}": ${Object.keys(data).join(", ")}`,
+        metadata: { workforceId: req.params.id, changes: data },
+      });
+
+      const updated = await storage.getWorkforceEmployee(req.params.id);
+      return res.json(updated);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   // ─── Bulk Update via Excel upload ────────────────────────────────────────
   app.post("/api/workforce/bulk-update", uploadXlsx.single("file"), async (req: Request, res: Response) => {
     try {
