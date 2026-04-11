@@ -104,6 +104,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { Candidate } from "@shared/schema";
+
+type CandidateWithWorkforce = Candidate & { workforceRecordCount: number };
 import { KSA_REGIONS } from "@shared/schema";
 
 const statusStyles: Record<string, string> = {
@@ -271,8 +273,23 @@ function StatusInfoHeader() {
   );
 }
 
+interface WorkforceRecord {
+  id: string;
+  employeeNumber: string;
+  candidateId: string;
+  jobId: string | null;
+  eventId: string | null;
+  salary: string | null;
+  startDate: string;
+  endDate: string | null;
+  terminationReason: string | null;
+  isActive: boolean;
+  jobTitle?: string;
+  eventName?: string;
+}
+
 function WorkforceHistorySection({ candidateId }: { candidateId: string }) {
-  const { data: records = [], isLoading } = useQuery<any[]>({
+  const { data: records = [], isLoading } = useQuery<WorkforceRecord[]>({
     queryKey: ["/api/workforce/all-by-candidate", candidateId],
     queryFn: () => apiRequest("GET", `/api/workforce/all-by-candidate/${candidateId}`).then(r => r.json()),
     enabled: !!candidateId,
@@ -300,7 +317,7 @@ function WorkforceHistorySection({ candidateId }: { candidateId: string }) {
         <span className="text-[10px] font-normal text-muted-foreground ml-auto">{records.length} record{records.length !== 1 ? "s" : ""}</span>
       </h4>
       <div className="space-y-2.5">
-        {records.map((rec: any) => (
+        {records.map((rec) => (
           <div
             key={rec.id}
             className={`rounded-sm border px-3 py-2.5 text-sm ${
@@ -988,7 +1005,7 @@ export default function TalentPage() {
     },
   });
 
-  const candidates: Candidate[] = data?.data ?? [];
+  const candidates: CandidateWithWorkforce[] = data?.data ?? [];
   const total: number = data?.total ?? 0;
   const PAGE_SIZE = 100;
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -1395,7 +1412,7 @@ export default function TalentPage() {
                                 >
                                   {displayStatus.replace("_", " ")}
                                 </Badge>
-                                {(candidate as any).workforceRecordCount > 0 && displayStatus !== "hired" && (
+                                {candidate.workforceRecordCount > 0 && displayStatus !== "hired" && (
                                   <span
                                     className="inline-flex items-center gap-1 text-[10px] text-amber-400/80 bg-amber-500/10 px-1.5 py-0.5 rounded-sm"
                                     title="This candidate has previous employment history"
