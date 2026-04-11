@@ -402,7 +402,8 @@ export async function registerRoutes(
       }
 
       const token = signAuthToken(user.id);
-      res.setHeader("Set-Cookie", `wf_auth=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}`);
+      const securFlag = process.env.NODE_ENV === "production" ? "; Secure" : "";
+      res.setHeader("Set-Cookie", `wf_auth=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}${securFlag}`);
 
       return res.json({ user: safeUser, candidate });
     } catch (err) {
