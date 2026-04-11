@@ -1945,7 +1945,7 @@ export async function registerRoutes(
       }
       if (Object.keys(filtered).length === 0) return res.status(400).json({ message: "No valid fields to update" });
 
-      const nullableFields = ["email", "fullNameAr", "phone", "dateOfBirth", "nationalityText",
+      const nullableFields = ["email", "fullNameAr", "phone", "dateOfBirth", "gender", "nationalityText",
         "maritalStatus", "iqamaNumber", "city", "region", "educationLevel", "university", "major",
         "ibanNumber", "ibanBankName", "ibanBankCode", "ibanAccountFirstName", "ibanAccountLastName",
         "emergencyContactName", "emergencyContactPhone"];
