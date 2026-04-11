@@ -61,7 +61,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun PrivacyScreen(
     workforceId: String,
-    userId: String,
     apiService: ApiService?,
     onBack: () -> Unit,
 ) {
@@ -73,6 +72,7 @@ fun PrivacyScreen(
     var hasPendingRequest by remember { mutableStateOf(false) }
     var isLoadingStatus by remember { mutableStateOf(true) }
     var showConfirmDialog by remember { mutableStateOf(false) }
+    var showSubmittedSuccess by remember { mutableStateOf(false) }
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedBorderColor = ForestGreen,
@@ -87,9 +87,9 @@ fun PrivacyScreen(
     )
 
     LaunchedEffect(workforceId) {
-        if (workforceId.isNotEmpty() && userId.isNotEmpty() && apiService != null) {
+        if (workforceId.isNotEmpty() && apiService != null) {
             try {
-                val resp = apiService.getErasureStatus(workforceId, userId)
+                val resp = apiService.getErasureStatus(workforceId)
                 if (resp.isSuccessful) {
                     hasPendingRequest = resp.body()?.hasPendingRequest == true
                 }
@@ -123,11 +123,10 @@ fun PrivacyScreen(
                         scope.launch {
                             try {
                                 val response = apiService?.requestDataErasure(
-                                    ErasureRequest(workforceId, userId, reason = reason.ifBlank { null })
+                                    ErasureRequest(workforceId, reason = reason.ifBlank { null })
                                 )
                                 if (response?.isSuccessful == true) {
-                                    resultMessage = response.body()?.message ?: "Request submitted successfully"
-                                    isError = false
+                                    showSubmittedSuccess = true
                                     hasPendingRequest = true
                                     reason = ""
                                 } else {
@@ -221,6 +220,23 @@ fun PrivacyScreen(
                     CircularProgressIndicator(color = ForestGreen, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                 }
             } else if (hasPendingRequest) {
+                if (showSubmittedSuccess) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF1A2E1A), RoundedCornerShape(8.dp))
+                            .border(1.dp, SuccessGreen, RoundedCornerShape(8.dp))
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "Your data erasure request has been submitted successfully and will be reviewed by HR.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SuccessGreen,
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

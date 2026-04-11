@@ -105,7 +105,6 @@ data class VerificationResult(
 
 data class ErasureRequest(
     @SerializedName("workforceId") val workforceId: String,
-    @SerializedName("userId") val userId: String,
     val reason: String? = null,
 )
 

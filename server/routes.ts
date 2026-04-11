@@ -4,6 +4,7 @@ import express from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { storage, createInboxItem } from "./storage";
 import { db } from "./db";
 import { getAuthenticatedUser, listUserRepos, getRepo, listRepoIssues, listRepoPullRequests } from "./github";
@@ -42,6 +43,37 @@ import {
 import { eq, and } from "drizzle-orm";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
 import XLSX from "xlsx";
+
+const AUTH_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
+
+function signAuthToken(userId: string): string {
+  const payload = Buffer.from(JSON.stringify({ uid: userId, iat: Date.now() })).toString("base64url");
+  const sig = crypto.createHmac("sha256", AUTH_SECRET).update(payload).digest("base64url");
+  return `${payload}.${sig}`;
+}
+
+function verifyAuthToken(token: string): string | null {
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+  const [payload, sig] = parts;
+  const expected = crypto.createHmac("sha256", AUTH_SECRET).update(payload).digest("base64url");
+  if (sig !== expected) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString());
+    if (!data.uid) return null;
+    const age = Date.now() - (data.iat || 0);
+    if (age > 30 * 24 * 60 * 60 * 1000) return null;
+    return data.uid;
+  } catch { return null; }
+}
+
+function getAuthUserId(req: Request): string | null {
+  const cookie = req.headers.cookie;
+  if (!cookie) return null;
+  const match = cookie.match(/wf_auth=([^;]+)/);
+  if (!match) return null;
+  return verifyAuthToken(match[1]);
+}
 
 async function logAudit(req: Request, params: {
   action: string;
@@ -368,6 +400,9 @@ export async function registerRoutes(
           if (updateFields.status) candidate.status = updateFields.status;
         }
       }
+
+      const token = signAuthToken(user.id);
+      res.setHeader("Set-Cookie", `wf_auth=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}`);
 
       return res.json({ user: safeUser, candidate });
     } catch (err) {
@@ -3475,9 +3510,14 @@ export async function registerRoutes(
   // ─── Portal: Data Erasure Request ───────────────────────────────────────────
   app.post("/api/portal/data-erasure-request", async (req: Request, res: Response) => {
     try {
-      const { workforceId, userId, reason } = req.body;
-      if (!workforceId || !userId) {
-        return res.status(400).json({ message: "Workforce ID and user ID are required" });
+      const authUserId = getAuthUserId(req);
+      if (!authUserId) {
+        return res.status(401).json({ message: "Authentication required. Please log in again." });
+      }
+
+      const { workforceId, reason } = req.body;
+      if (!workforceId) {
+        return res.status(400).json({ message: "Workforce ID is required" });
       }
 
       const wf = await storage.getWorkforceEmployee(workforceId);
@@ -3486,7 +3526,7 @@ export async function registerRoutes(
       }
 
       const candidate = await storage.getCandidate(wf.candidateId);
-      if (!candidate || candidate.userId !== userId) {
+      if (!candidate || candidate.userId !== authUserId) {
         return res.status(403).json({ message: "You are not authorized to submit a request for this employee record." });
       }
 
@@ -3511,7 +3551,7 @@ export async function registerRoutes(
       );
 
       await storage.createAuditLog({
-        actorId: userId,
+        actorId: authUserId,
         actorName: employeeName,
         action: "data_erasure_requested",
         entityType: "workforce",
@@ -3530,10 +3570,14 @@ export async function registerRoutes(
 
   app.get("/api/portal/data-erasure-status", async (req: Request, res: Response) => {
     try {
+      const authUserId = getAuthUserId(req);
+      if (!authUserId) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
       const workforceId = req.query.workforceId as string;
-      const userId = req.query.userId as string;
-      if (!workforceId || !userId) {
-        return res.status(400).json({ message: "workforceId and userId query parameters are required" });
+      if (!workforceId) {
+        return res.status(400).json({ message: "workforceId query parameter is required" });
       }
 
       const wf = await storage.getWorkforceEmployee(workforceId);
@@ -3541,7 +3585,7 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Employee record not found" });
       }
       const candidate = await storage.getCandidate(wf.candidateId);
-      if (!candidate || candidate.userId !== userId) {
+      if (!candidate || candidate.userId !== authUserId) {
         return res.status(403).json({ message: "Not authorized" });
       }
 
