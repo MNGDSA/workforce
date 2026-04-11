@@ -43,33 +43,35 @@ Results: 17 passed, 0 failed
 ========================================
 ```
 
-## Playwright E2E Suites (8 suites, 35 scenarios)
+## Playwright E2E Suites (8 suites, 34 scenarios)
 
-Each scenario uses an independent [New Context] for full isolation.
+Every scenario uses an independent [New Context] for full isolation.
 
 | Suite | Scenarios | Key Assertions |
 |-------|-----------|----------------|
 | Auth Validation | 3 | Invalid login error, admin /dashboard redirect, forgot password form |
-| Candidate Portal Login | 3 | NationalId login -> /candidate-portal, phone login, invalid credentials error |
-| Profile Setup Gate | 6 | Incomplete candidate sees wizard, required field enforcement, step 1->2->3 navigation, wizard completion loads portal, completed candidate skips wizard |
-| Portal Main View | 4 | Layout with title/badge/avatar, nav items, profile dropdown, profile editing |
-| Portal Flow & Logout | 3 | Portal renders with branding, candidate name visible, logout to /auth |
-| Photo Management | 3 | Avatar edit button, photo file input + select button, profile section access |
-| Inbox Review | 6 | Attendance filter, expand item with photos/confidence/GPS, approve dialog + cancel, reject dialog + cancel, full approve with notes + status transition |
-| Geofence CRUD | 5 | Zone list, zone details, create zone, delete zone, empty-name validation |
+| Candidate Portal Login | 3 | NationalId login -> /candidate-portal, phone login, invalid credentials |
+| Profile Setup Gate | 6 | Wizard shows for incomplete profile, required field enforcement blocks advance, fill all step 1 fields and advance to step 2, step 2->3 navigation, complete wizard loads portal, completed profile skips wizard |
+| Portal Main View | 4 | Portal title (NOT badge-portal-mode in candidate mode), nav items, profile dropdown, profile editing |
+| Portal Flow & Logout | 3 | Candidate Portal title, avatar click opens profile sheet (not photo dialog), logout to /auth |
+| Photo Management | 3 | Avatar edit opens profile sheet in candidate mode (not photo dialog), profile shows candidate info, avatar shows initials/photo |
+| Inbox Review | 6 | Attendance filter, expand item with photos/confidence/GPS, approve dialog with notes + cancel, reject dialog with notes + cancel, full approve with notes and status transition |
+| Geofence CRUD | 4 | Zone list with seeded data, zone details panel, create + delete zone lifecycle, empty-name validation |
 
 ## Test Data
 
 | Role | Identifier | Password | Profile Status |
 |------|-----------|----------|----------------|
 | Super Admin | 1000000001 | password123 | N/A (admin) |
-| Candidate (complete) | 2000000002 | password123 | profileCompleted=true, skips wizard |
+| Candidate (complete) | 2000000002 | password123 | profileCompleted=true, skips wizard, candidate mode (no workforce record) |
 | Candidate (phone) | 0500000002 | password123 | Same user as above |
 | Candidate (incomplete) | 2000000004 | password123 | profileCompleted=false, shows wizard |
 
 ## Known Limitation
 
-Test candidate 2000000002 does not have an active workforce record, so
-employee-mode photo management behavior (Change Photo dialog, pending review
-amber badge) cannot be tested in isolation. The admin-side workflow for
-approving photo change requests is verified in the Inbox Review suite.
+Test candidate 2000000002 does not have an active workforce record, so **employee-mode
+photo management** (Change Photo dialog, pending review amber badge, input-photo-change-file,
+button-select-new-photo) cannot be tested with current seed data. Creating a workforce record
+requires dependent event and job posting records. The admin-side photo approval workflow is
+verified in the Inbox Review suite. Employee-mode-specific photo controls are documented in
+the technicalDocs of the photo management suite for future test expansion.
