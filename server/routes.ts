@@ -1939,14 +1939,16 @@ export async function registerRoutes(
         "ibanAccountFirstName", "ibanAccountLastName",
         "emergencyContactName", "emergencyContactPhone",
       ];
-      const data: Record<string, any> = {};
+      const filtered: Record<string, any> = {};
       for (const key of allowed) {
-        if (key in req.body) data[key] = req.body[key] ?? null;
+        if (key in req.body) filtered[key] = req.body[key] ?? null;
       }
-      if (Object.keys(data).length === 0) return res.status(400).json({ message: "No valid fields to update" });
+      if (Object.keys(filtered).length === 0) return res.status(400).json({ message: "No valid fields to update" });
+
+      const data = insertCandidateSchema.partial().parse(filtered);
 
       if ("ibanNumber" in data) {
-        data.hasIban = !!data.ibanNumber;
+        (data as any).hasIban = !!data.ibanNumber;
       }
 
       const candidate = await storage.updateCandidate(candidateId, data);
