@@ -139,6 +139,7 @@ type Employee = {
   ibanAccountLastName?: string | null;
   positionId?: string | null;
   positionTitle?: string | null;
+  positionIsActive?: boolean | null;
 };
 
 type WorkHistory = {
@@ -352,7 +353,7 @@ function EmployeeDetailDialog({
     enabled: open,
   });
 
-  const { data: positionsList = [] } = useQuery<{ id: string; title: string; departmentId: string; departmentName?: string }[]>({
+  const { data: positionsList = [] } = useQuery<{ id: string; title: string; departmentId: string; departmentName?: string | null; isActive: boolean }[]>({
     queryKey: ["/api/positions"],
     queryFn: () => apiRequest("GET", "/api/positions").then(r => r.json()),
     enabled: open,
@@ -556,7 +557,7 @@ function EmployeeDetailDialog({
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
                           <SelectItem value="__none__" className="text-zinc-400 focus:bg-zinc-800 italic">None (unassign)</SelectItem>
-                          {positionsList.filter(p => (p as any).isActive !== false).map(pos => (
+                          {positionsList.filter(p => p.isActive).map(pos => (
                             <SelectItem key={pos.id} value={pos.id} className="text-white focus:bg-zinc-800">{pos.title}</SelectItem>
                           ))}
                         </SelectContent>
@@ -568,7 +569,14 @@ function EmployeeDetailDialog({
                     </div>
                   ) : (
                     <p className="text-white text-sm" data-testid="text-employee-position">
-                      {employee.positionTitle ?? <span className="text-zinc-500 text-xs italic">Not assigned</span>}
+                      {employee.positionTitle ? (
+                        <>
+                          {employee.positionTitle}
+                          {employee.positionIsActive === false && <span className="text-amber-400 text-xs ml-1">(Inactive)</span>}
+                        </>
+                      ) : (
+                        <span className="text-zinc-500 text-xs italic">Not assigned</span>
+                      )}
                     </p>
                   )}
                 </div>
@@ -1820,7 +1828,12 @@ export default function WorkforcePage() {
                         <TableCell className="hidden xl:table-cell" onClick={() => setSelectedEmployee(emp)}>
                           <div className="space-y-0.5">
                             <div className="text-sm text-white">{emp.jobTitle ?? "—"}</div>
-                            {emp.positionTitle && <div className="text-xs text-emerald-400/70">{emp.positionTitle}</div>}
+                            {emp.positionTitle && (
+                              <div className="text-xs text-emerald-400/70">
+                                {emp.positionTitle}
+                                {emp.positionIsActive === false && <span className="text-amber-400 ml-1">(Inactive)</span>}
+                              </div>
+                            )}
                             {emp.eventName && <div className="text-xs text-primary/70">{emp.eventName}</div>}
                           </div>
                         </TableCell>

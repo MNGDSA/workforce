@@ -435,7 +435,7 @@ export interface IStorage {
   getPosition(id: string): Promise<Position | undefined>;
   createPosition(data: InsertPosition): Promise<Position>;
   updatePosition(id: string, data: Partial<InsertPosition>): Promise<Position | undefined>;
-  togglePositionActive(id: string): Promise<{ success: boolean; error?: string; position?: Position }>;
+  togglePositionActive(id: string): Promise<{ success: boolean; error?: string; position?: Position; affectedEmployees?: { id: string; employeeNumber: string; fullNameEn: string | null }[] }>;
 
   // Dashboard
   getDashboardStats(): Promise<{
@@ -1164,6 +1164,7 @@ export class DatabaseStorage implements IStorage {
         ibanAccountLastName: candidates.ibanAccountLastName,
         positionId: workforce.positionId,
         positionTitle: positions.title,
+        positionIsActive: positions.isActive,
       })
       .from(workforce)
       .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
@@ -1226,6 +1227,7 @@ export class DatabaseStorage implements IStorage {
         ibanAccountLastName: candidates.ibanAccountLastName,
         positionId: workforce.positionId,
         positionTitle: positions.title,
+        positionIsActive: positions.isActive,
       })
       .from(workforce)
       .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
@@ -3037,10 +3039,11 @@ export class DatabaseStorage implements IStorage {
     if (!dept) return { success: false, error: "Department not found" };
 
     if (dept.isActive) {
-      const activePositions = await db.select({ id: positions.id }).from(positions)
+      const activePositions = await db.select({ id: positions.id, title: positions.title }).from(positions)
         .where(and(eq(positions.departmentId, id), eq(positions.isActive, true)));
       if (activePositions.length > 0) {
-        return { success: false, error: `Cannot deactivate: ${activePositions.length} active position(s) exist in this department. Deactivate them first.` };
+        const posNames = activePositions.map(p => p.title).join(", ");
+        return { success: false, error: `Cannot deactivate: ${activePositions.length} active position(s) in this department (${posNames}). Deactivate them first.` };
       }
     }
 
@@ -3092,21 +3095,32 @@ export class DatabaseStorage implements IStorage {
     return pos;
   }
 
-  async togglePositionActive(id: string): Promise<{ success: boolean; error?: string; position?: Position }> {
+  async togglePositionActive(id: string): Promise<{ success: boolean; error?: string; position?: Position; affectedEmployees?: { id: string; employeeNumber: string; fullNameEn: string | null }[] }> {
     const pos = await this.getPosition(id);
     if (!pos) return { success: false, error: "Position not found" };
 
     if (pos.isActive) {
-      const activeChildren = await db.select({ id: positions.id }).from(positions)
+      const activeChildren = await db.select({ id: positions.id, title: positions.title }).from(positions)
         .where(and(eq(positions.parentPositionId, id), eq(positions.isActive, true)));
       if (activeChildren.length > 0) {
-        return { success: false, error: `Cannot deactivate: ${activeChildren.length} active child position(s) exist. Deactivate or reassign them first.` };
+        const childNames = activeChildren.map(c => c.title).join(", ");
+        return { success: false, error: `Cannot deactivate: ${activeChildren.length} active child position(s) exist (${childNames}). Deactivate or reassign them first.` };
       }
 
-      const activeEmployees = await db.select({ id: workforce.id, employeeNumber: workforce.employeeNumber }).from(workforce)
+      const activeEmployees = await db.select({
+        id: workforce.id,
+        employeeNumber: workforce.employeeNumber,
+        fullNameEn: candidates.fullNameEn,
+      }).from(workforce)
+        .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
         .where(and(eq(workforce.positionId, id), eq(workforce.isActive, true)));
       if (activeEmployees.length > 0) {
-        return { success: false, error: `Cannot deactivate: ${activeEmployees.length} active employee(s) are assigned to this position. Reassign them first.` };
+        const empNames = activeEmployees.map(e => `${e.employeeNumber} (${e.fullNameEn ?? "Unknown"})`).join(", ");
+        return {
+          success: false,
+          error: `Cannot deactivate: ${activeEmployees.length} active employee(s) assigned — ${empNames}. Reassign them first.`,
+          affectedEmployees: activeEmployees,
+        };
       }
     }
 

@@ -558,14 +558,20 @@ export default function DepartmentsPage() {
   });
 
   const filteredDepts = useMemo(() => {
-    if (!searchQuery.trim()) return allDepartments;
-    const q = searchQuery.toLowerCase();
-    return allDepartments.filter(
-      (d) =>
-        d.name.toLowerCase().includes(q) ||
-        d.code.toLowerCase().includes(q) ||
-        (d.nameAr && d.nameAr.includes(searchQuery))
-    );
+    let list = allDepartments;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (d) =>
+          d.name.toLowerCase().includes(q) ||
+          d.code.toLowerCase().includes(q) ||
+          (d.nameAr && d.nameAr.includes(searchQuery))
+      );
+    }
+    return [...list].sort((a, b) => {
+      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+      return (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name);
+    });
   }, [allDepartments, searchQuery]);
 
   return (

@@ -1341,7 +1341,7 @@ export type Department = typeof departments.$inferSelect;
 export const positions = pgTable("positions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   departmentId: varchar("department_id").notNull().references(() => departments.id, { onDelete: "restrict" }),
-  parentPositionId: varchar("parent_position_id"),
+  parentPositionId: varchar("parent_position_id").references((): any => positions.id, { onDelete: "set null" }),
   title: text("title").notNull(),
   titleAr: text("title_ar"),
   code: varchar("code", { length: 20 }).notNull().unique(),
