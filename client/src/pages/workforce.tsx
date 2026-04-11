@@ -57,6 +57,15 @@ import {
   CheckCircle2,
   X,
   AlertCircle,
+  Mail,
+  MapPin,
+  GraduationCap,
+  Heart,
+  Globe,
+  User,
+  Building,
+  ShieldAlert,
+  Languages,
 } from "lucide-react";
 import {
   Table,
@@ -107,6 +116,24 @@ type Employee = {
   employmentType?: string | null;
   smpCompanyId?: string | null;
   smpCompanyName?: string | null;
+  fullNameAr?: string | null;
+  email?: string | null;
+  dateOfBirth?: string | null;
+  gender?: string | null;
+  nationalityText?: string | null;
+  maritalStatus?: string | null;
+  city?: string | null;
+  region?: string | null;
+  iqamaNumber?: string | null;
+  educationLevel?: string | null;
+  university?: string | null;
+  major?: string | null;
+  skills?: string[] | null;
+  languages?: string[] | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  ibanAccountFirstName?: string | null;
+  ibanAccountLastName?: string | null;
 };
 
 type WorkHistory = {
@@ -589,6 +616,91 @@ function EmployeeDetailDialog({
                   <p className="text-zinc-300 text-sm">{employee.notes || "No notes"}</p>
                 )}
               </div>
+
+              <Separator className="bg-zinc-800" />
+              <div>
+                <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-3">
+                  <User className="h-3.5 w-3.5" /> Personal Information
+                </Label>
+                <div className="grid grid-cols-2 gap-4">
+                  {employee.fullNameAr && <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Arabic Name" value={employee.fullNameAr} />}
+                  {employee.email && <InfoRow icon={<Mail className="h-3.5 w-3.5" />} label="Email" value={employee.email} />}
+                  {employee.dateOfBirth && <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label="Date of Birth" value={formatDate(employee.dateOfBirth)} />}
+                  {employee.gender && <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Gender" value={employee.gender.charAt(0).toUpperCase() + employee.gender.slice(1)} />}
+                  {employee.nationalityText && <InfoRow icon={<Globe className="h-3.5 w-3.5" />} label="Nationality" value={employee.nationalityText} />}
+                  {employee.maritalStatus && <InfoRow icon={<Heart className="h-3.5 w-3.5" />} label="Marital Status" value={employee.maritalStatus.charAt(0).toUpperCase() + employee.maritalStatus.slice(1)} />}
+                  {employee.iqamaNumber && <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="Iqama #" value={employee.iqamaNumber} mono />}
+                  {(employee.city || employee.region) && <InfoRow icon={<MapPin className="h-3.5 w-3.5" />} label="Location" value={[employee.city, employee.region].filter(Boolean).join(", ")} />}
+                </div>
+              </div>
+
+              {(employee.educationLevel || employee.skills?.length || employee.languages?.length) && (
+                <>
+                  <Separator className="bg-zinc-800" />
+                  <div>
+                    <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-3">
+                      <GraduationCap className="h-3.5 w-3.5" /> Education & Skills
+                    </Label>
+                    <div className="grid grid-cols-2 gap-4">
+                      {employee.educationLevel && <InfoRow icon={<GraduationCap className="h-3.5 w-3.5" />} label="Education" value={employee.educationLevel} />}
+                      {employee.university && <InfoRow icon={<Building className="h-3.5 w-3.5" />} label="University" value={employee.university} />}
+                      {employee.major && <InfoRow icon={<GraduationCap className="h-3.5 w-3.5" />} label="Major" value={employee.major} />}
+                    </div>
+                    {employee.skills && employee.skills.length > 0 && (
+                      <div className="mt-3">
+                        <span className="text-zinc-500 text-xs">Skills</span>
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {employee.skills.map((s, i) => (
+                            <span key={i} className="bg-zinc-800 text-zinc-300 text-xs px-2 py-0.5 rounded">{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {employee.languages && employee.languages.length > 0 && (
+                      <div className="mt-3">
+                        <span className="text-zinc-500 text-xs">Languages</span>
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {employee.languages.map((l, i) => (
+                            <span key={i} className="bg-zinc-800 text-zinc-300 text-xs px-2 py-0.5 rounded">{l}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {(employee.iban || employee.ibanBankName) && (
+                <>
+                  <Separator className="bg-zinc-800" />
+                  <div>
+                    <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-3">
+                      <CreditCard className="h-3.5 w-3.5" /> Financial Information
+                    </Label>
+                    <div className="grid grid-cols-2 gap-4">
+                      {employee.iban && <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="IBAN" value={employee.iban} mono />}
+                      {employee.ibanBankName && <InfoRow icon={<Building className="h-3.5 w-3.5" />} label="Bank Name" value={employee.ibanBankName} />}
+                      {employee.ibanBankCode && <InfoRow icon={<Hash className="h-3.5 w-3.5" />} label="Bank Code" value={employee.ibanBankCode} mono />}
+                      {employee.ibanAccountFirstName && <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Account Holder" value={`${employee.ibanAccountFirstName} ${employee.ibanAccountLastName ?? ""}`.trim()} />}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {(employee.emergencyContactName || employee.emergencyContactPhone) && (
+                <>
+                  <Separator className="bg-zinc-800" />
+                  <div>
+                    <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-3">
+                      <ShieldAlert className="h-3.5 w-3.5" /> Emergency Contact
+                    </Label>
+                    <div className="grid grid-cols-2 gap-4">
+                      {employee.emergencyContactName && <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Contact Name" value={employee.emergencyContactName} />}
+                      {employee.emergencyContactPhone && <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label="Contact Phone" value={employee.emergencyContactPhone} />}
+                    </div>
+                  </div>
+                </>
+              )}
 
               <>
                 <Separator className="bg-zinc-800" />
