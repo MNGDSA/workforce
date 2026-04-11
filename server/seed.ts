@@ -41,6 +41,15 @@ async function seed() {
         nationalId: "2000000004",
       },
       {
+        username: "purecandidate",
+        email: "purecandidate@workforce.sa",
+        password: candidatePassword,
+        role: "candidate",
+        fullName: "Candidate Only",
+        phone: "0500000005",
+        nationalId: "2000000005",
+      },
+      {
         username: "recruiter1",
         email: "recruiter@workforce.sa",
         password: adminPassword,
@@ -119,6 +128,44 @@ async function seed() {
         })
         .onConflictDoNothing();
       console.log("  → Created candidate record for New Candidate (incomplete profile)");
+    }
+  }
+
+  // ─── Candidate Record for Pure Candidate (no workforce) ──────────────────
+  const [pureCandidateUser] = await db
+    .select()
+    .from(users)
+    .where(eq(users.nationalId, "2000000005"))
+    .limit(1);
+
+  if (pureCandidateUser) {
+    const existingPure = await db
+      .select()
+      .from(candidates)
+      .where(eq(candidates.userId, pureCandidateUser.id))
+      .limit(1);
+
+    if (existingPure.length === 0) {
+      await db
+        .insert(candidates)
+        .values({
+          userId: pureCandidateUser.id,
+          fullNameEn: "Candidate Only",
+          fullNameAr: "مرشح فقط",
+          nationalId: "2000000005",
+          phone: "0500000005",
+          email: "purecandidate@workforce.sa",
+          gender: "male",
+          nationality: "saudi",
+          city: "Jeddah",
+          region: "Makkah Region",
+          country: "SA",
+          status: "active",
+          source: "individual",
+          profileCompleted: true,
+        })
+        .onConflictDoNothing();
+      console.log("  → Created candidate record for Pure Candidate (no workforce, candidate mode)");
     }
   }
 

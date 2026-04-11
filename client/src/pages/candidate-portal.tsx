@@ -1742,7 +1742,7 @@ export default function CandidatePortal() {
                     )}
                   </span>
                   {hasPendingPhotoChange && (
-                    <span className="absolute -top-1 -right-1 flex items-center justify-center h-5 w-5 rounded-full bg-amber-500 border-2 border-card z-10" title="Photo change pending review">
+                    <span className="absolute -top-1 -right-1 flex items-center justify-center h-5 w-5 rounded-full bg-amber-500 border-2 border-card z-10" title="Photo change pending review" data-testid="badge-photo-pending">
                       <Clock className="h-3 w-3 text-white" />
                     </span>
                   )}
