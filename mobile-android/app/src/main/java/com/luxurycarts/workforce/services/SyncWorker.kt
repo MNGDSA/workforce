@@ -24,18 +24,94 @@ class SyncWorker(
     override suspend fun doWork(): Result {
         val app = applicationContext as WorkforceApp
         val session = app.sessionManager
+        val ntpService = app.ntpTimeService
 
         if (!session.isSessionValid || session.workforceId == null || session.serverUrl.isEmpty()) {
             return Result.failure()
         }
 
-        val apiService = ApiClient.create(session.serverUrl)
+        val snapshotWorkforceId = session.workforceId!!
+
+        val apiService = ApiClient.create(session.serverUrl) { cookie ->
+            session.authCookie = cookie
+        }
+        if (session.authCookie != null) {
+            ApiClient.restoreCookie(session.serverUrl, session.authCookie!!)
+        }
+
+        ApiClient.isSyncInProgress = true
+        try {
+            return doSyncWork(app, session, ntpService, apiService, snapshotWorkforceId)
+        } finally {
+            ApiClient.isSyncInProgress = false
+        }
+    }
+
+    private suspend fun doSyncWork(
+        app: WorkforceApp,
+        session: com.luxurycarts.workforce.services.SessionManager,
+        ntpService: NtpTimeService,
+        apiService: com.luxurycarts.workforce.data.ApiService,
+        workforceId: String,
+    ): Result {
+        var isTerminated = false
+
+        try {
+            val configResp = apiService.getMobileConfig()
+            if (configResp.isSuccessful) {
+                val config = configResp.body()
+                if (config != null) {
+                    ntpService.ntpServerUrl = config.ntpServerUrl
+                    ntpService.organizationTimezone = config.organizationTimezone
+                    ntpService.configVersion = config.configVersion
+                }
+            } else if (configResp.code() == 403 || configResp.code() == 401) {
+                isTerminated = true
+            }
+        } catch (_: Exception) { }
+
+        val sixHoursMs = 6 * 60 * 60 * 1000L
+        val sinceLastSync = System.currentTimeMillis() - ntpService.lastNtpSyncTimestamp
+        if (sinceLastSync >= sixHoursMs || !ntpService.hasEverSynced) {
+            ntpService.syncNtp()
+        }
+
         val dao = app.database.attendanceDao()
-        val repository = AttendanceRepository(dao, apiService, session.workforceId!!)
+        val repository = AttendanceRepository(dao, apiService, workforceId, ntpService)
+
+        if (isTerminated) {
+            val remaining = dao.getPending(workforceId)
+            if (remaining.isNotEmpty()) {
+                try {
+                    repository.syncPending()
+                } catch (_: Exception) { }
+            }
+            session.clear()
+            ApiClient.reset()
+            return Result.failure()
+        }
 
         return try {
-            repository.syncPending()
-            Result.success()
+            val syncResult = repository.syncPending()
+            when {
+                syncResult.sessionExpired -> {
+                    session.clear()
+                    ApiClient.reset()
+                    Result.failure()
+                }
+                syncResult.terminated -> {
+                    val remaining = dao.getPending(workforceId)
+                    if (remaining.isNotEmpty()) {
+                        try {
+                            repository.syncPending()
+                        } catch (_: Exception) { }
+                    }
+                    session.clear()
+                    ApiClient.reset()
+                    Result.failure()
+                }
+                else -> Result.success()
+            }
         } catch (_: Exception) {
             Result.retry()
         }

@@ -1,6 +1,7 @@
 package com.luxurycarts.workforce.data
 
 import com.luxurycarts.workforce.services.EncryptionService
+import com.luxurycarts.workforce.services.NtpTimeService
 import kotlinx.coroutines.flow.Flow
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -9,12 +10,14 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.util.UUID
 
 class AttendanceRepository(
     private val dao: AttendanceDao,
     private val apiService: ApiService,
     private val workforceId: String,
+    private val ntpTimeService: NtpTimeService? = null,
 ) {
     val submissions: Flow<List<AttendanceEntity>> = dao.getSubmissions(workforceId)
     val pendingCount: Flow<Int> = dao.getPendingCount(workforceId)
@@ -24,10 +27,14 @@ class AttendanceRepository(
         gpsLat: Double,
         gpsLng: Double,
         gpsAccuracy: Float?,
+        trustReport: com.luxurycarts.workforce.services.DeviceTrustReport? = null,
     ) {
         val id = UUID.randomUUID().toString()
-        val now = Instant.now().toString()
-        val date = LocalDate.now().toString()
+        val trustedInstant = ntpTimeService?.getTrustedInstant() ?: Instant.now()
+        val systemClockInstant = Instant.now()
+        val lastNtpSync = ntpTimeService?.getLastNtpSyncInstant()
+        val timezone = ntpTimeService?.organizationTimezone ?: "Asia/Riyadh"
+        val date = trustedInstant.atZone(ZoneId.of(timezone)).toLocalDate().toString()
 
         val encPhotoPath = photoFile.absolutePath + ".enc"
         EncryptionService.encryptFile(photoFile.absolutePath, encPhotoPath)
@@ -37,17 +44,53 @@ class AttendanceRepository(
             id = id,
             workforceId = EncryptionService.encrypt(workforceId),
             attendanceDate = date,
-            encryptedTimestamp = EncryptionService.encrypt(now),
+            encryptedTimestamp = EncryptionService.encrypt(trustedInstant.toString()),
             encryptedGpsLat = EncryptionService.encrypt(gpsLat.toString()),
             encryptedGpsLng = EncryptionService.encrypt(gpsLng.toString()),
             gpsAccuracy = gpsAccuracy,
             encryptedPhotoPath = EncryptionService.encrypt(encPhotoPath),
             ownerWorkforceId = workforceId,
+            mockLocationDetected = trustReport?.mockLocationDetected ?: false,
+            isEmulator = trustReport?.isEmulator ?: false,
+            rootDetected = trustReport?.rootDetected ?: false,
+            locationProvider = trustReport?.locationProvider,
+            deviceFingerprint = trustReport?.deviceFingerprint,
+            ntpTimestamp = trustedInstant.toString(),
+            systemClockTimestamp = systemClockInstant.toString(),
+            lastNtpSyncAt = lastNtpSync?.toString(),
         )
         dao.insert(entity)
     }
 
-    suspend fun syncPending() {
+    data class SyncResult(
+        val terminated: Boolean = false,
+        val sessionExpired: Boolean = false,
+        val configChanged: Boolean = false,
+    )
+
+    suspend fun syncPending(): SyncResult {
+        var terminated = false
+        var sessionExpired = false
+        var configChanged = false
+
+        try {
+            val configResponse = apiService.getMobileConfig()
+            if (configResponse.isSuccessful) {
+                val config = configResponse.body()
+                if (config != null && ntpTimeService != null) {
+                    if (config.configVersion != ntpTimeService.configVersion) {
+                        ntpTimeService.ntpServerUrl = config.ntpServerUrl
+                        ntpTimeService.organizationTimezone = config.organizationTimezone
+                        ntpTimeService.configVersion = config.configVersion
+                        configChanged = true
+                        ntpTimeService.syncNtp()
+                    }
+                }
+            } else if (configResponse.code() == 401) {
+                return SyncResult(sessionExpired = true)
+            }
+        } catch (_: Exception) { }
+
         val pending = dao.getPending(workforceId)
         for (submission in pending) {
             if (submission.retryCount >= 5) continue
@@ -59,18 +102,23 @@ class AttendanceRepository(
                 val photoBody = tempFile.asRequestBody("image/jpeg".toMediaType())
                 val photoPart = MultipartBody.Part.createFormData("photo", "attendance.jpg", photoBody)
                 val plainWorkforceId = EncryptionService.decrypt(submission.workforceId)
+                val textType = "text/plain".toMediaType()
 
                 val response = apiService.submitAttendance(
-                    workforceId = plainWorkforceId.toRequestBody("text/plain".toMediaType()),
-                    gpsLat = EncryptionService.decrypt(submission.encryptedGpsLat).toRequestBody("text/plain".toMediaType()),
-                    gpsLng = EncryptionService.decrypt(submission.encryptedGpsLng).toRequestBody("text/plain".toMediaType()),
-                    gpsAccuracy = (submission.gpsAccuracy?.toString() ?: "0").toRequestBody("text/plain".toMediaType()),
-                    timestamp = EncryptionService.decrypt(submission.encryptedTimestamp).toRequestBody("text/plain".toMediaType()),
+                    workforceId = plainWorkforceId.toRequestBody(textType),
+                    gpsLat = EncryptionService.decrypt(submission.encryptedGpsLat).toRequestBody(textType),
+                    gpsLng = EncryptionService.decrypt(submission.encryptedGpsLng).toRequestBody(textType),
+                    gpsAccuracy = (submission.gpsAccuracy?.toString() ?: "0").toRequestBody(textType),
+                    timestamp = EncryptionService.decrypt(submission.encryptedTimestamp).toRequestBody(textType),
                     photo = photoPart,
-                    mockLocationDetected = submission.mockLocationDetected.toString().toRequestBody("text/plain".toMediaType()),
-                    isEmulator = submission.isEmulator.toString().toRequestBody("text/plain".toMediaType()),
-                    locationProvider = (submission.locationProvider ?: "unknown").toRequestBody("text/plain".toMediaType()),
-                    deviceFingerprint = (submission.deviceFingerprint ?: "").toRequestBody("text/plain".toMediaType()),
+                    mockLocationDetected = submission.mockLocationDetected.toString().toRequestBody(textType),
+                    isEmulator = submission.isEmulator.toString().toRequestBody(textType),
+                    rootDetected = submission.rootDetected.toString().toRequestBody(textType),
+                    locationProvider = (submission.locationProvider ?: "unknown").toRequestBody(textType),
+                    deviceFingerprint = (submission.deviceFingerprint ?: "").toRequestBody(textType),
+                    ntpTimestamp = (submission.ntpTimestamp ?: "").toRequestBody(textType),
+                    systemClockTimestamp = (submission.systemClockTimestamp ?: "").toRequestBody(textType),
+                    lastNtpSyncAt = (submission.lastNtpSyncAt ?: "").toRequestBody(textType),
                 )
 
                 if (response.isSuccessful) {
@@ -79,6 +127,11 @@ class AttendanceRepository(
                     dao.updateSyncResult(submission.id, sub?.status ?: "synced", sub?.id, sub?.flagReason, sub?.rekognitionConfidence)
                 } else if (response.code() == 409) {
                     dao.updateSyncResult(submission.id, "synced", null, null)
+                } else if (response.code() == 401) {
+                    sessionExpired = true
+                    break
+                } else if (response.code() == 403) {
+                    terminated = true
                 } else {
                     dao.incrementRetry(submission.id)
                 }
@@ -93,6 +146,7 @@ class AttendanceRepository(
         dao.purgeOld(workforceId, cutoff)
 
         refreshStatuses()
+        return SyncResult(terminated = terminated, sessionExpired = sessionExpired, configChanged = configChanged)
     }
 
     suspend fun refreshStatuses() {

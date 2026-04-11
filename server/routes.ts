@@ -62,7 +62,7 @@ function verifyAuthToken(token: string): string | null {
     const data = JSON.parse(Buffer.from(payload, "base64url").toString());
     if (!data.uid) return null;
     const age = Date.now() - (data.iat || 0);
-    if (age > 30 * 24 * 60 * 60 * 1000) return null;
+    if (age > 7 * 24 * 60 * 60 * 1000) return null;
     return data.uid;
   } catch { return null; }
 }
@@ -73,6 +73,24 @@ function getAuthUserId(req: Request): string | null {
   const match = cookie.match(/wf_auth=([^;]+)/);
   if (!match) return null;
   return verifyAuthToken(match[1]);
+}
+
+const userActiveCache = new Map<string, { isActive: boolean; ts: number }>();
+const USER_ACTIVE_CACHE_TTL = 60_000;
+
+async function isUserActive(userId: string): Promise<boolean> {
+  const cached = userActiveCache.get(userId);
+  if (cached && Date.now() - cached.ts < USER_ACTIVE_CACHE_TTL) {
+    return cached.isActive;
+  }
+  const user = await storage.getUser(userId);
+  const active = user?.isActive ?? false;
+  userActiveCache.set(userId, { isActive: active, ts: Date.now() });
+  return active;
+}
+
+function invalidateUserActiveCache(userId: string) {
+  userActiveCache.delete(userId);
 }
 
 async function logAudit(req: Request, params: {
@@ -201,6 +219,91 @@ export async function registerRoutes(
       res.setHeader("X-Content-Type-Options", "nosniff");
     }
   }));
+
+  app.use("/api", async (req: Request, res: Response, next) => {
+    const url = req.originalUrl || req.path;
+    const openPaths = ["/api/auth/"];
+    const publicGetPaths = ["/api/settings/system"];
+    const selfEnforcedPaths = ["/api/attendance-mobile/submit"];
+    if (openPaths.some(p => url.startsWith(p)) || (req.method === "GET" && publicGetPaths.some(p => url.startsWith(p))) || selfEnforcedPaths.some(p => url.startsWith(p))) {
+      return next();
+    }
+    const userId = getAuthUserId(req);
+    if (!userId) return next();
+    const active = await isUserActive(userId);
+    if (!active) {
+      return res.status(403).json({ message: "Account is disabled. Contact support.", terminated: true });
+    }
+    next();
+  });
+
+  app.get("/api/ntp-health", async (req: Request, res: Response) => {
+    try {
+      const server = (req.query.server as string) || "time.google.com";
+      const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/;
+      if (!hostnameRegex.test(server) || server.length > 253) {
+        return res.status(400).json({ reachable: false, server, detail: "Invalid hostname" });
+      }
+      const blockedPatterns = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|0\.|169\.254\.|::1|fc00|fd00|fe80)/i;
+      if (blockedPatterns.test(server)) {
+        return res.status(400).json({ reachable: false, server, detail: "Internal addresses not allowed" });
+      }
+
+      const dgram = await import("dgram");
+      const dns = await import("dns");
+      const { promisify } = await import("util");
+      const resolve = promisify(dns.resolve);
+
+      let resolvedAddresses: string[];
+      try {
+        resolvedAddresses = await resolve(server);
+      } catch {
+        return res.json({ reachable: false, server, detail: "DNS resolution failed" });
+      }
+      const privateIpRegex = /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|0\.|169\.254\.)/;
+      if (resolvedAddresses.some((addr: string) => privateIpRegex.test(addr))) {
+        return res.status(400).json({ reachable: false, server, detail: "Resolves to internal address" });
+      }
+
+      const ntpProbe = (): Promise<boolean> => new Promise((ok) => {
+        const socket = dgram.createSocket("udp4");
+        const timeout = setTimeout(() => { socket.close(); ok(false); }, 4000);
+        const buf = Buffer.alloc(48);
+        buf[0] = 0x1B;
+        socket.send(buf, 0, 48, 123, server, (err) => {
+          if (err) { clearTimeout(timeout); socket.close(); ok(false); }
+        });
+        socket.on("message", () => { clearTimeout(timeout); socket.close(); ok(true); });
+        socket.on("error", () => { clearTimeout(timeout); socket.close(); ok(false); });
+      });
+
+      const reachable = await ntpProbe();
+      return res.json({ reachable, server });
+    } catch (err) {
+      return res.json({ reachable: false });
+    }
+  });
+
+  app.get("/api/config/mobile", async (req: Request, res: Response) => {
+    try {
+      const userId = getAuthUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Authentication required." });
+      }
+      const [ntpUrl, orgTz, configVer] = await Promise.all([
+        storage.getSystemSetting("ntp_server_url"),
+        storage.getSystemSetting("organization_timezone"),
+        storage.getSystemSetting("config_version"),
+      ]);
+      return res.json({
+        ntp_server_url: ntpUrl ?? "time.google.com",
+        organization_timezone: orgTz ?? "Asia/Riyadh",
+        config_version: parseInt(configVer ?? "1", 10),
+      });
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to fetch config" });
+    }
+  });
 
   // ─── Document Upload ───────────────────────────────────────────────────────
   app.post("/api/candidates/:id/documents", upload.single("file"), async (req: Request, res: Response) => {
@@ -403,7 +506,7 @@ export async function registerRoutes(
 
       const token = signAuthToken(user.id);
       const securFlag = process.env.NODE_ENV === "production" ? "; Secure" : "";
-      res.setHeader("Set-Cookie", `wf_auth=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}${securFlag}`);
+      res.setHeader("Set-Cookie", `wf_auth=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}${securFlag}`);
 
       return res.json({ user: safeUser, candidate });
     } catch (err) {
@@ -716,15 +819,21 @@ export async function registerRoutes(
 
   app.get("/api/settings/system", async (_req: Request, res: Response) => {
     try {
-      const [supportEmail, privacyPolicy, termsConditions] = await Promise.all([
+      const [supportEmail, privacyPolicy, termsConditions, ntpServerUrl, orgTimezone, configVersion] = await Promise.all([
         storage.getSystemSetting("support_email"),
         storage.getSystemSetting("privacy_policy"),
         storage.getSystemSetting("terms_conditions"),
+        storage.getSystemSetting("ntp_server_url"),
+        storage.getSystemSetting("organization_timezone"),
+        storage.getSystemSetting("config_version"),
       ]);
       return res.json({
         support_email: supportEmail ?? "",
         privacy_policy: privacyPolicy ?? "",
         terms_conditions: termsConditions ?? "",
+        ntp_server_url: ntpServerUrl ?? "time.google.com",
+        organization_timezone: orgTimezone ?? "Asia/Riyadh",
+        config_version: parseInt(configVersion ?? "1", 10),
       });
     } catch (err) {
       return handleError(res, err);
@@ -733,19 +842,36 @@ export async function registerRoutes(
 
   app.patch("/api/settings/system", async (req: Request, res: Response) => {
     try {
-      const { support_email, privacy_policy, terms_conditions } = req.body;
+      const { support_email, privacy_policy, terms_conditions, ntp_server_url, organization_timezone } = req.body;
+      let anyChanged = false;
       if (typeof support_email === "string") {
         const trimmed = support_email.trim();
         if (trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
           return res.status(400).json({ message: "Invalid email format" });
         }
         await storage.setSystemSetting("support_email", trimmed);
+        anyChanged = true;
       }
       if (typeof privacy_policy === "string") {
         await storage.setSystemSetting("privacy_policy", privacy_policy);
+        anyChanged = true;
       }
       if (typeof terms_conditions === "string") {
         await storage.setSystemSetting("terms_conditions", terms_conditions);
+        anyChanged = true;
+      }
+      if (typeof ntp_server_url === "string" && ntp_server_url.trim()) {
+        await storage.setSystemSetting("ntp_server_url", ntp_server_url.trim());
+        anyChanged = true;
+      }
+      if (typeof organization_timezone === "string" && organization_timezone.trim()) {
+        await storage.setSystemSetting("organization_timezone", organization_timezone.trim());
+        anyChanged = true;
+      }
+      if (anyChanged) {
+        const currentVersion = await storage.getSystemSetting("config_version");
+        const newVersion = (parseInt(currentVersion ?? "1", 10) + 1).toString();
+        await storage.setSystemSetting("config_version", newVersion);
       }
       return res.json({ success: true });
     } catch (err) {
@@ -1953,6 +2079,16 @@ export async function registerRoutes(
       }
       const subjectName = before?.fullNameEn ?? (record as any).fullNameEn ?? undefined;
       const empNum = before?.employeeNumber ?? (record as any).employeeNumber ?? undefined;
+      if (data.isActive === false && before?.candidateId) {
+        const otherActive = await storage.getWorkforceByCandidateId(before.candidateId);
+        if (!otherActive || otherActive.id === req.params.id) {
+          const candidate = await storage.getCandidate(before.candidateId);
+          if (candidate?.userId) {
+            await storage.updateUser(candidate.userId, { isActive: false });
+            invalidateUserActiveCache(candidate.userId);
+          }
+        }
+      }
       await logAudit(req, {
         action: "workforce.updated",
         entityType: "workforce",
@@ -2162,6 +2298,19 @@ export async function registerRoutes(
       if (!record) return res.status(404).json({ message: "Employee not found" });
       const empNum = (record as any).employeeNumber ?? undefined;
       const subjectName = (record as any).fullNameEn ?? undefined;
+
+      if (record.candidateId) {
+        const candidate = await storage.getCandidate(record.candidateId);
+        if (candidate?.userId) {
+          const wfByCand = await storage.getWorkforceByCandidateId(record.candidateId);
+          const hasOtherActive = wfByCand && wfByCand.isActive;
+          if (!hasOtherActive) {
+            await storage.updateUser(candidate.userId, { isActive: false });
+            invalidateUserActiveCache(candidate.userId);
+          }
+        }
+      }
+
       await logAudit(req, {
         action: "workforce.terminated",
         entityType: "workforce",
@@ -2525,6 +2674,7 @@ export async function registerRoutes(
       const data = insertUserSchema.partial().omit({ password: true }).parse(req.body);
       const user = await storage.updateUser(req.params.id, data);
       if (!user) return res.status(404).json({ message: "User not found" });
+      invalidateUserActiveCache(req.params.id);
       return res.json({ ...user, password: undefined });
     } catch (err) {
       return handleError(res, err);
@@ -4050,13 +4200,107 @@ export async function registerRoutes(
         timestamp: z.string().optional(),
         mockLocationDetected: z.preprocess((v) => v === "true" || v === true, z.boolean()).optional(),
         isEmulator: z.preprocess((v) => v === "true" || v === true, z.boolean()).optional(),
+        rootDetected: z.preprocess((v) => v === "true" || v === true, z.boolean()).optional(),
         locationProvider: z.string().optional(),
         deviceFingerprint: z.string().optional(),
+        ntpTimestamp: z.string().optional(),
+        systemClockTimestamp: z.string().optional(),
+        lastNtpSyncAt: z.string().optional(),
       });
 
       const parsed = schema.parse(req.body);
+
+      const userId = getAuthUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Authentication required." });
+      }
+      const authUser = await storage.getUser(userId);
+      if (!authUser || !authUser.isActive) {
+        return res.status(403).json({ message: "User account is deactivated.", terminated: true });
+      }
+
+      const wfRecord = await storage.getWorkforceEmployee(parsed.workforceId);
+      if (!wfRecord) {
+        return res.status(404).json({ message: "Workforce record not found" });
+      }
+      if (wfRecord.candidateId) {
+        const candidate = await storage.getCandidate(wfRecord.candidateId);
+        if (!candidate || candidate.userId !== userId) {
+          return res.status(403).json({ message: "Workforce record does not belong to authenticated user." });
+        }
+      }
+      if (!wfRecord.isActive) {
+        if (wfRecord.endDate) {
+          const ntpTs = parsed.ntpTimestamp ? new Date(parsed.ntpTimestamp) : null;
+          const clientTs = parsed.clientTimestamp || parsed.timestamp;
+          let captureTime: number | null = null;
+          if (ntpTs && Number.isFinite(ntpTs.getTime())) {
+            captureTime = ntpTs.getTime();
+          } else if (clientTs) {
+            const ct = new Date(clientTs).getTime();
+            if (Number.isFinite(ct)) captureTime = ct;
+          }
+          const endTime = new Date(wfRecord.endDate).getTime();
+          if (!Number.isFinite(endTime) || captureTime === null || captureTime > endTime) {
+            return res.status(403).json({ message: "Workforce record terminated. Submission after termination date rejected.", terminated: true });
+          }
+        } else {
+          return res.status(403).json({ message: "Workforce record is inactive. Submission rejected.", terminated: true });
+        }
+      }
+
       const photoUrl = `/uploads/${req.file.filename}`;
       const ts = parsed.clientTimestamp || parsed.timestamp;
+      const serverReceivedAt = new Date();
+
+      let ntpTs: Date | null = null;
+      let sysClockTs: Date | null = null;
+      let lastNtpSync: Date | null = null;
+
+      if (parsed.ntpTimestamp) {
+        const d = new Date(parsed.ntpTimestamp);
+        if (!isNaN(d.getTime())) ntpTs = d;
+      }
+      if (parsed.systemClockTimestamp) {
+        const d = new Date(parsed.systemClockTimestamp);
+        if (!isNaN(d.getTime())) sysClockTs = d;
+      }
+      if (parsed.lastNtpSyncAt) {
+        const d = new Date(parsed.lastNtpSyncAt);
+        if (!isNaN(d.getTime())) lastNtpSync = d;
+      }
+
+      const clockTamperFlags: string[] = [];
+
+      if (ntpTs && sysClockTs) {
+        const drift = Math.abs(ntpTs.getTime() - sysClockTs.getTime());
+        if (drift > 5 * 60 * 1000) {
+          clockTamperFlags.push("Clock tampering suspected — NTP and system clock diverge by " + Math.round(drift / 60000) + " minutes");
+        }
+      }
+
+      if (ntpTs && sysClockTs) {
+        const submissionAge = serverReceivedAt.getTime() - sysClockTs.getTime();
+        const isOfflineSync = submissionAge > 2 * 60 * 1000;
+        if (!isOfflineSync) {
+          const serverDrift = Math.abs(ntpTs.getTime() - serverReceivedAt.getTime());
+          if (serverDrift > 5 * 60 * 1000) {
+            clockTamperFlags.push("NTP timestamp and server time diverge by " + Math.round(serverDrift / 60000) + " minutes");
+          }
+        }
+      } else if (ntpTs) {
+        const serverDrift = Math.abs(ntpTs.getTime() - serverReceivedAt.getTime());
+        if (serverDrift > 5 * 60 * 1000) {
+          clockTamperFlags.push("NTP timestamp and server time diverge by " + Math.round(serverDrift / 60000) + " minutes");
+        }
+      }
+
+      if (lastNtpSync) {
+        const ntpAge = serverReceivedAt.getTime() - lastNtpSync.getTime();
+        if (ntpAge > 7 * 24 * 60 * 60 * 1000) {
+          clockTamperFlags.push("Stale NTP offset — last sync " + Math.round(ntpAge / 86400000) + " days ago");
+        }
+      }
 
       const submission = await storage.createAttendanceSubmission({
         workforceId: parsed.workforceId,
@@ -4068,9 +4312,39 @@ export async function registerRoutes(
         status: "pending",
         mockLocationDetected: parsed.mockLocationDetected ?? null,
         isEmulator: parsed.isEmulator ?? null,
+        rootDetected: parsed.rootDetected ?? null,
         locationProvider: parsed.locationProvider ?? null,
         deviceFingerprint: parsed.deviceFingerprint ?? null,
+        serverReceivedAt,
+        ntpTimestamp: ntpTs,
+        systemClockTimestamp: sysClockTs,
+        lastNtpSyncAt: lastNtpSync,
       });
+
+      if (clockTamperFlags.length > 0) {
+        const flagReason = clockTamperFlags.join("; ");
+        await storage.updateAttendanceSubmission(submission.id, {
+          status: "flagged",
+          flagReason,
+        });
+        try {
+          const candidate = wfRecord.candidateId ? await storage.getCandidate(wfRecord.candidateId) : null;
+          await createInboxItem(
+            "attendance_verification",
+            `Clock tampering detected — ${candidate?.fullNameEn ?? "Unknown"}`,
+            flagReason,
+            {
+              workforceId: parsed.workforceId,
+              employeeNumber: wfRecord.employeeNumber,
+              candidateName: candidate?.fullNameEn,
+            },
+            "high",
+            { entityType: "attendance_submission", entityId: submission.id },
+          );
+        } catch (inboxErr) {
+          console.error("[Clock Tampering] Failed to create inbox item:", inboxErr);
+        }
+      }
 
       let pipelineResult;
       try {

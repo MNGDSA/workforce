@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import DashboardLayout from "@/components/layout";
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Building2, 
   Globe, 
@@ -21,9 +22,129 @@ import {
   Save,
   CreditCard,
   Bell,
-  Loader2
+  Loader2,
+  Clock,
+  Wifi,
+  WifiOff,
+  CheckCircle2,
+  AlertCircle,
+  XCircle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+const NTP_SERVERS = [
+  { group: "Global (Anycast)", servers: [
+    { value: "time.google.com", label: "time.google.com (Google)" },
+    { value: "time.cloudflare.com", label: "time.cloudflare.com (Cloudflare)" },
+    { value: "time.windows.com", label: "time.windows.com (Microsoft)" },
+    { value: "time.apple.com", label: "time.apple.com (Apple)" },
+    { value: "pool.ntp.org", label: "pool.ntp.org (NTP Pool)" },
+  ]},
+  { group: "Middle East", servers: [
+    { value: "asia.pool.ntp.org", label: "asia.pool.ntp.org" },
+    { value: "sa.pool.ntp.org", label: "sa.pool.ntp.org (Saudi Arabia)" },
+  ]},
+  { group: "Europe", servers: [
+    { value: "europe.pool.ntp.org", label: "europe.pool.ntp.org" },
+    { value: "time.euro.apple.com", label: "time.euro.apple.com" },
+  ]},
+  { group: "Asia", servers: [
+    { value: "asia.pool.ntp.org", label: "asia.pool.ntp.org" },
+    { value: "ntp.nict.jp", label: "ntp.nict.jp (Japan)" },
+  ]},
+  { group: "North America", servers: [
+    { value: "north-america.pool.ntp.org", label: "north-america.pool.ntp.org" },
+    { value: "time.nist.gov", label: "time.nist.gov (USA/NIST)" },
+  ]},
+  { group: "South America", servers: [
+    { value: "south-america.pool.ntp.org", label: "south-america.pool.ntp.org" },
+  ]},
+  { group: "Oceania", servers: [
+    { value: "oceania.pool.ntp.org", label: "oceania.pool.ntp.org" },
+  ]},
+];
+
+const ALL_NTP_VALUES = NTP_SERVERS.flatMap(g => g.servers.map(s => s.value));
+
+const ALL_TIMEZONES: string[] = (() => {
+  try {
+    return Intl.supportedValuesOf("timeZone");
+  } catch {
+    return [
+      "UTC",
+      "Asia/Riyadh", "Asia/Dubai", "Asia/Muscat", "Asia/Kuwait", "Asia/Bahrain", "Asia/Qatar",
+      "Asia/Kolkata", "Asia/Karachi", "Asia/Dhaka", "Asia/Bangkok", "Asia/Singapore", "Asia/Tokyo",
+      "Asia/Shanghai", "Asia/Hong_Kong", "Asia/Seoul", "Asia/Jakarta",
+      "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Madrid", "Europe/Rome", "Europe/Istanbul",
+      "Europe/Moscow", "Europe/Amsterdam", "Europe/Brussels", "Europe/Vienna",
+      "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+      "America/Toronto", "America/Sao_Paulo", "America/Mexico_City", "America/Argentina/Buenos_Aires",
+      "Africa/Cairo", "Africa/Johannesburg", "Africa/Lagos", "Africa/Nairobi",
+      "Australia/Sydney", "Australia/Melbourne", "Pacific/Auckland",
+    ];
+  }
+})();
+
+function getUtcOffset(tz: string): string {
+  try {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "shortOffset" });
+    const parts = formatter.formatToParts(now);
+    const offsetPart = parts.find(p => p.type === "timeZoneName");
+    return offsetPart?.value ?? "";
+  } catch { return ""; }
+}
+
+function NtpHealthIndicator({ serverUrl }: { serverUrl: string }) {
+  const [status, setStatus] = useState<"checking" | "reachable" | "unreachable" | "unknown">("unknown");
+
+  const checkHealth = useCallback(async () => {
+    if (!serverUrl) { setStatus("unknown"); return; }
+    setStatus("checking");
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(`/api/ntp-health?server=${encodeURIComponent(serverUrl)}`, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (res.ok) {
+        const data = await res.json();
+        setStatus(data.reachable ? "reachable" : "unreachable");
+      } else {
+        setStatus("unknown");
+      }
+    } catch {
+      setStatus("unknown");
+    }
+  }, [serverUrl]);
+
+  useEffect(() => { checkHealth(); }, [checkHealth]);
+
+  useEffect(() => {
+    const interval = setInterval(checkHealth, 60000);
+    return () => clearInterval(interval);
+  }, [checkHealth]);
+
+  return (
+    <div className="flex items-center gap-2 mt-2" data-testid="ntp-health-indicator">
+      {status === "checking" && <><Loader2 className="h-4 w-4 animate-spin text-yellow-500" /><span className="text-sm text-yellow-500">Checking NTP server...</span></>}
+      {status === "reachable" && <><CheckCircle2 className="h-4 w-4 text-green-500" /><span className="text-sm text-green-500">NTP server reachable</span></>}
+      {status === "unreachable" && <><XCircle className="h-4 w-4 text-red-500" /><span className="text-sm text-red-500">NTP server unreachable</span></>}
+      {status === "unknown" && <><AlertCircle className="h-4 w-4 text-muted-foreground" /><span className="text-sm text-muted-foreground">NTP status unknown</span></>}
+      <Button variant="ghost" size="sm" onClick={checkHealth} className="h-6 px-2 text-xs" data-testid="button-refresh-ntp">
+        Refresh
+      </Button>
+    </div>
+  );
+}
+
+interface SystemSettings {
+  support_email: string;
+  privacy_policy: string;
+  terms_conditions: string;
+  ntp_server_url: string;
+  organization_timezone: string;
+  config_version: number;
+}
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -31,8 +152,13 @@ export default function SettingsPage() {
   const [supportEmail, setSupportEmail] = useState("");
   const [privacyPolicy, setPrivacyPolicy] = useState("");
   const [termsConditions, setTermsConditions] = useState("");
+  const [ntpServerUrl, setNtpServerUrl] = useState("time.google.com");
+  const [customNtpServer, setCustomNtpServer] = useState("");
+  const [useCustomNtp, setUseCustomNtp] = useState(false);
+  const [organizationTimezone, setOrganizationTimezone] = useState("Asia/Riyadh");
+  const [timezoneSearch, setTimezoneSearch] = useState("");
 
-  const { data: systemSettings } = useQuery<{ support_email: string; privacy_policy: string; terms_conditions: string }>({
+  const { data: systemSettings } = useQuery<SystemSettings>({
     queryKey: ["/api/settings/system"],
     queryFn: () => apiRequest("GET", "/api/settings/system").then(r => r.json()),
   });
@@ -42,11 +168,21 @@ export default function SettingsPage() {
       setSupportEmail(systemSettings.support_email ?? "");
       setPrivacyPolicy(systemSettings.privacy_policy ?? "");
       setTermsConditions(systemSettings.terms_conditions ?? "");
+      const ntpUrl = systemSettings.ntp_server_url ?? "time.google.com";
+      if (ALL_NTP_VALUES.includes(ntpUrl)) {
+        setNtpServerUrl(ntpUrl);
+        setUseCustomNtp(false);
+      } else {
+        setCustomNtpServer(ntpUrl);
+        setUseCustomNtp(true);
+        setNtpServerUrl("custom");
+      }
+      setOrganizationTimezone(systemSettings.organization_timezone ?? "Asia/Riyadh");
     }
   }, [systemSettings]);
 
   const saveSettings = useMutation({
-    mutationFn: (data: { support_email: string; privacy_policy: string; terms_conditions: string }) =>
+    mutationFn: (data: Record<string, string>) =>
       apiRequest("PATCH", "/api/settings/system", data).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/settings/system"] });
@@ -56,8 +192,21 @@ export default function SettingsPage() {
   });
 
   const handleSave = () => {
-    saveSettings.mutate({ support_email: supportEmail, privacy_policy: privacyPolicy, terms_conditions: termsConditions });
+    const effectiveNtpServer = useCustomNtp ? customNtpServer : ntpServerUrl;
+    saveSettings.mutate({
+      support_email: supportEmail,
+      privacy_policy: privacyPolicy,
+      terms_conditions: termsConditions,
+      ntp_server_url: effectiveNtpServer,
+      organization_timezone: organizationTimezone,
+    });
   };
+
+  const effectiveNtpUrl = useCustomNtp ? customNtpServer : ntpServerUrl;
+
+  const filteredTimezones = timezoneSearch
+    ? ALL_TIMEZONES.filter(tz => tz.toLowerCase().includes(timezoneSearch.toLowerCase()))
+    : ALL_TIMEZONES;
 
   return (
     <DashboardLayout>
@@ -238,6 +387,97 @@ export default function SettingsPage() {
                     <Switch />
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-xl text-white">Time & Clock Security</CardTitle>
+                </div>
+                <CardDescription>Configure NTP server and organization timezone for clock tampering detection on mobile devices.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-white">NTP Server</Label>
+                    <Select
+                      value={useCustomNtp ? "custom" : ntpServerUrl}
+                      onValueChange={(val) => {
+                        if (val === "custom") {
+                          setUseCustomNtp(true);
+                          setNtpServerUrl("custom");
+                        } else {
+                          setUseCustomNtp(false);
+                          setNtpServerUrl(val);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="bg-muted/30 border-border" data-testid="select-ntp-server">
+                        <SelectValue placeholder="Select NTP server" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {NTP_SERVERS.map(group => (
+                          <SelectGroup key={group.group}>
+                            <SelectLabel>{group.group}</SelectLabel>
+                            {group.servers.map(s => (
+                              <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                        ))}
+                        <SelectGroup>
+                          <SelectLabel>Other</SelectLabel>
+                          <SelectItem value="custom">Custom URL...</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    {useCustomNtp && (
+                      <Input
+                        placeholder="e.g., ntp.mycompany.com"
+                        value={customNtpServer}
+                        onChange={(e) => setCustomNtpServer(e.target.value)}
+                        className="bg-muted/30 border-border mt-2"
+                        data-testid="input-custom-ntp"
+                      />
+                    )}
+                    <NtpHealthIndicator serverUrl={effectiveNtpUrl} />
+                    <p className="text-xs text-muted-foreground">Used by mobile devices to get trusted time independent of the device clock.</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-white">Organization Timezone</Label>
+                    <Select value={organizationTimezone} onValueChange={setOrganizationTimezone}>
+                      <SelectTrigger className="bg-muted/30 border-border" data-testid="select-timezone">
+                        <SelectValue placeholder="Select timezone" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <div className="p-2">
+                          <Input
+                            placeholder="Search timezones..."
+                            value={timezoneSearch}
+                            onChange={(e) => setTimezoneSearch(e.target.value)}
+                            className="h-8 bg-muted/30 border-border"
+                            data-testid="input-timezone-search"
+                          />
+                        </div>
+                        {filteredTimezones.map(tz => (
+                          <SelectItem key={tz} value={tz}>
+                            {tz} ({getUtcOffset(tz)})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      All attendance times are displayed in this timezone. Uses IANA timezone names (handles DST automatically).
+                    </p>
+                  </div>
+                </div>
+                {systemSettings?.config_version && (
+                  <p className="text-xs text-muted-foreground">
+                    Config version: {systemSettings.config_version} — Mobile devices automatically pick up changes on next sync.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

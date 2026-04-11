@@ -14,6 +14,7 @@ import com.google.gson.Gson
 import com.luxurycarts.workforce.WorkforceApp
 import com.luxurycarts.workforce.data.ApiClient
 import com.luxurycarts.workforce.data.ApiService
+import com.luxurycarts.workforce.data.LoginRequest
 import com.luxurycarts.workforce.data.User
 import com.luxurycarts.workforce.data.WorkforceRecord
 import com.luxurycarts.workforce.services.SyncWorker
@@ -47,22 +48,87 @@ fun AppNavigation() {
             user = Gson().fromJson(it, User::class.java)
         }
         if (app.sessionManager.serverUrl.isNotEmpty()) {
-            apiService = ApiClient.create(app.sessionManager.serverUrl)
+            val api = ApiClient.create(app.sessionManager.serverUrl) { cookie ->
+                app.sessionManager.authCookie = cookie
+            }
+            ApiClient.onSessionTerminated = {
+                SyncWorker.cancel(app)
+                app.sessionManager.clear()
+                ApiClient.reset()
+                isLoggedIn = false
+                user = null
+                workforceRecord = null
+                apiService = null
+            }
+            val savedCookie = app.sessionManager.authCookie
+            if (savedCookie != null) {
+                ApiClient.restoreCookie(app.sessionManager.serverUrl, savedCookie)
+            }
+            apiService = api
         }
     }
 
     LaunchedEffect(isLoggedIn, apiService) {
-        if (isLoggedIn && apiService != null && workforceRecord == null) {
-            val candidateId = app.sessionManager.candidateId
-            if (candidateId != null) {
-                try {
-                    val resp = apiService!!.getWorkforceRecords(candidateId)
-                    if (resp.isSuccessful) {
-                        val records = resp.body() ?: emptyList()
-                        workforceRecord = records.firstOrNull { it.isActive } ?: records.firstOrNull()
+        if (isLoggedIn && apiService != null) {
+            if (app.sessionManager.authCookie == null) {
+                val cachedId = app.sessionManager.cachedIdentifier
+                val cachedPw = app.sessionManager.cachedCredential
+                if (cachedId != null && cachedPw != null) {
+                    try {
+                        val resp = apiService!!.login(LoginRequest(cachedId, cachedPw))
+                        if (!resp.isSuccessful) {
+                            app.sessionManager.clear()
+                            ApiClient.reset()
+                            isLoggedIn = false
+                            user = null
+                            workforceRecord = null
+                            apiService = null
+                            return@LaunchedEffect
+                        }
+                    } catch (_: Exception) {
+                        app.sessionManager.clear()
+                        ApiClient.reset()
+                        isLoggedIn = false
+                        user = null
+                        workforceRecord = null
+                        apiService = null
+                        return@LaunchedEffect
                     }
-                } catch (_: Exception) {}
+                } else {
+                    app.sessionManager.clear()
+                    ApiClient.reset()
+                    isLoggedIn = false
+                    user = null
+                    workforceRecord = null
+                    apiService = null
+                    return@LaunchedEffect
+                }
             }
+
+            if (workforceRecord == null) {
+                val candidateId = app.sessionManager.candidateId
+                if (candidateId != null) {
+                    try {
+                        val resp = apiService!!.getWorkforceRecords(candidateId)
+                        if (resp.isSuccessful) {
+                            val records = resp.body() ?: emptyList()
+                            workforceRecord = records.firstOrNull { it.isActive } ?: records.firstOrNull()
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+            try {
+                val configResp = apiService!!.getMobileConfig()
+                if (configResp.isSuccessful) {
+                    val config = configResp.body()
+                    if (config != null) {
+                        app.ntpTimeService.ntpServerUrl = config.ntpServerUrl
+                        app.ntpTimeService.organizationTimezone = config.organizationTimezone
+                        app.ntpTimeService.configVersion = config.configVersion
+                    }
+                }
+            } catch (_: Exception) {}
+            app.ntpTimeService.syncNtp()
         }
     }
 

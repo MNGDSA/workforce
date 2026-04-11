@@ -3,6 +3,8 @@ package com.luxurycarts.workforce.data
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody
@@ -38,6 +40,9 @@ interface ApiService {
     @GET("api/portal/schedule/{workforceId}")
     suspend fun getSchedule(@Path("workforceId") workforceId: String): Response<List<ScheduleEntry>>
 
+    @GET("api/config/mobile")
+    suspend fun getMobileConfig(): Response<MobileConfigResponse>
+
     @Multipart
     @POST("api/attendance-mobile/submit")
     suspend fun submitAttendance(
@@ -49,8 +54,12 @@ interface ApiService {
         @Part photo: MultipartBody.Part,
         @Part("mockLocationDetected") mockLocationDetected: RequestBody,
         @Part("isEmulator") isEmulator: RequestBody,
+        @Part("rootDetected") rootDetected: RequestBody,
         @Part("locationProvider") locationProvider: RequestBody,
         @Part("deviceFingerprint") deviceFingerprint: RequestBody,
+        @Part("ntpTimestamp") ntpTimestamp: RequestBody,
+        @Part("systemClockTimestamp") systemClockTimestamp: RequestBody,
+        @Part("lastNtpSyncAt") lastNtpSyncAt: RequestBody,
     ): Response<SubmissionResponse>
 
     @GET("api/geofence-zones")
@@ -80,14 +89,27 @@ interface ApiService {
     ): Response<List<PhotoChangeRequest>>
 }
 
-class InMemoryCookieJar : CookieJar {
+class PersistentCookieJar(private val onCookieSaved: ((String) -> Unit)? = null) : CookieJar {
     private val store = mutableListOf<Cookie>()
+
+    fun restoreCookie(baseUrl: String, cookieString: String) {
+        try {
+            val url = baseUrl.toHttpUrlOrNull() ?: return
+            val cookie = Cookie.parse(url, cookieString) ?: return
+            store.removeAll { it.name == cookie.name && it.domain == cookie.domain }
+            store.add(cookie)
+        } catch (_: Exception) { }
+    }
 
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
         store.removeAll { existing ->
             cookies.any { it.name == existing.name && it.domain == existing.domain }
         }
         store.addAll(cookies)
+        val authCookie = cookies.find { it.name == "wf_auth" }
+        if (authCookie != null) {
+            onCookieSaved?.invoke("wf_auth=${authCookie.value}")
+        }
     }
 
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
@@ -99,16 +121,37 @@ class InMemoryCookieJar : CookieJar {
 object ApiClient {
     private var currentService: ApiService? = null
     private var currentBaseUrl: String? = null
+    private var cookieJar: PersistentCookieJar? = null
+    var onSessionTerminated: (() -> Unit)? = null
+    @Volatile
+    var isSyncInProgress: Boolean = false
 
-    fun create(baseUrl: String): ApiService {
+    fun create(baseUrl: String, onCookieSaved: ((String) -> Unit)? = null): ApiService {
         if (currentService != null && currentBaseUrl == baseUrl) {
             return currentService!!
         }
 
         val url = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
 
+        val jar = PersistentCookieJar(onCookieSaved)
+        cookieJar = jar
+
+        val terminationInterceptor = Interceptor { chain ->
+            val request = chain.request()
+            val isAuthRequest = request.url.encodedPath.contains("/api/auth/")
+            val response = chain.proceed(request)
+            if (!isAuthRequest && !isSyncInProgress && (response.code == 403 || response.code == 401)) {
+                val body = response.peekBody(1024).string()
+                if (body.contains("terminated") || body.contains("disabled") || body.contains("Account is disabled")) {
+                    onSessionTerminated?.invoke()
+                }
+            }
+            response
+        }
+
         val client = OkHttpClient.Builder()
-            .cookieJar(InMemoryCookieJar())
+            .cookieJar(jar)
+            .addInterceptor(terminationInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
@@ -126,8 +169,13 @@ object ApiClient {
         return service
     }
 
+    fun restoreCookie(baseUrl: String, cookieString: String) {
+        cookieJar?.restoreCookie(baseUrl, cookieString)
+    }
+
     fun reset() {
         currentService = null
         currentBaseUrl = null
+        cookieJar = null
     }
 }

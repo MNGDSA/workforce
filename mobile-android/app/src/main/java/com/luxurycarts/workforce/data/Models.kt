@@ -158,3 +158,9 @@ data class StatusCheckResult(
     @SerializedName("reviewNotes") val reviewNotes: String? = null,
     @SerializedName("rekognitionConfidence") val rekognitionConfidence: String? = null,
 )
+
+data class MobileConfigResponse(
+    @SerializedName("ntp_server_url") val ntpServerUrl: String,
+    @SerializedName("organization_timezone") val organizationTimezone: String,
+    @SerializedName("config_version") val configVersion: Int,
+)

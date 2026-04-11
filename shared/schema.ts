@@ -1258,8 +1258,13 @@ export const attendanceSubmissions = pgTable(
     referencePhotoUrl: text("reference_photo_url"),
     mockLocationDetected: boolean("mock_location_detected"),
     isEmulator: boolean("is_emulator"),
+    rootDetected: boolean("root_detected"),
     locationProvider: varchar("location_provider", { length: 32 }),
     deviceFingerprint: text("device_fingerprint"),
+    serverReceivedAt: timestamp("server_received_at"),
+    ntpTimestamp: timestamp("ntp_timestamp"),
+    systemClockTimestamp: timestamp("system_clock_timestamp"),
+    lastNtpSyncAt: timestamp("last_ntp_sync_at"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
   },
   (t) => ({

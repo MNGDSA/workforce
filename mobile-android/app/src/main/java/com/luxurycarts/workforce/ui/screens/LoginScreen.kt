@@ -47,6 +47,7 @@ import com.luxurycarts.workforce.data.ApiService
 import com.luxurycarts.workforce.data.LoginRequest
 import com.luxurycarts.workforce.data.User
 import com.luxurycarts.workforce.data.WorkforceRecord
+import com.luxurycarts.workforce.services.SyncWorker
 import com.luxurycarts.workforce.ui.components.WorkforceLogo
 import com.luxurycarts.workforce.ui.theme.Background
 import com.luxurycarts.workforce.ui.theme.Card
@@ -165,7 +166,14 @@ fun LoginScreen(
                     errorMessage = null
                     scope.launch {
                         try {
-                            val api = ApiClient.create(serverUrl.trim())
+                            val api = ApiClient.create(serverUrl.trim()) { cookie ->
+                                app.sessionManager.authCookie = cookie
+                            }
+                            ApiClient.onSessionTerminated = {
+                                SyncWorker.cancel(app)
+                                app.sessionManager.clear()
+                                ApiClient.reset()
+                            }
                             val response = api.login(LoginRequest(identifier.trim(), password))
                             if (response.isSuccessful && response.body() != null) {
                                 val body = response.body()!!
@@ -191,6 +199,21 @@ fun LoginScreen(
                                 app.sessionManager.loginTimestamp = System.currentTimeMillis()
                                 app.sessionManager.workforceId = activeRecord.id
                                 app.sessionManager.employeeNumber = activeRecord.employeeNumber
+                                app.sessionManager.cachedIdentifier = identifier.trim()
+                                app.sessionManager.cachedCredential = password
+
+                                try {
+                                    val configResp = api.getMobileConfig()
+                                    if (configResp.isSuccessful) {
+                                        val config = configResp.body()
+                                        if (config != null) {
+                                            app.ntpTimeService.ntpServerUrl = config.ntpServerUrl
+                                            app.ntpTimeService.organizationTimezone = config.organizationTimezone
+                                            app.ntpTimeService.configVersion = config.configVersion
+                                        }
+                                    }
+                                } catch (_: Exception) { }
+                                app.ntpTimeService.syncNtp()
 
                                 onLoginSuccess(body.user, activeRecord, api)
                             } else {

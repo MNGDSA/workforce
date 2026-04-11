@@ -32,8 +32,12 @@ data class AttendanceEntity(
     @ColumnInfo(name = "rekognition_confidence") val rekognitionConfidence: String? = null,
     @ColumnInfo(name = "mock_location_detected") val mockLocationDetected: Boolean = false,
     @ColumnInfo(name = "is_emulator") val isEmulator: Boolean = false,
+    @ColumnInfo(name = "root_detected") val rootDetected: Boolean = false,
     @ColumnInfo(name = "location_provider") val locationProvider: String? = null,
     @ColumnInfo(name = "device_fingerprint") val deviceFingerprint: String? = null,
+    @ColumnInfo(name = "ntp_timestamp") val ntpTimestamp: String? = null,
+    @ColumnInfo(name = "system_clock_timestamp") val systemClockTimestamp: String? = null,
+    @ColumnInfo(name = "last_ntp_sync_at") val lastNtpSyncAt: String? = null,
 )
 
 @Dao
@@ -70,7 +74,7 @@ interface AttendanceDao {
     suspend fun deleteAllForUser(workforceId: String)
 }
 
-@Database(entities = [AttendanceEntity::class], version = 5, exportSchema = false)
+@Database(entities = [AttendanceEntity::class], version = 6, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun attendanceDao(): AttendanceDao
 

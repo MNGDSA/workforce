@@ -44,11 +44,23 @@ class SessionManager(context: Context) {
         get() = prefs.getLong("login_timestamp", 0)
         set(value) = prefs.edit().putLong("login_timestamp", value).apply()
 
+    var authCookie: String?
+        get() = prefs.getString("auth_cookie", null)
+        set(value) = prefs.edit().putString("auth_cookie", value).apply()
+
+    var cachedIdentifier: String?
+        get() = prefs.getString("cached_identifier", null)
+        set(value) = prefs.edit().putString("cached_identifier", value).apply()
+
+    var cachedCredential: String?
+        get() = prefs.getString("cached_password_hash", null)
+        set(value) = prefs.edit().putString("cached_password_hash", value).apply()
+
     val isSessionValid: Boolean
         get() {
             if (userJson == null) return false
             val elapsed = System.currentTimeMillis() - loginTimestamp
-            return elapsed < 24 * 60 * 60 * 1000
+            return elapsed < 7 * 24 * 60 * 60 * 1000
         }
 
     fun clear() {

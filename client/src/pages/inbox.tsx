@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
-const SECURITY_KEYWORDS = /emulator detected|mock.*location|fake.*location|spoofing/gi;
+const SECURITY_KEYWORDS = /emulator detected|mock.*location|fake.*location|spoofing|root|magisk|rooted|tamper|clock tampering/gi;
 
 function highlightSecurityFlags(text: string): React.ReactNode {
   if (!SECURITY_KEYWORDS.test(text)) return text;

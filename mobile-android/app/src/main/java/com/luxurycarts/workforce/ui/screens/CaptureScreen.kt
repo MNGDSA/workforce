@@ -210,7 +210,22 @@ fun CaptureScreen(
 
                                 val location = getLocation(context)
 
+                                val app = context.applicationContext as com.luxurycarts.workforce.WorkforceApp
+                                val ntpService = app.ntpTimeService
+
+                                if (!ntpService.hasEverSynced) {
+                                    photoFile.delete()
+                                    errorMessage = "Internet connection required for first-time setup. Please connect to the internet and try again."
+                                    isCapturing = false
+                                    return@launch
+                                }
+
                                 val trustReport = DeviceTrustManager.generateReport(context, location.fourth)
+                                val trustedInstant = ntpService.getTrustedInstant() ?: Instant.now()
+                                val systemClockInstant = Instant.now()
+                                val lastNtpSync = ntpService.getLastNtpSyncInstant()
+                                val timezone = ntpService.organizationTimezone
+                                val attendanceDate = trustedInstant.atZone(java.time.ZoneId.of(timezone)).toLocalDate().toString()
 
                                 val encPhotoPath = photoFile.absolutePath + ".enc"
                                 EncryptionService.encryptFile(photoFile.absolutePath, encPhotoPath)
@@ -219,8 +234,8 @@ fun CaptureScreen(
                                 val entity = AttendanceEntity(
                                     id = UUID.randomUUID().toString(),
                                     workforceId = EncryptionService.encrypt(workforceId),
-                                    attendanceDate = LocalDate.now().toString(),
-                                    encryptedTimestamp = EncryptionService.encrypt(Instant.now().toString()),
+                                    attendanceDate = attendanceDate,
+                                    encryptedTimestamp = EncryptionService.encrypt(trustedInstant.toString()),
                                     encryptedGpsLat = EncryptionService.encrypt(location.first.toString()),
                                     encryptedGpsLng = EncryptionService.encrypt(location.second.toString()),
                                     gpsAccuracy = location.third,
@@ -228,8 +243,12 @@ fun CaptureScreen(
                                     ownerWorkforceId = workforceId,
                                     mockLocationDetected = trustReport.mockLocationDetected,
                                     isEmulator = trustReport.isEmulator,
+                                    rootDetected = trustReport.rootDetected,
                                     locationProvider = trustReport.locationProvider,
                                     deviceFingerprint = trustReport.deviceFingerprint,
+                                    ntpTimestamp = trustedInstant.toString(),
+                                    systemClockTimestamp = systemClockInstant.toString(),
+                                    lastNtpSyncAt = lastNtpSync?.toString(),
                                 )
                                 dao.insert(entity)
                                 SyncWorker.syncNow(context)

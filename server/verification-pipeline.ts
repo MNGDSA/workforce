@@ -6,10 +6,26 @@ import {
   workforce,
   candidates,
   inboxItems,
+  systemSettings,
   type GeofenceZone,
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { compareFaces } from "./rekognition";
+
+async function getOrgTimezone(): Promise<string> {
+  try {
+    const [row] = await db.select().from(systemSettings).where(eq(systemSettings.key, "organization_timezone"));
+    return row?.value ?? "Asia/Riyadh";
+  } catch { return "Asia/Riyadh"; }
+}
+
+function formatInTimezone(date: Date, timezone: string): { dateStr: string; timeStr: string } {
+  const formatter = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" });
+  const dateStr = formatter.format(date);
+  const timeFmt = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hour12: false });
+  const timeStr = timeFmt.format(date);
+  return { dateStr, timeStr };
+}
 
 function haversineDistance(
   lat1: number, lng1: number,
@@ -101,8 +117,9 @@ export async function runVerificationPipeline(submissionId: string): Promise<{
 
   const hasMockLocation = submission.mockLocationDetected === true;
   const hasEmulator = submission.isEmulator === true;
+  const hasRoot = submission.rootDetected === true;
   const faceOk = !faceError && confidence >= 95;
-  const isVerified = faceOk && gpsInside && !hasMockLocation && !hasEmulator;
+  const isVerified = faceOk && gpsInside && !hasMockLocation && !hasEmulator && !hasRoot;
 
   const flagReasons: string[] = [];
   if (faceError === "no_reference_photo") flagReasons.push("No reference photo on file");
@@ -111,25 +128,34 @@ export async function runVerificationPipeline(submissionId: string): Promise<{
   if (!gpsInside) flagReasons.push("GPS location outside all geofence zones");
   if (hasMockLocation) flagReasons.push("Mock/fake GPS location detected on device");
   if (hasEmulator) flagReasons.push("Android emulator detected — possible spoofing attempt");
+  if (hasRoot) flagReasons.push("Rooted/Magisk device detected — possible tampering attempt");
 
   const status = isVerified ? "verified" : "flagged";
   const flagReason = flagReasons.length > 0 ? flagReasons.join("; ") : undefined;
 
+  const existingFlagReason = submission.flagReason;
+  const wasAlreadyFlagged = submission.status === "flagged" && existingFlagReason;
+  let mergedFlagReason = flagReason ?? null;
+  if (wasAlreadyFlagged) {
+    mergedFlagReason = existingFlagReason + (flagReason ? "; " + flagReason : "");
+  }
+  const finalStatus = wasAlreadyFlagged ? "flagged" : (status as "verified" | "flagged");
+
   const updateData: Partial<typeof attendanceSubmissions.$inferInsert> & { verifiedAt?: Date } = {
-    status: status as "verified" | "flagged",
+    status: finalStatus,
     rekognitionConfidence: String(confidence),
     gpsInsideGeofence: gpsInside,
     matchedGeofenceId: gpsResult?.zone.id ?? null,
     referencePhotoUrl,
-    flagReason: flagReason ?? null,
+    flagReason: mergedFlagReason,
   };
 
-  if (isVerified) {
+  if (finalStatus === "verified") {
     updateData.verifiedAt = new Date();
 
+    const orgTz = await getOrgTimezone();
     const submittedTime = submission.submittedAt ? new Date(submission.submittedAt) : new Date();
-    const dateStr = submittedTime.toISOString().split("T")[0];
-    const clockIn = submittedTime.toTimeString().slice(0, 5);
+    const { dateStr, timeStr: clockIn } = formatInTimezone(submittedTime, orgTz);
 
     const existing = await db
       .select()
@@ -178,6 +204,7 @@ export async function runVerificationPipeline(submissionId: string): Promise<{
         gpsInside,
         mockLocationDetected: submission.mockLocationDetected,
         isEmulator: submission.isEmulator,
+        rootDetected: submission.rootDetected,
         locationProvider: submission.locationProvider,
         deviceFingerprint: submission.deviceFingerprint,
       },
@@ -205,8 +232,8 @@ export async function approveSubmission(
   if (!submission) throw new Error("Submission not found");
   if (submission.status !== "flagged") throw new Error("Only flagged submissions can be approved");
 
-  const dateStr = submission.submittedAt.toISOString().split("T")[0];
-  const clockIn = submission.submittedAt.toTimeString().slice(0, 5);
+  const orgTz = await getOrgTimezone();
+  const { dateStr, timeStr: clockIn } = formatInTimezone(submission.submittedAt, orgTz);
 
   const existing = await db
     .select()
