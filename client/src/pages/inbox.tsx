@@ -67,6 +67,8 @@ import {
   ShieldAlert,
   User,
   AlertTriangle,
+  ImageIcon,
+  ArrowRight,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
@@ -101,6 +103,7 @@ const TYPE_META: Record<string, { label: string; icon: React.ElementType; color:
   candidate_flag: { label: "Candidate Flag", icon: Flag, color: "text-red-400" },
   event_alert: { label: "Event Alert", icon: Calendar, color: "text-violet-400" },
   attendance_verification: { label: "Attendance", icon: Eye, color: "text-teal-400" },
+  photo_change_request: { label: "Photo Change", icon: ImageIcon, color: "text-purple-400" },
   general_request: { label: "General Request", icon: Clipboard, color: "text-slate-300" },
   system: { label: "System", icon: Monitor, color: "text-gray-400" },
 };
@@ -233,6 +236,28 @@ export default function InboxPage() {
     onError: () => toast({ title: "Failed to reject attendance", variant: "destructive" }),
   });
 
+  const approvePhotoChangeMut = useMutation({
+    mutationFn: (params: { changeRequestId: string; notes: string }) =>
+      apiRequest("POST", `/api/photo-change-requests/${params.changeRequestId}/approve`, { notes: params.notes }),
+    onSuccess: () => {
+      invalidateInbox(); setExpandedId(null); setActionNotes("");
+      setConfirmDialog({ open: false, action: null, entityId: null, inboxItemId: null }); setConfirmNotes("");
+      toast({ title: "Photo change approved" });
+    },
+    onError: () => toast({ title: "Failed to approve photo change", variant: "destructive" }),
+  });
+
+  const rejectPhotoChangeMut = useMutation({
+    mutationFn: (params: { changeRequestId: string; notes: string }) =>
+      apiRequest("POST", `/api/photo-change-requests/${params.changeRequestId}/reject`, { notes: params.notes }),
+    onSuccess: () => {
+      invalidateInbox(); setExpandedId(null); setActionNotes("");
+      setConfirmDialog({ open: false, action: null, entityId: null, inboxItemId: null }); setConfirmNotes("");
+      toast({ title: "Photo change rejected" });
+    },
+    onError: () => toast({ title: "Failed to reject photo change", variant: "destructive" }),
+  });
+
   const openConfirmDialog = (action: "approve" | "reject", entityId: string, inboxItemId: string) => {
     setConfirmNotes("");
     setConfirmDialog({ open: true, action, entityId, inboxItemId });
@@ -240,10 +265,22 @@ export default function InboxPage() {
 
   const executeConfirmAction = () => {
     if (!confirmDialog.entityId || !confirmDialog.action || !confirmNotes.trim()) return;
-    if (confirmDialog.action === "approve") {
-      approveAttendanceMut.mutate({ entityId: confirmDialog.entityId, notes: confirmNotes.trim() });
+    const inboxItem = rawData?.data?.find((i: InboxItem) => i.id === confirmDialog.inboxItemId);
+    const isPhotoChange = inboxItem?.type === "photo_change_request";
+    if (isPhotoChange) {
+      const changeRequestId = inboxItem?.metadata?.changeRequestId;
+      if (!changeRequestId) return;
+      if (confirmDialog.action === "approve") {
+        approvePhotoChangeMut.mutate({ changeRequestId, notes: confirmNotes.trim() });
+      } else {
+        rejectPhotoChangeMut.mutate({ changeRequestId, notes: confirmNotes.trim() });
+      }
     } else {
-      rejectAttendanceMut.mutate({ entityId: confirmDialog.entityId, notes: confirmNotes.trim() });
+      if (confirmDialog.action === "approve") {
+        approveAttendanceMut.mutate({ entityId: confirmDialog.entityId, notes: confirmNotes.trim() });
+      } else {
+        rejectAttendanceMut.mutate({ entityId: confirmDialog.entityId, notes: confirmNotes.trim() });
+      }
     }
   };
 
@@ -641,7 +678,60 @@ export default function InboxPage() {
                         </div>
                       )}
 
-                      {item.body && (
+                      {item.type === "photo_change_request" && item.metadata && (
+                        <div className="space-y-4" data-testid={`photo-review-${item.id}`}>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                <User className="h-3.5 w-3.5" /> Current Photo
+                              </span>
+                              {item.metadata.previousPhotoUrl ? (
+                                <div className="relative rounded-md overflow-hidden border border-border bg-muted/20 aspect-square max-w-[200px]">
+                                  <img
+                                    src={item.metadata.previousPhotoUrl}
+                                    alt="Current photo"
+                                    className="w-full h-full object-cover"
+                                    data-testid={`img-current-photo-${item.id}`}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-center rounded-md border border-dashed border-border bg-muted/10 aspect-square max-w-[200px]">
+                                  <span className="text-xs text-muted-foreground">No current photo</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                <ImageIcon className="h-3.5 w-3.5" /> New Photo
+                              </span>
+                              {item.metadata.newPhotoUrl ? (
+                                <div className="relative rounded-md overflow-hidden border-2 border-primary/50 bg-muted/20 aspect-square max-w-[200px]">
+                                  <img
+                                    src={item.metadata.newPhotoUrl}
+                                    alt="New photo"
+                                    className="w-full h-full object-cover"
+                                    data-testid={`img-new-photo-${item.id}`}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-center rounded-md border border-dashed border-border bg-muted/10 aspect-square max-w-[200px]">
+                                  <span className="text-xs text-muted-foreground">No new photo</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 text-sm">
+                            <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Employee</span>
+                              <p className="text-sm font-medium text-foreground mt-0.5" data-testid={`text-photo-employee-${item.id}`}>
+                                {item.metadata.candidateName ?? "Unknown"}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {item.body && item.type !== "photo_change_request" && (
                         <div>
                           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Details</span>
                           <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">{highlightSecurityFlags(item.body)}</p>
@@ -657,7 +747,7 @@ export default function InboxPage() {
 
                       {isPending && (
                         <div className="space-y-3 pt-2 border-t border-border/50">
-                          {item.type !== "attendance_verification" && (
+                          {item.type !== "attendance_verification" && item.type !== "photo_change_request" && (
                             <div>
                               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Notes (optional)</label>
                               <Textarea
@@ -690,6 +780,28 @@ export default function InboxPage() {
                                   data-testid={`button-reject-attendance-${item.id}`}
                                 >
                                   <XCircle className="h-4 w-4" /> Reject Attendance
+                                </Button>
+                              </>
+                            ) : item.type === "photo_change_request" && item.metadata?.changeRequestId ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                                  onClick={() => openConfirmDialog("approve", item.metadata!.changeRequestId, item.id)}
+                                  disabled={approvePhotoChangeMut.isPending}
+                                  data-testid={`button-approve-photo-${item.id}`}
+                                >
+                                  <CheckCircle2 className="h-4 w-4" /> Approve Photo
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1.5 border-red-600/50 text-red-400 hover:bg-red-600/10"
+                                  onClick={() => openConfirmDialog("reject", item.metadata!.changeRequestId, item.id)}
+                                  disabled={rejectPhotoChangeMut.isPending}
+                                  data-testid={`button-reject-photo-${item.id}`}
+                                >
+                                  <XCircle className="h-4 w-4" /> Reject Photo
                                 </Button>
                               </>
                             ) : (
@@ -796,16 +908,28 @@ export default function InboxPage() {
                   <AlertTriangle className="h-5 w-5 text-red-400" />
                 )}
               </div>
-              <div>
-                <h3 className="text-base font-semibold text-foreground">
-                  {confirmDialog.action === "approve" ? "Approve Attendance" : "Reject Attendance"}
-                </h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {confirmDialog.action === "approve"
-                    ? "This will verify the attendance record and create a clock-in entry."
-                    : "This will reject the attendance submission. The employee will need to resubmit."}
-                </p>
-              </div>
+              {(() => {
+                const confirmItem = rawData?.data?.find((i: InboxItem) => i.id === confirmDialog.inboxItemId);
+                const isPhoto = confirmItem?.type === "photo_change_request";
+                return (
+                  <div>
+                    <h3 className="text-base font-semibold text-foreground">
+                      {confirmDialog.action === "approve"
+                        ? (isPhoto ? "Approve Photo Change" : "Approve Attendance")
+                        : (isPhoto ? "Reject Photo Change" : "Reject Attendance")}
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {confirmDialog.action === "approve"
+                        ? (isPhoto
+                          ? "This will replace the employee's current profile photo with the new one."
+                          : "This will verify the attendance record and create a clock-in entry.")
+                        : (isPhoto
+                          ? "This will reject the photo change. The employee's current photo will remain unchanged."
+                          : "This will reject the attendance submission. The employee will need to resubmit.")}
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
 
             <div>
@@ -816,10 +940,18 @@ export default function InboxPage() {
                 data-testid="textarea-confirm-notes"
                 value={confirmNotes}
                 onChange={e => setConfirmNotes(e.target.value)}
-                placeholder={confirmDialog.action === "approve"
-                  ? "e.g., Verified identity manually, photo matches..."
-                  : "e.g., Photo does not match reference, suspected proxy attendance..."
-                }
+                placeholder={(() => {
+                  const confirmItem = rawData?.data?.find((i: InboxItem) => i.id === confirmDialog.inboxItemId);
+                  const isPhoto = confirmItem?.type === "photo_change_request";
+                  if (confirmDialog.action === "approve") {
+                    return isPhoto
+                      ? "e.g., New photo meets standards, identity verified..."
+                      : "e.g., Verified identity manually, photo matches...";
+                  }
+                  return isPhoto
+                    ? "e.g., Photo is blurry, face not clearly visible..."
+                    : "e.g., Photo does not match reference, suspected proxy attendance...";
+                })()}
                 className="mt-1.5 bg-muted/30 border-border text-sm min-h-[80px]"
                 autoFocus
               />
@@ -839,7 +971,7 @@ export default function InboxPage() {
               </Button>
               <Button
                 size="sm"
-                disabled={!confirmNotes.trim() || approveAttendanceMut.isPending || rejectAttendanceMut.isPending}
+                disabled={!confirmNotes.trim() || approveAttendanceMut.isPending || rejectAttendanceMut.isPending || approvePhotoChangeMut.isPending || rejectPhotoChangeMut.isPending}
                 className={confirmDialog.action === "approve"
                   ? "gap-1.5 bg-emerald-600 hover:bg-emerald-700"
                   : "gap-1.5 bg-red-600 hover:bg-red-700"
@@ -847,7 +979,7 @@ export default function InboxPage() {
                 onClick={executeConfirmAction}
                 data-testid="button-confirm-action"
               >
-                {(approveAttendanceMut.isPending || rejectAttendanceMut.isPending) && (
+                {(approveAttendanceMut.isPending || rejectAttendanceMut.isPending || approvePhotoChangeMut.isPending || rejectPhotoChangeMut.isPending) && (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 )}
                 {confirmDialog.action === "approve" ? "Confirm Approval" : "Confirm Rejection"}
