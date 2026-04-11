@@ -44,9 +44,10 @@ export const testPlan = `
 27. [Browser] In the nationality field, type and select "Saudi Arabian" from the dropdown
 28. [Browser] In data-testid="input-dob", enter a valid date like "1995-01-15"
 29. [Browser] In the marital status field, select "Single"
-30. [Browser] In data-testid="select-region", select "Makkah Region" or first available option
-31. [Browser] Click data-testid="button-step1-next"
-32. [Verify]
+30. [Browser] In data-testid="select-city", select "Makkah"
+31. [Browser] In data-testid="select-region", select "Makkah"
+32. [Browser] Click data-testid="button-step1-next"
+33. [Verify]
    - Assert step 2 is now visible (data-testid="input-firstName" is no longer visible)
    - Assert data-testid="input-emergency-name" is visible (step 2 field)
    - Assert data-testid="input-emergency-phone" is visible (step 2 field)
@@ -55,96 +56,99 @@ export const testPlan = `
    - Assert data-testid="button-step2-back" is visible
 
 ### Test 4: Step 2 required field enforcement (emergency + IBAN are required)
-33. [New Context] Create a new browser context
-34. [Browser] Navigate to /auth
-35. [Browser] Enter "2000000004" in data-testid="input-identifier"
-36. [Browser] Enter "password123" in data-testid="input-password"
-37. [Browser] Click data-testid="button-sign-in"
-38. [Browser] Wait up to 5 seconds for navigation to /candidate-portal
-39. [Browser] Enter "Ahmed" in data-testid="input-firstName"
-40. [Browser] Enter "Al-Harbi" in data-testid="input-lastName"
-41. [Browser] Click data-testid="button-gender-male"
-42. [Browser] In the nationality field, type and select "Saudi Arabian" from the dropdown
-43. [Browser] In data-testid="input-dob", enter a valid date like "1995-01-15"
-44. [Browser] In the marital status field, select "Single"
-45. [Browser] In data-testid="select-region", select "Makkah Region"
-46. [Browser] Click data-testid="button-step1-next"
-47. [Browser] Wait for step 2 to load (data-testid="input-emergency-name" is visible)
-48. [Browser] Clear data-testid="input-emergency-name"
-49. [Browser] Clear data-testid="input-emergency-phone"
-50. [Browser] Clear data-testid="input-iban"
-51. [Browser] Click data-testid="button-step2-next"
-52. [Verify]
+34. [New Context] Create a new browser context
+35. [Browser] Navigate to /auth
+36. [Browser] Enter "2000000004" in data-testid="input-identifier"
+37. [Browser] Enter "password123" in data-testid="input-password"
+38. [Browser] Click data-testid="button-sign-in"
+39. [Browser] Wait up to 5 seconds for navigation to /candidate-portal
+40. [Browser] Enter "Ahmed" in data-testid="input-firstName"
+41. [Browser] Enter "Al-Harbi" in data-testid="input-lastName"
+42. [Browser] Click data-testid="button-gender-male"
+43. [Browser] In the nationality field, type and select "Saudi Arabian" from the dropdown
+44. [Browser] In data-testid="input-dob", enter a valid date like "1995-01-15"
+45. [Browser] In the marital status field, select "Single"
+46. [Browser] In data-testid="select-city", select "Makkah"
+47. [Browser] In data-testid="select-region", select "Makkah"
+48. [Browser] Click data-testid="button-step1-next"
+49. [Browser] Wait for step 2 to load (data-testid="input-emergency-name" is visible)
+50. [Browser] Clear data-testid="input-emergency-name"
+51. [Browser] Clear data-testid="input-emergency-phone"
+52. [Browser] Clear data-testid="input-iban"
+53. [Browser] Click data-testid="button-step2-next"
+54. [Verify]
    - Assert we remain on step 2 (data-testid="input-emergency-name" is still visible)
    - Assert validation errors appear for required fields (emergency contact name, phone, IBAN)
 
 ### Test 5: Fill step 2 required fields and advance to step 3
-53. [New Context] Create a new browser context
-54. [Browser] Navigate to /auth
-55. [Browser] Enter "2000000004" in data-testid="input-identifier"
-56. [Browser] Enter "password123" in data-testid="input-password"
-57. [Browser] Click data-testid="button-sign-in"
-58. [Browser] Wait up to 5 seconds for navigation to /candidate-portal
-59. [Browser] Enter "Ahmed" in data-testid="input-firstName"
-60. [Browser] Enter "Al-Harbi" in data-testid="input-lastName"
-61. [Browser] Click data-testid="button-gender-male"
-62. [Browser] In the nationality field, type and select "Saudi Arabian" from the dropdown
-63. [Browser] In data-testid="input-dob", enter a valid date like "1995-01-15"
-64. [Browser] In the marital status field, select "Single"
-65. [Browser] In data-testid="select-region", select "Makkah Region"
-66. [Browser] Click data-testid="button-step1-next"
-67. [Browser] Wait for step 2 to load
-68. [Browser] Enter "Mohammed Al-Harbi" in data-testid="input-emergency-name"
-69. [Browser] Enter "0512345678" in data-testid="input-emergency-phone"
-70. [Browser] Enter "Ahmed" in data-testid="input-iban-first-name"
-71. [Browser] Enter "Al-Harbi" in data-testid="input-iban-last-name"
-72. [Browser] Enter "SA0380000000608010167519" in data-testid="input-iban"
-73. [Browser] Click data-testid="button-step2-next"
-74. [Verify]
+55. [New Context] Create a new browser context
+56. [Browser] Navigate to /auth
+57. [Browser] Enter "2000000004" in data-testid="input-identifier"
+58. [Browser] Enter "password123" in data-testid="input-password"
+59. [Browser] Click data-testid="button-sign-in"
+60. [Browser] Wait up to 5 seconds for navigation to /candidate-portal
+61. [Browser] Enter "Ahmed" in data-testid="input-firstName"
+62. [Browser] Enter "Al-Harbi" in data-testid="input-lastName"
+63. [Browser] Click data-testid="button-gender-male"
+64. [Browser] In the nationality field, type and select "Saudi Arabian" from the dropdown
+65. [Browser] In data-testid="input-dob", enter a valid date like "1995-01-15"
+66. [Browser] In the marital status field, select "Single"
+67. [Browser] In data-testid="select-city", select "Makkah"
+68. [Browser] In data-testid="select-region", select "Makkah"
+69. [Browser] Click data-testid="button-step1-next"
+70. [Browser] Wait for step 2 to load
+71. [Browser] Enter "Mohammed Al-Harbi" in data-testid="input-emergency-name"
+72. [Browser] Enter "0512345678" in data-testid="input-emergency-phone"
+73. [Browser] Enter "Ahmed" in data-testid="input-iban-first-name"
+74. [Browser] Enter "Al-Harbi" in data-testid="input-iban-last-name"
+75. [Browser] Enter "SA0380000000608010167519" in data-testid="input-iban"
+76. [Browser] Click data-testid="button-step2-next"
+77. [Verify]
    - Assert step 3 is now visible
    - Assert data-testid="button-step3-submit" is visible
    - Assert data-testid="button-step3-back" is visible
 
 ### Test 6: Complete full wizard (all 3 steps) and verify portal loads
-75. [New Context] Create a new browser context
-76. [Browser] Navigate to /auth
-77. [Browser] Enter "2000000004" in data-testid="input-identifier"
-78. [Browser] Enter "password123" in data-testid="input-password"
-79. [Browser] Click data-testid="button-sign-in"
-80. [Browser] Wait up to 5 seconds for navigation to /candidate-portal
-81. [Browser] Enter "Ahmed" in data-testid="input-firstName"
-82. [Browser] Enter "Al-Harbi" in data-testid="input-lastName"
-83. [Browser] Click data-testid="button-gender-male"
-84. [Browser] In the nationality field, type and select "Saudi Arabian" from the dropdown
-85. [Browser] In data-testid="input-dob", enter a valid date like "1995-01-15"
-86. [Browser] In the marital status field, select "Single"
-87. [Browser] In data-testid="select-region", select "Makkah Region"
-88. [Browser] Click data-testid="button-step1-next"
-89. [Browser] Wait for step 2
-90. [Browser] Enter "Mohammed Al-Harbi" in data-testid="input-emergency-name"
-91. [Browser] Enter "0512345678" in data-testid="input-emergency-phone"
-92. [Browser] Enter "Ahmed" in data-testid="input-iban-first-name"
-93. [Browser] Enter "Al-Harbi" in data-testid="input-iban-last-name"
-94. [Browser] Enter "SA0380000000608010167519" in data-testid="input-iban"
-95. [Browser] Click data-testid="button-step2-next"
-96. [Browser] Wait for step 3
-97. [Browser] Click one of the education level buttons (data-testid starting with "button-edu-")
-98. [Browser] Click at least one language checkbox (data-testid starting with "checkbox-lang-")
-99. [Browser] Click data-testid="button-step3-submit"
-100. [Browser] Wait up to 5 seconds for the wizard to finish
-101. [Verify]
+78. [New Context] Create a new browser context
+79. [Browser] Navigate to /auth
+80. [Browser] Enter "2000000004" in data-testid="input-identifier"
+81. [Browser] Enter "password123" in data-testid="input-password"
+82. [Browser] Click data-testid="button-sign-in"
+83. [Browser] Wait up to 5 seconds for navigation to /candidate-portal
+84. [Browser] Enter "Ahmed" in data-testid="input-firstName"
+85. [Browser] Enter "Al-Harbi" in data-testid="input-lastName"
+86. [Browser] Click data-testid="button-gender-male"
+87. [Browser] In the nationality field, type and select "Saudi Arabian" from the dropdown
+88. [Browser] In data-testid="input-dob", enter a valid date like "1995-01-15"
+89. [Browser] In the marital status field, select "Single"
+90. [Browser] In data-testid="select-city", select "Makkah"
+91. [Browser] In data-testid="select-region", select "Makkah"
+92. [Browser] Click data-testid="button-step1-next"
+93. [Browser] Wait for step 2
+94. [Browser] Enter "Mohammed Al-Harbi" in data-testid="input-emergency-name"
+95. [Browser] Enter "0512345678" in data-testid="input-emergency-phone"
+96. [Browser] Enter "Ahmed" in data-testid="input-iban-first-name"
+97. [Browser] Enter "Al-Harbi" in data-testid="input-iban-last-name"
+98. [Browser] Enter "SA0380000000608010167519" in data-testid="input-iban"
+99. [Browser] Click data-testid="button-step2-next"
+100. [Browser] Wait for step 3
+101. [Browser] Click one of the education level buttons (data-testid starting with "button-edu-")
+102. [Browser] Click at least one language checkbox (data-testid starting with "checkbox-lang-")
+103. [Browser] Click data-testid="button-step3-submit"
+104. [Browser] Wait up to 5 seconds for the wizard to finish
+105. [Verify]
    - Assert the wizard is gone
    - Assert portal content loads (data-testid="text-portal-title" is visible)
    - Assert URL is still /candidate-portal
 
 ### Test 7: Completed-profile employee skips wizard entirely
-102. [New Context] Create a new browser context
-103. [Browser] Navigate to /auth
-104. [Browser] Enter "2000000002" in data-testid="input-identifier"
-105. [Browser] Enter "password123" in data-testid="input-password"
-106. [Browser] Click data-testid="button-sign-in"
-107. [Browser] Wait up to 5 seconds for navigation to /candidate-portal
-108. [Verify]
+106. [New Context] Create a new browser context
+107. [Browser] Navigate to /auth
+108. [Browser] Enter "2000000002" in data-testid="input-identifier"
+109. [Browser] Enter "password123" in data-testid="input-password"
+110. [Browser] Click data-testid="button-sign-in"
+111. [Browser] Wait up to 5 seconds for navigation to /candidate-portal
+112. [Verify]
    - Assert URL is /candidate-portal
    - Assert data-testid="text-portal-title" is visible (portal content, NOT wizard)
    - Assert data-testid="badge-portal-mode" is visible (employee mode badge)
@@ -164,9 +168,11 @@ Step 1 required fields (all must be filled to advance):
 - data-testid="input-lastName" (min 2 chars)
 - Gender: data-testid="button-gender-male" or "button-gender-female"
 - Nationality: searchable dropdown
-- data-testid="input-dob" (date picker, must be 18+)
-- Marital status: radio/button group
-- data-testid="select-region" (KSA region)
+- data-testid="input-dob" (date picker, must be 15+)
+- Marital status: radio/button group ("Single", "Married", "Divorced", "Widowed")
+- data-testid="select-city" (KSA city: "Makkah", "Madinah", "Jeddah", "Riyadh", etc.)
+- data-testid="select-region" (KSA region: "Riyadh", "Makkah", "Madinah", "Eastern Province", etc.)
+- data-testid="input-email" (optional)
 
 Step 2 required fields (validated by step2Schema):
 - data-testid="input-emergency-name" (min 2 chars)

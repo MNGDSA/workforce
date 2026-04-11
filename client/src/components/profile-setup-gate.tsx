@@ -196,9 +196,9 @@ function FieldWrapper({ label, required, children, error }: {
   );
 }
 
-function SelectField({ value, onChange, options, placeholder, error }: {
+function SelectField({ value, onChange, options, placeholder, error, "data-testid": dataTestId }: {
   value: string; onChange: (v: string) => void; options: string[];
-  placeholder?: string; error?: string;
+  placeholder?: string; error?: string; "data-testid"?: string;
 }) {
   return (
     <div className="space-y-1.5">
@@ -206,6 +206,7 @@ function SelectField({ value, onChange, options, placeholder, error }: {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full h-10 bg-muted/30 border border-border rounded-sm px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
+        data-testid={dataTestId}
       >
         <option value="" className="bg-card text-muted-foreground">{placeholder ?? "Select..."}</option>
         {options.map((o, i) =>
@@ -324,7 +325,7 @@ function Step1Form({
         </FieldWrapper>
         <FieldWrapper label="City of Residence" required error={errors.city?.message}>
           <Controller control={control} name="city" render={({ field }) => (
-            <SelectField value={field.value} onChange={field.onChange} options={KSA_CITIES} placeholder="Select city" />
+            <SelectField value={field.value} onChange={field.onChange} options={KSA_CITIES} placeholder="Select city" data-testid="select-city" />
           )} />
         </FieldWrapper>
       </div>
