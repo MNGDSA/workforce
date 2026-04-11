@@ -768,9 +768,11 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
     });
   }
 
-  // No candidate in localStorage → redirect to auth
+  useEffect(() => {
+    if (!candidate) setLocation("/auth");
+  }, [candidate, setLocation]);
+
   if (!candidate) {
-    setLocation("/auth");
     return null;
   }
 

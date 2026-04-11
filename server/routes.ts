@@ -183,27 +183,31 @@ export async function registerRoutes(
         const candidate = await storage.getCandidate(id);
         if (!candidate) return res.status(404).json({ message: "Candidate not found" });
         if (candidate.hasPhoto && candidate.photoUrl) {
-          const changeRequest = await storage.createPhotoChangeRequest({
-            candidateId: id,
-            newPhotoUrl: fileUrl,
-            previousPhotoUrl: candidate.photoUrl,
-            status: "pending",
-          });
-          await createInboxItem(
-            "photo_change_request",
-            `Photo change request — ${candidate.fullNameEn ?? candidate.fullNameAr ?? "Unknown"}`,
-            `Candidate has submitted a new profile photo for review. The previous photo remains active until this request is approved.`,
-            {
+          const activeRecord = await storage.getWorkforceByCandidateId(id);
+          const isActiveEmployee = activeRecord && activeRecord.isActive;
+          if (isActiveEmployee) {
+            const changeRequest = await storage.createPhotoChangeRequest({
               candidateId: id,
-              changeRequestId: changeRequest.id,
-              candidateName: candidate.fullNameEn ?? candidate.fullNameAr,
               newPhotoUrl: fileUrl,
               previousPhotoUrl: candidate.photoUrl,
-            },
-            "high",
-            { entityType: "photo_change_request", entityId: changeRequest.id }
-          );
-          return res.json({ url: fileUrl, docType, pendingReview: true, changeRequestId: changeRequest.id, message: "Photo submitted for HR review. Your current photo remains active." });
+              status: "pending",
+            });
+            await createInboxItem(
+              "photo_change_request",
+              `Photo change request — ${candidate.fullNameEn ?? candidate.fullNameAr ?? "Unknown"}`,
+              `Employee has submitted a new profile photo for review. The previous photo remains active until this request is approved.`,
+              {
+                candidateId: id,
+                changeRequestId: changeRequest.id,
+                candidateName: candidate.fullNameEn ?? candidate.fullNameAr,
+                newPhotoUrl: fileUrl,
+                previousPhotoUrl: candidate.photoUrl,
+              },
+              "high",
+              { entityType: "photo_change_request", entityId: changeRequest.id }
+            );
+            return res.json({ url: fileUrl, docType, pendingReview: true, changeRequestId: changeRequest.id, message: "Photo submitted for HR review. Your current photo remains active." });
+          }
         }
       }
 

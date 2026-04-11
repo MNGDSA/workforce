@@ -40,6 +40,7 @@ import {
   Calendar,
   AlertTriangle,
   Shield,
+  Camera,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1074,6 +1075,10 @@ export default function CandidatePortal() {
   const [selectedJob, setSelectedJob] = useState<JobPosting | null>(null);
   const [activeNav, setActiveNav] = useState<NavKey>("dashboard");
   const [profileOpen, setProfileOpen] = useState(false);
+  const [photoChangeOpen, setPhotoChangeOpen] = useState(false);
+  const photoChangeInputRef = useRef<HTMLInputElement>(null);
+  const [photoChangeCropSrc, setPhotoChangeCropSrc] = useState<string | null>(null);
+  const [photoChangeUploading, setPhotoChangeUploading] = useState(false);
 
   const storedCandidate = (() => {
     try { return JSON.parse(localStorage.getItem("workforce_candidate") || "{}"); } catch { return {}; }
@@ -1110,6 +1115,13 @@ export default function CandidatePortal() {
   const isEmployee = portalMode === "employee_individual" || portalMode === "employee_smp";
   const isFormer = portalMode === "former_individual" || portalMode === "former_smp";
   const mostRecentRecord = allWorkforceRecords[0] ?? null;
+
+  const { data: pendingPhotoRequests = [] } = useQuery<{ id: string; status: string; newPhotoUrl: string }[]>({
+    queryKey: ["/api/photo-change-requests", candidateId, "pending"],
+    queryFn: () => apiRequest("GET", `/api/photo-change-requests?candidateId=${candidateId}&status=pending`).then(r => r.json()),
+    enabled: !!candidateId && isEmployee,
+  });
+  const hasPendingPhotoChange = pendingPhotoRequests.length > 0;
 
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobPosting[]>({
     queryKey: ["/api/jobs", "active"],
@@ -1199,6 +1211,59 @@ export default function CandidatePortal() {
     }
     if (!open) { setPwCurrent(""); setPwNew(""); setPwConfirm(""); }
     setProfileOpen(open);
+  };
+
+  const handleAvatarClick = () => {
+    if (isEmployee) {
+      setPhotoChangeOpen(true);
+    } else {
+      handleProfileOpen(true);
+    }
+  };
+
+  const handlePhotoChangeFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPhotoChangeCropSrc(reader.result as string);
+      setPhotoChangeOpen(false);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handlePhotoChangeUpload = async (croppedFile: File) => {
+    setPhotoChangeCropSrc(null);
+    setPhotoChangeUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", croppedFile);
+      formData.append("docType", "photo");
+      const res = await fetch(`/api/candidates/${candidateId}/documents`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Upload failed" }));
+        throw new Error(err.message);
+      }
+      const body = await res.json();
+      if (body.pendingReview) {
+        queryClient.invalidateQueries({ queryKey: ["/api/photo-change-requests", candidateId, "pending"] });
+        toast({
+          title: "Photo submitted for review",
+          description: "Your new photo has been sent to HR for approval. Your current photo remains active until approved.",
+        });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/candidates/profile", candidateId] });
+        toast({ title: "Photo updated" });
+      }
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setPhotoChangeUploading(false);
+    }
   };
 
   function handleProfileSave(e: React.FormEvent<HTMLFormElement>) {
@@ -1658,7 +1723,7 @@ export default function CandidatePortal() {
               <CardContent className="pt-0 -mt-10 text-center relative z-10">
                 <button
                   type="button"
-                  onClick={() => handleProfileOpen(true)}
+                  onClick={handleAvatarClick}
                   className="group relative inline-block"
                   data-testid="button-avatar-edit"
                 >
@@ -1667,8 +1732,25 @@ export default function CandidatePortal() {
                     <AvatarFallback className="text-xl bg-primary/20 text-primary font-bold">{displayInitials}</AvatarFallback>
                   </Avatar>
                   <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 rounded-full">
-                    <User className="h-6 w-6 text-white" />
+                    {isEmployee ? (
+                      <div className="flex flex-col items-center gap-0.5">
+                        <Camera className="h-5 w-5 text-white" />
+                        <span className="text-[9px] text-white font-medium leading-tight">Change Photo</span>
+                      </div>
+                    ) : (
+                      <User className="h-6 w-6 text-white" />
+                    )}
                   </span>
+                  {hasPendingPhotoChange && (
+                    <span className="absolute -top-1 -right-1 flex items-center justify-center h-5 w-5 rounded-full bg-amber-500 border-2 border-card z-10" title="Photo change pending review">
+                      <Clock className="h-3 w-3 text-white" />
+                    </span>
+                  )}
+                  {photoChangeUploading && (
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full z-10">
+                      <Loader2 className="h-6 w-6 text-white animate-spin" />
+                    </span>
+                  )}
                 </button>
                 <div className="mt-3">
                   <h3 className="font-bold text-lg text-white">{displayName}</h3>
@@ -1780,6 +1862,66 @@ export default function CandidatePortal() {
         open={applyOpen}
         onOpenChange={setApplyOpen}
         onSuccess={handleApplySuccess}
+      />
+
+      {isEmployee && createPortal(
+        <Dialog open={photoChangeOpen} onOpenChange={setPhotoChangeOpen}>
+          <DialogContent className="bg-card border-border text-foreground max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="font-display text-lg font-bold text-white flex items-center gap-2">
+                <Camera className="h-5 w-5 text-primary" />
+                Change Profile Photo
+              </DialogTitle>
+              <DialogDescription className="text-muted-foreground text-sm">
+                {hasPendingPhotoChange
+                  ? "You already have a photo change pending HR review. Submitting a new photo will create another request."
+                  : "Upload a new profile photo. It will be reviewed by HR before becoming active."}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center gap-4">
+                <Avatar className="h-16 w-16 border-2 border-border">
+                  {!!candidateProfile?.photoUrl && <AvatarImage src={String(candidateProfile!.photoUrl)} className="object-cover" />}
+                  <AvatarFallback className="text-lg bg-primary/20 text-primary font-bold">{displayInitials}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <p className="text-sm text-white font-medium">Current Photo</p>
+                  {hasPendingPhotoChange && (
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <Clock className="h-3 w-3 text-amber-400" />
+                      <span className="text-xs text-amber-400">Change pending review</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <input
+                ref={photoChangeInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoChangeFileSelect}
+                data-testid="input-photo-change-file"
+              />
+              <Button
+                className="w-full gap-2"
+                onClick={() => photoChangeInputRef.current?.click()}
+                disabled={photoChangeUploading}
+                data-testid="button-select-new-photo"
+              >
+                {photoChangeUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+                Select New Photo
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>,
+        document.body
+      )}
+
+      <PhotoCropDialog
+        open={!!photoChangeCropSrc}
+        imageSrc={photoChangeCropSrc}
+        onClose={() => setPhotoChangeCropSrc(null)}
+        onCrop={handlePhotoChangeUpload}
       />
 
       {/* ─── Profile Editor Sheet ──────────────────────────────────────────── */}
