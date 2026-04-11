@@ -271,6 +271,84 @@ function StatusInfoHeader() {
   );
 }
 
+function WorkforceHistorySection({ candidateId }: { candidateId: string }) {
+  const { data: records = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/workforce/all-by-candidate", candidateId],
+    queryFn: () => apiRequest("GET", `/api/workforce/all-by-candidate/${candidateId}`).then(r => r.json()),
+    enabled: !!candidateId,
+  });
+
+  if (isLoading) {
+    return (
+      <div>
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
+          <Briefcase className="h-3.5 w-3.5" /> Workforce History
+        </h4>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading...
+        </div>
+      </div>
+    );
+  }
+
+  if (records.length === 0) return null;
+
+  return (
+    <div data-testid="section-workforce-history">
+      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
+        <Briefcase className="h-3.5 w-3.5" /> Workforce History
+        <span className="text-[10px] font-normal text-muted-foreground ml-auto">{records.length} record{records.length !== 1 ? "s" : ""}</span>
+      </h4>
+      <div className="space-y-2.5">
+        {records.map((rec: any) => (
+          <div
+            key={rec.id}
+            className={`rounded-sm border px-3 py-2.5 text-sm ${
+              rec.isActive
+                ? "border-primary/30 bg-primary/5"
+                : "border-border bg-muted/10"
+            }`}
+            data-testid={`workforce-record-${rec.id}`}
+          >
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="font-mono text-xs text-primary font-medium">{rec.employeeNumber}</span>
+              <Badge
+                variant="outline"
+                className={`text-[10px] px-1.5 py-0 border-0 ${
+                  rec.isActive
+                    ? "bg-green-500/10 text-green-400"
+                    : "bg-gray-500/10 text-gray-400"
+                }`}
+              >
+                {rec.isActive ? "Active" : "Terminated"}
+              </Badge>
+            </div>
+            {rec.jobTitle && (
+              <p className="text-white text-sm font-medium">{rec.jobTitle}</p>
+            )}
+            {rec.eventName && (
+              <p className="text-muted-foreground text-xs">{rec.eventName}</p>
+            )}
+            <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                {new Date(rec.startDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                {rec.endDate && ` — ${new Date(rec.endDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`}
+              </span>
+              {rec.salary && (
+                <span>{Number(rec.salary).toLocaleString()} SAR</span>
+              )}
+            </div>
+            {rec.terminationReason && (
+              <p className="text-xs text-amber-400/80 mt-1">Reason: {rec.terminationReason}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CandidateProfileSheet({
   candidate,
   onClose,
@@ -634,6 +712,8 @@ function CandidateProfileSheet({
               <p className="text-sm text-amber-200/80">{c.chronicDiseases || "Chronic condition noted"}</p>
             </div>
           )}
+
+          <WorkforceHistorySection candidateId={c.id} />
 
           {c.notes && (
             <div>
@@ -1307,13 +1387,25 @@ export default function TalentPage() {
                           )}
                           {col("status") && (
                             <TableCell>
-                              <Badge
-                                variant="outline"
-                                className={`font-medium border-0 text-xs ${statusStyles[displayStatus] ?? "bg-muted text-muted-foreground"}`}
-                                data-testid={`status-${candidate.id}`}
-                              >
-                                {displayStatus.replace("_", " ")}
-                              </Badge>
+                              <div className="flex items-center gap-1.5">
+                                <Badge
+                                  variant="outline"
+                                  className={`font-medium border-0 text-xs ${statusStyles[displayStatus] ?? "bg-muted text-muted-foreground"}`}
+                                  data-testid={`status-${candidate.id}`}
+                                >
+                                  {displayStatus.replace("_", " ")}
+                                </Badge>
+                                {(candidate as any).workforceRecordCount > 0 && displayStatus !== "hired" && (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[10px] text-amber-400/80 bg-amber-500/10 px-1.5 py-0.5 rounded-sm"
+                                    title="This candidate has previous employment history"
+                                    data-testid={`badge-prev-employed-${candidate.id}`}
+                                  >
+                                    <Briefcase className="h-2.5 w-2.5" />
+                                    Prev. Employed
+                                  </span>
+                                )}
+                              </div>
                             </TableCell>
                           )}
                           {col("phone") && (

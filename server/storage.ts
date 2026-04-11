@@ -99,7 +99,7 @@ import {
   type PhotoChangeRequest,
   type InsertPhotoChangeRequest,
 } from "@shared/schema";
-import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte } from "drizzle-orm";
+import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte, getTableColumns } from "drizzle-orm";
 
 function computeCandidateStatusFromLogin(lastLoginAt: Date | null): "active" | "inactive" {
   if (!lastLoginAt) return "inactive";
@@ -517,9 +517,14 @@ export class DatabaseStorage implements IStorage {
       : sortBy === "email" ? candidates.email
       : candidates.createdAt;
 
+    const workforceCountSq = sql<number>`(SELECT count(*)::int FROM workforce WHERE workforce.candidate_id = candidates.id)`;
+
     const [data, [{ value: total }]] = await Promise.all([
       db
-        .select()
+        .select({
+          ...getTableColumns(candidates),
+          workforceRecordCount: workforceCountSq.as("workforceRecordCount"),
+        })
         .from(candidates)
         .where(where)
         .orderBy(orderFn(orderCol))
