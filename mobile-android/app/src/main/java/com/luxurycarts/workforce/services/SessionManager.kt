@@ -36,6 +36,10 @@ class SessionManager(context: Context) {
         get() = prefs.getString("employee_number", null)
         set(value) = prefs.edit().putString("employee_number", value).apply()
 
+    var candidateId: String?
+        get() = prefs.getString("candidate_id", null)
+        set(value) = prefs.edit().putString("candidate_id", value).apply()
+
     var loginTimestamp: Long
         get() = prefs.getLong("login_timestamp", 0)
         set(value) = prefs.edit().putLong("login_timestamp", value).apply()

@@ -15,6 +15,7 @@ import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
 import retrofit2.http.Path
+import retrofit2.http.Query
 import java.util.concurrent.TimeUnit
 
 interface ApiService {
@@ -51,6 +52,20 @@ interface ApiService {
 
     @POST("api/portal/data-deletion-request")
     suspend fun requestDataDeletion(@Body request: DeletionRequest): Response<DeletionResponse>
+
+    @Multipart
+    @POST("api/candidates/{candidateId}/documents")
+    suspend fun uploadPhoto(
+        @Path("candidateId") candidateId: String,
+        @Part("docType") docType: RequestBody,
+        @Part file: MultipartBody.Part,
+    ): Response<PhotoUploadResponse>
+
+    @GET("api/photo-change-requests")
+    suspend fun getPhotoChangeRequests(
+        @Query("candidateId") candidateId: String,
+        @Query("status") status: String? = null,
+    ): Response<List<PhotoChangeRequest>>
 }
 
 class InMemoryCookieJar : CookieJar {

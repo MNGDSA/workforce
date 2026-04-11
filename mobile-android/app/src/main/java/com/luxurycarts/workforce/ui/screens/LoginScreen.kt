@@ -219,6 +219,7 @@ fun LoginScreen(
                                 app.sessionManager.serverUrl = serverUrl.trim()
                                 app.sessionManager.userJson = Gson().toJson(body.user)
                                 app.sessionManager.candidateJson = Gson().toJson(body.candidate)
+                                app.sessionManager.candidateId = body.candidate.id
                                 app.sessionManager.loginTimestamp = System.currentTimeMillis()
                                 app.sessionManager.workforceId = activeRecord.id
                                 app.sessionManager.employeeNumber = activeRecord.employeeNumber

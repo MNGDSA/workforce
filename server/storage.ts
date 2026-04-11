@@ -1296,10 +1296,16 @@ export class DatabaseStorage implements IStorage {
         createdAt: workforce.createdAt,
         eventName: events.name,
         jobTitle: jobPostings.title,
+        positionId: workforce.positionId,
+        positionTitle: positions.title,
+        fullNameEn: candidates.fullNameEn,
+        photoUrl: candidates.photoUrl,
       })
       .from(workforce)
+      .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
       .leftJoin(events, eq(workforce.eventId, events.id))
       .leftJoin(jobPostings, eq(workforce.jobId, jobPostings.id))
+      .leftJoin(positions, eq(workforce.positionId, positions.id))
       .where(eq(workforce.candidateId, candidateId))
       .orderBy(desc(workforce.createdAt));
     return rows;

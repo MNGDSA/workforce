@@ -1,6 +1,7 @@
 package com.luxurycarts.workforce.ui.nav
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +48,21 @@ fun AppNavigation() {
         }
     }
 
+    LaunchedEffect(isLoggedIn, apiService) {
+        if (isLoggedIn && apiService != null && workforceRecord == null) {
+            val candidateId = app.sessionManager.candidateId
+            if (candidateId != null) {
+                try {
+                    val resp = apiService!!.getWorkforceRecords(candidateId)
+                    if (resp.isSuccessful) {
+                        val records = resp.body() ?: emptyList()
+                        workforceRecord = records.firstOrNull { it.isActive } ?: records.firstOrNull()
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
     if (!isLoggedIn) {
         LoginScreen(
             onLoginSuccess = { u, wr, api ->
@@ -54,6 +70,7 @@ fun AppNavigation() {
                 workforceRecord = wr
                 apiService = api
                 isLoggedIn = true
+                wr?.candidateId?.let { app.sessionManager.candidateId = it }
                 SyncWorker.schedule(app)
             },
         )
@@ -63,6 +80,19 @@ fun AppNavigation() {
                 HomeScreen(
                     user = user!!,
                     workforceRecord = workforceRecord,
+                    apiService = apiService,
+                    onWorkforceRefresh = {
+                        scope.launch {
+                            val cId = app.sessionManager.candidateId ?: return@launch
+                            try {
+                                val resp = apiService?.getWorkforceRecords(cId)
+                                if (resp?.isSuccessful == true) {
+                                    val records = resp.body() ?: emptyList()
+                                    workforceRecord = records.firstOrNull { it.isActive } ?: records.firstOrNull()
+                                }
+                            } catch (_: Exception) {}
+                        }
+                    },
                     onCheckIn = {
                         if (!biometricConsentGiven) {
                             showBiometricDisclosure = true

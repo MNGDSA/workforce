@@ -32,6 +32,28 @@ data class WorkforceRecord(
     @SerializedName("endDate") val endDate: String? = null,
     @SerializedName("fullNameEn") val fullNameEn: String? = null,
     @SerializedName("photoUrl") val photoUrl: String? = null,
+    @SerializedName("jobTitle") val jobTitle: String? = null,
+    @SerializedName("eventName") val eventName: String? = null,
+    @SerializedName("positionTitle") val positionTitle: String? = null,
+    @SerializedName("positionId") val positionId: String? = null,
+)
+
+data class PhotoUploadResponse(
+    val url: String? = null,
+    @SerializedName("docType") val docType: String? = null,
+    @SerializedName("pendingReview") val pendingReview: Boolean = false,
+    @SerializedName("changeRequestId") val changeRequestId: String? = null,
+    val message: String? = null,
+)
+
+data class PhotoChangeRequest(
+    val id: String,
+    @SerializedName("candidateId") val candidateId: String,
+    @SerializedName("newPhotoUrl") val newPhotoUrl: String? = null,
+    @SerializedName("previousPhotoUrl") val previousPhotoUrl: String? = null,
+    val status: String,
+    @SerializedName("reviewNotes") val reviewNotes: String? = null,
+    @SerializedName("createdAt") val createdAt: String? = null,
 )
 
 data class LoginRequest(

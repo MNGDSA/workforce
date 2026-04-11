@@ -1,6 +1,11 @@
 package com.luxurycarts.workforce.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,27 +24,46 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.luxurycarts.workforce.WorkforceApp
+import com.luxurycarts.workforce.data.ApiService
 import com.luxurycarts.workforce.data.User
 import com.luxurycarts.workforce.data.WorkforceRecord
 import com.luxurycarts.workforce.ui.theme.Background
@@ -50,6 +74,10 @@ import com.luxurycarts.workforce.ui.theme.TextMuted
 import com.luxurycarts.workforce.ui.theme.TextPrimary
 import com.luxurycarts.workforce.ui.theme.TextSecondary
 import com.luxurycarts.workforce.ui.theme.WarningAmber
+import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -57,18 +85,79 @@ import java.time.format.DateTimeFormatter
 fun HomeScreen(
     user: User,
     workforceRecord: WorkforceRecord?,
+    apiService: ApiService?,
     onCheckIn: () -> Unit,
     onHistory: () -> Unit,
     onMap: () -> Unit,
     onPrivacy: () -> Unit,
     onLogout: () -> Unit,
+    onWorkforceRefresh: () -> Unit = {},
 ) {
     val app = WorkforceApp.instance
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val wfId = workforceRecord?.id ?: app.sessionManager.workforceId ?: ""
     val pendingCount by app.database.attendanceDao().getPendingCount(wfId)
         .collectAsState(initial = 0)
 
     val today = LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy"))
+
+    var photoUploading by remember { mutableStateOf(false) }
+    var photoMessage by remember { mutableStateOf<String?>(null) }
+    var hasPendingPhotoChange by remember { mutableStateOf(false) }
+    var showPhotoDialog by remember { mutableStateOf(false) }
+
+    val candidateId = workforceRecord?.candidateId
+    val serverUrl = app.sessionManager.serverUrl.trimEnd('/')
+
+    LaunchedEffect(candidateId) {
+        if (candidateId != null && apiService != null) {
+            try {
+                val resp = apiService.getPhotoChangeRequests(candidateId, "pending")
+                if (resp.isSuccessful) {
+                    val requests = resp.body() ?: emptyList()
+                    hasPendingPhotoChange = requests.isNotEmpty()
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null && candidateId != null && apiService != null) {
+            scope.launch {
+                photoUploading = true
+                photoMessage = null
+                try {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    val bytes = inputStream?.readBytes() ?: throw Exception("Cannot read file")
+                    inputStream.close()
+
+                    val requestBody = bytes.toRequestBody("image/jpeg".toMediaTypeOrNull())
+                    val filePart = MultipartBody.Part.createFormData("file", "photo.jpg", requestBody)
+                    val docTypePart = "photo".toRequestBody("text/plain".toMediaTypeOrNull())
+
+                    val response = apiService.uploadPhoto(candidateId, docTypePart, filePart)
+                    if (response.isSuccessful) {
+                        val body = response.body()
+                        if (body?.pendingReview == true) {
+                            hasPendingPhotoChange = true
+                            photoMessage = "Photo submitted for HR review. Your current photo remains active until approved."
+                        } else {
+                            photoMessage = "Photo updated successfully."
+                            onWorkforceRefresh()
+                        }
+                    } else {
+                        photoMessage = "Upload failed. Please try again."
+                    }
+                } catch (e: Exception) {
+                    photoMessage = "Error: ${e.message}"
+                }
+                photoUploading = false
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -84,7 +173,7 @@ fun HomeScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     "Welcome back,",
                     style = MaterialTheme.typography.bodyMedium,
@@ -120,12 +209,116 @@ fun HomeScreen(
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(contentAlignment = Alignment.BottomEnd) {
+                    val photoUrl = workforceRecord?.photoUrl
+                    if (photoUrl != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data("$serverUrl$photoUrl")
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = "Profile photo",
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape)
+                                .border(2.dp, ForestGreen, CircleShape)
+                                .clickable { showPhotoDialog = true },
+                            contentScale = ContentScale.Crop,
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape)
+                                .background(CardBorder)
+                                .clickable { showPhotoDialog = true },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Filled.Person,
+                                contentDescription = "No photo",
+                                tint = TextMuted,
+                                modifier = Modifier.size(40.dp),
+                            )
+                        }
+                    }
+                    if (!photoUploading) {
+                        IconButton(
+                            onClick = { showPhotoDialog = true },
+                            modifier = Modifier
+                                .size(28.dp)
+                                .background(ForestGreen, CircleShape),
+                        ) {
+                            Icon(
+                                Icons.Filled.Edit,
+                                contentDescription = "Change photo",
+                                tint = TextPrimary,
+                                modifier = Modifier.size(14.dp),
+                            )
+                        }
+                    } else {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(28.dp),
+                            color = ForestGreen,
+                            strokeWidth = 2.dp,
+                        )
+                    }
+                }
+
+                if (hasPendingPhotoChange) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(
+                            Icons.Filled.HourglassTop,
+                            contentDescription = null,
+                            tint = WarningAmber,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            "Photo change pending approval",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = WarningAmber,
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
                 Text("Your Details", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
                 Spacer(Modifier.height(12.dp))
                 DetailRow("Employee #", workforceRecord?.employeeNumber ?: app.sessionManager.employeeNumber ?: "—")
+                workforceRecord?.positionTitle?.let { DetailRow("Position", it) }
+                workforceRecord?.jobTitle?.let { DetailRow("Job Title", it) }
+                workforceRecord?.eventName?.let { DetailRow("Event", it) }
                 workforceRecord?.startDate?.let { DetailRow("Start Date", it) }
                 DetailRow("Status", if (workforceRecord?.isActive != false) "Active" else "Inactive")
+            }
+        }
+
+        if (photoMessage != null) {
+            Spacer(Modifier.height(12.dp))
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = if (hasPendingPhotoChange) WarningAmber.copy(alpha = 0.1f) else ForestGreen.copy(alpha = 0.1f)
+                ),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    photoMessage!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (hasPendingPhotoChange) WarningAmber else ForestGreen,
+                    modifier = Modifier.padding(12.dp),
+                    textAlign = TextAlign.Center,
+                )
             }
         }
 
@@ -180,6 +373,49 @@ fun HomeScreen(
         }
 
         Spacer(Modifier.height(32.dp))
+    }
+
+    if (showPhotoDialog) {
+        AlertDialog(
+            onDismissRequest = { showPhotoDialog = false },
+            containerColor = Surface,
+            title = {
+                Text("Change Profile Photo", color = TextPrimary)
+            },
+            text = {
+                Column {
+                    if (hasPendingPhotoChange) {
+                        Text(
+                            "You already have a photo change request pending HR approval. Submitting a new photo will replace the pending request.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = WarningAmber,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    Text(
+                        "Select a new profile photo from your gallery. If you are an active employee, the change will require HR approval before it takes effect.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary,
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPhotoDialog = false
+                        photoPickerLauncher.launch("image/*")
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ForestGreen),
+                ) {
+                    Text("Choose Photo")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPhotoDialog = false }) {
+                    Text("Cancel", color = TextMuted)
+                }
+            },
+        )
     }
 }
 
