@@ -1947,8 +1947,8 @@ export async function registerRoutes(
 
       const data = insertCandidateSchema.partial().parse(filtered);
 
-      if ("ibanNumber" in data) {
-        (data as any).hasIban = !!data.ibanNumber;
+      if ("ibanNumber" in filtered) {
+        data.hasIban = !!data.ibanNumber;
       }
 
       const candidate = await storage.updateCandidate(candidateId, data);
