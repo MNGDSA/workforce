@@ -1,9 +1,9 @@
-export const name = "Candidate Portal Flow & Profile Setup";
+export const name = "Candidate Portal Flow & Logout";
 
 export const testPlan = `
-## Test Suite: Candidate Portal Flow & Profile Setup
+## Test Suite: Candidate Portal Flow & Logout
 
-### Test 1: Login and verify portal loads
+### Test 1: Login and verify portal renders content
 1. [New Context] Create a new browser context
 2. [Browser] Navigate to /auth
 3. [Browser] Enter "2000000002" in data-testid="input-identifier"
@@ -12,30 +12,30 @@ export const testPlan = `
 6. [Browser] Wait up to 5 seconds for navigation to /candidate-portal
 7. [Verify]
    - Assert URL is /candidate-portal
-   - Assert no error messages visible
-   - Assert page renders candidate portal content (look for "WORKFORCE" branding or portal layout)
+   - Assert data-testid="text-portal-title" is visible with WORKFORCE branding
+   - Assert data-testid="badge-portal-mode" is visible
+   - Assert data-testid="button-profile-menu" is visible
 
-### Test 2: Candidate portal shows profile info or portal sections
+### Test 2: Verify candidate name appears in portal
 8. [Verify]
-   - Assert the portal page contains candidate-related content
-   - Look for elements like profile info, applications section, or notifications
-   - Assert no JavaScript errors or blank page
+   - Assert the page contains the text "Test Candidate" (the candidate's name from seed data)
+   - Assert data-testid="button-avatar-edit" is visible (avatar area with photo controls)
 
-### Test 3: Logout from candidate portal
-9. [Browser] Look for a sign-out or logout button (data-testid="button-logout" or similar)
-10. [Browser] Click the logout button if found
+### Test 3: Logout clears state and returns to auth
+9. [Browser] Click data-testid="button-profile-menu"
+10. [Browser] Click data-testid="menu-item-signout"
 11. [Verify]
-   - Assert redirect to /auth
-   - Assert the login form is visible again
+   - Assert URL changes to /auth
+   - Assert data-testid="button-sign-in" is visible (login form shown)
+   - Assert data-testid="text-portal-title" is NOT visible (portal is gone)
 `;
 
 export const technicalDocs = `
-Candidate: 2000000002 / password123 -> /candidate-portal
-Candidate has profileCompleted=true so skips ProfileSetupGate wizard
-Portal route: /candidate-portal (client/src/pages/candidate-portal.tsx)
-ProfileSetupGate checks localStorage "workforce_candidate" for candidate data
-If profileCompleted=true, renders children (portal content)
-If profileCompleted=false, shows 4-step wizard: Personal > Medical > Education > Financial
-Logout: removes localStorage "workforce_candidate" and navigates to /auth
-Logout button: data-testid="button-logout"
+Candidate: 2000000002 / password123 -> /candidate-portal (profileCompleted=true, fullNameEn="Test Candidate")
+Portal title: data-testid="text-portal-title"
+Mode badge: data-testid="badge-portal-mode"
+Profile menu: data-testid="button-profile-menu"
+Sign out: data-testid="menu-item-signout"
+Avatar edit: data-testid="button-avatar-edit"
+Logout clears localStorage key "workforce_candidate" and navigates to /auth
 `;

@@ -32,6 +32,15 @@ async function seed() {
         nationalId: "2000000002",
       },
       {
+        username: "newcandidate",
+        email: "newcandidate@workforce.sa",
+        password: candidatePassword,
+        role: "candidate",
+        fullName: "New Candidate",
+        phone: "0500000004",
+        nationalId: "2000000004",
+      },
+      {
         username: "recruiter1",
         email: "recruiter@workforce.sa",
         password: adminPassword,
@@ -78,6 +87,38 @@ async function seed() {
         })
         .onConflictDoNothing();
       console.log("  → Created candidate record for Test Candidate");
+    }
+  }
+
+  // ─── Candidate Record for New Candidate (incomplete profile) ────────────
+  const [newCandidateUser] = await db
+    .select()
+    .from(users)
+    .where(eq(users.nationalId, "2000000004"))
+    .limit(1);
+
+  if (newCandidateUser) {
+    const existingNewCandidate = await db
+      .select()
+      .from(candidates)
+      .where(eq(candidates.userId, newCandidateUser.id))
+      .limit(1);
+
+    if (existingNewCandidate.length === 0) {
+      await db
+        .insert(candidates)
+        .values({
+          userId: newCandidateUser.id,
+          fullNameEn: "New Candidate",
+          nationalId: "2000000004",
+          phone: "0500000004",
+          country: "SA",
+          status: "active",
+          source: "individual",
+          profileCompleted: false,
+        })
+        .onConflictDoNothing();
+      console.log("  → Created candidate record for New Candidate (incomplete profile)");
     }
   }
 

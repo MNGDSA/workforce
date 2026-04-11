@@ -6,9 +6,7 @@
 
 ---
 
-## Results Overview
-
-### API Verification Tests (14/14 passing)
+## API Verification Results (17/17 passing)
 
 ```
 ========================================
@@ -24,12 +22,15 @@ WORKFORCE E2E API Verification
   [PASS] Candidate login returns candidate role
   [PASS] Candidate login returns candidate record
   [PASS] Candidate phone login works
+  [PASS] Incomplete-profile candidate returns candidate role
+  [PASS] Incomplete-profile candidate has profileCompleted=false
 
 --- Inbox API ---
   [PASS] Inbox API responds
   [PASS] Inbox API returns data object
   [PASS] Inbox contains typed items
-  [PASS] Inbox approve/resolve pending item
+  [PASS] Inbox resolve pending item returns 200
+  [PASS] Resolved item status changed to resolved
 
 --- Geofence API ---
   [PASS] Geofence API responds
@@ -38,85 +39,30 @@ WORKFORCE E2E API Verification
   [PASS] Delete geofence zone
 
 ========================================
-Results: 14 passed, 0 failed
+Results: 17 passed, 0 failed
 ========================================
 ```
 
-### Playwright E2E Suites (8 suites)
+## Playwright E2E Suites (8 suites, 28 scenarios)
 
 | Suite | Scenarios | Key Assertions |
 |-------|-----------|----------------|
-| Auth Validation & Forgot Password | 3 | Invalid login error, admin redirect to /dashboard, forgot password form |
-| Candidate Portal Login & Redirect | 3 | NationalId login, phone login, invalid credentials error |
-| Profile Setup Gate Wizard | 3 | Completed profile skips wizard, portal content loads, logout clears state |
-| Candidate Portal Main View | 5 | Portal layout, sidebar profile card, nav menu, profile dropdown, profile editing |
-| Candidate Portal Flow | 3 | Login to portal, content renders, logout to /auth |
-| Candidate Photo Management | 3 | Avatar edit button, photo upload controls, profile section |
-| Inbox Attendance & Photo Review | 4 | Filters, item expansion, approve/reject buttons, confirmation dialog |
-| Geofence Management | 4 | Zone list, zone details, create CRUD, delete cleanup |
-
----
-
-## Suite Details
-
-### 1. Auth Validation & Forgot Password
-- Invalid credentials (9999999999) shows error at `data-testid="login-error"` with "Invalid credentials"
-- Admin login (1000000001/password123) redirects to /dashboard
-- Forgot password link shows reset form with national ID input and back-to-login navigation
-
-### 2. Candidate Portal Login & Redirect
-- Candidate nationalId (2000000002/password123) returns `{ candidate: { profileCompleted: true } }`
-- Candidate phone (0500000002/password123) authenticates successfully
-- Invalid credentials produce 401 with "Invalid credentials" message
-
-### 3. Profile Setup Gate Wizard
-- Candidate with profileCompleted=true skips wizard, portal content renders directly
-- Portal title (data-testid="text-portal-title") visible, wizard step inputs NOT visible
-- Logout clears localStorage and redirects to /auth
-
-### 4. Candidate Portal Main View
-- Portal heading visible with data-testid="text-portal-title"
-- Mode badge shows candidate/employee mode (data-testid="badge-portal-mode")
-- Profile menu trigger (data-testid="button-profile-menu") opens dropdown
-- Dropdown contains "My Profile" (menu-item-profile) and "Sign out" (menu-item-signout)
-- Profile section shows editable fields (firstName, lastName, phone, etc.)
-
-### 5. Candidate Portal Flow
-- Login redirects to /candidate-portal for candidate users
-- WORKFORCE branding and portal layout render correctly
-- Logout clears state and returns to /auth
-
-### 6. Candidate Photo Management
-- Avatar edit button (data-testid="button-avatar-edit") is visible in portal
-- Photo upload input (data-testid="input-photo-change-file") available for photo changes
-- Profile section accessible with editable photo controls
-
-### 7. Inbox — Attendance Verification & Photo Review
-- Tab navigation: All, Pending, Resolved, Dismissed tabs work correctly
-- Type filter: Attendance (attendance_verification) and Photo Change (photo_change_request)
-- Expanded inbox items show:
-  - Attendance: submitted photo, reference photo, confidence score, GPS status
-  - Photo: current photo, new photo, employee info
-  - Resolution notes textarea (data-testid="textarea-notes-{id}")
-- Approve button triggers confirmation dialog (data-testid="dialog-confirm-attendance")
-- Confirmation dialog has required notes textarea (data-testid="textarea-confirm-notes")
-- Cancel button (data-testid="button-confirm-cancel") closes dialog
-- Confirm button (data-testid="button-confirm-action") executes action
-- API: PATCH /api/inbox/:id with status + resolutionNotes resolves items (verified via API test)
-
-### 8. Geofence Management CRUD
-- Page loads with Leaflet map and seeded "Masjid Al-Haram Complex" zone
-- Zone cards display name, Active badge, coordinates, radius
-- Zone click reveals details panel with full info
-- Create: "Test Zone E2E" (21.43/39.83, 750m) created and verified as valid UUID
-- Delete: test zone removed and confirmed absent
+| Auth Validation & Forgot Password | 3 | Invalid login error at login-error, admin /dashboard redirect, forgot password form with reset input and back-to-login |
+| Candidate Portal Login & Redirect | 3 | NationalId login to /candidate-portal, phone login, invalid credentials 401 |
+| Profile Setup Gate Wizard | 4 | Incomplete-profile (2000000004) sees wizard with step 1 inputs, required field enforcement, gender selection, completed-profile (2000000002) skips wizard |
+| Candidate Portal Main View | 4 | Portal layout with title/badge/avatar-edit, nav items, profile dropdown with My Profile and Sign Out, profile editing section |
+| Candidate Portal Flow & Logout | 3 | Portal renders with WORKFORCE branding, candidate name visible, logout clears state to /auth |
+| Candidate Photo Management | 3 | Avatar edit button, photo upload controls (input-photo-change-file, button-select-new-photo), profile section with save |
+| Inbox Attendance & Photo Review | 5 | Filters, expanded item with photos/confidence/GPS, approve triggers dialog-confirm-attendance, cancel closes dialog, full approve with notes and status transition |
+| Geofence Management | 4 | Zone list with seeded data, zone details, create zone with UUID verification, delete zone |
 
 ---
 
 ## Test Data
 
-| Role | Identifier | Password | Linked Record |
-|------|-----------|----------|---------------|
-| Super Admin | 1000000001 | password123 | N/A (admin) |
-| Candidate | 2000000002 | password123 | candidates table, profileCompleted=true |
+| Role | Identifier | Password | Profile Status |
+|------|-----------|----------|----------------|
+| Super Admin | 1000000001 | password123 | N/A (admin role) |
+| Candidate (complete) | 2000000002 | password123 | profileCompleted=true, skips wizard |
 | Candidate (phone) | 0500000002 | password123 | Same as above |
+| Candidate (incomplete) | 2000000004 | password123 | profileCompleted=false, shows wizard |

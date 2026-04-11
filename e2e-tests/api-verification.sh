@@ -56,6 +56,12 @@ R=$(curl -s -X POST "$BASE_URL/api/auth/login" \
   -d '{"identifier":"0500000002","password":"password123"}')
 check "Candidate phone login works" '"role":"candidate"' "$R"
 
+R=$(curl -s -X POST "$BASE_URL/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"identifier":"2000000004","password":"password123"}')
+check "Incomplete-profile candidate returns candidate role" '"role":"candidate"' "$R"
+check "Incomplete-profile candidate has profileCompleted=false" '"profileCompleted":false' "$R"
+
 echo ""
 echo "--- Inbox API ---"
 
@@ -81,13 +87,18 @@ let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
   console.log(pending?pending.id:'');
 })")
 if [ -n "$PENDING_ID" ]; then
-  R=$(curl -s -o /dev/null -w "%{http_code}" -X PATCH "$BASE_URL/api/inbox/$PENDING_ID" \
+  R=$(curl -s -o /dev/null -w "%{http_code}" -X PATCH "$BASE_URL/api/inbox/$PENDING_ID/resolve" \
     -H "Content-Type: application/json" \
-    -d '{"status":"resolved","resolutionNotes":"E2E test auto-approve"}')
-  check "Inbox approve/resolve pending item" "200" "$R"
-  curl -s -X PATCH "$BASE_URL/api/inbox/$PENDING_ID" \
-    -H "Content-Type: application/json" \
-    -d '{"status":"pending","resolutionNotes":null}' > /dev/null 2>&1
+    -d '{"notes":"E2E test auto-approve"}')
+  check "Inbox resolve pending item returns 200" "200" "$R"
+
+  R=$(curl -s "$BASE_URL/api/inbox" | node -e "
+  let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+    const j=JSON.parse(d);
+    const item=(j.data||[]).find(i=>i.id==='$PENDING_ID');
+    console.log(item?item.status:'not_found');
+  })")
+  check "Resolved item status changed to resolved" "resolved" "$R"
 else
   echo "  [SKIP] No pending inbox items to test approve workflow"
 fi

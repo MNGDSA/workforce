@@ -12,7 +12,8 @@ export const testPlan = `
 6. [Browser] Wait up to 5 seconds for navigation
 7. [Verify]
    - Assert no "Invalid credentials" error at data-testid="login-error"
-   - Assert URL changed to /candidate-portal (candidate has a linked record with profileCompleted=true)
+   - Assert URL changed to /candidate-portal
+   - Assert data-testid="text-portal-title" is visible (portal loaded successfully)
 
 ### Test 2: Candidate login with phone number
 8. [New Context] Create a new browser context
@@ -23,6 +24,7 @@ export const testPlan = `
 13. [Browser] Wait up to 5 seconds
 14. [Verify]
    - Assert no error message visible at data-testid="login-error"
+   - Assert URL changed to /candidate-portal
 
 ### Test 3: Invalid credentials show error
 15. [New Context] Create a new browser context
@@ -37,10 +39,10 @@ export const testPlan = `
 
 export const technicalDocs = `
 Auth endpoint: POST /api/auth/login with { identifier, password }
-Candidate: nationalId=2000000002 or phone=0500000002, password=password123
-Login returns { user, candidate } where candidate has id, profileCompleted etc.
-Candidate with profileCompleted=true goes directly to /candidate-portal
+Candidate (completed profile): nationalId=2000000002 or phone=0500000002, password=password123
+Login returns { user: { role: "candidate" }, candidate: { profileCompleted: true } }
 Client stores candidate in localStorage key "workforce_candidate"
-ProfileSetupGate checks localStorage for candidate data
+ProfileSetupGate renders portal content when profileCompleted=true
 Error display: data-testid="login-error"
+Portal title: data-testid="text-portal-title"
 `;

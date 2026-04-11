@@ -3,7 +3,7 @@ export const name = "Inbox - Attendance Verification & Photo Review";
 export const testPlan = `
 ## Test Suite: Inbox - Attendance Verification & Photo Review (Admin)
 
-### Test 1: Login and navigate to Inbox
+### Test 1: Login and navigate to Inbox, verify page structure
 1. [New Context] Create a new browser context
 2. [Browser] Navigate to /auth
 3. [Browser] Enter "1000000001" in data-testid="input-identifier"
@@ -12,51 +12,62 @@ export const testPlan = `
 6. [Browser] Wait for redirect to /dashboard, then navigate to /inbox
 7. [Verify]
    - Assert data-testid="text-inbox-title" shows "Inbox"
-   - Assert filter controls are visible (select-inbox-type, select-inbox-priority, select-inbox-sort)
+   - Assert data-testid="select-inbox-type" is visible (type filter dropdown)
+   - Assert data-testid="select-inbox-priority" is visible (priority filter dropdown)
+   - Assert data-testid="select-inbox-sort" is visible (sort dropdown)
+   - Assert data-testid="tab-all" is visible
+   - Assert data-testid="tab-pending" is visible
 
-### Test 2: Tab switching and type filter
-8. [Browser] Click tab data-testid="tab-all"
-9. [Verify] Tab switches without error
-10. [Browser] Click data-testid="select-inbox-type" and select "Attendance" option
-11. [Verify] Inbox filters to attendance items (or shows empty state)
-12. [Browser] Click data-testid="select-inbox-type" and select "Photo Change" option
-13. [Verify] Inbox filters to photo change items (or shows empty state)
+### Test 2: Filter by Attendance type
+8. [Browser] Click data-testid="select-inbox-type" and select the "Attendance" option
+9. [Verify]
+   - Assert the inbox list updates (loading completes)
+   - Assert each visible inbox item card contains text related to "attendance" or "Attendance verification"
 
-### Test 3: Expand pending item and verify approve/reject buttons
-14. [Browser] Reset type filter to "All Types"
-15. [Browser] Click tab data-testid="tab-pending"
-16. [Browser] If any cards with data-testid starting with "row-inbox-" exist, click the first one
-17. [Verify] If an item was expanded:
-   - Detail section appears (data-testid starting with "detail-inbox-")
-   - For attendance items: verify these elements exist:
-     - Submitted photo (data-testid="img-submitted-photo-{id}")
-     - Reference photo (data-testid="img-reference-photo-{id}")
-     - Confidence score (data-testid="text-confidence-{id}")
-     - GPS status (data-testid="text-gps-status-{id}")
-     - Approve button (data-testid="button-approve-attendance-{id}")
-     - Reject button (data-testid="button-reject-attendance-{id}")
-   - For photo items: verify these elements exist:
-     - Current photo (data-testid="img-current-photo-{id}")
-     - New photo (data-testid="img-new-photo-{id}")
-     - Approve Photo button (data-testid="button-approve-photo-{id}")
-     - Reject Photo button (data-testid="button-reject-photo-{id}")
-   - Resolution notes textarea exists (data-testid="textarea-notes-{id}")
+### Test 3: Switch to Pending tab and expand an attendance item
+10. [Browser] Click tab data-testid="tab-pending"
+11. [Browser] Wait for items to load
+12. [Browser] Click the first card with data-testid starting with "row-inbox-" to expand it
+13. [Verify]
+   - Assert a detail section appears with data-testid starting with "detail-inbox-"
+   - Assert the expanded item shows:
+     - A submitted photo element (data-testid starting with "img-submitted-photo-")
+     - A reference photo element (data-testid starting with "img-reference-photo-")
+     - A confidence score element (data-testid starting with "text-confidence-")
+     - A GPS status element (data-testid starting with "text-gps-status-")
+     - An Approve button (data-testid starting with "button-approve-attendance-")
+     - A Reject button (data-testid starting with "button-reject-attendance-")
+     - A resolution notes textarea (data-testid starting with "textarea-notes-")
 
-### Test 4: Test approve confirmation dialog
-18. [Browser] If an attendance or photo item is expanded with an Approve button visible:
-   - Click the Approve button (data-testid starting with "button-approve-attendance-" or "button-approve-photo-")
-19. [Verify]
+### Test 4: Click Approve, verify confirmation dialog with required notes, then cancel
+14. [Browser] Click the Approve button (data-testid starting with "button-approve-attendance-")
+15. [Verify]
    - Assert a confirmation dialog appears (data-testid="dialog-confirm-attendance")
-   - Assert the dialog has a notes textarea (data-testid="textarea-confirm-notes")
-   - Assert "Cancel" button exists (data-testid="button-confirm-cancel")
-   - Assert "Confirm" action button exists (data-testid="button-confirm-action")
-20. [Browser] Click "Cancel" (data-testid="button-confirm-cancel") to close the dialog
-21. [Verify] Dialog closes and we return to the inbox list
+   - Assert the dialog contains a notes textarea (data-testid="textarea-confirm-notes")
+   - Assert a Cancel button exists (data-testid="button-confirm-cancel")
+   - Assert a Confirm/action button exists (data-testid="button-confirm-action")
+16. [Browser] Click the Cancel button (data-testid="button-confirm-cancel")
+17. [Verify]
+   - Assert the confirmation dialog closes (data-testid="dialog-confirm-attendance" is no longer visible)
+   - Assert we are back to the inbox list view
+
+### Test 5: Execute full approve workflow with notes
+18. [Browser] Click the same Approve button again (data-testid starting with "button-approve-attendance-")
+19. [Verify] Assert the confirmation dialog appears again (data-testid="dialog-confirm-attendance")
+20. [Browser] Enter "Verified by admin during E2E test" in data-testid="textarea-confirm-notes"
+21. [Browser] Click the Confirm button (data-testid="button-confirm-action")
+22. [Verify]
+   - Assert the dialog closes
+   - Assert a success toast or notification appears
+   - Assert the item is no longer in the Pending tab (it should move to Resolved)
 `;
 
 export const technicalDocs = `
 Login: POST /api/auth/login { identifier: "1000000001", password: "password123" }
 Inbox route: /inbox, API: GET /api/inbox
+
+The inbox contains real data: attendance_verification and photo_change_request items created
+by mobile app submissions. There are pending items available for testing.
 
 Tab elements:
 - data-testid="tab-all", "tab-pending", "tab-resolved", "tab-dismissed"
@@ -67,32 +78,31 @@ Filter elements:
 - Sort: data-testid="select-inbox-sort"
 
 Inbox item elements:
-- Row: data-testid="row-inbox-{id}"
-- Detail: data-testid="detail-inbox-{id}"
+- Row card: data-testid="row-inbox-{id}" (click to expand)
+- Detail section: data-testid="detail-inbox-{id}"
 
-Attendance review fields:
-- data-testid="img-submitted-photo-{id}" - submitted selfie
-- data-testid="img-reference-photo-{id}" - reference photo
-- data-testid="text-confidence-{id}" - face match confidence score
-- data-testid="text-gps-status-{id}" - GPS location status
-- data-testid="text-employee-name-{id}" - employee name
-- data-testid="text-employee-number-{id}" - employee number
-- data-testid="button-approve-attendance-{id}" - approve button
-- data-testid="button-reject-attendance-{id}" - reject button
+Attendance review fields (inside expanded detail):
+- Submitted photo: data-testid="img-submitted-photo-{id}"
+- Reference photo: data-testid="img-reference-photo-{id}"
+- Confidence: data-testid="text-confidence-{id}"
+- GPS status: data-testid="text-gps-status-{id}"
+- Employee name: data-testid="text-employee-name-{id}"
+- Employee number: data-testid="text-employee-number-{id}"
+- Approve button: data-testid="button-approve-attendance-{id}"
+- Reject button: data-testid="button-reject-attendance-{id}"
+- Notes textarea: data-testid="textarea-notes-{id}"
 
 Photo review fields:
-- data-testid="img-current-photo-{id}" - current photo
-- data-testid="img-new-photo-{id}" - new photo
-- data-testid="button-approve-photo-{id}" - approve photo
-- data-testid="button-reject-photo-{id}" - reject photo
+- Current photo: data-testid="img-current-photo-{id}"
+- New photo: data-testid="img-new-photo-{id}"
+- Approve: data-testid="button-approve-photo-{id}"
+- Reject: data-testid="button-reject-photo-{id}"
 
-Resolution notes: data-testid="textarea-notes-{id}"
-
-Confirmation dialog:
-- Dialog: data-testid="dialog-confirm-attendance"
-- Notes: data-testid="textarea-confirm-notes"
+Confirmation dialog (appears after clicking Approve or Reject):
+- Dialog container: data-testid="dialog-confirm-attendance"
+- Notes textarea: data-testid="textarea-confirm-notes"
 - Cancel: data-testid="button-confirm-cancel"
 - Confirm: data-testid="button-confirm-action"
 
-API: PATCH /api/inbox/:id with { status: "resolved"|"dismissed", resolutionNotes: "..." }
+API for resolving: PATCH /api/inbox/:id with { status: "resolved", resolutionNotes: "..." }
 `;

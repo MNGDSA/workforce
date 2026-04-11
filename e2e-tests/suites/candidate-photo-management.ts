@@ -3,7 +3,7 @@ export const name = "Candidate Photo Management";
 export const testPlan = `
 ## Test Suite: Candidate Photo Management
 
-### Test 1: Login and verify avatar edit button
+### Test 1: Candidate mode shows avatar edit button
 1. [New Context] Create a new browser context
 2. [Browser] Navigate to /auth
 3. [Browser] Enter "2000000002" in data-testid="input-identifier"
@@ -12,23 +12,23 @@ export const testPlan = `
 6. [Browser] Wait up to 5 seconds for navigation to /candidate-portal
 7. [Verify]
    - Assert URL is /candidate-portal
-   - Assert data-testid="button-avatar-edit" is visible (camera icon for photo management)
+   - Assert data-testid="button-avatar-edit" is visible (camera icon overlay on profile avatar)
+   - Assert data-testid="badge-portal-mode" is visible showing the current mode
 
-### Test 2: Verify photo management mode behavior
-8. [Verify]
-   - In candidate mode (no active workforce record), clicking the avatar edit button
-     should show a file upload dialog or navigate to profile editing
-   - Assert data-testid="button-avatar-edit" exists and is clickable
-   - Look for the photo upload input (data-testid="input-photo-change-file")
-     or "Select New Photo" button (data-testid="button-select-new-photo")
+### Test 2: Avatar edit triggers photo upload controls
+8. [Browser] Hover over or click the avatar area where data-testid="button-avatar-edit" is
+9. [Verify]
+   - Assert data-testid="button-avatar-edit" is clickable
+   - Assert data-testid="input-photo-change-file" exists in the DOM (hidden file input for photo selection)
+   - Assert data-testid="button-select-new-photo" is visible (or becomes visible upon interaction)
 
-### Test 3: Profile section has photo-related controls
-9. [Browser] Click data-testid="button-profile-menu"
-10. [Browser] Click data-testid="menu-item-profile"
-11. [Verify]
+### Test 3: Profile section accessible with photo-related controls
+10. [Browser] Click data-testid="button-profile-menu"
+11. [Browser] Click data-testid="menu-item-profile"
+12. [Verify]
    - Assert profile editing section is visible
    - Assert data-testid="button-save-profile" is visible
-   - The profile section shows the candidate's information
+   - Assert the profile form contains the candidate's name and contact information
 `;
 
 export const technicalDocs = `
@@ -36,22 +36,22 @@ Candidate: 2000000002 / password123 -> /candidate-portal (profileCompleted=true)
 
 Photo management elements:
 - Avatar edit trigger: data-testid="button-avatar-edit" (camera icon overlay on profile photo)
-- Photo change file input: data-testid="input-photo-change-file" (hidden file input)
-- Select new photo button: data-testid="button-select-new-photo"
+- Photo change file input: data-testid="input-photo-change-file" (hidden file input, may be type="file")
+- Select new photo button: data-testid="button-select-new-photo" (visible when clicking avatar edit)
 
-Photo crop dialog (shown after selecting a photo):
+Photo crop dialog (shown after selecting a photo file):
 - Crop overlay: data-testid="photo-crop-overlay"
 - Crop dialog: data-testid="photo-crop-dialog"
 - Crop close: data-testid="button-crop-close"
 - Zoom slider: data-testid="input-crop-zoom"
 - Save crop: data-testid="button-crop-save"
 
-Employee mode (with active workforce record):
-- Shows employee-specific photo management
-- Photo change requests go to admin inbox for approval
-- Pending review shows badge on avatar
+Candidate mode behavior:
+- In candidate mode (no active workforce record), photo upload is direct
+- In employee mode (active workforce record), photo changes create inbox approval requests
+- Employee mode shows "pending review" badge when a photo change is awaiting admin approval
 
-Candidate mode (no workforce record):
-- Direct photo upload without approval workflow
-- Photo updates profile immediately
+Profile menu: data-testid="button-profile-menu"
+Profile option: data-testid="menu-item-profile"
+Save: data-testid="button-save-profile"
 `;

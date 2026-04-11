@@ -14,22 +14,24 @@ export const testPlan = `
    - Assert URL is still /auth
 
 ### Test 2: Admin login correctly redirects to /dashboard
-7. [Browser] Clear the identifier input and type "1000000001"
-8. [Browser] Clear the password input and type "password123"
-9. [Browser] Click data-testid="button-sign-in"
-10. [Verify]
+7. [New Context] Create a new browser context
+8. [Browser] Navigate to /auth
+9. [Browser] Enter "1000000001" in data-testid="input-identifier"
+10. [Browser] Enter "password123" in data-testid="input-password"
+11. [Browser] Click data-testid="button-sign-in"
+12. [Verify]
    - Assert URL changes to /dashboard
    - Assert the page shows "Dashboard" text
 
 ### Test 3: Forgot password link and reset form
-11. [New Context] Create a new browser context
-12. [Browser] Navigate to /auth
-13. [Browser] Click the link with data-testid="link-forgot-password"
-14. [Verify]
+13. [New Context] Create a new browser context
+14. [Browser] Navigate to /auth
+15. [Browser] Click the link with data-testid="link-forgot-password"
+16. [Verify]
    - Assert a reset form appears with input data-testid="input-reset-national-id"
    - Assert a "Back to login" link is visible at data-testid="link-back-to-login"
-15. [Browser] Click data-testid="link-back-to-login"
-16. [Verify] Assert the Sign In button is visible again
+17. [Browser] Click data-testid="link-back-to-login"
+18. [Verify] Assert the Sign In button (data-testid="button-sign-in") is visible again
 `;
 
 export const technicalDocs = `
@@ -39,5 +41,4 @@ Error display: data-testid="login-error"
 Forgot password: data-testid="link-forgot-password"
 Reset input: data-testid="input-reset-national-id"
 Back link: data-testid="link-back-to-login"
-Password validation: min 8 chars
 `;
