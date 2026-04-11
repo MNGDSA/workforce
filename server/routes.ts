@@ -1934,7 +1934,7 @@ export async function registerRoutes(
       const allowed = [
         "fullNameAr", "email", "phone", "dateOfBirth", "gender",
         "nationalityText", "maritalStatus", "iqamaNumber", "city", "region",
-        "educationLevel", "university", "major", "skills", "languages",
+        "educationLevel", "university", "major",
         "ibanNumber", "ibanBankName", "ibanBankCode",
         "ibanAccountFirstName", "ibanAccountLastName",
         "emergencyContactName", "emergencyContactPhone",

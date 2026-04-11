@@ -299,12 +299,14 @@ function EmployeeDetailDialog({
   onOpenChange,
   onUpdated,
   onPrintCard,
+  onEmployeeRefreshed,
 }: {
   employee: Employee | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onUpdated: () => void;
   onPrintCard?: (emp: Employee) => void;
+  onEmployeeRefreshed?: (emp: Employee) => void;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -415,12 +417,13 @@ function EmployeeDetailDialog({
   const profileMutation = useMutation({
     mutationFn: (data: Record<string, any>) =>
       apiRequest("PATCH", `/api/workforce/${employee!.id}/candidate-profile`, data).then(r => r.json()),
-    onSuccess: () => {
+    onSuccess: (updatedEmployee: Employee) => {
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
       setEditPersonal(false);
       setEditFinancial(false);
       setEditEmergency(false);
       setEditEducation(false);
+      if (onEmployeeRefreshed) onEmployeeRefreshed(updatedEmployee);
       toast({ title: "Profile updated" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -729,8 +732,6 @@ function EmployeeDetailDialog({
                           educationLevel: employee.educationLevel || "",
                           university: employee.university || "",
                           major: employee.major || "",
-                          skills: (employee.skills || []).join(", "),
-                          languages: (employee.languages || []).join(", "),
                         });
                         setEditEducation(true);
                       }}
@@ -740,16 +741,7 @@ function EmployeeDetailDialog({
                       <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500" onClick={() => setEditEducation(false)} data-testid="button-cancel-education"><X className="h-3 w-3" /></Button>
                       <Button size="sm" className="h-6 px-2 text-xs bg-emerald-700 hover:bg-emerald-600" data-testid="button-save-education"
                         disabled={profileMutation.isPending}
-                        onClick={() => {
-                          const payload: Record<string, any> = {
-                            educationLevel: educationForm.educationLevel,
-                            university: educationForm.university,
-                            major: educationForm.major,
-                            skills: educationForm.skills ? educationForm.skills.split(",").map((s: string) => s.trim()).filter(Boolean) : [],
-                            languages: educationForm.languages ? educationForm.languages.split(",").map((s: string) => s.trim()).filter(Boolean) : [],
-                          };
-                          profileMutation.mutate(payload);
-                        }}
+                        onClick={() => profileMutation.mutate(educationForm)}
                       ><Save className="h-3 w-3 mr-1" /> Save</Button>
                     </div>
                   )}
@@ -772,8 +764,6 @@ function EmployeeDetailDialog({
                     </div>
                     <div><label className="text-zinc-500 text-xs">University</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={educationForm.university} onChange={e => setEducationForm(f => ({ ...f, university: e.target.value }))} data-testid="input-education-university" /></div>
                     <div><label className="text-zinc-500 text-xs">Major</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={educationForm.major} onChange={e => setEducationForm(f => ({ ...f, major: e.target.value }))} data-testid="input-education-major" /></div>
-                    <div className="col-span-2"><label className="text-zinc-500 text-xs">Skills (comma-separated)</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" placeholder="e.g. Driving, Customer Service" value={educationForm.skills} onChange={e => setEducationForm(f => ({ ...f, skills: e.target.value }))} data-testid="input-education-skills" /></div>
-                    <div className="col-span-2"><label className="text-zinc-500 text-xs">Languages (comma-separated)</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" placeholder="e.g. Arabic, English, Urdu" value={educationForm.languages} onChange={e => setEducationForm(f => ({ ...f, languages: e.target.value }))} data-testid="input-education-languages" /></div>
                   </div>
                 ) : (
                   <>
@@ -1854,6 +1844,7 @@ export default function WorkforcePage() {
           setSelectedEmployee(null);
         }}
         onPrintCard={(emp) => handlePrintIdCards([emp])}
+        onEmployeeRefreshed={(emp) => setSelectedEmployee(emp)}
       />
 
       {/* ── Bulk Mass Update Dialog ─────────────────────────────────────────── */}
