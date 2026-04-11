@@ -720,11 +720,17 @@ export default function InboxPage() {
                               )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-3 text-sm">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
                               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Employee</span>
-                              <p className="text-sm font-medium text-foreground mt-0.5" data-testid={`text-photo-employee-${item.id}`}>
+                              <p className="text-sm font-medium text-foreground mt-0.5 truncate" data-testid={`text-photo-employee-${item.id}`}>
                                 {item.metadata.candidateName ?? "Unknown"}
+                              </p>
+                            </div>
+                            <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Employee #</span>
+                              <p className="text-sm font-medium text-foreground mt-0.5" data-testid={`text-photo-empnum-${item.id}`}>
+                                {item.metadata.employeeNumber ?? "—"}
                               </p>
                             </div>
                           </div>
