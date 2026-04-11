@@ -357,7 +357,7 @@ fun HomeScreen(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(36.dp))
                 Spacer(Modifier.height(4.dp))
-                Text("CHECK IN", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text("CHECK IN/OUT", fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
 

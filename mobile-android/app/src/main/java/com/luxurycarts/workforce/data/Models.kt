@@ -66,6 +66,36 @@ data class LoginResponse(
     val candidate: Candidate? = null,
 )
 
+data class ResetPasswordRequest(
+    @SerializedName("nationalId") val nationalId: String,
+)
+
+data class ResetPasswordRequestResponse(
+    @SerializedName("maskedPhone") val maskedPhone: String,
+    val phone: String? = null,
+    @SerializedName("expiresAt") val expiresAt: String? = null,
+)
+
+data class OtpVerifyRequest(
+    val phone: String,
+    val code: String,
+)
+
+data class OtpVerifyResponse(
+    val success: Boolean,
+    @SerializedName("otpId") val otpId: String? = null,
+)
+
+data class ResetPasswordFinalize(
+    @SerializedName("nationalId") val nationalId: String,
+    @SerializedName("otpId") val otpId: String,
+    @SerializedName("newPassword") val newPassword: String,
+)
+
+data class MessageResponse(
+    val message: String,
+)
+
 data class ScheduleEntry(
     val id: String,
     val date: String,

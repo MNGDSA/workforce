@@ -2,6 +2,7 @@ package com.luxurycarts.workforce.ui.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,6 +60,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun LoginScreen(
     onLoginSuccess: (User, WorkforceRecord?, ApiService) -> Unit,
+    onForgotPassword: (ApiService) -> Unit = {},
 ) {
     val app = WorkforceApp.instance
     val scope = rememberCoroutineScope()
@@ -216,6 +218,23 @@ fun LoginScreen(
                     Text("Sign In", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 }
             }
+
+            Spacer(Modifier.height(12.dp))
+
+            Text(
+                text = "Forgot Password?",
+                color = ForestGreen,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .clickable(enabled = serverUrl.length > 8) {
+                        val api = try {
+                            ApiClient.create(serverUrl.trim().trimEnd('/'))
+                        } catch (_: Exception) { null }
+                        if (api != null) onForgotPassword(api)
+                    },
+            )
 
             Spacer(Modifier.height(16.dp))
 

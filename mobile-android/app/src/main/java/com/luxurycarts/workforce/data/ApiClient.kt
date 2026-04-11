@@ -23,6 +23,15 @@ interface ApiService {
     @POST("api/auth/login")
     suspend fun login(@Body request: LoginRequest): Response<LoginResponse>
 
+    @POST("api/auth/reset-password/request")
+    suspend fun requestPasswordReset(@Body request: ResetPasswordRequest): Response<ResetPasswordRequestResponse>
+
+    @POST("api/auth/otp/verify")
+    suspend fun verifyOtp(@Body request: OtpVerifyRequest): Response<OtpVerifyResponse>
+
+    @POST("api/auth/reset-password")
+    suspend fun resetPassword(@Body request: ResetPasswordFinalize): Response<MessageResponse>
+
     @GET("api/workforce/all-by-candidate/{candidateId}")
     suspend fun getWorkforceRecords(@Path("candidateId") candidateId: String): Response<List<WorkforceRecord>>
 

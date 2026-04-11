@@ -21,6 +21,7 @@ import com.luxurycarts.workforce.ui.components.BiometricDisclosureDialog
 import com.luxurycarts.workforce.ui.screens.CaptureScreen
 import com.luxurycarts.workforce.ui.screens.HistoryScreen
 import com.luxurycarts.workforce.ui.screens.HomeScreen
+import com.luxurycarts.workforce.ui.screens.ForgotPasswordScreen
 import com.luxurycarts.workforce.ui.screens.LoginScreen
 import com.luxurycarts.workforce.ui.screens.MapScreen
 import com.luxurycarts.workforce.ui.screens.PrivacyScreen
@@ -38,6 +39,8 @@ fun AppNavigation() {
     var apiService by remember { mutableStateOf<ApiService?>(null) }
     var showBiometricDisclosure by remember { mutableStateOf(false) }
     var biometricConsentGiven by remember { mutableStateOf(false) }
+    var showForgotPassword by remember { mutableStateOf(false) }
+    var forgotPasswordApi by remember { mutableStateOf<ApiService?>(null) }
 
     if (isLoggedIn && user == null) {
         app.sessionManager.userJson?.let {
@@ -64,16 +67,28 @@ fun AppNavigation() {
     }
 
     if (!isLoggedIn) {
-        LoginScreen(
-            onLoginSuccess = { u, wr, api ->
-                user = u
-                workforceRecord = wr
-                apiService = api
-                isLoggedIn = true
-                wr?.candidateId?.let { app.sessionManager.candidateId = it }
-                SyncWorker.schedule(app)
-            },
-        )
+        if (showForgotPassword) {
+            ForgotPasswordScreen(
+                apiService = forgotPasswordApi,
+                onBack = { showForgotPassword = false },
+                onResetComplete = { showForgotPassword = false },
+            )
+        } else {
+            LoginScreen(
+                onLoginSuccess = { u, wr, api ->
+                    user = u
+                    workforceRecord = wr
+                    apiService = api
+                    isLoggedIn = true
+                    wr?.candidateId?.let { app.sessionManager.candidateId = it }
+                    SyncWorker.schedule(app)
+                },
+                onForgotPassword = { api ->
+                    forgotPasswordApi = api
+                    showForgotPassword = true
+                },
+            )
+        }
     } else {
         NavHost(navController = navController, startDestination = "home") {
             composable("home") {
