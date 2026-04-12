@@ -2183,7 +2183,7 @@ export default function CandidatePortal() {
             {(portalMode === "candidate" || portalMode === "employee_individual") && (
               <Card className="bg-card border-border">
                 <CardContent className="p-5">
-                  <ContractSection candidateId={candidateId!} candidateName={displayName} onboardingId={currentOnboarding?.id} />
+                  <ContractSection candidateId={candidateId!} candidateName={displayName} readOnly={!isEmployee} onboardingId={currentOnboarding?.id} />
                 </CardContent>
               </Card>
             )}
