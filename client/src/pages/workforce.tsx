@@ -1,5 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from "react";
-import { createPortal } from "react-dom";
+import { useState, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -48,6 +47,7 @@ import {
   AlertTriangle,
   XCircle,
   ChevronRight,
+  ChevronLeft,
   Download,
   ArrowUpDown,
   ArrowUp,
@@ -363,11 +363,6 @@ function EmployeeDetailDialog({
   });
 
   const [viewingAdminContract, setViewingAdminContract] = useState<any | null>(null);
-  const contractViewerOpenRef = useRef(false);
-  const setContractViewer = useCallback((v: any | null) => {
-    contractViewerOpenRef.current = !!v;
-    setViewingAdminContract(v);
-  }, []);
 
   const adminContractMap = useMemo(() => {
     const map = new Map<string, any>();
@@ -532,12 +527,79 @@ function EmployeeDetailDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(o) => { if (!contractViewerOpenRef.current) onOpenChange(o); }}>
-        <DialogContent
-          className="max-w-2xl bg-zinc-950 border-zinc-800 text-white max-h-[90vh] overflow-y-auto"
-          onInteractOutside={(e) => { if (contractViewerOpenRef.current) e.preventDefault(); }}
-          onPointerDownOutside={(e) => { if (contractViewerOpenRef.current) e.preventDefault(); }}
-        >
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl bg-zinc-950 border-zinc-800 text-white max-h-[90vh] overflow-y-auto">
+          {viewingAdminContract && (
+            <div data-testid="admin-contract-history-viewer">
+              <div className="flex items-center gap-2 mb-4">
+                <button
+                  onClick={() => setViewingAdminContract(null)}
+                  className="text-zinc-400 hover:text-white transition-colors"
+                  data-testid="button-back-from-contract"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <div>
+                  <h3 className="text-base font-semibold text-white">Employment Contract</h3>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    {viewingAdminContract.jobTitle && <span>{viewingAdminContract.jobTitle}</span>}
+                    {viewingAdminContract.jobTitle && viewingAdminContract.eventName && " — "}
+                    {viewingAdminContract.eventName && <span>{viewingAdminContract.eventName}</span>}
+                    {viewingAdminContract.signedAt && (
+                      <span className="ml-2 text-emerald-400">
+                        Signed {new Date(viewingAdminContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-6">
+                {Array.isArray(viewingAdminContract.snapshotArticles) && viewingAdminContract.snapshotArticles.map((article: any, idx: number) => {
+                  let body = article.body ?? "";
+                  if (viewingAdminContract.snapshotVariables) {
+                    Object.entries(viewingAdminContract.snapshotVariables).forEach(([key, val]) => {
+                      body = body.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), val as string);
+                    });
+                  }
+                  return (
+                    <div key={idx}>
+                      <h4 className="text-sm font-semibold text-white mb-2">
+                        {idx + 1}. {article.title}
+                      </h4>
+                      <div className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">{body}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex justify-end mt-4">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-zinc-700 gap-1.5"
+                  onClick={() => {
+                    const printWindow = window.open("", "_blank");
+                    if (!printWindow) return;
+                    const articles = Array.isArray(viewingAdminContract.snapshotArticles) ? viewingAdminContract.snapshotArticles : [];
+                    const vars = viewingAdminContract.snapshotVariables ?? {};
+                    const html = articles.map((a: any, i: number) => {
+                      let b = a.body ?? "";
+                      Object.entries(vars).forEach(([k, v]) => { b = b.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v as string); });
+                      return `<h3>${i + 1}. ${a.title}</h3><p style="white-space:pre-wrap">${b}</p>`;
+                    }).join("");
+                    printWindow.document.write(`<html><head><title>Contract</title><style>body{font-family:sans-serif;padding:2rem;max-width:700px;margin:auto}h3{margin-top:1.5em}</style></head><body>${html}</body></html>`);
+                    printWindow.document.close();
+                    printWindow.print();
+                  }}
+                  data-testid="button-print-admin-contract"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  Print / Download
+                </Button>
+              </div>
+            </div>
+          )}
+          {!viewingAdminContract && (
+          <>
           <DialogHeader>
             <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-3">
               <Avatar className="h-10 w-10 border border-zinc-700">
@@ -1106,7 +1168,7 @@ function EmployeeDetailDialog({
                       </div>
                       {linkedContract && (
                         <button
-                          onClick={() => setContractViewer(linkedContract)}
+                          onClick={() => setViewingAdminContract(linkedContract)}
                           className="inline-flex items-center gap-1.5 text-xs text-[hsl(155,45%,45%)] hover:text-[hsl(155,45%,55%)] transition-colors mt-1"
                           data-testid={`button-view-contract-history-${idx}`}
                         >
@@ -1183,8 +1245,6 @@ function EmployeeDetailDialog({
               )}
             </div>
           )}
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={assignScheduleOpen} onOpenChange={setAssignScheduleOpen}>
         <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-sm">
@@ -1407,75 +1467,10 @@ function EmployeeDetailDialog({
           </div>
         </DialogContent>
       </Dialog>
-
-      {viewingAdminContract && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70" onClick={() => setContractViewer(null)}>
-          <div className="bg-card border border-border rounded-lg w-[90vw] max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()} data-testid="admin-contract-history-viewer">
-            <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
-              <div>
-                <h3 className="text-base font-semibold text-white">Employment Contract</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {viewingAdminContract.jobTitle && <span>{viewingAdminContract.jobTitle}</span>}
-                  {viewingAdminContract.jobTitle && viewingAdminContract.eventName && " — "}
-                  {viewingAdminContract.eventName && <span>{viewingAdminContract.eventName}</span>}
-                  {viewingAdminContract.signedAt && (
-                    <span className="ml-2 text-emerald-400">
-                      Signed {new Date(viewingAdminContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
-                    </span>
-                  )}
-                </p>
-              </div>
-              <button onClick={() => setContractViewer(null)} className="text-muted-foreground hover:text-white" data-testid="button-close-admin-contract-viewer">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {Array.isArray(viewingAdminContract.snapshotArticles) && viewingAdminContract.snapshotArticles.map((article: any, idx: number) => {
-                let body = article.body ?? "";
-                if (viewingAdminContract.snapshotVariables) {
-                  Object.entries(viewingAdminContract.snapshotVariables).forEach(([key, val]) => {
-                    body = body.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), val as string);
-                  });
-                }
-                return (
-                  <div key={idx}>
-                    <h4 className="text-sm font-semibold text-white mb-2">
-                      {idx + 1}. {article.title}
-                    </h4>
-                    <div className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">{body}</div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="p-4 border-t border-border flex justify-end shrink-0">
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-zinc-700 gap-1.5"
-                onClick={() => {
-                  const printWindow = window.open("", "_blank");
-                  if (!printWindow) return;
-                  const articles = Array.isArray(viewingAdminContract.snapshotArticles) ? viewingAdminContract.snapshotArticles : [];
-                  const vars = viewingAdminContract.snapshotVariables ?? {};
-                  const html = articles.map((a: any, i: number) => {
-                    let b = a.body ?? "";
-                    Object.entries(vars).forEach(([k, v]) => { b = b.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v as string); });
-                    return `<h3>${i + 1}. ${a.title}</h3><p style="white-space:pre-wrap">${b}</p>`;
-                  }).join("");
-                  printWindow.document.write(`<html><head><title>Contract</title><style>body{font-family:sans-serif;padding:2rem;max-width:700px;margin:auto}h3{margin-top:1.5em}</style></head><body>${html}</body></html>`);
-                  printWindow.document.close();
-                  printWindow.print();
-                }}
-                data-testid="button-print-admin-contract"
-              >
-                <Printer className="h-3.5 w-3.5" />
-                Print / Download
-              </Button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+          </>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
