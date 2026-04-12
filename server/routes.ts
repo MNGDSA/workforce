@@ -39,8 +39,9 @@ import {
   insertGeofenceZoneSchema,
   insertDepartmentSchema,
   insertPositionSchema,
+  photoChangeRequests,
 } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
 import { validateFaceQuality } from "./rekognition";
 import XLSX from "xlsx";
@@ -340,6 +341,23 @@ export async function registerRoutes(
           const activeRecord = await storage.getWorkforceByCandidateId(id);
           const isActiveEmployee = activeRecord && activeRecord.isActive;
           if (isActiveEmployee) {
+            const olderPending = await db.select({ id: photoChangeRequests.id })
+              .from(photoChangeRequests)
+              .where(and(
+                eq(photoChangeRequests.candidateId, id),
+                eq(photoChangeRequests.status, "pending"),
+              ));
+            for (const old of olderPending) {
+              await storage.updatePhotoChangeRequest(old.id, {
+                status: "rejected",
+                reviewedAt: new Date(),
+                reviewNotes: "Superseded by a newer photo submission",
+              });
+              await db.update(inboxItems)
+                .set({ status: "resolved", resolvedAt: new Date(), resolutionNotes: "Superseded by a newer photo submission" })
+                .where(and(eq(inboxItems.entityType, "photo_change_request"), eq(inboxItems.entityId, old.id), eq(inboxItems.status, "pending")));
+            }
+
             const changeRequest = await storage.createPhotoChangeRequest({
               candidateId: id,
               newPhotoUrl: fileUrl,
@@ -4628,6 +4646,25 @@ export async function registerRoutes(
       await db.update(inboxItems)
         .set({ status: "resolved", resolvedBy: reviewedBy, resolvedAt: new Date(), resolutionNotes: notes ?? "Approved" })
         .where(and(eq(inboxItems.entityType, "photo_change_request"), eq(inboxItems.entityId, req.params.id), eq(inboxItems.status, "pending")));
+
+      const olderPending = await db.select({ id: photoChangeRequests.id })
+        .from(photoChangeRequests)
+        .where(and(
+          eq(photoChangeRequests.candidateId, changeReq.candidateId),
+          eq(photoChangeRequests.status, "pending"),
+          sql`${photoChangeRequests.id} != ${req.params.id}`,
+        ));
+      for (const old of olderPending) {
+        await storage.updatePhotoChangeRequest(old.id, {
+          status: "rejected",
+          reviewedBy,
+          reviewedAt: new Date(),
+          reviewNotes: "Auto-resolved: a newer photo change was approved",
+        });
+        await db.update(inboxItems)
+          .set({ status: "resolved", resolvedBy: reviewedBy, resolvedAt: new Date(), resolutionNotes: "Auto-resolved: a newer photo change was approved" })
+          .where(and(eq(inboxItems.entityType, "photo_change_request"), eq(inboxItems.entityId, old.id), eq(inboxItems.status, "pending")));
+      }
 
       await logAudit(req, { action: "approve_photo_change", entityType: "photo_change_request", entityId: req.params.id, description: `Approved photo change for candidate ${changeReq.candidateId}` });
       return res.json(updated);

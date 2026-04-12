@@ -542,6 +542,13 @@ function ProfileCompletionCard({
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    if (pendingPhotoRequestsInCard.length === 0 && photoPendingReview) {
+      setPhotoPendingReview(false);
+    }
+  }, [pendingPhotoRequestsInCard, photoPendingReview]);
+
   const hasPendingPhotoChange = pendingPhotoRequestsInCard.length > 0 || photoPendingReview;
 
   const uploadFile = useCallback(async (key: DocKey, file: File): Promise<{ ok: boolean; qualityResult?: QualityResult; error?: string }> => {
