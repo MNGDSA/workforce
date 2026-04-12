@@ -316,14 +316,16 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid docType. Must be photo, nationalId, iban, or resume" });
       }
       const fileUrl = `/uploads/${req.file.filename}`;
+      let photoQualityResult: import("./rekognition").FaceQualityResult | undefined;
 
       if (docType === "photo") {
-        const allowedPhotoMimes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+        const allowedPhotoMimes = ["image/jpeg", "image/jpg", "image/png"];
         if (!allowedPhotoMimes.includes(req.file.mimetype.toLowerCase())) {
           try { fs.unlinkSync(path.join("uploads", req.file.filename)); } catch {}
-          return res.status(400).json({ message: "Photo must be a JPG, PNG, or WebP image" });
+          return res.status(400).json({ message: "Photo must be a JPG or PNG image" });
         }
         const qualityResult = await validateFaceQuality(fileUrl);
+        photoQualityResult = qualityResult;
         if (!qualityResult.passed && !qualityResult.qualityCheckSkipped) {
           try { fs.unlinkSync(path.join("uploads", req.file.filename)); } catch {}
           return res.status(422).json({
@@ -385,7 +387,9 @@ export async function registerRoutes(
           await storage.updateOnboardingRecord(rec.id, syncPayload);
         }
       }
-      return res.json({ url: fileUrl, docType, candidate: updated });
+      const response: Record<string, any> = { url: fileUrl, docType, candidate: updated };
+      if (photoQualityResult) response.qualityResult = photoQualityResult;
+      return res.json(response);
     } catch (err) {
       return handleError(res, err);
     }
