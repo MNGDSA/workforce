@@ -301,9 +301,14 @@ export default function InboxPage() {
   const totalPages = Math.ceil(total / limit);
   const pendingCount = countData?.count ?? 0;
 
+  const BULK_PROTECTED_TYPES = ["photo_change_request", "attendance_verification"];
+
   const pendingItems = items.filter(i => i.status === "pending");
+  const bulkSelectableItems = pendingItems.filter(i => !BULK_PROTECTED_TYPES.includes(i.type));
 
   const toggleSelect = (id: string) => {
+    const item = items.find(i => i.id === id);
+    if (item && BULK_PROTECTED_TYPES.includes(item.type)) return;
     setSelected(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -313,8 +318,8 @@ export default function InboxPage() {
   };
 
   const toggleAll = () => {
-    if (selected.size === pendingItems.length && pendingItems.length > 0) setSelected(new Set());
-    else setSelected(new Set(pendingItems.map(i => i.id)));
+    if (selected.size === bulkSelectableItems.length && bulkSelectableItems.length > 0) setSelected(new Set());
+    else setSelected(new Set(bulkSelectableItems.map(i => i.id)));
   };
 
   const switchTab = (newTab: TabValue) => {
@@ -326,6 +331,7 @@ export default function InboxPage() {
   };
 
   const hasPendingInView = pendingItems.length > 0;
+  const hasBulkSelectableInView = bulkSelectableItems.length > 0;
 
   return (
     <DashboardLayout>
@@ -430,7 +436,7 @@ export default function InboxPage() {
           </div>
         </div>
 
-        {selected.size > 0 && hasPendingInView && (
+        {selected.size > 0 && (
           <div className="flex items-center gap-3 px-4 py-2 bg-muted/50 border border-border rounded-sm">
             <span className="text-sm text-muted-foreground">{selected.size} selected</span>
             <Button
@@ -474,13 +480,20 @@ export default function InboxPage() {
           <div className="space-y-2">
             {hasPendingInView && (
               <div className="flex items-center gap-3 px-4 py-1">
-                <Checkbox
-                  checked={selected.size === pendingItems.length && pendingItems.length > 0}
-                  onCheckedChange={toggleAll}
-                  data-testid="checkbox-select-all"
-                />
+                {hasBulkSelectableInView ? (
+                  <Checkbox
+                    checked={selected.size === bulkSelectableItems.length && bulkSelectableItems.length > 0}
+                    onCheckedChange={toggleAll}
+                    data-testid="checkbox-select-all"
+                  />
+                ) : (
+                  <div className="h-4 w-4" />
+                )}
                 <span className="text-xs text-muted-foreground">
                   {total} item{total !== 1 ? "s" : ""} total
+                  {bulkSelectableItems.length < pendingItems.length && (
+                    <span className="ml-2 text-amber-500">· {pendingItems.length - bulkSelectableItems.length} require individual review</span>
+                  )}
                 </span>
               </div>
             )}
@@ -505,7 +518,7 @@ export default function InboxPage() {
                     data-testid={`row-inbox-${item.id}`}
                   >
                     <div className="flex items-center gap-3 pt-0.5">
-                      {isPending && (
+                      {isPending && !BULK_PROTECTED_TYPES.includes(item.type) && (
                         <Checkbox
                           checked={selected.has(item.id)}
                           onCheckedChange={() => toggleSelect(item.id)}
@@ -513,6 +526,16 @@ export default function InboxPage() {
                           data-testid={`checkbox-inbox-${item.id}`}
                         />
                       )}
+                      {isPending && BULK_PROTECTED_TYPES.includes(item.type) && (
+                        <div
+                          className="h-4 w-4 flex items-center justify-center shrink-0"
+                          title="Requires individual review — cannot be bulk actioned"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <ShieldAlert className="h-3.5 w-3.5 text-amber-500/60" />
+                        </div>
+                      )}
+                      {!isPending && <div className="h-4 w-4 shrink-0" />}
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted/50">
                         <Icon className={`h-4 w-4 ${typeMeta.color}`} />
                       </div>

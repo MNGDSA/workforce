@@ -4234,10 +4234,26 @@ export async function registerRoutes(
   });
 
   const inboxBulkSchema = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) });
+  const BULK_PROTECTED_TYPES = ["photo_change_request", "attendance_verification"];
+
+  async function rejectIfProtectedTypes(ids: string[], res: Response): Promise<boolean> {
+    const items = await Promise.all(ids.map(id => storage.getInboxItem(id)));
+    const protected_ = items.filter(i => i && BULK_PROTECTED_TYPES.includes(i.type));
+    if (protected_.length > 0) {
+      const types = [...new Set(protected_.map(i => i!.type))].join(", ");
+      res.status(422).json({
+        message: `${protected_.length} item${protected_.length > 1 ? "s" : ""} require individual review and cannot be bulk actioned (${types}). Please review them one by one.`,
+        protectedCount: protected_.length,
+      });
+      return true;
+    }
+    return false;
+  }
 
   app.post("/api/inbox/bulk-resolve", async (req: Request, res: Response) => {
     try {
       const { ids } = inboxBulkSchema.parse(req.body);
+      if (await rejectIfProtectedTypes(ids, res)) return;
       const resolvedBy = (req as any).userId ?? "system";
       const count = await storage.bulkResolveInboxItems(ids, resolvedBy);
       return res.json({ resolved: count });
@@ -4247,6 +4263,7 @@ export async function registerRoutes(
   app.post("/api/inbox/bulk-dismiss", async (req: Request, res: Response) => {
     try {
       const { ids } = inboxBulkSchema.parse(req.body);
+      if (await rejectIfProtectedTypes(ids, res)) return;
       const resolvedBy = (req as any).userId ?? "system";
       const count = await storage.bulkDismissInboxItems(ids, resolvedBy);
       return res.json({ dismissed: count });
