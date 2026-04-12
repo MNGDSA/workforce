@@ -2709,9 +2709,7 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(workforce.candidateId, wf.candidateId), eq(workforce.isActive, true)))
       .limit(1);
     if (otherActive.length === 0) {
-      const [cand] = await db.select({ lastLoginAt: candidates.lastLoginAt }).from(candidates).where(eq(candidates.id, wf.candidateId));
-      const newStatus = computeCandidateStatusFromLogin(cand?.lastLoginAt);
-      await db.update(candidates).set({ status: newStatus, updatedAt: new Date() }).where(eq(candidates.id, wf.candidateId));
+      await db.update(candidates).set({ status: "active", updatedAt: new Date() }).where(eq(candidates.id, wf.candidateId));
     }
 
     return updated;
