@@ -26,6 +26,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.HourglassTop
@@ -33,6 +35,7 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -84,6 +87,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
+data class QualityCheck(val name: String, val passed: Boolean, val tip: String?)
+
 @Composable
 fun HomeScreen(
     user: User,
@@ -107,6 +112,7 @@ fun HomeScreen(
 
     var photoUploading by remember { mutableStateOf(false) }
     var photoMessage by remember { mutableStateOf<String?>(null) }
+    var qualityChecks by remember { mutableStateOf<List<QualityCheck>?>(null) }
     var hasPendingPhotoChange by remember { mutableStateOf(false) }
     var showPhotoDialog by remember { mutableStateOf(false) }
 
@@ -163,6 +169,7 @@ fun HomeScreen(
             scope.launch {
                 photoUploading = true
                 photoMessage = null
+                qualityChecks = null
                 try {
                     val inputStream = context.contentResolver.openInputStream(cameraPhotoUri!!)
                     val bytes = inputStream?.readBytes() ?: throw Exception("Cannot read file")
@@ -183,15 +190,37 @@ fun HomeScreen(
                             onWorkforceRefresh()
                         }
                     } else {
-                        val errMsg = try {
-                            val errJson = response.errorBody()?.string()
+                        val errJson = try { response.errorBody()?.string() } catch (_: Exception) { null }
+                        val parsedChecks = try {
                             if (errJson != null) {
-                                val obj = com.google.gson.Gson()
-                                    .fromJson(errJson, com.google.gson.JsonObject::class.java)
-                                obj?.get("message")?.asString
+                                val gson = com.google.gson.Gson()
+                                val obj = gson.fromJson(errJson, com.google.gson.JsonObject::class.java)
+                                val qr = obj?.getAsJsonObject("qualityResult")
+                                val arr = qr?.getAsJsonArray("checks")
+                                arr?.map { el ->
+                                    val c = el.asJsonObject
+                                    QualityCheck(
+                                        name = c.get("name")?.asString ?: "",
+                                        passed = c.get("passed")?.asBoolean ?: false,
+                                        tip = c.get("tip")?.takeIf { !it.isJsonNull }?.asString,
+                                    )
+                                }
                             } else null
                         } catch (_: Exception) { null }
-                        photoMessage = errMsg ?: "Upload failed. Please try again."
+
+                        if (!parsedChecks.isNullOrEmpty()) {
+                            qualityChecks = parsedChecks
+                            photoMessage = null
+                        } else {
+                            val errMsg = try {
+                                if (errJson != null) {
+                                    val obj = com.google.gson.Gson()
+                                        .fromJson(errJson, com.google.gson.JsonObject::class.java)
+                                    obj?.get("message")?.asString
+                                } else null
+                            } catch (_: Exception) { null }
+                            photoMessage = errMsg ?: "Upload failed. Please try again."
+                        }
                     }
                 } catch (e: Exception) {
                     photoMessage = "Error: ${e.message}"
@@ -386,6 +415,70 @@ fun HomeScreen(
                     modifier = Modifier.padding(12.dp),
                     textAlign = TextAlign.Center,
                 )
+            }
+        }
+
+        val checks = qualityChecks
+        if (checks != null) {
+            Spacer(Modifier.height(12.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFF3B0A0A)),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Filled.Warning,
+                            contentDescription = null,
+                            tint = androidx.compose.ui.graphics.Color(0xFFF87171),
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "Photo Quality Check Failed",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = androidx.compose.ui.graphics.Color(0xFFF87171),
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    checks.forEach { check ->
+                        Row(
+                            verticalAlignment = Alignment.Top,
+                            modifier = Modifier.padding(vertical = 3.dp),
+                        ) {
+                            Icon(
+                                if (check.passed) Icons.Filled.CheckCircle else Icons.Filled.Cancel,
+                                contentDescription = null,
+                                tint = if (check.passed)
+                                    androidx.compose.ui.graphics.Color(0xFF34D399)
+                                else
+                                    androidx.compose.ui.graphics.Color(0xFFF87171),
+                                modifier = Modifier.size(14.dp).padding(top = 1.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Column {
+                                Text(
+                                    check.name,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (check.passed)
+                                        androidx.compose.ui.graphics.Color(0xFF34D399)
+                                    else
+                                        androidx.compose.ui.graphics.Color(0xFFF87171),
+                                )
+                                if (!check.passed && check.tip != null) {
+                                    Text(
+                                        check.tip,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextMuted,
+                                        fontSize = 10.sp,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
