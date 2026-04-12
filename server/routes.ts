@@ -325,8 +325,23 @@ export async function registerRoutes(
           try { fs.unlinkSync(path.join("uploads", req.file.filename)); } catch {}
           return res.status(400).json({ message: "Photo must be a JPG or PNG image" });
         }
+        const candidate = await storage.getCandidate(id);
+        if (!candidate) return res.status(404).json({ message: "Candidate not found" });
+        const activeRecord = await storage.getWorkforceByCandidateId(id);
+        const isActiveEmployee = activeRecord && activeRecord.isActive;
+        const isPhotoChange = isActiveEmployee && candidate.hasPhoto && candidate.photoUrl;
+
         const qualityResult = await validateFaceQuality(fileUrl);
         photoQualityResult = qualityResult;
+
+        if (isPhotoChange && qualityResult.qualityCheckSkipped) {
+          try { fs.unlinkSync(path.join("uploads", req.file.filename)); } catch {}
+          return res.status(503).json({
+            message: "Photo verification is temporarily unavailable. Please try again in a few minutes.",
+            qualityResult: { passed: false, checks: [{ name: "Face verification service", passed: false, tip: "The verification service is currently unreachable. Your photo cannot be processed until the service is available." }], qualityCheckSkipped: true },
+          });
+        }
+
         if (!qualityResult.passed && !qualityResult.qualityCheckSkipped) {
           try { fs.unlinkSync(path.join("uploads", req.file.filename)); } catch {}
           return res.status(422).json({
@@ -335,52 +350,46 @@ export async function registerRoutes(
           });
         }
 
-        const candidate = await storage.getCandidate(id);
-        if (!candidate) return res.status(404).json({ message: "Candidate not found" });
-        if (candidate.hasPhoto && candidate.photoUrl) {
-          const activeRecord = await storage.getWorkforceByCandidateId(id);
-          const isActiveEmployee = activeRecord && activeRecord.isActive;
-          if (isActiveEmployee) {
-            const olderPending = await db.select({ id: photoChangeRequests.id })
-              .from(photoChangeRequests)
-              .where(and(
-                eq(photoChangeRequests.candidateId, id),
-                eq(photoChangeRequests.status, "pending"),
-              ));
-            for (const old of olderPending) {
-              await storage.updatePhotoChangeRequest(old.id, {
-                status: "rejected",
-                reviewedAt: new Date(),
-                reviewNotes: "Superseded by a newer photo submission",
-              });
-              await db.update(inboxItems)
-                .set({ status: "resolved", resolvedAt: new Date(), resolutionNotes: "Superseded by a newer photo submission" })
-                .where(and(eq(inboxItems.entityType, "photo_change_request"), eq(inboxItems.entityId, old.id), eq(inboxItems.status, "pending")));
-            }
+        if (isPhotoChange) {
+          const olderPending = await db.select({ id: photoChangeRequests.id })
+            .from(photoChangeRequests)
+            .where(and(
+              eq(photoChangeRequests.candidateId, id),
+              eq(photoChangeRequests.status, "pending"),
+            ));
+          for (const old of olderPending) {
+            await storage.updatePhotoChangeRequest(old.id, {
+              status: "rejected",
+              reviewedAt: new Date(),
+              reviewNotes: "Superseded by a newer photo submission",
+            });
+            await db.update(inboxItems)
+              .set({ status: "resolved", resolvedAt: new Date(), resolutionNotes: "Superseded by a newer photo submission" })
+              .where(and(eq(inboxItems.entityType, "photo_change_request"), eq(inboxItems.entityId, old.id), eq(inboxItems.status, "pending")));
+          }
 
-            const changeRequest = await storage.createPhotoChangeRequest({
+          const changeRequest = await storage.createPhotoChangeRequest({
+            candidateId: id,
+            newPhotoUrl: fileUrl,
+            previousPhotoUrl: candidate.photoUrl,
+            status: "pending",
+          });
+          await createInboxItem(
+            "photo_change_request",
+            `Photo change request — ${candidate.fullNameEn ?? candidate.fullNameAr ?? "Unknown"}`,
+            `Employee has submitted a new profile photo for review. The previous photo remains active until this request is approved.`,
+            {
               candidateId: id,
+              changeRequestId: changeRequest.id,
+              candidateName: candidate.fullNameEn ?? candidate.fullNameAr,
+              employeeNumber: activeRecord!.employeeNumber ?? null,
               newPhotoUrl: fileUrl,
               previousPhotoUrl: candidate.photoUrl,
-              status: "pending",
-            });
-            await createInboxItem(
-              "photo_change_request",
-              `Photo change request — ${candidate.fullNameEn ?? candidate.fullNameAr ?? "Unknown"}`,
-              `Employee has submitted a new profile photo for review. The previous photo remains active until this request is approved.`,
-              {
-                candidateId: id,
-                changeRequestId: changeRequest.id,
-                candidateName: candidate.fullNameEn ?? candidate.fullNameAr,
-                employeeNumber: activeRecord.employeeNumber ?? null,
-                newPhotoUrl: fileUrl,
-                previousPhotoUrl: candidate.photoUrl,
-              },
-              "high",
-              { entityType: "photo_change_request", entityId: changeRequest.id }
-            );
-            return res.json({ url: fileUrl, docType, pendingReview: true, changeRequestId: changeRequest.id, qualityResult, message: "Photo submitted for HR review. Your current photo remains active." });
-          }
+            },
+            "high",
+            { entityType: "photo_change_request", entityId: changeRequest.id }
+          );
+          return res.json({ url: fileUrl, docType, pendingReview: true, changeRequestId: changeRequest.id, qualityResult, message: "Photo submitted for HR review. Your current photo remains active." });
         }
       }
 

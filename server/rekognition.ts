@@ -74,12 +74,42 @@ export async function validateFaceQuality(photoPath: string): Promise<FaceQualit
 
     if (faces.length === 1) {
       const face = faces[0];
+      const faceConf = face.Confidence ?? 0;
+      checks.push({
+        name: "Face confidence",
+        passed: faceConf >= 90,
+        tip: faceConf < 90 ? "Face is not clearly recognisable. Use a well-lit photo showing your full face." : undefined,
+      });
+
       const box = face.BoundingBox;
       const boxArea = (box?.Width ?? 0) * (box?.Height ?? 0);
       checks.push({
         name: "Face size sufficient",
-        passed: boxArea >= 0.02,
-        tip: boxArea < 0.02 ? "Face is too small. Move closer to the camera or crop tighter." : undefined,
+        passed: boxArea >= 0.04,
+        tip: boxArea < 0.04 ? "Face is too small. Move closer to the camera or crop tighter." : undefined,
+      });
+
+      const yaw = Math.abs(face.Pose?.Yaw ?? 0);
+      const pitch = Math.abs(face.Pose?.Pitch ?? 0);
+      checks.push({
+        name: "Face facing forward",
+        passed: yaw <= 30 && pitch <= 25,
+        tip: yaw > 30 || pitch > 25 ? "Face the camera directly. Avoid turning or tilting your head." : undefined,
+      });
+
+      const landmarks = face.Landmarks ?? [];
+      const nose = landmarks.find(l => l.Type === "nose");
+      const mouthLeft = landmarks.find(l => l.Type === "mouthLeft");
+      const mouthRight = landmarks.find(l => l.Type === "mouthRight");
+      const boxBottom = (box?.Top ?? 0) + (box?.Height ?? 0);
+      const noseInBox = nose && box ? (nose.Y! <= boxBottom + 0.02) : false;
+      const mouthInBox = mouthLeft && mouthRight && box
+        ? (mouthLeft.Y! <= boxBottom + 0.05 && mouthRight.Y! <= boxBottom + 0.05)
+        : false;
+      checks.push({
+        name: "Full face visible",
+        passed: noseInBox && mouthInBox,
+        tip: !(noseInBox && mouthInBox) ? "Your entire face must be visible — forehead to chin. Do not crop or cut off any part." : undefined,
       });
 
       const sharpness = face.Quality?.Sharpness ?? 0;
@@ -104,7 +134,10 @@ export async function validateFaceQuality(photoPath: string): Promise<FaceQualit
         tip: !eyesOpen || eyesConf < 70 ? "Eyes should be clearly open and visible. Remove sunglasses if worn." : undefined,
       });
     } else {
+      checks.push({ name: "Face confidence", passed: false, tip: "Cannot evaluate — no single face detected." });
       checks.push({ name: "Face size sufficient", passed: false, tip: "Cannot evaluate — no single face detected." });
+      checks.push({ name: "Face facing forward", passed: false, tip: "Cannot evaluate — no single face detected." });
+      checks.push({ name: "Full face visible", passed: false, tip: "Cannot evaluate — no single face detected." });
       checks.push({ name: "Sharpness acceptable", passed: false, tip: "Cannot evaluate — no single face detected." });
       checks.push({ name: "Brightness acceptable", passed: false, tip: "Cannot evaluate — no single face detected." });
       checks.push({ name: "Eyes visible", passed: false, tip: "Cannot evaluate — no single face detected." });
