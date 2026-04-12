@@ -535,6 +535,15 @@ function ProfileCompletionCard({
 
   const [photoPendingReview, setPhotoPendingReview] = useState(false);
 
+  const { data: pendingPhotoRequestsInCard = [] } = useQuery<{ id: string; status: string }[]>({
+    queryKey: ["/api/photo-change-requests", candidateId, "pending"],
+    queryFn: () => apiRequest("GET", `/api/photo-change-requests?candidateId=${candidateId}&status=pending`).then(r => r.json()),
+    enabled: !!candidateId,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  });
+  const hasPendingPhotoChange = pendingPhotoRequestsInCard.length > 0 || photoPendingReview;
+
   const uploadFile = useCallback(async (key: DocKey, file: File): Promise<{ ok: boolean; qualityResult?: QualityResult; error?: string }> => {
     setUploading((p) => ({ ...p, [key]: true }));
     try {
@@ -621,7 +630,7 @@ function ProfileCompletionCard({
             const done = isDone(key);
             const uploadedName = justUploaded[key];
             const hasFileUrl = !!docUrlMap[key];
-            const isPendingPhotoReview = key === "photo" && (photoPendingReview || hasPendingPhotoChange);
+            const isPendingPhotoReview = key === "photo" && hasPendingPhotoChange;
 
             return (
               <div key={key}>
