@@ -1972,17 +1972,26 @@ export async function registerRoutes(
 
       // Enforce: individual workers must have null smpCompanyId regardless of what client sends
       const resolvedSmpCompanyId = resolvedEmploymentType === "smp" ? (smpCompanyId || undefined) : undefined;
-      const workforce = await storage.convertOnboardingToEmployee(
-        req.params.id,
-        {
-          startDate,
-          eventId: eventId || undefined,
-          salary: salary && salary.trim() !== "" ? salary : undefined,
-          smpCompanyId: resolvedSmpCompanyId,
-          employmentType: resolvedEmploymentType,
-        },
-        (req as any).userId,
-      );
+      let workforce;
+      try {
+        workforce = await storage.convertOnboardingToEmployee(
+          req.params.id,
+          {
+            startDate,
+            eventId: eventId || undefined,
+            salary: salary && salary.trim() !== "" ? salary : undefined,
+            smpCompanyId: resolvedSmpCompanyId,
+            employmentType: resolvedEmploymentType,
+          },
+          (req as any).userId,
+        );
+      } catch (convErr: any) {
+        const msg = convErr?.message || "";
+        if (msg.includes("Contract must be signed") || msg.includes("Cannot convert") || msg.includes("Already converted") || msg.includes("not found")) {
+          return res.status(400).json({ message: msg });
+        }
+        throw convErr;
+      }
       await logAudit(req, {
         action: "workforce.converted",
         entityType: "workforce",
