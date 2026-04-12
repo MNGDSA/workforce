@@ -3,6 +3,8 @@ package com.luxurycarts.workforce.ui.screens
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
+import java.io.File
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -122,15 +124,17 @@ fun HomeScreen(
         }
     }
 
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null && candidateId != null && apiService != null) {
+    var cameraPhotoUri by remember { mutableStateOf<Uri?>(null) }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success: Boolean ->
+        if (success && cameraPhotoUri != null && candidateId != null && apiService != null) {
             scope.launch {
                 photoUploading = true
                 photoMessage = null
                 try {
-                    val inputStream = context.contentResolver.openInputStream(uri)
+                    val inputStream = context.contentResolver.openInputStream(cameraPhotoUri!!)
                     val bytes = inputStream?.readBytes() ?: throw Exception("Cannot read file")
                     inputStream.close()
 
@@ -393,7 +397,7 @@ fun HomeScreen(
                         Spacer(Modifier.height(8.dp))
                     }
                     Text(
-                        "Select a new profile photo from your gallery. If you are an active employee, the change will require HR approval before it takes effect.",
+                        "Take a new profile photo using your camera. The photo will be checked for quality. If you are an active employee, the change will require HR approval before it takes effect.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary,
                     )
@@ -403,11 +407,14 @@ fun HomeScreen(
                 Button(
                     onClick = {
                         showPhotoDialog = false
-                        photoPickerLauncher.launch("image/*")
+                        val photoFile = File(context.cacheDir, "profile_photo_${System.currentTimeMillis()}.jpg")
+                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
+                        cameraPhotoUri = uri
+                        cameraLauncher.launch(uri)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ForestGreen),
                 ) {
-                    Text("Choose Photo")
+                    Text("Open Camera")
                 }
             },
             dismissButton = {
