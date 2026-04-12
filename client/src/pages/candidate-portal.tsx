@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { printContract } from "@/lib/print-contract";
 import { useLocation } from "wouter";
@@ -42,6 +42,7 @@ import {
   Shield,
   Camera,
   UserCheck,
+  Printer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -256,6 +257,7 @@ type WorkforceRecord = {
   isActive: boolean;
   eventName: string | null;
   jobTitle: string | null;
+  createdAt?: string;
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -725,12 +727,60 @@ function PlaceholderCard({ icon, title, description }: { icon: React.ReactNode; 
 
 // ─── Work History Section ─────────────────────────────────────────────────────
 
+type ContractHistoryItem = {
+  id: string;
+  status: string;
+  signedAt: string | null;
+  createdAt: string;
+  snapshotArticles: any[];
+  snapshotVariables: Record<string, string>;
+  generatedPdfUrl: string | null;
+  onboardingId: string | null;
+  templateId: string;
+  onboardingStatus: string | null;
+  onboardingConvertedAt: string | null;
+  eventName: string | null;
+  jobTitle: string | null;
+};
+
 function WorkHistorySection({ candidateId }: { candidateId: string }) {
   const { data: allRecords = [], isLoading } = useQuery<WorkforceRecord[]>({
     queryKey: ["/api/workforce/all-by-candidate", candidateId],
     queryFn: () => apiRequest("GET", `/api/workforce/all-by-candidate/${candidateId}`).then(r => r.json()),
     enabled: !!candidateId,
   });
+
+  const { data: contractHistory = [] } = useQuery<ContractHistoryItem[]>({
+    queryKey: ["/api/candidates/contract-history", candidateId],
+    queryFn: () => apiRequest("GET", `/api/candidates/${candidateId}/contract-history`).then(r => r.json()),
+    enabled: !!candidateId,
+  });
+
+  const [viewingContract, setViewingContract] = useState<ContractHistoryItem | null>(null);
+
+  const contractMatchMap = useMemo(() => {
+    const map = new Map<string, ContractHistoryItem>();
+    if (contractHistory.length === 0 || allRecords.length === 0) return map;
+    const used = new Set<string>();
+    const sorted = [...allRecords].sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+    for (const rec of sorted) {
+      const recCreated = new Date(rec.createdAt ?? rec.startDate).getTime();
+      let best: ContractHistoryItem | undefined;
+      let bestScore = -1;
+      for (const c of contractHistory) {
+        if (c.onboardingStatus !== "converted" || used.has(c.id)) continue;
+        const convertedAt = c.onboardingConvertedAt ? new Date(c.onboardingConvertedAt).getTime() : 0;
+        const timeDiff = Math.abs(convertedAt - recCreated);
+        if (timeDiff > 7 * 24 * 60 * 60 * 1000) continue;
+        let score = 1000 - Math.min(timeDiff / (24 * 60 * 60 * 1000), 7);
+        if (c.eventName && rec.eventName && c.eventName === rec.eventName) score += 500;
+        if (c.jobTitle && rec.jobTitle && c.jobTitle === rec.jobTitle) score += 300;
+        if (score > bestScore) { bestScore = score; best = c; }
+      }
+      if (best) { map.set(rec.id, best); used.add(best.id); }
+    }
+    return map;
+  }, [contractHistory, allRecords]);
 
   if (isLoading) {
     return (
@@ -750,85 +800,174 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
   }
 
   return (
-    <div className="space-y-3">
-      {allRecords.map((rec) => {
-        const start = new Date(rec.startDate);
-        const end = rec.endDate ? new Date(rec.endDate) : (rec.isActive ? new Date() : null);
-        const durationDays = end ? Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))) : null;
-        const categoryLabel = rec.terminationCategory ? (CATEGORY_LABELS[rec.terminationCategory] ?? rec.terminationCategory) : null;
+    <>
+      <div className="space-y-3">
+        {allRecords.map((rec) => {
+          const start = new Date(rec.startDate);
+          const end = rec.endDate ? new Date(rec.endDate) : (rec.isActive ? new Date() : null);
+          const durationDays = end ? Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))) : null;
+          const categoryLabel = rec.terminationCategory ? (CATEGORY_LABELS[rec.terminationCategory] ?? rec.terminationCategory) : null;
+          const linkedContract = contractMatchMap.get(rec.id);
 
-        return (
-          <Card key={rec.id} className="bg-card border-border" data-testid={`card-work-history-${rec.id}`}>
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="font-bold text-white font-mono text-sm">{rec.employeeNumber}</span>
-                    <Badge
-                      className={`text-[10px] h-5 border-0 ${
-                        rec.employmentType === "smp"
-                          ? "bg-amber-500/15 text-amber-400"
-                          : "bg-blue-500/15 text-blue-400"
-                      }`}
-                      data-testid={`badge-employment-type-${rec.id}`}
-                    >
-                      {rec.employmentType === "smp" ? "SMP Contract" : "Individual"}
-                    </Badge>
-                    <Badge
-                      className={`text-[10px] h-5 border-0 ${
-                        rec.isActive
-                          ? "bg-emerald-500/15 text-emerald-400"
-                          : "bg-muted/40 text-muted-foreground"
-                      }`}
-                    >
-                      {rec.isActive ? "Active" : categoryLabel ?? "Ended"}
-                    </Badge>
-                  </div>
-                  {rec.jobTitle && (
-                    <p className="text-sm text-white">{rec.jobTitle}</p>
-                  )}
-                  {rec.eventName && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                      <Building2 className="h-3 w-3" /> {rec.eventName}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {start.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                      {rec.endDate && (
-                        <> → {new Date(rec.endDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</>
+          return (
+            <Card key={rec.id} className="bg-card border-border" data-testid={`card-work-history-${rec.id}`}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="font-bold text-white font-mono text-sm">{rec.employeeNumber}</span>
+                      <Badge
+                        className={`text-[10px] h-5 border-0 ${
+                          rec.employmentType === "smp"
+                            ? "bg-amber-500/15 text-amber-400"
+                            : "bg-blue-500/15 text-blue-400"
+                        }`}
+                        data-testid={`badge-employment-type-${rec.id}`}
+                      >
+                        {rec.employmentType === "smp" ? "SMP Contract" : "Individual"}
+                      </Badge>
+                      <Badge
+                        className={`text-[10px] h-5 border-0 ${
+                          rec.isActive
+                            ? "bg-emerald-500/15 text-emerald-400"
+                            : "bg-muted/40 text-muted-foreground"
+                        }`}
+                      >
+                        {rec.isActive ? "Active" : categoryLabel ?? "Ended"}
+                      </Badge>
+                    </div>
+                    {rec.jobTitle && (
+                      <p className="text-sm text-white">{rec.jobTitle}</p>
+                    )}
+                    {rec.eventName && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <Building2 className="h-3 w-3" /> {rec.eventName}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {start.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                        {rec.endDate && (
+                          <> → {new Date(rec.endDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</>
+                        )}
+                      </span>
+                      {durationDays !== null && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {durationDays} day{durationDays !== 1 ? "s" : ""}
+                        </span>
                       )}
-                    </span>
-                    {durationDays !== null && (
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {durationDays} day{durationDays !== 1 ? "s" : ""}
-                      </span>
+                      {rec.salary && rec.employmentType !== "smp" && (
+                        <span className="flex items-center gap-1">
+                          <Banknote className="h-3 w-3" />
+                          {Number(rec.salary).toLocaleString()} SAR/mo
+                        </span>
+                      )}
+                    </div>
+                    {linkedContract && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          onClick={() => setViewingContract(linkedContract)}
+                          className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
+                          data-testid={`button-view-contract-${rec.id}`}
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          View Contract
+                          {linkedContract.signedAt && (
+                            <span className="text-muted-foreground ml-1">
+                              (signed {new Date(linkedContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })})
+                            </span>
+                          )}
+                        </button>
+                      </div>
                     )}
-                    {rec.salary && rec.employmentType !== "smp" && (
-                      <span className="flex items-center gap-1">
-                        <Banknote className="h-3 w-3" />
-                        {Number(rec.salary).toLocaleString()} SAR/mo
-                      </span>
+                    {!rec.isActive && rec.offboardingCompletedAt && (
+                      <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                        Offboarding completed {new Date(rec.offboardingCompletedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                      </p>
+                    )}
+                    {!rec.isActive && rec.terminationReason && (
+                      <p className="text-xs text-muted-foreground mt-1 italic">Reason: {rec.terminationReason}</p>
                     )}
                   </div>
-                  {!rec.isActive && rec.offboardingCompletedAt && (
-                    <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
-                      <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                      Offboarding completed {new Date(rec.offboardingCompletedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                    </p>
-                  )}
-                  {!rec.isActive && rec.terminationReason && (
-                    <p className="text-xs text-muted-foreground mt-1 italic">Reason: {rec.terminationReason}</p>
-                  )}
                 </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {viewingContract && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70" onClick={() => setViewingContract(null)}>
+          <div className="bg-card border border-border rounded-lg w-[90vw] max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()} data-testid="contract-history-viewer">
+            <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="text-base font-semibold text-white">Employment Contract</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {viewingContract.jobTitle && <span>{viewingContract.jobTitle}</span>}
+                  {viewingContract.jobTitle && viewingContract.eventName && " — "}
+                  {viewingContract.eventName && <span>{viewingContract.eventName}</span>}
+                  {viewingContract.signedAt && (
+                    <span className="ml-2 text-emerald-400">
+                      Signed {new Date(viewingContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+                    </span>
+                  )}
+                </p>
               </div>
-            </CardContent>
-          </Card>
-        );
-      })}
-    </div>
+              <button onClick={() => setViewingContract(null)} className="text-muted-foreground hover:text-white" data-testid="button-close-contract-viewer">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {Array.isArray(viewingContract.snapshotArticles) && viewingContract.snapshotArticles.map((article: any, idx: number) => {
+                let body = article.body ?? "";
+                if (viewingContract.snapshotVariables) {
+                  Object.entries(viewingContract.snapshotVariables).forEach(([key, val]) => {
+                    body = body.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), val as string);
+                  });
+                }
+                return (
+                  <div key={idx}>
+                    <h4 className="text-sm font-semibold text-white mb-2">
+                      {idx + 1}. {article.title}
+                    </h4>
+                    <div className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">{body}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="p-4 border-t border-border flex justify-end shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-zinc-700 gap-1.5"
+                onClick={() => {
+                  const printWindow = window.open("", "_blank");
+                  if (!printWindow) return;
+                  const articles = Array.isArray(viewingContract.snapshotArticles) ? viewingContract.snapshotArticles : [];
+                  const vars = viewingContract.snapshotVariables ?? {};
+                  const html = articles.map((a: any, i: number) => {
+                    let b = a.body ?? "";
+                    Object.entries(vars).forEach(([k, v]) => { b = b.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v as string); });
+                    return `<h3>${i + 1}. ${a.title}</h3><p style="white-space:pre-wrap">${b}</p>`;
+                  }).join("");
+                  printWindow.document.write(`<html><head><title>Contract</title><style>body{font-family:sans-serif;padding:2rem;max-width:700px;margin:auto}h3{margin-top:1.5em}</style></head><body>${html}</body></html>`);
+                  printWindow.document.close();
+                  printWindow.print();
+                }}
+                data-testid="button-print-contract"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Print / Download
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 

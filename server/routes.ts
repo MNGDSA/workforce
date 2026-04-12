@@ -968,6 +968,15 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/candidates/:id/contract-history", async (req: Request, res: Response) => {
+    try {
+      const contracts = await storage.getContractHistory(req.params.id);
+      return res.json(contracts);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   app.get("/api/candidates/:id", async (req: Request, res: Response) => {
     try {
       const candidate = await storage.getCandidate(req.params.id);

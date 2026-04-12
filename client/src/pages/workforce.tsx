@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -354,6 +355,38 @@ function EmployeeDetailDialog({
     queryFn: () => apiRequest("GET", `/api/workforce/history/${employee!.nationalId}`).then(r => r.json()),
     enabled: open && !!employee?.nationalId && tab === "history",
   });
+
+  const { data: contractHistory = [] } = useQuery<any[]>({
+    queryKey: ["/api/candidates/contract-history", employee?.candidateId],
+    queryFn: () => apiRequest("GET", `/api/candidates/${employee!.candidateId}/contract-history`).then(r => r.json()),
+    enabled: open && !!employee?.candidateId && tab === "history",
+  });
+
+  const [viewingAdminContract, setViewingAdminContract] = useState<any | null>(null);
+
+  const adminContractMap = useMemo(() => {
+    const map = new Map<string, any>();
+    if (contractHistory.length === 0 || history.length === 0) return map;
+    const used = new Set<string>();
+    const sorted = [...history].sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+    for (const rec of sorted) {
+      const recCreated = new Date(rec.createdAt ?? rec.startDate).getTime();
+      let best: any = undefined;
+      let bestScore = -1;
+      for (const c of contractHistory) {
+        if (c.onboardingStatus !== "converted" || used.has(c.id)) continue;
+        const convertedAt = c.onboardingConvertedAt ? new Date(c.onboardingConvertedAt).getTime() : 0;
+        const timeDiff = Math.abs(convertedAt - recCreated);
+        if (timeDiff > 7 * 24 * 60 * 60 * 1000) continue;
+        let score = 1000 - Math.min(timeDiff / (24 * 60 * 60 * 1000), 7);
+        if (c.eventName && rec.eventName && c.eventName === rec.eventName) score += 500;
+        if (c.jobTitle && rec.jobTitle && c.jobTitle === rec.jobTitle) score += 300;
+        if (score > bestScore) { bestScore = score; best = c; }
+      }
+      if (best) { map.set(rec.id, best); used.add(best.id); }
+    }
+    return map;
+  }, [contractHistory, history]);
 
   const { data: eventsList = [] } = useQuery<{ id: string; name: string }[]>({
     queryKey: ["/api/events"],
@@ -1025,7 +1058,9 @@ function EmployeeDetailDialog({
                   <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
                     Employment Records ({history.length})
                   </p>
-                  {history.map((h, idx) => (
+                  {history.map((h, idx) => {
+                    const linkedContract = adminContractMap.get(h.id);
+                    return (
                     <div
                       key={h.id}
                       className={`border rounded-lg p-4 space-y-2 ${
@@ -1060,13 +1095,29 @@ function EmployeeDetailDialog({
                           <p className="text-zinc-200">{formatDate(h.endDate)}</p>
                         </div>
                       </div>
+                      {linkedContract && (
+                        <button
+                          onClick={() => setViewingAdminContract(linkedContract)}
+                          className="inline-flex items-center gap-1.5 text-xs text-[hsl(155,45%,45%)] hover:text-[hsl(155,45%,55%)] transition-colors mt-1"
+                          data-testid={`button-view-contract-history-${idx}`}
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          View Contract
+                          {linkedContract.signedAt && (
+                            <span className="text-zinc-500 ml-1">
+                              (signed {new Date(linkedContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })})
+                            </span>
+                          )}
+                        </button>
+                      )}
                       {h.terminationReason && (
                         <div className="text-xs text-red-400/80 flex items-center gap-1 mt-1">
                           <AlertTriangle className="h-3 w-3" /> {h.terminationReason}
                         </div>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1347,6 +1398,75 @@ function EmployeeDetailDialog({
           </div>
         </DialogContent>
       </Dialog>
+
+      {viewingAdminContract && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70" onClick={() => setViewingAdminContract(null)}>
+          <div className="bg-card border border-border rounded-lg w-[90vw] max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()} data-testid="admin-contract-history-viewer">
+            <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="text-base font-semibold text-white">Employment Contract</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {viewingAdminContract.jobTitle && <span>{viewingAdminContract.jobTitle}</span>}
+                  {viewingAdminContract.jobTitle && viewingAdminContract.eventName && " — "}
+                  {viewingAdminContract.eventName && <span>{viewingAdminContract.eventName}</span>}
+                  {viewingAdminContract.signedAt && (
+                    <span className="ml-2 text-emerald-400">
+                      Signed {new Date(viewingAdminContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+                    </span>
+                  )}
+                </p>
+              </div>
+              <button onClick={() => setViewingAdminContract(null)} className="text-muted-foreground hover:text-white" data-testid="button-close-admin-contract-viewer">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {Array.isArray(viewingAdminContract.snapshotArticles) && viewingAdminContract.snapshotArticles.map((article: any, idx: number) => {
+                let body = article.body ?? "";
+                if (viewingAdminContract.snapshotVariables) {
+                  Object.entries(viewingAdminContract.snapshotVariables).forEach(([key, val]) => {
+                    body = body.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), val as string);
+                  });
+                }
+                return (
+                  <div key={idx}>
+                    <h4 className="text-sm font-semibold text-white mb-2">
+                      {idx + 1}. {article.title}
+                    </h4>
+                    <div className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">{body}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="p-4 border-t border-border flex justify-end shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-zinc-700 gap-1.5"
+                onClick={() => {
+                  const printWindow = window.open("", "_blank");
+                  if (!printWindow) return;
+                  const articles = Array.isArray(viewingAdminContract.snapshotArticles) ? viewingAdminContract.snapshotArticles : [];
+                  const vars = viewingAdminContract.snapshotVariables ?? {};
+                  const html = articles.map((a: any, i: number) => {
+                    let b = a.body ?? "";
+                    Object.entries(vars).forEach(([k, v]) => { b = b.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v as string); });
+                    return `<h3>${i + 1}. ${a.title}</h3><p style="white-space:pre-wrap">${b}</p>`;
+                  }).join("");
+                  printWindow.document.write(`<html><head><title>Contract</title><style>body{font-family:sans-serif;padding:2rem;max-width:700px;margin:auto}h3{margin-top:1.5em}</style></head><body>${html}</body></html>`);
+                  printWindow.document.close();
+                  printWindow.print();
+                }}
+                data-testid="button-print-admin-contract"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Print / Download
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 }

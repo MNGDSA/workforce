@@ -198,6 +198,7 @@ export interface IStorage {
   getWorkforceByCandidateId(candidateId: string): Promise<any | undefined>;
   getAllWorkforceByCandidateId(candidateId: string): Promise<any[]>;
   getWorkHistory(nationalId: string): Promise<any[]>;
+  getContractHistory(candidateId: string): Promise<any[]>;
   createWorkforceRecord(record: InsertWorkforce): Promise<WorkforceRecord>;
   updateWorkforceRecord(id: string, data: Partial<InsertWorkforce>): Promise<WorkforceRecord | undefined>;
   terminateEmployee(id: string, data: { endDate: string; terminationReason?: string; terminationCategory?: string }): Promise<WorkforceRecord | undefined>;
@@ -1348,6 +1349,32 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(jobPostings, eq(workforce.jobId, jobPostings.id))
       .where(eq(candidates.nationalId, nationalId))
       .orderBy(desc(workforce.createdAt));
+    return rows;
+  }
+
+  async getContractHistory(candidateId: string): Promise<any[]> {
+    const rows = await db
+      .select({
+        id: candidateContracts.id,
+        status: candidateContracts.status,
+        signedAt: candidateContracts.signedAt,
+        createdAt: candidateContracts.createdAt,
+        snapshotArticles: candidateContracts.snapshotArticles,
+        snapshotVariables: candidateContracts.snapshotVariables,
+        generatedPdfUrl: candidateContracts.generatedPdfUrl,
+        onboardingId: candidateContracts.onboardingId,
+        templateId: candidateContracts.templateId,
+        onboardingStatus: onboarding.status,
+        onboardingConvertedAt: onboarding.convertedAt,
+        eventName: events.name,
+        jobTitle: jobPostings.title,
+      })
+      .from(candidateContracts)
+      .leftJoin(onboarding, eq(candidateContracts.onboardingId, onboarding.id))
+      .leftJoin(jobPostings, eq(onboarding.jobId, jobPostings.id))
+      .leftJoin(events, eq(onboarding.eventId, events.id))
+      .where(eq(candidateContracts.candidateId, candidateId))
+      .orderBy(desc(candidateContracts.createdAt));
     return rows;
   }
 
