@@ -49,12 +49,16 @@ function ZoneMap({ zones, selectedId, onSelect }: { zones: GeofenceZone[]; selec
     if (!mapRef.current) return;
 
     let L: any;
+    let cancelled = false;
     const init = async () => {
       L = await import("leaflet");
       await import("leaflet/dist/leaflet.css");
 
+      if (cancelled || !mapRef.current || !mapRef.current.isConnected) return;
+
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
       }
 
       const center = zones.length > 0
@@ -113,6 +117,7 @@ function ZoneMap({ zones, selectedId, onSelect }: { zones: GeofenceZone[]; selec
     init();
 
     return () => {
+      cancelled = true;
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
