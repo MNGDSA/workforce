@@ -105,7 +105,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { Candidate } from "@shared/schema";
 
-type CandidateWithWorkforce = Candidate & { workforceRecordCount: number };
+type CandidateWithWorkforce = Candidate & { workforceRecordCount: number; workforceSeasonCount: number; completedStints: number };
 import { KSA_REGIONS } from "@shared/schema";
 
 const statusStyles: Record<string, string> = {
@@ -286,6 +286,7 @@ interface WorkforceRecord {
   isActive: boolean;
   jobTitle?: string;
   eventName?: string;
+  performanceScore?: string | null;
 }
 
 function FormerEmployeeSummary({ candidateId }: { candidateId: string }) {
@@ -301,9 +302,12 @@ function FormerEmployeeSummary({ candidateId }: { candidateId: string }) {
   if (completedRecords.length === 0 && !records.some(r => r.isActive)) return null;
   if (completedRecords.length === 0) return null;
 
-  const lastRecord = completedRecords.sort((a, b) =>
+  const sorted = completedRecords.sort((a, b) =>
     new Date(b.endDate || b.startDate).getTime() - new Date(a.endDate || a.startDate).getTime()
-  )[0];
+  );
+  const lastRecord = sorted[0];
+
+  const lastPerfScore = sorted.find(r => r.performanceScore)?.performanceScore;
 
   const distinctEvents = new Set(records.filter(r => r.eventId).map(r => r.eventId));
   const seasonCount = distinctEvents.size || records.length;
@@ -346,6 +350,12 @@ function FormerEmployeeSummary({ candidateId }: { candidateId: string }) {
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Experience</p>
           <p className="text-sm text-white">{totalDays} calendar days</p>
         </div>
+        {lastPerfScore && (
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Last Performance</p>
+            <p className="text-sm text-white font-medium">{Number(lastPerfScore).toFixed(1)} / 5.0</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1489,14 +1499,14 @@ export default function TalentPage() {
                                 >
                                   {displayStatus.replace("_", " ")}
                                 </Badge>
-                                {candidate.workforceRecordCount > 0 && displayStatus !== "hired" && (
+                                {candidate.completedStints > 0 && displayStatus !== "hired" && (
                                   <span
                                     className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-300 bg-emerald-500/15 border border-emerald-500/25 px-1.5 py-0.5 rounded-sm"
-                                    title={`Former employee with ${candidate.workforceSeasonCount || candidate.workforceRecordCount} season(s) of work history`}
+                                    title={`Former employee with ${candidate.workforceSeasonCount || candidate.completedStints} completed season(s)`}
                                     data-testid={`badge-former-employee-${candidate.id}`}
                                   >
                                     <UserCheck className="h-2.5 w-2.5" />
-                                    Former Employee{(candidate.workforceSeasonCount || candidate.workforceRecordCount) > 0 && ` · ${candidate.workforceSeasonCount || candidate.workforceRecordCount} season${(candidate.workforceSeasonCount || candidate.workforceRecordCount) !== 1 ? "s" : ""}`}
+                                    Former Employee{` · ${candidate.workforceSeasonCount || candidate.completedStints} season${(candidate.workforceSeasonCount || candidate.completedStints) !== 1 ? "s" : ""}`}
                                   </span>
                                 )}
                               </div>

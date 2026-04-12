@@ -527,7 +527,7 @@ export class DatabaseStorage implements IStorage {
     }
     if ((query as any).region) conditions.push(eq(candidates.region, (query as any).region));
     if ((query as any).formerEmployee === "true") {
-      conditions.push(sql`EXISTS (SELECT 1 FROM workforce WHERE workforce.candidate_id = candidates.id)`);
+      conditions.push(sql`EXISTS (SELECT 1 FROM workforce WHERE workforce.candidate_id = candidates.id AND workforce.is_active = false)`);
     }
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
@@ -544,6 +544,7 @@ export class DatabaseStorage implements IStorage {
 
     const workforceCountSq = sql<number>`(SELECT count(*)::int FROM workforce WHERE workforce.candidate_id = candidates.id)`;
     const workforceSeasonsSq = sql<number>`(SELECT count(DISTINCT event_id)::int FROM workforce WHERE workforce.candidate_id = candidates.id AND event_id IS NOT NULL)`;
+    const completedStintsSq = sql<number>`(SELECT count(*)::int FROM workforce WHERE workforce.candidate_id = candidates.id AND workforce.is_active = false)`;
 
     const [data, [{ value: total }]] = await Promise.all([
       db
@@ -551,6 +552,7 @@ export class DatabaseStorage implements IStorage {
           ...getTableColumns(candidates),
           workforceRecordCount: workforceCountSq.as("workforceRecordCount"),
           workforceSeasonCount: workforceSeasonsSq.as("workforceSeasonCount"),
+          completedStints: completedStintsSq.as("completedStints"),
         })
         .from(candidates)
         .where(where)
