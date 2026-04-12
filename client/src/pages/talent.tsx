@@ -296,11 +296,8 @@ function FormerEmployeeSummary({ candidateId }: { candidateId: string }) {
     enabled: !!candidateId,
   });
 
-  if (isLoading || records.length === 0) return null;
-
   const completedRecords = records.filter(r => !r.isActive);
-  if (completedRecords.length === 0 && !records.some(r => r.isActive)) return null;
-  if (completedRecords.length === 0) return null;
+  if (isLoading || completedRecords.length === 0) return null;
 
   const sorted = completedRecords.sort((a, b) =>
     new Date(b.endDate || b.startDate).getTime() - new Date(a.endDate || a.startDate).getTime()

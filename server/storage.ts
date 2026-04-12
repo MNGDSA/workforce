@@ -1310,6 +1310,7 @@ export class DatabaseStorage implements IStorage {
         jobTitle: jobPostings.title,
         positionId: workforce.positionId,
         positionTitle: positions.title,
+        performanceScore: workforce.performanceScore,
         fullNameEn: candidates.fullNameEn,
         photoUrl: candidates.photoUrl,
       })
