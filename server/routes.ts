@@ -2065,10 +2065,11 @@ export async function registerRoutes(
   // ─── Workforce (Employees) ────────────────────────────────────────────────
   app.get("/api/workforce", async (req: Request, res: Response) => {
     try {
-      const { eventId, isActive, search } = req.query as Record<string, string>;
+      const { eventId, isActive, active, search } = req.query as Record<string, string>;
+      const activeParam = isActive ?? active;
       const data = await storage.getWorkforce({
         eventId,
-        isActive: isActive !== undefined ? isActive === "true" : undefined,
+        isActive: activeParam !== undefined ? activeParam === "true" : undefined,
         search,
       });
       return res.json(data);

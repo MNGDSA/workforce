@@ -133,6 +133,7 @@ export default function BroadcastPage() {
   const { data: broadcastsData, isLoading: loadingHistory } = useQuery<{ data: BroadcastRecord[]; total: number }>({
     queryKey: ["/api/broadcasts"],
     queryFn: () => apiRequest("GET", "/api/broadcasts?limit=50").then(r => r.json()),
+    refetchInterval: tab === "history" ? 10_000 : false,
   });
   const broadcasts = broadcastsData?.data ?? [];
 
