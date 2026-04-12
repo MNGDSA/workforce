@@ -288,6 +288,69 @@ interface WorkforceRecord {
   eventName?: string;
 }
 
+function FormerEmployeeSummary({ candidateId }: { candidateId: string }) {
+  const { data: records = [], isLoading } = useQuery<WorkforceRecord[]>({
+    queryKey: ["/api/workforce/all-by-candidate", candidateId],
+    queryFn: () => apiRequest("GET", `/api/workforce/all-by-candidate/${candidateId}`).then(r => r.json()),
+    enabled: !!candidateId,
+  });
+
+  if (isLoading || records.length === 0) return null;
+
+  const completedRecords = records.filter(r => !r.isActive);
+  if (completedRecords.length === 0 && !records.some(r => r.isActive)) return null;
+  if (completedRecords.length === 0) return null;
+
+  const lastRecord = completedRecords.sort((a, b) =>
+    new Date(b.endDate || b.startDate).getTime() - new Date(a.endDate || a.startDate).getTime()
+  )[0];
+
+  const distinctEvents = new Set(records.filter(r => r.eventId).map(r => r.eventId));
+  const seasonCount = distinctEvents.size || records.length;
+
+  let totalDays = 0;
+  for (const rec of records) {
+    const start = new Date(rec.startDate);
+    const end = rec.endDate ? new Date(rec.endDate) : new Date();
+    totalDays += Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+  }
+
+  return (
+    <div className="rounded-sm border border-emerald-500/25 bg-emerald-500/5 px-4 py-3" data-testid="former-employee-summary">
+      <div className="flex items-center gap-2 mb-2.5">
+        <UserCheck className="h-4 w-4 text-emerald-400" />
+        <span className="text-sm font-semibold text-emerald-300">Former Employee</span>
+        <span className="text-[10px] text-emerald-400/70 ml-auto">{seasonCount} season{seasonCount !== 1 ? "s" : ""} · {totalDays} days total</span>
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+        {lastRecord.jobTitle && (
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Last Position</p>
+            <p className="text-sm text-white font-medium">{lastRecord.jobTitle}</p>
+          </div>
+        )}
+        {lastRecord.eventName && (
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Last Event</p>
+            <p className="text-sm text-white">{lastRecord.eventName}</p>
+          </div>
+        )}
+        <div>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Last Employed</p>
+          <p className="text-sm text-white">
+            {new Date(lastRecord.startDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+            {lastRecord.endDate && ` — ${new Date(lastRecord.endDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Experience</p>
+          <p className="text-sm text-white">{totalDays} calendar days</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function WorkforceHistorySection({ candidateId }: { candidateId: string }) {
   const { data: records = [], isLoading } = useQuery<WorkforceRecord[]>({
     queryKey: ["/api/workforce/all-by-candidate", candidateId],
@@ -480,6 +543,8 @@ function CandidateProfileSheet({
         </SheetHeader>
 
         <div className="px-6 py-5 space-y-6">
+          <FormerEmployeeSummary candidateId={c.id} />
+
           <div>
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Contact</h4>
             <div className="space-y-2.5">
@@ -787,6 +852,7 @@ export default function TalentPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("active");
   const [sourceFilter, setSourceFilter] = useState("all");
+  const [formerEmployeeFilter, setFormerEmployeeFilter] = useState(false);
   const [sortBy, setSortBy] = useState<SortField>("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(new Set(DEFAULT_VISIBLE));
@@ -835,10 +901,11 @@ export default function TalentPage() {
     ...(status && status !== "all" && status !== "archived" ? { status } : {}),
     ...(status === "archived" ? { archived: "true" } : {}),
     ...(sourceFilter && sourceFilter !== "all" ? { source: sourceFilter } : {}),
+    ...(formerEmployeeFilter ? { formerEmployee: "true" } : {}),
   });
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["/api/candidates", page, debouncedSearch, status, sourceFilter, sortBy, sortOrder],
+    queryKey: ["/api/candidates", page, debouncedSearch, status, sourceFilter, formerEmployeeFilter, sortBy, sortOrder],
     queryFn: () => apiRequest("GET", `/api/candidates?${queryParams.toString()}`).then(r => r.json()),
   });
 
@@ -1220,6 +1287,16 @@ export default function TalentPage() {
                 <SelectItem value="smp">SMP</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              variant={formerEmployeeFilter ? "default" : "outline"}
+              size="sm"
+              className={`h-10 gap-1.5 ${formerEmployeeFilter ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "border-border"}`}
+              onClick={() => { setFormerEmployeeFilter(!formerEmployeeFilter); setPage(1); setSelectedIds(new Set()); }}
+              data-testid="filter-former-employees"
+            >
+              <UserCheck className="h-3.5 w-3.5" />
+              Former Employees
+            </Button>
           </div>
         </div>
 
@@ -1414,12 +1491,12 @@ export default function TalentPage() {
                                 </Badge>
                                 {candidate.workforceRecordCount > 0 && displayStatus !== "hired" && (
                                   <span
-                                    className="inline-flex items-center gap-1 text-[10px] text-amber-400/80 bg-amber-500/10 px-1.5 py-0.5 rounded-sm"
-                                    title="This candidate has previous employment history"
-                                    data-testid={`badge-prev-employed-${candidate.id}`}
+                                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-300 bg-emerald-500/15 border border-emerald-500/25 px-1.5 py-0.5 rounded-sm"
+                                    title={`Former employee with ${candidate.workforceSeasonCount || candidate.workforceRecordCount} season(s) of work history`}
+                                    data-testid={`badge-former-employee-${candidate.id}`}
                                   >
-                                    <Briefcase className="h-2.5 w-2.5" />
-                                    Prev. Employed
+                                    <UserCheck className="h-2.5 w-2.5" />
+                                    Former Employee{(candidate.workforceSeasonCount || candidate.workforceRecordCount) > 0 && ` · ${candidate.workforceSeasonCount || candidate.workforceRecordCount} season${(candidate.workforceSeasonCount || candidate.workforceRecordCount) !== 1 ? "s" : ""}`}
                                   </span>
                                 )}
                               </div>

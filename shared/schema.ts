@@ -1380,6 +1380,7 @@ export const candidateQuerySchema = z.object({
   nationality: z.enum(["saudi", "non_saudi"]).optional(),
   gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),
   source: z.enum(["individual", "smp"]).optional(),
+  formerEmployee: z.enum(["true"]).optional(),
   sortBy: z.enum(["createdAt", "fullNameEn", "rating", "city", "source", "phone", "email"]).default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
