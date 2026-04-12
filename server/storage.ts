@@ -1866,7 +1866,7 @@ export class DatabaseStorage implements IStorage {
 
     const [cand] = await db.select().from(candidates).where(eq(candidates.id, rec.candidateId));
     const isSmpCandidate = cand?.source === "smp" || !rec.applicationId;
-    if (!isSmpCandidate && !rec.hasSignedContract) {
+    if (!isSmpCandidate && !rec.hasSignedContract && !rec.contractSignedAt) {
       throw new Error("Contract must be signed before conversion. Generate and have the candidate sign the employment contract first.");
     }
 

@@ -1692,7 +1692,7 @@ export default function OnboardingPage() {
                             <div className={`w-4 h-px ${phase >= 2 ? "bg-emerald-700" : "bg-zinc-700"}`} />
                             <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${isSmpPipeline ? "bg-zinc-800 text-zinc-600" : phase >= 2 ? (contractSigned ? "bg-emerald-900/40 text-emerald-400" : "bg-yellow-900/40 text-yellow-400") : "bg-zinc-800 text-zinc-600"}`}>
                               <FileSignature className="h-3 w-3" />
-                              {isSmpPipeline ? "N/A" : contractSigned ? "Signed" : docsComplete ? "Awaiting" : "Locked"}
+                              {isSmpPipeline ? "N/A" : contractSigned ? "Signed" : docsComplete ? "Awaiting Signature" : "Not Generated"}
                             </div>
                             <div className={`w-4 h-px ${phase >= 3 ? "bg-emerald-700" : "bg-zinc-700"}`} />
                             <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${phase >= 3 ? "bg-emerald-900/40 text-emerald-400" : "bg-zinc-800 text-zinc-600"}`}>
