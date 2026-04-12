@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { useLocation } from "wouter";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout";
@@ -69,6 +70,7 @@ import {
   Languages,
   Pencil,
   Save,
+  LogOut,
 } from "lucide-react";
 import {
   Table,
@@ -319,6 +321,7 @@ function EmployeeDetailDialog({
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [, setLocation] = useLocation();
   const [tab, setTab] = useState<"details" | "history" | "schedule">("details");
   const [editSalary, setEditSalary] = useState(false);
   const [salaryValue, setSalaryValue] = useState("");
@@ -974,9 +977,20 @@ function EmployeeDetailDialog({
                       <UserX className="h-4 w-4" /> Terminate Employee
                     </Button>
                   ) : employee.offboardingStatus === "in_progress" ? (
-                    <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 py-1.5 px-3 text-sm">
-                      In Offboarding
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 py-1.5 px-3 text-sm">
+                        In Offboarding
+                      </Badge>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-amber-800 text-amber-400 hover:bg-amber-950/30 hover:text-amber-300 gap-1.5"
+                        onClick={() => { onOpenChange(false); setLocation("/offboarding"); }}
+                        data-testid="button-view-offboarding"
+                      >
+                        <LogOut className="h-4 w-4" /> View in Offboarding
+                      </Button>
+                    </div>
                   ) : !employee.isActive ? (
                     <Button
                       variant="outline"
