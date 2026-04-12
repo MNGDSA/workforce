@@ -100,7 +100,9 @@ type Employee = {
   startDate: string;
   endDate: string | null;
   terminationReason: string | null;
+  terminationCategory: string | null;
   isActive: boolean;
+  offboardingStatus: string | null;
   supervisorId: string | null;
   performanceScore: string | null;
   notes: string | null;
@@ -159,7 +161,10 @@ type WorkHistory = {
 type SortField = "employeeNumber" | "fullNameEn" | "nationalId" | "salary" | "startDate" | "endDate" | "phone";
 type SortDir = "asc" | "desc";
 
-function statusBadge(isActive: boolean) {
+function statusBadge(isActive: boolean, offboardingStatus?: string | null) {
+  if (offboardingStatus === "in_progress") {
+    return { label: "In Offboarding", className: "bg-amber-500/10 text-amber-400 border-amber-500/30" };
+  }
   return isActive
     ? { label: "Active", className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" }
     : { label: "Terminated", className: "bg-red-500/10 text-red-400 border-red-500/30" };
@@ -324,7 +329,7 @@ function EmployeeDetailDialog({
   const [editPosition, setEditPosition] = useState(false);
   const [positionValue, setPositionValue] = useState("");
   const [terminateOpen, setTerminateOpen] = useState(false);
-  const [terminateForm, setTerminateForm] = useState({ endDate: "", reason: "" });
+  const [terminateForm, setTerminateForm] = useState({ endDate: "", reason: "", category: "" });
   const [reinstateOpen, setReinstateOpen] = useState(false);
   const [reinstateForm, setReinstateForm] = useState({ startDate: "", eventId: "", salary: "", smpCompanyId: "" });
   const [assignScheduleOpen, setAssignScheduleOpen] = useState(false);
@@ -443,15 +448,17 @@ function EmployeeDetailDialog({
   });
 
   const terminateMutation = useMutation({
-    mutationFn: (data: { endDate: string; terminationReason?: string }) =>
+    mutationFn: (data: { endDate: string; terminationReason?: string; terminationCategory?: string }) =>
       apiRequest("POST", `/api/workforce/${employee!.id}/terminate`, data).then(r => r.json()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
+      qc.invalidateQueries({ queryKey: ["/api/offboarding"] });
+      qc.invalidateQueries({ queryKey: ["/api/offboarding/stats"] });
       setTerminateOpen(false);
-      setTerminateForm({ endDate: "", reason: "" });
+      setTerminateForm({ endDate: "", reason: "", category: "" });
       onOpenChange(false);
       onUpdated();
-      toast({ title: "Employee terminated" });
+      toast({ title: "Employee sent to offboarding pipeline" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -479,7 +486,7 @@ function EmployeeDetailDialog({
 
   if (!employee) return null;
 
-  const st = statusBadge(employee.isActive);
+  const st = statusBadge(employee.isActive, employee.offboardingStatus);
   const initials = (employee.fullNameEn ?? "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
   return (
@@ -957,7 +964,7 @@ function EmployeeDetailDialog({
                       <Printer className="h-4 w-4" /> Print ID Card
                     </Button>
                   )}
-                  {employee.isActive ? (
+                  {employee.isActive && !employee.offboardingStatus ? (
                     <Button
                       variant="outline"
                       className="border-red-800 text-red-400 hover:bg-red-950/30 hover:text-red-300 gap-1.5"
@@ -966,7 +973,11 @@ function EmployeeDetailDialog({
                     >
                       <UserX className="h-4 w-4" /> Terminate Employee
                     </Button>
-                  ) : (
+                  ) : employee.offboardingStatus === "in_progress" ? (
+                    <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 py-1.5 px-3 text-sm">
+                      In Offboarding
+                    </Badge>
+                  ) : !employee.isActive ? (
                     <Button
                       variant="outline"
                       className="border-emerald-800 text-emerald-400 hover:bg-emerald-950/30 hover:text-emerald-300 gap-1.5"
@@ -978,7 +989,7 @@ function EmployeeDetailDialog({
                     >
                       <CheckCircle2 className="h-4 w-4" /> Reinstate Employee
                     </Button>
-                  )}
+                  ) : null}
                 </div>
               </>
             </div>
@@ -1168,13 +1179,13 @@ function EmployeeDetailDialog({
               Terminate Employee
             </DialogTitle>
             <DialogDescription className="text-zinc-400 text-sm">
-              This will mark {employee.fullNameEn ?? "this employee"} ({employee.employeeNumber}) as terminated.
+              This will send {employee.fullNameEn ?? "this employee"} ({employee.employeeNumber}) to the offboarding pipeline.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-2">
-            <div className="bg-red-950/20 border border-red-800/40 rounded-lg p-3 text-sm text-red-300 flex items-start gap-2">
+            <div className="bg-amber-950/20 border border-amber-800/40 rounded-lg p-3 text-sm text-amber-300 flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-              This action cannot be undone. The employee's record will be preserved in work history.
+              The employee will enter offboarding. Assets must be confirmed and settlement calculated before final exit.
             </div>
             <div className="space-y-1.5">
               <Label className="text-zinc-400 text-sm">End Date <span className="text-red-400">*</span></Label>
@@ -1186,25 +1197,46 @@ function EmployeeDetailDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-sm">Reason</Label>
+              <Label className="text-zinc-400 text-sm">Category <span className="text-red-400">*</span></Label>
+              <select
+                data-testid="select-terminate-category"
+                value={terminateForm.category}
+                onChange={e => setTerminateForm(f => ({ ...f, category: e.target.value }))}
+                className="w-full bg-zinc-900 border border-zinc-700 text-white rounded-md px-3 py-2 text-sm"
+              >
+                <option value="">Select category…</option>
+                <option value="end_of_season">End of Season</option>
+                <option value="resignation">Resignation</option>
+                <option value="performance">Performance</option>
+                <option value="disciplinary">Disciplinary</option>
+                <option value="contract_expiry">Contract Expiry</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-zinc-400 text-sm">Notes</Label>
               <Textarea
                 data-testid="textarea-terminate-reason"
                 value={terminateForm.reason}
                 onChange={e => setTerminateForm(f => ({ ...f, reason: e.target.value }))}
                 className="bg-zinc-900 border-zinc-700 text-white resize-none"
                 rows={2}
-                placeholder="e.g. End of season, Performance, Resignation..."
+                placeholder="Additional details about the termination…"
               />
             </div>
             <div className="flex gap-2 justify-end pt-1">
               <Button variant="outline" className="border-zinc-700 text-zinc-300" onClick={() => setTerminateOpen(false)}>Cancel</Button>
               <Button
                 data-testid="button-confirm-terminate"
-                disabled={!terminateForm.endDate || terminateMutation.isPending}
-                onClick={() => terminateMutation.mutate({ endDate: terminateForm.endDate, terminationReason: terminateForm.reason || undefined })}
+                disabled={!terminateForm.endDate || !terminateForm.category || terminateMutation.isPending}
+                onClick={() => terminateMutation.mutate({
+                  endDate: terminateForm.endDate,
+                  terminationReason: terminateForm.reason || undefined,
+                  terminationCategory: terminateForm.category || undefined,
+                })}
                 className="bg-red-600 hover:bg-red-700 text-white gap-2"
               >
-                {terminateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><UserX className="h-4 w-4" /> Confirm Termination</>}
+                {terminateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><UserX className="h-4 w-4" /> Send to Offboarding</>}
               </Button>
             </div>
           </div>
@@ -1787,7 +1819,7 @@ export default function WorkforcePage() {
                 </TableHeader>
                 <TableBody>
                   {sortedEmployees.map((emp) => {
-                    const st = statusBadge(emp.isActive);
+                    const st = statusBadge(emp.isActive, emp.offboardingStatus);
                     const initials = (emp.fullNameEn ?? "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
                     const checked = selectedIds.has(emp.id);
                     return (

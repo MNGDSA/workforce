@@ -1,4 +1,5 @@
-import { useState, createPortal } from "react";
+import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -6,16 +7,16 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import {
   LogOut, Search, UserX, Package, DollarSign, CheckCircle2, AlertTriangle,
   Clock, RefreshCw, ChevronRight, X, Check, Ban, Undo2, Calendar, Users,
   ShieldAlert, Loader2, TrendingDown, Banknote, FileText, ArrowRight,
+  PlayCircle, CheckCircle, Tag,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { format, differenceInDays } from "date-fns";
-
-// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface OffboardingEmployee {
   id: string;
@@ -32,6 +33,8 @@ interface OffboardingEmployee {
   employmentType: string;
   offboardingStatus: string | null;
   offboardingStartedAt: string | null;
+  terminationReason: string | null;
+  terminationCategory: string | null;
 }
 
 interface AssetChecklist {
@@ -60,7 +63,21 @@ interface Settlement {
   allAssetsConfirmed: boolean;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+interface OffboardingStats {
+  pending: number;
+  inProgress: number;
+  ready: number;
+  completedToday: number;
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  end_of_season: "End of Season",
+  resignation: "Resignation",
+  performance: "Performance",
+  disciplinary: "Disciplinary",
+  contract_expiry: "Contract Expiry",
+  other: "Other",
+};
 
 function daysSince(dateStr: string | null): number {
   if (!dateStr) return 0;
@@ -83,8 +100,6 @@ function getReadiness(emp: OffboardingEmployee, settlement?: Settlement | null) 
   if (pending > 0) return "assets_pending";
   return "ready";
 }
-
-// ─── Waive Deduction Confirm Dialog ──────────────────────────────────────────
 
 function WaiveDialog({ asset, onConfirm, onCancel }: {
   asset: AssetChecklist;
@@ -136,8 +151,6 @@ function WaiveDialog({ asset, onConfirm, onCancel }: {
   );
 }
 
-// ─── Employee Detail Sheet ────────────────────────────────────────────────────
-
 function OffboardingSheet({ emp, events, onClose }: {
   emp: OffboardingEmployee;
   events: any[];
@@ -158,6 +171,7 @@ function OffboardingSheet({ emp, events, onClose }: {
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["/api/offboarding"] });
+    qc.invalidateQueries({ queryKey: ["/api/offboarding/stats"] });
     qc.invalidateQueries({ queryKey: ["/api/offboarding/settlement", emp.id] });
   };
 
@@ -169,7 +183,7 @@ function OffboardingSheet({ emp, events, onClose }: {
 
   const completeMut = useMutation({
     mutationFn: () => apiRequest("POST", `/api/offboarding/${emp.id}/complete`),
-    onSuccess: () => { toast({ title: "Offboarding completed — employee returned to talent pool" }); qc.invalidateQueries({ queryKey: ["/api/offboarding"] }); onClose(); },
+    onSuccess: () => { toast({ title: "Offboarding completed — employee returned to talent pool" }); invalidate(); onClose(); },
     onError: (e: any) => toast({ title: "Cannot complete", description: e.message, variant: "destructive" }),
   });
 
@@ -204,11 +218,12 @@ function OffboardingSheet({ emp, events, onClose }: {
   const today = new Date().toISOString().slice(0, 10);
   const activeEvents = events.filter(e => e.status !== "archived" && (e.endDate == null || e.endDate > today));
 
+  const reasonLabel = emp.terminationCategory ? (CATEGORY_LABELS[emp.terminationCategory] ?? emp.terminationCategory) : null;
+
   return createPortal(
     <div className="fixed inset-0 z-[9998] flex">
       <div className="flex-1 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="w-full max-w-2xl bg-background border-l border-border flex flex-col h-full shadow-2xl overflow-hidden">
-        {/* Header */}
         <div className="flex items-start justify-between p-5 border-b border-border bg-card shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-primary text-sm">
@@ -229,7 +244,6 @@ function OffboardingSheet({ emp, events, onClose }: {
           </Button>
         </div>
 
-        {/* Status bar */}
         <div className="px-5 py-2.5 bg-amber-500/5 border-b border-amber-500/20 flex items-center gap-2 shrink-0">
           {readiness === "ready" ? (
             <><CheckCircle2 className="h-4 w-4 text-emerald-400" /><span className="text-xs text-emerald-400 font-medium">Ready to complete offboarding</span></>
@@ -239,11 +253,10 @@ function OffboardingSheet({ emp, events, onClose }: {
             <><Clock className="h-4 w-4 text-muted-foreground" /><span className="text-xs text-muted-foreground">Calculating checklist…</span></>
           )}
           <div className="ml-auto text-xs text-muted-foreground">
-            Event ended {daysSince(emp.eventEndDate)} days ago
+            {emp.endDate ? `End date: ${fmtDate(emp.endDate)}` : emp.eventEndDate ? `Event ended ${daysSince(emp.eventEndDate)} days ago` : "—"}
           </div>
         </div>
 
-        {/* Tab Bar */}
         <div className="flex border-b border-border shrink-0 bg-card">
           {(["overview", "assets", "settlement"] as const).map(t => (
             <button
@@ -263,18 +276,15 @@ function OffboardingSheet({ emp, events, onClose }: {
           ))}
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
 
-          {/* ── OVERVIEW TAB ── */}
           {tab === "overview" && (
             <>
-              {/* Key info */}
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { label: "Employee #", value: emp.employeeNumber, mono: true },
                   { label: "Event", value: emp.eventName ?? "—" },
-                  { label: "Event Ended", value: fmtDate(emp.eventEndDate) },
+                  { label: "End Date", value: fmtDate(emp.endDate ?? emp.eventEndDate) },
                   { label: "Started Work", value: fmtDate(emp.startDate) },
                   { label: "Monthly Salary", value: emp.salary ? formatSAR(parseFloat(emp.salary)) : "—" },
                   { label: "Type", value: emp.employmentType === "smp" ? "SMP Worker" : "Individual" },
@@ -286,6 +296,20 @@ function OffboardingSheet({ emp, events, onClose }: {
                 ))}
               </div>
 
+              {(reasonLabel || emp.terminationReason) && (
+                <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <Tag className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-medium text-red-300">
+                      Termination: {reasonLabel ?? "Manual"}
+                    </p>
+                    {emp.terminationReason && (
+                      <p className="text-xs text-red-300/70 mt-0.5">{emp.terminationReason}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {emp.employmentType === "smp" && (
                 <div className="flex items-start gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                   <FileText className="h-4 w-4 text-blue-400 mt-0.5 shrink-0" />
@@ -296,7 +320,6 @@ function OffboardingSheet({ emp, events, onClose }: {
                 </div>
               )}
 
-              {/* Reassign Event */}
               <Card className="border-border">
                 <CardHeader className="pb-3 pt-4 px-4">
                   <CardTitle className="text-sm flex items-center gap-2">
@@ -306,7 +329,7 @@ function OffboardingSheet({ emp, events, onClose }: {
                 </CardHeader>
                 <CardContent className="px-4 pb-4 space-y-3">
                   <p className="text-xs text-muted-foreground">
-                    If you want to retain this employee, assign them to an ongoing or upcoming event. This will remove them from offboarding.
+                    If you want to retain this employee, assign them to an ongoing or upcoming event. This will remove them from offboarding and clear the end date.
                   </p>
                   {showReassign ? (
                     <div className="flex gap-2">
@@ -318,7 +341,7 @@ function OffboardingSheet({ emp, events, onClose }: {
                       >
                         <option value="">Select event…</option>
                         {activeEvents.map(ev => (
-                          <option key={ev.id} value={ev.id}>{ev.name} (ends {fmtDate(ev.endDate)})</option>
+                          <option key={ev.id} value={ev.id}>{ev.name}{ev.endDate ? ` (ends ${fmtDate(ev.endDate)})` : " (ongoing)"}</option>
                         ))}
                       </select>
                       <Button
@@ -339,7 +362,6 @@ function OffboardingSheet({ emp, events, onClose }: {
                 </CardContent>
               </Card>
 
-              {/* Start Offboarding (if pending) */}
               {emp.offboardingStatus === null && (
                 <div className="flex items-center justify-between p-4 bg-amber-500/5 border border-amber-500/20 rounded-lg">
                   <div>
@@ -357,7 +379,6 @@ function OffboardingSheet({ emp, events, onClose }: {
                 </div>
               )}
 
-              {/* Complete Offboarding */}
               {emp.offboardingStatus === "in_progress" && (
                 <div className={`flex items-center justify-between p-4 border rounded-lg ${
                   readiness === "ready"
@@ -387,7 +408,6 @@ function OffboardingSheet({ emp, events, onClose }: {
             </>
           )}
 
-          {/* ── ASSETS TAB ── */}
           {tab === "assets" && (
             <>
               {settlementLoading ? (
@@ -401,7 +421,6 @@ function OffboardingSheet({ emp, events, onClose }: {
                 </div>
               ) : (
                 <>
-                  {/* Bulk actions */}
                   {pendingAssets > 0 && (
                     <div className="flex gap-2 p-3 bg-muted/20 border border-border/50 rounded-lg">
                       <span className="text-xs text-muted-foreground flex-1 self-center">{pendingAssets} asset(s) awaiting confirmation</span>
@@ -418,7 +437,6 @@ function OffboardingSheet({ emp, events, onClose }: {
                     </div>
                   )}
 
-                  {/* Asset list */}
                   <div className="space-y-2">
                     {settlement.assetChecklist.map((asset) => (
                       <div
@@ -441,7 +459,6 @@ function OffboardingSheet({ emp, events, onClose }: {
                               <span className="font-semibold text-foreground">{formatSAR(asset.assetPrice)}</span>
                             </div>
 
-                            {/* Status & deduction */}
                             <div className="flex items-center gap-2 mt-2 flex-wrap">
                               {asset.status === "assigned" && (
                                 <Badge variant="outline" className="text-[11px] border-amber-500/40 text-amber-400">Pending Confirmation</Badge>
@@ -459,32 +476,26 @@ function OffboardingSheet({ emp, events, onClose }: {
                                   )}
                                 </>
                               )}
-                              {asset.confirmedAt && (
-                                <span className="text-[10px] text-muted-foreground">Confirmed {fmtDate(asset.confirmedAt)}</span>
-                              )}
                             </div>
                           </div>
 
-                          {/* Action buttons */}
                           <div className="flex flex-col gap-1.5 shrink-0">
                             {asset.status === "assigned" && (
                               <>
-                                <Button size="sm" variant="outline" className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 h-7 text-[11px]"
-                                  onClick={() => confirmMut.mutate({ assetId: asset.id, status: "returned" })}
-                                  disabled={confirmMut.isPending}
-                                  data-testid={`button-returned-${asset.id}`}>
+                                <Button size="sm" variant="outline" className="text-xs border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 h-7"
+                                  onClick={() => confirmMut.mutate({ assetId: asset.id, status: "returned" })} disabled={confirmMut.isPending}
+                                  data-testid={`button-confirm-returned-${asset.id}`}>
                                   <Check className="h-3 w-3 mr-1" /> Returned
                                 </Button>
-                                <Button size="sm" variant="outline" className="border-red-500/40 text-red-400 hover:bg-red-500/10 h-7 text-[11px]"
-                                  onClick={() => confirmMut.mutate({ assetId: asset.id, status: "not_returned" })}
-                                  disabled={confirmMut.isPending}
-                                  data-testid={`button-not-returned-${asset.id}`}>
+                                <Button size="sm" variant="outline" className="text-xs border-red-500/40 text-red-400 hover:bg-red-500/10 h-7"
+                                  onClick={() => confirmMut.mutate({ assetId: asset.id, status: "not_returned" })} disabled={confirmMut.isPending}
+                                  data-testid={`button-confirm-not-returned-${asset.id}`}>
                                   <X className="h-3 w-3 mr-1" /> Not Returned
                                 </Button>
                               </>
                             )}
                             {asset.status === "not_returned" && asset.deductionWaived !== true && (
-                              <Button size="sm" variant="outline" className="border-purple-500/40 text-purple-400 hover:bg-purple-500/10 h-7 text-[11px]"
+                              <Button size="sm" variant="outline" className="text-xs border-purple-500/40 text-purple-400 hover:bg-purple-500/10 h-7"
                                 onClick={() => setWaivedAsset(asset)}
                                 data-testid={`button-waive-${asset.id}`}>
                                 <Ban className="h-3 w-3 mr-1" /> Waive
@@ -500,7 +511,6 @@ function OffboardingSheet({ emp, events, onClose }: {
             </>
           )}
 
-          {/* ── SETTLEMENT TAB ── */}
           {tab === "settlement" && (
             <>
               {settlementLoading ? (
@@ -511,7 +521,6 @@ function OffboardingSheet({ emp, events, onClose }: {
                 <div className="text-center py-12 text-muted-foreground text-sm">Unable to calculate settlement</div>
               ) : (
                 <>
-                  {/* Employment period */}
                   <Card className="border-border">
                     <CardContent className="p-4 space-y-3">
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Employment Period</p>
@@ -530,7 +539,6 @@ function OffboardingSheet({ emp, events, onClose }: {
                     </CardContent>
                   </Card>
 
-                  {/* Salary breakdown */}
                   <Card className="border-border">
                     <CardContent className="p-4 space-y-3">
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Salary Breakdown</p>
@@ -551,7 +559,6 @@ function OffboardingSheet({ emp, events, onClose }: {
                     </CardContent>
                   </Card>
 
-                  {/* Attendance */}
                   <Card className="border-border">
                     <CardContent className="p-4 space-y-3">
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Attendance (Logged)</p>
@@ -573,7 +580,6 @@ function OffboardingSheet({ emp, events, onClose }: {
                     </CardContent>
                   </Card>
 
-                  {/* Deductions */}
                   {settlement.deductions.length > 0 && (
                     <Card className="border-red-500/20 bg-red-500/5">
                       <CardContent className="p-4 space-y-3">
@@ -595,7 +601,6 @@ function OffboardingSheet({ emp, events, onClose }: {
                     </Card>
                   )}
 
-                  {/* Net Settlement */}
                   <Card className="border-emerald-500/20 bg-emerald-500/5">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
@@ -617,7 +622,6 @@ function OffboardingSheet({ emp, events, onClose }: {
         </div>
       </div>
 
-      {/* Waive Deduction Dialog */}
       {waivedAsset && (
         <WaiveDialog
           asset={waivedAsset}
@@ -630,11 +634,12 @@ function OffboardingSheet({ emp, events, onClose }: {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
-
 export default function OffboardingPage() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedEmp, setSelectedEmp] = useState<OffboardingEmployee | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const { data: employees = [], isLoading } = useQuery<OffboardingEmployee[]>({
     queryKey: ["/api/offboarding"],
@@ -642,10 +647,44 @@ export default function OffboardingPage() {
     staleTime: 30_000,
   });
 
+  const { data: stats } = useQuery<OffboardingStats>({
+    queryKey: ["/api/offboarding/stats"],
+    queryFn: () => apiRequest("GET", "/api/offboarding/stats").then(r => r.json()),
+    staleTime: 30_000,
+  });
+
   const { data: events = [] } = useQuery<any[]>({
     queryKey: ["/api/events"],
     queryFn: () => apiRequest("GET", "/api/events").then(r => r.json()),
     staleTime: 60_000,
+  });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["/api/offboarding"] });
+    qc.invalidateQueries({ queryKey: ["/api/offboarding/stats"] });
+  };
+
+  const bulkStartMut = useMutation({
+    mutationFn: (ids: string[]) => apiRequest("POST", "/api/offboarding/bulk-start", { ids }).then(r => r.json()),
+    onSuccess: (data: any) => {
+      toast({ title: `Started offboarding for ${data.started} employee(s)` });
+      setSelectedIds(new Set());
+      invalidate();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const bulkCompleteMut = useMutation({
+    mutationFn: (ids: string[]) => apiRequest("POST", "/api/offboarding/bulk-complete", { ids }).then(r => r.json()),
+    onSuccess: (data: any) => {
+      const msg = data.errors?.length > 0
+        ? `Completed ${data.completed} of ${data.total}. ${data.errors.length} failed (likely pending assets).`
+        : `Completed offboarding for ${data.completed} employee(s)`;
+      toast({ title: msg });
+      setSelectedIds(new Set());
+      invalidate();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const filtered = employees.filter(e => {
@@ -656,9 +695,24 @@ export default function OffboardingPage() {
       || (e.nationalId ?? "").includes(q);
   });
 
-  const pending = employees.filter(e => e.offboardingStatus === null).length;
-  const inProgress = employees.filter(e => e.offboardingStatus === "in_progress").length;
-  const total = employees.length;
+  const toggleId = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(e => e.id)));
+    }
+  };
+
+  const selectedPending = filtered.filter(e => selectedIds.has(e.id) && e.offboardingStatus === null);
+  const selectedInProgress = filtered.filter(e => selectedIds.has(e.id) && e.offboardingStatus === "in_progress");
 
   function statusBadge(emp: OffboardingEmployee) {
     if (emp.offboardingStatus === "in_progress") return (
@@ -670,7 +724,6 @@ export default function OffboardingPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6 p-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
@@ -683,18 +736,18 @@ export default function OffboardingPage() {
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           {[
-            { label: "In Offboarding", value: total, icon: UserX, color: "border-l-amber-500" },
-            { label: "Pending Start", value: pending, icon: Clock, color: "border-l-blue-500" },
-            { label: "In Progress", value: inProgress, icon: RefreshCw, color: "border-l-primary" },
-          ].map(({ label, value, icon: Icon, color }) => (
+            { label: "Pending Start", value: stats?.pending ?? 0, icon: Clock, color: "border-l-blue-500", desc: "Event ended, awaiting start" },
+            { label: "In Progress", value: stats?.inProgress ?? 0, icon: RefreshCw, color: "border-l-amber-500", desc: "Processing assets & settlement" },
+            { label: "Ready to Complete", value: stats?.ready ?? 0, icon: CheckCircle, color: "border-l-emerald-500", desc: "All assets confirmed" },
+            { label: "Completed Today", value: stats?.completedToday ?? 0, icon: CheckCircle2, color: "border-l-primary", desc: "Offboarded today" },
+          ].map(({ label, value, icon: Icon, color, desc }) => (
             <Card key={label} className={`border-l-4 ${color} border-border`}>
               <CardContent className="flex items-center gap-3 p-4">
                 <Icon className="h-5 w-5 text-muted-foreground shrink-0" />
                 <div>
-                  <p className="text-2xl font-bold text-foreground">{value}</p>
+                  <p className="text-2xl font-bold text-foreground" data-testid={`stat-offboarding-${label.toLowerCase().replace(/\s+/g, "-")}`}>{value}</p>
                   <p className="text-xs text-muted-foreground">{label}</p>
                 </div>
               </CardContent>
@@ -702,27 +755,68 @@ export default function OffboardingPage() {
           ))}
         </div>
 
-        {/* Search */}
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name, employee #, event…"
-            className="pl-9 bg-card border-border"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            data-testid="input-offboarding-search"
-          />
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, employee #, event…"
+              className="pl-9 bg-card border-border"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              data-testid="input-offboarding-search"
+            />
+          </div>
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{selectedIds.size} selected</span>
+              {selectedPending.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 gap-1.5"
+                  onClick={() => bulkStartMut.mutate(selectedPending.map(e => e.id))}
+                  disabled={bulkStartMut.isPending}
+                  data-testid="button-bulk-start-offboarding"
+                >
+                  {bulkStartMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
+                  Start ({selectedPending.length})
+                </Button>
+              )}
+              {selectedInProgress.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 gap-1.5"
+                  onClick={() => bulkCompleteMut.mutate(selectedInProgress.map(e => e.id))}
+                  disabled={bulkCompleteMut.isPending}
+                  data-testid="button-bulk-complete-offboarding"
+                >
+                  {bulkCompleteMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                  Complete ({selectedInProgress.length})
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => setSelectedIds(new Set())}>
+                Clear
+              </Button>
+            </div>
+          )}
         </div>
 
-        {/* Table */}
         <div className="rounded-lg border border-border overflow-hidden bg-card">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/20">
+                <th className="py-3 px-3 w-10">
+                  <Checkbox
+                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                    onCheckedChange={toggleAll}
+                    data-testid="checkbox-select-all-offboarding"
+                  />
+                </th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Employee</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Event</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Event Ended</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Days Since</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Reason</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">End Date</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Salary</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
                 <th className="py-3 px-4" />
@@ -731,17 +825,17 @@ export default function OffboardingPage() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="py-16 text-center text-muted-foreground">
+                  <td colSpan={8} className="py-16 text-center text-muted-foreground">
                     <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
                     <p className="text-sm">Loading offboarding queue…</p>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-16 text-center text-muted-foreground">
+                  <td colSpan={8} className="py-16 text-center text-muted-foreground">
                     <CheckCircle2 className="h-10 w-10 mx-auto mb-3 opacity-30" />
                     <p className="text-sm font-medium">{search ? "No matches found" : "No employees in offboarding"}</p>
-                    <p className="text-xs mt-1">{!search && "Employees whose event end date has passed will appear here automatically"}</p>
+                    <p className="text-xs mt-1">{!search && "Employees whose event has ended or who are terminated will appear here"}</p>
                   </td>
                 </tr>
               ) : filtered.map((emp, i) => (
@@ -751,6 +845,13 @@ export default function OffboardingPage() {
                   className="border-b border-border/30 hover:bg-muted/[0.08] transition-colors cursor-pointer"
                   onClick={() => setSelectedEmp(emp)}
                 >
+                  <td className="py-3 px-3" onClick={e => e.stopPropagation()}>
+                    <Checkbox
+                      checked={selectedIds.has(emp.id)}
+                      onCheckedChange={() => toggleId(emp.id)}
+                      data-testid={`checkbox-offboarding-${emp.id}`}
+                    />
+                  </td>
                   <td className="py-3 px-4">
                     <div className="font-medium text-foreground">{emp.fullNameEn ?? "—"}</div>
                     <div className="text-xs text-muted-foreground font-mono">#{emp.employeeNumber}</div>
@@ -758,12 +859,16 @@ export default function OffboardingPage() {
                   <td className="py-3 px-4">
                     <span className="text-muted-foreground">{emp.eventName ?? "—"}</span>
                   </td>
-                  <td className="py-3 px-4 text-muted-foreground">{fmtDate(emp.eventEndDate)}</td>
                   <td className="py-3 px-4">
-                    <span className={`font-medium ${daysSince(emp.eventEndDate) > 7 ? "text-red-400" : "text-amber-400"}`}>
-                      {daysSince(emp.eventEndDate)}d
-                    </span>
+                    {emp.terminationCategory ? (
+                      <Badge variant="outline" className="text-[10px] border-red-500/30 text-red-400">
+                        {CATEGORY_LABELS[emp.terminationCategory] ?? emp.terminationCategory}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Event ended</span>
+                    )}
                   </td>
+                  <td className="py-3 px-4 text-muted-foreground">{fmtDate(emp.endDate ?? emp.eventEndDate)}</td>
                   <td className="py-3 px-4 font-mono text-muted-foreground">
                     {emp.salary ? formatSAR(parseFloat(emp.salary)) : "—"}
                   </td>
@@ -778,7 +883,6 @@ export default function OffboardingPage() {
         </div>
       </div>
 
-      {/* Detail Sheet */}
       {selectedEmp && (
         <OffboardingSheet
           emp={selectedEmp}

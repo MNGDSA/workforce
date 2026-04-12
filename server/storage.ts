@@ -200,13 +200,14 @@ export interface IStorage {
   getWorkHistory(nationalId: string): Promise<any[]>;
   createWorkforceRecord(record: InsertWorkforce): Promise<WorkforceRecord>;
   updateWorkforceRecord(id: string, data: Partial<InsertWorkforce>): Promise<WorkforceRecord | undefined>;
-  terminateEmployee(id: string, data: { endDate: string; terminationReason?: string }): Promise<WorkforceRecord | undefined>;
+  terminateEmployee(id: string, data: { endDate: string; terminationReason?: string; terminationCategory?: string }): Promise<WorkforceRecord | undefined>;
   reinstateEmployee(nationalId: string, data: { startDate: string; eventId?: string; salary?: string; jobId?: string; employmentType?: "individual" | "smp"; smpCompanyId?: string }): Promise<WorkforceRecord>;
   getWorkforceStats(): Promise<{ total: number; active: number; terminated: number; smpWorkers: number }>;
   generateEmployeeNumber(): Promise<string>;
 
   // Offboarding
   getOffboardingEmployees(): Promise<any[]>;
+  getOffboardingStats(): Promise<{ pending: number; inProgress: number; ready: number; completedToday: number }>;
   getOffboardingSettlement(workforceId: string): Promise<any>;
   startOffboarding(workforceId: string, startedBy?: string): Promise<any>;
   completeOffboarding(workforceId: string, completedBy?: string): Promise<any>;
@@ -1125,7 +1126,9 @@ export class DatabaseStorage implements IStorage {
         startDate: workforce.startDate,
         endDate: workforce.endDate,
         terminationReason: workforce.terminationReason,
+        terminationCategory: workforce.terminationCategory,
         isActive: workforce.isActive,
+        offboardingStatus: workforce.offboardingStatus,
         supervisorId: workforce.supervisorId,
         performanceScore: workforce.performanceScore,
         notes: workforce.notes,
@@ -1189,7 +1192,9 @@ export class DatabaseStorage implements IStorage {
         startDate: workforce.startDate,
         endDate: workforce.endDate,
         terminationReason: workforce.terminationReason,
+        terminationCategory: workforce.terminationCategory,
         isActive: workforce.isActive,
+        offboardingStatus: workforce.offboardingStatus,
         supervisorId: workforce.supervisorId,
         performanceScore: workforce.performanceScore,
         notes: workforce.notes,
@@ -1346,27 +1351,19 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async terminateEmployee(id: string, data: { endDate: string; terminationReason?: string }): Promise<WorkforceRecord | undefined> {
+  async terminateEmployee(id: string, data: { endDate: string; terminationReason?: string; terminationCategory?: string }): Promise<WorkforceRecord | undefined> {
     const [existing] = await db.select().from(workforce).where(eq(workforce.id, id));
     if (!existing) return undefined;
     if (!existing.isActive) throw new Error("Employee is already terminated");
+    if (existing.offboardingStatus === "in_progress") throw new Error("Employee is already in offboarding");
     const [updated] = await db.update(workforce).set({
-      isActive: false,
       endDate: data.endDate,
       terminationReason: data.terminationReason ?? null,
+      terminationCategory: data.terminationCategory ?? null,
+      offboardingStatus: "in_progress",
+      offboardingStartedAt: new Date(),
       updatedAt: new Date(),
     }).where(eq(workforce.id, id)).returning();
-
-    const hasOtherActive = await db
-      .select({ id: workforce.id })
-      .from(workforce)
-      .where(and(eq(workforce.candidateId, existing.candidateId), eq(workforce.isActive, true)))
-      .limit(1);
-    if (hasOtherActive.length === 0) {
-      const [cand] = await db.select({ lastLoginAt: candidates.lastLoginAt }).from(candidates).where(eq(candidates.id, existing.candidateId));
-      const newStatus = computeCandidateStatusFromLogin(cand?.lastLoginAt);
-      await db.update(candidates).set({ status: newStatus, updatedAt: new Date() }).where(eq(candidates.id, existing.candidateId));
-    }
 
     return updated;
   }
@@ -2524,6 +2521,8 @@ export class DatabaseStorage implements IStorage {
         offboardingStartedAt: workforce.offboardingStartedAt,
         offboardingCompletedAt: workforce.offboardingCompletedAt,
         employmentType: workforce.employmentType,
+        terminationReason: workforce.terminationReason,
+        terminationCategory: workforce.terminationCategory,
         notes: workforce.notes,
         fullNameEn: candidates.fullNameEn,
         nationalId: candidates.nationalId,
@@ -2553,13 +2552,55 @@ export class DatabaseStorage implements IStorage {
     return rows;
   }
 
+  async getOffboardingStats(): Promise<{ pending: number; inProgress: number; ready: number; completedToday: number }> {
+    const today = new Date().toISOString().slice(0, 10);
+    const todayStart = new Date(today + "T00:00:00.000Z");
+
+    const [pendingRow] = await db.select({ value: count() }).from(workforce)
+      .leftJoin(events, eq(workforce.eventId, events.id))
+      .where(and(
+        eq(workforce.isActive, true),
+        sql`${workforce.offboardingStatus} IS NULL AND ${events.endDate} IS NOT NULL AND ${events.endDate} < ${today}`
+      ));
+
+    const [inProgressRow] = await db.select({ value: count() }).from(workforce)
+      .where(and(eq(workforce.isActive, true), sql`${workforce.offboardingStatus} = 'in_progress'`));
+
+    const [completedTodayRow] = await db.select({ value: count() }).from(workforce)
+      .where(and(
+        sql`${workforce.offboardingStatus} = 'completed'`,
+        sql`${workforce.offboardingCompletedAt} >= ${todayStart}`
+      ));
+
+    const allOffboarding = await this.getOffboardingEmployees();
+    let readyCount = 0;
+    for (const emp of allOffboarding) {
+      if (emp.offboardingStatus !== "in_progress") continue;
+      const assets = await this.getEmployeeAssets({ workforceId: emp.id });
+      const allConfirmed = assets.every((a: any) => a.status !== "assigned");
+      if (allConfirmed) readyCount++;
+    }
+
+    return {
+      pending: Number(pendingRow.value),
+      inProgress: Number(inProgressRow.value),
+      ready: readyCount,
+      completedToday: Number(completedTodayRow.value),
+    };
+  }
+
   async getOffboardingSettlement(workforceId: string): Promise<any> {
     const emp = await this.getWorkforceEmployee(workforceId);
     if (!emp) throw new Error("Employee not found");
 
     const today = new Date().toISOString().slice(0, 10);
     const start = emp.startDate ?? today;
-    const end = emp.endDate ?? today;
+    let eventEndDate: string | null = null;
+    if (emp.eventId) {
+      const [ev] = await db.select({ endDate: events.endDate }).from(events).where(eq(events.id, emp.eventId));
+      if (ev?.endDate) eventEndDate = ev.endDate;
+    }
+    const end = emp.endDate ?? (eventEndDate && eventEndDate < today ? eventEndDate : today);
     const startMs = new Date(start).getTime();
     const endMs = new Date(end).getTime();
     const calendarDays = Math.max(0, Math.round((endMs - startMs) / 86400000) + 1);
@@ -2625,6 +2666,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async startOffboarding(workforceId: string, startedBy?: string): Promise<any> {
+    const [existing] = await db.select().from(workforce).where(eq(workforce.id, workforceId));
+    if (!existing) throw new Error("Employee not found");
+    if (!existing.isActive) throw new Error("Employee is not active");
+    if (existing.offboardingStatus === "in_progress") throw new Error("Offboarding already in progress");
+    if (existing.offboardingStatus === "completed") throw new Error("Offboarding already completed");
+
     const [updated] = await db
       .update(workforce)
       .set({ offboardingStatus: "in_progress", offboardingStartedAt: new Date(), updatedAt: new Date() })
@@ -2667,8 +2714,12 @@ export class DatabaseStorage implements IStorage {
       .update(workforce)
       .set({
         eventId,
+        endDate: null,
+        terminationReason: null,
+        terminationCategory: null,
         offboardingStatus: null,
         offboardingStartedAt: null,
+        offboardingCompletedAt: null,
         updatedAt: new Date(),
       })
       .where(eq(workforce.id, workforceId))

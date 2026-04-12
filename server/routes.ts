@@ -2312,33 +2312,21 @@ export async function registerRoutes(
 
   app.post("/api/workforce/:id/terminate", async (req: Request, res: Response) => {
     try {
-      const { endDate, terminationReason } = req.body as { endDate: string; terminationReason?: string };
+      const { endDate, terminationReason, terminationCategory } = req.body as { endDate: string; terminationReason?: string; terminationCategory?: string };
       if (!endDate) return res.status(400).json({ message: "endDate is required" });
-      const record = await storage.terminateEmployee(req.params.id, { endDate, terminationReason });
+      const record = await storage.terminateEmployee(req.params.id, { endDate, terminationReason, terminationCategory });
       if (!record) return res.status(404).json({ message: "Employee not found" });
       const empNum = (record as any).employeeNumber ?? undefined;
       const subjectName = (record as any).fullNameEn ?? undefined;
 
-      if (record.candidateId) {
-        const candidate = await storage.getCandidate(record.candidateId);
-        if (candidate?.userId) {
-          const wfByCand = await storage.getWorkforceByCandidateId(record.candidateId);
-          const hasOtherActive = wfByCand && wfByCand.isActive;
-          if (!hasOtherActive) {
-            await storage.updateUser(candidate.userId, { isActive: false });
-            invalidateUserActiveCache(candidate.userId);
-          }
-        }
-      }
-
       await logAudit(req, {
-        action: "workforce.terminated",
-        entityType: "workforce",
+        action: "offboarding.started",
+        entityType: "offboarding",
         entityId: req.params.id,
         employeeNumber: empNum,
         subjectName,
-        description: `Terminated employee #${empNum ?? "—"} "${subjectName ?? req.params.id}"${terminationReason ? ` — reason: ${terminationReason}` : ""}`,
-        metadata: { endDate, terminationReason },
+        description: `Sent employee #${empNum ?? "—"} "${subjectName ?? req.params.id}" to offboarding${terminationCategory ? ` (${terminationCategory})` : ""}${terminationReason ? ` — ${terminationReason}` : ""}`,
+        metadata: { endDate, terminationReason, terminationCategory },
       });
       return res.json(record);
     } catch (err) {
@@ -3913,6 +3901,13 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
+  app.get("/api/offboarding/stats", async (req: Request, res: Response) => {
+    try {
+      const stats = await storage.getOffboardingStats();
+      return res.json(stats);
+    } catch (err) { return handleError(res, err); }
+  });
+
   app.get("/api/offboarding/:id/settlement", async (req: Request, res: Response) => {
     try {
       const settlement = await storage.getOffboardingSettlement(req.params.id);
@@ -3942,6 +3937,19 @@ export async function registerRoutes(
       const emp = await storage.getWorkforceEmployee(req.params.id);
       const settlement = await storage.getOffboardingSettlement(req.params.id);
       const record = await storage.completeOffboarding(req.params.id, actorId);
+
+      if (record.candidateId) {
+        const candidate = await storage.getCandidate(record.candidateId);
+        if (candidate?.userId) {
+          const wfByCand = await storage.getWorkforceByCandidateId(record.candidateId);
+          const hasOtherActive = wfByCand && wfByCand.isActive;
+          if (!hasOtherActive) {
+            await storage.updateUser(candidate.userId, { isActive: false });
+            invalidateUserActiveCache(candidate.userId);
+          }
+        }
+      }
+
       await logAudit(req, {
         action: "offboarding.completed",
         entityType: "offboarding",
@@ -3952,6 +3960,71 @@ export async function registerRoutes(
         metadata: { netSettlement: settlement?.netSettlement, totalDeductions: settlement?.totalDeductions },
       });
       return res.json(record);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/offboarding/bulk-start", async (req: Request, res: Response) => {
+    try {
+      const { ids } = req.body as { ids: string[] };
+      if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "ids array is required" });
+      const actorId = (req as any).userId ?? undefined;
+      let started = 0;
+      const errors: { id: string; message: string }[] = [];
+      for (const id of ids) {
+        try {
+          await storage.startOffboarding(id, actorId);
+          started++;
+        } catch (e: any) {
+          errors.push({ id, message: e?.message || "failed" });
+        }
+      }
+      if (started > 0) {
+        await logAudit(req, {
+          action: "offboarding.bulk_started",
+          entityType: "offboarding",
+          description: `Bulk-started offboarding for ${started} of ${ids.length} employee(s)`,
+          metadata: { started, failed: errors.length, total: ids.length },
+        });
+      }
+      return res.json({ started, errors, total: ids.length });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/offboarding/bulk-complete", async (req: Request, res: Response) => {
+    try {
+      const { ids } = req.body as { ids: string[] };
+      if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "ids array is required" });
+      const actorId = (req as any).userId ?? undefined;
+      let completed = 0;
+      const errors: { id: string; message: string }[] = [];
+      for (const id of ids) {
+        try {
+          const record = await storage.completeOffboarding(id, actorId);
+          if (record.candidateId) {
+            const candidate = await storage.getCandidate(record.candidateId);
+            if (candidate?.userId) {
+              const wfByCand = await storage.getWorkforceByCandidateId(record.candidateId);
+              const hasOtherActive = wfByCand && wfByCand.isActive;
+              if (!hasOtherActive) {
+                await storage.updateUser(candidate.userId, { isActive: false });
+                invalidateUserActiveCache(candidate.userId);
+              }
+            }
+          }
+          completed++;
+        } catch (e: any) {
+          errors.push({ id, message: e?.message || "failed" });
+        }
+      }
+      if (completed > 0) {
+        await logAudit(req, {
+          action: "offboarding.bulk_completed",
+          entityType: "offboarding",
+          description: `Bulk-completed offboarding for ${completed} of ${ids.length} employee(s)`,
+          metadata: { completed, failed: errors.length, total: ids.length },
+        });
+      }
+      return res.json({ completed, errors, total: ids.length });
     } catch (err) { return handleError(res, err); }
   });
 

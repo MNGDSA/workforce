@@ -470,6 +470,7 @@ export const workforce = pgTable(
     startDate: text("start_date").notNull(),
     endDate: text("end_date"),
     terminationReason: text("termination_reason"),
+    terminationCategory: text("termination_category"),
     isActive: boolean("is_active").notNull().default(true),
     supervisorId: varchar("supervisor_id").references(() => users.id),
     performanceScore: decimal("performance_score", { precision: 3, scale: 2 }),
