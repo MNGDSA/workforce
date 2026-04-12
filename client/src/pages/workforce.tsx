@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
 import { DatePickerField } from "@/components/ui/date-picker-field";
@@ -363,6 +363,11 @@ function EmployeeDetailDialog({
   });
 
   const [viewingAdminContract, setViewingAdminContract] = useState<any | null>(null);
+  const contractViewerOpenRef = useRef(false);
+  const setContractViewer = useCallback((v: any | null) => {
+    contractViewerOpenRef.current = !!v;
+    setViewingAdminContract(v);
+  }, []);
 
   const adminContractMap = useMemo(() => {
     const map = new Map<string, any>();
@@ -527,8 +532,12 @@ function EmployeeDetailDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl bg-zinc-950 border-zinc-800 text-white max-h-[90vh] overflow-y-auto">
+      <Dialog open={open} onOpenChange={(o) => { if (!contractViewerOpenRef.current) onOpenChange(o); }}>
+        <DialogContent
+          className="max-w-2xl bg-zinc-950 border-zinc-800 text-white max-h-[90vh] overflow-y-auto"
+          onInteractOutside={(e) => { if (contractViewerOpenRef.current) e.preventDefault(); }}
+          onPointerDownOutside={(e) => { if (contractViewerOpenRef.current) e.preventDefault(); }}
+        >
           <DialogHeader>
             <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-3">
               <Avatar className="h-10 w-10 border border-zinc-700">
@@ -1097,7 +1106,7 @@ function EmployeeDetailDialog({
                       </div>
                       {linkedContract && (
                         <button
-                          onClick={() => setViewingAdminContract(linkedContract)}
+                          onClick={() => setContractViewer(linkedContract)}
                           className="inline-flex items-center gap-1.5 text-xs text-[hsl(155,45%,45%)] hover:text-[hsl(155,45%,55%)] transition-colors mt-1"
                           data-testid={`button-view-contract-history-${idx}`}
                         >
@@ -1400,7 +1409,7 @@ function EmployeeDetailDialog({
       </Dialog>
 
       {viewingAdminContract && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70" onClick={() => setViewingAdminContract(null)}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70" onClick={() => setContractViewer(null)}>
           <div className="bg-card border border-border rounded-lg w-[90vw] max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()} data-testid="admin-contract-history-viewer">
             <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
               <div>
@@ -1416,7 +1425,7 @@ function EmployeeDetailDialog({
                   )}
                 </p>
               </div>
-              <button onClick={() => setViewingAdminContract(null)} className="text-muted-foreground hover:text-white" data-testid="button-close-admin-contract-viewer">
+              <button onClick={() => setContractViewer(null)} className="text-muted-foreground hover:text-white" data-testid="button-close-admin-contract-viewer">
                 <X className="h-5 w-5" />
               </button>
             </div>
