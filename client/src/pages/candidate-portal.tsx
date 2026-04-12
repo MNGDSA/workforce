@@ -99,32 +99,46 @@ function createCroppedImage(imageSrc: string, crop: Area, minSize = 400): Promis
   });
 }
 
-function PhotoCropDialog({ open, imageSrc, onCrop, onClose }: {
+interface QualityCheck {
+  name: string;
+  passed: boolean;
+  tip?: string;
+}
+
+interface QualityResult {
+  passed: boolean;
+  checks: QualityCheck[];
+  qualityCheckSkipped?: boolean;
+}
+
+function PhotoCropDialog({ open, imageSrc, onCrop, onClose, onRetry }: {
   open: boolean;
   imageSrc: string | null;
-  onCrop: (file: File) => void;
+  onCrop: (file: File) => Promise<{ ok: boolean; qualityResult?: QualityResult; error?: string }>;
   onClose: () => void;
+  onRetry: () => void;
 }) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedArea, setCroppedArea] = useState<Area | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [qualityChecks, setQualityChecks] = useState<QualityCheck[] | null>(null);
 
   if (!open || !imageSrc) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70" data-testid="photo-crop-overlay">
-      <div className="bg-card border border-border rounded-lg w-[90vw] max-w-md overflow-hidden" data-testid="photo-crop-dialog">
+      <div className="bg-card border border-border rounded-lg w-[90vw] max-w-md overflow-hidden max-h-[90vh] overflow-y-auto" data-testid="photo-crop-dialog">
         <div className="p-4 border-b border-border flex items-center justify-between">
           <div>
             <h3 className="text-base font-semibold text-white">Crop your photo</h3>
             <p className="text-xs text-muted-foreground mt-0.5">Drag to position, scroll to zoom. The square area will be your profile photo.</p>
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-white" data-testid="button-crop-close">
+          <button onClick={() => { setQualityChecks(null); onClose(); }} className="text-muted-foreground hover:text-white" data-testid="button-crop-close">
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="relative w-full" style={{ height: 360 }}>
+        <div className="relative w-full" style={{ height: 320 }}>
           <Cropper
             image={imageSrc}
             crop={crop}
@@ -137,6 +151,43 @@ function PhotoCropDialog({ open, imageSrc, onCrop, onClose }: {
             showGrid={false}
           />
         </div>
+
+        {qualityChecks && (
+          <div className="mx-4 mt-3 p-3 rounded-lg border border-red-800/50 bg-red-950/30" data-testid="quality-checklist">
+            <p className="text-sm font-semibold text-red-400 mb-2 flex items-center gap-1.5">
+              <AlertCircle className="h-4 w-4" />
+              Photo Quality Check Failed
+            </p>
+            <div className="space-y-1.5">
+              {qualityChecks.map((check, i) => (
+                <div key={i} className="flex items-start gap-2" data-testid={`quality-check-${i}`}>
+                  {check.passed ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                  ) : (
+                    <X className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                  )}
+                  <div className="min-w-0">
+                    <span className={`text-xs font-medium ${check.passed ? "text-emerald-400" : "text-red-400"}`}>{check.name}</span>
+                    {!check.passed && check.tip && (
+                      <p className="text-[11px] text-zinc-500 mt-0.5">{check.tip}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-3 w-full border-red-800/50 text-red-400 hover:bg-red-950/50 gap-1.5"
+              data-testid="button-try-different-photo"
+              onClick={() => { setQualityChecks(null); onRetry(); }}
+            >
+              <Camera className="h-3.5 w-3.5" />
+              Try Different Photo
+            </Button>
+          </div>
+        )}
+
         <div className="p-4 flex items-center gap-3">
           <label className="text-xs text-muted-foreground shrink-0">Zoom</label>
           <input
@@ -152,14 +203,23 @@ function PhotoCropDialog({ open, imageSrc, onCrop, onClose }: {
             onClick={async () => {
               if (!croppedArea) return;
               setProcessing(true);
+              setQualityChecks(null);
               try {
                 const file = await createCroppedImage(imageSrc, croppedArea);
-                onCrop(file);
+                const result = await onCrop(file);
+                if (!result.ok && result.qualityResult?.checks) {
+                  setQualityChecks(result.qualityResult.checks);
+                }
               } catch { }
               setProcessing(false);
             }}
           >
-            {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Photo"}
+            {processing ? (
+              <span className="flex items-center gap-1.5">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-xs">Checking quality…</span>
+              </span>
+            ) : "Save Photo"}
           </Button>
         </div>
       </div>
@@ -473,7 +533,7 @@ function ProfileCompletionCard({
 
   const [photoPendingReview, setPhotoPendingReview] = useState(false);
 
-  const uploadFile = useCallback(async (key: DocKey, file: File) => {
+  const uploadFile = useCallback(async (key: DocKey, file: File): Promise<{ ok: boolean; qualityResult?: QualityResult; error?: string }> => {
     setUploading((p) => ({ ...p, [key]: true }));
     try {
       const formData = new FormData();
@@ -483,6 +543,10 @@ function ProfileCompletionCard({
         method: "POST",
         body: formData,
       });
+      if (res.status === 422 && key === "photo") {
+        const body = await res.json().catch(() => ({ message: "Photo quality check failed" }));
+        return { ok: false, qualityResult: body.qualityResult, error: body.message };
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({ message: "Upload failed" }));
         throw new Error(err.message);
@@ -494,10 +558,13 @@ function ProfileCompletionCard({
       } else {
         setJustUploaded((p) => ({ ...p, [key]: file.name }));
         queryClient.invalidateQueries({ queryKey: ["/api/candidates/profile", candidateId] });
-        toast({ title: "File uploaded", description: `"${file.name}" saved successfully.` });
+        const title = key === "photo" ? "Photo uploaded and verified" : "File uploaded";
+        toast({ title, description: `"${file.name}" saved successfully.` });
       }
+      return { ok: true };
     } catch (err: any) {
       toast({ title: "Upload failed", description: err?.message || "Please try again.", variant: "destructive" });
+      return { ok: false, error: err?.message };
     } finally {
       setUploading((p) => ({ ...p, [key]: false }));
       if (inputRefs[key].current) inputRefs[key].current!.value = "";
@@ -620,9 +687,15 @@ function ProfileCompletionCard({
         imageSrc={cropImageSrc}
         onClose={() => { setShowCropDialog(false); setCropImageSrc(null); }}
         onCrop={async (croppedFile) => {
-          setShowCropDialog(false);
-          setCropImageSrc(null);
-          await uploadFile("photo", croppedFile);
+          const result = await uploadFile("photo", croppedFile);
+          if (result.ok) {
+            setShowCropDialog(false);
+            setCropImageSrc(null);
+          }
+          return result;
+        }}
+        onRetry={() => {
+          inputRefs.photo.current?.click();
         }}
       />
     </Card>
@@ -1245,8 +1318,7 @@ export default function CandidatePortal() {
     e.target.value = "";
   };
 
-  const handlePhotoChangeUpload = async (croppedFile: File) => {
-    setPhotoChangeCropSrc(null);
+  const handlePhotoChangeUpload = async (croppedFile: File): Promise<{ ok: boolean; qualityResult?: QualityResult; error?: string }> => {
     setPhotoChangeUploading(true);
     try {
       const formData = new FormData();
@@ -1256,6 +1328,10 @@ export default function CandidatePortal() {
         method: "POST",
         body: formData,
       });
+      if (res.status === 422) {
+        const body = await res.json().catch(() => ({ message: "Photo quality check failed" }));
+        return { ok: false, qualityResult: body.qualityResult, error: body.message };
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({ message: "Upload failed" }));
         throw new Error(err.message);
@@ -1269,10 +1345,13 @@ export default function CandidatePortal() {
         });
       } else {
         queryClient.invalidateQueries({ queryKey: ["/api/candidates/profile", candidateId] });
-        toast({ title: "Photo updated" });
+        toast({ title: "Photo uploaded and verified" });
       }
+      setPhotoChangeCropSrc(null);
+      return { ok: true };
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+      return { ok: false, error: err?.message };
     } finally {
       setPhotoChangeUploading(false);
     }
@@ -1999,6 +2078,7 @@ export default function CandidatePortal() {
         imageSrc={photoChangeCropSrc}
         onClose={() => setPhotoChangeCropSrc(null)}
         onCrop={handlePhotoChangeUpload}
+        onRetry={() => photoChangeInputRef.current?.click()}
       />
 
       {/* ─── Profile Editor Sheet ──────────────────────────────────────────── */}

@@ -234,6 +234,78 @@ export async function fetchShiftInfo(workforceId: string): Promise<ShiftInfo | n
   }
 }
 
+export interface PhotoQualityCheck {
+  name: string;
+  passed: boolean;
+  tip?: string;
+}
+
+export interface PhotoQualityResult {
+  passed: boolean;
+  checks: PhotoQualityCheck[];
+  qualityCheckSkipped?: boolean;
+}
+
+export class PhotoQualityError extends Error {
+  qualityResult: PhotoQualityResult;
+  constructor(message: string, qualityResult: PhotoQualityResult) {
+    super(message);
+    this.name = 'PhotoQualityError';
+    this.qualityResult = qualityResult;
+  }
+}
+
+export async function uploadProfilePhoto(
+  candidateId: string,
+  photoUri: string,
+): Promise<UploadResult & { qualityResult?: PhotoQualityResult }> {
+  const url = `${await getBaseUrl()}/api/candidates/${candidateId}/documents`;
+  const formData = new FormData();
+  const photoPayload: FormDataPhoto = {
+    uri: photoUri,
+    name: `profile_${Date.now()}.jpg`,
+    type: 'image/jpeg',
+  };
+  formData.append('file', photoPayload as unknown as Blob);
+  formData.append('docType', 'photo');
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+      credentials: 'include',
+    });
+
+    if (response.status === 422) {
+      const body = await response.json().catch(() => ({ message: 'Photo quality check failed' }));
+      throw new PhotoQualityError(
+        body.message || 'Photo quality check failed',
+        body.qualityResult || { passed: false, checks: [] },
+      );
+    }
+
+    if (response.status === 401) {
+      await clearSession();
+      logoutCallback?.();
+      throw new ApiError('Session expired. Please log in again.', 401);
+    }
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({ message: 'Upload failed' }));
+      throw new ApiError(errorBody.message || `HTTP ${response.status}`, response.status);
+    }
+
+    const text = await response.text();
+    return text ? JSON.parse(text) : {};
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function requestDataDeletion(identifier: string, password: string): Promise<{ message: string }> {
   return apiRequest<{ message: string }>('POST', '/api/portal/data-deletion-request', { identifier, password });
 }

@@ -42,6 +42,7 @@ import {
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
+import { validateFaceQuality } from "./rekognition";
 import XLSX from "xlsx";
 
 const AUTH_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
@@ -317,6 +318,20 @@ export async function registerRoutes(
       const fileUrl = `/uploads/${req.file.filename}`;
 
       if (docType === "photo") {
+        const allowedPhotoMimes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+        if (!allowedPhotoMimes.includes(req.file.mimetype.toLowerCase())) {
+          try { fs.unlinkSync(path.join("uploads", req.file.filename)); } catch {}
+          return res.status(400).json({ message: "Photo must be a JPG, PNG, or WebP image" });
+        }
+        const qualityResult = await validateFaceQuality(fileUrl);
+        if (!qualityResult.passed && !qualityResult.qualityCheckSkipped) {
+          try { fs.unlinkSync(path.join("uploads", req.file.filename)); } catch {}
+          return res.status(422).json({
+            message: "Photo quality check failed",
+            qualityResult,
+          });
+        }
+
         const candidate = await storage.getCandidate(id);
         if (!candidate) return res.status(404).json({ message: "Candidate not found" });
         if (candidate.hasPhoto && candidate.photoUrl) {
@@ -344,7 +359,7 @@ export async function registerRoutes(
               "high",
               { entityType: "photo_change_request", entityId: changeRequest.id }
             );
-            return res.json({ url: fileUrl, docType, pendingReview: true, changeRequestId: changeRequest.id, message: "Photo submitted for HR review. Your current photo remains active." });
+            return res.json({ url: fileUrl, docType, pendingReview: true, changeRequestId: changeRequest.id, qualityResult, message: "Photo submitted for HR review. Your current photo remains active." });
           }
         }
       }

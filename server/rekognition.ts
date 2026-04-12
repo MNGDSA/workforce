@@ -1,3 +1,142 @@
+export interface FaceQualityCheck {
+  name: string;
+  passed: boolean;
+  tip?: string;
+}
+
+export interface FaceQualityResult {
+  passed: boolean;
+  checks: FaceQualityCheck[];
+  qualityCheckSkipped?: boolean;
+}
+
+export async function validateFaceQuality(photoPath: string): Promise<FaceQualityResult> {
+  const awsRegion = process.env.AWS_REGION ?? "me-south-1";
+  const accessKey = process.env.AWS_ACCESS_KEY_ID;
+  const secretKey = process.env.AWS_SECRET_ACCESS_KEY;
+
+  if (!accessKey || !secretKey) {
+    console.warn("[Rekognition] AWS credentials not configured — skipping face quality check");
+    return { passed: true, checks: [], qualityCheckSkipped: true };
+  }
+
+  try {
+    const { RekognitionClient, DetectFacesCommand } = await import("@aws-sdk/client-rekognition");
+    const { readFileSync } = await import("fs");
+    const path = await import("path");
+
+    if (!photoPath.startsWith("/uploads/")) {
+      throw new Error("Only /uploads/ paths are allowed for face quality check");
+    }
+    const filename = path.basename(photoPath);
+    const safePath = path.resolve("uploads", filename);
+    if (!safePath.startsWith(path.resolve("uploads"))) {
+      throw new Error("Path traversal detected");
+    }
+    const imageBytes = readFileSync(safePath);
+
+    const client = new RekognitionClient({
+      region: awsRegion,
+      credentials: { accessKeyId: accessKey, secretAccessKey: secretKey },
+    });
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    const command = new DetectFacesCommand({
+      Image: { Bytes: imageBytes },
+      Attributes: ["ALL"],
+    });
+
+    let response;
+    try {
+      response = await client.send(command, { abortSignal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const faces = response.FaceDetails ?? [];
+    console.log("[Rekognition] DetectFaces returned", faces.length, "face(s)");
+
+    const checks: FaceQualityCheck[] = [];
+
+    checks.push({
+      name: "Face detected",
+      passed: faces.length >= 1,
+      tip: faces.length === 0 ? "No face found. Make sure your face is clearly visible in the photo." : undefined,
+    });
+
+    checks.push({
+      name: "Single face",
+      passed: faces.length === 1,
+      tip: faces.length > 1 ? "Multiple faces detected. Use a photo with only your face." : faces.length === 0 ? "No face detected." : undefined,
+    });
+
+    if (faces.length === 1) {
+      const face = faces[0];
+      const box = face.BoundingBox;
+      const boxArea = (box?.Width ?? 0) * (box?.Height ?? 0);
+      checks.push({
+        name: "Face size sufficient",
+        passed: boxArea >= 0.02,
+        tip: boxArea < 0.02 ? "Face is too small. Move closer to the camera or crop tighter." : undefined,
+      });
+
+      const sharpness = face.Quality?.Sharpness ?? 0;
+      checks.push({
+        name: "Sharpness acceptable",
+        passed: sharpness >= 40,
+        tip: sharpness < 40 ? "Photo is too blurry. Hold steady and ensure good focus." : undefined,
+      });
+
+      const brightness = face.Quality?.Brightness ?? 0;
+      checks.push({
+        name: "Brightness acceptable",
+        passed: brightness >= 30,
+        tip: brightness < 30 ? "Photo is too dark. Retake in better lighting." : undefined,
+      });
+
+      const eyesOpen = face.EyesOpen?.Value ?? false;
+      const eyesConf = face.EyesOpen?.Confidence ?? 0;
+      checks.push({
+        name: "Eyes visible",
+        passed: eyesOpen && eyesConf >= 70,
+        tip: !eyesOpen || eyesConf < 70 ? "Eyes should be clearly open and visible. Remove sunglasses if worn." : undefined,
+      });
+    } else {
+      checks.push({ name: "Face size sufficient", passed: false, tip: "Cannot evaluate — no single face detected." });
+      checks.push({ name: "Sharpness acceptable", passed: false, tip: "Cannot evaluate — no single face detected." });
+      checks.push({ name: "Brightness acceptable", passed: false, tip: "Cannot evaluate — no single face detected." });
+      checks.push({ name: "Eyes visible", passed: false, tip: "Cannot evaluate — no single face detected." });
+    }
+
+    const allPassed = checks.every(c => c.passed);
+    return { passed: allPassed, checks };
+  } catch (err: any) {
+    const errMsg = err instanceof Error ? err.message : "unknown";
+    const errName = err?.name ?? "";
+    const httpCode = err?.$metadata?.httpStatusCode;
+
+    const isTimeout = errMsg.includes("aborted") || errMsg.includes("AbortError") || errName === "AbortError";
+    const isServiceError = httpCode >= 500 || errName === "ThrottlingException" || errName === "ProvisionedThroughputExceededException" || errMsg.includes("ECONNREFUSED") || errMsg.includes("ENOTFOUND") || errMsg.includes("ETIMEDOUT") || errMsg.includes("NetworkingError");
+
+    if (isTimeout || isServiceError) {
+      console.warn(`[Rekognition] DetectFaces unavailable (${isTimeout ? "timeout" : errName || errMsg}) — allowing photo through`);
+      return { passed: true, checks: [], qualityCheckSkipped: true };
+    }
+
+    console.error("[Rekognition] DetectFaces FAILED (non-transient) —", errMsg);
+    return {
+      passed: false,
+      checks: [{
+        name: "Photo validation",
+        passed: false,
+        tip: "Could not validate photo. Please ensure the file is a valid image (JPG or PNG).",
+      }],
+    };
+  }
+}
+
 export interface FaceCompareResult {
   confidence: number;
   matched: boolean;
