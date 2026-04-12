@@ -519,8 +519,12 @@ export default function InboxPage() {
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="text-sm font-medium text-foreground truncate">{item.title}</span>
+                        <Badge variant="outline" className={`shrink-0 text-[10px] px-1.5 py-0 ${typeMeta.color} border-current/30`}>
+                          <Icon className="h-2.5 w-2.5 mr-1" />
+                          {typeMeta.label}
+                        </Badge>
                         <Badge variant="outline" className={`shrink-0 text-[10px] px-1.5 py-0 ${priorityMeta.color}`}>
                           <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1 ${priorityMeta.dotColor}`} />
                           {priorityMeta.label}
@@ -537,8 +541,6 @@ export default function InboxPage() {
                       )}
 
                       <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5">
-                        <span>{typeMeta.label}</span>
-                        <span>·</span>
                         <span>{timeAgo(item.createdAt)}</span>
                         {item.resolvedAt && (
                           <>
