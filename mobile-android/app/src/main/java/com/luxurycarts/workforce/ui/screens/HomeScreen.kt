@@ -76,6 +76,7 @@ import com.luxurycarts.workforce.ui.theme.TextMuted
 import com.luxurycarts.workforce.ui.theme.TextPrimary
 import com.luxurycarts.workforce.ui.theme.TextSecondary
 import com.luxurycarts.workforce.ui.theme.WarningAmber
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -113,14 +114,42 @@ fun HomeScreen(
     val serverUrl = app.sessionManager.serverUrl.trimEnd('/')
 
     LaunchedEffect(candidateId) {
-        if (candidateId != null && apiService != null) {
+        if (candidateId == null || apiService == null) return@LaunchedEffect
+        while (true) {
             try {
-                val resp = apiService.getPhotoChangeRequests(candidateId, "pending")
-                if (resp.isSuccessful) {
-                    val requests = resp.body() ?: emptyList()
-                    hasPendingPhotoChange = requests.isNotEmpty()
+                val pendingResp = apiService.getPhotoChangeRequests(candidateId, "pending")
+                if (pendingResp.isSuccessful) {
+                    val pendingList = pendingResp.body() ?: emptyList()
+                    val wasPending = hasPendingPhotoChange
+                    hasPendingPhotoChange = pendingList.isNotEmpty()
+
+                    if (wasPending && !hasPendingPhotoChange) {
+                        val allResp = apiService.getPhotoChangeRequests(candidateId, null)
+                        if (allResp.isSuccessful) {
+                            val mostRecent = (allResp.body() ?: emptyList())
+                                .sortedByDescending { it.createdAt }
+                                .firstOrNull()
+                            when (mostRecent?.status) {
+                                "approved" -> {
+                                    photoMessage = "Your new photo has been approved and is now active."
+                                    onWorkforceRefresh()
+                                }
+                                "rejected" -> {
+                                    val reason = mostRecent.reviewNotes
+                                    photoMessage = if (!reason.isNullOrBlank())
+                                        "Photo change not approved: $reason"
+                                    else
+                                        "Your photo change request was not approved."
+                                }
+                                else -> {
+                                    photoMessage = "Your photo change request has been reviewed."
+                                }
+                            }
+                        }
+                    }
                 }
             } catch (_: Exception) {}
+            delay(30_000L)
         }
     }
 
