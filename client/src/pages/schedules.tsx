@@ -450,6 +450,10 @@ function AssignScheduleDialog({
     }).then(r => r.json()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/schedule-assignments"] });
+      Array.from(selectedIds).forEach(wid => {
+        qc.invalidateQueries({ queryKey: ["/api/schedule-assignments/employee", wid] });
+        qc.invalidateQueries({ queryKey: ["/api/schedule-assignments/employee", wid, "active"] });
+      });
       toast({ title: "Schedule assigned successfully" });
       onAssigned();
       onOpenChange(false);
@@ -853,9 +857,16 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
   }
 
   const endMutation = useMutation({
-    mutationFn: (id: string) => apiRequest("POST", `/api/schedule-assignments/${id}/end`, { endDate }).then(r => r.json()),
-    onSuccess: () => {
+    mutationFn: (id: string) => {
+      const assignment = assignments.find(a => a.id === id);
+      return apiRequest("POST", `/api/schedule-assignments/${id}/end`, { endDate }).then(r => r.json()).then(res => ({ res, workforceId: assignment?.workforceId }));
+    },
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["/api/schedule-assignments"] });
+      if (data?.workforceId) {
+        qc.invalidateQueries({ queryKey: ["/api/schedule-assignments/employee", data.workforceId] });
+        qc.invalidateQueries({ queryKey: ["/api/schedule-assignments/employee", data.workforceId, "active"] });
+      }
       toast({ title: "Assignment ended" });
       setEndAssignId(null);
     },
