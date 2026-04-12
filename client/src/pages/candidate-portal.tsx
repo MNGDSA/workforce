@@ -861,19 +861,25 @@ function ContractSection({
   candidateId,
   candidateName,
   readOnly = false,
+  onboardingId,
 }: {
   candidateId: string;
   candidateName?: string;
   readOnly?: boolean;
+  onboardingId?: string;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [contractPreviewOpen, setContractPreviewOpen] = useState(false);
   const [isSignModalOpen, setIsSignModalOpen] = useState(false);
 
+  const contractQueryParams = onboardingId
+    ? `onboardingId=${onboardingId}`
+    : `candidateId=${candidateId}`;
+
   const { data: myContracts = [] } = useQuery<{ id: string; status: string; signedAt: string | null; templateId: string; snapshotArticles: any[]; snapshotVariables: Record<string, string> }[]>({
-    queryKey: ["/api/candidate-contracts/mine", candidateId],
-    queryFn: () => apiRequest("GET", `/api/candidate-contracts?candidateId=${candidateId}`).then(r => r.json()),
+    queryKey: ["/api/candidate-contracts/mine", candidateId, onboardingId],
+    queryFn: () => apiRequest("GET", `/api/candidate-contracts?${contractQueryParams}`).then(r => r.json()),
     enabled: !!candidateId,
   });
 
@@ -891,7 +897,8 @@ function ContractSection({
   const signContractMutation = useMutation({
     mutationFn: () => apiRequest("POST", `/api/candidate-contracts/${activeContract!.id}/sign`).then(r => r.json()),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/candidate-contracts/mine", candidateId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidate-contracts/mine", candidateId, onboardingId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding/mine", candidateId] });
       toast({ title: "Contract signed successfully!" });
       setIsSignModalOpen(false);
     },
@@ -1208,6 +1215,17 @@ export default function CandidatePortal() {
   });
   const hasPendingPhotoChange = pendingPhotoRequests.length > 0;
 
+  const { data: myOnboardingRecords = [] } = useQuery<{ id: string; status: string; candidateId: string; hasSignedContract: boolean; contractSignedAt: string | null }[]>({
+    queryKey: ["/api/onboarding/mine", candidateId],
+    queryFn: () => apiRequest("GET", `/api/onboarding?candidateId=${candidateId}`).then(r => r.json()),
+    enabled: !!candidateId,
+  });
+  const sortedOnboarding = [...myOnboardingRecords].sort((a, b) =>
+    new Date(b.contractSignedAt ?? 0).getTime() - new Date(a.contractSignedAt ?? 0).getTime()
+  );
+  const currentOnboarding = sortedOnboarding.find(o => o.status !== "converted" && o.status !== "rejected")
+    || sortedOnboarding.find(o => o.status === "converted");
+
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobPosting[]>({
     queryKey: ["/api/jobs", "active"],
     queryFn: () => apiRequest("GET", "/api/jobs?status=active").then(r => r.json()),
@@ -1474,6 +1492,7 @@ export default function CandidatePortal() {
               candidateId={candidateId!}
               candidateName={displayName}
               readOnly={!isEmployee}
+              onboardingId={currentOnboarding?.id}
             />
           </div>
         );
@@ -1999,7 +2018,7 @@ export default function CandidatePortal() {
             {(portalMode === "candidate" || portalMode === "employee_individual") && (
               <Card className="bg-card border-border">
                 <CardContent className="p-5">
-                  <ContractSection candidateId={candidateId!} candidateName={displayName} />
+                  <ContractSection candidateId={candidateId!} candidateName={displayName} onboardingId={currentOnboarding?.id} />
                 </CardContent>
               </Card>
             )}
