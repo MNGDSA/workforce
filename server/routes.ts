@@ -2314,6 +2314,10 @@ export async function registerRoutes(
     try {
       const { endDate, terminationReason, terminationCategory } = req.body as { endDate: string; terminationReason?: string; terminationCategory?: string };
       if (!endDate) return res.status(400).json({ message: "endDate is required" });
+      const validCategories = ["end_of_season", "resignation", "performance", "disciplinary", "contract_expiry", "other"];
+      if (terminationCategory && !validCategories.includes(terminationCategory)) {
+        return res.status(400).json({ message: `Invalid terminationCategory. Must be one of: ${validCategories.join(", ")}` });
+      }
       const record = await storage.terminateEmployee(req.params.id, { endDate, terminationReason, terminationCategory });
       if (!record) return res.status(404).json({ message: "Employee not found" });
       const empNum = (record as any).employeeNumber ?? undefined;
