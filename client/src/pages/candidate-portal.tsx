@@ -41,6 +41,7 @@ import {
   AlertTriangle,
   Shield,
   Camera,
+  UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -190,9 +191,20 @@ type WorkforceRecord = {
   startDate: string;
   endDate: string | null;
   terminationReason: string | null;
+  terminationCategory: string | null;
+  offboardingCompletedAt: string | null;
   isActive: boolean;
   eventName: string | null;
   jobTitle: string | null;
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  end_of_season: "End of Season",
+  resignation: "Resignation",
+  performance: "Performance",
+  disciplinary: "Disciplinary",
+  contract_expiry: "Contract Expiry",
+  other: "Other",
 };
 
 // ─── Portal Mode Detection ────────────────────────────────────────────────────
@@ -666,64 +678,83 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
 
   return (
     <div className="space-y-3">
-      {allRecords.map((rec) => (
-        <Card key={rec.id} className="bg-card border-border" data-testid={`card-work-history-${rec.id}`}>
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="font-bold text-white font-mono text-sm">{rec.employeeNumber}</span>
-                  <Badge
-                    className={`text-[10px] h-5 border-0 ${
-                      rec.employmentType === "smp"
-                        ? "bg-amber-500/15 text-amber-400"
-                        : "bg-blue-500/15 text-blue-400"
-                    }`}
-                    data-testid={`badge-employment-type-${rec.id}`}
-                  >
-                    {rec.employmentType === "smp" ? "SMP Contract" : "Individual"}
-                  </Badge>
-                  <Badge
-                    className={`text-[10px] h-5 border-0 ${
-                      rec.isActive
-                        ? "bg-emerald-500/15 text-emerald-400"
-                        : "bg-muted/40 text-muted-foreground"
-                    }`}
-                  >
-                    {rec.isActive ? "Active" : "Ended"}
-                  </Badge>
-                </div>
-                {rec.jobTitle && (
-                  <p className="text-sm text-white">{rec.jobTitle}</p>
-                )}
-                {rec.eventName && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                    <Building2 className="h-3 w-3" /> {rec.eventName}
-                  </p>
-                )}
-                <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    {new Date(rec.startDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                    {rec.endDate && (
-                      <> → {new Date(rec.endDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</>
-                    )}
-                  </span>
-                  {rec.salary && rec.employmentType !== "smp" && (
+      {allRecords.map((rec) => {
+        const start = new Date(rec.startDate);
+        const end = rec.endDate ? new Date(rec.endDate) : (rec.isActive ? new Date() : null);
+        const durationDays = end ? Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))) : null;
+        const categoryLabel = rec.terminationCategory ? (CATEGORY_LABELS[rec.terminationCategory] ?? rec.terminationCategory) : null;
+
+        return (
+          <Card key={rec.id} className="bg-card border-border" data-testid={`card-work-history-${rec.id}`}>
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="font-bold text-white font-mono text-sm">{rec.employeeNumber}</span>
+                    <Badge
+                      className={`text-[10px] h-5 border-0 ${
+                        rec.employmentType === "smp"
+                          ? "bg-amber-500/15 text-amber-400"
+                          : "bg-blue-500/15 text-blue-400"
+                      }`}
+                      data-testid={`badge-employment-type-${rec.id}`}
+                    >
+                      {rec.employmentType === "smp" ? "SMP Contract" : "Individual"}
+                    </Badge>
+                    <Badge
+                      className={`text-[10px] h-5 border-0 ${
+                        rec.isActive
+                          ? "bg-emerald-500/15 text-emerald-400"
+                          : "bg-muted/40 text-muted-foreground"
+                      }`}
+                    >
+                      {rec.isActive ? "Active" : categoryLabel ?? "Ended"}
+                    </Badge>
+                  </div>
+                  {rec.jobTitle && (
+                    <p className="text-sm text-white">{rec.jobTitle}</p>
+                  )}
+                  {rec.eventName && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <Building2 className="h-3 w-3" /> {rec.eventName}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
                     <span className="flex items-center gap-1">
-                      <Banknote className="h-3 w-3" />
-                      {Number(rec.salary).toLocaleString()} SAR/mo
+                      <Calendar className="h-3 w-3" />
+                      {start.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                      {rec.endDate && (
+                        <> → {new Date(rec.endDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</>
+                      )}
                     </span>
+                    {durationDays !== null && (
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {durationDays} day{durationDays !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                    {rec.salary && rec.employmentType !== "smp" && (
+                      <span className="flex items-center gap-1">
+                        <Banknote className="h-3 w-3" />
+                        {Number(rec.salary).toLocaleString()} SAR/mo
+                      </span>
+                    )}
+                  </div>
+                  {!rec.isActive && rec.offboardingCompletedAt && (
+                    <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                      Offboarding completed {new Date(rec.offboardingCompletedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    </p>
+                  )}
+                  {!rec.isActive && rec.terminationReason && (
+                    <p className="text-xs text-muted-foreground mt-1 italic">Reason: {rec.terminationReason}</p>
                   )}
                 </div>
-                {!rec.isActive && rec.terminationReason && (
-                  <p className="text-xs text-muted-foreground mt-1 italic">Reason: {rec.terminationReason}</p>
-                )}
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }
@@ -1381,9 +1412,11 @@ export default function CandidatePortal() {
               </TabsList>
             </div>
             {hasWorkHistory && (
-              <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-xs text-blue-300 flex items-center gap-2">
-                <Shield className="h-4 w-4 shrink-0" />
-                Welcome back! Your previous employment history is preserved. You are eligible to apply for new positions.
+              <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs text-emerald-300 flex items-center gap-2" data-testid="jobs-former-employee-message">
+                <UserCheck className="h-4 w-4 shrink-0" />
+                <span>
+                  Welcome back{allWorkforceRecords.find(r => !r.isActive)?.eventName ? ` from ${allWorkforceRecords.find(r => !r.isActive)!.eventName}` : ""}! As a former employee, your work history is on record. We encourage you to apply for upcoming seasonal positions.
+                </span>
               </div>
             )}
             <TabsContent value="open" className="space-y-4">
@@ -1487,11 +1520,55 @@ export default function CandidatePortal() {
         );
 
       case "dashboard":
-      default:
+      default: {
+        const completedRecords = allWorkforceRecords.filter(r => !r.isActive);
+        const isFormerEmployee = !isEmployee && completedRecords.length > 0;
+        const lastCompleted = completedRecords[0] ?? null;
+        const feDurationDays = lastCompleted ? Math.max(0, Math.round(
+          ((lastCompleted.endDate ? new Date(lastCompleted.endDate).getTime() : Date.now()) - new Date(lastCompleted.startDate).getTime()) / (1000 * 60 * 60 * 24)
+        )) : 0;
+
         return (
           <div className="space-y-6">
-            {/* Previous employment info for returning candidates */}
-            {!isEmployee && hasWorkHistory && mostRecentRecord && (
+            {isFormerEmployee && lastCompleted && (
+              <Card className="bg-emerald-950/30 border border-emerald-700/30" data-testid="welcome-back-card">
+                <CardContent className="p-5">
+                  <div className="flex items-start gap-3 mb-4">
+                    <div className="h-10 w-10 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
+                      <UserCheck className="h-5 w-5 text-emerald-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-emerald-300 font-display">Welcome Back</h3>
+                      <p className="text-xs text-emerald-400/70 mt-0.5">Your service record is preserved. You're eligible to apply for new seasonal positions.</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-lg p-3">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Employee ID</p>
+                      <p className="text-sm font-bold text-white font-mono mt-0.5">{lastCompleted.employeeNumber}</p>
+                    </div>
+                    {lastCompleted.jobTitle && (
+                      <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-lg p-3">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Last Position</p>
+                        <p className="text-sm font-bold text-white mt-0.5">{lastCompleted.jobTitle}</p>
+                      </div>
+                    )}
+                    {lastCompleted.eventName && (
+                      <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-lg p-3">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Last Event</p>
+                        <p className="text-sm font-bold text-white mt-0.5">{lastCompleted.eventName}</p>
+                      </div>
+                    )}
+                    <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-lg p-3">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Duration</p>
+                      <p className="text-sm font-bold text-white mt-0.5">{feDurationDays} day{feDurationDays !== 1 ? "s" : ""}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {!isEmployee && hasWorkHistory && !isFormerEmployee && mostRecentRecord && (
               <TerminationBanner record={mostRecentRecord} />
             )}
 
@@ -1610,6 +1687,7 @@ export default function CandidatePortal() {
             )}
           </div>
         );
+      }
     }
   }
 
@@ -1754,11 +1832,21 @@ export default function CandidatePortal() {
                       {isSmp ? "SMP Contract" : "Active Employee"}
                     </Badge>
                   )}
-                  {!isEmployee && hasWorkHistory && (
-                    <Badge className="mt-2 bg-primary/15 text-primary border border-primary/30 text-xs gap-1">
-                      <History className="h-3 w-3" /> Returning Candidate
-                    </Badge>
-                  )}
+                  {!isEmployee && hasWorkHistory && (() => {
+                    const lastCompleted = allWorkforceRecords.find(r => !r.isActive);
+                    return (
+                      <div className="mt-2 space-y-1 flex flex-col items-center">
+                        <Badge className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs gap-1" data-testid="badge-former-employee">
+                          <UserCheck className="h-3 w-3" /> Former Employee
+                        </Badge>
+                        {lastCompleted && (
+                          <span className="text-[10px] text-muted-foreground font-mono" data-testid="text-last-employee-number">
+                            Last ID: {lastCompleted.employeeNumber}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {(isEmployee && activeWorkforceRecord) && (

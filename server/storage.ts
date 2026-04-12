@@ -1303,6 +1303,8 @@ export class DatabaseStorage implements IStorage {
         startDate: workforce.startDate,
         endDate: workforce.endDate,
         terminationReason: workforce.terminationReason,
+        terminationCategory: workforce.terminationCategory,
+        offboardingCompletedAt: workforce.offboardingCompletedAt,
         isActive: workforce.isActive,
         notes: workforce.notes,
         createdAt: workforce.createdAt,
