@@ -995,7 +995,14 @@ function EmployeeDetailDialog({
                       <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500" onClick={() => setEditFinancial(false)} data-testid="button-cancel-financial"><X className="h-3 w-3" /></Button>
                       <Button size="sm" className="h-6 px-2 text-xs bg-emerald-700 hover:bg-emerald-600" data-testid="button-save-financial"
                         disabled={profileMutation.isPending}
-                        onClick={() => profileMutation.mutate(financialForm)}
+                        onClick={() => {
+                          const iban = (financialForm.ibanNumber ?? "").trim().toUpperCase();
+                          if (iban && !/^SA\d{22}$/.test(iban)) {
+                            toast({ title: "Invalid IBAN", description: "IBAN must be SA followed by 22 digits (24 characters total)", variant: "destructive" });
+                            return;
+                          }
+                          profileMutation.mutate(financialForm);
+                        }}
                       ><Save className="h-3 w-3 mr-1" /> Save</Button>
                     </div>
                   )}
