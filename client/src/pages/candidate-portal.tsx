@@ -1039,7 +1039,9 @@ function ContractSection({
     enabled: !!candidateId,
   });
 
-  const activeContract = myContracts.find(c => c.status !== "signed") || myContracts.find(c => c.status === "signed");
+  const pendingContract = myContracts.find(c => c.status !== "signed");
+  const signedContract = myContracts.find(c => c.status === "signed");
+  const activeContract = pendingContract || (!readOnly || onboardingId ? signedContract : undefined);
   const contractIsSigned = activeContract?.status === "signed";
 
   const { data: contractPreview } = useQuery<{ contract: any; template: any; articles: any[]; variables: Record<string, string> }>({
@@ -1343,12 +1345,16 @@ export default function CandidatePortal() {
     queryKey: ["/api/workforce/by-candidate", candidateId],
     queryFn: () => apiRequest("GET", `/api/workforce/by-candidate/${candidateId}`).then(r => r.json()),
     enabled: !!candidateId,
+    refetchInterval: 10_000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: allWorkforceRecords = [] } = useQuery<WorkforceRecord[]>({
     queryKey: ["/api/workforce/all-by-candidate", candidateId],
     queryFn: () => apiRequest("GET", `/api/workforce/all-by-candidate/${candidateId}`).then(r => r.json()),
     enabled: !!candidateId,
+    refetchInterval: 10_000,
+    refetchOnWindowFocus: true,
   });
 
   const portalMode = resolvePortalMode(candidateProfile, activeWorkforceRecord);
@@ -1381,8 +1387,9 @@ export default function CandidatePortal() {
   const sortedOnboarding = [...myOnboardingRecords].sort((a, b) =>
     new Date(b.contractSignedAt ?? 0).getTime() - new Date(a.contractSignedAt ?? 0).getTime()
   );
-  const currentOnboarding = sortedOnboarding.find(o => o.status !== "converted" && o.status !== "rejected")
-    || sortedOnboarding.find(o => o.status === "converted");
+  const activeOnboarding = sortedOnboarding.find(o => o.status !== "converted" && o.status !== "rejected");
+  const currentOnboarding = activeOnboarding
+    || (isEmployee ? sortedOnboarding.find(o => o.status === "converted") : undefined);
 
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobPosting[]>({
     queryKey: ["/api/jobs", "active"],
