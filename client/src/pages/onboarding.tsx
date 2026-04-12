@@ -1638,6 +1638,11 @@ export default function OnboardingPage() {
               const isReady = rec.status === "ready";
               const isConverted = rec.status === "converted";
               const isRejected = rec.status === "rejected";
+              const contractSigned = rec.hasSignedContract || !!rec.contractSignedAt;
+              const isSmpPipeline = isSmp || !rec.applicationId;
+              const canConvert = isReady && (isSmpPipeline || contractSigned);
+              const linkedApp = rec.applicationId ? applications.find(a => a.id === rec.applicationId) : null;
+              const isOffered = linkedApp?.status === "offered";
 
               return (
                 <div
@@ -1659,6 +1664,9 @@ export default function OnboardingPage() {
                         <StatusIcon className="h-3 w-3 mr-1" />
                         {cfg.label}
                       </Badge>
+                      {isOffered && !isConverted && (
+                        <Badge data-testid={`badge-offered-${rec.id}`} className="text-[10px] px-1.5 py-0.5 bg-cyan-900/50 text-cyan-400 border-0">Offered</Badge>
+                      )}
                       {isSmp && (
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-800 text-blue-400">SMP</Badge>
                       )}
@@ -1673,8 +1681,7 @@ export default function OnboardingPage() {
                       const docPrereqs = getPrerequisites(isSmp);
                       const docsComplete = docPrereqs.every(p => rec[p.key as keyof OnboardingRecord]);
                       const docsDone = docPrereqs.filter(p => rec[p.key as keyof OnboardingRecord]).length;
-                      const contractSigned = !!rec.contractSignedAt;
-                      const phase = isConverted ? 3 : isSmp ? (docsComplete ? 3 : 1) : contractSigned ? 3 : docsComplete ? 2 : 1;
+                      const phase = isConverted ? 3 : isSmpPipeline ? (docsComplete ? 3 : 1) : contractSigned ? 3 : docsComplete ? 2 : 1;
                       return (
                         <div className="mt-2">
                           <div className="flex items-center gap-1 text-xs">
@@ -1683,9 +1690,9 @@ export default function OnboardingPage() {
                               Docs {docsDone}/{docPrereqs.length}
                             </div>
                             <div className={`w-4 h-px ${phase >= 2 ? "bg-emerald-700" : "bg-zinc-700"}`} />
-                            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${isSmp ? "bg-zinc-800 text-zinc-600" : phase >= 2 ? (contractSigned ? "bg-emerald-900/40 text-emerald-400" : "bg-yellow-900/40 text-yellow-400") : "bg-zinc-800 text-zinc-600"}`}>
+                            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${isSmpPipeline ? "bg-zinc-800 text-zinc-600" : phase >= 2 ? (contractSigned ? "bg-emerald-900/40 text-emerald-400" : "bg-yellow-900/40 text-yellow-400") : "bg-zinc-800 text-zinc-600"}`}>
                               <FileSignature className="h-3 w-3" />
-                              {isSmp ? "N/A" : contractSigned ? "Signed" : docsComplete ? "Pending" : "Locked"}
+                              {isSmpPipeline ? "N/A" : contractSigned ? "Signed" : docsComplete ? "Awaiting" : "Locked"}
                             </div>
                             <div className={`w-4 h-px ${phase >= 3 ? "bg-emerald-700" : "bg-zinc-700"}`} />
                             <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${phase >= 3 ? "bg-emerald-900/40 text-emerald-400" : "bg-zinc-800 text-zinc-600"}`}>
@@ -1713,22 +1720,32 @@ export default function OnboardingPage() {
                       </Button>
                     )}
                     {isReady && (
-                      <Button
-                        data-testid={`button-convert-${rec.id}`}
-                        size="sm"
-                        className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white gap-1"
-                        onClick={() => {
-                          setConvertRecord(rec);
-                          setConvertForm({
-                            startDate: rec.startDate ?? "",
-                            salary: "",
-                            eventId: rec.eventId ?? "",
-                          });
-                        }}
-                      >
-                        <UserCheck className="h-3.5 w-3.5" />
-                        Convert to Employee
-                      </Button>
+                      <div className="relative group">
+                        <Button
+                          data-testid={`button-convert-${rec.id}`}
+                          size="sm"
+                          className={canConvert ? "bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white gap-1" : "bg-zinc-700 text-zinc-400 gap-1 cursor-not-allowed"}
+                          disabled={!canConvert}
+                          onClick={() => {
+                            if (!canConvert) return;
+                            setConvertRecord(rec);
+                            setConvertForm({
+                              startDate: rec.startDate ?? "",
+                              salary: "",
+                              eventId: rec.eventId ?? "",
+                            });
+                          }}
+                        >
+                          <UserCheck className="h-3.5 w-3.5" />
+                          Convert to Employee
+                        </Button>
+                        {!canConvert && isReady && !isSmpPipeline && (
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-yellow-400 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                            <FileSignature className="h-3 w-3 inline mr-1" />
+                            Contract must be signed first
+                          </div>
+                        )}
+                      </div>
                     )}
                     {!isConverted && !isRejected && (
                       <Button
@@ -2073,18 +2090,38 @@ export default function OnboardingPage() {
               />
 
               {/* Status indicator */}
-              {checklistRecord.status !== "converted" && checklistRecord.status !== "rejected" && (
-                <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
-                  checklistDone === checklistTotal
-                    ? "bg-emerald-950/30 text-emerald-400 border border-emerald-800/40"
-                    : "bg-zinc-900 text-zinc-400 border border-zinc-800"
-                }`}>
-                  {checklistDone === checklistTotal
-                    ? <><CheckCircle2 className="h-4 w-4 shrink-0" /> Ready to convert — use the "Convert to Employee" button on the main list</>
-                    : <><TriangleAlert className="h-4 w-4 shrink-0" /> {checklistTotal - checklistDone} prerequisite(s) still outstanding</>
-                  }
-                </div>
-              )}
+              {checklistRecord.status !== "converted" && checklistRecord.status !== "rejected" && (() => {
+                const docsAllDone = checklistDone === checklistTotal;
+                const contractRequired = !checklistIsSmp && !!checklistRecord.applicationId;
+                const contractDone = checklistRecord.hasSignedContract || !!checklistRecord.contractSignedAt;
+                const fullyReady = docsAllDone && (!contractRequired || contractDone);
+                return (
+                  <div className={`flex flex-col gap-2 p-3 rounded-lg text-sm ${
+                    fullyReady
+                      ? "bg-emerald-950/30 text-emerald-400 border border-emerald-800/40"
+                      : "bg-zinc-900 text-zinc-400 border border-zinc-800"
+                  }`}>
+                    {fullyReady ? (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 shrink-0" /> Ready to convert — use the "Convert to Employee" button on the main list
+                      </div>
+                    ) : (
+                      <>
+                        {!docsAllDone && (
+                          <div className="flex items-center gap-2">
+                            <TriangleAlert className="h-4 w-4 shrink-0" /> {checklistTotal - checklistDone} document(s) still outstanding
+                          </div>
+                        )}
+                        {docsAllDone && contractRequired && !contractDone && (
+                          <div className="flex items-center gap-2 text-yellow-400">
+                            <FileSignature className="h-4 w-4 shrink-0" /> Contract must be signed before conversion
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             );
           })()}

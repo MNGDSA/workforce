@@ -1865,6 +1865,11 @@ export class DatabaseStorage implements IStorage {
     if (rec.status !== "ready") throw new Error(`Cannot convert — status is "${rec.status}", must be "ready"`);
 
     const [cand] = await db.select().from(candidates).where(eq(candidates.id, rec.candidateId));
+    const isSmpCandidate = cand?.source === "smp" || !rec.applicationId;
+    if (!isSmpCandidate && !rec.hasSignedContract) {
+      throw new Error("Contract must be signed before conversion. Generate and have the candidate sign the employment contract first.");
+    }
+
     let employeeNumber: string;
     if (cand?.nationalId) {
       const prev = await db
