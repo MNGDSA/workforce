@@ -4745,8 +4745,19 @@ export async function registerRoutes(
         return res.status(400).json({ message: "No active SMS plugin configured. Go to Notifications > SMS Gateway to set one up." });
       }
 
-      const employees = await storage.getWorkforce({ isActive: true });
-      const employeeMap = new Map(employees.map((e: any) => [e.id, e]));
+      interface WorkforceRow {
+        id: string;
+        employeeNumber: string;
+        phone: string | null;
+        fullNameEn: string | null;
+        fullNameAr: string | null;
+        positionTitle: string | null;
+        jobTitle: string | null;
+        departmentName: string | null;
+        eventName: string | null;
+      }
+      const employees: WorkforceRow[] = await storage.getWorkforce({ isActive: true });
+      const employeeMap = new Map(employees.map(e => [e.id, e]));
       const validRecipients: Array<{ workforceId: string; phone: string; name: string; resolvedMessage: string }> = [];
 
       for (const wid of workforceIds) {
@@ -4766,20 +4777,13 @@ export async function registerRoutes(
         return res.status(400).json({ message: "None of the selected employees have a valid phone number." });
       }
 
-      let userId: string | undefined;
-      const authHeader = req.headers.authorization;
-      if (authHeader) {
-        try {
-          const decoded = JSON.parse(Buffer.from(authHeader.replace("Bearer ", ""), "base64").toString());
-          userId = decoded.id;
-        } catch {}
-      }
+      const userId: string | null = (req as Request & { userId?: string }).userId ?? null;
 
       const broadcast = await storage.createSmsBroadcast({
         messageTemplate,
         totalRecipients: validRecipients.length,
         status: "sending",
-        createdBy: userId ?? null,
+        createdBy: userId,
       });
 
       const recipientRecords = [];
