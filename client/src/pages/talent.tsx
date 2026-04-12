@@ -306,11 +306,11 @@ function FormerEmployeeSummary({ candidateId }: { candidateId: string }) {
 
   const lastPerfScore = sorted.find(r => r.performanceScore)?.performanceScore;
 
-  const distinctEvents = new Set(records.filter(r => r.eventId).map(r => r.eventId));
-  const seasonCount = distinctEvents.size || records.length;
+  const distinctEvents = new Set(completedRecords.filter(r => r.eventId).map(r => r.eventId));
+  const seasonCount = distinctEvents.size || completedRecords.length;
 
   let totalDays = 0;
-  for (const rec of records) {
+  for (const rec of completedRecords) {
     const start = new Date(rec.startDate);
     const end = rec.endDate ? new Date(rec.endDate) : new Date();
     totalDays += Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
