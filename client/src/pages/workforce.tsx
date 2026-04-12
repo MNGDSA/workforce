@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -363,6 +363,10 @@ function EmployeeDetailDialog({
   });
 
   const [viewingAdminContract, setViewingAdminContract] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (!open) setViewingAdminContract(null);
+  }, [open]);
 
   const adminContractMap = useMemo(() => {
     const map = new Map<string, any>();
