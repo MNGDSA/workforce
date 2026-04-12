@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout";
+import { resolveSaudiBank } from "@/lib/saudi-banks";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -1000,20 +1001,62 @@ function EmployeeDetailDialog({
                   )}
                 </div>
                 {editFinancial ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2"><label className="text-zinc-500 text-xs">IBAN</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700 font-mono" value={financialForm.ibanNumber} onChange={e => setFinancialForm(f => ({ ...f, ibanNumber: e.target.value }))} data-testid="input-financial-iban" /></div>
-                    <div><label className="text-zinc-500 text-xs">Bank Name</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={financialForm.ibanBankName} onChange={e => setFinancialForm(f => ({ ...f, ibanBankName: e.target.value }))} data-testid="input-financial-bankName" /></div>
-                    <div><label className="text-zinc-500 text-xs">Bank Code</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700 font-mono" value={financialForm.ibanBankCode} onChange={e => setFinancialForm(f => ({ ...f, ibanBankCode: e.target.value }))} data-testid="input-financial-bankCode" /></div>
-                    <div><label className="text-zinc-500 text-xs">Account First Name</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={financialForm.ibanAccountFirstName} onChange={e => setFinancialForm(f => ({ ...f, ibanAccountFirstName: e.target.value }))} data-testid="input-financial-firstName" /></div>
-                    <div><label className="text-zinc-500 text-xs">Account Last Name</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={financialForm.ibanAccountLastName} onChange={e => setFinancialForm(f => ({ ...f, ibanAccountLastName: e.target.value }))} data-testid="input-financial-lastName" /></div>
-                  </div>
+                  (() => {
+                    const detected = resolveSaudiBank(financialForm.ibanNumber ?? "");
+                    return (
+                      <div className="space-y-3">
+                        <div className="space-y-1">
+                          <label className="text-zinc-500 text-xs">IBAN Number</label>
+                          <Input className="h-8 text-sm bg-zinc-900 border-zinc-700 font-mono uppercase" value={financialForm.ibanNumber} onChange={e => {
+                            const val = e.target.value.toUpperCase();
+                            const bank = resolveSaudiBank(val);
+                            setFinancialForm(f => ({
+                              ...f,
+                              ibanNumber: val,
+                              ibanBankName: bank?.ibanBankName ?? "",
+                              ibanBankCode: bank?.ibanBankCode ?? "",
+                            }));
+                          }} maxLength={24} placeholder="SA0000000000000000000000" data-testid="input-financial-iban" />
+                          <p className="text-[10px] text-zinc-600">Saudi IBAN: SA followed by 22 digits (24 characters total)</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-zinc-500 text-xs">Bank Name</label>
+                            <Input className="h-8 text-sm bg-zinc-900/50 border-zinc-700 text-zinc-400 cursor-not-allowed" value={detected?.ibanBankName ?? financialForm.ibanBankName ?? ""} readOnly placeholder="Auto-detected from IBAN" data-testid="input-financial-bankName" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-zinc-500 text-xs">Bank Code</label>
+                            <Input className="h-8 text-sm bg-zinc-900/50 border-zinc-700 font-mono text-zinc-400 cursor-not-allowed" value={detected?.ibanBankCode ?? financialForm.ibanBankCode ?? ""} readOnly placeholder="Auto-detected" data-testid="input-financial-bankCode" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-zinc-500 text-xs">Account First Name</label>
+                            <Input className="h-8 text-sm bg-zinc-900 border-zinc-700" value={financialForm.ibanAccountFirstName} onChange={e => setFinancialForm(f => ({ ...f, ibanAccountFirstName: e.target.value }))} data-testid="input-financial-firstName" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-zinc-500 text-xs">Account Last Name</label>
+                            <Input className="h-8 text-sm bg-zinc-900 border-zinc-700" value={financialForm.ibanAccountLastName} onChange={e => setFinancialForm(f => ({ ...f, ibanAccountLastName: e.target.value }))} data-testid="input-financial-lastName" />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()
                 ) : (
-                  <div className="grid grid-cols-2 gap-4">
-                    {employee.iban ? <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="IBAN" value={employee.iban} mono /> : null}
-                    {employee.ibanBankName ? <InfoRow icon={<Building className="h-3.5 w-3.5" />} label="Bank Name" value={employee.ibanBankName} /> : null}
-                    {employee.ibanBankCode ? <InfoRow icon={<Hash className="h-3.5 w-3.5" />} label="Bank Code" value={employee.ibanBankCode} mono /> : null}
-                    {employee.ibanAccountFirstName ? <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Account Holder" value={`${employee.ibanAccountFirstName} ${employee.ibanAccountLastName ?? ""}`.trim()} /> : null}
-                    {!employee.iban && !employee.ibanBankName && <p className="text-zinc-500 text-sm col-span-2">No financial data</p>}
+                  <div className="space-y-3">
+                    {employee.iban ? (
+                      <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="IBAN" value={employee.iban} mono />
+                    ) : null}
+                    {(employee.ibanBankName || employee.ibanBankCode) ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        {employee.ibanBankName ? <InfoRow icon={<Building className="h-3.5 w-3.5" />} label="Bank Name" value={employee.ibanBankName} /> : null}
+                        {employee.ibanBankCode ? <InfoRow icon={<Hash className="h-3.5 w-3.5" />} label="Bank Code" value={employee.ibanBankCode} mono /> : null}
+                      </div>
+                    ) : null}
+                    {employee.ibanAccountFirstName ? (
+                      <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Account Holder" value={`${employee.ibanAccountFirstName} ${employee.ibanAccountLastName ?? ""}`.trim()} />
+                    ) : null}
+                    {!employee.iban && !employee.ibanBankName && <p className="text-zinc-500 text-sm">No financial data</p>}
                   </div>
                 )}
               </div>
