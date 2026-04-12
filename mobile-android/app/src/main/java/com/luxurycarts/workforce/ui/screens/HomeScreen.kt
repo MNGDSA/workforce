@@ -125,6 +125,7 @@ fun HomeScreen(
     }
 
     var cameraPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingCameraLaunch by remember { mutableStateOf(false) }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
@@ -159,6 +160,31 @@ fun HomeScreen(
                     photoMessage = "Error: ${e.message}"
                 }
                 photoUploading = false
+            }
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted: Boolean ->
+        if (granted) {
+            pendingCameraLaunch = true
+        } else {
+            photoMessage = "Camera permission is required to take a profile photo."
+        }
+    }
+
+    LaunchedEffect(pendingCameraLaunch) {
+        if (pendingCameraLaunch) {
+            try {
+                val photoFile = File(context.cacheDir, "profile_photo_${System.currentTimeMillis()}.jpg")
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
+                cameraPhotoUri = uri
+                pendingCameraLaunch = false
+                cameraLauncher.launch(uri)
+            } catch (e: Exception) {
+                photoMessage = "Error opening camera: ${e.message}"
+                pendingCameraLaunch = false
             }
         }
     }
@@ -407,10 +433,14 @@ fun HomeScreen(
                 Button(
                     onClick = {
                         showPhotoDialog = false
-                        val photoFile = File(context.cacheDir, "profile_photo_${System.currentTimeMillis()}.jpg")
-                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
-                        cameraPhotoUri = uri
-                        cameraLauncher.launch(uri)
+                        val hasCameraPerm = androidx.core.content.ContextCompat.checkSelfPermission(
+                            context, android.Manifest.permission.CAMERA
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        if (hasCameraPerm) {
+                            pendingCameraLaunch = true
+                        } else {
+                            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ForestGreen),
                 ) {
