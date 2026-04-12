@@ -4710,5 +4710,127 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
+  // ─── SMS Broadcasts ──────────────────────────────────────────────────────────
+
+  app.get("/api/broadcasts", async (req: Request, res: Response) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const result = await storage.getSmsBroadcasts({ page, limit });
+      return res.json(result);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/broadcasts/:id", async (req: Request, res: Response) => {
+    try {
+      const broadcast = await storage.getSmsBroadcast(req.params.id);
+      if (!broadcast) return res.status(404).json({ message: "Broadcast not found" });
+      const recipients = await storage.getSmsBroadcastRecipients(req.params.id);
+      return res.json({ ...broadcast, recipients });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/broadcasts", async (req: Request, res: Response) => {
+    try {
+      const { messageTemplate, workforceIds } = req.body;
+      if (!messageTemplate || typeof messageTemplate !== "string" || !messageTemplate.trim()) {
+        return res.status(400).json({ message: "Message template is required" });
+      }
+      if (!Array.isArray(workforceIds) || workforceIds.length === 0) {
+        return res.status(400).json({ message: "At least one recipient is required" });
+      }
+
+      const smsPlugin = await storage.getActiveSmsPlugin();
+      if (!smsPlugin) {
+        return res.status(400).json({ message: "No active SMS plugin configured. Go to Notifications > SMS Gateway to set one up." });
+      }
+
+      const employees = await storage.getWorkforce({ isActive: true });
+      const employeeMap = new Map(employees.map((e: any) => [e.id, e]));
+      const validRecipients: Array<{ workforceId: string; phone: string; name: string; resolvedMessage: string }> = [];
+
+      for (const wid of workforceIds) {
+        const emp = employeeMap.get(wid);
+        if (!emp || !emp.phone) continue;
+        const name = emp.fullNameEn || emp.fullNameAr || "Employee";
+        const resolved = messageTemplate
+          .replace(/\{name\}/g, name)
+          .replace(/\{employee_number\}/g, emp.employeeNumber || "")
+          .replace(/\{position\}/g, emp.positionTitle || emp.jobTitle || "")
+          .replace(/\{department\}/g, emp.departmentName || "")
+          .replace(/\{event\}/g, emp.eventName || "");
+        validRecipients.push({ workforceId: wid, phone: emp.phone, name, resolvedMessage: resolved });
+      }
+
+      if (validRecipients.length === 0) {
+        return res.status(400).json({ message: "None of the selected employees have a valid phone number." });
+      }
+
+      let userId: string | undefined;
+      const authHeader = req.headers.authorization;
+      if (authHeader) {
+        try {
+          const decoded = JSON.parse(Buffer.from(authHeader.replace("Bearer ", ""), "base64").toString());
+          userId = decoded.id;
+        } catch {}
+      }
+
+      const broadcast = await storage.createSmsBroadcast({
+        messageTemplate,
+        totalRecipients: validRecipients.length,
+        status: "sending",
+        createdBy: userId ?? null,
+      });
+
+      const recipientRecords = [];
+      for (const r of validRecipients) {
+        const rec = await storage.createSmsBroadcastRecipient({
+          broadcastId: broadcast.id,
+          workforceId: r.workforceId,
+          phone: r.phone,
+          resolvedMessage: r.resolvedMessage,
+          recipientName: r.name,
+          status: "pending",
+        });
+        recipientRecords.push(rec);
+      }
+
+      (async () => {
+        let sentCount = 0;
+        let failedCount = 0;
+        for (const rec of recipientRecords) {
+          try {
+            const result = await sendSmsViaPlugin(smsPlugin, rec.phone, rec.resolvedMessage);
+            if (result.success) {
+              sentCount++;
+              await storage.updateSmsBroadcastRecipient(rec.id, { status: "sent", sentAt: new Date() });
+            } else {
+              failedCount++;
+              await storage.updateSmsBroadcastRecipient(rec.id, { status: "failed", error: result.error ?? "Unknown error" });
+            }
+          } catch (err) {
+            failedCount++;
+            await storage.updateSmsBroadcastRecipient(rec.id, { status: "failed", error: err instanceof Error ? err.message : String(err) });
+          }
+        }
+        await storage.updateSmsBroadcast(broadcast.id, {
+          sentCount,
+          failedCount,
+          status: failedCount === validRecipients.length ? "failed" : "completed",
+        });
+        console.log(`[Broadcast ${broadcast.id}] Complete: ${sentCount} sent, ${failedCount} failed out of ${validRecipients.length}`);
+      })();
+
+      await logAudit(req, {
+        action: "create_broadcast",
+        entityType: "sms_broadcast",
+        entityId: broadcast.id,
+        description: `SMS broadcast to ${validRecipients.length} recipients`,
+      });
+
+      return res.status(201).json({ ...broadcast, recipientCount: validRecipients.length });
+    } catch (err) { return handleError(res, err); }
+  });
+
   return httpServer;
 }

@@ -104,6 +104,12 @@ import {
   type InsertDepartment,
   type Position,
   type InsertPosition,
+  smsBroadcasts,
+  smsBroadcastRecipients,
+  type SmsBroadcast,
+  type InsertSmsBroadcast,
+  type SmsBroadcastRecipient,
+  type InsertSmsBroadcastRecipient,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte, getTableColumns } from "drizzle-orm";
 
@@ -438,6 +444,15 @@ export interface IStorage {
   createPosition(data: InsertPosition): Promise<Position>;
   updatePosition(id: string, data: Partial<InsertPosition>): Promise<Position | undefined>;
   togglePositionActive(id: string): Promise<{ success: boolean; error?: string; position?: Position; affectedEmployees?: { id: string; employeeNumber: string; fullNameEn: string | null }[] }>;
+
+  // SMS Broadcasts
+  createSmsBroadcast(data: InsertSmsBroadcast): Promise<SmsBroadcast>;
+  getSmsBroadcasts(params?: { page?: number; limit?: number }): Promise<{ data: SmsBroadcast[]; total: number }>;
+  getSmsBroadcast(id: string): Promise<SmsBroadcast | undefined>;
+  updateSmsBroadcast(id: string, data: Partial<SmsBroadcast>): Promise<SmsBroadcast | undefined>;
+  createSmsBroadcastRecipient(data: InsertSmsBroadcastRecipient): Promise<SmsBroadcastRecipient>;
+  getSmsBroadcastRecipients(broadcastId: string): Promise<SmsBroadcastRecipient[]>;
+  updateSmsBroadcastRecipient(id: string, data: Partial<SmsBroadcastRecipient>): Promise<SmsBroadcastRecipient | undefined>;
 
   // Dashboard
   getDashboardStats(): Promise<{
@@ -1176,6 +1191,7 @@ export class DatabaseStorage implements IStorage {
         positionId: workforce.positionId,
         positionTitle: positions.title,
         positionIsActive: positions.isActive,
+        departmentName: departments.name,
       })
       .from(workforce)
       .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
@@ -1183,6 +1199,7 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(jobPostings, eq(workforce.jobId, jobPostings.id))
       .leftJoin(smpCompanies, eq(workforce.smpCompanyId, smpCompanies.id))
       .leftJoin(positions, eq(workforce.positionId, positions.id))
+      .leftJoin(departments, eq(positions.departmentId, departments.id))
       .where(where)
       .orderBy(desc(workforce.createdAt));
     return rows;
@@ -3231,6 +3248,45 @@ export class DatabaseStorage implements IStorage {
 
     const [updated] = await db.update(positions).set({ isActive: !pos.isActive }).where(eq(positions.id, id)).returning();
     return { success: true, position: updated };
+  }
+
+  // ─── SMS Broadcasts ─────────────────────────────────────────────────────────
+  async createSmsBroadcast(data: InsertSmsBroadcast): Promise<SmsBroadcast> {
+    const [row] = await db.insert(smsBroadcasts).values(data).returning();
+    return row;
+  }
+
+  async getSmsBroadcasts(params?: { page?: number; limit?: number }): Promise<{ data: SmsBroadcast[]; total: number }> {
+    const page = params?.page ?? 1;
+    const limit = params?.limit ?? 20;
+    const offset = (page - 1) * limit;
+    const [{ value: total }] = await db.select({ value: count() }).from(smsBroadcasts);
+    const data = await db.select().from(smsBroadcasts).orderBy(desc(smsBroadcasts.createdAt)).limit(limit).offset(offset);
+    return { data, total };
+  }
+
+  async getSmsBroadcast(id: string): Promise<SmsBroadcast | undefined> {
+    const [row] = await db.select().from(smsBroadcasts).where(eq(smsBroadcasts.id, id));
+    return row;
+  }
+
+  async updateSmsBroadcast(id: string, data: Partial<SmsBroadcast>): Promise<SmsBroadcast | undefined> {
+    const [row] = await db.update(smsBroadcasts).set(data).where(eq(smsBroadcasts.id, id)).returning();
+    return row;
+  }
+
+  async createSmsBroadcastRecipient(data: InsertSmsBroadcastRecipient): Promise<SmsBroadcastRecipient> {
+    const [row] = await db.insert(smsBroadcastRecipients).values(data).returning();
+    return row;
+  }
+
+  async getSmsBroadcastRecipients(broadcastId: string): Promise<SmsBroadcastRecipient[]> {
+    return db.select().from(smsBroadcastRecipients).where(eq(smsBroadcastRecipients.broadcastId, broadcastId)).orderBy(smsBroadcastRecipients.recipientName);
+  }
+
+  async updateSmsBroadcastRecipient(id: string, data: Partial<SmsBroadcastRecipient>): Promise<SmsBroadcastRecipient | undefined> {
+    const [row] = await db.update(smsBroadcastRecipients).set(data).where(eq(smsBroadcastRecipients.id, id)).returning();
+    return row;
   }
 }
 

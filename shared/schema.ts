@@ -1320,6 +1320,57 @@ export const insertPhotoChangeRequestSchema = createInsertSchema(photoChangeRequ
 export type InsertPhotoChangeRequest = z.infer<typeof insertPhotoChangeRequestSchema>;
 export type PhotoChangeRequest = typeof photoChangeRequests.$inferSelect;
 
+// ─── SMS Broadcasts ──────────────────────────────────────────────────────────
+
+export const broadcastStatusEnum = pgEnum("broadcast_status", ["sending", "completed", "failed"]);
+export const broadcastRecipientStatusEnum = pgEnum("broadcast_recipient_status", ["pending", "sent", "failed"]);
+
+export const smsBroadcasts = pgTable("sms_broadcasts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  messageTemplate: text("message_template").notNull(),
+  totalRecipients: integer("total_recipients").notNull().default(0),
+  sentCount: integer("sent_count").notNull().default(0),
+  failedCount: integer("failed_count").notNull().default(0),
+  status: broadcastStatusEnum("status").notNull().default("sending"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+}, (t) => ({
+  statusIdx: index("sms_broadcasts_status_idx").on(t.status),
+  createdAtIdx: index("sms_broadcasts_created_at_idx").on(t.createdAt),
+}));
+
+export const smsBroadcastRecipients = pgTable("sms_broadcast_recipients", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  broadcastId: varchar("broadcast_id").notNull().references(() => smsBroadcasts.id, { onDelete: "cascade" }),
+  workforceId: varchar("workforce_id").references(() => workforce.id, { onDelete: "set null" }),
+  phone: text("phone").notNull(),
+  resolvedMessage: text("resolved_message").notNull(),
+  recipientName: text("recipient_name"),
+  status: broadcastRecipientStatusEnum("status").notNull().default("pending"),
+  error: text("error"),
+  sentAt: timestamp("sent_at"),
+}, (t) => ({
+  broadcastIdx: index("sms_br_broadcast_idx").on(t.broadcastId),
+  statusIdx: index("sms_br_status_idx").on(t.status),
+}));
+
+export const insertSmsBroadcastSchema = createInsertSchema(smsBroadcasts).omit({
+  id: true,
+  createdAt: true,
+  sentCount: true,
+  failedCount: true,
+});
+export type InsertSmsBroadcast = z.infer<typeof insertSmsBroadcastSchema>;
+export type SmsBroadcast = typeof smsBroadcasts.$inferSelect;
+
+export const insertSmsBroadcastRecipientSchema = createInsertSchema(smsBroadcastRecipients).omit({
+  id: true,
+  sentAt: true,
+  error: true,
+});
+export type InsertSmsBroadcastRecipient = z.infer<typeof insertSmsBroadcastRecipientSchema>;
+export type SmsBroadcastRecipient = typeof smsBroadcastRecipients.$inferSelect;
+
 // ─── Departments ─────────────────────────────────────────────────────────────
 
 export const departments = pgTable("departments", {

@@ -35,6 +35,7 @@ import OffboardingPage from "@/pages/offboarding";
 import InboxPage from "@/pages/inbox";
 import GeofencesPage from "@/pages/geofences";
 import DepartmentsPage from "@/pages/departments";
+import BroadcastPage from "@/pages/broadcast";
 
 function Router() {
   return (
@@ -70,6 +71,7 @@ function Router() {
       <Route path="/inbox" component={InboxPage} />
       <Route path="/geofences" component={GeofencesPage} />
       <Route path="/departments" component={DepartmentsPage} />
+      <Route path="/broadcast" component={BroadcastPage} />
       <Route path="/candidate-portal" component={() => (
         <ProfileSetupGate><CandidatePortal /></ProfileSetupGate>
       )} />

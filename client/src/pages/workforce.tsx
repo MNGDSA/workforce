@@ -73,6 +73,7 @@ import {
   Pencil,
   Save,
   LogOut,
+  Radio,
 } from "lucide-react";
 import {
   Table,
@@ -1553,6 +1554,7 @@ function employeeToCardData(emp: Employee): EmployeeCardData {
 }
 
 export default function WorkforcePage() {
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -1827,6 +1829,15 @@ export default function WorkforcePage() {
             <p className="text-muted-foreground mt-1">Manage your employees and details.</p>
           </div>
           <div className="flex items-center gap-2 self-start sm:self-auto">
+            <Button
+              variant="outline"
+              className="h-11 border-border text-foreground font-bold uppercase tracking-wide text-xs gap-2"
+              data-testid="button-broadcast"
+              onClick={() => setLocation("/broadcast")}
+            >
+              <Radio className="h-4 w-4" />
+              Broadcast
+            </Button>
             <Button
               variant="outline"
               className="h-11 border-border text-foreground font-bold uppercase tracking-wide text-xs gap-2"
