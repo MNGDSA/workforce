@@ -4803,19 +4803,24 @@ export async function registerRoutes(
       (async () => {
         let sentCount = 0;
         let failedCount = 0;
-        for (const rec of recipientRecords) {
-          try {
-            const result = await sendSmsViaPlugin(smsPlugin, rec.phone, rec.resolvedMessage);
-            if (result.success) {
-              sentCount++;
-              await storage.updateSmsBroadcastRecipient(rec.id, { status: "sent", sentAt: new Date() });
-            } else {
-              failedCount++;
-              await storage.updateSmsBroadcastRecipient(rec.id, { status: "failed", error: result.error ?? "Unknown error" });
-            }
-          } catch (err) {
-            failedCount++;
-            await storage.updateSmsBroadcastRecipient(rec.id, { status: "failed", error: err instanceof Error ? err.message : String(err) });
+        const BATCH_SIZE = 10;
+        for (let i = 0; i < recipientRecords.length; i += BATCH_SIZE) {
+          const batch = recipientRecords.slice(i, i + BATCH_SIZE);
+          const results = await Promise.allSettled(
+            batch.map(async (rec) => {
+              const result = await sendSmsViaPlugin(smsPlugin, rec.phone, rec.resolvedMessage);
+              if (result.success) {
+                await storage.updateSmsBroadcastRecipient(rec.id, { status: "sent", sentAt: new Date() });
+                return true;
+              } else {
+                await storage.updateSmsBroadcastRecipient(rec.id, { status: "failed", error: result.error ?? "Unknown error" });
+                return false;
+              }
+            })
+          );
+          for (const r of results) {
+            if (r.status === "fulfilled" && r.value) sentCount++;
+            else failedCount++;
           }
         }
         await storage.updateSmsBroadcast(broadcast.id, {
