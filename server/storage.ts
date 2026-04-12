@@ -543,7 +543,7 @@ export class DatabaseStorage implements IStorage {
       : candidates.createdAt;
 
     const workforceCountSq = sql<number>`(SELECT count(*)::int FROM workforce WHERE workforce.candidate_id = candidates.id)`;
-    const workforceSeasonsSq = sql<number>`(SELECT count(DISTINCT event_id)::int FROM workforce WHERE workforce.candidate_id = candidates.id AND event_id IS NOT NULL)`;
+    const workforceSeasonsSq = sql<number>`(SELECT count(DISTINCT event_id)::int FROM workforce WHERE workforce.candidate_id = candidates.id AND event_id IS NOT NULL AND workforce.is_active = false)`;
     const completedStintsSq = sql<number>`(SELECT count(*)::int FROM workforce WHERE workforce.candidate_id = candidates.id AND workforce.is_active = false)`;
 
     const [data, [{ value: total }]] = await Promise.all([
