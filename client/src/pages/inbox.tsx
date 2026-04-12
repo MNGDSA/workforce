@@ -185,6 +185,8 @@ export default function InboxPage() {
   const { data: rawData, isLoading } = useQuery<{ data: InboxItem[]; total: number }>({
     queryKey: ["/api/inbox", page, tab, typeFilter, priorityFilter, search, sortBy, sortOrder],
     queryFn: () => apiRequest("GET", `/api/inbox?${queryParams.toString()}`).then(r => r.json()),
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   const data = tab === "history" && rawData
