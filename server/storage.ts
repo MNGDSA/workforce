@@ -2572,13 +2572,21 @@ export class DatabaseStorage implements IStorage {
         sql`${workforce.offboardingCompletedAt} >= ${todayStart}`
       ));
 
-    const allOffboarding = await this.getOffboardingEmployees();
+    const inProgressIds = await db.select({ id: workforce.id }).from(workforce)
+      .where(and(eq(workforce.isActive, true), sql`${workforce.offboardingStatus} = 'in_progress'`));
     let readyCount = 0;
-    for (const emp of allOffboarding) {
-      if (emp.offboardingStatus !== "in_progress") continue;
-      const assets = await this.getEmployeeAssets({ workforceId: emp.id });
-      const allConfirmed = assets.every((a: any) => a.status !== "assigned");
-      if (allConfirmed) readyCount++;
+    if (inProgressIds.length > 0) {
+      const unconfirmedCounts = await db.select({
+        workforceId: employeeAssets.workforceId,
+        cnt: count(),
+      }).from(employeeAssets)
+        .where(and(
+          sql`${employeeAssets.workforceId} IN (${sql.join(inProgressIds.map(r => sql`${r.id}`), sql`, `)})`,
+          eq(employeeAssets.status, "assigned"),
+        ))
+        .groupBy(employeeAssets.workforceId);
+      const unconfirmedSet = new Set(unconfirmedCounts.map(r => r.workforceId));
+      readyCount = inProgressIds.filter(r => !unconfirmedSet.has(r.id)).length;
     }
 
     return {
