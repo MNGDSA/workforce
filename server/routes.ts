@@ -3942,18 +3942,6 @@ export async function registerRoutes(
       const settlement = await storage.getOffboardingSettlement(req.params.id);
       const record = await storage.completeOffboarding(req.params.id, actorId);
 
-      if (record.candidateId) {
-        const candidate = await storage.getCandidate(record.candidateId);
-        if (candidate?.userId) {
-          const wfByCand = await storage.getWorkforceByCandidateId(record.candidateId);
-          const hasOtherActive = wfByCand && wfByCand.isActive;
-          if (!hasOtherActive) {
-            await storage.updateUser(candidate.userId, { isActive: false });
-            invalidateUserActiveCache(candidate.userId);
-          }
-        }
-      }
-
       await logAudit(req, {
         action: "offboarding.completed",
         entityType: "offboarding",
@@ -4003,18 +3991,7 @@ export async function registerRoutes(
       const errors: { id: string; message: string }[] = [];
       for (const id of ids) {
         try {
-          const record = await storage.completeOffboarding(id, actorId);
-          if (record.candidateId) {
-            const candidate = await storage.getCandidate(record.candidateId);
-            if (candidate?.userId) {
-              const wfByCand = await storage.getWorkforceByCandidateId(record.candidateId);
-              const hasOtherActive = wfByCand && wfByCand.isActive;
-              if (!hasOtherActive) {
-                await storage.updateUser(candidate.userId, { isActive: false });
-                invalidateUserActiveCache(candidate.userId);
-              }
-            }
-          }
+          await storage.completeOffboarding(id, actorId);
           completed++;
         } catch (e: any) {
           errors.push({ id, message: e?.message || "failed" });
