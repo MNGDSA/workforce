@@ -556,6 +556,7 @@ function ProfileCompletionCard({
       const body = await res.json();
       if (key === "photo" && body.pendingReview) {
         setPhotoPendingReview(true);
+        queryClient.invalidateQueries({ queryKey: ["/api/photo-change-requests", candidateId, "pending"] });
         toast({ title: "Photo submitted for review", description: "Your new photo has been sent to HR for approval. Your current photo remains active." });
       } else {
         setJustUploaded((p) => ({ ...p, [key]: file.name }));
@@ -620,7 +621,7 @@ function ProfileCompletionCard({
             const done = isDone(key);
             const uploadedName = justUploaded[key];
             const hasFileUrl = !!docUrlMap[key];
-            const isPendingPhotoReview = key === "photo" && photoPendingReview;
+            const isPendingPhotoReview = key === "photo" && (photoPendingReview || hasPendingPhotoChange);
 
             return (
               <div key={key}>
@@ -1351,6 +1352,8 @@ export default function CandidatePortal() {
     queryKey: ["/api/photo-change-requests", candidateId, "pending"],
     queryFn: () => apiRequest("GET", `/api/photo-change-requests?candidateId=${candidateId}&status=pending`).then(r => r.json()),
     enabled: !!candidateId && isEmployee,
+    refetchInterval: isEmployee && !!candidateId ? 30_000 : false,
+    refetchOnWindowFocus: true,
   });
   const hasPendingPhotoChange = pendingPhotoRequests.length > 0;
 

@@ -183,7 +183,15 @@ fun HomeScreen(
                             onWorkforceRefresh()
                         }
                     } else {
-                        photoMessage = "Upload failed. Please try again."
+                        val errMsg = try {
+                            val errJson = response.errorBody()?.string()
+                            if (errJson != null) {
+                                val obj = com.google.gson.Gson()
+                                    .fromJson(errJson, com.google.gson.JsonObject::class.java)
+                                obj?.get("message")?.asString
+                            } else null
+                        } catch (_: Exception) { null }
+                        photoMessage = errMsg ?: "Upload failed. Please try again."
                     }
                 } catch (e: Exception) {
                     photoMessage = "Error: ${e.message}"
