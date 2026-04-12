@@ -38,12 +38,25 @@ data class WorkforceRecord(
     @SerializedName("positionId") val positionId: String? = null,
 )
 
+data class QualityCheckItem(
+    val name: String = "",
+    val passed: Boolean = false,
+    val tip: String? = null,
+)
+
+data class QualityResultResponse(
+    val passed: Boolean = false,
+    val checks: List<QualityCheckItem> = emptyList(),
+    @SerializedName("qualityCheckSkipped") val qualityCheckSkipped: Boolean = false,
+)
+
 data class PhotoUploadResponse(
     val url: String? = null,
     @SerializedName("docType") val docType: String? = null,
     @SerializedName("pendingReview") val pendingReview: Boolean = false,
     @SerializedName("changeRequestId") val changeRequestId: String? = null,
     val message: String? = null,
+    @SerializedName("qualityResult") val qualityResult: QualityResultResponse? = null,
 )
 
 data class PhotoChangeRequest(

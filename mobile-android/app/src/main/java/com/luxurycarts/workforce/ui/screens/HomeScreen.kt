@@ -182,6 +182,10 @@ fun HomeScreen(
                     val response = apiService.uploadPhoto(candidateId, docTypePart, filePart)
                     if (response.isSuccessful) {
                         val body = response.body()
+                        val qr = body?.qualityResult
+                        if (qr != null && qr.checks.isNotEmpty() && !qr.qualityCheckSkipped) {
+                            qualityChecks = qr.checks.map { QualityCheck(it.name, it.passed, it.tip) }
+                        }
                         if (body?.pendingReview == true) {
                             hasPendingPhotoChange = true
                             photoMessage = "Photo submitted for HR review. Your current photo remains active until approved."
@@ -420,25 +424,28 @@ fun HomeScreen(
 
         val checks = qualityChecks
         if (checks != null) {
+            val allPassed = checks.all { it.passed }
+            val headerColor = if (allPassed) androidx.compose.ui.graphics.Color(0xFF34D399) else androidx.compose.ui.graphics.Color(0xFFF87171)
+            val cardBg = if (allPassed) ForestGreen.copy(alpha = 0.1f) else androidx.compose.ui.graphics.Color(0xFF3B0A0A)
             Spacer(Modifier.height(12.dp))
             Card(
-                colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFF3B0A0A)),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Filled.Warning,
+                            if (allPassed) Icons.Filled.CheckCircle else Icons.Filled.Warning,
                             contentDescription = null,
-                            tint = androidx.compose.ui.graphics.Color(0xFFF87171),
+                            tint = headerColor,
                             modifier = Modifier.size(16.dp),
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            "Photo Quality Check Failed",
+                            if (allPassed) "Photo Quality Verified" else "Photo Quality Check Failed",
                             style = MaterialTheme.typography.labelMedium,
-                            color = androidx.compose.ui.graphics.Color(0xFFF87171),
+                            color = headerColor,
                             fontWeight = FontWeight.SemiBold,
                         )
                     }
