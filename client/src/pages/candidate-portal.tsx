@@ -1916,36 +1916,22 @@ export default function CandidatePortal() {
               </Card>
             )}
 
-            {/* Candidate dashboard */}
+            {/* Candidate dashboard — stats and profile strength are in the sidebar */}
             {portalMode === "candidate" && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {jobs.length > 0 && (
                   <Card className="bg-card border-border">
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-white">{appliedIds.size}</div>
-                      <div className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Applied</div>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base font-display text-white flex items-center gap-2">
+                        <Briefcase className="h-4 w-4 text-primary" />
+                        Open Positions
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-sm text-muted-foreground">
+                      <p>There {jobs.length === 1 ? "is" : "are"} <span className="text-white font-bold">{jobs.length}</span> open position{jobs.length !== 1 ? "s" : ""} available. Check the <button type="button" className="text-primary hover:underline bg-transparent border-0 p-0 cursor-pointer font-medium" onClick={() => setActiveNav("jobs")}>Job Opportunities</button> tab to browse and apply.</p>
                     </CardContent>
                   </Card>
-                  <Card className="bg-card border-border">
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-white">{myInterviews.length}</div>
-                      <div className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Interviews</div>
-                    </CardContent>
-                  </Card>
-                </div>
-                <ProfileCompletionCard toast={toast} candidateId={candidateId!} isSmp={false} />
-              </div>
-            )}
-
-            {/* Returning candidate records info */}
-            {!isEmployee && hasWorkHistory && (
-              <div className="space-y-4">
-                <Card className="bg-card border-border">
-                  <CardContent className="p-4 text-sm text-muted-foreground">
-                    <p className="font-medium text-white mb-1">Your Records</p>
-                    <p>All your employment history and work records remain on file and accessible below.</p>
-                  </CardContent>
-                </Card>
+                )}
               </div>
             )}
           </div>
