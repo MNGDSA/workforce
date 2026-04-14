@@ -37,6 +37,7 @@ import InboxPage from "@/pages/inbox";
 import GeofencesPage from "@/pages/geofences";
 import DepartmentsPage from "@/pages/departments";
 import BroadcastPage from "@/pages/broadcast";
+import OrgChartPage from "@/pages/org-chart";
 
 function Router() {
   return (
@@ -74,6 +75,7 @@ function Router() {
       <Route path="/geofences" component={GeofencesPage} />
       <Route path="/departments" component={DepartmentsPage} />
       <Route path="/broadcast" component={BroadcastPage} />
+      <Route path="/org-chart" component={OrgChartPage} />
       <Route path="/candidate-portal" component={() => (
         <ProfileSetupGate><CandidatePortal /></ProfileSetupGate>
       )} />

@@ -40,6 +40,10 @@ import {
   insertDepartmentSchema,
   insertPositionSchema,
   photoChangeRequests,
+  departments,
+  positions,
+  workforce,
+  candidates,
 } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
@@ -2631,6 +2635,109 @@ export async function registerRoutes(
     } catch (err) {
       return handleError(res, err);
     }
+  });
+
+  // ─── Org Chart ──────────────────────────────────────────────────────────────
+  app.get("/api/org-chart", async (req: Request, res: Response) => {
+    try {
+      const userId = getAuthUserId(req);
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const allDepts = await db.select().from(departments)
+        .where(eq(departments.isActive, true))
+        .orderBy(departments.sortOrder, departments.name);
+
+      const allPositions = await db.select().from(positions)
+        .where(eq(positions.isActive, true))
+        .orderBy(positions.sortOrder, positions.title);
+
+      const employeeRows = await db.select({
+        positionId: workforce.positionId,
+        employeeNumber: workforce.employeeNumber,
+        candidateId: workforce.candidateId,
+        fullNameEn: candidates.fullNameEn,
+        fullNameAr: candidates.fullNameAr,
+        nationalId: candidates.nationalId,
+        phone: candidates.phone,
+        photoUrl: candidates.photoUrl,
+      })
+        .from(workforce)
+        .innerJoin(candidates, eq(workforce.candidateId, candidates.id))
+        .where(and(
+          eq(workforce.isActive, true),
+          sql`${workforce.positionId} IS NOT NULL`,
+        ));
+
+      const empsByPosition = new Map<string, typeof employeeRows>();
+      for (const e of employeeRows) {
+        const pid = e.positionId!;
+        if (!empsByPosition.has(pid)) empsByPosition.set(pid, []);
+        empsByPosition.get(pid)!.push(e);
+      }
+
+      const unassignedRows = await db.select({
+        employeeNumber: workforce.employeeNumber,
+        candidateId: workforce.candidateId,
+        fullNameEn: candidates.fullNameEn,
+        fullNameAr: candidates.fullNameAr,
+        nationalId: candidates.nationalId,
+        phone: candidates.phone,
+        photoUrl: candidates.photoUrl,
+      })
+        .from(workforce)
+        .innerJoin(candidates, eq(workforce.candidateId, candidates.id))
+        .where(and(
+          eq(workforce.isActive, true),
+          sql`${workforce.positionId} IS NULL`,
+        ));
+
+      const result = allDepts.map(dept => {
+        const deptPositions = allPositions
+          .filter(p => p.departmentId === dept.id)
+          .map(p => {
+            const emps = empsByPosition.get(p.id) || [];
+            return {
+              id: p.id,
+              title: p.title,
+              titleAr: p.titleAr,
+              code: p.code,
+              gradeLevel: p.gradeLevel,
+              parentPositionId: p.parentPositionId,
+              employeeCount: emps.length,
+              employees: emps.map(e => ({
+                candidateId: e.candidateId,
+                employeeNumber: e.employeeNumber,
+                fullNameEn: e.fullNameEn,
+                fullNameAr: e.fullNameAr,
+                nationalId: e.nationalId,
+                phone: e.phone,
+                photoUrl: e.photoUrl,
+              })),
+            };
+          });
+        const totalEmployees = deptPositions.reduce((s, p) => s + p.employeeCount, 0);
+        return {
+          id: dept.id,
+          name: dept.name,
+          nameAr: dept.nameAr,
+          code: dept.code,
+          totalEmployees,
+          positions: deptPositions,
+        };
+      });
+
+      return res.json({
+        departments: result,
+        unassigned: unassignedRows.map(e => ({
+          candidateId: e.candidateId,
+          employeeNumber: e.employeeNumber,
+          fullNameEn: e.fullNameEn,
+          fullNameAr: e.fullNameAr,
+          nationalId: e.nationalId,
+          phone: e.phone,
+          photoUrl: e.photoUrl,
+        })),
+      });
+    } catch (err) { return handleError(res, err); }
   });
 
   // ─── Departments ───────────────────────────────────────────────────────────

@@ -169,3 +169,65 @@
 .animate-marquee:hover {
   animation-play-state: paused;
 }
+
+/* ── Org Chart — React Flow Theme ─────────────────────────────── */
+.org-chart-flow .react-flow__pane {
+  cursor: grab;
+}
+.org-chart-flow .react-flow__pane:active {
+  cursor: grabbing;
+}
+
+.org-chart-controls {
+  background: hsl(220, 15%, 11%) !important;
+  border: 1px solid hsl(220, 15%, 20%) !important;
+  border-radius: 0.25rem !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4) !important;
+}
+.org-chart-controls .react-flow__controls-button {
+  background: hsl(220, 15%, 11%) !important;
+  border: none !important;
+  border-bottom: 1px solid hsl(220, 15%, 18%) !important;
+  color: hsl(215, 15%, 60%) !important;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 5px !important;
+}
+.org-chart-controls .react-flow__controls-button:hover {
+  background: hsl(220, 15%, 16%) !important;
+  color: hsl(155, 45%, 55%) !important;
+}
+.org-chart-controls .react-flow__controls-button:last-child {
+  border-bottom: none !important;
+}
+.org-chart-controls .react-flow__controls-button svg {
+  fill: currentColor !important;
+}
+
+.org-chart-minimap {
+  background: hsl(220, 15%, 8%) !important;
+  border: 1px solid hsl(220, 15%, 20%) !important;
+  border-radius: 0.25rem !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4) !important;
+}
+.org-chart-minimap .react-flow__minimap-mask {
+  fill: rgba(0,0,0,0.65) !important;
+}
+
+.react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: hsl(220, 15%, 25%);
+  border-radius: 2px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: hsl(220, 15%, 35%);
+}

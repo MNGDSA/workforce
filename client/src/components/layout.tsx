@@ -35,6 +35,7 @@ import {
   Inbox,
   MapPin,
   Building2,
+  Network,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -307,9 +308,10 @@ const topNavItems = [
   { href: "/payroll",   icon: Wallet,          label: "Payroll" },
 ];
 
-const workforcePaths = ["/workforce", "/geofences", "/assets", "/offboarding", "/attendance"];
+const workforcePaths = ["/workforce", "/org-chart", "/geofences", "/assets", "/offboarding", "/attendance"];
 const workforceSubItems = [
   { href: "/workforce",   icon: Users,   label: "Employees" },
+  { href: "/org-chart",   icon: Network, label: "Org Chart" },
   { href: "/attendance",  icon: Clock,   label: "Attendance" },
   { href: "/geofences",   icon: MapPin,  label: "Geofence Zones" },
   { href: "/assets",      icon: Package, label: "Assets" },
