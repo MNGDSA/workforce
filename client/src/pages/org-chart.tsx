@@ -26,16 +26,13 @@ import {
   ChevronDown,
   ChevronRight,
   User,
-  Phone,
   CreditCard,
   Search,
   Network,
   Loader2,
   AlertCircle,
-  Maximize2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface OrgEmployee {
@@ -73,24 +70,51 @@ interface OrgChartData {
   unassigned: OrgEmployee[];
 }
 
+interface DeptNodeData extends Record<string, unknown> {
+  label: string;
+  nameAr: string | null;
+  deptId: string;
+  totalEmployees: number;
+  expanded: boolean;
+}
+
+interface PosNodeData extends Record<string, unknown> {
+  label: string;
+  titleAr: string | null;
+  posId: string;
+  code: string;
+  gradeLevel: number | null;
+  employeeCount: number;
+  employees: OrgEmployee[];
+  hasChildren: boolean;
+  childrenExpanded: boolean;
+}
+
+interface UnassignedNodeData extends Record<string, unknown> {
+  employees: OrgEmployee[];
+}
+
+type DeptNode = Node<DeptNodeData, "department">;
+type PosNode = Node<PosNodeData, "position">;
+type UnassignedNode = Node<UnassignedNodeData, "unassigned">;
+
 const NODE_WIDTH = 260;
 const DEPT_NODE_HEIGHT = 80;
 const POS_NODE_HEIGHT = 64;
 const NODE_GAP_X = 40;
 const NODE_GAP_Y = 60;
 
-function DepartmentNode({ data }: NodeProps) {
-  const d = data as any;
+function DepartmentNodeComponent({ data }: NodeProps<DeptNode>) {
   return (
     <div
       className="group cursor-pointer select-none"
-      data-testid={`node-dept-${d.deptId}`}
+      data-testid={`node-dept-${data.deptId}`}
     >
       <Handle type="source" position={Position.Bottom} className="!bg-transparent !border-0 !w-0 !h-0" />
       <div className={cn(
         "relative w-[260px] rounded-sm border transition-all duration-300 overflow-hidden",
         "bg-gradient-to-br from-[hsl(155,45%,12%)] to-[hsl(220,15%,11%)]",
-        d.expanded
+        data.expanded
           ? "border-[hsl(155,45%,45%)] shadow-[0_0_30px_rgba(52,168,120,0.15)]"
           : "border-[hsl(220,15%,22%)] hover:border-[hsl(155,45%,35%)] hover:shadow-[0_0_20px_rgba(52,168,120,0.1)]",
       )}>
@@ -102,19 +126,19 @@ function DepartmentNode({ data }: NodeProps) {
                 <Building2 className="w-4 h-4 text-[hsl(155,45%,55%)]" />
               </div>
               <div className="min-w-0">
-                <h3 className="font-display font-bold text-sm text-white truncate leading-tight">{d.label}</h3>
-                {d.nameAr && (
-                  <p className="text-[10px] text-[hsl(215,15%,55%)] truncate mt-0.5 font-medium" dir="rtl">{d.nameAr}</p>
+                <h3 className="font-display font-bold text-sm text-white truncate leading-tight">{data.label}</h3>
+                {data.nameAr && (
+                  <p className="text-[10px] text-[hsl(215,15%,55%)] truncate mt-0.5 font-medium" dir="rtl">{data.nameAr}</p>
                 )}
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 ml-2">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-xs font-semibold bg-[hsl(155,45%,45%)]/15 text-[hsl(155,45%,55%)] border border-[hsl(155,45%,45%)]/20">
                 <Users className="w-3 h-3" />
-                {d.totalEmployees}
+                {data.totalEmployees}
               </span>
               <div className="text-[hsl(215,15%,50%)] transition-transform duration-200">
-                {d.expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                {data.expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
               </div>
             </div>
           </div>
@@ -124,12 +148,10 @@ function DepartmentNode({ data }: NodeProps) {
   );
 }
 
-function PositionNode({ data }: NodeProps) {
-  const d = data as any;
+function PositionNodeComponent({ data }: NodeProps<PosNode>) {
   const [showEmployees, setShowEmployees] = useState(false);
   const [search, setSearch] = useState("");
-  const hasChildren = d.hasChildren;
-  const employees: OrgEmployee[] = d.employees || [];
+  const employees = data.employees;
   const filtered = search
     ? employees.filter(e =>
         e.fullNameEn.toLowerCase().includes(search.toLowerCase()) ||
@@ -140,54 +162,54 @@ function PositionNode({ data }: NodeProps) {
     : employees;
 
   return (
-    <div data-testid={`node-pos-${d.posId}`} className="select-none">
+    <div data-testid={`node-pos-${data.posId}`} className="select-none">
       <Handle type="target" position={Position.Top} className="!bg-transparent !border-0 !w-0 !h-0" />
       <Handle type="source" position={Position.Bottom} className="!bg-transparent !border-0 !w-0 !h-0" />
       <div className={cn(
         "w-[260px] rounded-sm border transition-all duration-200",
-        d.employeeCount === 0
+        data.employeeCount === 0
           ? "border-dashed border-[hsl(220,15%,22%)] bg-[hsl(220,15%,11%)]/80"
           : "border-[hsl(220,15%,22%)] bg-[hsl(220,15%,12%)] hover:border-[hsl(155,45%,35%)]/60",
       )}>
         <div
           className="px-3.5 py-2.5 flex items-center justify-between cursor-pointer"
-          onClick={() => { if (d.employeeCount > 0) setShowEmployees(!showEmployees); }}
+          onClick={(e) => { e.stopPropagation(); if (data.employeeCount > 0) setShowEmployees(!showEmployees); }}
         >
           <div className="flex items-center gap-2.5 min-w-0">
             <div className={cn(
               "flex-shrink-0 w-7 h-7 rounded-sm flex items-center justify-center",
-              d.employeeCount > 0 ? "bg-[hsl(155,45%,45%)]/10" : "bg-[hsl(220,10%,20%)]"
+              data.employeeCount > 0 ? "bg-[hsl(155,45%,45%)]/10" : "bg-[hsl(220,10%,20%)]"
             )}>
-              <Users className={cn("w-3.5 h-3.5", d.employeeCount > 0 ? "text-[hsl(155,45%,55%)]" : "text-[hsl(215,15%,40%)]")} />
+              <Users className={cn("w-3.5 h-3.5", data.employeeCount > 0 ? "text-[hsl(155,45%,55%)]" : "text-[hsl(215,15%,40%)]")} />
             </div>
             <div className="min-w-0">
-              <p className={cn("text-sm font-semibold truncate leading-tight", d.employeeCount > 0 ? "text-white" : "text-[hsl(215,15%,50%)]")}>{d.label}</p>
+              <p className={cn("text-sm font-semibold truncate leading-tight", data.employeeCount > 0 ? "text-white" : "text-[hsl(215,15%,50%)]")}>{data.label}</p>
               <div className="flex items-center gap-1.5 mt-0.5">
-                {d.gradeLevel !== null && d.gradeLevel !== undefined && (
-                  <span className="text-[10px] px-1.5 py-px rounded-sm bg-[hsl(190,80%,50%)]/10 text-[hsl(190,80%,60%)] font-bold border border-[hsl(190,80%,50%)]/15">G{d.gradeLevel}</span>
+                {data.gradeLevel !== null && data.gradeLevel !== undefined && (
+                  <span className="text-[10px] px-1.5 py-px rounded-sm bg-[hsl(190,80%,50%)]/10 text-[hsl(190,80%,60%)] font-bold border border-[hsl(190,80%,50%)]/15">G{data.gradeLevel}</span>
                 )}
-                <span className="text-[10px] text-[hsl(215,15%,45%)] font-mono">{d.code}</span>
+                <span className="text-[10px] text-[hsl(215,15%,45%)] font-mono">{data.code}</span>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
             <span className={cn(
               "inline-flex items-center justify-center min-w-[26px] h-[22px] px-1.5 rounded-sm text-xs font-bold",
-              d.employeeCount > 0
+              data.employeeCount > 0
                 ? "bg-[hsl(155,45%,45%)]/15 text-[hsl(155,45%,55%)] border border-[hsl(155,45%,45%)]/20"
                 : "bg-[hsl(220,10%,18%)] text-[hsl(215,15%,40%)] border border-[hsl(220,15%,20%)]"
             )}>
-              {d.employeeCount}
+              {data.employeeCount}
             </span>
-            {(hasChildren || d.employeeCount > 0) && (
-              <div className="text-[hsl(215,15%,45%)]">
-                {showEmployees ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            {data.hasChildren && (
+              <div className={cn("text-[hsl(215,15%,45%)]", data.childrenExpanded && "text-[hsl(155,45%,50%)]")}>
+                {data.childrenExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               </div>
             )}
           </div>
         </div>
 
-        {showEmployees && d.employeeCount > 0 && (
+        {showEmployees && data.employeeCount > 0 && (
           <div className="border-t border-[hsl(220,15%,18%)]">
             {employees.length > 8 && (
               <div className="px-3 pt-2">
@@ -198,7 +220,7 @@ function PositionNode({ data }: NodeProps) {
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search..."
                     className="h-7 text-xs pl-7 bg-[hsl(220,15%,10%)] border-[hsl(220,15%,20%)] focus-visible:ring-[hsl(155,45%,45%)]"
-                    data-testid={`input-search-pos-${d.posId}`}
+                    data-testid={`input-search-pos-${data.posId}`}
                   />
                 </div>
               </div>
@@ -241,10 +263,9 @@ function PositionNode({ data }: NodeProps) {
   );
 }
 
-function UnassignedNode({ data }: NodeProps) {
-  const d = data as any;
+function UnassignedNodeComponent({ data }: NodeProps<UnassignedNode>) {
   const [open, setOpen] = useState(false);
-  const employees: OrgEmployee[] = d.employees || [];
+  const employees = data.employees;
   const [search, setSearch] = useState("");
   const filtered = search
     ? employees.filter(e =>
@@ -301,14 +322,15 @@ function UnassignedNode({ data }: NodeProps) {
 }
 
 const nodeTypes = {
-  department: memo(DepartmentNode),
-  position: memo(PositionNode),
-  unassigned: memo(UnassignedNode),
+  department: memo(DepartmentNodeComponent),
+  position: memo(PositionNodeComponent),
+  unassigned: memo(UnassignedNodeComponent),
 };
 
 function buildLayout(
   data: OrgChartData,
   expandedDepts: Set<string>,
+  expandedPositions: Set<string>,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -317,52 +339,58 @@ function buildLayout(
   g.setDefaultEdgeLabel(() => ({}));
 
   const depts = data.departments;
-  const totalDeptWidth = depts.length * (NODE_WIDTH + 80);
 
-  depts.forEach((dept, dIdx) => {
+  depts.forEach((dept) => {
     const deptNodeId = `dept-${dept.id}`;
-    const isExpanded = expandedDepts.has(dept.id);
+    const isDeptExpanded = expandedDepts.has(dept.id);
 
     g.setNode(deptNodeId, { width: NODE_WIDTH, height: DEPT_NODE_HEIGHT });
+
+    const deptData: DeptNodeData = {
+      label: dept.name,
+      nameAr: dept.nameAr,
+      deptId: dept.id,
+      totalEmployees: dept.totalEmployees,
+      expanded: isDeptExpanded,
+    };
 
     nodes.push({
       id: deptNodeId,
       type: "department",
       position: { x: 0, y: 0 },
-      data: {
-        label: dept.name,
-        nameAr: dept.nameAr,
-        deptId: dept.id,
-        totalEmployees: dept.totalEmployees,
-        expanded: isExpanded,
-      },
+      data: deptData,
     });
 
-    if (isExpanded) {
-      const rootPositions = dept.positions.filter(p => !p.parentPositionId || !dept.positions.find(pp => pp.id === p.parentPositionId));
-      const posMap = new Map(dept.positions.map(p => [p.id, p]));
+    if (isDeptExpanded) {
+      const rootPositions = dept.positions.filter(
+        p => !p.parentPositionId || !dept.positions.find(pp => pp.id === p.parentPositionId)
+      );
 
-      function addPositionNodes(pos: OrgPosition, parentNodeId: string) {
+      function addPositionNode(pos: OrgPosition, parentNodeId: string) {
         const posNodeId = `pos-${pos.id}`;
         const children = dept.positions.filter(p => p.parentPositionId === pos.id);
+        const isPosExpanded = expandedPositions.has(pos.id);
 
         g.setNode(posNodeId, { width: NODE_WIDTH, height: POS_NODE_HEIGHT });
         g.setEdge(parentNodeId, posNodeId);
+
+        const posData: PosNodeData = {
+          label: pos.title,
+          titleAr: pos.titleAr,
+          posId: pos.id,
+          code: pos.code,
+          gradeLevel: pos.gradeLevel,
+          employeeCount: pos.employeeCount,
+          employees: pos.employees,
+          hasChildren: children.length > 0,
+          childrenExpanded: isPosExpanded,
+        };
 
         nodes.push({
           id: posNodeId,
           type: "position",
           position: { x: 0, y: 0 },
-          data: {
-            label: pos.title,
-            titleAr: pos.titleAr,
-            posId: pos.id,
-            code: pos.code,
-            gradeLevel: pos.gradeLevel,
-            employeeCount: pos.employeeCount,
-            employees: pos.employees,
-            hasChildren: children.length > 0,
-          },
+          data: posData,
         });
 
         edges.push({
@@ -374,21 +402,25 @@ function buildLayout(
           markerEnd: { type: MarkerType.ArrowClosed, color: "hsl(155, 45%, 35%)", width: 12, height: 12 },
         });
 
-        children.forEach(child => addPositionNodes(child, posNodeId));
+        if (isPosExpanded && children.length > 0) {
+          children.forEach(child => addPositionNode(child, posNodeId));
+        }
       }
 
-      rootPositions.forEach(pos => addPositionNodes(pos, deptNodeId));
+      rootPositions.forEach(pos => addPositionNode(pos, deptNodeId));
     }
   });
 
   if (data.unassigned.length > 0) {
     const unId = "unassigned";
     g.setNode(unId, { width: NODE_WIDTH, height: POS_NODE_HEIGHT });
+
+    const unData: UnassignedNodeData = { employees: data.unassigned };
     nodes.push({
       id: unId,
       type: "unassigned",
       position: { x: 0, y: 0 },
-      data: { employees: data.unassigned },
+      data: unData,
     });
   }
 
@@ -413,6 +445,7 @@ function OrgChartCanvas() {
   });
 
   const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set());
+  const [expandedPositions, setExpandedPositions] = useState<Set<string>>(new Set());
 
   const toggleDept = useCallback((deptId: string) => {
     setExpandedDepts(prev => {
@@ -423,16 +456,31 @@ function OrgChartCanvas() {
     });
   }, []);
 
+  const togglePosition = useCallback((posId: string) => {
+    setExpandedPositions(prev => {
+      const next = new Set(prev);
+      if (next.has(posId)) next.delete(posId);
+      else next.add(posId);
+      return next;
+    });
+  }, []);
+
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     if (node.type === "department") {
-      toggleDept((node.data as any).deptId);
+      const deptData = node.data as DeptNodeData;
+      toggleDept(deptData.deptId);
+    } else if (node.type === "position") {
+      const posData = node.data as PosNodeData;
+      if (posData.hasChildren) {
+        togglePosition(posData.posId);
+      }
     }
-  }, [toggleDept]);
+  }, [toggleDept, togglePosition]);
 
   const { nodes: layoutNodes, edges: layoutEdges } = useMemo(() => {
     if (!data) return { nodes: [], edges: [] };
-    return buildLayout(data, expandedDepts);
-  }, [data, expandedDepts]);
+    return buildLayout(data, expandedDepts, expandedPositions);
+  }, [data, expandedDepts, expandedPositions]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutEdges);

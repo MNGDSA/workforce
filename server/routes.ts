@@ -2642,6 +2642,10 @@ export async function registerRoutes(
     try {
       const userId = getAuthUserId(req);
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const user = await storage.getUser(userId);
+      if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
       const allDepts = await db.select().from(departments)
         .where(eq(departments.isActive, true))
         .orderBy(departments.sortOrder, departments.name);
@@ -2665,6 +2669,7 @@ export async function registerRoutes(
         .where(and(
           eq(workforce.isActive, true),
           sql`${workforce.positionId} IS NOT NULL`,
+          sql`${candidates.status} IN ('active', 'available')`,
         ));
 
       const empsByPosition = new Map<string, typeof employeeRows>();
@@ -2688,6 +2693,7 @@ export async function registerRoutes(
         .where(and(
           eq(workforce.isActive, true),
           sql`${workforce.positionId} IS NULL`,
+          sql`${candidates.status} IN ('active', 'available')`,
         ));
 
       const result = allDepts.map(dept => {
