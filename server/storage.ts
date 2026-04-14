@@ -2876,27 +2876,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   async bulkAssignAsset(assetId: string, workforceIds: string[], assignedAt: string, notes?: string): Promise<{ created: number; skipped: number }> {
-    if (workforceIds.length === 0) return { created: 0, skipped: 0 };
-    const existing = await db
-      .select({ workforceId: employeeAssets.workforceId })
-      .from(employeeAssets)
-      .where(and(eq(employeeAssets.assetId, assetId), eq(employeeAssets.status, "assigned"), inArray(employeeAssets.workforceId, workforceIds)));
-    const existingSet = new Set(existing.map(e => e.workforceId));
-    const toInsert = workforceIds.filter(wId => !existingSet.has(wId));
-    if (toInsert.length > 0) {
-      const batchSize = 500;
-      for (let i = 0; i < toInsert.length; i += batchSize) {
-        const batch = toInsert.slice(i, i + batchSize);
-        await db.insert(employeeAssets).values(batch.map(wId => ({
-          assetId,
-          workforceId: wId,
-          assignedAt,
-          status: "assigned" as const,
-          notes: notes || null,
-        })));
+    const uniqueIds = [...new Set(workforceIds)];
+    if (uniqueIds.length === 0) return { created: 0, skipped: 0 };
+    return await db.transaction(async (tx) => {
+      const existing = await tx
+        .select({ workforceId: employeeAssets.workforceId })
+        .from(employeeAssets)
+        .where(and(eq(employeeAssets.assetId, assetId), eq(employeeAssets.status, "assigned"), inArray(employeeAssets.workforceId, uniqueIds)));
+      const existingSet = new Set(existing.map(e => e.workforceId));
+      const toInsert = uniqueIds.filter(wId => !existingSet.has(wId));
+      if (toInsert.length > 0) {
+        const batchSize = 500;
+        for (let i = 0; i < toInsert.length; i += batchSize) {
+          const batch = toInsert.slice(i, i + batchSize);
+          await tx.insert(employeeAssets).values(batch.map(wId => ({
+            assetId,
+            workforceId: wId,
+            assignedAt,
+            status: "assigned" as const,
+            notes: notes || null,
+          })));
+        }
       }
-    }
-    return { created: toInsert.length, skipped: existingSet.size };
+      return { created: toInsert.length, skipped: existingSet.size };
+    });
   }
 
   async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {
