@@ -3666,13 +3666,15 @@ export async function registerRoutes(
   });
 
   // ─── Attendance Records ──────────────────────────────────────────────────────
-  async function enrichAttendanceMinutes(data: { workforceId: string; date: string; clockIn?: string | null; clockOut?: string | null; minutesScheduled?: number | null; minutesWorked?: number | null }) {
+  async function enrichAttendanceMinutes(data: { workforceId: string; date: string; status?: string | null; clockIn?: string | null; clockOut?: string | null; minutesScheduled?: number | null; minutesWorked?: number | null }) {
     if (!data.workforceId || !data.date) return;
     const { timeToMinutes, getShiftForEmployeeDate } = await import("./verification-pipeline");
     const shiftInfo = await getShiftForEmployeeDate(data.workforceId, data.date);
     if (shiftInfo) {
       data.minutesScheduled = shiftInfo.shiftDuration;
-      if (data.clockIn && data.clockOut) {
+      if (data.status === "absent") {
+        data.minutesWorked = 0;
+      } else if (data.clockIn && data.clockOut) {
         const cIn = timeToMinutes(data.clockIn);
         let cOut = timeToMinutes(data.clockOut);
         if (cOut <= cIn) cOut += 24 * 60;
@@ -3825,6 +3827,16 @@ export async function registerRoutes(
       const authUserId = getAuthUserId(req);
       if (!authUserId) return res.status(401).json({ message: "Authentication required" });
       const { workforceId } = req.params;
+      const wfRecord = await storage.getWorkforceEmployee(workforceId);
+      if (wfRecord) {
+        const user = await storage.getUser(authUserId);
+        if (user?.role !== "admin" && user?.role !== "super_admin") {
+          const candidate = user ? await storage.getCandidateByNationalId(user.nationalId) : null;
+          if (!candidate || wfRecord.candidateId !== candidate.id) {
+            return res.status(403).json({ message: "Access denied" });
+          }
+        }
+      }
       const assignment = await storage.getActiveAssignmentForEmployee(workforceId);
       if (!assignment) return res.json({ assignment: null, template: null, shifts: {}, attendance: [] });
 

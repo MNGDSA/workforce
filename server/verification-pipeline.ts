@@ -236,10 +236,18 @@ export async function runVerificationPipeline(submissionId: string): Promise<{
         minutesScheduled = shiftInfo.shiftDuration;
         const clockInMin = timeToMinutes(clockIn);
         const shiftStartMin = timeToMinutes(shiftInfo.shiftStartTime);
+        const isOvernight = timeToMinutes(shiftInfo.shiftEndTime) <= shiftStartMin;
         let shiftEndMin = timeToMinutes(shiftInfo.shiftEndTime);
-        if (shiftEndMin <= shiftStartMin) shiftEndMin += 24 * 60;
+        if (isOvernight) shiftEndMin += 24 * 60;
+
         let adjustedClockIn = clockInMin;
-        if (adjustedClockIn < shiftStartMin && shiftEndMin > 24 * 60) adjustedClockIn += 24 * 60;
+        if (isOvernight && clockInMin < shiftStartMin) {
+          const distBefore = shiftStartMin - clockInMin;
+          const distAfterWrap = (clockInMin + 24 * 60) - shiftStartMin;
+          if (distAfterWrap < distBefore) {
+            adjustedClockIn = clockInMin + 24 * 60;
+          }
+        }
 
         if (adjustedClockIn > shiftStartMin) {
           status = "late";
@@ -357,10 +365,18 @@ export async function approveSubmission(
       minutesScheduled = shiftInfo.shiftDuration;
       const clockInMin = timeToMinutes(clockIn);
       const shiftStartMin = timeToMinutes(shiftInfo.shiftStartTime);
+      const isOvernight = timeToMinutes(shiftInfo.shiftEndTime) <= shiftStartMin;
       let shiftEndMin = timeToMinutes(shiftInfo.shiftEndTime);
-      if (shiftEndMin <= shiftStartMin) shiftEndMin += 24 * 60;
+      if (isOvernight) shiftEndMin += 24 * 60;
+
       let adjustedClockIn = clockInMin;
-      if (adjustedClockIn < shiftStartMin && shiftEndMin > 24 * 60) adjustedClockIn += 24 * 60;
+      if (isOvernight && clockInMin < shiftStartMin) {
+        const distBefore = shiftStartMin - clockInMin;
+        const distAfterWrap = (clockInMin + 24 * 60) - shiftStartMin;
+        if (distAfterWrap < distBefore) {
+          adjustedClockIn = clockInMin + 24 * 60;
+        }
+      }
 
       if (adjustedClockIn > shiftStartMin) {
         status = "late";

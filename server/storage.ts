@@ -2691,13 +2691,12 @@ export class DatabaseStorage implements IStorage {
     let dailyRate: number;
     let perMinuteRate: number | null = null;
 
+    dailyRate = salary / 30;
     if (totalMinutesScheduled > 0) {
       perMinuteRate = salary / 30 / (totalMinutesScheduled / loggedDays);
       grossPay = Math.round(totalMinutesWorked * perMinuteRate * 100) / 100;
-      dailyRate = salary / 30;
     } else {
-      dailyRate = salary / 30;
-      grossPay = Math.round(calendarDays * dailyRate * 100) / 100;
+      grossPay = 0;
     }
 
     const empAssets = await this.getEmployeeAssets({ workforceId });
