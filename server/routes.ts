@@ -4322,7 +4322,7 @@ export async function registerRoutes(
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(200).default(50),
     status: z.enum(["pending", "resolved", "dismissed"]).optional(),
-    type: z.enum(["document_review", "document_reupload", "application_review", "onboarding_action", "contract_action", "offboarding_action", "schedule_conflict", "asset_return", "candidate_flag", "event_alert", "attendance_verification", "photo_change_request", "general_request", "system"]).optional(),
+    type: z.enum(["document_review", "document_reupload", "application_review", "onboarding_action", "contract_action", "offboarding_action", "schedule_conflict", "asset_return", "candidate_flag", "event_alert", "attendance_verification", "photo_change_request", "excuse_request", "general_request", "system"]).optional(),
     priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
     search: z.string().optional(),
     sortBy: z.enum(["createdAt", "priority", "type"]).default("createdAt"),
@@ -4384,7 +4384,7 @@ export async function registerRoutes(
   });
 
   const inboxBulkSchema = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) });
-  const BULK_PROTECTED_TYPES = ["photo_change_request", "attendance_verification"];
+  const BULK_PROTECTED_TYPES = ["photo_change_request", "attendance_verification", "excuse_request"];
 
   async function rejectIfProtectedTypes(ids: string[], res: Response): Promise<boolean> {
     const items = await Promise.all(ids.map(id => storage.getInboxItem(id)));
@@ -4417,6 +4417,200 @@ export async function registerRoutes(
       const resolvedBy = (req as any).userId ?? "system";
       const count = await storage.bulkDismissInboxItems(ids, resolvedBy);
       return res.json({ dismissed: count });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Excuse Requests ─────────────────────────────────────────────────────────
+  const excuseRequestSchema = z.object({
+    workforceId: z.string(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    reason: z.string().min(1).max(1000),
+    attachmentUrl: z.string().nullable().optional(),
+  });
+
+  app.post("/api/excuse-requests", async (req: Request, res: Response) => {
+    try {
+      const authUserId = getAuthUserId(req);
+      if (!authUserId) return res.status(401).json({ message: "Authentication required" });
+
+      const data = excuseRequestSchema.parse(req.body);
+
+      const wf = await storage.getWorkforceEmployee(data.workforceId);
+      if (!wf) return res.status(404).json({ message: "Employee not found" });
+
+      const user = await storage.getUser(authUserId);
+      if (user?.role !== "admin" && user?.role !== "super_admin") {
+        const candidate = user ? await storage.getCandidateByNationalId(user.nationalId) : null;
+        if (!candidate || wf.candidateId !== candidate.id) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
+
+      const existing = await storage.getExcuseRequests({ workforceId: data.workforceId });
+      const duplicate = existing.find(e => e.date === data.date && e.status !== "rejected");
+      if (duplicate) return res.status(409).json({ message: "An excuse request already exists for this date" });
+
+      const attendance = await storage.getAttendanceRecords({ workforceId: data.workforceId, date: data.date });
+      const todayRecord = attendance[0];
+      const hadClockIn = !!(todayRecord && todayRecord.clockIn);
+
+      const now = new Date();
+      let effectiveClockOut: string | null = null;
+      if (hadClockIn) {
+        const hh = String(now.getHours()).padStart(2, "0");
+        const mm = String(now.getMinutes()).padStart(2, "0");
+        effectiveClockOut = `${hh}:${mm}`;
+      }
+
+      const excuse = await storage.createExcuseRequest({
+        workforceId: data.workforceId,
+        date: data.date,
+        reason: data.reason,
+        attachmentUrl: data.attachmentUrl ?? null,
+        hadClockIn,
+        effectiveClockOut,
+        status: "pending",
+      });
+
+      const employeeName = wf.fullNameEn || wf.employeeNumber || "Employee";
+      const excuseType = hadClockIn ? "Partial (mid-shift)" : "Full day";
+      await createInboxItem(
+        "excuse_request",
+        `Excuse Request — ${employeeName}`,
+        `${excuseType} excuse for ${data.date}. Reason: ${data.reason}`,
+        {
+          excuseRequestId: excuse.id,
+          workforceId: data.workforceId,
+          employeeName,
+          employeeNumber: wf.employeeNumber,
+          date: data.date,
+          hadClockIn,
+          effectiveClockOut,
+        },
+        "medium",
+        { entityType: "excuse_request", entityId: excuse.id },
+      );
+
+      return res.status(201).json(excuse);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/excuse-requests", async (req: Request, res: Response) => {
+    try {
+      const authUserId = getAuthUserId(req);
+      if (!authUserId) return res.status(401).json({ message: "Authentication required" });
+
+      const workforceId = req.query.workforceId as string | undefined;
+      const status = req.query.status as string | undefined;
+
+      const user = await storage.getUser(authUserId);
+      const isAdmin = user?.role === "admin" || user?.role === "super_admin";
+
+      if (!isAdmin && !workforceId) {
+        return res.status(400).json({ message: "workforceId is required" });
+      }
+
+      if (workforceId && !isAdmin) {
+        const wf = await storage.getWorkforceEmployee(workforceId);
+        if (wf) {
+          const candidate = user ? await storage.getCandidateByNationalId(user.nationalId) : null;
+          if (!candidate || wf.candidateId !== candidate.id) {
+            return res.status(403).json({ message: "Access denied" });
+          }
+        }
+      }
+
+      const requests = await storage.getExcuseRequests({ workforceId, status });
+      return res.json(requests);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/excuse-requests/pending-count", async (req: Request, res: Response) => {
+    try {
+      const authUserId = getAuthUserId(req);
+      if (!authUserId) return res.status(401).json({ message: "Authentication required" });
+      const count = await storage.countPendingExcuseRequests();
+      return res.json({ count });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/excuse-requests/:id/approve", async (req: Request, res: Response) => {
+    try {
+      const reviewedBy = getAuthUserId(req);
+      if (!reviewedBy) return res.status(401).json({ message: "Authentication required" });
+      const reviewer = await storage.getUser(reviewedBy);
+      if (reviewer?.role !== "admin" && reviewer?.role !== "super_admin") {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+      const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() || null : null;
+      const excuse = await storage.getExcuseRequest(req.params.id);
+      if (!excuse) return res.status(404).json({ message: "Excuse request not found" });
+      if (excuse.status !== "pending") return res.status(422).json({ message: `Cannot approve a ${excuse.status} request` });
+
+      const updated = await storage.updateExcuseRequest(req.params.id, {
+        status: "approved",
+        reviewedBy,
+        reviewedAt: new Date(),
+        reviewNotes: notes,
+      });
+
+      const linkedInbox = await db.select().from(inboxItems)
+        .where(and(
+          eq(inboxItems.type, "excuse_request"),
+          eq(inboxItems.entityId, excuse.id),
+        ));
+      if (linkedInbox[0]) {
+        await storage.resolveInboxItem(linkedInbox[0].id, reviewedBy || "system", `Approved${notes ? `: ${notes}` : ""}`);
+      }
+
+      await logAudit(req, {
+        action: "excuse_approve",
+        entityType: "excuse_request",
+        entityId: excuse.id,
+        description: `Approved excuse request for ${excuse.date} (workforce ${excuse.workforceId})`,
+      });
+
+      return res.json(updated);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/excuse-requests/:id/reject", async (req: Request, res: Response) => {
+    try {
+      const reviewedBy = getAuthUserId(req);
+      if (!reviewedBy) return res.status(401).json({ message: "Authentication required" });
+      const reviewer = await storage.getUser(reviewedBy);
+      if (reviewer?.role !== "admin" && reviewer?.role !== "super_admin") {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+      const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() || null : null;
+      const excuse = await storage.getExcuseRequest(req.params.id);
+      if (!excuse) return res.status(404).json({ message: "Excuse request not found" });
+      if (excuse.status !== "pending") return res.status(422).json({ message: `Cannot reject a ${excuse.status} request` });
+
+      const updated = await storage.updateExcuseRequest(req.params.id, {
+        status: "rejected",
+        reviewedBy,
+        reviewedAt: new Date(),
+        reviewNotes: notes,
+      });
+
+      const linkedInbox = await db.select().from(inboxItems)
+        .where(and(
+          eq(inboxItems.type, "excuse_request"),
+          eq(inboxItems.entityId, excuse.id),
+        ));
+      if (linkedInbox[0]) {
+        await storage.resolveInboxItem(linkedInbox[0].id, reviewedBy || "system", `Rejected${notes ? `: ${notes}` : ""}`);
+      }
+
+      await logAudit(req, {
+        action: "excuse_reject",
+        entityType: "excuse_request",
+        entityId: excuse.id,
+        description: `Rejected excuse request for ${excuse.date} (workforce ${excuse.workforceId})`,
+      });
+
+      return res.json(updated);
     } catch (err) { return handleError(res, err); }
   });
 

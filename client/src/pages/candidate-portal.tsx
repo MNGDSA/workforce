@@ -43,6 +43,10 @@ import {
   Camera,
   UserCheck,
   Printer,
+  Plus,
+  Send,
+  MessageCircle,
+  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -285,14 +289,14 @@ function resolvePortalMode(
 
 // ─── Nav items per mode ───────────────────────────────────────────────────────
 
-type NavKey = "dashboard" | "jobs" | "documents" | "contract" | "payslips" | "shift" | "assets" | "history";
+type NavKey = "dashboard" | "jobs" | "documents" | "contract" | "payslips" | "shift" | "excuses" | "assets" | "history";
 
 function getNavItems(mode: PortalMode, hasWorkHistory: boolean): NavKey[] {
   switch (mode) {
     case "employee_individual":
-      return ["dashboard", "shift", "contract", "payslips", "history", "assets"];
+      return ["dashboard", "shift", "excuses", "contract", "payslips", "history", "assets"];
     case "employee_smp":
-      return ["dashboard", "shift", "history"];
+      return ["dashboard", "shift", "excuses", "history"];
     case "candidate":
     default:
       return hasWorkHistory ? ["dashboard", "jobs", "history"] : ["jobs"];
@@ -306,6 +310,7 @@ const NAV_LABELS: Record<NavKey, string> = {
   contract: "My Contract",
   payslips: "Payslips",
   shift: "My Shift",
+  excuses: "Excuses",
   assets: "Assets",
   history: "Work History",
 };
@@ -889,6 +894,166 @@ function MyShiftSection({ workforceId }: { workforceId: string }) {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// ─── Excuse Requests Section (Employee Portal) ──────────────────────────────
+
+type ExcuseRequest = {
+  id: string;
+  workforceId: string;
+  date: string;
+  reason: string;
+  attachmentUrl: string | null;
+  submittedAt: string;
+  hadClockIn: boolean;
+  effectiveClockOut: string | null;
+  status: "pending" | "approved" | "rejected";
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  reviewNotes: string | null;
+};
+
+const EXCUSE_STATUS_STYLES: Record<string, { label: string; color: string; bg: string }> = {
+  pending: { label: "Pending", color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/30" },
+  approved: { label: "Approved", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30" },
+  rejected: { label: "Rejected", color: "text-red-400", bg: "bg-red-500/10 border-red-500/30" },
+};
+
+function ExcuseRequestSection({ workforceId }: { workforceId: string }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [showForm, setShowForm] = useState(false);
+  const [reason, setReason] = useState("");
+  const [excuseDate, setExcuseDate] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const { data: excuses = [], isLoading } = useQuery<ExcuseRequest[]>({
+    queryKey: ["/api/excuse-requests", workforceId],
+    queryFn: () => apiRequest("GET", `/api/excuse-requests?workforceId=${workforceId}`).then(r => r.json()),
+  });
+
+  const submitMut = useMutation({
+    mutationFn: (data: { workforceId: string; date: string; reason: string }) =>
+      apiRequest("POST", "/api/excuse-requests", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/excuse-requests", workforceId] });
+      setShowForm(false);
+      setReason("");
+      setExcuseDate(new Date().toISOString().split("T")[0]);
+      toast({ title: "Excuse request submitted successfully" });
+    },
+    onError: async (err: any) => {
+      let msg = "Failed to submit excuse request";
+      try { const body = await err.json?.(); if (body?.message) msg = body.message; } catch {}
+      toast({ title: msg, variant: "destructive" });
+    },
+  });
+
+  const handleSubmit = () => {
+    if (!reason.trim()) return;
+    submitMut.mutate({ workforceId, date: excuseDate, reason: reason.trim() });
+  };
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center py-12 gap-2 text-zinc-500">
+      <Loader2 className="h-5 w-5 animate-spin" />
+      <span className="text-sm">Loading excuse requests...</span>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-display font-bold text-white">Excuse Requests</h3>
+        <Button
+          size="sm"
+          className="gap-1.5"
+          onClick={() => setShowForm(!showForm)}
+          data-testid="button-new-excuse"
+        >
+          {showForm ? <XCircle className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+          {showForm ? "Cancel" : "New Request"}
+        </Button>
+      </div>
+
+      {showForm && (
+        <Card className="bg-card border-border" data-testid="card-excuse-form">
+          <CardContent className="pt-5 space-y-4">
+            <div>
+              <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Date</label>
+              <Input
+                type="date"
+                value={excuseDate}
+                onChange={e => setExcuseDate(e.target.value)}
+                className="mt-1 bg-muted/30 border-border"
+                data-testid="input-excuse-date"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Reason</label>
+              <Textarea
+                value={reason}
+                onChange={e => setReason(e.target.value)}
+                placeholder="Explain why you need to be excused..."
+                className="mt-1 bg-muted/30 border-border min-h-[80px]"
+                data-testid="input-excuse-reason"
+              />
+            </div>
+            <Button
+              onClick={handleSubmit}
+              disabled={!reason.trim() || submitMut.isPending}
+              className="w-full gap-1.5"
+              data-testid="button-submit-excuse"
+            >
+              {submitMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Submit Request
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {excuses.length === 0 && !showForm ? (
+        <Card className="bg-card border-border">
+          <CardContent className="py-10 text-center">
+            <MessageCircle className="h-8 w-8 text-zinc-500 mx-auto mb-2" />
+            <p className="text-zinc-400 text-sm">No excuse requests yet.</p>
+            <p className="text-zinc-500 text-xs mt-1">Submit a request if you need to be excused from a shift.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {excuses.map(excuse => {
+            const st = EXCUSE_STATUS_STYLES[excuse.status] ?? EXCUSE_STATUS_STYLES.pending;
+            return (
+              <Card key={excuse.id} className="bg-card border-border" data-testid={`card-excuse-${excuse.id}`}>
+                <CardContent className="py-3 px-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-white">{excuse.date}</span>
+                      <Badge variant="outline" className={`text-[10px] ${st.bg} ${st.color}`} data-testid={`badge-excuse-status-${excuse.id}`}>
+                        {st.label}
+                      </Badge>
+                    </div>
+                    <span className="text-[10px] text-zinc-500">
+                      {excuse.hadClockIn ? "Partial (mid-shift)" : "Full day"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-zinc-300">{excuse.reason}</p>
+                  {excuse.hadClockIn && excuse.effectiveClockOut && (
+                    <p className="text-xs text-amber-400 mt-1">Effective clock out: {excuse.effectiveClockOut}</p>
+                  )}
+                  {excuse.reviewNotes && (
+                    <p className="text-xs text-zinc-500 mt-2 border-t border-border pt-2">
+                      HR Notes: {excuse.reviewNotes}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -1803,6 +1968,9 @@ export default function CandidatePortal() {
 
       case "shift":
         return activeWorkforceRecord ? <MyShiftSection workforceId={activeWorkforceRecord.id} /> : <PlaceholderCard icon={<Calendar className="h-6 w-6" />} title="My Shift" description="Your shift schedule will appear here once you are assigned to a workforce." />;
+
+      case "excuses":
+        return activeWorkforceRecord ? <ExcuseRequestSection workforceId={activeWorkforceRecord.id} /> : <PlaceholderCard icon={<MessageCircle className="h-6 w-6" />} title="Excuse Requests" description="Excuse requests will be available once you are assigned to a workforce." />;
 
       case "payslips":
         return <PlaceholderCard icon={<Banknote className="h-6 w-6" />} title="Payslips" description="Your payslips will appear here once the payroll module is live." />;

@@ -1157,6 +1157,7 @@ export const inboxItemTypeEnum = pgEnum("inbox_item_type", [
   "event_alert",
   "attendance_verification",
   "photo_change_request",
+  "excuse_request",
   "general_request",
   "system",
 ]);
@@ -1438,3 +1439,39 @@ export const candidateQuerySchema = z.object({
 });
 
 export type CandidateQuery = z.infer<typeof candidateQuerySchema>;
+
+// ─── Excuse Requests ──────────────────────────────────────────────────────────
+export const excuseRequestStatusEnum = pgEnum("excuse_request_status", [
+  "pending",
+  "approved",
+  "rejected",
+]);
+
+export const excuseRequests = pgTable("excuse_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workforceId: varchar("workforce_id").notNull().references(() => workforce.id, { onDelete: "cascade" }),
+  date: text("date").notNull(),
+  reason: text("reason").notNull(),
+  attachmentUrl: text("attachment_url"),
+  submittedAt: timestamp("submitted_at").defaultNow().notNull(),
+  hadClockIn: boolean("had_clock_in").notNull().default(false),
+  effectiveClockOut: text("effective_clock_out"),
+  status: excuseRequestStatusEnum("status").notNull().default("pending"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
+}, (t) => ({
+  workforceIdx: index("excuse_requests_workforce_idx").on(t.workforceId),
+  dateIdx: index("excuse_requests_date_idx").on(t.date),
+  statusIdx: index("excuse_requests_status_idx").on(t.status),
+}));
+
+export const insertExcuseRequestSchema = createInsertSchema(excuseRequests).omit({
+  id: true,
+  submittedAt: true,
+  reviewedBy: true,
+  reviewedAt: true,
+  reviewNotes: true,
+});
+export type InsertExcuseRequest = z.infer<typeof insertExcuseRequestSchema>;
+export type ExcuseRequest = typeof excuseRequests.$inferSelect;

@@ -48,6 +48,7 @@ import {
   Download,
   LayoutDashboard,
   TrendingUp,
+  MessageCircle,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1496,6 +1497,11 @@ function DashboardTab() {
     queryFn: () => apiRequest("GET", `/api/attendance/dashboard-stats?dateFrom=${dateFrom}&dateTo=${dateTo}`).then(r => r.json()),
   });
 
+  const { data: pendingExcuses } = useQuery<{ count: number }>({
+    queryKey: ["/api/excuse-requests/pending-count"],
+    queryFn: () => apiRequest("GET", "/api/excuse-requests/pending-count").then(r => r.json()),
+  });
+
   const handleExport = (format: "csv" | "xlsx") => {
     window.open(`/api/attendance/export-lateness?dateFrom=${dateFrom}&dateTo=${dateTo}&format=${format}`, "_blank");
   };
@@ -1510,6 +1516,7 @@ function DashboardTab() {
     { label: "Total Late Minutes", value: t.totalMinutesLate, color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/30", icon: TrendingUp },
     { label: "Attendance Rate", value: `${attendanceRate}%`, color: "text-primary", bg: "bg-primary/10 border-primary/30", icon: BarChart3 },
     { label: "Excused Days", value: t.excused, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/30", icon: Shield },
+    { label: "Pending Excuses", value: pendingExcuses?.count ?? 0, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/30", icon: MessageCircle },
   ];
 
   return (
@@ -1532,7 +1539,7 @@ function DashboardTab() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             {statCards.map(sc => (
               <div key={sc.label} className={`rounded-lg border p-3 ${sc.bg}`} data-testid={`stat-card-${sc.label.toLowerCase().replace(/\s+/g, "-")}`}>
                 <div className="flex items-center gap-1.5 mb-1">

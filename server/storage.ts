@@ -110,6 +110,9 @@ import {
   type InsertSmsBroadcast,
   type SmsBroadcastRecipient,
   type InsertSmsBroadcastRecipient,
+  excuseRequests,
+  type ExcuseRequest,
+  type InsertExcuseRequest,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte, getTableColumns } from "drizzle-orm";
 
@@ -453,6 +456,13 @@ export interface IStorage {
   createSmsBroadcastRecipient(data: InsertSmsBroadcastRecipient): Promise<SmsBroadcastRecipient>;
   getSmsBroadcastRecipients(broadcastId: string): Promise<SmsBroadcastRecipient[]>;
   updateSmsBroadcastRecipient(id: string, data: Partial<SmsBroadcastRecipient>): Promise<SmsBroadcastRecipient | undefined>;
+
+  // Excuse Requests
+  createExcuseRequest(data: InsertExcuseRequest): Promise<ExcuseRequest>;
+  getExcuseRequest(id: string): Promise<ExcuseRequest | undefined>;
+  getExcuseRequests(params: { workforceId?: string; status?: string }): Promise<ExcuseRequest[]>;
+  updateExcuseRequest(id: string, data: Partial<ExcuseRequest>): Promise<ExcuseRequest | undefined>;
+  countPendingExcuseRequests(): Promise<number>;
 
   // Dashboard
   getDashboardStats(): Promise<{
@@ -3299,6 +3309,35 @@ export class DatabaseStorage implements IStorage {
   async updateSmsBroadcastRecipient(id: string, data: Partial<SmsBroadcastRecipient>): Promise<SmsBroadcastRecipient | undefined> {
     const [row] = await db.update(smsBroadcastRecipients).set(data).where(eq(smsBroadcastRecipients.id, id)).returning();
     return row;
+  }
+
+  async createExcuseRequest(data: InsertExcuseRequest): Promise<ExcuseRequest> {
+    const [row] = await db.insert(excuseRequests).values(data).returning();
+    return row;
+  }
+
+  async getExcuseRequest(id: string): Promise<ExcuseRequest | undefined> {
+    const [row] = await db.select().from(excuseRequests).where(eq(excuseRequests.id, id));
+    return row;
+  }
+
+  async getExcuseRequests(params: { workforceId?: string; status?: string }): Promise<ExcuseRequest[]> {
+    const conditions: any[] = [];
+    if (params.workforceId) conditions.push(eq(excuseRequests.workforceId, params.workforceId));
+    if (params.status) conditions.push(eq(excuseRequests.status, params.status as any));
+    return db.select().from(excuseRequests)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(excuseRequests.submittedAt));
+  }
+
+  async updateExcuseRequest(id: string, data: Partial<ExcuseRequest>): Promise<ExcuseRequest | undefined> {
+    const [row] = await db.update(excuseRequests).set(data).where(eq(excuseRequests.id, id)).returning();
+    return row;
+  }
+
+  async countPendingExcuseRequests(): Promise<number> {
+    const [result] = await db.select({ value: count() }).from(excuseRequests).where(eq(excuseRequests.status, "pending"));
+    return result?.value ?? 0;
   }
 }
 

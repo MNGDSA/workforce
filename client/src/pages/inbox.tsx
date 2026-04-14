@@ -69,6 +69,7 @@ import {
   AlertTriangle,
   ImageIcon,
   ArrowRight,
+  MessageCircle,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
@@ -104,6 +105,7 @@ const TYPE_META: Record<string, { label: string; icon: React.ElementType; color:
   event_alert: { label: "Event Alert", icon: Calendar, color: "text-violet-400" },
   attendance_verification: { label: "Attendance", icon: Eye, color: "text-teal-400" },
   photo_change_request: { label: "Photo Change", icon: ImageIcon, color: "text-purple-400" },
+  excuse_request: { label: "Excuse Request", icon: MessageCircle, color: "text-yellow-400" },
   general_request: { label: "General Request", icon: Clipboard, color: "text-slate-300" },
   system: { label: "System", icon: Monitor, color: "text-gray-400" },
 };
@@ -260,6 +262,28 @@ export default function InboxPage() {
     onError: () => toast({ title: "Failed to reject photo change", variant: "destructive" }),
   });
 
+  const approveExcuseMut = useMutation({
+    mutationFn: (params: { excuseId: string; notes: string }) =>
+      apiRequest("PATCH", `/api/excuse-requests/${params.excuseId}/approve`, { notes: params.notes }),
+    onSuccess: () => {
+      invalidateInbox(); setExpandedId(null); setActionNotes("");
+      setConfirmDialog({ open: false, action: null, entityId: null, inboxItemId: null }); setConfirmNotes("");
+      toast({ title: "Excuse request approved" });
+    },
+    onError: () => toast({ title: "Failed to approve excuse request", variant: "destructive" }),
+  });
+
+  const rejectExcuseMut = useMutation({
+    mutationFn: (params: { excuseId: string; notes: string }) =>
+      apiRequest("PATCH", `/api/excuse-requests/${params.excuseId}/reject`, { notes: params.notes }),
+    onSuccess: () => {
+      invalidateInbox(); setExpandedId(null); setActionNotes("");
+      setConfirmDialog({ open: false, action: null, entityId: null, inboxItemId: null }); setConfirmNotes("");
+      toast({ title: "Excuse request rejected" });
+    },
+    onError: () => toast({ title: "Failed to reject excuse request", variant: "destructive" }),
+  });
+
   const openConfirmDialog = (action: "approve" | "reject", entityId: string, inboxItemId: string) => {
     setConfirmNotes("");
     setConfirmDialog({ open: true, action, entityId, inboxItemId });
@@ -269,6 +293,7 @@ export default function InboxPage() {
     if (!confirmDialog.entityId || !confirmDialog.action || !confirmNotes.trim()) return;
     const inboxItem = rawData?.data?.find((i: InboxItem) => i.id === confirmDialog.inboxItemId);
     const isPhotoChange = inboxItem?.type === "photo_change_request";
+    const isExcuseRequest = inboxItem?.type === "excuse_request";
     if (isPhotoChange) {
       const changeRequestId = inboxItem?.metadata?.changeRequestId;
       if (!changeRequestId) return;
@@ -276,6 +301,14 @@ export default function InboxPage() {
         approvePhotoChangeMut.mutate({ changeRequestId, notes: confirmNotes.trim() });
       } else {
         rejectPhotoChangeMut.mutate({ changeRequestId, notes: confirmNotes.trim() });
+      }
+    } else if (isExcuseRequest) {
+      const excuseId = inboxItem?.metadata?.excuseRequestId ?? inboxItem?.entityId;
+      if (!excuseId) return;
+      if (confirmDialog.action === "approve") {
+        approveExcuseMut.mutate({ excuseId, notes: confirmNotes.trim() });
+      } else {
+        rejectExcuseMut.mutate({ excuseId, notes: confirmNotes.trim() });
       }
     } else {
       if (confirmDialog.action === "approve") {
@@ -303,7 +336,7 @@ export default function InboxPage() {
   const totalPages = Math.ceil(total / limit);
   const pendingCount = countData?.count ?? 0;
 
-  const BULK_PROTECTED_TYPES = ["photo_change_request", "attendance_verification"];
+  const BULK_PROTECTED_TYPES = ["photo_change_request", "attendance_verification", "excuse_request"];
 
   const pendingItems = items.filter(i => i.status === "pending");
   const bulkSelectableItems = pendingItems.filter(i => !BULK_PROTECTED_TYPES.includes(i.type));
@@ -764,7 +797,54 @@ export default function InboxPage() {
                         </div>
                       )}
 
-                      {item.body && item.type !== "photo_change_request" && (
+                      {item.type === "excuse_request" && item.metadata && (
+                        <div className="space-y-4" data-testid={`excuse-review-${item.id}`}>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Employee</span>
+                              <p className="text-sm font-medium text-foreground mt-0.5 truncate" data-testid={`text-excuse-employee-${item.id}`}>
+                                {item.metadata.employeeName ?? "Unknown"}
+                              </p>
+                            </div>
+                            <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Employee #</span>
+                              <p className="text-sm font-medium text-foreground mt-0.5" data-testid={`text-excuse-empnum-${item.id}`}>
+                                {item.metadata.employeeNumber ?? "—"}
+                              </p>
+                            </div>
+                            <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Date</span>
+                              <p className="text-sm font-medium text-foreground mt-0.5" data-testid={`text-excuse-date-${item.id}`}>
+                                {item.metadata.date ?? "—"}
+                              </p>
+                            </div>
+                            <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Type</span>
+                              <p className="text-sm font-medium mt-0.5" data-testid={`text-excuse-type-${item.id}`}>
+                                {item.metadata.hadClockIn ? (
+                                  <span className="text-amber-400">Partial (mid-shift)</span>
+                                ) : (
+                                  <span className="text-blue-400">Full day</span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          {item.metadata.hadClockIn && item.metadata.effectiveClockOut && (
+                            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+                              <span className="text-[10px] font-medium text-amber-400 uppercase tracking-wider">Effective Clock Out</span>
+                              <p className="text-sm font-medium text-amber-300 mt-0.5">{item.metadata.effectiveClockOut}</p>
+                            </div>
+                          )}
+                          {item.body && (
+                            <div>
+                              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Reason</span>
+                              <p className="mt-1 text-sm text-foreground whitespace-pre-wrap bg-muted/20 rounded-sm px-3 py-2">{item.body}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {item.body && item.type !== "photo_change_request" && item.type !== "excuse_request" && (
                         <div>
                           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Details</span>
                           <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">{highlightSecurityFlags(item.body)}</p>
@@ -780,7 +860,7 @@ export default function InboxPage() {
 
                       {isPending && (
                         <div className="space-y-3 pt-2 border-t border-border/50">
-                          {item.type !== "attendance_verification" && item.type !== "photo_change_request" && (
+                          {item.type !== "attendance_verification" && item.type !== "photo_change_request" && item.type !== "excuse_request" && (
                             <div>
                               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Notes (optional)</label>
                               <Textarea
@@ -835,6 +915,28 @@ export default function InboxPage() {
                                   data-testid={`button-reject-photo-${item.id}`}
                                 >
                                   <XCircle className="h-4 w-4" /> Reject Photo
+                                </Button>
+                              </>
+                            ) : item.type === "excuse_request" && item.entityId ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                                  onClick={() => openConfirmDialog("approve", item.metadata?.excuseRequestId ?? item.entityId!, item.id)}
+                                  disabled={approveExcuseMut.isPending}
+                                  data-testid={`button-approve-excuse-${item.id}`}
+                                >
+                                  <CheckCircle2 className="h-4 w-4" /> Approve Excuse
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1.5 border-red-600/50 text-red-400 hover:bg-red-600/10"
+                                  onClick={() => openConfirmDialog("reject", item.metadata?.excuseRequestId ?? item.entityId!, item.id)}
+                                  disabled={rejectExcuseMut.isPending}
+                                  data-testid={`button-reject-excuse-${item.id}`}
+                                >
+                                  <XCircle className="h-4 w-4" /> Reject Excuse
                                 </Button>
                               </>
                             ) : (
@@ -944,22 +1046,29 @@ export default function InboxPage() {
               {(() => {
                 const confirmItem = rawData?.data?.find((i: InboxItem) => i.id === confirmDialog.inboxItemId);
                 const isPhoto = confirmItem?.type === "photo_change_request";
+                const isExcuse = confirmItem?.type === "excuse_request";
+                const titleMap: Record<string, string> = {
+                  approve_photo: "Approve Photo Change",
+                  reject_photo: "Reject Photo Change",
+                  approve_excuse: "Approve Excuse Request",
+                  reject_excuse: "Reject Excuse Request",
+                  approve_default: "Approve Attendance",
+                  reject_default: "Reject Attendance",
+                };
+                const descMap: Record<string, string> = {
+                  approve_photo: "This will replace the employee's current profile photo with the new one.",
+                  reject_photo: "This will reject the photo change. The employee's current photo will remain unchanged.",
+                  approve_excuse: "This will approve the excuse request. The employee will be treated as fully paid for this date at payroll time.",
+                  reject_excuse: "This will reject the excuse request. Attendance records will be used as-is for payroll calculation.",
+                  approve_default: "This will verify the attendance record and create a clock-in entry.",
+                  reject_default: "This will reject the attendance submission. The employee will need to resubmit.",
+                };
+                const kind = isPhoto ? "photo" : isExcuse ? "excuse" : "default";
+                const titleKey = `${confirmDialog.action}_${kind}`;
                 return (
                   <div>
-                    <h3 className="text-base font-semibold text-foreground">
-                      {confirmDialog.action === "approve"
-                        ? (isPhoto ? "Approve Photo Change" : "Approve Attendance")
-                        : (isPhoto ? "Reject Photo Change" : "Reject Attendance")}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {confirmDialog.action === "approve"
-                        ? (isPhoto
-                          ? "This will replace the employee's current profile photo with the new one."
-                          : "This will verify the attendance record and create a clock-in entry.")
-                        : (isPhoto
-                          ? "This will reject the photo change. The employee's current photo will remain unchanged."
-                          : "This will reject the attendance submission. The employee will need to resubmit.")}
-                    </p>
+                    <h3 className="text-base font-semibold text-foreground">{titleMap[titleKey]}</h3>
+                    <p className="text-sm text-muted-foreground mt-1">{descMap[titleKey]}</p>
                   </div>
                 );
               })()}
@@ -976,13 +1085,18 @@ export default function InboxPage() {
                 placeholder={(() => {
                   const confirmItem = rawData?.data?.find((i: InboxItem) => i.id === confirmDialog.inboxItemId);
                   const isPhoto = confirmItem?.type === "photo_change_request";
+                  const isExcuse = confirmItem?.type === "excuse_request";
                   if (confirmDialog.action === "approve") {
                     return isPhoto
                       ? "e.g., New photo meets standards, identity verified..."
+                      : isExcuse
+                      ? "e.g., Valid medical certificate provided, approved..."
                       : "e.g., Verified identity manually, photo matches...";
                   }
                   return isPhoto
                     ? "e.g., Photo is blurry, face not clearly visible..."
+                    : isExcuse
+                    ? "e.g., No supporting documentation, insufficient reason..."
                     : "e.g., Photo does not match reference, suspected proxy attendance...";
                 })()}
                 className="mt-1.5 bg-muted/30 border-border text-sm min-h-[80px]"
