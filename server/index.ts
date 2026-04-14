@@ -181,6 +181,21 @@ app.use((req, res, next) => {
     }
   }
 
+  try {
+    const { eq } = await import("drizzle-orm");
+    const { db } = await import("./db");
+    const { candidates } = await import("@shared/schema");
+    const migrated = await db.update(candidates)
+      .set({ status: "available", updatedAt: new Date() })
+      .where(eq(candidates.status, "active" as any))
+      .returning({ id: candidates.id });
+    if (migrated.length > 0) {
+      log(`Migrated ${migrated.length} candidates from 'active' to 'available'`, "migration");
+    }
+  } catch (err) {
+    log(`Status migration check error: ${err}`, "migration");
+  }
+
   // Run all once at startup, then every 24 hours
   runAutoActivateUpcomingEvents();
   runAutoCloseExpiredEvents();

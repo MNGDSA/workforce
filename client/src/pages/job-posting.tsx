@@ -420,6 +420,7 @@ const appStatusStyle: Record<string, string> = {
   hired:       "bg-emerald-500/10 text-emerald-400",
   rejected:    "bg-destructive/10 text-destructive",
   withdrawn:   "bg-muted text-muted-foreground",
+  closed:      "bg-zinc-500/10 text-zinc-400",
 };
 
 function initials(name: string) {
@@ -700,7 +701,7 @@ function ApplicantsSheet({
             </div>
             <div className="flex items-center gap-1 flex-wrap">
               <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              {["all", "new", "shortlisted", "interviewed", "offered", "hired", "rejected"].map(s => (
+              {["all", "new", "shortlisted", "interviewed", "offered", "hired", "rejected", "closed"].map(s => (
                 <button
                   key={s}
                   onClick={() => setAppStatusFilter(s)}
