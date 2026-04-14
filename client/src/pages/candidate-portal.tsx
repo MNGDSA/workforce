@@ -777,12 +777,49 @@ function MyShiftSection({ workforceId }: { workforceId: string }) {
   };
 
   const today = new Date().getDay();
-  const attMap: Record<string, typeof data.attendance[0]> = {};
-  for (const a of data.attendance) attMap[a.date] = a;
+  const todayStr = new Date().toISOString().split("T")[0];
+  const todayShiftId = dayShiftIds[DAY_KEYS[today]];
+  const todayShift = todayShiftId ? shiftMap[todayShiftId] : null;
+  const todayAtt = data.attendance.find(a => a.date === todayStr);
+  const todayStatus = todayAtt ? (STATUS_STYLES[todayAtt.status] ?? { label: todayAtt.status, color: "text-zinc-400" }) : null;
 
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-display font-bold text-white">My Shift</h3>
+
+      <Card className="bg-card border-border" data-testid="card-today-shift">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm text-zinc-400">Today</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {todayShift ? (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-white font-medium">{todayShift.name}</p>
+                <p className="text-zinc-400 text-sm">{todayShift.startTime} – {todayShift.endTime}</p>
+              </div>
+              <div className="text-right">
+                {todayAtt ? (
+                  <div className="space-y-1">
+                    <span className={`text-sm font-semibold ${todayStatus?.color}`} data-testid="text-today-status">{todayStatus?.label}</span>
+                    <div className="text-xs text-zinc-400">
+                      {todayAtt.clockIn ? `In: ${todayAtt.clockIn}` : "Not clocked in"}
+                      {todayAtt.clockOut ? ` · Out: ${todayAtt.clockOut}` : todayAtt.clockIn ? " · Not clocked out" : ""}
+                    </div>
+                    {todayAtt.minutesWorked != null && (
+                      <div className="text-xs text-zinc-500">{todayAtt.minutesWorked}/{todayAtt.minutesScheduled ?? "—"} min</div>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-zinc-500 text-xs" data-testid="text-today-pending">Awaiting attendance</span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-zinc-500 text-sm">Day off today</p>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="bg-card border-border">
         <CardHeader className="pb-2">
@@ -794,6 +831,10 @@ function MyShiftSection({ workforceId }: { workforceId: string }) {
               const shiftId = dayShiftIds[day];
               const shift = shiftId ? shiftMap[shiftId] : null;
               const isToday = idx === today;
+              const dayDate = new Date();
+              dayDate.setDate(dayDate.getDate() + (idx - today));
+              const dayStr = dayDate.toISOString().split("T")[0];
+              const dayAtt = data.attendance.find(a => a.date === dayStr);
               return (
                 <div key={day} className={`rounded p-2 text-center ${isToday ? "bg-primary/15 border border-primary/30" : "bg-muted/20"}`} data-testid={`day-shift-${day}`}>
                   <div className={`text-[10px] font-bold uppercase ${isToday ? "text-primary" : "text-zinc-500"}`}>{DAY_NAMES[idx].slice(0, 3)}</div>
@@ -801,6 +842,11 @@ function MyShiftSection({ workforceId }: { workforceId: string }) {
                     <>
                       <div className="text-xs text-white font-medium mt-1">{shift.name}</div>
                       <div className="text-[10px] text-zinc-400 mt-0.5">{shift.startTime} – {shift.endTime}</div>
+                      {dayAtt && (
+                        <div className={`text-[9px] mt-0.5 font-semibold ${(STATUS_STYLES[dayAtt.status] ?? { color: "text-zinc-400" }).color}`}>
+                          {dayAtt.minutesWorked != null ? `${dayAtt.minutesWorked}m` : (STATUS_STYLES[dayAtt.status]?.label ?? dayAtt.status)}
+                        </div>
+                      )}
                     </>
                   ) : (
                     <div className="text-[10px] text-zinc-600 mt-1">Off</div>
@@ -833,7 +879,7 @@ function MyShiftSection({ workforceId }: { workforceId: string }) {
                     </div>
                     <div className="flex items-center gap-3">
                       {rec.clockIn && <span className="text-zinc-400 text-xs">{rec.clockIn}–{rec.clockOut ?? "?"}</span>}
-                      {rec.minutesWorked != null && <span className="text-zinc-400 text-xs">{rec.minutesWorked}m</span>}
+                      {rec.minutesWorked != null && <span className="text-zinc-400 text-xs">{rec.minutesWorked}/{rec.minutesScheduled ?? "—"}m</span>}
                       <span className={`text-xs font-semibold ${st.color}`}>{st.label}</span>
                     </div>
                   </div>
