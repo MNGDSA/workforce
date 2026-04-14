@@ -88,6 +88,7 @@ interface PosNodeData extends Record<string, unknown> {
   employees: OrgEmployee[];
   hasChildren: boolean;
   childrenExpanded: boolean;
+  showEmployees: boolean;
 }
 
 interface UnassignedNodeData extends Record<string, unknown> {
@@ -149,7 +150,6 @@ function DepartmentNodeComponent({ data }: NodeProps<DeptNode>) {
 }
 
 function PositionNodeComponent({ data }: NodeProps<PosNode>) {
-  const [showEmployees, setShowEmployees] = useState(false);
   const [search, setSearch] = useState("");
   const employees = data.employees;
   const filtered = search
@@ -162,7 +162,7 @@ function PositionNodeComponent({ data }: NodeProps<PosNode>) {
     : employees;
 
   return (
-    <div data-testid={`node-pos-${data.posId}`} className="select-none">
+    <div data-testid={`node-pos-${data.posId}`} className="select-none cursor-pointer">
       <Handle type="target" position={Position.Top} className="!bg-transparent !border-0 !w-0 !h-0" />
       <Handle type="source" position={Position.Bottom} className="!bg-transparent !border-0 !w-0 !h-0" />
       <div className={cn(
@@ -171,10 +171,7 @@ function PositionNodeComponent({ data }: NodeProps<PosNode>) {
           ? "border-dashed border-[hsl(220,15%,22%)] bg-[hsl(220,15%,11%)]/80"
           : "border-[hsl(220,15%,22%)] bg-[hsl(220,15%,12%)] hover:border-[hsl(155,45%,35%)]/60",
       )}>
-        <div
-          className="px-3.5 py-2.5 flex items-center justify-between cursor-pointer"
-          onClick={(e) => { e.stopPropagation(); if (data.employeeCount > 0) setShowEmployees(!showEmployees); }}
-        >
+        <div className="px-3.5 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className={cn(
               "flex-shrink-0 w-7 h-7 rounded-sm flex items-center justify-center",
@@ -209,7 +206,7 @@ function PositionNodeComponent({ data }: NodeProps<PosNode>) {
           </div>
         </div>
 
-        {showEmployees && data.employeeCount > 0 && (
+        {data.showEmployees && data.employeeCount > 0 && (
           <div className="border-t border-[hsl(220,15%,18%)]">
             {employees.length > 8 && (
               <div className="px-3 pt-2">
@@ -331,6 +328,7 @@ function buildLayout(
   data: OrgChartData,
   expandedDepts: Set<string>,
   expandedPositions: Set<string>,
+  showEmployeesFor: Set<string>,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -384,6 +382,7 @@ function buildLayout(
           employees: pos.employees,
           hasChildren: children.length > 0,
           childrenExpanded: isPosExpanded,
+          showEmployees: showEmployeesFor.has(pos.id),
         };
 
         nodes.push({
@@ -446,6 +445,7 @@ function OrgChartCanvas() {
 
   const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set());
   const [expandedPositions, setExpandedPositions] = useState<Set<string>>(new Set());
+  const [showEmployeesFor, setShowEmployeesFor] = useState<Set<string>>(new Set());
 
   const toggleDept = useCallback((deptId: string) => {
     setExpandedDepts(prev => {
@@ -465,22 +465,34 @@ function OrgChartCanvas() {
     });
   }, []);
 
+  const toggleEmployeePanel = useCallback((posId: string) => {
+    setShowEmployeesFor(prev => {
+      const next = new Set(prev);
+      if (next.has(posId)) next.delete(posId);
+      else next.add(posId);
+      return next;
+    });
+  }, []);
+
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
-    if (node.type === "department") {
-      const deptData = node.data as DeptNodeData;
-      toggleDept(deptData.deptId);
-    } else if (node.type === "position") {
-      const posData = node.data as PosNodeData;
+    if (node.type === "department" && node.id.startsWith("dept-")) {
+      toggleDept(node.id.slice(5));
+    } else if (node.type === "position" && node.id.startsWith("pos-")) {
+      const posId = node.id.slice(4);
+      const posData = node.data as Record<string, unknown>;
       if (posData.hasChildren) {
-        togglePosition(posData.posId);
+        togglePosition(posId);
+      }
+      if (typeof posData.employeeCount === "number" && posData.employeeCount > 0) {
+        toggleEmployeePanel(posId);
       }
     }
-  }, [toggleDept, togglePosition]);
+  }, [toggleDept, togglePosition, toggleEmployeePanel]);
 
   const { nodes: layoutNodes, edges: layoutEdges } = useMemo(() => {
     if (!data) return { nodes: [], edges: [] };
-    return buildLayout(data, expandedDepts, expandedPositions);
-  }, [data, expandedDepts, expandedPositions]);
+    return buildLayout(data, expandedDepts, expandedPositions, showEmployeesFor);
+  }, [data, expandedDepts, expandedPositions, showEmployeesFor]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutEdges);
