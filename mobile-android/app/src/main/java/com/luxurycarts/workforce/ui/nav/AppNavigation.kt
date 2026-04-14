@@ -20,6 +20,7 @@ import com.luxurycarts.workforce.data.WorkforceRecord
 import com.luxurycarts.workforce.services.SyncWorker
 import com.luxurycarts.workforce.ui.components.BiometricDisclosureDialog
 import com.luxurycarts.workforce.ui.screens.CaptureScreen
+import com.luxurycarts.workforce.ui.screens.ExcuseRequestScreen
 import com.luxurycarts.workforce.ui.screens.HistoryScreen
 import com.luxurycarts.workforce.ui.screens.HomeScreen
 import com.luxurycarts.workforce.ui.screens.ForgotPasswordScreen
@@ -184,6 +185,7 @@ fun AppNavigation() {
                     onHistory = { navController.navigate("history") },
                     onMap = { navController.navigate("map") },
                     onPrivacy = { navController.navigate("privacy") },
+                    onExcuse = { navController.navigate("excuse") },
                     onLogout = {
                         scope.launch {
                             app.sessionManager.workforceId?.let { wfId ->
@@ -227,6 +229,14 @@ fun AppNavigation() {
             composable("privacy") {
                 val wfId = workforceRecord?.id ?: app.sessionManager.workforceId ?: ""
                 PrivacyScreen(
+                    workforceId = wfId,
+                    apiService = apiService,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable("excuse") {
+                val wfId = workforceRecord?.id ?: app.sessionManager.workforceId ?: ""
+                ExcuseRequestScreen(
                     workforceId = wfId,
                     apiService = apiService,
                     onBack = { navController.popBackStack() },

@@ -177,3 +177,24 @@ data class MobileConfigResponse(
     @SerializedName("organization_timezone") val organizationTimezone: String,
     @SerializedName("config_version") val configVersion: Int,
 )
+
+data class ExcuseRequestSubmit(
+    @SerializedName("workforceId") val workforceId: String,
+    val date: String,
+    val reason: String,
+)
+
+data class ExcuseRequest(
+    val id: String,
+    @SerializedName("workforceId") val workforceId: String,
+    val date: String,
+    val reason: String,
+    @SerializedName("attachmentUrl") val attachmentUrl: String? = null,
+    @SerializedName("submittedAt") val submittedAt: String? = null,
+    @SerializedName("hadClockIn") val hadClockIn: Boolean = false,
+    @SerializedName("effectiveClockOut") val effectiveClockOut: String? = null,
+    val status: String = "pending",
+    @SerializedName("reviewedBy") val reviewedBy: String? = null,
+    @SerializedName("reviewedAt") val reviewedAt: String? = null,
+    @SerializedName("reviewNotes") val reviewNotes: String? = null,
+)

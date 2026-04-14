@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.EventBusy
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -98,6 +99,7 @@ fun HomeScreen(
     onHistory: () -> Unit,
     onMap: () -> Unit,
     onPrivacy: () -> Unit,
+    onExcuse: () -> Unit,
     onLogout: () -> Unit,
     onWorkforceRefresh: () -> Unit = {},
 ) {
@@ -535,6 +537,7 @@ fun HomeScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             ActionCard("History", Icons.Filled.History, Modifier.weight(1f), onHistory)
+            ActionCard("Excuse", Icons.Filled.EventBusy, Modifier.weight(1f), onExcuse)
             ActionCard("Map", Icons.Filled.Map, Modifier.weight(1f), onMap)
             ActionCard("Privacy", Icons.Filled.Shield, Modifier.weight(1f), onPrivacy)
         }

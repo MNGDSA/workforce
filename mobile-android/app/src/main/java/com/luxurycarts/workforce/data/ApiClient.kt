@@ -87,6 +87,12 @@ interface ApiService {
         @Query("candidateId") candidateId: String,
         @Query("status") status: String? = null,
     ): Response<List<PhotoChangeRequest>>
+
+    @POST("api/excuse-requests")
+    suspend fun submitExcuseRequest(@Body request: ExcuseRequestSubmit): Response<ExcuseRequest>
+
+    @GET("api/excuse-requests")
+    suspend fun getExcuseRequests(@Query("workforceId") workforceId: String): Response<List<ExcuseRequest>>
 }
 
 class PersistentCookieJar(private val onCookieSaved: ((String) -> Unit)? = null) : CookieJar {
