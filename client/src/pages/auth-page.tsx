@@ -876,9 +876,6 @@ export default function AuthPage() {
           alt="Masjid Al-Haram, Mecca"
           className="absolute inset-0 w-full h-full object-cover object-center"
         />
-        <div className="absolute inset-0 pointer-events-none" style={{
-          background: "linear-gradient(to right, hsl(155,60%,3%) 0%, transparent 30%), linear-gradient(to top, hsl(155,60%,3%,0.4) 0%, transparent 40%)",
-        }} />
       </div>
     </div>
   );
