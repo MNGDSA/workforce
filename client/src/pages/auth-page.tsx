@@ -48,6 +48,10 @@ export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [supportEmail, setSupportEmail] = useState<string | null>(null);
 
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialTab = urlParams.get("tab") === "signup" ? "register" : null;
+  const returnTo = urlParams.get("returnTo");
+
   useEffect(() => {
     fetch("/api/settings/public", { credentials: "include" })
       .then(r => r.json())
@@ -104,7 +108,7 @@ export default function AuthPage() {
         if (data.candidate) {
           localStorage.setItem("workforce_candidate", JSON.stringify(data.candidate));
         }
-        setLocation("/candidate-portal");
+        setLocation(returnTo || "/candidate-portal");
       } else {
         setLocation("/dashboard");
       }
@@ -180,7 +184,7 @@ export default function AuthPage() {
       if (data.candidate) {
         localStorage.setItem("workforce_candidate", JSON.stringify(data.candidate));
       }
-      setLocation("/candidate-portal");
+      setLocation(returnTo || "/candidate-portal");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Registration failed";
       setRegisterError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
@@ -462,7 +466,7 @@ export default function AuthPage() {
             </div>
           ) : (
 
-          <Tabs defaultValue={showSignUpFromReset ? "register" : "login"} key={showSignUpFromReset ? "reg" : "login"} className="w-full">
+          <Tabs defaultValue={showSignUpFromReset || initialTab === "register" ? "register" : "login"} key={`${showSignUpFromReset}-${initialTab}`} className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-8 bg-muted/50 p-1 rounded-sm">
               <TabsTrigger value="login" className="rounded-sm data-[state=active]:bg-background data-[state=active]:text-foreground font-medium">
                 Login

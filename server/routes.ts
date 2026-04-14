@@ -226,8 +226,9 @@ export async function registerRoutes(
     const url = req.originalUrl || req.path;
     const openPaths = ["/api/auth/"];
     const publicGetPaths = ["/api/settings/system"];
+    const publicGetPatterns = [/^\/api\/jobs\/[0-9a-f-]{36}$/];
     const selfEnforcedPaths = ["/api/attendance-mobile/submit"];
-    if (openPaths.some(p => url.startsWith(p)) || (req.method === "GET" && publicGetPaths.some(p => url.startsWith(p))) || selfEnforcedPaths.some(p => url.startsWith(p))) {
+    if (openPaths.some(p => url.startsWith(p)) || (req.method === "GET" && (publicGetPaths.some(p => url.startsWith(p)) || publicGetPatterns.some(re => re.test(url.split("?")[0])))) || selfEnforcedPaths.some(p => url.startsWith(p))) {
       return next();
     }
     const userId = getAuthUserId(req);
@@ -1552,6 +1553,10 @@ export async function registerRoutes(
     try {
       const job = await storage.getJobPosting(req.params.id);
       if (!job) return res.status(404).json({ message: "Job not found" });
+      const userId = getAuthUserId(req);
+      if (!userId && job.status !== "active") {
+        return res.status(404).json({ message: "Job not found" });
+      }
       return res.json(job);
     } catch (err) {
       return handleError(res, err);
