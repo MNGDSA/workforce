@@ -1497,11 +1497,21 @@ export default function OnboardingPage() {
     setChecklistRecord(prev => prev ? { ...prev, ...update } : prev);
   }
 
+  const readyAll = records.filter(r => r.status === "ready");
+  const convertibleReady = readyAll.filter(r => {
+    const candidate = candidates.find(c => c.id === r.candidateId);
+    const isSmpCandidate = candidate?.source === "smp";
+    const isSmpPipeline = isSmpCandidate || !r.applicationId;
+    const contractSigned = r.hasSignedContract || !!r.contractSignedAt;
+    return isSmpPipeline || contractSigned;
+  });
   const stats = {
     total:     records.length,
     pending:   records.filter(r => r.status === "pending").length,
     inProgress:records.filter(r => r.status === "in_progress").length,
-    ready:     records.filter(r => r.status === "ready").length,
+    ready:     readyAll.length,
+    convertible: convertibleReady.length,
+    readyNoContract: readyAll.length - convertibleReady.length,
     converted: records.filter(r => r.status === "converted").length,
   };
 
@@ -1541,7 +1551,7 @@ export default function OnboardingPage() {
                 Bulk Generate Contracts
               </Button>
             )}
-            {stats.ready > 0 && (
+            {stats.convertible > 0 && (
               <Button
                 data-testid="button-bulk-convert"
                 onClick={() => setBulkConvertOpen(true)}
@@ -1549,7 +1559,7 @@ export default function OnboardingPage() {
                 className="border-emerald-700 text-emerald-400 hover:bg-emerald-900/30 gap-2"
               >
                 <UserCheck className="h-4 w-4" />
-                Convert All Ready ({stats.ready})
+                Convert All Ready ({stats.convertible})
               </Button>
             )}
             <Button
@@ -2242,19 +2252,28 @@ export default function OnboardingPage() {
           <DialogHeader>
             <DialogTitle>Bulk Convert to Employees</DialogTitle>
             <DialogDescription>
-              Convert all {stats.ready} ready candidates into employees at once. Fill in the shared employment details below.
+              Convert {stats.convertible} eligible candidate{stats.convertible !== 1 ? "s" : ""} into employee{stats.convertible !== 1 ? "s" : ""} at once. Fill in the shared employment details below.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="bg-emerald-900/20 border border-emerald-800 rounded-lg p-3 flex items-center gap-3">
               <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
               <div>
-                <p className="text-sm font-medium text-emerald-300">{stats.ready} candidates ready</p>
-                <p className="text-xs text-emerald-400/70">All prerequisites verified</p>
+                <p className="text-sm font-medium text-emerald-300">{stats.convertible} candidate{stats.convertible !== 1 ? "s" : ""} ready to convert</p>
+                <p className="text-xs text-emerald-400/70">All prerequisites verified &amp; contracts signed</p>
               </div>
             </div>
+            {stats.readyNoContract > 0 && (
+              <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-3 flex items-center gap-3">
+                <FileSignature className="h-5 w-5 text-yellow-400 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-yellow-300">{stats.readyNoContract} candidate{stats.readyNoContract !== 1 ? "s" : ""} skipped</p>
+                  <p className="text-xs text-yellow-400/70">Contract not yet signed — generate &amp; sign contracts first</p>
+                </div>
+              </div>
+            )}
             {(() => {
-              const readyRecords = records.filter(r => r.status === "ready");
+              const readyRecords = convertibleReady;
               const hasSmpReady = readyRecords.some(r => !r.applicationId);
               return (
                 <div className="space-y-3">
@@ -2331,7 +2350,7 @@ export default function OnboardingPage() {
                     >
                       {bulkConvertMutation.isPending
                         ? <><Loader2 className="h-4 w-4 animate-spin" /> Converting...</>
-                        : <><UserCheck className="h-4 w-4" /> Convert {stats.ready} Employees</>
+                        : <><UserCheck className="h-4 w-4" /> Convert {stats.convertible} Employee{stats.convertible !== 1 ? "s" : ""}</>
                       }
                     </Button>
                   </div>
