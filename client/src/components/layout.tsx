@@ -746,7 +746,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
     return btn;
   };
 
-  const NavContent = ({ mobile = false }: { mobile?: boolean }) => (
+  const renderNavContent = (mobile = false) => (
     <div className="flex flex-col h-full bg-sidebar border-r border-border text-sidebar-foreground">
       {/* Logo */}
       <div className={cn(
@@ -906,7 +906,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
           "hidden lg:block fixed inset-y-0 left-0 z-50 transition-all duration-300 ease-in-out",
           collapsed ? "w-16" : "w-64"
         )}>
-          <NavContent />
+          {renderNavContent()}
         </aside>
 
         {/* Main Content */}
@@ -924,7 +924,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="p-0 w-64 border-r border-border bg-sidebar">
-                  <NavContent mobile />
+                  {renderNavContent(true)}
                 </SheetContent>
               </Sheet>
 
