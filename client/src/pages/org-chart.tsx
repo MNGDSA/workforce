@@ -27,6 +27,7 @@ import {
   ChevronRight,
   User,
   CreditCard,
+  Phone,
   Search,
   Network,
   Loader2,
@@ -208,7 +209,7 @@ function PositionNodeComponent({ data }: NodeProps<PosNode>) {
 
         {data.showEmployees && data.employeeCount > 0 && (
           <div className="border-t border-[hsl(220,15%,18%)]">
-            {employees.length > 8 && (
+            {employees.length > 20 && (
               <div className="px-3 pt-2">
                 <div className="relative">
                   <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[hsl(215,15%,45%)]" />
@@ -243,6 +244,11 @@ function PositionNodeComponent({ data }: NodeProps<PosNode>) {
                       {emp.nationalId && (
                         <span className="text-[10px] text-[hsl(215,15%,40%)] flex items-center gap-0.5">
                           <CreditCard className="w-2.5 h-2.5" />{emp.nationalId}
+                        </span>
+                      )}
+                      {emp.phone && (
+                        <span className="text-[10px] text-[hsl(215,15%,40%)] flex items-center gap-0.5">
+                          <Phone className="w-2.5 h-2.5" />{emp.phone}
                         </span>
                       )}
                     </div>
@@ -290,7 +296,7 @@ function UnassignedNodeComponent({ data }: NodeProps<UnassignedNode>) {
         </div>
         {open && (
           <div className="border-t border-[hsl(40,30%,15%)]">
-            {employees.length > 8 && (
+            {employees.length > 20 && (
               <div className="px-3 pt-2">
                 <div className="relative">
                   <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[hsl(215,15%,45%)]" />
@@ -306,7 +312,14 @@ function UnassignedNodeComponent({ data }: NodeProps<UnassignedNode>) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium text-white truncate">{emp.fullNameEn}</p>
-                    <span className="text-[10px] text-[hsl(215,15%,50%)] font-mono">#{emp.employeeNumber}</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] text-[hsl(215,15%,50%)] font-mono">#{emp.employeeNumber}</span>
+                      {emp.phone && (
+                        <span className="text-[10px] text-[hsl(215,15%,40%)] flex items-center gap-0.5">
+                          <Phone className="w-2.5 h-2.5" />{emp.phone}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
