@@ -276,6 +276,8 @@ export default function AssetsPage() {
       return (
         (emp?.fullNameEn ?? "").toLowerCase().includes(q) ||
         (emp?.employeeNumber ?? "").toLowerCase().includes(q) ||
+        (emp?.nationalId ?? "").toLowerCase().includes(q) ||
+        (emp?.phone ?? "").toLowerCase().includes(q) ||
         (asset?.name ?? "").toLowerCase().includes(q)
       );
     }), [assignments, statusFilter, assignSearch, workforceMap, assetMap]);
@@ -286,7 +288,9 @@ export default function AssetsPage() {
       const q = empSearch.toLowerCase();
       return (
         (w.fullNameEn ?? "").toLowerCase().includes(q) ||
-        w.employeeNumber.toLowerCase().includes(q)
+        w.employeeNumber.toLowerCase().includes(q) ||
+        (w.nationalId ?? "").toLowerCase().includes(q) ||
+        (w.phone ?? "").toLowerCase().includes(q)
       );
     }).slice(0, 40), [workforce, empSearch]);
 
@@ -575,7 +579,7 @@ export default function AssetsPage() {
             <div className="relative min-w-[220px] flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
-                placeholder="Search employee or asset…"
+                placeholder="Search name, ID #, national ID, phone, or asset…"
                 value={assignSearch}
                 onChange={e => setAssignSearch(e.target.value)}
                 className="pl-9 rounded-sm"
@@ -906,7 +910,7 @@ export default function AssetsPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
-                  placeholder="Search by name or employee #…"
+                  placeholder="Search name, ID #, national ID, phone…"
                   value={empSearch}
                   onChange={e => { setEmpSearch(e.target.value); if (assignForm.workforceId) setAssignForm(f => ({ ...f, workforceId: "" })); }}
                   className="pl-9 rounded-sm"
