@@ -1727,6 +1727,7 @@ export default function CandidatePortal() {
   const activeOnboarding = sortedOnboarding.find(o => o.status !== "converted" && o.status !== "rejected");
   const currentOnboarding = activeOnboarding
     || (isEmployee ? sortedOnboarding.find(o => o.status === "converted") : undefined);
+  const canSignContract = isEmployee || !!activeOnboarding;
 
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobPosting[]>({
     queryKey: ["/api/jobs", "active"],
@@ -1996,7 +1997,7 @@ export default function CandidatePortal() {
             <ContractSection
               candidateId={candidateId!}
               candidateName={displayName}
-              readOnly={!isEmployee}
+              readOnly={!canSignContract}
               onboardingId={currentOnboarding?.id}
             />
           </div>
@@ -2509,7 +2510,7 @@ export default function CandidatePortal() {
             {(portalMode === "candidate" || portalMode === "employee_individual") && (
               <Card className="bg-card border-border">
                 <CardContent className="p-5">
-                  <ContractSection candidateId={candidateId!} candidateName={displayName} readOnly={!isEmployee} onboardingId={currentOnboarding?.id} />
+                  <ContractSection candidateId={candidateId!} candidateName={displayName} readOnly={!canSignContract} onboardingId={currentOnboarding?.id} />
                 </CardContent>
               </Card>
             )}
