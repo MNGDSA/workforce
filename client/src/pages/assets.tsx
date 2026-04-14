@@ -60,7 +60,10 @@ import {
   Square,
   X,
   Loader2,
+  Users,
+  MinusSquare,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import DashboardLayout from "@/components/layout";
@@ -91,6 +94,13 @@ interface WorkforceRow {
   fullNameEn?: string | null;
   employmentType: string;
   candidateId: string;
+  nationalId?: string | null;
+  phone?: string | null;
+  eventId?: string | null;
+  eventName?: string | null;
+  positionId?: string | null;
+  positionTitle?: string | null;
+  departmentName?: string | null;
 }
 
 const CATEGORIES = ["Equipment", "Uniform", "Badge", "Device", "Vehicle", "Tools", "Other"];
@@ -134,6 +144,18 @@ export default function AssetsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDialog, setBulkDialog] = useState<{ status: "returned" | "not_returned"; count: number; totalValue: number } | null>(null);
 
+  // ─── Bulk assign state ────────────────────────────────────────────────────
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
+  const [bulkAssetId, setBulkAssetId] = useState("");
+  const [bulkAssignDate, setBulkAssignDate] = useState(localDate());
+  const [bulkAssignNotes, setBulkAssignNotes] = useState("");
+  const [bulkEmpSearch, setBulkEmpSearch] = useState("");
+  const [bulkEventFilter, setBulkEventFilter] = useState("all");
+  const [bulkDeptFilter, setBulkDeptFilter] = useState("all");
+  const [bulkTypeFilter, setBulkTypeFilter] = useState("all");
+  const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+
   // ─── Queries ───────────────────────────────────────────────────────────────
   const { data: assetList = [], isLoading: loadingAssets } = useQuery<Asset[]>({
     queryKey: ["/api/assets"],
@@ -148,6 +170,22 @@ export default function AssetsPage() {
   const { data: workforce = [] } = useQuery<WorkforceRow[]>({
     queryKey: ["/api/workforce"],
     queryFn: () => apiRequest("GET", "/api/workforce").then(r => r.json()),
+  });
+
+  const { data: activeWorkforce = [] } = useQuery<WorkforceRow[]>({
+    queryKey: ["/api/workforce", "active"],
+    queryFn: () => apiRequest("GET", "/api/workforce?active=true").then(r => r.json()),
+    enabled: bulkAssignOpen,
+  });
+  const { data: events = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/events"],
+    queryFn: () => apiRequest("GET", "/api/events").then(r => r.json()),
+    enabled: bulkAssignOpen,
+  });
+  const { data: departments = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/departments"],
+    queryFn: () => apiRequest("GET", "/api/departments").then(r => r.json()),
+    enabled: bulkAssignOpen,
   });
 
   // ─── Mutations ─────────────────────────────────────────────────────────────
@@ -195,6 +233,28 @@ export default function AssetsPage() {
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const bulkAssignMut = useMutation({
+    mutationFn: (data: { assetId: string; workforceIds: string[]; assignedAt: string; notes?: string }) =>
+      apiRequest("POST", "/api/employee-assets/bulk-assign", data).then(r => r.json()),
+    onSuccess: (data: { created: number; skipped: number }) => {
+      qc.invalidateQueries({ queryKey: ["/api/employee-assets"] });
+      const assetName = assetList.find(a => a.id === bulkAssetId)?.name ?? "Asset";
+      setBulkConfirmOpen(false);
+      setBulkAssignOpen(false);
+      setBulkSelectedIds(new Set());
+      setBulkAssetId("");
+      setBulkAssignNotes("");
+      setBulkEmpSearch("");
+      setBulkEventFilter("all");
+      setBulkDeptFilter("all");
+      setBulkTypeFilter("all");
+      toast({
+        title: `Assigned "${assetName}" to ${data.created} employee${data.created !== 1 ? "s" : ""}${data.skipped > 0 ? ` (${data.skipped} skipped — already assigned)` : ""}`,
+      });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   // ─── Derived data ──────────────────────────────────────────────────────────
   const filteredAssets = useMemo(() =>
     assetList.filter(a =>
@@ -229,6 +289,30 @@ export default function AssetsPage() {
         w.employeeNumber.toLowerCase().includes(q)
       );
     }).slice(0, 40), [workforce, empSearch]);
+
+  const bulkFilteredEmployees = useMemo(() =>
+    activeWorkforce.filter(w => {
+      if (bulkEventFilter !== "all" && w.eventId !== bulkEventFilter) return false;
+      if (bulkDeptFilter !== "all" && (w.departmentName ?? "") !== bulkDeptFilter) return false;
+      if (bulkTypeFilter !== "all" && w.employmentType !== bulkTypeFilter) return false;
+      if (bulkEmpSearch) {
+        const q = bulkEmpSearch.toLowerCase();
+        if (
+          !(w.fullNameEn ?? "").toLowerCase().includes(q) &&
+          !w.employeeNumber.toLowerCase().includes(q) &&
+          !(w.nationalId ?? "").toLowerCase().includes(q) &&
+          !(w.phone ?? "").toLowerCase().includes(q)
+        ) return false;
+      }
+      return true;
+    }), [activeWorkforce, bulkEventFilter, bulkDeptFilter, bulkTypeFilter, bulkEmpSearch]);
+
+  const bulkAllSelected = bulkFilteredEmployees.length > 0 && bulkFilteredEmployees.every(w => bulkSelectedIds.has(w.id));
+  const bulkSomeSelected = bulkFilteredEmployees.some(w => bulkSelectedIds.has(w.id));
+  const deptOptions = useMemo(() => {
+    const names = new Set(activeWorkforce.map(w => w.departmentName).filter(Boolean) as string[]);
+    return Array.from(names).sort();
+  }, [activeWorkforce]);
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
   function openNewAsset() {
@@ -512,14 +596,25 @@ export default function AssetsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button
-              onClick={() => { setAssignForm({ workforceId: "", assetId: "", assignedAt: localDate(), notes: "" }); setEmpSearch(""); setAssignDialog(true); }}
-              className="gap-2 rounded-sm font-semibold ml-auto"
-              data-testid="button-assign-asset"
-            >
-              <Plus className="h-4 w-4" />
-              Assign Asset
-            </Button>
+            <div className="flex gap-2 ml-auto">
+              <Button
+                variant="outline"
+                onClick={() => { setBulkAssetId(""); setBulkAssignDate(localDate()); setBulkAssignNotes(""); setBulkEmpSearch(""); setBulkEventFilter("all"); setBulkDeptFilter("all"); setBulkTypeFilter("all"); setBulkSelectedIds(new Set()); setBulkAssignOpen(true); }}
+                className="gap-2 rounded-sm font-semibold"
+                data-testid="button-bulk-assign"
+              >
+                <Users className="h-4 w-4" />
+                Bulk Assign
+              </Button>
+              <Button
+                onClick={() => { setAssignForm({ workforceId: "", assetId: "", assignedAt: localDate(), notes: "" }); setEmpSearch(""); setAssignDialog(true); }}
+                className="gap-2 rounded-sm font-semibold"
+                data-testid="button-assign-asset"
+              >
+                <Plus className="h-4 w-4" />
+                Assign Asset
+              </Button>
+            </div>
           </div>
 
           <Card className="bg-card border-border shadow-sm overflow-hidden rounded-sm">
@@ -911,6 +1006,241 @@ export default function AssetsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Bulk Assign Dialog ──────────────────────────────────────────────── */}
+      <Dialog open={bulkAssignOpen} onOpenChange={setBulkAssignOpen}>
+        <DialogContent className="bg-card border-border text-foreground max-w-3xl rounded-sm max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Bulk Assign Asset</DialogTitle>
+            <DialogDescription className="text-muted-foreground text-sm">
+              Select an asset, filter employees, then assign to all selected at once.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-1 flex-1 overflow-hidden flex flex-col">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label>Asset <span className="text-red-400">*</span></Label>
+                <Select value={bulkAssetId} onValueChange={setBulkAssetId}>
+                  <SelectTrigger className="rounded-sm" data-testid="select-bulk-asset">
+                    <SelectValue placeholder="Select an asset…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assetList.filter(a => a.isActive).map(a => (
+                      <SelectItem key={a.id} value={a.id}>
+                        <span className="font-medium">{a.name}</span>
+                        <span className="ml-2 text-muted-foreground text-xs">SAR {parseFloat(a.price).toLocaleString("en", { minimumFractionDigits: 2 })}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Assignment Date <span className="text-red-400">*</span></Label>
+                <Input
+                  type="date"
+                  value={bulkAssignDate}
+                  onChange={e => setBulkAssignDate(e.target.value)}
+                  className="rounded-sm"
+                  data-testid="input-bulk-assign-date"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Notes</Label>
+                <Input
+                  placeholder="Optional notes…"
+                  value={bulkAssignNotes}
+                  onChange={e => setBulkAssignNotes(e.target.value)}
+                  className="rounded-sm"
+                  data-testid="input-bulk-assign-notes"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="Search name, ID #, national ID, phone…"
+                  value={bulkEmpSearch}
+                  onChange={e => setBulkEmpSearch(e.target.value)}
+                  className="pl-9 rounded-sm h-9"
+                  data-testid="input-bulk-emp-search"
+                />
+              </div>
+              <Select value={bulkEventFilter} onValueChange={v => { setBulkEventFilter(v); setBulkSelectedIds(new Set()); }}>
+                <SelectTrigger className="h-9 w-40 rounded-sm" data-testid="select-bulk-event">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Events</SelectItem>
+                  {events.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={bulkDeptFilter} onValueChange={v => { setBulkDeptFilter(v); setBulkSelectedIds(new Set()); }}>
+                <SelectTrigger className="h-9 w-40 rounded-sm" data-testid="select-bulk-dept">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Departments</SelectItem>
+                  {deptOptions.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={bulkTypeFilter} onValueChange={v => { setBulkTypeFilter(v); setBulkSelectedIds(new Set()); }}>
+                <SelectTrigger className="h-9 w-36 rounded-sm" data-testid="select-bulk-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="individual">Individual</SelectItem>
+                  <SelectItem value="smp">SMP</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="border border-border rounded-sm overflow-hidden flex-1 overflow-y-auto min-h-0" style={{ maxHeight: "340px" }}>
+              <Table>
+                <TableHeader className="sticky top-0 bg-card z-10">
+                  <TableRow className="border-border/50 hover:bg-transparent">
+                    <TableHead className="w-10 pl-3">
+                      <Checkbox
+                        checked={bulkAllSelected}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setBulkSelectedIds(new Set(bulkFilteredEmployees.map(w => w.id)));
+                          } else {
+                            setBulkSelectedIds(new Set());
+                          }
+                        }}
+                        data-testid="checkbox-bulk-select-all"
+                      />
+                    </TableHead>
+                    <TableHead className={TH}>Emp #</TableHead>
+                    <TableHead className={TH}>Name</TableHead>
+                    <TableHead className={TH}>National ID</TableHead>
+                    <TableHead className={TH}>Event</TableHead>
+                    <TableHead className={TH}>Dept / Position</TableHead>
+                    <TableHead className={TH}>Type</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bulkFilteredEmployees.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                        No active employees match the current filters
+                      </TableCell>
+                    </TableRow>
+                  ) : bulkFilteredEmployees.map(w => (
+                    <TableRow
+                      key={w.id}
+                      className={cn("border-border/30 cursor-pointer transition-colors", bulkSelectedIds.has(w.id) ? "bg-primary/5" : "hover:bg-muted/30")}
+                      onClick={() => {
+                        setBulkSelectedIds(prev => {
+                          const next = new Set(prev);
+                          if (next.has(w.id)) next.delete(w.id); else next.add(w.id);
+                          return next;
+                        });
+                      }}
+                    >
+                      <TableCell className="pl-3">
+                        <Checkbox
+                          checked={bulkSelectedIds.has(w.id)}
+                          onCheckedChange={(checked) => {
+                            setBulkSelectedIds(prev => {
+                              const next = new Set(prev);
+                              if (checked) next.add(w.id); else next.delete(w.id);
+                              return next;
+                            });
+                          }}
+                          data-testid={`checkbox-bulk-emp-${w.id}`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{w.employeeNumber}</TableCell>
+                      <TableCell className="font-medium text-sm">{w.fullNameEn ?? "—"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{w.nationalId ?? "—"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{w.eventName ?? "—"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{w.departmentName ? `${w.departmentName}${w.positionTitle ? ` / ${w.positionTitle}` : ""}` : w.positionTitle ?? "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={cn("text-[10px]", w.employmentType === "smp" ? "bg-violet-500/10 text-violet-400 border-violet-500/30" : "bg-primary/10 text-primary border-primary/30")}>
+                          {w.employmentType === "smp" ? "SMP" : "Individual"}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                {bulkFilteredEmployees.length} employee{bulkFilteredEmployees.length !== 1 ? "s" : ""} shown
+                {bulkSelectedIds.size > 0 && <> · <span className="text-primary font-semibold">{bulkSelectedIds.size} selected</span></>}
+              </span>
+              {bulkSomeSelected && !bulkAllSelected && (
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="text-xs h-auto p-0"
+                  onClick={() => setBulkSelectedIds(new Set(bulkFilteredEmployees.map(w => w.id)))}
+                  data-testid="button-select-all-filtered"
+                >
+                  Select all {bulkFilteredEmployees.length} matching
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button variant="outline" className="rounded-sm" onClick={() => setBulkAssignOpen(false)}>Cancel</Button>
+            <Button
+              className="rounded-sm"
+              disabled={!bulkAssetId || !bulkAssignDate || bulkSelectedIds.size === 0}
+              onClick={() => setBulkConfirmOpen(true)}
+              data-testid="button-bulk-assign-submit"
+            >
+              Assign to {bulkSelectedIds.size} Employee{bulkSelectedIds.size !== 1 ? "s" : ""}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Bulk Assign Confirmation ────────────────────────────────────────── */}
+      <AlertDialog open={bulkConfirmOpen} onOpenChange={setBulkConfirmOpen}>
+        <AlertDialogContent className="bg-card border-border text-foreground rounded-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Bulk Assignment</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground space-y-2">
+              <span className="block">
+                Assign <span className="text-foreground font-semibold">"{assetList.find(a => a.id === bulkAssetId)?.name ?? "Asset"}"</span> to{" "}
+                <span className="text-foreground font-semibold">{bulkSelectedIds.size} employee{bulkSelectedIds.size !== 1 ? "s" : ""}</span> on{" "}
+                <span className="text-foreground font-semibold">{bulkAssignDate}</span>?
+              </span>
+              <span className="block text-sm">
+                Employees who already have this asset assigned will be skipped. This action cannot be undone.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-sm">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-sm bg-primary hover:bg-primary/90"
+              disabled={bulkAssignMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                bulkAssignMut.mutate({
+                  assetId: bulkAssetId,
+                  workforceIds: Array.from(bulkSelectedIds),
+                  assignedAt: bulkAssignDate,
+                  notes: bulkAssignNotes.trim() || undefined,
+                });
+              }}
+              data-testid="button-bulk-assign-confirm"
+            >
+              {bulkAssignMut.isPending ? "Assigning…" : `Yes, Assign`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ─── Delete Asset Confirm ────────────────────────────────────────────── */}
       <AlertDialog open={!!deleteAssetId} onOpenChange={o => !o && setDeleteAssetId(null)}>

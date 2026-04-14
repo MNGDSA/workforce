@@ -226,6 +226,7 @@ export interface IStorage {
   waiveAssetDeduction(assetId: string, waivedBy: string): Promise<EmployeeAsset>;
   bulkConfirmAssets(workforceId: string, status: "returned" | "not_returned", confirmedBy?: string): Promise<number>;
   bulkUpdateAssetStatus(ids: string[], status: "returned" | "not_returned"): Promise<number>;
+  bulkAssignAsset(assetId: string, workforceIds: string[], assignedAt: string, notes?: string): Promise<{ created: number; skipped: number }>;
 
   // Automation Rules
   getAutomationRules(): Promise<AutomationRule[]>;
@@ -2872,6 +2873,30 @@ export class DatabaseStorage implements IStorage {
       })
       .where(inArray(employeeAssets.id, ids));
     return (result as any).rowCount ?? ids.length;
+  }
+
+  async bulkAssignAsset(assetId: string, workforceIds: string[], assignedAt: string, notes?: string): Promise<{ created: number; skipped: number }> {
+    if (workforceIds.length === 0) return { created: 0, skipped: 0 };
+    const existing = await db
+      .select({ workforceId: employeeAssets.workforceId })
+      .from(employeeAssets)
+      .where(and(eq(employeeAssets.assetId, assetId), eq(employeeAssets.status, "assigned"), inArray(employeeAssets.workforceId, workforceIds)));
+    const existingSet = new Set(existing.map(e => e.workforceId));
+    const toInsert = workforceIds.filter(wId => !existingSet.has(wId));
+    if (toInsert.length > 0) {
+      const batchSize = 500;
+      for (let i = 0; i < toInsert.length; i += batchSize) {
+        const batch = toInsert.slice(i, i + batchSize);
+        await db.insert(employeeAssets).values(batch.map(wId => ({
+          assetId,
+          workforceId: wId,
+          assignedAt,
+          status: "assigned" as const,
+          notes: notes || null,
+        })));
+      }
+    }
+    return { created: toInsert.length, skipped: existingSet.size };
   }
 
   async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {

@@ -4290,6 +4290,31 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
+  app.post("/api/employee-assets/bulk-assign", async (req: Request, res: Response) => {
+    try {
+      const { assetId, workforceIds, assignedAt, notes } = req.body as {
+        assetId: string;
+        workforceIds: string[];
+        assignedAt: string;
+        notes?: string;
+      };
+      if (!assetId || !Array.isArray(workforceIds) || workforceIds.length === 0 || !assignedAt) {
+        return res.status(400).json({ message: "assetId, workforceIds (non-empty array), and assignedAt are required" });
+      }
+      const asset = await storage.getAsset(assetId);
+      if (!asset) return res.status(404).json({ message: "Asset not found" });
+      const result = await storage.bulkAssignAsset(assetId, workforceIds, assignedAt, notes);
+      await logAudit(req, {
+        action: "assets.bulk_assigned",
+        entityType: "assets",
+        entityId: assetId,
+        description: `Bulk-assigned asset "${asset.name}" to ${result.created} employee(s) (${result.skipped} skipped — already assigned)`,
+        metadata: { assetId, created: result.created, skipped: result.skipped, assignedAt },
+      });
+      return res.status(201).json(result);
+    } catch (err) { return handleError(res, err); }
+  });
+
   // ─── Global Search ────────────────────────────────────────────────────────────
   app.get("/api/search", async (req: Request, res: Response) => {
     try {
