@@ -17,6 +17,7 @@ import { z } from "zod";
 
 // ─── Enums ─────────────────────────────────────────────────────────────────
 export const candidateStatusEnum = pgEnum("candidate_status", [
+  "available",
   "active",
   "inactive",
   "blocked",
@@ -36,6 +37,7 @@ export const applicationStatusEnum = pgEnum("application_status", [
   "hired",
   "rejected",
   "withdrawn",
+  "closed",
 ]);
 
 export const jobStatusEnum = pgEnum("job_status", [
@@ -52,6 +54,7 @@ export const onboardingStatusEnum = pgEnum("onboarding_status", [
   "ready",
   "converted",
   "rejected",
+  "terminated",
 ]);
 
 export const interviewStatusEnum = pgEnum("interview_status", [
@@ -190,7 +193,7 @@ export const candidates = pgTable(
     ibanBankCode: text("iban_bank_code"),
     expectedSalary: decimal("expected_salary", { precision: 10, scale: 2 }),
     // Status & Ratings
-    status: candidateStatusEnum("status").notNull().default("active"),
+    status: candidateStatusEnum("status").notNull().default("available"),
     rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
     totalRatings: integer("total_ratings").notNull().default(0),
     // Profile completion flags
@@ -1427,7 +1430,7 @@ export const candidateQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(1000).default(100),
   search: z.string().optional(),
-  status: z.enum(["active", "inactive", "blocked", "hired"]).optional(),
+  status: z.enum(["available", "active", "inactive", "blocked", "hired"]).optional(),
   archived: z.enum(["true"]).optional(),
   city: z.string().optional(),
   nationality: z.enum(["saudi", "non_saudi"]).optional(),

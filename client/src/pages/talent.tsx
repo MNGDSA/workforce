@@ -109,6 +109,7 @@ type CandidateWithWorkforce = Candidate & { workforceRecordCount: number; workfo
 import { KSA_REGIONS } from "@shared/schema";
 
 const statusStyles: Record<string, string> = {
+  available: "bg-green-500/10 text-green-500",
   active: "bg-green-500/10 text-green-500",
   inactive: "bg-gray-500/10 text-gray-400",
   archived: "bg-slate-500/10 text-slate-400",
@@ -857,7 +858,7 @@ export default function TalentPage() {
   const [, navigate] = useLocation();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("active");
+  const [status, setStatus] = useState("available");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [formerEmployeeFilter, setFormerEmployeeFilter] = useState(false);
   const [sortBy, setSortBy] = useState<SortField>("createdAt");
@@ -1228,7 +1229,7 @@ export default function TalentPage() {
           </Card>
           <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Active</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Available</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-4xl font-bold font-display text-green-500" data-testid="stat-active">
@@ -1277,7 +1278,7 @@ export default function TalentPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="available">Available</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
                 <SelectItem value="hired">Hired</SelectItem>
                 <SelectItem value="blocked">Blocked</SelectItem>
@@ -1549,7 +1550,7 @@ export default function TalentPage() {
                                 <DropdownMenuItem
                                   onClick={() => {
                                     if (candidate.status === "blocked") {
-                                      updateStatus.mutate({ id: candidate.id, status: "active" });
+                                      updateStatus.mutate({ id: candidate.id, status: "available" });
                                     } else {
                                       setBlockCandidate(candidate);
                                     }

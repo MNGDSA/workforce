@@ -90,7 +90,7 @@ async function seed() {
           city: "Makkah",
           region: "Makkah Region",
           country: "SA",
-          status: "active",
+          status: "available",
           source: "individual",
           profileCompleted: true,
         })
@@ -122,7 +122,7 @@ async function seed() {
           nationalId: "2000000004",
           phone: "0500000004",
           country: "SA",
-          status: "active",
+          status: "available",
           source: "individual",
           profileCompleted: false,
         })
@@ -160,7 +160,7 @@ async function seed() {
           city: "Jeddah",
           region: "Makkah Region",
           country: "SA",
-          status: "active",
+          status: "available",
           source: "individual",
           profileCompleted: true,
         })

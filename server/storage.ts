@@ -116,11 +116,11 @@ import {
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte, getTableColumns } from "drizzle-orm";
 
-function computeCandidateStatusFromLogin(lastLoginAt: Date | null): "active" | "inactive" {
+function computeCandidateStatusFromLogin(lastLoginAt: Date | null): "available" | "inactive" {
   if (!lastLoginAt) return "inactive";
   const oneYearAgo = new Date();
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-  return lastLoginAt >= oneYearAgo ? "active" : "inactive";
+  return lastLoginAt >= oneYearAgo ? "available" : "inactive";
 }
 
 export interface IStorage {
@@ -784,7 +784,7 @@ export class DatabaseStorage implements IStorage {
       .from(candidates)
       .where(notArchived);
 
-    const [activeRow] = await db.select({ value: count() }).from(candidates).where(and(eq(candidates.status, "active"), notArchived));
+    const [activeRow] = await db.select({ value: count() }).from(candidates).where(and(eq(candidates.status, "available"), notArchived));
     const [hiredRow] = await db.select({ value: count() }).from(candidates).where(and(eq(candidates.status, "hired"), notArchived));
     const [blockedRow] = await db.select({ value: count() }).from(candidates).where(and(eq(candidates.status, "blocked"), notArchived));
 
@@ -896,7 +896,7 @@ export class DatabaseStorage implements IStorage {
     const result = await db.update(candidates)
       .set({ status: "inactive", updatedAt: new Date() })
       .where(and(
-        eq(candidates.status, "active"),
+        eq(candidates.status, "available"),
         or(
           and(isNotNull(candidates.lastLoginAt), lt(candidates.lastLoginAt, oneYearAgo)),
           isNull(candidates.lastLoginAt),
@@ -2771,7 +2771,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async completeOffboarding(workforceId: string, completedBy?: string): Promise<any> {
-    // Verify all assets are confirmed
     const assets = await this.getEmployeeAssets({ workforceId });
     const unconfirmed = assets.filter(a => a.status === "assigned");
     if (unconfirmed.length > 0) throw new Error(`${unconfirmed.length} asset(s) still need confirmation before completing offboarding`);
@@ -2791,8 +2790,16 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(workforce.candidateId, wf.candidateId), eq(workforce.isActive, true)))
       .limit(1);
     if (otherActive.length === 0) {
-      await db.update(candidates).set({ status: "active", updatedAt: new Date() }).where(eq(candidates.id, wf.candidateId));
+      await db.update(candidates).set({ status: "available", updatedAt: new Date() }).where(eq(candidates.id, wf.candidateId));
     }
+
+    await db.update(applications)
+      .set({ status: "closed", updatedAt: new Date() })
+      .where(and(eq(applications.candidateId, wf.candidateId), eq(applications.status, "hired")));
+
+    await db.update(onboarding)
+      .set({ status: "terminated", updatedAt: new Date() })
+      .where(and(eq(onboarding.candidateId, wf.candidateId), eq(onboarding.status, "converted")));
 
     return updated;
   }

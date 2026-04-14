@@ -402,7 +402,7 @@ export async function registerRoutes(
       if (!updated) return res.status(404).json({ message: "Candidate not found" });
       const onboardingRecords = await storage.getOnboardingRecords({ candidateId: id });
       for (const rec of onboardingRecords) {
-        if (rec.status === "converted" || rec.status === "rejected") continue;
+        if (rec.status === "converted" || rec.status === "rejected" || rec.status === "terminated") continue;
         const isSmpRec = !rec.applicationId;
         const syncPayload: Record<string, any> = {};
         if (docType === "photo") syncPayload.hasPhoto = true;
@@ -449,7 +449,7 @@ export async function registerRoutes(
       if (!updated) return res.status(404).json({ message: "Candidate not found" });
       const onboardingRecordsDel = await storage.getOnboardingRecords({ candidateId: id });
       for (const rec of onboardingRecordsDel) {
-        if (rec.status === "converted" || rec.status === "rejected") continue;
+        if (rec.status === "converted" || rec.status === "rejected" || rec.status === "terminated") continue;
         // Derive SMP status from onboarding linkage (applicationId === null = SMP pipeline)
         const isSmpRec = !rec.applicationId;
         const syncPayload: Record<string, any> = {};
@@ -542,7 +542,7 @@ export async function registerRoutes(
           }
           const updateFields: Record<string, any> = { lastLoginAt: new Date() };
           if (candidate.status !== "blocked" && candidate.status !== "hired") {
-            updateFields.status = "active";
+            updateFields.status = "available";
           }
           await storage.updateCandidate(candidate.id, updateFields);
           candidate.lastLoginAt = new Date();
@@ -716,7 +716,7 @@ export async function registerRoutes(
           phone: normalizedPhone,
           nationalId: nationalId.trim(),
           email: syntheticEmail,
-          status: "active",
+          status: "available",
           country: "SA",
           userId: user.id,
         });
@@ -1094,7 +1094,7 @@ export async function registerRoutes(
         const affected = await storage.bulkUpdateCandidateStatus(ids, "blocked");
         return res.json({ affected, action });
       } else if (action === "unblock") {
-        const affected = await storage.bulkUpdateCandidateStatus(ids, "active");
+        const affected = await storage.bulkUpdateCandidateStatus(ids, "available");
         return res.json({ affected, action });
       } else if (action === "archive") {
         const affected = await storage.bulkArchiveCandidates(ids);
@@ -1204,7 +1204,7 @@ export async function registerRoutes(
 
         // Check for pending onboarding
         const onboardingRecords = await storage.getOnboardingRecords({ candidateId: existing.id });
-        const activeOnboarding = onboardingRecords.find(ob => ob.status !== "converted" && ob.status !== "rejected");
+        const activeOnboarding = onboardingRecords.find(ob => ob.status !== "converted" && ob.status !== "rejected" && ob.status !== "terminated");
         if (activeOnboarding) {
           results.push({ status: "blocked", row, candidate: candidateMeta, blockedReason: "In onboarding — remove from onboarding first" });
           continue;
@@ -1295,7 +1295,7 @@ export async function registerRoutes(
             : "Active individual employment — cannot add to SMP batch";
         }
         const onboardingRecords = await storage.getOnboardingRecords({ candidateId });
-        const activeOnboarding = onboardingRecords.find(ob => ob.status !== "converted" && ob.status !== "rejected");
+        const activeOnboarding = onboardingRecords.find(ob => ob.status !== "converted" && ob.status !== "rejected" && ob.status !== "terminated");
         if (activeOnboarding) {
           return "In active onboarding — remove from onboarding first";
         }
@@ -1328,7 +1328,7 @@ export async function registerRoutes(
           }
           // Attach to SMP batch via onboarding record
           const existingObs = await storage.getOnboardingRecords({ candidateId });
-          const alreadyActive = existingObs.find(r => r.status !== "converted" && r.status !== "rejected");
+          const alreadyActive = existingObs.find(r => r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated");
           if (!alreadyActive) {
             const candidateData = await storage.getCandidate(candidateId);
             await storage.createOnboardingRecord(buildSmpOnboardingPayload(
@@ -1356,7 +1356,7 @@ export async function registerRoutes(
                 continue;
               }
               const existingObs = await storage.getOnboardingRecords({ candidateId: maybeExisting.id });
-              const alreadyActive = existingObs.find(r => r.status !== "converted" && r.status !== "rejected");
+              const alreadyActive = existingObs.find(r => r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated");
               if (!alreadyActive) {
                 await storage.createOnboardingRecord(buildSmpOnboardingPayload(
                   maybeExisting.id,
@@ -1671,7 +1671,7 @@ export async function registerRoutes(
         if (hasSmpLinkage) {
           const onboardingRecords = await storage.getOnboardingRecords({ candidateId: data.candidateId });
           const pendingOnboarding = onboardingRecords.find(
-            ob => ob.status !== "converted" && ob.status !== "rejected"
+            ob => ob.status !== "converted" && ob.status !== "rejected" && ob.status !== "terminated"
           );
           if (pendingOnboarding) {
             return res.status(409).json({
@@ -1688,6 +1688,7 @@ export async function registerRoutes(
             ob =>
               ob.status !== "converted" &&
               ob.status !== "rejected" &&
+              ob.status !== "terminated" &&
               !ob.applicationId // SMP onboardings have no job application linkage
           );
           if (pendingSmpOnboarding) {
@@ -1926,7 +1927,7 @@ export async function registerRoutes(
       const data = insertOnboardingSchema.parse(req.body);
       // Prevent duplicate onboarding for same candidate
       const existing = await storage.getOnboardingRecords({});
-      const dup = existing.find(r => r.candidateId === data.candidateId && r.status !== "converted" && r.status !== "rejected");
+      const dup = existing.find(r => r.candidateId === data.candidateId && r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated");
       if (dup) return res.status(409).json({ message: "Candidate is already in onboarding" });
       // Server-side: always read the candidate's actual upload status from DB
       // so stale client caches don't create onboarding records with false flags
@@ -1968,7 +1969,7 @@ export async function registerRoutes(
       if (!isRejection) delete data.status;
       if (data.hasSignedContract !== undefined || isRejection) {
         const current = await storage.getOnboardingRecord(req.params.id);
-        if (current && current.status !== "converted" && current.status !== "rejected") {
+        if (current && current.status !== "converted" && current.status !== "rejected" && current.status !== "terminated") {
           const merged = { ...current, ...data };
           if (!isRejection) {
             // Derive SMP from onboarding record's applicationId (authoritative, source-agnostic)
@@ -3051,7 +3052,7 @@ export async function registerRoutes(
         try {
           const ob = await storage.getOnboardingRecord(obId);
           if (!ob) { results.push({ onboardingId: obId, success: false, error: "Record not found" }); continue; }
-          if (ob.status === "converted" || ob.status === "rejected") { results.push({ onboardingId: obId, success: false, error: "Already converted or rejected" }); continue; }
+          if (ob.status === "converted" || ob.status === "rejected" || ob.status === "terminated") { results.push({ onboardingId: obId, success: false, error: "Already converted, rejected, or terminated" }); continue; }
           const candidate = await storage.getCandidate(ob.candidateId);
           if (!candidate) { results.push({ onboardingId: obId, success: false, error: "Candidate not found" }); continue; }
           // SMP onboardings have no applicationId — they do not get individual contracts

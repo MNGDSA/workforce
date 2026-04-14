@@ -78,7 +78,7 @@ import {
   Image,
 } from "lucide-react";
 
-type OnboardingStatus = "pending" | "in_progress" | "ready" | "converted" | "rejected";
+type OnboardingStatus = "pending" | "in_progress" | "ready" | "converted" | "rejected" | "terminated";
 
 interface OnboardingRecord {
   id: string;
@@ -135,6 +135,7 @@ const STATUS_CONFIG: Record<OnboardingStatus, { label: string; color: string; ic
   ready:       { label: "Ready",       color: "bg-emerald-900/60 text-emerald-300", icon: CheckCircle2 },
   converted:   { label: "Converted",   color: "bg-blue-900/60 text-blue-300",     icon: UserCheck },
   rejected:    { label: "Rejected",    color: "bg-red-900/60 text-red-300",       icon: XCircle },
+  terminated:  { label: "Terminated",  color: "bg-orange-900/60 text-orange-300", icon: XCircle },
 };
 
 const ALL_PREREQUISITES = [
@@ -1284,8 +1285,8 @@ export default function OnboardingPage() {
   });
 
   const { data: candidates = [] } = useQuery<Candidate[]>({
-    queryKey: ["/api/candidates", { limit: 1000, status: "active" }],
-    queryFn: () => apiRequest("GET", "/api/candidates?limit=1000&status=active").then(r => r.json()),
+    queryKey: ["/api/candidates", { limit: 1000, status: "available" }],
+    queryFn: () => apiRequest("GET", "/api/candidates?limit=1000&status=available").then(r => r.json()),
     select: (r: any) => r?.data ?? [],
     staleTime: 0,
     refetchOnWindowFocus: true,
@@ -1430,7 +1431,7 @@ export default function OnboardingPage() {
   });
 
   const filtered = records.filter(r => {
-    if (statusFilter === "active" && (r.status === "rejected" || r.status === "converted")) return false;
+    if (statusFilter === "active" && (r.status === "rejected" || r.status === "converted" || r.status === "terminated")) return false;
     if (statusFilter !== "all" && statusFilter !== "active" && r.status !== statusFilter) return false;
     if (search) {
       const candidate = candidates.find(c => c.id === r.candidateId);
@@ -1449,7 +1450,7 @@ export default function OnboardingPage() {
     applications.filter(a => ["interviewed", "hired", "shortlisted"].includes(a.status)).map(a => a.candidateId)
   );
   const alreadyOnboarding = new Set(
-    records.filter(r => r.status !== "converted" && r.status !== "rejected").map(r => r.candidateId)
+    records.filter(r => r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated").map(r => r.candidateId)
   );
   const eligibleCandidates = candidates.filter(c =>
     (interviewedIds.has(c.id) || c.status === "hired") && !alreadyOnboarding.has(c.id)
@@ -1513,6 +1514,7 @@ export default function OnboardingPage() {
     convertible: convertibleReady.length,
     readyNoContract: readyAll.length - convertibleReady.length,
     converted: records.filter(r => r.status === "converted").length,
+    terminated: records.filter(r => r.status === "terminated").length,
   };
 
   return (
@@ -1540,7 +1542,7 @@ export default function OnboardingPage() {
 
           <TabsContent value="pipeline" className="space-y-6 mt-4">
         <div className="flex justify-end gap-2">
-            {activeTemplates.length > 0 && filtered.filter(r => r.status !== "converted" && r.status !== "rejected").length > 0 && (
+            {activeTemplates.length > 0 && filtered.filter(r => r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated").length > 0 && (
               <Button
                 data-testid="button-bulk-contracts"
                 onClick={() => setBulkContractOpen(true)}
@@ -2100,7 +2102,7 @@ export default function OnboardingPage() {
               />
 
               {/* Status indicator */}
-              {checklistRecord.status !== "converted" && checklistRecord.status !== "rejected" && (() => {
+              {checklistRecord.status !== "converted" && checklistRecord.status !== "rejected" && checklistRecord.status !== "terminated" && (() => {
                 const docsAllDone = checklistDone === checklistTotal;
                 const contractRequired = !checklistIsSmp && !!checklistRecord.applicationId;
                 const contractDone = checklistRecord.hasSignedContract || !!checklistRecord.contractSignedAt;
@@ -2375,7 +2377,7 @@ export default function OnboardingPage() {
             <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-3 flex items-center gap-3">
               <FileText className="h-5 w-5 text-blue-400 shrink-0" />
               <div>
-                <p className="text-sm font-medium text-blue-300">{records.filter(r => r.status !== "converted" && r.status !== "rejected").length} eligible candidates</p>
+                <p className="text-sm font-medium text-blue-300">{records.filter(r => r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated").length} eligible candidates</p>
                 <p className="text-xs text-blue-400/70">Non-SMP candidates with complete documents will receive contracts</p>
               </div>
             </div>
@@ -2401,7 +2403,7 @@ export default function OnboardingPage() {
                 disabled={!bulkContractTemplateId || bulkContractMutation.isPending}
                 onClick={() => {
                   const eligibleIds = records
-                    .filter(r => r.status !== "converted" && r.status !== "rejected")
+                    .filter(r => r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated")
                     .filter(r => {
                       const c = getCandidateFor(r);
                       return c?.source !== "smp";

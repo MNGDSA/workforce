@@ -1724,7 +1724,7 @@ export default function CandidatePortal() {
   const sortedOnboarding = [...myOnboardingRecords].sort((a, b) =>
     new Date(b.contractSignedAt ?? 0).getTime() - new Date(a.contractSignedAt ?? 0).getTime()
   );
-  const activeOnboarding = sortedOnboarding.find(o => o.status !== "converted" && o.status !== "rejected");
+  const activeOnboarding = sortedOnboarding.find(o => o.status !== "converted" && o.status !== "rejected" && o.status !== "terminated");
   const currentOnboarding = activeOnboarding
     || (isEmployee ? sortedOnboarding.find(o => o.status === "converted") : undefined);
   const canSignContract = isEmployee || !!activeOnboarding;
