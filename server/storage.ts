@@ -384,7 +384,7 @@ export interface IStorage {
   getAttendanceForEmployee(workforceId: string, dateFrom: string, dateTo: string): Promise<AttendanceRecord[]>;
   upsertAttendanceRecord(data: InsertAttendanceRecord): Promise<AttendanceRecord>;
   deleteAttendanceRecord(id: string): Promise<boolean>;
-  getWorkedDaySummary(workforceIds: string[], dateFrom: string, dateTo: string): Promise<Array<{ workforceId: string; workedDays: number; absentDays: number; lateDays: number; halfDays: number; excusedDays: number; totalScheduledDays: number }>>;
+  getWorkedDaySummary(workforceIds: string[], dateFrom: string, dateTo: string): Promise<Array<{ workforceId: string; workedDays: number; absentDays: number; lateDays: number; excusedDays: number; totalScheduledDays: number; totalMinutesWorked: number; totalMinutesScheduled: number; totalMinutesLate: number }>>;
 
   // Assets
   getAssets(includeInactive?: boolean): Promise<Asset[]>;
@@ -2516,7 +2516,7 @@ export class DatabaseStorage implements IStorage {
     const [row] = await db.insert(attendanceRecords).values(data)
       .onConflictDoUpdate({
         target: [attendanceRecords.workforceId, attendanceRecords.date],
-        set: { status: data.status, clockIn: data.clockIn, clockOut: data.clockOut, notes: data.notes, recordedBy: data.recordedBy, updatedAt: new Date() },
+        set: { status: data.status, clockIn: data.clockIn, clockOut: data.clockOut, minutesScheduled: data.minutesScheduled, minutesWorked: data.minutesWorked, notes: data.notes, recordedBy: data.recordedBy, updatedAt: new Date() },
       })
       .returning();
     return row;
@@ -2527,12 +2527,14 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
-  async getWorkedDaySummary(workforceIds: string[], dateFrom: string, dateTo: string): Promise<Array<{ workforceId: string; workedDays: number; absentDays: number; lateDays: number; halfDays: number; excusedDays: number; totalScheduledDays: number }>> {
+  async getWorkedDaySummary(workforceIds: string[], dateFrom: string, dateTo: string): Promise<Array<{ workforceId: string; workedDays: number; absentDays: number; lateDays: number; excusedDays: number; totalScheduledDays: number; totalMinutesWorked: number; totalMinutesScheduled: number; totalMinutesLate: number }>> {
     if (workforceIds.length === 0) return [];
     const rows = await db.select({
       workforceId: attendanceRecords.workforceId,
       status: attendanceRecords.status,
       cnt: count(attendanceRecords.id),
+      sumMinutesWorked: sql<number>`COALESCE(SUM(${attendanceRecords.minutesWorked}), 0)`,
+      sumMinutesScheduled: sql<number>`COALESCE(SUM(${attendanceRecords.minutesScheduled}), 0)`,
     })
       .from(attendanceRecords)
       .where(and(
@@ -2542,19 +2544,22 @@ export class DatabaseStorage implements IStorage {
       ))
       .groupBy(attendanceRecords.workforceId, attendanceRecords.status);
 
-    const map: Record<string, { workedDays: number; absentDays: number; lateDays: number; halfDays: number; excusedDays: number; totalScheduledDays: number }> = {};
+    const map: Record<string, { workedDays: number; absentDays: number; lateDays: number; excusedDays: number; totalScheduledDays: number; totalMinutesWorked: number; totalMinutesScheduled: number; totalMinutesLate: number }> = {};
     for (const wid of workforceIds) {
-      map[wid] = { workedDays: 0, absentDays: 0, lateDays: 0, halfDays: 0, excusedDays: 0, totalScheduledDays: 0 };
+      map[wid] = { workedDays: 0, absentDays: 0, lateDays: 0, excusedDays: 0, totalScheduledDays: 0, totalMinutesWorked: 0, totalMinutesScheduled: 0, totalMinutesLate: 0 };
     }
     for (const r of rows) {
       const entry = map[r.workforceId];
       if (!entry) continue;
       const n = Number(r.cnt);
+      const mw = Number(r.sumMinutesWorked);
+      const ms = Number(r.sumMinutesScheduled);
       entry.totalScheduledDays += n;
+      entry.totalMinutesWorked += mw;
+      entry.totalMinutesScheduled += ms;
       if (r.status === "present") entry.workedDays += n;
-      else if (r.status === "absent") entry.absentDays += n;
-      else if (r.status === "late") { entry.lateDays += n; entry.workedDays += n; }
-      else if (r.status === "half_day") { entry.halfDays += n; entry.workedDays += n * 0.5; }
+      else if (r.status === "absent") { entry.absentDays += n; }
+      else if (r.status === "late") { entry.lateDays += n; entry.workedDays += n; entry.totalMinutesLate += Math.max(0, ms - mw); }
       else if (r.status === "excused") entry.excusedDays += n;
     }
     return workforceIds.map(wid => ({ workforceId: wid, ...map[wid] }));
@@ -2672,10 +2677,29 @@ export class DatabaseStorage implements IStorage {
     const endMs = new Date(end).getTime();
     const calendarDays = Math.max(0, Math.round((endMs - startMs) / 86400000) + 1);
     const salary = parseFloat(emp.salary ?? "0");
-    const dailyRate = salary / 30;
-    const grossPay = Math.round(calendarDays * dailyRate * 100) / 100;
 
-    // Asset deductions: not_returned and not waived
+    const attendanceRows = await this.getAttendanceForEmployee(workforceId, start, end);
+
+    const totalMinutesWorked = attendanceRows.reduce((sum, r) => sum + (r.minutesWorked ?? 0), 0);
+    const totalMinutesScheduled = attendanceRows.reduce((sum, r) => sum + (r.minutesScheduled ?? 0), 0);
+    const workedDays = attendanceRows.filter(r => r.status === "present" || r.status === "late").length;
+    const absentDays = attendanceRows.filter(r => r.status === "absent").length;
+    const excusedDays = attendanceRows.filter(r => r.status === "excused").length;
+    const loggedDays = attendanceRows.length;
+
+    let grossPay: number;
+    let dailyRate: number;
+    let perMinuteRate: number | null = null;
+
+    if (totalMinutesScheduled > 0) {
+      perMinuteRate = salary / 30 / (totalMinutesScheduled / loggedDays);
+      grossPay = Math.round(totalMinutesWorked * perMinuteRate * 100) / 100;
+      dailyRate = salary / 30;
+    } else {
+      dailyRate = salary / 30;
+      grossPay = Math.round(calendarDays * dailyRate * 100) / 100;
+    }
+
     const empAssets = await this.getEmployeeAssets({ workforceId });
     const allAssets = await this.getAssets(true);
     const assetMap: Record<string, any> = {};
@@ -2700,17 +2724,6 @@ export class DatabaseStorage implements IStorage {
 
     const netSettlement = Math.max(0, grossPay - totalDeductions);
 
-    // Attendance summary for the period
-    const attendanceRows = await this.getAttendanceForEmployee(workforceId, start, end);
-    const workedDays = attendanceRows.reduce((sum, r) => {
-      if (r.status === "present" || r.status === "late") return sum + 1;
-      if (r.status === "half_day") return sum + 0.5;
-      return sum;
-    }, 0);
-    const absentDays = attendanceRows.filter(r => r.status === "absent").length;
-    const loggedDays = attendanceRows.length;
-
-    // All assets with confirmation status
     const assetChecklist = empAssets.map(ea => ({
       ...ea,
       assetName: assetMap[ea.assetId]?.name ?? "Unknown",
@@ -2722,8 +2735,8 @@ export class DatabaseStorage implements IStorage {
     return {
       employee: emp,
       period: { start, end, calendarDays },
-      salary: { monthly: salary, daily: Math.round(dailyRate * 100) / 100, gross: grossPay },
-      attendance: { workedDays, absentDays, loggedDays, total: attendanceRows.length },
+      salary: { monthly: salary, daily: Math.round(dailyRate * 100) / 100, gross: grossPay, perMinuteRate: perMinuteRate ? Math.round(perMinuteRate * 10000) / 10000 : null },
+      attendance: { workedDays, absentDays, excusedDays, loggedDays, total: attendanceRows.length, totalMinutesWorked, totalMinutesScheduled },
       deductions,
       totalDeductions: Math.round(totalDeductions * 100) / 100,
       netSettlement: Math.round(netSettlement * 100) / 100,

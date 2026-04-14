@@ -29,6 +29,7 @@ import OnboardingPage from "@/pages/onboarding";
 import IdCardsPage from "@/pages/id-cards";
 import LegalPage from "@/pages/legal-page";
 import SchedulesPage from "@/pages/schedules";
+import { Redirect } from "wouter";
 import AssetsPage from "@/pages/assets";
 import AuditLogPage from "@/pages/audit-log";
 import OffboardingPage from "@/pages/offboarding";
@@ -64,7 +65,8 @@ function Router() {
       <Route path="/profile" component={ProfilePage} />
       <Route path="/onboarding" component={OnboardingPage} />
       <Route path="/id-cards" component={IdCardsPage} />
-      <Route path="/schedules" component={SchedulesPage} />
+      <Route path="/attendance" component={SchedulesPage} />
+      <Route path="/schedules">{() => <Redirect to="/attendance" />}</Route>
       <Route path="/assets" component={AssetsPage} />
       <Route path="/offboarding" component={OffboardingPage} />
       <Route path="/audit-log" component={AuditLogPage} />

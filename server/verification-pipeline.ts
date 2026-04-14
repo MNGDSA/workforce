@@ -7,9 +7,12 @@ import {
   candidates,
   inboxItems,
   systemSettings,
+  scheduleAssignments,
+  scheduleTemplates,
+  shifts,
   type GeofenceZone,
 } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { compareFaces } from "./rekognition";
 
 async function getOrgTimezone(): Promise<string> {
@@ -17,6 +20,61 @@ async function getOrgTimezone(): Promise<string> {
     const [row] = await db.select().from(systemSettings).where(eq(systemSettings.key, "organization_timezone"));
     return row?.value ?? "Asia/Riyadh";
   } catch { return "Asia/Riyadh"; }
+}
+
+export function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+export function getShiftDurationMinutes(startTime: string, endTime: string): number {
+  let start = timeToMinutes(startTime);
+  let end = timeToMinutes(endTime);
+  if (end <= start) end += 24 * 60;
+  return end - start;
+}
+
+const DAYS_OF_WEEK = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
+
+export async function getShiftForEmployeeDate(workforceId: string, dateStr: string): Promise<{ shiftStartTime: string; shiftEndTime: string; shiftDuration: number } | null> {
+  const d = new Date(dateStr + "T00:00:00");
+  const dayIndex = d.getDay();
+  const dayName = DAYS_OF_WEEK[dayIndex];
+
+  const allAssignments = await db
+    .select()
+    .from(scheduleAssignments)
+    .where(eq(scheduleAssignments.workforceId, workforceId));
+
+  const active = allAssignments.find(a =>
+    a.startDate <= dateStr && (a.endDate == null || a.endDate > dateStr)
+  );
+  if (!active) return null;
+
+  const [template] = await db.select().from(scheduleTemplates).where(eq(scheduleTemplates.id, active.templateId));
+  if (!template) return null;
+
+  const dayShiftMap: Record<string, string | null> = {
+    sunday: template.sundayShiftId,
+    monday: template.mondayShiftId,
+    tuesday: template.tuesdayShiftId,
+    wednesday: template.wednesdayShiftId,
+    thursday: template.thursdayShiftId,
+    friday: template.fridayShiftId,
+    saturday: template.saturdayShiftId,
+  };
+
+  const shiftId = dayShiftMap[dayName];
+  if (!shiftId) return null;
+
+  const [shift] = await db.select().from(shifts).where(eq(shifts.id, shiftId));
+  if (!shift) return null;
+
+  return {
+    shiftStartTime: shift.startTime,
+    shiftEndTime: shift.endTime,
+    shiftDuration: getShiftDurationMinutes(shift.startTime, shift.endTime),
+  };
 }
 
 function formatInTimezone(date: Date, timezone: string): { dateStr: string; timeStr: string } {
@@ -167,19 +225,61 @@ export async function runVerificationPipeline(submissionId: string): Promise<{
         )
       );
 
+    const shiftInfo = await getShiftForEmployeeDate(submission.workforceId, dateStr);
+
     if (existing.length === 0) {
+      let status: "present" | "late" = "present";
+      let minutesWorked: number | null = null;
+      let minutesScheduled: number | null = null;
+
+      if (shiftInfo) {
+        minutesScheduled = shiftInfo.shiftDuration;
+        const clockInMin = timeToMinutes(clockIn);
+        const shiftStartMin = timeToMinutes(shiftInfo.shiftStartTime);
+        let shiftEndMin = timeToMinutes(shiftInfo.shiftEndTime);
+        if (shiftEndMin <= shiftStartMin) shiftEndMin += 24 * 60;
+        let adjustedClockIn = clockInMin;
+        if (adjustedClockIn < shiftStartMin && shiftEndMin > 24 * 60) adjustedClockIn += 24 * 60;
+
+        if (adjustedClockIn > shiftStartMin) {
+          status = "late";
+          minutesWorked = Math.max(0, Math.min(shiftEndMin - adjustedClockIn, minutesScheduled));
+        } else {
+          minutesWorked = minutesScheduled;
+        }
+      }
+
       const [record] = await db
         .insert(attendanceRecords)
         .values({
           workforceId: submission.workforceId,
           date: dateStr,
-          status: "present",
+          status,
           clockIn,
+          minutesScheduled,
+          minutesWorked,
           source: "mobile",
           notes: `Auto-verified via mobile (confidence: ${confidence}%)`,
         })
         .returning();
       updateData.linkedAttendanceRecordId = record.id;
+    } else if (existing[0].clockIn && !existing[0].clockOut) {
+      let minutesWorked: number | null = null;
+      const clockInMin = timeToMinutes(existing[0].clockIn);
+      const clockOutMin = timeToMinutes(clockIn);
+      const scheduled = existing[0].minutesScheduled ?? (shiftInfo?.shiftDuration ?? null);
+
+      if (scheduled !== null) {
+        let diff = clockOutMin - clockInMin;
+        if (diff < 0) diff += 24 * 60;
+        minutesWorked = Math.min(diff, scheduled);
+      }
+
+      await db
+        .update(attendanceRecords)
+        .set({ clockOut: clockIn, minutesWorked, updatedAt: new Date() })
+        .where(eq(attendanceRecords.id, existing[0].id));
+      updateData.linkedAttendanceRecordId = existing[0].id;
     } else {
       updateData.linkedAttendanceRecordId = existing[0].id;
     }
@@ -245,22 +345,63 @@ export async function approveSubmission(
       )
     );
 
+  const shiftInfo = await getShiftForEmployeeDate(submission.workforceId, dateStr);
   let linkedRecordId: string;
 
   if (existing.length === 0) {
+    let status: "present" | "late" = "present";
+    let minutesWorked: number | null = null;
+    let minutesScheduled: number | null = null;
+
+    if (shiftInfo) {
+      minutesScheduled = shiftInfo.shiftDuration;
+      const clockInMin = timeToMinutes(clockIn);
+      const shiftStartMin = timeToMinutes(shiftInfo.shiftStartTime);
+      let shiftEndMin = timeToMinutes(shiftInfo.shiftEndTime);
+      if (shiftEndMin <= shiftStartMin) shiftEndMin += 24 * 60;
+      let adjustedClockIn = clockInMin;
+      if (adjustedClockIn < shiftStartMin && shiftEndMin > 24 * 60) adjustedClockIn += 24 * 60;
+
+      if (adjustedClockIn > shiftStartMin) {
+        status = "late";
+        minutesWorked = Math.max(0, Math.min(shiftEndMin - adjustedClockIn, minutesScheduled));
+      } else {
+        minutesWorked = minutesScheduled;
+      }
+    }
+
     const [record] = await db
       .insert(attendanceRecords)
       .values({
         workforceId: submission.workforceId,
         date: dateStr,
-        status: "present",
+        status,
         clockIn,
+        minutesScheduled,
+        minutesWorked,
         source: "mobile",
         recordedBy: reviewedBy,
         notes: `Manually approved by HR${notes ? `: ${notes}` : ""}`,
       })
       .returning();
     linkedRecordId = record.id;
+  } else if (existing[0].clockIn && !existing[0].clockOut) {
+    let minutesWorked: number | null = null;
+    const clockInMin = timeToMinutes(existing[0].clockIn);
+    const clockOutMin = timeToMinutes(clockIn);
+    const scheduled = existing[0].minutesScheduled ?? (shiftInfo?.shiftDuration ?? null);
+
+    if (scheduled !== null) {
+      let diff = clockOutMin - clockInMin;
+      if (diff < 0) diff += 24 * 60;
+      minutesWorked = Math.min(diff, scheduled);
+    }
+
+    await db
+      .update(attendanceRecords)
+      .set({ clockOut: clockIn, minutesWorked, updatedAt: new Date() })
+      .where(eq(attendanceRecords.id, existing[0].id));
+    linkedRecordId = existing[0].id;
   } else {
     linkedRecordId = existing[0].id;
   }

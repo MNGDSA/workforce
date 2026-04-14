@@ -928,7 +928,6 @@ export const attendanceStatusEnum = pgEnum("attendance_status", [
   "present",
   "absent",
   "late",
-  "half_day",
   "excused",
 ]);
 
@@ -1002,6 +1001,8 @@ export const attendanceRecords = pgTable(
     status: attendanceStatusEnum("status").notNull(),
     clockIn: text("clock_in"),
     clockOut: text("clock_out"),
+    minutesScheduled: integer("minutes_scheduled"),
+    minutesWorked: integer("minutes_worked"),
     notes: text("notes"),
     source: attendanceSourceEnum("source").notNull().default("manual"),
     recordedBy: varchar("recorded_by").references(() => users.id, { onDelete: "set null" }),

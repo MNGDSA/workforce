@@ -3666,6 +3666,21 @@ export async function registerRoutes(
   });
 
   // ─── Attendance Records ──────────────────────────────────────────────────────
+  async function enrichAttendanceMinutes(data: { workforceId: string; date: string; clockIn?: string | null; clockOut?: string | null; minutesScheduled?: number | null; minutesWorked?: number | null }) {
+    if (!data.workforceId || !data.date) return;
+    const { timeToMinutes, getShiftForEmployeeDate } = await import("./verification-pipeline");
+    const shiftInfo = await getShiftForEmployeeDate(data.workforceId, data.date);
+    if (shiftInfo) {
+      data.minutesScheduled = shiftInfo.shiftDuration;
+      if (data.clockIn && data.clockOut) {
+        const cIn = timeToMinutes(data.clockIn);
+        let cOut = timeToMinutes(data.clockOut);
+        if (cOut <= cIn) cOut += 24 * 60;
+        data.minutesWorked = Math.min(cOut - cIn, shiftInfo.shiftDuration);
+      }
+    }
+  }
+
   app.get("/api/attendance", async (req: Request, res: Response) => {
     try {
       const { workforceId, dateFrom, dateTo, date } = req.query as { workforceId?: string; dateFrom?: string; dateTo?: string; date?: string };
@@ -3676,6 +3691,7 @@ export async function registerRoutes(
   app.post("/api/attendance", async (req: Request, res: Response) => {
     try {
       const data = insertAttendanceRecordSchema.parse(req.body);
+      await enrichAttendanceMinutes(data);
       const row = await storage.upsertAttendanceRecord(data);
       return res.status(201).json(row);
     } catch (err) { return handleError(res, err); }
@@ -3686,6 +3702,7 @@ export async function registerRoutes(
       const { records } = req.body as { records: unknown[] };
       if (!Array.isArray(records)) return res.status(400).json({ message: "records array required" });
       const parsed = records.map(r => insertAttendanceRecordSchema.parse(r));
+      await Promise.all(parsed.map(r => enrichAttendanceMinutes(r)));
       const results = await Promise.all(parsed.map(r => storage.upsertAttendanceRecord(r)));
       return res.status(201).json(results);
     } catch (err) { return handleError(res, err); }
@@ -3696,7 +3713,9 @@ export async function registerRoutes(
       const existing = await storage.getAttendanceRecord(req.params.id);
       if (!existing) return res.status(404).json({ message: "Attendance record not found" });
       const data = insertAttendanceRecordSchema.partial().parse(req.body);
-      const row = await storage.upsertAttendanceRecord({ ...existing, ...data });
+      const merged = { ...existing, ...data };
+      await enrichAttendanceMinutes(merged);
+      const row = await storage.upsertAttendanceRecord(merged);
       const emp = existing.workforceId ? await storage.getWorkforceEmployee(existing.workforceId) : null;
       const empNum = emp?.employeeNumber ?? undefined;
       const subjectName = emp?.fullNameEn ?? undefined;
@@ -3733,6 +3752,97 @@ export async function registerRoutes(
         return { ...s, fullNameEn: emp?.fullNameEn ?? null, employeeNumber: emp?.employeeNumber ?? null };
       });
       return res.json(summaryWithName);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/attendance/dashboard-stats", async (req: Request, res: Response) => {
+    try {
+      const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
+      if (!dateFrom || !dateTo) return res.status(400).json({ message: "dateFrom and dateTo required" });
+      const allEmployees = await storage.getWorkforce({ isActive: true });
+      const workforceIds = allEmployees.map((e: { id: string }) => e.id);
+      if (workforceIds.length === 0) return res.json({ totals: { present: 0, absent: 0, late: 0, excused: 0, totalRecords: 0, totalMinutesWorked: 0, totalMinutesScheduled: 0, totalMinutesLate: 0 }, topLate: [], topAbsent: [] });
+
+      const summary = await storage.getWorkedDaySummary(workforceIds, dateFrom, dateTo);
+      const enriched = summary.map(s => {
+        const emp = allEmployees.find((e: { id: string; fullNameEn?: string | null; employeeNumber?: string }) => e.id === s.workforceId);
+        return { ...s, fullNameEn: emp?.fullNameEn ?? null, employeeNumber: emp?.employeeNumber ?? null };
+      });
+
+      const totals = enriched.reduce((acc, r) => ({
+        present: acc.present + r.workedDays,
+        absent: acc.absent + r.absentDays,
+        late: acc.late + r.lateDays,
+        excused: acc.excused + r.excusedDays,
+        totalRecords: acc.totalRecords + r.totalScheduledDays,
+        totalMinutesWorked: acc.totalMinutesWorked + r.totalMinutesWorked,
+        totalMinutesScheduled: acc.totalMinutesScheduled + r.totalMinutesScheduled,
+        totalMinutesLate: acc.totalMinutesLate + r.totalMinutesLate,
+      }), { present: 0, absent: 0, late: 0, excused: 0, totalRecords: 0, totalMinutesWorked: 0, totalMinutesScheduled: 0, totalMinutesLate: 0 });
+
+      const topLate = [...enriched].sort((a, b) => b.totalMinutesLate - a.totalMinutesLate).slice(0, 50);
+      const topAbsent = [...enriched].sort((a, b) => b.absentDays - a.absentDays).slice(0, 50);
+
+      return res.json({ totals, topLate, topAbsent });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/attendance/export-lateness", async (req: Request, res: Response) => {
+    try {
+      const { dateFrom, dateTo, format } = req.query as { dateFrom?: string; dateTo?: string; format?: string };
+      if (!dateFrom || !dateTo) return res.status(400).json({ message: "dateFrom and dateTo required" });
+      const allEmployees = await storage.getWorkforce({ isActive: true });
+      const workforceIds = allEmployees.map((e: { id: string }) => e.id);
+      const summary = await storage.getWorkedDaySummary(workforceIds, dateFrom, dateTo);
+      const enriched = summary.map(s => {
+        const emp = allEmployees.find((e: { id: string; fullNameEn?: string | null; employeeNumber?: string }) => e.id === s.workforceId);
+        return { ...s, fullNameEn: emp?.fullNameEn ?? null, employeeNumber: emp?.employeeNumber ?? null };
+      });
+      const sorted = [...enriched].sort((a, b) => b.totalMinutesLate - a.totalMinutesLate).filter(r => r.totalMinutesLate > 0);
+
+      const headers = ["Employee #", "Name", "Late Days", "Absent Days", "Total Minutes Late", "Total Minutes Worked", "Total Minutes Scheduled"];
+      const rows = sorted.map(r => [r.employeeNumber ?? "", r.fullNameEn ?? "", r.lateDays, r.absentDays, r.totalMinutesLate, r.totalMinutesWorked, r.totalMinutesScheduled]);
+
+      if (format === "xlsx") {
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Lateness Report");
+        const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename="lateness_report_${dateFrom}_${dateTo}.xlsx"`);
+        return res.send(buf);
+      }
+
+      const csvLines = [headers.join(","), ...rows.map(r => r.join(","))];
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="lateness_report_${dateFrom}_${dateTo}.csv"`);
+      return res.send(csvLines.join("\n"));
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/portal/my-shift/:workforceId", async (req: Request, res: Response) => {
+    try {
+      const authUserId = getAuthUserId(req);
+      if (!authUserId) return res.status(401).json({ message: "Authentication required" });
+      const { workforceId } = req.params;
+      const assignment = await storage.getActiveAssignmentForEmployee(workforceId);
+      if (!assignment) return res.json({ assignment: null, template: null, shifts: {}, attendance: [] });
+
+      const template = await storage.getScheduleTemplate(assignment.templateId);
+      const allShifts = await storage.getShifts();
+      const shiftMap: Record<string, { id: string; name: string; startTime: string; endTime: string; color: string }> = {};
+      for (const s of allShifts) shiftMap[s.id] = { id: s.id, name: s.name, startTime: s.startTime, endTime: s.endTime, color: s.color };
+
+      const today = new Date();
+      const dateFrom = new Date(today);
+      dateFrom.setDate(dateFrom.getDate() - 7);
+      const dateTo = new Date(today);
+      dateTo.setDate(dateTo.getDate() + 7);
+      const fmt = (d: Date) => d.toISOString().split("T")[0];
+
+      const attendance = await storage.getAttendanceRecords({ workforceId, dateFrom: fmt(dateFrom), dateTo: fmt(dateTo) });
+
+      return res.json({ assignment, template: template ?? null, shifts: shiftMap, attendance });
     } catch (err) { return handleError(res, err); }
   });
 

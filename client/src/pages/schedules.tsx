@@ -44,8 +44,10 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
-  MinusCircle,
   Shield,
+  Download,
+  LayoutDashboard,
+  TrendingUp,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -86,9 +88,11 @@ type AttendanceRecord = {
   id: string;
   workforceId: string;
   date: string;
-  status: "present" | "absent" | "late" | "half_day" | "excused";
+  status: "present" | "absent" | "late" | "excused";
   clockIn: string | null;
   clockOut: string | null;
+  minutesScheduled: number | null;
+  minutesWorked: number | null;
   notes: string | null;
 };
 
@@ -108,9 +112,11 @@ type WorkedDaySummary = {
   workedDays: number;
   absentDays: number;
   lateDays: number;
-  halfDays: number;
   excusedDays: number;
   totalScheduledDays: number;
+  totalMinutesWorked: number;
+  totalMinutesScheduled: number;
+  totalMinutesLate: number;
 };
 
 const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
@@ -128,7 +134,6 @@ const ATTENDANCE_STATUSES = [
   { value: "present", label: "Present", icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30" },
   { value: "absent", label: "Absent", icon: XCircle, color: "text-red-400", bg: "bg-red-500/10 border-red-500/30" },
   { value: "late", label: "Late", icon: AlertCircle, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/30" },
-  { value: "half_day", label: "Half Day", icon: MinusCircle, color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/30" },
   { value: "excused", label: "Excused", icon: Shield, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/30" },
 ];
 
@@ -1196,7 +1201,7 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
     return m;
   }, [attendanceRows]);
 
-  const [localStatuses, setLocalStatuses] = useState<Record<string, "present" | "absent" | "late" | "half_day" | "excused">>({});
+  const [localStatuses, setLocalStatuses] = useState<Record<string, "present" | "absent" | "late" | "excused">>({});
   const [localClockIn, setLocalClockIn] = useState<Record<string, string>>({});
   const [localClockOut, setLocalClockOut] = useState<Record<string, string>>({});
 
@@ -1206,7 +1211,7 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
     setLocalClockOut({});
   }, [selectedDate]);
 
-  const handleStatusChange = (workforceId: string, status: "present" | "absent" | "late" | "half_day" | "excused") => {
+  const handleStatusChange = (workforceId: string, status: "present" | "absent" | "late" | "excused") => {
     setLocalStatuses(prev => ({ ...prev, [workforceId]: status }));
   };
 
@@ -1333,10 +1338,11 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
                 <TableHeader>
                   <TableRow className="border-border/40 hover:bg-transparent">
                     <TableHead className="text-zinc-400">Employee</TableHead>
-                    <TableHead className="text-zinc-400">Scheduled Shift</TableHead>
+                    <TableHead className="text-zinc-400">Shift</TableHead>
                     <TableHead className="text-zinc-400">Status</TableHead>
                     <TableHead className="text-zinc-400">Clock In</TableHead>
                     <TableHead className="text-zinc-400">Clock Out</TableHead>
+                    <TableHead className="text-zinc-400 text-center">Mins Worked</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1347,6 +1353,7 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
                     const statusInfo = getStatusInfo(currentStatus);
                     const clockInValue = localClockIn[emp.id] !== undefined ? localClockIn[emp.id] : (existing?.clockIn ?? "");
                     const clockOutValue = localClockOut[emp.id] !== undefined ? localClockOut[emp.id] : (existing?.clockOut ?? "");
+                    const hasMissingClockOut = !!(existing?.clockIn && !existing?.clockOut && existing?.status !== "absent");
                     return (
                       <TableRow key={emp.id} className="border-border/30 hover:bg-muted/[0.08]" data-testid={`row-attendance-${emp.id}`}>
                         <TableCell>
@@ -1357,24 +1364,31 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
                           <ShiftBadge shift={shift} />
                         </TableCell>
                         <TableCell>
-                          <Select
-                            value={currentStatus}
-                            onValueChange={v => handleStatusChange(emp.id, v as typeof currentStatus)}
-                          >
-                            <SelectTrigger
-                              data-testid={`select-status-${emp.id}`}
-                              className={`h-7 text-xs border ${statusInfo.bg} ${statusInfo.color} w-[120px]`}
+                          <div className="flex items-center gap-1">
+                            <Select
+                              value={currentStatus}
+                              onValueChange={v => handleStatusChange(emp.id, v as typeof currentStatus)}
                             >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="bg-popover border-border">
-                              {ATTENDANCE_STATUSES.map(s => (
-                                <SelectItem key={s.value} value={s.value} className="text-xs">
-                                  {s.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                              <SelectTrigger
+                                data-testid={`select-status-${emp.id}`}
+                                className={`h-7 text-xs border ${statusInfo.bg} ${statusInfo.color} w-[120px]`}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="bg-popover border-border">
+                                {ATTENDANCE_STATUSES.map(s => (
+                                  <SelectItem key={s.value} value={s.value} className="text-xs">
+                                    {s.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {hasMissingClockOut && (
+                              <span title="Missing clock-out" className="text-amber-400" data-testid={`badge-missing-clockout-${emp.id}`}>
+                                <AlertCircle className="h-3.5 w-3.5" />
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Input
@@ -1395,6 +1409,11 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
                             placeholder={formatTime(shift.endTime)}
                             className="bg-background border-input text-foreground h-7 text-xs w-[100px]"
                           />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="text-xs text-zinc-300" data-testid={`text-minutes-${emp.id}`}>
+                            {existing?.minutesWorked != null ? `${existing.minutesWorked}/${existing.minutesScheduled ?? "—"}` : "—"}
+                          </span>
                         </TableCell>
                       </TableRow>
                     );
@@ -1422,9 +1441,9 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
                     <TableHead className="text-zinc-400 text-center">Worked</TableHead>
                     <TableHead className="text-zinc-400 text-center">Absent</TableHead>
                     <TableHead className="text-zinc-400 text-center">Late</TableHead>
-                    <TableHead className="text-zinc-400 text-center">Half Day</TableHead>
                     <TableHead className="text-zinc-400 text-center">Excused</TableHead>
-                    <TableHead className="text-zinc-400 text-center">Total Scheduled</TableHead>
+                    <TableHead className="text-zinc-400 text-center">Late Mins</TableHead>
+                    <TableHead className="text-zinc-400 text-center">Total</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1441,8 +1460,8 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
                       </TableCell>
                       <TableCell className="text-center text-red-400 text-sm">{row.absentDays}</TableCell>
                       <TableCell className="text-center text-yellow-400 text-sm">{row.lateDays}</TableCell>
-                      <TableCell className="text-center text-orange-400 text-sm">{row.halfDays}</TableCell>
                       <TableCell className="text-center text-blue-400 text-sm">{row.excusedDays}</TableCell>
+                      <TableCell className="text-center text-amber-400 text-sm" data-testid={`text-late-mins-${row.workforceId}`}>{row.totalMinutesLate}</TableCell>
                       <TableCell className="text-center text-zinc-400 text-sm">{row.totalScheduledDays}</TableCell>
                     </TableRow>
                   ))}
@@ -1456,9 +1475,159 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
   );
 }
 
+// ─── Dashboard Tab ──────────────────────────────────────────────────────────────
+type DashboardStats = {
+  totals: {
+    present: number; absent: number; late: number; excused: number;
+    totalRecords: number; totalMinutesWorked: number; totalMinutesScheduled: number; totalMinutesLate: number;
+  };
+  topLate: WorkedDaySummary[];
+  topAbsent: WorkedDaySummary[];
+};
+
+function DashboardTab() {
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date(); d.setDate(1); return localDateStr(d);
+  });
+  const [dateTo, setDateTo] = useState(localDateStr());
+
+  const { data: stats, isLoading } = useQuery<DashboardStats>({
+    queryKey: ["/api/attendance/dashboard-stats", dateFrom, dateTo],
+    queryFn: () => apiRequest("GET", `/api/attendance/dashboard-stats?dateFrom=${dateFrom}&dateTo=${dateTo}`).then(r => r.json()),
+  });
+
+  const handleExport = (format: "csv" | "xlsx") => {
+    window.open(`/api/attendance/export-lateness?dateFrom=${dateFrom}&dateTo=${dateTo}&format=${format}`, "_blank");
+  };
+
+  const t = stats?.totals ?? { present: 0, absent: 0, late: 0, excused: 0, totalRecords: 0, totalMinutesWorked: 0, totalMinutesScheduled: 0, totalMinutesLate: 0 };
+  const attendanceRate = t.totalRecords > 0 ? Math.round((t.present / t.totalRecords) * 100) : 0;
+
+  const statCards = [
+    { label: "Present Days", value: t.present, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30", icon: CheckCircle2 },
+    { label: "Absent Days", value: t.absent, color: "text-red-400", bg: "bg-red-500/10 border-red-500/30", icon: XCircle },
+    { label: "Late Days", value: t.late, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/30", icon: AlertCircle },
+    { label: "Total Late Minutes", value: t.totalMinutesLate, color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/30", icon: TrendingUp },
+    { label: "Attendance Rate", value: `${attendanceRate}%`, color: "text-primary", bg: "bg-primary/10 border-primary/30", icon: BarChart3 },
+    { label: "Excused Days", value: t.excused, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/30", icon: Shield },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Label className="text-zinc-400 text-xs">From</Label>
+          <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bg-background border-input text-foreground h-8 text-xs w-[140px]" data-testid="input-dashboard-from" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="text-zinc-400 text-xs">To</Label>
+          <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="bg-background border-input text-foreground h-8 text-xs w-[140px]" data-testid="input-dashboard-to" />
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16 gap-3 text-zinc-500">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="text-sm">Loading dashboard...</span>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {statCards.map(sc => (
+              <div key={sc.label} className={`rounded-lg border p-3 ${sc.bg}`} data-testid={`stat-card-${sc.label.toLowerCase().replace(/\s+/g, "-")}`}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <sc.icon className={`h-3.5 w-3.5 ${sc.color}`} />
+                  <span className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">{sc.label}</span>
+                </div>
+                <span className={`text-xl font-bold ${sc.color}`}>{sc.value}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-6">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-white font-display">Most Late (Top 50)</h3>
+                <div className="flex gap-1">
+                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => handleExport("csv")} data-testid="button-export-csv">
+                    <Download className="h-3 w-3" /> CSV
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => handleExport("xlsx")} data-testid="button-export-xlsx">
+                    <Download className="h-3 w-3" /> Excel
+                  </Button>
+                </div>
+              </div>
+              <div className="border border-border/50 rounded-lg overflow-hidden max-h-[400px] overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-border/40 hover:bg-transparent">
+                      <TableHead className="text-zinc-400 text-xs">#</TableHead>
+                      <TableHead className="text-zinc-400 text-xs">Employee</TableHead>
+                      <TableHead className="text-zinc-400 text-xs text-center">Late Days</TableHead>
+                      <TableHead className="text-zinc-400 text-xs text-center">Late Mins</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(stats?.topLate ?? []).filter(r => r.totalMinutesLate > 0).map((row, i) => (
+                      <TableRow key={row.workforceId} className="border-border/30 hover:bg-muted/[0.08]" data-testid={`row-top-late-${row.workforceId}`}>
+                        <TableCell className="text-zinc-500 text-xs">{i + 1}</TableCell>
+                        <TableCell>
+                          <div className="text-sm text-white font-medium">{row.fullNameEn ?? "—"}</div>
+                          <div className="text-[10px] text-primary font-mono">{row.employeeNumber}</div>
+                        </TableCell>
+                        <TableCell className="text-center text-yellow-400 text-sm">{row.lateDays}</TableCell>
+                        <TableCell className="text-center text-amber-400 text-sm font-bold">{row.totalMinutesLate}</TableCell>
+                      </TableRow>
+                    ))}
+                    {(stats?.topLate ?? []).filter(r => r.totalMinutesLate > 0).length === 0 && (
+                      <TableRow><TableCell colSpan={4} className="text-center text-zinc-500 py-8 text-sm">No lateness data for this period</TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-bold text-white font-display mb-3">Most Absent (Top 50)</h3>
+              <div className="border border-border/50 rounded-lg overflow-hidden max-h-[400px] overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-border/40 hover:bg-transparent">
+                      <TableHead className="text-zinc-400 text-xs">#</TableHead>
+                      <TableHead className="text-zinc-400 text-xs">Employee</TableHead>
+                      <TableHead className="text-zinc-400 text-xs text-center">Absent Days</TableHead>
+                      <TableHead className="text-zinc-400 text-xs text-center">Scheduled</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(stats?.topAbsent ?? []).filter(r => r.absentDays > 0).map((row, i) => (
+                      <TableRow key={row.workforceId} className="border-border/30 hover:bg-muted/[0.08]" data-testid={`row-top-absent-${row.workforceId}`}>
+                        <TableCell className="text-zinc-500 text-xs">{i + 1}</TableCell>
+                        <TableCell>
+                          <div className="text-sm text-white font-medium">{row.fullNameEn ?? "—"}</div>
+                          <div className="text-[10px] text-primary font-mono">{row.employeeNumber}</div>
+                        </TableCell>
+                        <TableCell className="text-center text-red-400 text-sm font-bold">{row.absentDays}</TableCell>
+                        <TableCell className="text-center text-zinc-400 text-sm">{row.totalScheduledDays}</TableCell>
+                      </TableRow>
+                    ))}
+                    {(stats?.topAbsent ?? []).filter(r => r.absentDays > 0).length === 0 && (
+                      <TableRow><TableCell colSpan={4} className="text-center text-zinc-500 py-8 text-sm">No absence data for this period</TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function SchedulesPage() {
-  const [tab, setTab] = useState<"shifts" | "templates" | "roster" | "attendance">("shifts");
+  const [tab, setTab] = useState<"dashboard" | "shifts" | "templates" | "roster" | "attendance">("dashboard");
 
   const { data: shifts = [], isLoading: shiftsLoading } = useQuery<Shift[]>({
     queryKey: ["/api/shifts"],
@@ -1478,6 +1647,7 @@ export default function SchedulesPage() {
   const loading = shiftsLoading || templatesLoading || empLoading;
 
   const TABS = [
+    { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { key: "shifts", label: "Shifts", icon: Clock },
     { key: "templates", label: "Templates", icon: Calendar },
     { key: "roster", label: "Roster", icon: Users },
@@ -1488,8 +1658,8 @@ export default function SchedulesPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-white font-display">Work Schedules</h1>
-          <p className="text-zinc-400 text-sm mt-1">Manage shift definitions, schedule templates, employee rosters, and attendance tracking.</p>
+          <h1 className="text-2xl font-bold text-white font-display">Attendance</h1>
+          <p className="text-zinc-400 text-sm mt-1">Dashboard, shift definitions, schedule templates, employee rosters, and attendance tracking.</p>
         </div>
 
         <div className="flex rounded-md overflow-hidden border border-border/50 bg-muted/20 w-fit">
@@ -1516,6 +1686,7 @@ export default function SchedulesPage() {
               </div>
             ) : (
               <>
+                {tab === "dashboard" && <DashboardTab />}
                 {tab === "shifts" && <ShiftsTab shifts={shifts} />}
                 {tab === "templates" && <TemplatesTab shifts={shifts} templates={templates} />}
                 {tab === "roster" && <RosterTab employees={employees} shifts={shifts} templates={templates} />}

@@ -40,7 +40,7 @@ The system employs a modern, full-stack architecture.
 - **Candidate Data**: Identified by `national_id`; `skills`, `languages`, `certifications`, `tags` are array columns; `metadata` uses JSONB.
 - **Data Integrity**: Strict policy against `onConflictDoNothing()` and soft deletion (`archivedAt`) for events and candidates.
 - **Events**: Central entity, can be `duration_based` or `ongoing`.
-- **Work Schedules & Shifts**: Dedicated schema for `shifts` (catalog), `schedule_templates` (weekly patterns), `schedule_assignments` (employee assignments with history), and `attendance_records` (daily status and clock-in/out).
+- **Work Schedules & Attendance**: Dedicated schema for `shifts` (catalog), `schedule_templates` (weekly patterns), `schedule_assignments` (employee assignments with history), and `attendance_records` (daily status, clock-in/out, `minutesScheduled`, `minutesWorked`). Attendance status enum: `present`, `absent`, `late`, `excused` (no half_day). Navigation at `/attendance` (top-level sidebar), old `/schedules` redirects. Dashboard tab with stat cards, Most Late/Most Absent top-50 tables, CSV/Excel export. Minute-based engine: verification pipeline auto-detects lateness, manual edits auto-calculate minutes, settlement uses minute-based formula. Employee portal "My Shift" tab shows weekly schedule and recent attendance.
 - **Departments & Positions**: Global position catalog with parent-child hierarchy within departments. Positions link to workforce records via `workforce.positionId`. Soft-delete with deactivation safety guards (blocks deactivation of positions with active employees or active children, blocks department deactivation with active positions). Settings page at `/departments`.
 
 **Authentication**:

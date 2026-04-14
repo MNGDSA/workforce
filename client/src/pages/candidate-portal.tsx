@@ -721,6 +721,132 @@ function ProfileCompletionCard({
   );
 }
 
+// ─── My Shift Section (Employee Portal) ──────────────────────────────────────
+
+type MyShiftData = {
+  assignment: { id: string; templateId: string; startDate: string; endDate: string | null } | null;
+  template: {
+    id: string; name: string;
+    sundayShiftId: string | null; mondayShiftId: string | null; tuesdayShiftId: string | null;
+    wednesdayShiftId: string | null; thursdayShiftId: string | null; fridayShiftId: string | null;
+    saturdayShiftId: string | null;
+  } | null;
+  shifts: Record<string, { id: string; name: string; startTime: string; endTime: string; color: string }>;
+  attendance: Array<{ id: string; date: string; status: string; clockIn: string | null; clockOut: string | null; minutesWorked: number | null; minutesScheduled: number | null }>;
+};
+
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
+const STATUS_STYLES: Record<string, { label: string; color: string }> = {
+  present: { label: "Present", color: "text-emerald-400" },
+  absent: { label: "Absent", color: "text-red-400" },
+  late: { label: "Late", color: "text-yellow-400" },
+  excused: { label: "Excused", color: "text-blue-400" },
+};
+
+function MyShiftSection({ workforceId }: { workforceId: string }) {
+  const { data, isLoading } = useQuery<MyShiftData>({
+    queryKey: ["/api/portal/my-shift", workforceId],
+    queryFn: () => apiRequest("GET", `/api/portal/my-shift/${workforceId}`).then(r => r.json()),
+  });
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center py-12 gap-2 text-zinc-500">
+      <Loader2 className="h-5 w-5 animate-spin" />
+      <span className="text-sm">Loading shift info...</span>
+    </div>
+  );
+
+  if (!data?.assignment || !data?.template) {
+    return (
+      <Card className="bg-card border-border">
+        <CardContent className="py-10 text-center">
+          <Calendar className="h-8 w-8 text-zinc-500 mx-auto mb-2" />
+          <p className="text-zinc-400 text-sm">No shift schedule assigned yet.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const tmpl = data.template;
+  const shiftMap = data.shifts;
+  const dayShiftIds: Record<string, string | null> = {
+    sunday: tmpl.sundayShiftId, monday: tmpl.mondayShiftId, tuesday: tmpl.tuesdayShiftId,
+    wednesday: tmpl.wednesdayShiftId, thursday: tmpl.thursdayShiftId, friday: tmpl.fridayShiftId,
+    saturday: tmpl.saturdayShiftId,
+  };
+
+  const today = new Date().getDay();
+  const attMap: Record<string, typeof data.attendance[0]> = {};
+  for (const a of data.attendance) attMap[a.date] = a;
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-display font-bold text-white">My Shift</h3>
+
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm text-zinc-400">Schedule: {tmpl.name}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-7 gap-1">
+            {DAY_KEYS.map((day, idx) => {
+              const shiftId = dayShiftIds[day];
+              const shift = shiftId ? shiftMap[shiftId] : null;
+              const isToday = idx === today;
+              return (
+                <div key={day} className={`rounded p-2 text-center ${isToday ? "bg-primary/15 border border-primary/30" : "bg-muted/20"}`} data-testid={`day-shift-${day}`}>
+                  <div className={`text-[10px] font-bold uppercase ${isToday ? "text-primary" : "text-zinc-500"}`}>{DAY_NAMES[idx].slice(0, 3)}</div>
+                  {shift ? (
+                    <>
+                      <div className="text-xs text-white font-medium mt-1">{shift.name}</div>
+                      <div className="text-[10px] text-zinc-400 mt-0.5">{shift.startTime} – {shift.endTime}</div>
+                    </>
+                  ) : (
+                    <div className="text-[10px] text-zinc-600 mt-1">Off</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm text-zinc-400">Recent Attendance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {data.attendance.length === 0 ? (
+            <p className="text-zinc-500 text-sm text-center py-4">No attendance records yet.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {data.attendance.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 14).map(rec => {
+                const st = STATUS_STYLES[rec.status] ?? { label: rec.status, color: "text-zinc-400" };
+                const dateObj = new Date(rec.date + "T00:00:00");
+                const dayLabel = DAY_NAMES[dateObj.getDay()];
+                return (
+                  <div key={rec.id} className="flex items-center justify-between text-sm py-1.5 px-2 rounded bg-muted/10" data-testid={`attendance-row-${rec.date}`}>
+                    <div>
+                      <span className="text-white font-medium">{rec.date}</span>
+                      <span className="text-zinc-500 text-xs ml-2">{dayLabel}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {rec.clockIn && <span className="text-zinc-400 text-xs">{rec.clockIn}–{rec.clockOut ?? "?"}</span>}
+                      {rec.minutesWorked != null && <span className="text-zinc-400 text-xs">{rec.minutesWorked}m</span>}
+                      <span className={`text-xs font-semibold ${st.color}`}>{st.label}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ─── Placeholder Card ─────────────────────────────────────────────────────────
 
 function PlaceholderCard({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
@@ -1630,7 +1756,7 @@ export default function CandidatePortal() {
         );
 
       case "shift":
-        return <PlaceholderCard icon={<Calendar className="h-6 w-6" />} title="My Shift" description="Your shift schedule will appear here once the scheduling module is live." />;
+        return activeWorkforceRecord ? <MyShiftSection workforceId={activeWorkforceRecord.id} /> : <PlaceholderCard icon={<Calendar className="h-6 w-6" />} title="My Shift" description="Your shift schedule will appear here once you are assigned to a workforce." />;
 
       case "payslips":
         return <PlaceholderCard icon={<Banknote className="h-6 w-6" />} title="Payslips" description="Your payslips will appear here once the payroll module is live." />;
