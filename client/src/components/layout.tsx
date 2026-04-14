@@ -307,12 +307,10 @@ const topNavItems = [
   { href: "/payroll",   icon: Wallet,          label: "Payroll" },
 ];
 
-const attendancePaths = ["/attendance"];
-const attendanceItem = { href: "/attendance", icon: Clock, label: "Attendance" };
-
-const workforcePaths = ["/workforce", "/geofences", "/assets", "/offboarding"];
+const workforcePaths = ["/workforce", "/geofences", "/assets", "/offboarding", "/attendance"];
 const workforceSubItems = [
   { href: "/workforce",   icon: Users,   label: "Employees" },
+  { href: "/attendance",  icon: Clock,   label: "Attendance" },
   { href: "/geofences",   icon: MapPin,  label: "Geofence Zones" },
   { href: "/assets",      icon: Package, label: "Assets" },
   { href: "/offboarding", icon: LogOut,  label: "Offboarding" },
@@ -781,13 +779,6 @@ export default function DashboardLayout({ children }: LayoutProps) {
             badge={item.href === "/inbox" ? inboxCount?.count : undefined}
           />
         ))}
-
-        <NavItem
-          href={attendanceItem.href}
-          icon={attendanceItem.icon}
-          label={attendanceItem.label}
-          isActive={location.startsWith("/attendance")}
-        />
 
         {/* Workforce group */}
         <div>
