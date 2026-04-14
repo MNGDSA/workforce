@@ -2710,6 +2710,8 @@ export async function registerRoutes(
               parentPositionId: p.parentPositionId,
               employeeCount: emps.length,
               employees: emps.map(e => ({
+                id: e.candidateId,
+                fullName: e.fullNameEn,
                 candidateId: e.candidateId,
                 employeeNumber: e.employeeNumber,
                 fullNameEn: e.fullNameEn,
@@ -2731,9 +2733,12 @@ export async function registerRoutes(
         };
       });
 
+      const grandTotal = result.reduce((s, d) => s + d.totalEmployees, 0) + unassignedRows.length;
       return res.json({
         departments: result,
         unassigned: unassignedRows.map(e => ({
+          id: e.candidateId,
+          fullName: e.fullNameEn,
           candidateId: e.candidateId,
           employeeNumber: e.employeeNumber,
           fullNameEn: e.fullNameEn,
@@ -2742,6 +2747,7 @@ export async function registerRoutes(
           phone: e.phone,
           photoUrl: e.photoUrl,
         })),
+        totalEmployees: grandTotal,
       });
     } catch (err) { return handleError(res, err); }
   });
