@@ -11,6 +11,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "attendance_submissions")
@@ -38,6 +40,8 @@ data class AttendanceEntity(
     @ColumnInfo(name = "ntp_timestamp") val ntpTimestamp: String? = null,
     @ColumnInfo(name = "system_clock_timestamp") val systemClockTimestamp: String? = null,
     @ColumnInfo(name = "last_ntp_sync_at") val lastNtpSyncAt: String? = null,
+    @ColumnInfo(name = "location_source", defaultValue = "high_accuracy") val locationSource: String? = null,
+    @ColumnInfo(name = "created_at_millis", defaultValue = "0") val createdAtMillis: Long = System.currentTimeMillis(),
 )
 
 @Dao
@@ -51,6 +55,9 @@ interface AttendanceDao {
 
     @Query("SELECT COUNT(*) FROM attendance_submissions WHERE sync_status = 'pending' AND owner_workforce_id = :workforceId")
     fun getPendingCount(workforceId: String): Flow<Int>
+
+    @Query("SELECT MIN(created_at_millis) FROM attendance_submissions WHERE sync_status = 'pending' AND owner_workforce_id = :workforceId AND created_at_millis > 0")
+    fun getOldestPendingCreatedAt(workforceId: String): Flow<Long?>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: AttendanceEntity)
@@ -74,7 +81,7 @@ interface AttendanceDao {
     suspend fun deleteAllForUser(workforceId: String)
 }
 
-@Database(entities = [AttendanceEntity::class], version = 6, exportSchema = false)
+@Database(entities = [AttendanceEntity::class], version = 7, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun attendanceDao(): AttendanceDao
 
@@ -82,13 +89,24 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE attendance_submissions ADD COLUMN location_source TEXT DEFAULT 'high_accuracy'")
+                db.execSQL("ALTER TABLE attendance_submissions ADD COLUMN created_at_millis INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "workforce.db",
-                ).fallbackToDestructiveMigration().build().also { INSTANCE = it }
+                )
+                    .addMigrations(MIGRATION_6_7)
+                    .fallbackToDestructiveMigrationFrom(1, 2, 3, 4, 5)
+                    .build()
+                    .also { INSTANCE = it }
             }
         }
     }

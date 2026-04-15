@@ -2,6 +2,8 @@ package com.luxurycarts.workforce.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.SystemClock
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -23,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -30,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,6 +48,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -52,6 +57,7 @@ import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import com.luxurycarts.workforce.R
 import com.luxurycarts.workforce.data.AttendanceDao
 import com.luxurycarts.workforce.data.AttendanceEntity
 import com.luxurycarts.workforce.services.DeviceTrustManager
@@ -60,14 +66,15 @@ import com.luxurycarts.workforce.services.SyncWorker
 import com.luxurycarts.workforce.ui.theme.Background
 import com.luxurycarts.workforce.ui.theme.ErrorRed
 import com.luxurycarts.workforce.ui.theme.ForestGreen
+import com.luxurycarts.workforce.ui.theme.Surface
 import com.luxurycarts.workforce.ui.theme.TextMuted
 import com.luxurycarts.workforce.ui.theme.TextPrimary
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import android.graphics.BitmapFactory
 import java.io.File
 import java.time.Instant
-import java.time.LocalDate
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -96,18 +103,46 @@ fun CaptureScreen(
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
     var isCapturing by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showBackConfirm by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = isCapturing) {
+        showBackConfirm = true
+    }
 
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         hasCameraPermission = it
     }
     val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        hasLocationPermission = it[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        hasLocationPermission = it[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                it[Manifest.permission.ACCESS_COARSE_LOCATION] == true
     }
 
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) cameraLauncher.launch(Manifest.permission.CAMERA)
         if (!hasLocationPermission) locationLauncher.launch(
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        )
+    }
+
+    if (showBackConfirm) {
+        AlertDialog(
+            onDismissRequest = { showBackConfirm = false },
+            containerColor = Surface,
+            title = { Text(stringResource(R.string.capture_in_progress), color = TextPrimary) },
+            text = { Text(stringResource(R.string.capture_back_warning), color = TextMuted) },
+            confirmButton = {
+                TextButton(onClick = { showBackConfirm = false }) {
+                    Text(stringResource(R.string.stay), color = ForestGreen)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showBackConfirm = false
+                    onBack()
+                }) {
+                    Text(stringResource(R.string.leave), color = ErrorRed)
+                }
+            },
         )
     }
 
@@ -156,7 +191,7 @@ fun CaptureScreen(
             }
 
             Text(
-                "Position your face within the oval",
+                stringResource(R.string.position_face),
                 color = Color.White.copy(alpha = 0.7f),
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
@@ -166,12 +201,18 @@ fun CaptureScreen(
             )
 
             IconButton(
-                onClick = onBack,
+                onClick = {
+                    if (isCapturing) {
+                        showBackConfirm = true
+                    } else {
+                        onBack()
+                    }
+                },
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(16.dp),
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = Color.White)
             }
 
             Column(
@@ -191,8 +232,10 @@ fun CaptureScreen(
                         isCapturing = true
                         errorMessage = null
                         scope.launch {
+                            var photoFile: File? = null
+                            var encPhotoFile: File? = null
                             try {
-                                val photoFile = File(context.filesDir, "att_${System.currentTimeMillis()}.jpg")
+                                photoFile = File(context.filesDir, "att_${System.currentTimeMillis()}.jpg")
                                 capturePhoto(imageCapture!!, photoFile, context)
 
                                 val fileSizeKb = photoFile.length() / 1024
@@ -203,24 +246,26 @@ fun CaptureScreen(
 
                                 if (fileSizeKb < 30 || imgW < 400 || imgH < 400) {
                                     photoFile.delete()
-                                    errorMessage = "Photo quality too low (${imgW}×${imgH}, ${fileSizeKb}KB). Please ensure good lighting and hold steady."
+                                    photoFile = null
+                                    errorMessage = context.getString(R.string.photo_quality_low, imgW, imgH, fileSizeKb)
                                     isCapturing = false
                                     return@launch
                                 }
 
-                                val location = getLocation(context)
+                                val location = getLocationTiered(context)
 
                                 val app = context.applicationContext as com.luxurycarts.workforce.WorkforceApp
                                 val ntpService = app.ntpTimeService
 
                                 if (!ntpService.hasEverSynced) {
                                     photoFile.delete()
-                                    errorMessage = "Internet connection required for first-time setup. Please connect to the internet and try again."
+                                    photoFile = null
+                                    errorMessage = context.getString(R.string.internet_required_first_time)
                                     isCapturing = false
                                     return@launch
                                 }
 
-                                val trustReport = DeviceTrustManager.generateReport(context, location.fourth)
+                                val trustReport = DeviceTrustManager.generateReport(context, location.rawLocation)
                                 val trustedInstant = ntpService.getTrustedInstant() ?: Instant.now()
                                 val systemClockInstant = Instant.now()
                                 val lastNtpSync = ntpService.getLastNtpSyncInstant()
@@ -228,17 +273,19 @@ fun CaptureScreen(
                                 val attendanceDate = trustedInstant.atZone(java.time.ZoneId.of(timezone)).toLocalDate().toString()
 
                                 val encPhotoPath = photoFile.absolutePath + ".enc"
+                                encPhotoFile = File(encPhotoPath)
                                 EncryptionService.encryptFile(photoFile.absolutePath, encPhotoPath)
                                 photoFile.delete()
+                                photoFile = null
 
                                 val entity = AttendanceEntity(
                                     id = UUID.randomUUID().toString(),
                                     workforceId = EncryptionService.encrypt(workforceId),
                                     attendanceDate = attendanceDate,
                                     encryptedTimestamp = EncryptionService.encrypt(trustedInstant.toString()),
-                                    encryptedGpsLat = EncryptionService.encrypt(location.first.toString()),
-                                    encryptedGpsLng = EncryptionService.encrypt(location.second.toString()),
-                                    gpsAccuracy = location.third,
+                                    encryptedGpsLat = EncryptionService.encrypt(location.latitude.toString()),
+                                    encryptedGpsLng = EncryptionService.encrypt(location.longitude.toString()),
+                                    gpsAccuracy = location.accuracy,
                                     encryptedPhotoPath = EncryptionService.encrypt(encPhotoPath),
                                     ownerWorkforceId = workforceId,
                                     mockLocationDetected = trustReport.mockLocationDetected,
@@ -249,12 +296,16 @@ fun CaptureScreen(
                                     ntpTimestamp = trustedInstant.toString(),
                                     systemClockTimestamp = systemClockInstant.toString(),
                                     lastNtpSyncAt = lastNtpSync?.toString(),
+                                    locationSource = location.source,
+                                    createdAtMillis = System.currentTimeMillis(),
                                 )
                                 dao.insert(entity)
                                 SyncWorker.syncNow(context)
                                 onComplete()
                             } catch (e: Exception) {
-                                errorMessage = e.message ?: "Capture failed"
+                                photoFile?.let { if (it.exists()) it.delete() }
+                                encPhotoFile?.let { if (it.exists()) it.delete() }
+                                errorMessage = e.message ?: context.getString(R.string.capture_failed)
                                 isCapturing = false
                             }
                         }
@@ -267,7 +318,7 @@ fun CaptureScreen(
                     if (isCapturing) {
                         CircularProgressIndicator(color = TextPrimary, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
                     } else {
-                        Icon(Icons.Filled.CameraAlt, "Capture", modifier = Modifier.size(32.dp))
+                        Icon(Icons.Filled.CameraAlt, stringResource(R.string.capture), modifier = Modifier.size(32.dp))
                     }
                 }
             }
@@ -278,7 +329,7 @@ fun CaptureScreen(
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Camera and location permissions are required", color = TextPrimary)
+                Text(stringResource(R.string.permissions_required), color = TextPrimary)
                 Spacer(Modifier.height(16.dp))
                 Button(
                     onClick = {
@@ -289,13 +340,13 @@ fun CaptureScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ForestGreen),
                 ) {
-                    Text("Grant Permissions", fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.grant_permissions), fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.height(12.dp))
-                Text("or", color = TextMuted)
+                Text(stringResource(R.string.or_text), color = TextMuted)
                 Spacer(Modifier.height(12.dp))
                 Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)) {
-                    Text("Go Back", color = TextMuted)
+                    Text(stringResource(R.string.go_back), color = TextMuted)
                 }
             }
         }
@@ -320,23 +371,63 @@ private suspend fun capturePhoto(imageCapture: ImageCapture, outputFile: File, c
     }
 
 data class LocationResult(
-    val first: Double,
-    val second: Double,
-    val third: Float?,
-    val fourth: android.location.Location?,
+    val latitude: Double,
+    val longitude: Double,
+    val accuracy: Float?,
+    val rawLocation: android.location.Location?,
+    val source: String,
 )
 
 @android.annotation.SuppressLint("MissingPermission")
-private suspend fun getLocation(context: android.content.Context): LocationResult =
-    suspendCancellableCoroutine { cont ->
-        val client = LocationServices.getFusedLocationProviderClient(context)
-        client.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
-            .addOnSuccessListener { location ->
-                if (location != null) {
-                    cont.resume(LocationResult(location.latitude, location.longitude, location.accuracy, location))
-                } else {
-                    cont.resumeWithException(Exception("Location unavailable"))
+private suspend fun getLocationTiered(context: android.content.Context): LocationResult {
+    val client = LocationServices.getFusedLocationProviderClient(context)
+
+    val highAccuracy = withTimeoutOrNull(10_000L) {
+        suspendCancellableCoroutine { cont ->
+            val cts = CancellationTokenSource()
+            cont.invokeOnCancellation { cts.cancel() }
+            client.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cts.token)
+                .addOnSuccessListener { location ->
+                    if (location != null) {
+                        cont.resume(LocationResult(location.latitude, location.longitude, location.accuracy, location, "high_accuracy"))
+                    } else {
+                        cont.resume(null)
+                    }
                 }
-            }
-            .addOnFailureListener { cont.resumeWithException(it) }
+                .addOnFailureListener { cont.resume(null) }
+        }
     }
+    if (highAccuracy != null) return highAccuracy
+
+    val lastKnown = suspendCancellableCoroutine<android.location.Location?> { cont ->
+        client.lastLocation
+            .addOnSuccessListener { location -> cont.resume(location) }
+            .addOnFailureListener { cont.resume(null) }
+    }
+    if (lastKnown != null) {
+        val ageMs = SystemClock.elapsedRealtime() - (lastKnown.elapsedRealtimeNanos / 1_000_000)
+        val fiveMinMs = 5 * 60 * 1000L
+        if (ageMs < fiveMinMs) {
+            return LocationResult(lastKnown.latitude, lastKnown.longitude, lastKnown.accuracy, lastKnown, "last_known")
+        }
+    }
+
+    val coarse = withTimeoutOrNull(15_000L) {
+        suspendCancellableCoroutine { cont ->
+            val cts = CancellationTokenSource()
+            cont.invokeOnCancellation { cts.cancel() }
+            client.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, cts.token)
+                .addOnSuccessListener { location ->
+                    if (location != null) {
+                        cont.resume(LocationResult(location.latitude, location.longitude, location.accuracy, location, "network_coarse"))
+                    } else {
+                        cont.resume(null)
+                    }
+                }
+                .addOnFailureListener { cont.resume(null) }
+        }
+    }
+    if (coarse != null) return coarse
+
+    throw Exception(context.getString(R.string.location_unavailable))
+}

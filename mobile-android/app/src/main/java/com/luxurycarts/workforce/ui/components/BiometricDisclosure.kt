@@ -13,7 +13,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.luxurycarts.workforce.R
 import com.luxurycarts.workforce.ui.theme.ForestGreen
 import com.luxurycarts.workforce.ui.theme.TextMuted
 import com.luxurycarts.workforce.ui.theme.TextPrimary
@@ -27,7 +29,7 @@ fun BiometricDisclosureDialog(
         onDismissRequest = onDecline,
         title = {
             Text(
-                "Biometric Data Notice",
+                stringResource(R.string.biometric_notice),
                 style = MaterialTheme.typography.titleLarge,
                 color = TextPrimary,
             )
@@ -35,22 +37,22 @@ fun BiometricDisclosureDialog(
         text = {
             Column {
                 Text(
-                    "This app captures facial photographs for attendance verification purposes.",
+                    stringResource(R.string.biometric_intro),
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextPrimary,
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "Your photo will be:",
+                    stringResource(R.string.biometric_usage),
                     style = MaterialTheme.typography.labelLarge,
                     color = TextPrimary,
                 )
                 Spacer(Modifier.height(4.dp))
                 val points = listOf(
-                    "Encrypted on your device before transmission",
-                    "Used solely for identity verification at your assigned work site",
-                    "Compared against your registered reference photo",
-                    "Stored securely and deleted upon your request",
+                    stringResource(R.string.biometric_point_1),
+                    stringResource(R.string.biometric_point_2),
+                    stringResource(R.string.biometric_point_3),
+                    stringResource(R.string.biometric_point_4),
                 )
                 points.forEach { point ->
                     Text(
@@ -62,7 +64,7 @@ fun BiometricDisclosureDialog(
                 }
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "By proceeding, you consent to the collection and processing of your facial biometric data for attendance purposes.",
+                    stringResource(R.string.biometric_consent),
                     style = MaterialTheme.typography.bodySmall,
                     color = TextMuted,
                 )
@@ -73,12 +75,12 @@ fun BiometricDisclosureDialog(
                 onClick = onAccept,
                 colors = ButtonDefaults.buttonColors(containerColor = ForestGreen),
             ) {
-                Text("I Understand & Accept")
+                Text(stringResource(R.string.i_understand_accept))
             }
         },
         dismissButton = {
             OutlinedButton(onClick = onDecline) {
-                Text("Decline")
+                Text(stringResource(R.string.decline))
             }
         },
         modifier = Modifier.fillMaxWidth(),

@@ -41,8 +41,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.luxurycarts.workforce.R
 import com.luxurycarts.workforce.data.ApiService
 import com.luxurycarts.workforce.data.ErasureRequest
 import com.luxurycarts.workforce.ui.theme.Background
@@ -86,6 +88,9 @@ fun PrivacyScreen(
         cursorColor = ForestGreen,
     )
 
+    val erasureAlreadyPending = stringResource(R.string.erasure_already_pending)
+    val requestFailedStr = stringResource(R.string.request_failed)
+
     LaunchedEffect(workforceId) {
         if (workforceId.isNotEmpty() && apiService != null) {
             try {
@@ -106,13 +111,9 @@ fun PrivacyScreen(
             containerColor = Card,
             titleContentColor = TextPrimary,
             textContentColor = TextSecondary,
-            title = { Text("Confirm Data Erasure Request") },
+            title = { Text(stringResource(R.string.confirm_data_erasure)) },
             text = {
-                Text(
-                    "This will submit a formal request to HR to erase your personal data. " +
-                    "Your request will be reviewed in accordance with company policy and applicable regulations. " +
-                    "Some records may be retained as required by law.\n\nDo you wish to proceed?"
-                )
+                Text(stringResource(R.string.confirm_erasure_body))
             },
             confirmButton = {
                 TextButton(
@@ -132,9 +133,9 @@ fun PrivacyScreen(
                                 } else {
                                     val errorBody = response?.errorBody()?.string()
                                     val msg = if (response?.code() == 409) {
-                                        "A data erasure request is already pending review."
+                                        erasureAlreadyPending
                                     } else {
-                                        errorBody ?: "Request failed. Please try again."
+                                        errorBody ?: requestFailedStr
                                     }
                                     resultMessage = msg
                                     isError = true
@@ -149,13 +150,13 @@ fun PrivacyScreen(
                         }
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = ErrorRed),
-                ) { Text("Submit Request") }
+                ) { Text(stringResource(R.string.submit_request)) }
             },
             dismissButton = {
                 TextButton(
                     onClick = { showConfirmDialog = false },
                     colors = ButtonDefaults.textButtonColors(contentColor = TextMuted),
-                ) { Text("Cancel") }
+                ) { Text(stringResource(R.string.cancel)) }
             },
         )
     }
@@ -173,9 +174,9 @@ fun PrivacyScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = TextPrimary)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = TextPrimary)
             }
-            Text("Privacy & Data", style = MaterialTheme.typography.titleLarge, color = TextPrimary)
+            Text(stringResource(R.string.privacy_data), style = MaterialTheme.typography.titleLarge, color = TextPrimary)
         }
 
         Column(
@@ -185,14 +186,14 @@ fun PrivacyScreen(
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Privacy Policy", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+            Text(stringResource(R.string.privacy_policy), style = MaterialTheme.typography.titleMedium, color = TextPrimary)
 
             val policyItems = listOf(
-                "Data Collection" to "We collect attendance photos, GPS coordinates, and timestamps solely for workforce management purposes.",
-                "Data Encryption" to "All sensitive data is encrypted on your device using AES-256-GCM before transmission. Photos are encrypted at rest.",
-                "Data Storage" to "Your data is stored securely on company servers and on your device. Local data older than 30 days is automatically purged.",
-                "Data Access" to "Only authorized HR personnel and system administrators can access your attendance records.",
-                "Your Rights" to "You may request erasure of your personal data at any time using the form below. Your request will be reviewed by HR.",
+                stringResource(R.string.data_collection) to stringResource(R.string.data_collection_desc),
+                stringResource(R.string.data_encryption) to stringResource(R.string.data_encryption_desc),
+                stringResource(R.string.data_storage) to stringResource(R.string.data_storage_desc),
+                stringResource(R.string.data_access) to stringResource(R.string.data_access_desc),
+                stringResource(R.string.your_rights) to stringResource(R.string.your_rights_desc),
             )
 
             policyItems.forEach { (title, description) ->
@@ -205,9 +206,9 @@ fun PrivacyScreen(
 
             HorizontalDivider(color = Border, modifier = Modifier.padding(vertical = 8.dp))
 
-            Text("Request Data Erasure", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+            Text(stringResource(R.string.request_data_erasure), style = MaterialTheme.typography.titleMedium, color = TextPrimary)
             Text(
-                "As this is an employer-managed account, your data erasure request will be reviewed by HR in accordance with company policy and applicable labor regulations. Certain employment records may be retained as required by law.",
+                stringResource(R.string.data_erasure_info),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextMuted,
             )
@@ -230,7 +231,7 @@ fun PrivacyScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            "Your data erasure request has been submitted successfully and will be reviewed by HR.",
+                            stringResource(R.string.erasure_submitted),
                             style = MaterialTheme.typography.bodySmall,
                             color = SuccessGreen,
                         )
@@ -245,10 +246,10 @@ fun PrivacyScreen(
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Filled.HourglassTop, "Pending", tint = Color(0xFFD4A843), modifier = Modifier.size(20.dp))
+                    Icon(Icons.Filled.HourglassTop, stringResource(R.string.pending), tint = Color(0xFFD4A843), modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        "A data erasure request is currently being reviewed by HR. You will be notified once it has been processed.",
+                        stringResource(R.string.erasure_pending),
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFFD4A843),
                     )
@@ -257,7 +258,7 @@ fun PrivacyScreen(
                 OutlinedTextField(
                     value = reason,
                     onValueChange = { reason = it },
-                    label = { Text("Reason (optional)") },
+                    label = { Text(stringResource(R.string.reason_optional)) },
                     minLines = 2,
                     maxLines = 4,
                     colors = fieldColors,
@@ -283,7 +284,7 @@ fun PrivacyScreen(
                     if (isSubmitting) {
                         CircularProgressIndicator(color = TextPrimary, strokeWidth = 2.dp, modifier = Modifier.height(20.dp).width(20.dp))
                     } else {
-                        Text("Submit Data Erasure Request", fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.submit_data_erasure), fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -296,10 +297,10 @@ fun PrivacyScreen(
                     .padding(12.dp),
                 verticalAlignment = Alignment.Top,
             ) {
-                Icon(Icons.Filled.Info, "Info", tint = TextMuted, modifier = Modifier.size(16.dp))
+                Icon(Icons.Filled.Info, stringResource(R.string.privacy), tint = TextMuted, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "This process complies with applicable data protection regulations. Submitting a request does not result in immediate data removal — HR will review and process it within the legally required timeframe.",
+                    stringResource(R.string.compliance_info),
                     style = MaterialTheme.typography.bodySmall,
                     color = TextMuted,
                 )

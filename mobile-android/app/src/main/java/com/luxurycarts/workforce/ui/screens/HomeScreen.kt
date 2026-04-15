@@ -62,11 +62,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.luxurycarts.workforce.R
 import coil.request.ImageRequest
 import com.luxurycarts.workforce.WorkforceApp
 import com.luxurycarts.workforce.data.ApiService
@@ -79,6 +81,7 @@ import com.luxurycarts.workforce.ui.theme.Surface
 import com.luxurycarts.workforce.ui.theme.TextMuted
 import com.luxurycarts.workforce.ui.theme.TextPrimary
 import com.luxurycarts.workforce.ui.theme.TextSecondary
+import com.luxurycarts.workforce.ui.theme.ErrorRed
 import com.luxurycarts.workforce.ui.theme.WarningAmber
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -89,6 +92,8 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 data class QualityCheck(val name: String, val passed: Boolean, val tip: String?)
+
+private const val STUCK_THRESHOLD_MS = 30 * 60 * 1000L
 
 @Composable
 fun HomeScreen(
@@ -109,6 +114,11 @@ fun HomeScreen(
     val wfId = workforceRecord?.id ?: app.sessionManager.workforceId ?: ""
     val pendingCount by app.database.attendanceDao().getPendingCount(wfId)
         .collectAsState(initial = 0)
+    val oldestPendingCreatedAt by app.database.attendanceDao().getOldestPendingCreatedAt(wfId)
+        .collectAsState(initial = null)
+    val hasStuckSubmissions = oldestPendingCreatedAt?.let {
+        it > 0 && (System.currentTimeMillis() - it) > STUCK_THRESHOLD_MS
+    } ?: false
 
     val today = LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy"))
 
@@ -117,6 +127,12 @@ fun HomeScreen(
     var qualityChecks by remember { mutableStateOf<List<QualityCheck>?>(null) }
     var hasPendingPhotoChange by remember { mutableStateOf(false) }
     var showPhotoDialog by remember { mutableStateOf(false) }
+
+    val strPhotoSubmittedReview = stringResource(R.string.photo_submitted_review)
+    val strPhotoUpdated = stringResource(R.string.photo_updated)
+    val strUploadFailed = stringResource(R.string.upload_failed)
+    val strCameraPermRequired = stringResource(R.string.camera_permission_required)
+    val strErrorOpeningCamera = stringResource(R.string.error_opening_camera, "")
 
     val candidateId = workforceRecord?.candidateId
     val serverUrl = app.sessionManager.serverUrl.trimEnd('/')
@@ -139,18 +155,15 @@ fun HomeScreen(
                                 .firstOrNull()
                             when (mostRecent?.status) {
                                 "approved" -> {
-                                    photoMessage = "Your new photo has been approved and is now active."
+                                    photoMessage = strPhotoUpdated
                                     onWorkforceRefresh()
                                 }
                                 "rejected" -> {
                                     val reason = mostRecent.reviewNotes
-                                    photoMessage = if (!reason.isNullOrBlank())
-                                        "Photo change not approved: $reason"
-                                    else
-                                        "Your photo change request was not approved."
+                                    photoMessage = reason ?: strUploadFailed
                                 }
                                 else -> {
-                                    photoMessage = "Your photo change request has been reviewed."
+                                    photoMessage = strPhotoUpdated
                                 }
                             }
                         }
@@ -190,9 +203,9 @@ fun HomeScreen(
                         }
                         if (body?.pendingReview == true) {
                             hasPendingPhotoChange = true
-                            photoMessage = "Photo submitted for HR review. Your current photo remains active until approved."
+                            photoMessage = strPhotoSubmittedReview
                         } else {
-                            photoMessage = "Photo updated successfully."
+                            photoMessage = strPhotoUpdated
                             onWorkforceRefresh()
                         }
                     } else {
@@ -225,7 +238,7 @@ fun HomeScreen(
                                     obj?.get("message")?.asString
                                 } else null
                             } catch (_: Exception) { null }
-                            photoMessage = errMsg ?: "Upload failed. Please try again."
+                            photoMessage = errMsg ?: strUploadFailed
                         }
                     }
                 } catch (e: Exception) {
@@ -242,7 +255,7 @@ fun HomeScreen(
         if (granted) {
             pendingCameraLaunch = true
         } else {
-            photoMessage = "Camera permission is required to take a profile photo."
+            photoMessage = strCameraPermRequired
         }
     }
 
@@ -255,7 +268,7 @@ fun HomeScreen(
                 pendingCameraLaunch = false
                 cameraLauncher.launch(uri)
             } catch (e: Exception) {
-                photoMessage = "Error opening camera: ${e.message}"
+                photoMessage = "${strErrorOpeningCamera}${e.message}"
                 pendingCameraLaunch = false
             }
         }
@@ -277,12 +290,12 @@ fun HomeScreen(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Welcome back,",
+                    stringResource(R.string.welcome_back),
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextMuted,
                 )
                 Text(
-                    user.fullName ?: user.username ?: "Worker",
+                    user.fullName ?: user.username ?: stringResource(R.string.worker_default_name),
                     style = MaterialTheme.typography.headlineMedium,
                     color = TextPrimary,
                     fontWeight = FontWeight.Bold,
@@ -294,7 +307,7 @@ fun HomeScreen(
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.ExitToApp,
-                    contentDescription = "Logout",
+                    contentDescription = stringResource(R.string.logout),
                     tint = TextMuted,
                     modifier = Modifier.size(18.dp),
                 )
@@ -323,7 +336,7 @@ fun HomeScreen(
                                 .data("$serverUrl$photoUrl")
                                 .crossfade(true)
                                 .build(),
-                            contentDescription = "Profile photo",
+                            contentDescription = stringResource(R.string.change_profile_photo),
                             modifier = Modifier
                                 .size(80.dp)
                                 .clip(CircleShape)
@@ -342,7 +355,7 @@ fun HomeScreen(
                         ) {
                             Icon(
                                 Icons.Filled.Person,
-                                contentDescription = "No photo",
+                                contentDescription = null,
                                 tint = TextMuted,
                                 modifier = Modifier.size(40.dp),
                             )
@@ -357,7 +370,7 @@ fun HomeScreen(
                         ) {
                             Icon(
                                 Icons.Filled.Edit,
-                                contentDescription = "Change photo",
+                                contentDescription = stringResource(R.string.change_profile_photo),
                                 tint = TextPrimary,
                                 modifier = Modifier.size(14.dp),
                             )
@@ -385,7 +398,7 @@ fun HomeScreen(
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            "Photo change pending approval",
+                            stringResource(R.string.photo_pending_approval),
                             style = MaterialTheme.typography.labelMedium,
                             color = WarningAmber,
                         )
@@ -394,14 +407,14 @@ fun HomeScreen(
 
                 Spacer(Modifier.height(16.dp))
 
-                Text("Your Details", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+                Text(stringResource(R.string.your_details), style = MaterialTheme.typography.titleMedium, color = TextPrimary)
                 Spacer(Modifier.height(12.dp))
-                DetailRow("Employee #", workforceRecord?.employeeNumber ?: app.sessionManager.employeeNumber ?: "—")
-                workforceRecord?.positionTitle?.let { DetailRow("Position", it) }
-                workforceRecord?.jobTitle?.let { DetailRow("Job Title", it) }
-                workforceRecord?.eventName?.let { DetailRow("Event", it) }
-                workforceRecord?.startDate?.let { DetailRow("Start Date", it) }
-                DetailRow("Status", if (workforceRecord?.isActive != false) "Active" else "Inactive")
+                DetailRow(stringResource(R.string.employee_number), workforceRecord?.employeeNumber ?: app.sessionManager.employeeNumber ?: "—")
+                workforceRecord?.positionTitle?.let { DetailRow(stringResource(R.string.position), it) }
+                workforceRecord?.jobTitle?.let { DetailRow(stringResource(R.string.job_title), it) }
+                workforceRecord?.eventName?.let { DetailRow(stringResource(R.string.event), it) }
+                workforceRecord?.startDate?.let { DetailRow(stringResource(R.string.start_date), it) }
+                DetailRow(stringResource(R.string.status), if (workforceRecord?.isActive != false) stringResource(R.string.active) else stringResource(R.string.inactive))
             }
         }
 
@@ -445,7 +458,7 @@ fun HomeScreen(
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            if (allPassed) "Photo Quality Verified" else "Photo Quality Check Failed",
+                            if (allPassed) stringResource(R.string.photo_quality_verified) else stringResource(R.string.photo_quality_failed),
                             style = MaterialTheme.typography.labelMedium,
                             color = headerColor,
                             fontWeight = FontWeight.SemiBold,
@@ -506,10 +519,39 @@ fun HomeScreen(
                     Icon(Icons.Filled.Sync, contentDescription = null, tint = WarningAmber, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        "$pendingCount pending submission${if (pendingCount > 1) "s" else ""} awaiting sync",
+                        stringResource(R.string.pending_submissions, pendingCount),
                         style = MaterialTheme.typography.bodyMedium,
                         color = WarningAmber,
                     )
+                }
+            }
+            if (hasStuckSubmissions) {
+                Spacer(Modifier.height(8.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = ErrorRed.copy(alpha = 0.1f)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Filled.Warning, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.submissions_stuck),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = ErrorRed,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                stringResource(R.string.submissions_stuck_detail),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = ErrorRed.copy(alpha = 0.8f),
+                            )
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -526,7 +568,7 @@ fun HomeScreen(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(36.dp))
                 Spacer(Modifier.height(4.dp))
-                Text("CHECK IN/OUT", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text(stringResource(R.string.check_in_out), fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
 
@@ -536,10 +578,10 @@ fun HomeScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ActionCard("History", Icons.Filled.History, Modifier.weight(1f), onHistory)
-            ActionCard("Excuse", Icons.Filled.EventBusy, Modifier.weight(1f), onExcuse)
-            ActionCard("Map", Icons.Filled.Map, Modifier.weight(1f), onMap)
-            ActionCard("Privacy", Icons.Filled.Shield, Modifier.weight(1f), onPrivacy)
+            ActionCard(stringResource(R.string.history), Icons.Filled.History, Modifier.weight(1f), onHistory)
+            ActionCard(stringResource(R.string.excuse), Icons.Filled.EventBusy, Modifier.weight(1f), onExcuse)
+            ActionCard(stringResource(R.string.map), Icons.Filled.Map, Modifier.weight(1f), onMap)
+            ActionCard(stringResource(R.string.privacy), Icons.Filled.Shield, Modifier.weight(1f), onPrivacy)
         }
 
         Spacer(Modifier.height(32.dp))
@@ -550,20 +592,20 @@ fun HomeScreen(
             onDismissRequest = { showPhotoDialog = false },
             containerColor = Surface,
             title = {
-                Text("Change Profile Photo", color = TextPrimary)
+                Text(stringResource(R.string.change_profile_photo), color = TextPrimary)
             },
             text = {
                 Column {
                     if (hasPendingPhotoChange) {
                         Text(
-                            "You already have a photo change request pending HR approval. Submitting a new photo will replace the pending request.",
+                            stringResource(R.string.pending_photo_warning),
                             style = MaterialTheme.typography.bodySmall,
                             color = WarningAmber,
                         )
                         Spacer(Modifier.height(8.dp))
                     }
                     Text(
-                        "Take a new profile photo using your camera. The photo will be checked for quality. If you are an active employee, the change will require HR approval before it takes effect.",
+                        stringResource(R.string.photo_change_instructions),
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary,
                     )
@@ -584,12 +626,12 @@ fun HomeScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ForestGreen),
                 ) {
-                    Text("Open Camera")
+                    Text(stringResource(R.string.open_camera))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showPhotoDialog = false }) {
-                    Text("Cancel", color = TextMuted)
+                    Text(stringResource(R.string.cancel), color = TextMuted)
                 }
             },
         )

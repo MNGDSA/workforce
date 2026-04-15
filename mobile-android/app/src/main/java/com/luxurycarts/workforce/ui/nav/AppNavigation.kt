@@ -12,12 +12,28 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.google.gson.Gson
 import com.luxurycarts.workforce.WorkforceApp
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import com.luxurycarts.workforce.R
 import com.luxurycarts.workforce.data.ApiClient
 import com.luxurycarts.workforce.data.ApiService
 import com.luxurycarts.workforce.data.LoginRequest
 import com.luxurycarts.workforce.data.User
 import com.luxurycarts.workforce.data.WorkforceRecord
 import com.luxurycarts.workforce.services.SyncWorker
+import com.luxurycarts.workforce.ui.theme.ErrorRed
+import com.luxurycarts.workforce.ui.theme.ForestGreen
+import com.luxurycarts.workforce.ui.theme.Surface
+import com.luxurycarts.workforce.ui.theme.TextMuted
+import com.luxurycarts.workforce.ui.theme.TextPrimary
+import com.luxurycarts.workforce.ui.theme.WarningAmber
 import com.luxurycarts.workforce.ui.components.BiometricDisclosureDialog
 import com.luxurycarts.workforce.ui.screens.CaptureScreen
 import com.luxurycarts.workforce.ui.screens.ExcuseRequestScreen
@@ -43,6 +59,8 @@ fun AppNavigation() {
     var biometricConsentGiven by remember { mutableStateOf(false) }
     var showForgotPassword by remember { mutableStateOf(false) }
     var forgotPasswordApi by remember { mutableStateOf<ApiService?>(null) }
+    var showLogoutConfirm by remember { mutableStateOf(false) }
+    var logoutPendingCount by remember { mutableStateOf(0) }
 
     if (isLoggedIn && user == null) {
         app.sessionManager.userJson?.let {
@@ -188,18 +206,13 @@ fun AppNavigation() {
                     onExcuse = { navController.navigate("excuse") },
                     onLogout = {
                         scope.launch {
-                            app.sessionManager.workforceId?.let { wfId ->
-                                app.database.attendanceDao().deleteAllForUser(wfId)
-                            }
+                            val wfId = app.sessionManager.workforceId
+                            val pending = if (wfId != null) {
+                                try { app.database.attendanceDao().getPending(wfId).size } catch (_: Exception) { 0 }
+                            } else 0
+                            logoutPendingCount = pending
+                            showLogoutConfirm = true
                         }
-                        SyncWorker.cancel(app)
-                        ApiClient.reset()
-                        app.sessionManager.clear()
-                        isLoggedIn = false
-                        user = null
-                        workforceRecord = null
-                        apiService = null
-                        biometricConsentGiven = false
                     },
                 )
             }
@@ -252,6 +265,54 @@ fun AppNavigation() {
                     navController.navigate("capture")
                 },
                 onDecline = { showBiometricDisclosure = false },
+            )
+        }
+
+        if (showLogoutConfirm) {
+            AlertDialog(
+                onDismissRequest = { showLogoutConfirm = false },
+                containerColor = Surface,
+                title = { Text(stringResource(R.string.sign_out), color = TextPrimary) },
+                text = {
+                    Column {
+                        Text(
+                            stringResource(R.string.sign_out_confirm),
+                            color = TextMuted,
+                        )
+                        if (logoutPendingCount > 0) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                stringResource(R.string.sign_out_pending_warning, logoutPendingCount),
+                                color = WarningAmber,
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showLogoutConfirm = false
+                        scope.launch {
+                            app.sessionManager.workforceId?.let { wfId ->
+                                app.database.attendanceDao().deleteAllForUser(wfId)
+                            }
+                        }
+                        SyncWorker.cancel(app)
+                        ApiClient.reset()
+                        app.sessionManager.clear()
+                        isLoggedIn = false
+                        user = null
+                        workforceRecord = null
+                        apiService = null
+                        biometricConsentGiven = false
+                    }) {
+                        Text(stringResource(R.string.sign_out), color = ErrorRed)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showLogoutConfirm = false }) {
+                        Text(stringResource(R.string.cancel), color = ForestGreen)
+                    }
+                },
             )
         }
     }

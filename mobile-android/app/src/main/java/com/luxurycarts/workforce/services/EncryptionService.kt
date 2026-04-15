@@ -6,6 +6,8 @@ import android.util.Base64
 import java.io.File
 import java.security.KeyStore
 import javax.crypto.Cipher
+import javax.crypto.CipherInputStream
+import javax.crypto.CipherOutputStream
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
@@ -16,6 +18,7 @@ object EncryptionService {
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
     private const val IV_SIZE = 12
     private const val TAG_BITS = 128
+    private const val STREAM_BUFFER_SIZE = 8192
 
     private fun getOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -65,21 +68,45 @@ object EncryptionService {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, key)
         val iv = cipher.iv
-        val plainBytes = File(inputPath).readBytes()
-        val encrypted = cipher.doFinal(plainBytes)
-        File(outputPath).outputStream().use { out ->
-            out.write(iv)
-            out.write(encrypted)
+
+        File(inputPath).inputStream().buffered().use { input ->
+            File(outputPath).outputStream().buffered().use { output ->
+                output.write(iv)
+                CipherOutputStream(output, cipher).use { cos ->
+                    val buffer = ByteArray(STREAM_BUFFER_SIZE)
+                    var bytesRead: Int
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        cos.write(buffer, 0, bytesRead)
+                    }
+                }
+            }
         }
     }
 
     fun decryptFile(inputPath: String, outputPath: String) {
         val key = getOrCreateKey()
-        val data = File(inputPath).readBytes()
-        val iv = data.sliceArray(0 until IV_SIZE)
-        val ciphertext = data.sliceArray(IV_SIZE until data.size)
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
-        File(outputPath).writeBytes(cipher.doFinal(ciphertext))
+
+        File(inputPath).inputStream().buffered().use { fis ->
+            val iv = ByteArray(IV_SIZE)
+            var totalRead = 0
+            while (totalRead < IV_SIZE) {
+                val read = fis.read(iv, totalRead, IV_SIZE - totalRead)
+                if (read == -1) throw IllegalStateException("Encrypted file too short")
+                totalRead += read
+            }
+
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
+
+            CipherInputStream(fis, cipher).use { cis ->
+                File(outputPath).outputStream().buffered().use { fos ->
+                    val buffer = ByteArray(STREAM_BUFFER_SIZE)
+                    var bytesRead: Int
+                    while (cis.read(buffer).also { bytesRead = it } != -1) {
+                        fos.write(buffer, 0, bytesRead)
+                    }
+                }
+            }
+        }
     }
 }

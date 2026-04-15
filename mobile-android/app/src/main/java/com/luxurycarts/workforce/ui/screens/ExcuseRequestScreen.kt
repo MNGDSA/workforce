@@ -46,10 +46,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.luxurycarts.workforce.R
 import com.luxurycarts.workforce.data.ApiService
 import com.luxurycarts.workforce.data.ExcuseRequest
 import com.luxurycarts.workforce.data.ExcuseRequestSubmit
@@ -117,12 +119,12 @@ fun ExcuseRequestScreen(
             IconButton(onClick = onBack) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.back),
                     tint = TextPrimary,
                 )
             }
             Text(
-                "Excuse Requests",
+                stringResource(R.string.excuse_requests),
                 style = MaterialTheme.typography.titleLarge,
                 color = TextPrimary,
                 fontWeight = FontWeight.Bold,
@@ -140,7 +142,7 @@ fun ExcuseRequestScreen(
             ) {
                 Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("New", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                Text(stringResource(R.string.new_label), fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
         }
 
@@ -165,13 +167,13 @@ fun ExcuseRequestScreen(
                     )
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        "No excuse requests yet",
+                        stringResource(R.string.no_excuse_requests),
                         style = MaterialTheme.typography.titleMedium,
                         color = TextSecondary,
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Tap \"New\" to submit an excuse request for a day you need off or need to leave early.",
+                        stringResource(R.string.excuse_empty_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = TextMuted,
                         textAlign = TextAlign.Center,
@@ -198,6 +200,12 @@ fun ExcuseRequestScreen(
         Spacer(Modifier.height(0.dp))
     }
 
+    val pleaseProvideReason = stringResource(R.string.please_provide_reason)
+    val notConnected = stringResource(R.string.not_connected)
+    val partialMidShift = stringResource(R.string.partial_mid_shift)
+    val fullDayStr = stringResource(R.string.full_day)
+    val submitFailedStr = stringResource(R.string.submit_failed)
+
     if (showSubmitDialog) {
         AlertDialog(
             onDismissRequest = {
@@ -205,13 +213,12 @@ fun ExcuseRequestScreen(
             },
             containerColor = Surface,
             title = {
-                Text("Request Excuse", color = TextPrimary, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.request_excuse), color = TextPrimary, fontWeight = FontWeight.Bold)
             },
             text = {
                 Column {
                     Text(
-                        "Submit an excuse for today (${LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d, yyyy"))}). " +
-                            "If you have already clocked in, this will be treated as a partial excuse (leaving early).",
+                        stringResource(R.string.excuse_today_info, LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d, yyyy"))),
                         style = MaterialTheme.typography.bodySmall,
                         color = TextMuted,
                     )
@@ -219,8 +226,8 @@ fun ExcuseRequestScreen(
                     OutlinedTextField(
                         value = submitReason,
                         onValueChange = { submitReason = it },
-                        label = { Text("Reason", color = TextMuted) },
-                        placeholder = { Text("e.g. Medical appointment, family emergency...", color = TextMuted.copy(alpha = 0.5f)) },
+                        label = { Text(stringResource(R.string.reason), color = TextMuted) },
+                        placeholder = { Text(stringResource(R.string.reason_placeholder), color = TextMuted.copy(alpha = 0.5f)) },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,
                         maxLines = 5,
@@ -249,17 +256,17 @@ fun ExcuseRequestScreen(
                         onClick = { showSubmitDialog = false },
                         colors = ButtonDefaults.buttonColors(containerColor = ForestGreen),
                     ) {
-                        Text("Done")
+                        Text(stringResource(R.string.done))
                     }
                 } else {
                     Button(
                         onClick = {
                             if (submitReason.isBlank()) {
-                                submitError = "Please provide a reason."
+                                submitError = pleaseProvideReason
                                 return@Button
                             }
                             if (apiService == null || workforceId.isEmpty()) {
-                                submitError = "Not connected to server."
+                                submitError = notConnected
                                 return@Button
                             }
                             scope.launch {
@@ -276,7 +283,7 @@ fun ExcuseRequestScreen(
                                     )
                                     if (resp.isSuccessful) {
                                         val body = resp.body()
-                                        val typeText = if (body?.hadClockIn == true) "partial (mid-shift)" else "full day"
+                                        val typeText = if (body?.hadClockIn == true) partialMidShift else fullDayStr
                                         submitSuccess = "Excuse request submitted ($typeText). HR will review it."
                                         loadRequests()
                                     } else {
@@ -285,7 +292,7 @@ fun ExcuseRequestScreen(
                                             val obj = com.google.gson.Gson().fromJson(errBody, com.google.gson.JsonObject::class.java)
                                             obj?.get("message")?.asString
                                         } catch (_: Exception) { null }
-                                        submitError = msg ?: "Failed to submit. Please try again."
+                                        submitError = msg ?: submitFailedStr
                                     }
                                 } catch (e: Exception) {
                                     submitError = "Network error: ${e.message}"
@@ -306,7 +313,7 @@ fun ExcuseRequestScreen(
                         }
                         Icon(Icons.Filled.Send, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Submit")
+                        Text(stringResource(R.string.submit))
                     }
                 }
             },
@@ -316,7 +323,7 @@ fun ExcuseRequestScreen(
                         onClick = { showSubmitDialog = false },
                         enabled = !isSubmitting,
                     ) {
-                        Text("Cancel", color = TextMuted)
+                        Text(stringResource(R.string.cancel), color = TextMuted)
                     }
                 }
             },
@@ -337,9 +344,9 @@ private fun ExcuseRequestCard(request: ExcuseRequest) {
         else -> Icons.Filled.HourglassTop
     }
     val statusLabel = when (request.status) {
-        "approved" -> "Approved"
-        "rejected" -> "Rejected"
-        else -> "Pending"
+        "approved" -> stringResource(R.string.approved)
+        "rejected" -> stringResource(R.string.rejected)
+        else -> stringResource(R.string.pending)
     }
 
     val dateFormatted = try {
@@ -348,7 +355,7 @@ private fun ExcuseRequestCard(request: ExcuseRequest) {
         request.date
     }
 
-    val typeLabel = if (request.hadClockIn) "Partial (mid-shift)" else "Full day"
+    val typeLabel = if (request.hadClockIn) stringResource(R.string.partial_label) else stringResource(R.string.full_day_label)
     val typeColor = if (request.hadClockIn) InfoBlue else WarningAmber
 
     Card(
@@ -416,7 +423,7 @@ private fun ExcuseRequestCard(request: ExcuseRequest) {
                 if (request.hadClockIn && request.effectiveClockOut != null) {
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Left at ${request.effectiveClockOut}",
+                        stringResource(R.string.left_at, request.effectiveClockOut),
                         style = MaterialTheme.typography.labelSmall,
                         color = TextMuted,
                     )
@@ -439,7 +446,7 @@ private fun ExcuseRequestCard(request: ExcuseRequest) {
                     shape = RoundedCornerShape(6.dp),
                 ) {
                     Text(
-                        "Reason: ${request.reviewNotes}",
+                        stringResource(R.string.review_reason, request.reviewNotes),
                         style = MaterialTheme.typography.bodySmall,
                         color = ErrorRed,
                         modifier = Modifier.padding(8.dp),
@@ -454,7 +461,7 @@ private fun ExcuseRequestCard(request: ExcuseRequest) {
                     shape = RoundedCornerShape(6.dp),
                 ) {
                     Text(
-                        "Note: ${request.reviewNotes}",
+                        stringResource(R.string.review_note, request.reviewNotes),
                         style = MaterialTheme.typography.bodySmall,
                         color = SuccessGreen,
                         modifier = Modifier.padding(8.dp),

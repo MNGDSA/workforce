@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -84,6 +85,11 @@ fun LoginScreen(
         cursorColor = ForestGreen,
     )
 
+    val allFieldsRequired = stringResource(R.string.all_fields_required)
+    val accessDeniedEmployees = stringResource(R.string.access_denied_employees_only)
+    val accessDeniedNoRecord = stringResource(R.string.access_denied_no_active_record)
+    val invalidCredentials = stringResource(R.string.invalid_credentials)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -107,7 +113,7 @@ fun LoginScreen(
                 Spacer(Modifier.width(10.dp))
 
                 Text(
-                    text = "WORKFORCE",
+                    text = stringResource(R.string.app_name),
                     fontFamily = spaceGrotesk,
                     fontWeight = FontWeight.Bold,
                     fontSize = 28.sp,
@@ -121,7 +127,7 @@ fun LoginScreen(
             OutlinedTextField(
                 value = serverUrl,
                 onValueChange = { serverUrl = it },
-                label = { Text("Server URL") },
+                label = { Text(stringResource(R.string.server_url)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 colors = fieldColors,
@@ -132,7 +138,7 @@ fun LoginScreen(
             OutlinedTextField(
                 value = identifier,
                 onValueChange = { identifier = it },
-                label = { Text("ID Number / Phone Number") },
+                label = { Text(stringResource(R.string.id_number_phone)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 colors = fieldColors,
@@ -143,7 +149,7 @@ fun LoginScreen(
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("Password") },
+                label = { Text(stringResource(R.string.password)) },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -159,7 +165,7 @@ fun LoginScreen(
             Button(
                 onClick = {
                     if (serverUrl.isBlank() || identifier.isBlank() || password.isBlank()) {
-                        errorMessage = "All fields are required"
+                        errorMessage = allFieldsRequired
                         return@Button
                     }
                     isLoading = true
@@ -179,7 +185,7 @@ fun LoginScreen(
                                 val body = response.body()!!
 
                                 if (body.candidate == null) {
-                                    errorMessage = "Access denied. This app is for active employees only."
+                                    errorMessage = accessDeniedEmployees
                                     return@launch
                                 }
 
@@ -188,7 +194,7 @@ fun LoginScreen(
                                 val activeRecord = allRecords.firstOrNull { it.isActive }
 
                                 if (activeRecord == null) {
-                                    errorMessage = "Access denied. No active employment record found. Contact HR if you believe this is an error."
+                                    errorMessage = accessDeniedNoRecord
                                     return@launch
                                 }
 
@@ -217,7 +223,7 @@ fun LoginScreen(
 
                                 onLoginSuccess(body.user, activeRecord, api)
                             } else {
-                                errorMessage = "Invalid credentials"
+                                errorMessage = invalidCredentials
                             }
                         } catch (e: Exception) {
                             errorMessage = "Connection failed: ${e.message?.take(80)}"
@@ -238,14 +244,14 @@ fun LoginScreen(
                         modifier = Modifier.height(20.dp).width(20.dp),
                     )
                 } else {
-                    Text("Sign In", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Text(stringResource(R.string.sign_in), fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 }
             }
 
             Spacer(Modifier.height(12.dp))
 
             Text(
-                text = "Forgot Password?",
+                text = stringResource(R.string.forgot_password),
                 color = ForestGreen,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -266,7 +272,7 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
-                    text = "Powered by",
+                    text = stringResource(R.string.powered_by),
                     fontFamily = spaceGrotesk,
                     fontWeight = FontWeight.Bold,
                     fontSize = 11.sp,
@@ -281,7 +287,7 @@ fun LoginScreen(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "Amazon AWS Rekognition",
+                    text = stringResource(R.string.amazon_aws_rekognition),
                     fontFamily = spaceGrotesk,
                     fontWeight = FontWeight.Bold,
                     fontSize = 11.sp,

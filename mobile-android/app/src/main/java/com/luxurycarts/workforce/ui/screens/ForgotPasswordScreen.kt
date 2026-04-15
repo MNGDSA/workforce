@@ -34,6 +34,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -91,6 +92,15 @@ fun ForgotPasswordScreen(
         cursorColor = ForestGreen,
     )
 
+    val nationalIdRequired = stringResource(R.string.national_id_required)
+    val enterSixDigit = stringResource(R.string.enter_six_digit)
+    val verificationFailed = stringResource(R.string.verification_failed)
+    val invalidCode = stringResource(R.string.invalid_code)
+    val passwordRequirements = stringResource(R.string.password_requirements)
+    val passwordsNotMatch = stringResource(R.string.passwords_not_match)
+    val passwordResetSuccess = stringResource(R.string.password_reset_success)
+    val resetFailed = stringResource(R.string.reset_failed)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -104,7 +114,7 @@ fun ForgotPasswordScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = TextPrimary)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = TextPrimary)
             }
         }
 
@@ -118,7 +128,7 @@ fun ForgotPasswordScreen(
             WorkforceLogo(size = 36.dp)
             Spacer(Modifier.width(10.dp))
             Text(
-                text = "WORKFORCE",
+                text = stringResource(R.string.app_name),
                 fontFamily = spaceGrotesk,
                 fontWeight = FontWeight.Bold,
                 fontSize = 24.sp,
@@ -130,7 +140,7 @@ fun ForgotPasswordScreen(
         Spacer(Modifier.height(32.dp))
 
         Text(
-            text = "Reset Password",
+            text = stringResource(R.string.reset_password),
             style = MaterialTheme.typography.titleLarge,
             color = TextPrimary,
             fontWeight = FontWeight.Bold,
@@ -140,10 +150,10 @@ fun ForgotPasswordScreen(
 
         Text(
             text = when (step) {
-                1 -> "Enter your National ID / Iqama number to receive a verification code on your registered phone."
-                2 -> "Enter the 6-digit code sent to $maskedPhone"
-                3 -> "Create your new password"
-                else -> "Password reset complete"
+                1 -> stringResource(R.string.enter_national_id_hint)
+                2 -> stringResource(R.string.enter_code_hint, maskedPhone)
+                3 -> stringResource(R.string.create_new_password)
+                else -> stringResource(R.string.password_reset_complete)
             },
             style = MaterialTheme.typography.bodyMedium,
             color = TextMuted,
@@ -168,7 +178,7 @@ fun ForgotPasswordScreen(
                 OutlinedTextField(
                     value = nationalId,
                     onValueChange = { nationalId = it },
-                    label = { Text("National ID / Iqama Number") },
+                    label = { Text(stringResource(R.string.national_id_iqama)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     colors = fieldColors,
@@ -181,7 +191,7 @@ fun ForgotPasswordScreen(
                 Button(
                     onClick = {
                         if (nationalId.isBlank()) {
-                            errorMessage = "National ID is required"
+                            errorMessage = nationalIdRequired
                             return@Button
                         }
                         isLoading = true
@@ -200,7 +210,7 @@ fun ForgotPasswordScreen(
                                     val errBody = resp?.errorBody()?.string()
                                     errorMessage = try {
                                         com.google.gson.Gson().fromJson(errBody, com.luxurycarts.workforce.data.MessageResponse::class.java).message
-                                    } catch (_: Exception) { "Request failed. Please try again." }
+                                    } catch (_: Exception) { resetFailed }
                                 }
                             } catch (e: Exception) {
                                 errorMessage = "Connection error: ${e.message?.take(60)}"
@@ -217,7 +227,7 @@ fun ForgotPasswordScreen(
                     if (isLoading) {
                         CircularProgressIndicator(color = TextPrimary, strokeWidth = 2.dp, modifier = Modifier.height(20.dp).width(20.dp))
                     } else {
-                        Text("Send Verification Code", fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.send_verification_code), fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -226,7 +236,7 @@ fun ForgotPasswordScreen(
                 OutlinedTextField(
                     value = otpCode,
                     onValueChange = { if (it.length <= 6) otpCode = it },
-                    label = { Text("6-Digit Code") },
+                    label = { Text(stringResource(R.string.six_digit_code)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     colors = fieldColors,
@@ -239,7 +249,7 @@ fun ForgotPasswordScreen(
                 Button(
                     onClick = {
                         if (otpCode.length != 6) {
-                            errorMessage = "Please enter the 6-digit code"
+                            errorMessage = enterSixDigit
                             return@Button
                         }
                         isLoading = true
@@ -252,7 +262,7 @@ fun ForgotPasswordScreen(
                                 if (resp?.isSuccessful == true && resp.body()?.success == true) {
                                     val receivedOtpId = resp.body()!!.otpId
                                     if (receivedOtpId.isNullOrBlank()) {
-                                        errorMessage = "Verification failed. Please try again."
+                                        errorMessage = verificationFailed
                                         return@launch
                                     }
                                     otpId = receivedOtpId
@@ -261,7 +271,7 @@ fun ForgotPasswordScreen(
                                     val errBody = resp?.errorBody()?.string()
                                     errorMessage = try {
                                         com.google.gson.Gson().fromJson(errBody, com.luxurycarts.workforce.data.MessageResponse::class.java).message
-                                    } catch (_: Exception) { "Invalid code. Please try again." }
+                                    } catch (_: Exception) { invalidCode }
                                 }
                             } catch (e: Exception) {
                                 errorMessage = "Connection error: ${e.message?.take(60)}"
@@ -278,7 +288,7 @@ fun ForgotPasswordScreen(
                     if (isLoading) {
                         CircularProgressIndicator(color = TextPrimary, strokeWidth = 2.dp, modifier = Modifier.height(20.dp).width(20.dp))
                     } else {
-                        Text("Verify Code", fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.verify_code), fontWeight = FontWeight.SemiBold)
                     }
                 }
 
@@ -294,24 +304,24 @@ fun ForgotPasswordScreen(
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth().height(40.dp),
                 ) {
-                    Text("Resend Code", fontWeight = FontWeight.SemiBold, color = TextPrimary, fontSize = 13.sp)
+                    Text(stringResource(R.string.resend_code), fontWeight = FontWeight.SemiBold, color = TextPrimary, fontSize = 13.sp)
                 }
             }
 
             3 -> {
                 val pwRules = listOf(
-                    Pair(newPassword.length >= 8, "At least 8 characters"),
-                    Pair(newPassword.any { it.isUpperCase() }, "One uppercase letter"),
-                    Pair(newPassword.any { it.isLowerCase() }, "One lowercase letter"),
-                    Pair(newPassword.any { it.isDigit() }, "One number"),
-                    Pair(newPassword.any { !it.isLetterOrDigit() }, "One special character"),
+                    Pair(newPassword.length >= 8, stringResource(R.string.at_least_8_chars)),
+                    Pair(newPassword.any { it.isUpperCase() }, stringResource(R.string.one_uppercase)),
+                    Pair(newPassword.any { it.isLowerCase() }, stringResource(R.string.one_lowercase)),
+                    Pair(newPassword.any { it.isDigit() }, stringResource(R.string.one_number)),
+                    Pair(newPassword.any { !it.isLetterOrDigit() }, stringResource(R.string.one_special)),
                 )
                 val allRulesMet = pwRules.all { it.first }
 
                 OutlinedTextField(
                     value = newPassword,
                     onValueChange = { newPassword = it },
-                    label = { Text("New Password") },
+                    label = { Text(stringResource(R.string.new_password)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -349,7 +359,7 @@ fun ForgotPasswordScreen(
                 OutlinedTextField(
                     value = confirmPassword,
                     onValueChange = { confirmPassword = it },
-                    label = { Text("Confirm New Password") },
+                    label = { Text(stringResource(R.string.confirm_new_password)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -363,11 +373,11 @@ fun ForgotPasswordScreen(
                 Button(
                     onClick = {
                         if (!allRulesMet) {
-                            errorMessage = "Please meet all password requirements"
+                            errorMessage = passwordRequirements
                             return@Button
                         }
                         if (newPassword != confirmPassword) {
-                            errorMessage = "Passwords do not match"
+                            errorMessage = passwordsNotMatch
                             return@Button
                         }
                         isLoading = true
@@ -378,13 +388,13 @@ fun ForgotPasswordScreen(
                                     ResetPasswordFinalize(nationalId.trim(), otpId, newPassword)
                                 )
                                 if (resp?.isSuccessful == true) {
-                                    successMessage = resp.body()?.message ?: "Password reset successfully"
+                                    successMessage = resp.body()?.message ?: passwordResetSuccess
                                     step = 4
                                 } else {
                                     val errBody = resp?.errorBody()?.string()
                                     errorMessage = try {
                                         com.google.gson.Gson().fromJson(errBody, com.luxurycarts.workforce.data.MessageResponse::class.java).message
-                                    } catch (_: Exception) { "Reset failed. Please try again." }
+                                    } catch (_: Exception) { resetFailed }
                                 }
                             } catch (e: Exception) {
                                 errorMessage = "Connection error: ${e.message?.take(60)}"
@@ -401,7 +411,7 @@ fun ForgotPasswordScreen(
                     if (isLoading) {
                         CircularProgressIndicator(color = TextPrimary, strokeWidth = 2.dp, modifier = Modifier.height(20.dp).width(20.dp))
                     } else {
-                        Text("Reset Password", fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.reset_password), fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -414,7 +424,7 @@ fun ForgotPasswordScreen(
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                 ) {
-                    Text("Back to Login", fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.back_to_login), fontWeight = FontWeight.SemiBold)
                 }
             }
         }

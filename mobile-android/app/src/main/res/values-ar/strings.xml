@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WORKFORCE</string>
+
+    <!-- Common -->
+    <string name="back">رجوع</string>
+    <string name="cancel">إلغاء</string>
+    <string name="done">تم</string>
+    <string name="submit">إرسال</string>
+    <string name="or_text">أو</string>
+    <string name="loading">جارٍ التحميل…</string>
+    <string name="retry">إعادة المحاولة</string>
+    <string name="stay">البقاء</string>
+    <string name="leave">مغادرة</string>
+
+    <!-- Login Screen -->
+    <string name="server_url">رابط الخادم</string>
+    <string name="id_number_phone">رقم الهوية / رقم الجوال</string>
+    <string name="password">كلمة المرور</string>
+    <string name="sign_in">تسجيل الدخول</string>
+    <string name="forgot_password">نسيت كلمة المرور؟</string>
+    <string name="all_fields_required">جميع الحقول مطلوبة</string>
+    <string name="invalid_credentials">بيانات الدخول غير صحيحة</string>
+    <string name="connection_failed">فشل الاتصال: %1$s</string>
+    <string name="access_denied_employees_only">تم رفض الوصول. هذا التطبيق مخصص للموظفين النشطين فقط.</string>
+    <string name="access_denied_no_active_record">تم رفض الوصول. لا يوجد سجل توظيف نشط. تواصل مع الموارد البشرية إذا كنت تعتقد أن هذا خطأ.</string>
+    <string name="powered_by">مدعوم من</string>
+    <string name="amazon_aws_rekognition">Amazon AWS Rekognition</string>
+
+    <!-- Home Screen -->
+    <string name="welcome_back">مرحباً بعودتك،</string>
+    <string name="worker_default_name">عامل</string>
+    <string name="logout">تسجيل الخروج</string>
+    <string name="your_details">بياناتك</string>
+    <string name="employee_number">رقم الموظف</string>
+    <string name="position">المنصب</string>
+    <string name="job_title">المسمى الوظيفي</string>
+    <string name="event">الفعالية</string>
+    <string name="start_date">تاريخ البدء</string>
+    <string name="status">الحالة</string>
+    <string name="active">نشط</string>
+    <string name="inactive">غير نشط</string>
+    <string name="check_in_out">تسجيل الحضور</string>
+    <string name="history">السجل</string>
+    <string name="excuse">عذر</string>
+    <string name="map">الخريطة</string>
+    <string name="privacy">الخصوصية</string>
+    <string name="pending_submissions">%1$d تسجيل(ات) معلقة بانتظار المزامنة</string>
+    <string name="submissions_stuck">تسجيلات معلقة</string>
+    <string name="submissions_stuck_detail">بعض التسجيلات معلقة لأكثر من ٣٠ دقيقة. يرجى التحقق من اتصالك بالإنترنت.</string>
+    <string name="change_profile_photo">تغيير صورة الملف الشخصي</string>
+    <string name="open_camera">فتح الكاميرا</string>
+    <string name="photo_pending_approval">تغيير الصورة بانتظار الموافقة</string>
+    <string name="pending_photo_warning">لديك طلب تغيير صورة معلق بانتظار موافقة الموارد البشرية. إرسال صورة جديدة سيحل محل الطلب المعلق.</string>
+    <string name="photo_change_instructions">التقط صورة شخصية جديدة باستخدام الكاميرا. سيتم فحص جودة الصورة. إذا كنت موظفاً نشطاً، سيتطلب التغيير موافقة الموارد البشرية.</string>
+    <string name="photo_submitted_review">تم إرسال الصورة للمراجعة. صورتك الحالية ستبقى نشطة حتى الموافقة.</string>
+    <string name="photo_updated">تم تحديث الصورة بنجاح.</string>
+    <string name="camera_permission_required">إذن الكاميرا مطلوب لالتقاط صورة شخصية.</string>
+    <string name="error_opening_camera">خطأ في فتح الكاميرا: %1$s</string>
+    <string name="photo_quality_verified">تم التحقق من جودة الصورة</string>
+    <string name="photo_quality_failed">فشل فحص جودة الصورة</string>
+    <string name="upload_failed">فشل الرفع. يرجى المحاولة مرة أخرى.</string>
+
+    <!-- Capture Screen -->
+    <string name="position_face">ضع وجهك داخل الشكل البيضاوي</string>
+    <string name="capture">التقاط</string>
+    <string name="capture_in_progress">جارٍ الالتقاط</string>
+    <string name="capture_back_warning">يتم معالجة الصورة حالياً. المغادرة الآن قد تفقد تسجيل الحضور. هل أنت متأكد؟</string>
+    <string name="capture_failed">فشل الالتقاط</string>
+    <string name="photo_quality_low">جودة الصورة منخفضة (%1$d×%2$d، %3$d كيلوبايت). يرجى التأكد من الإضاءة الجيدة والثبات.</string>
+    <string name="internet_required_first_time">اتصال الإنترنت مطلوب للإعداد الأولي. يرجى الاتصال بالإنترنت والمحاولة مرة أخرى.</string>
+    <string name="location_unavailable">الموقع غير متاح. يرجى التأكد من تفعيل GPS والمحاولة مرة أخرى.</string>
+    <string name="permissions_required">أذونات الكاميرا والموقع مطلوبة</string>
+    <string name="grant_permissions">منح الأذونات</string>
+    <string name="go_back">رجوع</string>
+
+    <!-- History Screen -->
+    <string name="attendance_history">سجل الحضور</string>
+    <string name="records_count">%1$d سجل</string>
+    <string name="no_attendance_records">لا توجد سجلات حضور بعد</string>
+    <string name="tap_to_view_photo">اضغط لعرض الصورة</string>
+    <string name="gps_accuracy">دقة الموقع</string>
+    <string name="face_match">مطابقة الوجه</string>
+    <string name="sync_status">حالة المزامنة</string>
+    <string name="server_id">معرف الخادم</string>
+    <string name="hr_notes">ملاحظات الموارد البشرية</string>
+    <string name="retries">إعادة المحاولات</string>
+    <string name="taken_at">الوقت: %1$s</string>
+    <string name="identical_confidence">مطابق (%1$s%%)</string>
+    <string name="not_identical_confidence">غير مطابق (%1$s%%)</string>
+    <string name="not_processed">لم تتم المعالجة</string>
+    <string name="verification_error">خطأ</string>
+
+    <!-- Excuse Request Screen -->
+    <string name="excuse_requests">طلبات الأعذار</string>
+    <string name="new_label">جديد</string>
+    <string name="no_excuse_requests">لا توجد طلبات أعذار بعد</string>
+    <string name="excuse_empty_hint">اضغط \"جديد\" لتقديم طلب عذر ليوم تحتاج إجازة فيه أو تحتاج المغادرة مبكراً.</string>
+    <string name="request_excuse">طلب عذر</string>
+    <string name="excuse_today_info">تقديم عذر لليوم (%1$s). إذا كنت قد سجلت حضورك، سيتم التعامل معه كعذر جزئي (مغادرة مبكرة).</string>
+    <string name="reason">السبب</string>
+    <string name="reason_placeholder">مثال: موعد طبي، طارئ عائلي…</string>
+    <string name="please_provide_reason">يرجى تقديم سبب.</string>
+    <string name="not_connected">غير متصل بالخادم.</string>
+    <string name="excuse_submitted">تم تقديم طلب العذر (%1$s). سيراجعه قسم الموارد البشرية.</string>
+    <string name="partial_mid_shift">جزئي (أثناء الوردية)</string>
+    <string name="full_day">يوم كامل</string>
+    <string name="submit_failed">فشل الإرسال. يرجى المحاولة مرة أخرى.</string>
+    <string name="network_error">خطأ في الشبكة: %1$s</string>
+    <string name="approved">تمت الموافقة</string>
+    <string name="rejected">مرفوض</string>
+    <string name="pending">معلق</string>
+    <string name="partial_label">جزئي (أثناء الوردية)</string>
+    <string name="full_day_label">يوم كامل</string>
+    <string name="left_at">غادر في %1$s</string>
+    <string name="review_reason">السبب: %1$s</string>
+    <string name="review_note">ملاحظة: %1$s</string>
+
+    <!-- Map Screen -->
+    <string name="geofence_zones">مناطق السياج الجغرافي</string>
+    <string name="zones_count">%1$d منطقة</string>
+    <string name="radius_meters">النطاق: %1$d متر</string>
+
+    <!-- Privacy Screen -->
+    <string name="privacy_data">الخصوصية والبيانات</string>
+    <string name="privacy_policy">سياسة الخصوصية</string>
+    <string name="data_collection">جمع البيانات</string>
+    <string name="data_collection_desc">نقوم بجمع صور الحضور وإحداثيات GPS والطوابع الزمنية لأغراض إدارة القوى العاملة فقط.</string>
+    <string name="data_encryption">تشفير البيانات</string>
+    <string name="data_encryption_desc">يتم تشفير جميع البيانات الحساسة على جهازك باستخدام AES-256-GCM قبل الإرسال. يتم تشفير الصور عند التخزين.</string>
+    <string name="data_storage">تخزين البيانات</string>
+    <string name="data_storage_desc">يتم تخزين بياناتك بشكل آمن على خوادم الشركة وعلى جهازك. يتم حذف البيانات المحلية الأقدم من ٣٠ يوماً تلقائياً.</string>
+    <string name="data_access">الوصول للبيانات</string>
+    <string name="data_access_desc">يمكن فقط لموظفي الموارد البشرية المعتمدين ومسؤولي النظام الوصول إلى سجلات حضورك.</string>
+    <string name="your_rights">حقوقك</string>
+    <string name="your_rights_desc">يمكنك طلب حذف بياناتك الشخصية في أي وقت باستخدام النموذج أدناه. سيتم مراجعة طلبك من قبل الموارد البشرية.</string>
+    <string name="request_data_erasure">طلب حذف البيانات</string>
+    <string name="data_erasure_info">بصفته حساباً يُدار من قبل صاحب العمل، سيتم مراجعة طلب حذف بياناتك من قبل الموارد البشرية وفقاً لسياسة الشركة وأنظمة العمل المعمول بها. قد يتم الاحتفاظ ببعض سجلات التوظيف وفقاً لما يقتضيه القانون.</string>
+    <string name="reason_optional">السبب (اختياري)</string>
+    <string name="submit_data_erasure">تقديم طلب حذف البيانات</string>
+    <string name="confirm_data_erasure">تأكيد طلب حذف البيانات</string>
+    <string name="confirm_erasure_body">سيتم تقديم طلب رسمي للموارد البشرية لحذف بياناتك الشخصية. سيتم مراجعة طلبك وفقاً لسياسة الشركة والأنظمة المعمول بها. قد يتم الاحتفاظ ببعض السجلات وفقاً لما يقتضيه القانون.\n\nهل ترغب في المتابعة؟</string>
+    <string name="submit_request">تقديم الطلب</string>
+    <string name="erasure_submitted">تم تقديم طلب حذف البيانات بنجاح وسيتم مراجعته من قبل الموارد البشرية.</string>
+    <string name="erasure_pending">يتم حالياً مراجعة طلب حذف البيانات من قبل الموارد البشرية. سيتم إخطارك بمجرد معالجته.</string>
+    <string name="erasure_already_pending">يوجد طلب حذف بيانات معلق للمراجعة.</string>
+    <string name="request_failed">فشل الطلب. يرجى المحاولة مرة أخرى.</string>
+    <string name="compliance_info">تتوافق هذه العملية مع أنظمة حماية البيانات المعمول بها. تقديم الطلب لا يؤدي إلى حذف فوري للبيانات — ستقوم الموارد البشرية بمراجعته ومعالجته ضمن الإطار الزمني المطلوب قانونياً.</string>
+
+    <!-- Forgot Password Screen -->
+    <string name="reset_password">إعادة تعيين كلمة المرور</string>
+    <string name="national_id_iqama">رقم الهوية / رقم الإقامة</string>
+    <string name="enter_national_id_hint">أدخل رقم الهوية / رقم الإقامة لتلقي رمز التحقق على هاتفك المسجل.</string>
+    <string name="enter_code_hint">أدخل الرمز المكون من ٦ أرقام المرسل إلى %1$s</string>
+    <string name="create_new_password">أنشئ كلمة المرور الجديدة</string>
+    <string name="password_reset_complete">تمت إعادة تعيين كلمة المرور</string>
+    <string name="send_verification_code">إرسال رمز التحقق</string>
+    <string name="six_digit_code">رمز من ٦ أرقام</string>
+    <string name="verify_code">تحقق من الرمز</string>
+    <string name="resend_code">إعادة إرسال الرمز</string>
+    <string name="new_password">كلمة المرور الجديدة</string>
+    <string name="confirm_new_password">تأكيد كلمة المرور الجديدة</string>
+    <string name="back_to_login">العودة لتسجيل الدخول</string>
+    <string name="national_id_required">رقم الهوية مطلوب</string>
+    <string name="enter_six_digit">يرجى إدخال الرمز المكون من ٦ أرقام</string>
+    <string name="verification_failed">فشل التحقق. يرجى المحاولة مرة أخرى.</string>
+    <string name="invalid_code">رمز غير صالح. يرجى المحاولة مرة أخرى.</string>
+    <string name="password_requirements">يرجى استيفاء جميع متطلبات كلمة المرور</string>
+    <string name="passwords_not_match">كلمات المرور غير متطابقة</string>
+    <string name="password_reset_success">تم إعادة تعيين كلمة المرور بنجاح</string>
+    <string name="reset_failed">فشلت إعادة التعيين. يرجى المحاولة مرة أخرى.</string>
+    <string name="at_least_8_chars">٨ أحرف على الأقل</string>
+    <string name="one_uppercase">حرف كبير واحد</string>
+    <string name="one_lowercase">حرف صغير واحد</string>
+    <string name="one_number">رقم واحد</string>
+    <string name="one_special">حرف خاص واحد</string>
+
+    <!-- Biometric Disclosure -->
+    <string name="biometric_notice">إشعار البيانات البيومترية</string>
+    <string name="biometric_intro">يلتقط هذا التطبيق صوراً للوجه لأغراض التحقق من الحضور.</string>
+    <string name="biometric_usage">سيتم استخدام صورتك في:</string>
+    <string name="biometric_point_1">تشفيرها على جهازك قبل الإرسال</string>
+    <string name="biometric_point_2">استخدامها فقط للتحقق من الهوية في موقع عملك المحدد</string>
+    <string name="biometric_point_3">مقارنتها بصورتك المرجعية المسجلة</string>
+    <string name="biometric_point_4">تخزينها بشكل آمن وحذفها عند طلبك</string>
+    <string name="biometric_consent">بالمتابعة، أنت توافق على جمع ومعالجة بياناتك البيومترية للوجه لأغراض الحضور.</string>
+    <string name="i_understand_accept">أفهم وأوافق</string>
+    <string name="decline">رفض</string>
+
+    <!-- Status Badges -->
+    <string name="status_pending">معلق</string>
+    <string name="status_synced">تمت المزامنة</string>
+    <string name="status_verified">تم التحقق</string>
+    <string name="status_flagged">مُعلَّم</string>
+    <string name="status_rejected">مرفوض</string>
+    <string name="status_failed">فشل</string>
+
+    <!-- Logout Confirmation -->
+    <string name="sign_out">تسجيل الخروج</string>
+    <string name="sign_out_confirm">هل أنت متأكد أنك تريد تسجيل الخروج؟</string>
+    <string name="sign_out_pending_warning">تحذير: لديك %1$d تسجيل(ات) معلقة سيتم حذفها. لم تتم مزامنتها مع الخادم بعد.</string>
+</resources>

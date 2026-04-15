@@ -27,8 +27,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.luxurycarts.workforce.R
 import com.luxurycarts.workforce.data.ApiService
 import com.luxurycarts.workforce.data.GeofenceZone
 import com.luxurycarts.workforce.ui.theme.Background
@@ -76,16 +78,16 @@ fun MapScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = TextPrimary)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = TextPrimary)
             }
             Text(
-                "Geofence Zones",
+                stringResource(R.string.geofence_zones),
                 style = MaterialTheme.typography.titleLarge,
                 color = TextPrimary,
                 modifier = Modifier.weight(1f),
             )
             Text(
-                "${zones.size} zone${if (zones.size != 1) "s" else ""}",
+                stringResource(R.string.zones_count, zones.size),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextMuted,
             )

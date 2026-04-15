@@ -37,9 +37,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.luxurycarts.workforce.R
 import com.luxurycarts.workforce.data.AttendanceDao
 import com.luxurycarts.workforce.data.AttendanceEntity
 import com.luxurycarts.workforce.services.EncryptionService
@@ -93,16 +95,16 @@ fun HistoryScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = TextPrimary)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = TextPrimary)
             }
             Text(
-                "Attendance History",
+                stringResource(R.string.attendance_history),
                 style = MaterialTheme.typography.titleLarge,
                 color = TextPrimary,
                 modifier = Modifier.weight(1f),
             )
             Text(
-                "${submissions.size} records",
+                stringResource(R.string.records_count, submissions.size),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextMuted,
             )
@@ -116,7 +118,7 @@ fun HistoryScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Filled.Image, contentDescription = null, tint = TextMuted, modifier = Modifier.size(48.dp))
                     Spacer(Modifier.height(12.dp))
-                    Text("No attendance records yet", color = TextMuted)
+                    Text(stringResource(R.string.no_attendance_records), color = TextMuted)
                 }
             }
         } else {
@@ -193,7 +195,7 @@ private fun HistoryItem(
             Column {
                 Text(dateFormatted, style = MaterialTheme.typography.bodyMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
                 if (timeFormatted != null) {
-                    Text("Taken: $timeFormatted", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                    Text(stringResource(R.string.taken_at, timeFormatted), style = MaterialTheme.typography.bodySmall, color = TextMuted)
                 }
             }
             StatusBadge(status = item.syncStatus)
@@ -202,31 +204,31 @@ private fun HistoryItem(
         if (isExpanded) {
             HorizontalDivider(color = Border)
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                item.gpsAccuracy?.let { DetailLine("GPS Accuracy", "\u00B1${it.toInt()}m") }
+                item.gpsAccuracy?.let { DetailLine(stringResource(R.string.gps_accuracy), "\u00B1${it.toInt()}m") }
                 val hasRekError = item.flagReason?.contains("Face verification error") == true
                 val rekLabel = when {
                     item.rekognitionConfidence == null && item.syncStatus == "pending" -> null
-                    item.rekognitionConfidence == null -> "Not processed"
-                    hasRekError -> "Error"
+                    item.rekognitionConfidence == null -> stringResource(R.string.not_processed)
+                    hasRekError -> stringResource(R.string.verification_error)
                     else -> {
                         val conf = item.rekognitionConfidence.toDoubleOrNull() ?: 0.0
                         when {
-                            conf >= 95.0 -> "Identical (${String.format("%.1f", conf)}%)"
-                            else -> "Not identical (${String.format("%.1f", conf)}%)"
+                            conf >= 95.0 -> stringResource(R.string.identical_confidence, String.format("%.1f", conf))
+                            else -> stringResource(R.string.not_identical_confidence, String.format("%.1f", conf))
                         }
                     }
                 }
                 if (rekLabel != null) {
                     val rekColor = when {
-                        rekLabel.startsWith("Identical") -> SuccessGreen
-                        rekLabel.startsWith("Not identical") -> ErrorRed
-                        rekLabel == "Error" -> ErrorRed
+                        rekLabel.contains("Identical") || rekLabel.contains("مطابق") -> SuccessGreen
+                        rekLabel.contains("Not identical") || rekLabel.contains("غير مطابق") -> ErrorRed
+                        rekLabel == stringResource(R.string.verification_error) -> ErrorRed
                         else -> TextMuted
                     }
-                    DetailLine("Face Match", rekLabel, rekColor)
+                    DetailLine(stringResource(R.string.face_match), rekLabel, rekColor)
                 }
-                DetailLine("Sync Status", item.syncStatus)
-                item.serverId?.let { DetailLine("Server ID", it.toString()) }
+                DetailLine(stringResource(R.string.sync_status), item.syncStatus)
+                item.serverId?.let { DetailLine(stringResource(R.string.server_id), it.toString()) }
                 item.flagReason?.let {
                     val sanitized = it.split(";")
                         .map { r -> r.trim() }
@@ -252,7 +254,7 @@ private fun HistoryItem(
                     val isRejected = item.syncStatus.lowercase() == "rejected"
                     val noteColor = if (isRejected) ErrorRed else SuccessGreen
                     Text(
-                        "HR Notes: $it",
+                        "${stringResource(R.string.hr_notes)}: $it",
                         style = MaterialTheme.typography.bodySmall,
                         color = noteColor,
                         modifier = Modifier
@@ -261,12 +263,12 @@ private fun HistoryItem(
                             .padding(8.dp),
                     )
                 }
-                if (item.retryCount > 0) DetailLine("Retries", item.retryCount.toString())
+                if (item.retryCount > 0) DetailLine(stringResource(R.string.retries), item.retryCount.toString())
 
                 if (decryptedPhotoPath != null) {
                     AsyncImage(
                         model = File(decryptedPhotoPath),
-                        contentDescription = "Attendance photo",
+                        contentDescription = stringResource(R.string.tap_to_view_photo),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -287,7 +289,7 @@ private fun HistoryItem(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Icon(Icons.Filled.Image, contentDescription = null, tint = TextMuted, modifier = Modifier.size(18.dp))
-                            Text("Tap to view photo", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                            Text(stringResource(R.string.tap_to_view_photo), style = MaterialTheme.typography.bodySmall, color = TextMuted)
                         }
                     }
                 }
