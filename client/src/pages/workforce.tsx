@@ -74,6 +74,9 @@ import {
   Save,
   LogOut,
   Radio,
+  Banknote,
+  Landmark,
+  Coins,
 } from "lucide-react";
 import {
   Table,
@@ -147,6 +150,8 @@ type Employee = {
   positionId?: string | null;
   positionTitle?: string | null;
   positionIsActive?: boolean | null;
+  paymentMethod?: string | null;
+  paymentMethodReason?: string | null;
 };
 
 type WorkHistory = {
@@ -1071,6 +1076,14 @@ function EmployeeDetailDialog({
 
               <Separator className="bg-zinc-800" />
               <div>
+                <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-3">
+                  <Banknote className="h-3.5 w-3.5" /> Payment Method
+                </Label>
+                <PaymentMethodToggle employee={employee} />
+              </div>
+
+              <Separator className="bg-zinc-800" />
+              <div>
                 <div className="flex items-center justify-between mb-3">
                   <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
                     <ShieldAlert className="h-3.5 w-3.5" /> Emergency Contact
@@ -1527,6 +1540,66 @@ function EmployeeDetailDialog({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function PaymentMethodToggle({ employee }: { employee: Employee }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [showCashReason, setShowCashReason] = useState(false);
+  const [reason, setReason] = useState("");
+
+  const toggleMut = useMutation({
+    mutationFn: (data: { paymentMethod: string; reason: string }) =>
+      apiRequest("PATCH", `/api/workforce/${employee.id}/payment-method`, data).then(r => r.json()),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/workforce"] }); toast({ title: "Payment method updated" }); setShowCashReason(false); setReason(""); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const current = employee.paymentMethod ?? "bank_transfer";
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <button
+          onClick={() => current !== "bank_transfer" && toggleMut.mutate({ paymentMethod: "bank_transfer", reason: "" })}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-sm border text-xs font-medium transition-colors ${
+            current === "bank_transfer"
+              ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400"
+              : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-zinc-300"
+          }`}
+          data-testid="button-payment-method-bank"
+        >
+          <Landmark className="h-3.5 w-3.5" /> Bank Transfer
+        </button>
+        <button
+          onClick={() => { if (current !== "cash") setShowCashReason(true); }}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-sm border text-xs font-medium transition-colors ${
+            current === "cash"
+              ? "border-amber-500/50 bg-amber-500/10 text-amber-400"
+              : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-zinc-300"
+          }`}
+          data-testid="button-payment-method-cash"
+        >
+          <Coins className="h-3.5 w-3.5" /> Cash
+        </button>
+      </div>
+      {showCashReason && (
+        <div className="space-y-2 p-3 bg-amber-500/5 border border-amber-500/20 rounded-sm">
+          <label className="text-zinc-400 text-xs">Reason for cash payment</label>
+          <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. No bank account" className="h-7 text-xs bg-zinc-900 border-zinc-700" data-testid="input-cash-reason" />
+          <div className="flex gap-2">
+            <Button size="sm" className="h-6 text-xs bg-amber-600 hover:bg-amber-700" disabled={!reason.trim() || toggleMut.isPending} onClick={() => toggleMut.mutate({ paymentMethod: "cash", reason })} data-testid="button-confirm-cash">
+              {toggleMut.isPending ? "Saving..." : "Confirm Cash"}
+            </Button>
+            <Button size="sm" variant="ghost" className="h-6 text-xs text-zinc-500" onClick={() => { setShowCashReason(false); setReason(""); }} data-testid="button-cancel-cash">Cancel</Button>
+          </div>
+        </div>
+      )}
+      {employee.paymentMethodReason && !showCashReason && (
+        <p className="text-[10px] text-zinc-500">Reason: {employee.paymentMethodReason}</p>
+      )}
+    </div>
   );
 }
 

@@ -44,8 +44,14 @@ import {
   positions,
   workforce,
   candidates,
+  payRunLines,
+  payrollTransactions,
+  attendanceRecords,
+  otpVerifications,
+  users,
+  type InsertPayrollAdjustment,
 } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, desc, inArray, count } from "drizzle-orm";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
 import { validateFaceQuality } from "./rekognition";
 import XLSX from "xlsx";
@@ -5305,6 +5311,628 @@ export async function registerRoutes(
       });
 
       return res.status(201).json({ ...broadcast, recipientCount: validRecipients.length });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Pay Runs ────────────────────────────────────────────────────────────────
+  app.get("/api/pay-runs", async (req: Request, res: Response) => {
+    try {
+      const runs = await storage.getPayRuns();
+      const enriched = await Promise.all(runs.map(async (run) => {
+        const lines = await storage.getPayRunLines(run.id);
+        const totalAmount = lines.reduce((s, l) => s + parseFloat(l.netPayable ?? "0"), 0);
+        const bankCount = lines.filter(l => l.paymentMethod === "bank_transfer").length;
+        const cashCount = lines.filter(l => l.paymentMethod === "cash").length;
+        let eventName: string | null = null;
+        if (run.eventId) {
+          const ev = await storage.getEvent(run.eventId);
+          eventName = ev?.name ?? null;
+        }
+        return { ...run, totalAmount: Math.round(totalAmount * 100) / 100, employeeCount: lines.length, bankCount, cashCount, eventName };
+      }));
+      return res.json(enriched);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/pay-runs", async (req: Request, res: Response) => {
+    try {
+      const userId = getAuthUserId(req);
+      const { name, eventId, dateFrom, dateTo, mode, splitPercentage, tranche1DepositDate, tranche2DepositDate } = req.body;
+      if (!name || !dateFrom || !dateTo) return res.status(400).json({ error: "Name, dateFrom, dateTo required" });
+      if (mode === "split" && (!splitPercentage || splitPercentage < 1 || splitPercentage > 99)) {
+        return res.status(400).json({ error: "Split percentage must be between 1 and 99" });
+      }
+      const run = await storage.createPayRun({
+        name, eventId: eventId || null, dateFrom, dateTo,
+        mode: mode || "full",
+        splitPercentage: mode === "split" ? splitPercentage : null,
+        tranche1DepositDate: tranche1DepositDate || null,
+        tranche2DepositDate: mode === "split" ? (tranche2DepositDate || null) : null,
+        status: "draft",
+        createdBy: userId,
+      });
+      await logAudit(req, { action: "create_pay_run", entityType: "pay_run", entityId: run.id, description: `Created pay run "${name}" (${mode}) for ${dateFrom} to ${dateTo}` });
+      return res.status(201).json(run);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/pay-runs/:id", async (req: Request, res: Response) => {
+    try {
+      const run = await storage.getPayRun(req.params.id);
+      if (!run) return res.status(404).json({ error: "Pay run not found" });
+      const lines = await storage.getPayRunLines(run.id);
+      let eventName: string | null = null;
+      if (run.eventId) {
+        const ev = await storage.getEvent(run.eventId);
+        eventName = ev?.name ?? null;
+      }
+      const enrichedLines = await Promise.all(lines.map(async (line) => {
+        const [cand] = await db.select({ fullNameEn: candidates.fullNameEn, fullNameAr: candidates.fullNameAr, phone: candidates.phone, ibanNumber: candidates.ibanNumber, ibanBankCode: candidates.ibanBankCode, ibanBankName: candidates.ibanBankName, ibanAccountFirstName: candidates.ibanAccountFirstName, ibanAccountLastName: candidates.ibanAccountLastName }).from(candidates).where(eq(candidates.id, line.candidateId));
+        const txns = await storage.getPayrollTransactions({ payRunLineId: line.id });
+        return { ...line, candidate: cand ?? null, transactions: txns };
+      }));
+      const totalAmount = lines.reduce((s, l) => s + parseFloat(l.netPayable ?? "0"), 0);
+      return res.json({ ...run, eventName, lines: enrichedLines, totalAmount: Math.round(totalAmount * 100) / 100 });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/pay-runs/:id/process", async (req: Request, res: Response) => {
+    try {
+      const result = await storage.processPayRun(req.params.id);
+      await logAudit(req, { action: "process_pay_run", entityType: "pay_run", entityId: req.params.id, description: `Processed pay run: ${result.linesCreated} lines created` });
+      return res.json(result);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/pay-runs/:id/mark-t1-paid", async (req: Request, res: Response) => {
+    try {
+      const lines = await storage.getPayRunLines(req.params.id);
+      let updated = 0;
+      for (const line of lines) {
+        if (line.tranche1Status === "pending") {
+          await storage.updatePayRunLine(line.id, { tranche1Status: "paid" });
+          updated++;
+        }
+      }
+      const run = await storage.getPayRun(req.params.id);
+      if (run?.mode === "split") {
+        await storage.updatePayRun(req.params.id, { status: "t1_paid" });
+      } else {
+        await storage.updatePayRun(req.params.id, { status: "completed" });
+      }
+      await logAudit(req, { action: "mark_t1_paid", entityType: "pay_run", entityId: req.params.id, description: `Marked tranche 1 paid for ${updated} lines` });
+      return res.json({ updated });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/pay-runs/:id/lines/:lineId/manual-addition", async (req: Request, res: Response) => {
+    try {
+      const userId = getAuthUserId(req);
+      const line = await storage.getPayRunLine(req.params.lineId);
+      if (!line) return res.status(404).json({ error: "Line not found" });
+      const { label, amount } = req.body;
+      if (!label || !amount) return res.status(400).json({ error: "Label and amount required" });
+      const additions = (line.manualAdditions as any[]) || [];
+      additions.push({ label, amount: parseFloat(amount), addedBy: userId, addedAt: new Date().toISOString() });
+      const totalManualAdditions = additions.reduce((s: number, a: any) => s + a.amount, 0);
+      await storage.updatePayRunLine(line.id, { manualAdditions: additions, totalManualAdditions: String(totalManualAdditions) });
+      return res.json({ success: true });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/pay-runs/:id/lines/:lineId/manual-deduction", async (req: Request, res: Response) => {
+    try {
+      const userId = getAuthUserId(req);
+      const line = await storage.getPayRunLine(req.params.lineId);
+      if (!line) return res.status(404).json({ error: "Line not found" });
+      const { label, amount } = req.body;
+      if (!label || !amount) return res.status(400).json({ error: "Label and amount required" });
+      const deductions = (line.manualDeductions as any[]) || [];
+      deductions.push({ label, amount: parseFloat(amount), addedBy: userId, addedAt: new Date().toISOString() });
+      const totalManualDeductions = deductions.reduce((s: number, a: any) => s + a.amount, 0);
+      await storage.updatePayRunLine(line.id, { manualDeductions: deductions, totalManualDeductions: String(totalManualDeductions) });
+      return res.json({ success: true });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Payment Transaction Recording ─────────────────────────────────────────
+  app.post("/api/pay-runs/:id/lines/:lineId/record-payment", async (req: Request, res: Response) => {
+    try {
+      const userId = getAuthUserId(req);
+      const line = await storage.getPayRunLine(req.params.lineId);
+      if (!line) return res.status(404).json({ error: "Line not found" });
+
+      const { bankTransactionId, trancheNumber, depositDate, notes } = req.body;
+      if (!bankTransactionId || !depositDate) return res.status(400).json({ error: "bankTransactionId and depositDate required" });
+
+      const tranche = trancheNumber ?? 1;
+      if (tranche === 2 && line.tranche2Status === "blocked") {
+        return res.status(400).json({ error: "Tranche 2 is blocked — offboarding must be completed first" });
+      }
+
+      const [cand] = await db.select().from(candidates).where(eq(candidates.id, line.candidateId));
+      const amount = tranche === 1 ? (line.tranche1Amount ?? line.netPayable) : (line.tranche2Amount ?? "0");
+
+      const txn = await storage.createPayrollTransaction({
+        payRunLineId: line.id,
+        workforceId: line.workforceId,
+        candidateId: line.candidateId,
+        trancheNumber: tranche,
+        amount: amount,
+        paymentMethod: "bank_transfer",
+        bankTransactionId,
+        ibanUsed: cand?.ibanNumber ?? null,
+        bankCode: cand?.ibanBankCode ?? null,
+        bankName: cand?.ibanBankName ?? null,
+        beneficiaryName: cand ? `${cand.ibanAccountFirstName ?? ""} ${cand.ibanAccountLastName ?? ""}`.trim() : null,
+        depositDate,
+        enteredBy: userId ?? "system",
+        notes: notes ?? null,
+      });
+
+      if (tranche === 1) await storage.updatePayRunLine(line.id, { tranche1Status: "paid" });
+      else await storage.updatePayRunLine(line.id, { tranche2Status: "paid" });
+
+      await logAudit(req, { action: "record_payment", entityType: "payroll_transaction", entityId: txn.id, description: `Recorded bank txn ${bankTransactionId} for employee ${line.employeeNumber} tranche ${tranche}` });
+      return res.json(txn);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/pay-runs/:id/import-bank-response", upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      const userId = getAuthUserId(req);
+      if (!req.file) return res.status(400).json({ error: "File required" });
+
+      const { ibanColumn, txnIdColumn, depositDate } = req.body;
+      if (!ibanColumn || !txnIdColumn) return res.status(400).json({ error: "ibanColumn and txnIdColumn mappings required" });
+
+      const fileContent = fs.readFileSync(req.file.path, "utf-8");
+      const lines = fileContent.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+      if (lines.length < 2) return res.status(400).json({ error: "File must have a header row and at least one data row" });
+
+      const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ""));
+      const ibanIdx = headers.indexOf(ibanColumn);
+      const txnIdx = headers.indexOf(txnIdColumn);
+      if (ibanIdx === -1 || txnIdx === -1) return res.status(400).json({ error: "Column names not found in file headers" });
+
+      const payRunLines_list = await storage.getPayRunLines(req.params.id);
+      const candidateIds = [...new Set(payRunLines_list.map(l => l.candidateId))];
+      const candidateRows = candidateIds.length > 0
+        ? await db.select({ id: candidates.id, ibanNumber: candidates.ibanNumber }).from(candidates).where(inArray(candidates.id, candidateIds))
+        : [];
+      const ibanToLine = new Map<string, typeof payRunLines_list[0]>();
+      for (const line of payRunLines_list) {
+        const cand = candidateRows.find(c => c.id === line.candidateId);
+        if (cand?.ibanNumber) ibanToLine.set(cand.ibanNumber.toUpperCase(), line);
+      }
+
+      let matched = 0, skipped = 0, notFound = 0;
+      const errors: string[] = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(",").map(c => c.trim().replace(/^"|"$/g, ""));
+        const iban = (cols[ibanIdx] ?? "").toUpperCase().replace(/\s/g, "");
+        const txnId = cols[txnIdx] ?? "";
+        if (!iban || !txnId) continue;
+
+        const line = ibanToLine.get(iban);
+        if (!line) { notFound++; errors.push(`Row ${i + 1}: IBAN ${iban} not found in this pay run`); continue; }
+
+        const existingTxns = await storage.getPayrollTransactions({ payRunLineId: line.id });
+        const pendingTranche = line.tranche1Status === "pending" ? 1 : (line.tranche2Status === "pending" ? 2 : null);
+
+        if (!pendingTranche) { skipped++; continue; }
+        if (pendingTranche === 2 && line.tranche2Status === "blocked") { errors.push(`Row ${i + 1}: Tranche 2 blocked for ${iban}`); notFound++; continue; }
+
+        const cand = candidateRows.find(c => c.id === line.candidateId);
+        const amount = pendingTranche === 1 ? (line.tranche1Amount ?? line.netPayable) : (line.tranche2Amount ?? "0");
+
+        try {
+          await storage.createPayrollTransaction({
+            payRunLineId: line.id,
+            workforceId: line.workforceId,
+            candidateId: line.candidateId,
+            trancheNumber: pendingTranche,
+            amount,
+            paymentMethod: "bank_transfer",
+            bankTransactionId: txnId,
+            ibanUsed: iban,
+            bankCode: null,
+            bankName: null,
+            beneficiaryName: null,
+            depositDate: depositDate || new Date().toISOString().slice(0, 10),
+            enteredBy: userId ?? "system",
+          });
+          if (pendingTranche === 1) await storage.updatePayRunLine(line.id, { tranche1Status: "paid" });
+          else await storage.updatePayRunLine(line.id, { tranche2Status: "paid" });
+          matched++;
+        } catch (e: any) {
+          if (e.message?.includes("unique") || e.code === "23505") { skipped++; }
+          else { notFound++; errors.push(`Row ${i + 1}: ${e.message}`); }
+        }
+      }
+
+      if (req.file.path) try { fs.unlinkSync(req.file.path); } catch (_e) {}
+      await logAudit(req, { action: "import_bank_response", entityType: "pay_run", entityId: req.params.id, description: `Imported bank response: ${matched} matched, ${skipped} skipped, ${notFound} not found` });
+      return res.json({ matched, skipped, notFound, errors });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/pay-runs/:id/lines/:lineId/record-cash-payment", async (req: Request, res: Response) => {
+    try {
+      const userId = getAuthUserId(req);
+      const line = await storage.getPayRunLine(req.params.lineId);
+      if (!line) return res.status(404).json({ error: "Line not found" });
+
+      const { otp, trancheNumber, depositDate, notes } = req.body;
+      const tranche = trancheNumber ?? 1;
+
+      if (tranche === 2 && line.tranche2Status === "blocked") {
+        return res.status(400).json({ error: "Tranche 2 blocked — offboarding must be completed first" });
+      }
+
+      const [cand] = await db.select().from(candidates).where(eq(candidates.id, line.candidateId));
+      if (!cand?.phone) return res.status(400).json({ error: "Employee has no phone number on file — required for cash payment OTP" });
+
+      if (!otp) {
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const amount = tranche === 1 ? (line.tranche1Amount ?? line.netPayable) : (line.tranche2Amount ?? "0");
+
+        await db.insert(otpVerifications).values({
+          phone: cand.phone,
+          code,
+          purpose: "cash_payment",
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+          metadata: { payRunLineId: line.id, trancheNumber: tranche, amount },
+        });
+
+        const { sendSmsViaPlugin } = await import("./sms-sender");
+        const plugins = await storage.getSmsPlugins();
+        const activePlugin = plugins.find((p: any) => p.isActive);
+        if (activePlugin) {
+          await sendSmsViaPlugin(activePlugin, cand.phone, `Your cash payment verification code is ${code}. Amount: ${amount} SAR. Provide this code to the cashier to confirm receipt. WORKFORCE`);
+        }
+
+        return res.json({ otpSent: true, phone: cand.phone.slice(0, 4) + "****" + cand.phone.slice(-2) });
+      }
+
+      const [verification] = await db.select().from(otpVerifications)
+        .where(and(
+          eq(otpVerifications.phone, cand.phone),
+          eq(otpVerifications.purpose, "cash_payment"),
+          eq(otpVerifications.code, otp),
+        ))
+        .orderBy(desc(otpVerifications.createdAt))
+        .limit(1);
+
+      if (!verification) return res.status(400).json({ error: "Invalid OTP code" });
+      if (verification.expiresAt && verification.expiresAt < new Date()) return res.status(400).json({ error: "OTP expired — request a new code" });
+      if ((verification.attempts ?? 0) >= 3) return res.status(429).json({ error: "Too many attempts — request a new code" });
+
+      await db.update(otpVerifications).set({ isVerified: true }).where(eq(otpVerifications.id, verification.id));
+
+      const receiptSeq = await db.select({ value: count() }).from(payrollTransactions).where(eq(payrollTransactions.paymentMethod, "cash"));
+      const receiptNumber = `CR-${new Date().getFullYear()}-${String((receiptSeq[0]?.value ?? 0) + 1).padStart(5, "0")}`;
+      const amount = tranche === 1 ? (line.tranche1Amount ?? line.netPayable) : (line.tranche2Amount ?? "0");
+
+      const txn = await storage.createPayrollTransaction({
+        payRunLineId: line.id,
+        workforceId: line.workforceId,
+        candidateId: line.candidateId,
+        trancheNumber: tranche,
+        amount,
+        paymentMethod: "cash",
+        receiptNumber,
+        otpVerified: true,
+        otpSentTo: cand.phone,
+        otpVerifiedAt: new Date(),
+        disbursedBy: userId,
+        depositDate: depositDate || new Date().toISOString().slice(0, 10),
+        enteredBy: userId ?? "system",
+        notes: notes ?? null,
+      });
+
+      if (tranche === 1) await storage.updatePayRunLine(line.id, { tranche1Status: "paid" });
+      else await storage.updatePayRunLine(line.id, { tranche2Status: "paid" });
+
+      await logAudit(req, { action: "record_cash_payment", entityType: "payroll_transaction", entityId: txn.id, description: `Cash payment ${receiptNumber} for employee ${line.employeeNumber} tranche ${tranche} (OTP verified)` });
+      return res.json(txn);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/pay-runs/:id/lines/:lineId/cash-otp-override", async (req: Request, res: Response) => {
+    try {
+      const userId = getAuthUserId(req);
+      const [user] = await db.select().from(users).where(eq(users.id, userId ?? ""));
+      if (!user || user.role !== "super_admin") return res.status(403).json({ error: "Super admin only" });
+
+      const line = await storage.getPayRunLine(req.params.lineId);
+      if (!line) return res.status(404).json({ error: "Line not found" });
+      const { overrideReason, trancheNumber, depositDate, notes } = req.body;
+      if (!overrideReason) return res.status(400).json({ error: "Override reason required" });
+
+      const tranche = trancheNumber ?? 1;
+      if (tranche === 2 && line.tranche2Status === "blocked") {
+        return res.status(400).json({ error: "Tranche 2 blocked — offboarding must be completed first" });
+      }
+
+      const [cand] = await db.select().from(candidates).where(eq(candidates.id, line.candidateId));
+      const receiptSeq = await db.select({ value: count() }).from(payrollTransactions).where(eq(payrollTransactions.paymentMethod, "cash"));
+      const receiptNumber = `CR-${new Date().getFullYear()}-${String((receiptSeq[0]?.value ?? 0) + 1).padStart(5, "0")}`;
+      const amount = tranche === 1 ? (line.tranche1Amount ?? line.netPayable) : (line.tranche2Amount ?? "0");
+
+      const txn = await storage.createPayrollTransaction({
+        payRunLineId: line.id,
+        workforceId: line.workforceId,
+        candidateId: line.candidateId,
+        trancheNumber: tranche,
+        amount,
+        paymentMethod: "cash",
+        receiptNumber,
+        otpVerified: false,
+        otpSentTo: cand?.phone ?? null,
+        manualOverride: true,
+        overrideReason,
+        disbursedBy: userId,
+        depositDate: depositDate || new Date().toISOString().slice(0, 10),
+        enteredBy: userId ?? "system",
+        notes: notes ?? null,
+      });
+
+      if (tranche === 1) await storage.updatePayRunLine(line.id, { tranche1Status: "paid" });
+      else await storage.updatePayRunLine(line.id, { tranche2Status: "paid" });
+
+      await logAudit(req, { action: "cash_otp_override", entityType: "payroll_transaction", entityId: txn.id, description: `Cash OTP override for employee ${line.employeeNumber}: ${overrideReason}` });
+      return res.json(txn);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Payroll Adjustments ────────────────────────────────────────────────────
+  app.post("/api/payroll-adjustments", async (req: Request, res: Response) => {
+    try {
+      const userId = getAuthUserId(req);
+      const { workforceId, date, originalDeductionMinutes, adjustedDeductionMinutes, reason } = req.body;
+      if (!workforceId || !date || !reason) return res.status(400).json({ error: "workforceId, date, reason required" });
+      const adj = await storage.createPayrollAdjustment({
+        workforceId, date,
+        originalDeductionMinutes: originalDeductionMinutes ?? 0,
+        adjustedDeductionMinutes: adjustedDeductionMinutes ?? 0,
+        reason, adjustedBy: userId ?? "system",
+      });
+      await logAudit(req, { action: "create_payroll_adjustment", entityType: "payroll_adjustment", entityId: adj.id, description: `Override for ${workforceId} on ${date}: ${reason}` });
+      return res.status(201).json(adj);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/payroll-adjustments/bulk", async (req: Request, res: Response) => {
+    try {
+      const userId = getAuthUserId(req);
+      const { date, reason, workforceIds, eventId, departmentId } = req.body;
+      if (!date || !reason) return res.status(400).json({ error: "date and reason required" });
+
+      let targetIds: string[] = workforceIds ?? [];
+      if (!workforceIds || workforceIds.length === 0) {
+        const conditions: any[] = [eq(workforce.isActive, true)];
+        if (eventId) conditions.push(eq(workforce.eventId, eventId));
+        const employees = await db.select({ id: workforce.id }).from(workforce).where(and(...conditions));
+        targetIds = employees.map(e => e.id);
+      }
+
+      const attendanceForDate = await db.select().from(attendanceRecords).where(and(eq(attendanceRecords.date, date), inArray(attendanceRecords.workforceId, targetIds)));
+
+      const adjustments: InsertPayrollAdjustment[] = attendanceForDate
+        .filter(a => a.status === "absent" || a.status === "late")
+        .map(a => ({
+          workforceId: a.workforceId,
+          date,
+          originalDeductionMinutes: (a.minutesScheduled ?? 0) - (a.minutesWorked ?? 0),
+          adjustedDeductionMinutes: 0,
+          reason,
+          adjustedBy: userId ?? "system",
+        }));
+
+      const count = await storage.bulkCreatePayrollAdjustments(adjustments);
+      await logAudit(req, { action: "bulk_payroll_adjustment", entityType: "payroll_adjustment", entityId: date, description: `Bulk override for ${count} employees on ${date}: ${reason}` });
+      return res.json({ created: count });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/payroll-adjustments", async (req: Request, res: Response) => {
+    try {
+      const { workforceId, dateFrom, dateTo } = req.query as any;
+      const adjustments = await storage.getPayrollAdjustments({ workforceId, dateFrom, dateTo });
+      return res.json(adjustments);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Payslips ───────────────────────────────────────────────────────────────
+  app.get("/api/payslips/:candidateId", async (req: Request, res: Response) => {
+    try {
+      const userId = getAuthUserId(req);
+      if (!userId) return res.status(401).json({ error: "Unauthorized" });
+      const txns = await storage.getPayrollTransactions({ candidateId: req.params.candidateId });
+      const enriched = await Promise.all(txns.map(async (txn) => {
+        const line = await storage.getPayRunLine(txn.payRunLineId);
+        const run = line ? await storage.getPayRun(line.payRunId) : null;
+        let eventName: string | null = null;
+        if (run?.eventId) { const ev = await storage.getEvent(run.eventId); eventName = ev?.name ?? null; }
+
+        const isAdmin = userId !== null;
+        let ibanDisplay = txn.ibanUsed;
+        if (ibanDisplay && !isAdmin) {
+          ibanDisplay = ibanDisplay.slice(0, 4) + " " + ibanDisplay.slice(4, 8) + " **** **** **" + ibanDisplay.slice(-2);
+        }
+
+        return {
+          ...txn,
+          ibanUsed: ibanDisplay,
+          payRunLine: line ? {
+            effectiveDateFrom: line.effectiveDateFrom,
+            effectiveDateTo: line.effectiveDateTo,
+            baseSalary: line.baseSalary,
+            daysWorked: line.daysWorked,
+            excusedDays: line.excusedDays,
+            absentDays: line.absentDays,
+            lateMinutes: line.lateMinutes,
+            grossEarned: line.grossEarned,
+            manualAdditions: line.manualAdditions,
+            manualDeductions: line.manualDeductions,
+            totalManualAdditions: line.totalManualAdditions,
+            totalManualDeductions: line.totalManualDeductions,
+            absentDeduction: line.absentDeduction,
+            lateDeduction: line.lateDeduction,
+            assetDeductions: line.assetDeductions,
+            totalDeductions: line.totalDeductions,
+            netPayable: line.netPayable,
+          } : null,
+          payRunName: run?.name ?? null,
+          eventName,
+          payPeriod: run ? { dateFrom: run.dateFrom, dateTo: run.dateTo } : null,
+        };
+      }));
+      return res.json(enriched);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Settlement Payment Tracking ────────────────────────────────────────────
+  app.post("/api/workforce/:id/mark-settlement-paid", async (req: Request, res: Response) => {
+    try {
+      const userId = getAuthUserId(req);
+      const { reference } = req.body;
+      const updated = await storage.updateWorkforceRecord(req.params.id, {
+        settlementPaidAt: new Date() as any,
+        settlementPaidBy: userId,
+        settlementReference: reference ?? null,
+      } as any);
+      if (!updated) return res.status(404).json({ error: "Employee not found" });
+      await logAudit(req, { action: "mark_settlement_paid", entityType: "workforce", entityId: req.params.id, description: `Settlement marked as paid${reference ? ` (ref: ${reference})` : ""}` });
+      return res.json(updated);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Payment Method Management ──────────────────────────────────────────────
+  app.patch("/api/workforce/:id/payment-method", async (req: Request, res: Response) => {
+    try {
+      const userId = getAuthUserId(req);
+      const { paymentMethod, reason } = req.body;
+      if (!paymentMethod || !["bank_transfer", "cash"].includes(paymentMethod)) {
+        return res.status(400).json({ error: "paymentMethod must be 'bank_transfer' or 'cash'" });
+      }
+      if (paymentMethod === "cash" && !reason) {
+        return res.status(400).json({ error: "Reason required when setting payment method to cash" });
+      }
+      const updated = await storage.updateWorkforceRecord(req.params.id, {
+        paymentMethod,
+        paymentMethodReason: paymentMethod === "cash" ? reason : null,
+        paymentMethodSetBy: userId,
+        paymentMethodSetAt: new Date() as any,
+      } as any);
+      if (!updated) return res.status(404).json({ error: "Employee not found" });
+      await logAudit(req, { action: "update_payment_method", entityType: "workforce", entityId: req.params.id, description: `Payment method changed to ${paymentMethod}${reason ? `: ${reason}` : ""}` });
+      return res.json(updated);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Completed Offboarding List ─────────────────────────────────────────────
+  app.get("/api/offboarding/completed", async (req: Request, res: Response) => {
+    try {
+      const rows = await db
+        .select({
+          id: workforce.id,
+          employeeNumber: workforce.employeeNumber,
+          candidateId: workforce.candidateId,
+          eventId: workforce.eventId,
+          salary: workforce.salary,
+          startDate: workforce.startDate,
+          endDate: workforce.endDate,
+          offboardingCompletedAt: workforce.offboardingCompletedAt,
+          finalGrossPay: workforce.finalGrossPay,
+          finalDeductions: workforce.finalDeductions,
+          finalNetSettlement: workforce.finalNetSettlement,
+          settlementPaidAt: workforce.settlementPaidAt,
+          settlementPaidBy: workforce.settlementPaidBy,
+          settlementReference: workforce.settlementReference,
+          paymentMethod: workforce.paymentMethod,
+          employmentType: workforce.employmentType,
+          fullNameEn: candidates.fullNameEn,
+          fullNameAr: candidates.fullNameAr,
+        })
+        .from(workforce)
+        .innerJoin(candidates, eq(workforce.candidateId, candidates.id))
+        .where(eq(workforce.offboardingStatus, "completed"))
+        .orderBy(desc(workforce.offboardingCompletedAt));
+
+      const enriched = await Promise.all(rows.map(async (row) => {
+        let eventName: string | null = null;
+        if (row.eventId) { const ev = await storage.getEvent(row.eventId); eventName = ev?.name ?? null; }
+        return { ...row, eventName };
+      }));
+      return res.json(enriched);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Pay Run Export ─────────────────────────────────────────────────────────
+  app.get("/api/pay-runs/:id/export", async (req: Request, res: Response) => {
+    try {
+      const run = await storage.getPayRun(req.params.id);
+      if (!run) return res.status(404).json({ error: "Pay run not found" });
+      const lines = await storage.getPayRunLines(run.id);
+      const { format, lineIds } = req.query as any;
+
+      let targetLines = lines;
+      if (lineIds) {
+        const ids = lineIds.split(",");
+        targetLines = lines.filter(l => ids.includes(l.id));
+      }
+
+      const enriched = await Promise.all(targetLines.map(async (line) => {
+        const [cand] = await db.select({ fullNameEn: candidates.fullNameEn, ibanNumber: candidates.ibanNumber, ibanBankCode: candidates.ibanBankCode, ibanBankName: candidates.ibanBankName }).from(candidates).where(eq(candidates.id, line.candidateId));
+        return { ...line, candidateName: cand?.fullNameEn ?? "", iban: cand?.ibanNumber ?? "", bankCode: cand?.ibanBankCode ?? "", bankName: cand?.ibanBankName ?? "" };
+      }));
+
+      if (format === "csv") {
+        const headers = ["Employee Number", "Name", "Base Salary", "Days Worked", "Excused Days", "Gross Earned", "Absent Days", "Absent Deduction", "Late Minutes", "Late Deduction", "Asset Deductions", "Manual Additions", "Manual Deductions", "Total Deductions", "Net Payable", "Payment Method", "IBAN", "Bank"];
+        if (run.mode === "split") headers.push("Tranche 1", "T1 Status", "Tranche 2", "T2 Status");
+        const csvRows = enriched.map(l => {
+          const row = [l.employeeNumber, l.candidateName, l.baseSalary, l.daysWorked, l.excusedDays, l.grossEarned, l.absentDays, l.absentDeduction, l.lateMinutes, l.lateDeduction, l.assetDeductions, l.totalManualAdditions, l.totalManualDeductions, l.totalDeductions, l.netPayable, l.paymentMethod, l.iban, l.bankName];
+          if (run.mode === "split") row.push(l.tranche1Amount ?? "", l.tranche1Status ?? "", l.tranche2Amount ?? "", l.tranche2Status ?? "");
+          return row.map(v => `"${v ?? ""}"`).join(",");
+        });
+        const csv = [headers.map(h => `"${h}"`).join(","), ...csvRows].join("\n");
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename="payrun-${run.name.replace(/\s/g, "_")}.csv"`);
+        return res.send(csv);
+      }
+
+      return res.json({ payRun: run, lines: enriched });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/pay-runs/:id/export-for-bank", async (req: Request, res: Response) => {
+    try {
+      const run = await storage.getPayRun(req.params.id);
+      if (!run) return res.status(404).json({ error: "Pay run not found" });
+      const lines = await storage.getPayRunLines(run.id);
+      const bankLines = lines.filter(l => l.paymentMethod === "bank_transfer");
+
+      const rows = await Promise.all(bankLines.map(async (line) => {
+        const [cand] = await db.select({ fullNameEn: candidates.fullNameEn, ibanNumber: candidates.ibanNumber, ibanBankCode: candidates.ibanBankCode, ibanAccountFirstName: candidates.ibanAccountFirstName, ibanAccountLastName: candidates.ibanAccountLastName }).from(candidates).where(eq(candidates.id, line.candidateId));
+        const amount = line.tranche1Status === "pending" ? (line.tranche1Amount ?? line.netPayable) : (line.tranche2Amount ?? "0");
+        return {
+          employeeNumber: line.employeeNumber,
+          name: cand?.fullNameEn ?? "",
+          beneficiaryName: cand ? `${cand.ibanAccountFirstName ?? ""} ${cand.ibanAccountLastName ?? ""}`.trim() : "",
+          iban: cand?.ibanNumber ?? "",
+          bankCode: cand?.ibanBankCode ?? "",
+          amount,
+        };
+      }));
+
+      const headers = ["Employee Number", "Name", "Beneficiary Name", "IBAN", "Bank Code", "Amount"];
+      const csv = [headers.map(h => `"${h}"`).join(","), ...rows.map(r => [r.employeeNumber, r.name, r.beneficiaryName, r.iban, r.bankCode, r.amount].map(v => `"${v}"`).join(","))].join("\n");
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="bank-export-${run.name.replace(/\s/g, "_")}.csv"`);
+      return res.send(csv);
     } catch (err) { return handleError(res, err); }
   });
 

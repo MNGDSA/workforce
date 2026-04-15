@@ -481,6 +481,16 @@ export const workforce = pgTable(
     offboardingStatus: text("offboarding_status"), // "in_progress" | "completed" | null
     offboardingStartedAt: timestamp("offboarding_started_at"),
     offboardingCompletedAt: timestamp("offboarding_completed_at"),
+    finalGrossPay: decimal("final_gross_pay", { precision: 12, scale: 2 }),
+    finalDeductions: decimal("final_deductions", { precision: 12, scale: 2 }),
+    finalNetSettlement: decimal("final_net_settlement", { precision: 12, scale: 2 }),
+    settlementPaidAt: timestamp("settlement_paid_at"),
+    settlementPaidBy: text("settlement_paid_by"),
+    settlementReference: text("settlement_reference"),
+    paymentMethod: text("payment_method").notNull().default("bank_transfer"),
+    paymentMethodReason: text("payment_method_reason"),
+    paymentMethodSetBy: text("payment_method_set_by"),
+    paymentMethodSetAt: timestamp("payment_method_set_at"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
   },
@@ -1478,3 +1488,130 @@ export const insertExcuseRequestSchema = createInsertSchema(excuseRequests).omit
 });
 export type InsertExcuseRequest = z.infer<typeof insertExcuseRequestSchema>;
 export type ExcuseRequest = typeof excuseRequests.$inferSelect;
+
+// ─── Pay Runs ─────────────────────────────────────────────────────────────────
+export const payRuns = pgTable("pay_runs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  eventId: varchar("event_id").references(() => events.id),
+  dateFrom: text("date_from").notNull(),
+  dateTo: text("date_to").notNull(),
+  mode: text("mode").notNull().default("full"),
+  splitPercentage: integer("split_percentage"),
+  tranche1DepositDate: text("tranche1_deposit_date"),
+  tranche2DepositDate: text("tranche2_deposit_date"),
+  status: text("status").notNull().default("draft"),
+  createdBy: text("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+}, (t) => ({
+  eventIdx: index("pay_runs_event_idx").on(t.eventId),
+  statusIdx: index("pay_runs_status_idx").on(t.status),
+}));
+
+export const insertPayRunSchema = createInsertSchema(payRuns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertPayRun = z.infer<typeof insertPayRunSchema>;
+export type PayRun = typeof payRuns.$inferSelect;
+
+// ─── Pay Run Lines ────────────────────────────────────────────────────────────
+export const payRunLines = pgTable("pay_run_lines", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  payRunId: varchar("pay_run_id").notNull().references(() => payRuns.id, { onDelete: "cascade" }),
+  workforceId: varchar("workforce_id").notNull().references(() => workforce.id),
+  candidateId: text("candidate_id").notNull(),
+  employeeNumber: text("employee_number").notNull(),
+  effectiveDateFrom: text("effective_date_from").notNull(),
+  effectiveDateTo: text("effective_date_to").notNull(),
+  baseSalary: decimal("base_salary", { precision: 12, scale: 2 }).notNull(),
+  totalScheduledMinutes: integer("total_scheduled_minutes").notNull().default(0),
+  totalWorkedMinutes: integer("total_worked_minutes").notNull().default(0),
+  daysWorked: integer("days_worked").notNull().default(0),
+  excusedDays: integer("excused_days").notNull().default(0),
+  absentDays: integer("absent_days").notNull().default(0),
+  lateMinutes: integer("late_minutes").notNull().default(0),
+  adjustedMinutes: integer("adjusted_minutes").notNull().default(0),
+  effectiveMinutes: integer("effective_minutes").notNull().default(0),
+  perMinuteRate: decimal("per_minute_rate", { precision: 10, scale: 6 }).notNull().default("0"),
+  grossEarned: decimal("gross_earned", { precision: 12, scale: 2 }).notNull().default("0"),
+  manualAdditions: jsonb("manual_additions").notNull().default(sql`'[]'::jsonb`),
+  manualDeductions: jsonb("manual_deductions").notNull().default(sql`'[]'::jsonb`),
+  totalManualAdditions: decimal("total_manual_additions", { precision: 12, scale: 2 }).notNull().default("0"),
+  totalManualDeductions: decimal("total_manual_deductions", { precision: 12, scale: 2 }).notNull().default("0"),
+  absentDeduction: decimal("absent_deduction", { precision: 12, scale: 2 }).notNull().default("0"),
+  lateDeduction: decimal("late_deduction", { precision: 12, scale: 2 }).notNull().default("0"),
+  assetDeductions: decimal("asset_deductions", { precision: 12, scale: 2 }).notNull().default("0"),
+  totalDeductions: decimal("total_deductions", { precision: 12, scale: 2 }).notNull().default("0"),
+  netPayable: decimal("net_payable", { precision: 12, scale: 2 }).notNull().default("0"),
+  tranche1Amount: decimal("tranche1_amount", { precision: 12, scale: 2 }),
+  tranche2Amount: decimal("tranche2_amount", { precision: 12, scale: 2 }),
+  tranche1Status: text("tranche1_status").default("pending"),
+  tranche2Status: text("tranche2_status"),
+  tranche2BlockedReason: text("tranche2_blocked_reason"),
+  paymentMethod: text("payment_method").notNull().default("bank_transfer"),
+}, (t) => ({
+  payRunIdx: index("pay_run_lines_pay_run_idx").on(t.payRunId),
+  workforceIdx: index("pay_run_lines_workforce_idx").on(t.workforceId),
+  candidateIdx: index("pay_run_lines_candidate_idx").on(t.candidateId),
+}));
+
+export type PayRunLine = typeof payRunLines.$inferSelect;
+
+// ─── Payroll Adjustments ──────────────────────────────────────────────────────
+export const payrollAdjustments = pgTable("payroll_adjustments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workforceId: varchar("workforce_id").notNull().references(() => workforce.id, { onDelete: "cascade" }),
+  date: text("date").notNull(),
+  originalDeductionMinutes: integer("original_deduction_minutes").notNull().default(0),
+  adjustedDeductionMinutes: integer("adjusted_deduction_minutes").notNull().default(0),
+  reason: text("reason").notNull(),
+  adjustedBy: text("adjusted_by").notNull(),
+  adjustedAt: timestamp("adjusted_at").notNull().default(sql`now()`),
+}, (t) => ({
+  workforceIdx: index("payroll_adj_workforce_idx").on(t.workforceId),
+  workforceDateIdx: uniqueIndex("payroll_adj_workforce_date_idx").on(t.workforceId, t.date),
+}));
+
+export const insertPayrollAdjustmentSchema = createInsertSchema(payrollAdjustments).omit({
+  id: true,
+  adjustedAt: true,
+});
+export type InsertPayrollAdjustment = z.infer<typeof insertPayrollAdjustmentSchema>;
+export type PayrollAdjustment = typeof payrollAdjustments.$inferSelect;
+
+// ─── Payroll Transactions ─────────────────────────────────────────────────────
+export const payrollTransactions = pgTable("payroll_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  payRunLineId: varchar("pay_run_line_id").notNull().references(() => payRunLines.id, { onDelete: "cascade" }),
+  workforceId: varchar("workforce_id").notNull().references(() => workforce.id),
+  candidateId: text("candidate_id").notNull(),
+  trancheNumber: integer("tranche_number").notNull().default(1),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  paymentMethod: text("payment_method").notNull().default("bank_transfer"),
+  bankTransactionId: text("bank_transaction_id"),
+  ibanUsed: text("iban_used"),
+  bankCode: text("bank_code"),
+  bankName: text("bank_name"),
+  beneficiaryName: text("beneficiary_name"),
+  receiptNumber: text("receipt_number"),
+  otpVerified: boolean("otp_verified"),
+  otpSentTo: text("otp_sent_to"),
+  otpVerifiedAt: timestamp("otp_verified_at"),
+  manualOverride: boolean("manual_override").notNull().default(false),
+  overrideReason: text("override_reason"),
+  disbursedBy: text("disbursed_by"),
+  depositDate: text("deposit_date").notNull(),
+  enteredBy: text("entered_by").notNull(),
+  enteredAt: timestamp("entered_at").notNull().default(sql`now()`),
+  notes: text("notes"),
+}, (t) => ({
+  payRunLineIdx: index("payroll_txn_pay_run_line_idx").on(t.payRunLineId),
+  workforceIdx: index("payroll_txn_workforce_idx").on(t.workforceId),
+  candidateIdx: index("payroll_txn_candidate_idx").on(t.candidateId),
+  bankTxnIdx: uniqueIndex("payroll_txn_bank_txn_idx").on(t.bankTransactionId),
+}));
+
+export type PayrollTransaction = typeof payrollTransactions.$inferSelect;

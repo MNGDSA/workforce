@@ -1097,6 +1097,67 @@ type ContractHistoryItem = {
   jobTitle: string | null;
 };
 
+function PayslipsSection({ candidateId }: { candidateId: string }) {
+  const { data: payslips = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/payslips", candidateId],
+    queryFn: () => apiRequest("GET", `/api/payslips/${candidateId}`).then(r => r.json()),
+    enabled: !!candidateId,
+  });
+
+  if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+
+  if (payslips.length === 0) return (
+    <Card className="bg-card border-border">
+      <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+        <Banknote className="h-10 w-10 text-muted-foreground/40 mb-3" />
+        <p className="text-sm font-medium text-muted-foreground">No payslips yet</p>
+        <p className="text-xs text-muted-foreground/60 mt-1">Payment records will appear here after payroll processing.</p>
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-display font-bold text-white">Payslips</h3>
+      <div className="space-y-3">
+        {payslips.map((slip: any, i: number) => (
+          <Card key={i} className="bg-card border-border" data-testid={`payslip-card-${i}`}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm font-medium text-white">{slip.payRunName ?? "Payment"}</p>
+                  <p className="text-xs text-muted-foreground">{slip.eventName ?? ""} · {slip.payRunLine?.effectiveDateFrom} → {slip.payRunLine?.effectiveDateTo}</p>
+                </div>
+                <Badge className={`text-xs border-0 ${slip.paymentMethod === "cash" ? "bg-amber-500/15 text-amber-400" : "bg-emerald-500/15 text-emerald-400"}`}>
+                  {slip.paymentMethod === "cash" ? "Cash" : "Bank Transfer"}
+                </Badge>
+              </div>
+              <div className="grid grid-cols-3 gap-4 text-xs">
+                <div>
+                  <p className="text-muted-foreground uppercase tracking-wider mb-1">Gross Earned</p>
+                  <p className="text-emerald-400 font-medium">SAR {parseFloat(slip.payRunLine?.grossEarned ?? 0).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground uppercase tracking-wider mb-1">Deductions</p>
+                  <p className="text-red-400 font-medium">-SAR {parseFloat(slip.payRunLine?.totalDeductions ?? 0).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground uppercase tracking-wider mb-1">Net Paid</p>
+                  <p className="text-white font-bold">SAR {parseFloat(slip.amount ?? 0).toLocaleString()}</p>
+                </div>
+              </div>
+              {slip.ibanUsed && (
+                <p className="text-[10px] text-muted-foreground mt-2 font-mono">IBAN: {slip.ibanUsed}</p>
+              )}
+              <p className="text-[10px] text-muted-foreground mt-1">Paid: {slip.depositDate ?? slip.createdAt}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function WorkHistorySection({ candidateId }: { candidateId: string }) {
   const { data: allRecords = [], isLoading } = useQuery<WorkforceRecord[]>({
     queryKey: ["/api/workforce/all-by-candidate", candidateId],
@@ -1974,7 +2035,7 @@ export default function CandidatePortal() {
         return activeWorkforceRecord ? <ExcuseRequestSection workforceId={activeWorkforceRecord.id} /> : <PlaceholderCard icon={<MessageCircle className="h-6 w-6" />} title="Excuse Requests" description="Excuse requests will be available once you are assigned to a workforce." />;
 
       case "payslips":
-        return <PlaceholderCard icon={<Banknote className="h-6 w-6" />} title="Payslips" description="Your payslips will appear here once the payroll module is live." />;
+        return candidateId ? <PayslipsSection candidateId={candidateId} /> : <PlaceholderCard icon={<Banknote className="h-6 w-6" />} title="Payslips" description="Your payslips will appear here once assigned." />;
 
       case "assets":
         if (portalMode === "employee_individual") {

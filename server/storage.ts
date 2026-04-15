@@ -113,6 +113,16 @@ import {
   excuseRequests,
   type ExcuseRequest,
   type InsertExcuseRequest,
+  payRuns,
+  payRunLines,
+  payrollAdjustments,
+  payrollTransactions,
+  type PayRun,
+  type InsertPayRun,
+  type PayRunLine,
+  type PayrollAdjustment,
+  type InsertPayrollAdjustment,
+  type PayrollTransaction,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte, getTableColumns } from "drizzle-orm";
 
@@ -465,6 +475,45 @@ export interface IStorage {
   updateExcuseRequest(id: string, data: Partial<ExcuseRequest>): Promise<ExcuseRequest | undefined>;
   countPendingExcuseRequests(): Promise<number>;
 
+  // Pay Runs
+  createPayRun(data: InsertPayRun): Promise<PayRun>;
+  getPayRuns(): Promise<PayRun[]>;
+  getPayRun(id: string): Promise<PayRun | undefined>;
+  updatePayRun(id: string, data: Partial<PayRun>): Promise<PayRun | undefined>;
+  getPayRunLines(payRunId: string): Promise<PayRunLine[]>;
+  getPayRunLine(id: string): Promise<PayRunLine | undefined>;
+  updatePayRunLine(id: string, data: Partial<PayRunLine>): Promise<PayRunLine | undefined>;
+
+  // Payroll Calculation Engine
+  calculatePayroll(workforceId: string, dateFrom: string, dateTo: string): Promise<{
+    totalScheduledMinutes: number;
+    totalWorkedMinutes: number;
+    daysWorked: number;
+    excusedDays: number;
+    absentDays: number;
+    lateMinutes: number;
+    adjustedMinutes: number;
+    effectiveMinutes: number;
+    perMinuteRate: number;
+    grossEarned: number;
+    absentDeduction: number;
+    lateDeduction: number;
+    assetDeductions: number;
+    totalDeductions: number;
+    netPayable: number;
+  }>;
+  processPayRun(payRunId: string): Promise<{ linesCreated: number }>;
+
+  // Payroll Adjustments
+  createPayrollAdjustment(data: InsertPayrollAdjustment): Promise<PayrollAdjustment>;
+  getPayrollAdjustments(params: { workforceId?: string; dateFrom?: string; dateTo?: string }): Promise<PayrollAdjustment[]>;
+  bulkCreatePayrollAdjustments(adjustments: InsertPayrollAdjustment[]): Promise<number>;
+
+  // Payroll Transactions
+  createPayrollTransaction(data: Partial<PayrollTransaction> & { payRunLineId: string; workforceId: string; candidateId: string; amount: string; depositDate: string; enteredBy: string }): Promise<PayrollTransaction>;
+  getPayrollTransactions(params: { candidateId?: string; workforceId?: string; payRunLineId?: string }): Promise<PayrollTransaction[]>;
+  getPayrollTransaction(id: string): Promise<PayrollTransaction | undefined>;
+
   // Dashboard
   getDashboardStats(): Promise<{
     totalCandidates: number;
@@ -572,6 +621,7 @@ export class DatabaseStorage implements IStorage {
     const workforceCountSq = sql<number>`(SELECT count(*)::int FROM workforce WHERE workforce.candidate_id = candidates.id)`;
     const workforceSeasonsSq = sql<number>`(SELECT count(DISTINCT event_id)::int FROM workforce WHERE workforce.candidate_id = candidates.id AND event_id IS NOT NULL AND workforce.is_active = false)`;
     const completedStintsSq = sql<number>`(SELECT count(*)::int FROM workforce WHERE workforce.candidate_id = candidates.id AND workforce.is_active = false)`;
+    const unpaidSettlementsSq = sql<number>`(SELECT count(*)::int FROM workforce WHERE workforce.candidate_id = candidates.id AND workforce.offboarding_status = 'completed' AND workforce.settlement_paid_at IS NULL)`;
 
     const [data, [{ value: total }]] = await Promise.all([
       db
@@ -580,6 +630,7 @@ export class DatabaseStorage implements IStorage {
           workforceRecordCount: workforceCountSq.as("workforceRecordCount"),
           workforceSeasonCount: workforceSeasonsSq.as("workforceSeasonCount"),
           completedStints: completedStintsSq.as("completedStints"),
+          unpaidSettlements: unpaidSettlementsSq.as("unpaidSettlements"),
         })
         .from(candidates)
         .where(where)
@@ -1269,6 +1320,8 @@ export class DatabaseStorage implements IStorage {
         positionId: workforce.positionId,
         positionTitle: positions.title,
         positionIsActive: positions.isActive,
+        paymentMethod: workforce.paymentMethod,
+        paymentMethodReason: workforce.paymentMethodReason,
       })
       .from(workforce)
       .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
@@ -2778,11 +2831,39 @@ export class DatabaseStorage implements IStorage {
     const [wf] = await db.select().from(workforce).where(eq(workforce.id, workforceId));
     if (!wf) throw new Error("Employee not found");
 
+    const today = new Date().toISOString().slice(0, 10);
+    const start = wf.startDate ?? today;
+    const end = wf.endDate ?? today;
+    let finalGrossPay = "0";
+    let finalDeductions = "0";
+    let finalNetSettlement = "0";
+    try {
+      const calc = await this.calculatePayroll(workforceId, start, end);
+      finalGrossPay = String(calc.grossEarned);
+      finalDeductions = String(calc.totalDeductions);
+      finalNetSettlement = String(calc.netPayable);
+    } catch (_e) {}
+
     const [updated] = await db
       .update(workforce)
-      .set({ offboardingStatus: "completed", offboardingCompletedAt: new Date(), isActive: false, updatedAt: new Date() })
+      .set({
+        offboardingStatus: "completed",
+        offboardingCompletedAt: new Date(),
+        isActive: false,
+        finalGrossPay,
+        finalDeductions,
+        finalNetSettlement,
+        updatedAt: new Date(),
+      })
       .where(eq(workforce.id, workforceId))
       .returning();
+
+    await db.update(payRunLines)
+      .set({ tranche2Status: "pending", tranche2BlockedReason: null })
+      .where(and(
+        eq(payRunLines.workforceId, workforceId),
+        eq(payRunLines.tranche2Status, "blocked"),
+      ));
 
     const otherActive = await db
       .select({ id: workforce.id })
@@ -3373,6 +3454,301 @@ export class DatabaseStorage implements IStorage {
   async countPendingExcuseRequests(): Promise<number> {
     const [result] = await db.select({ value: count() }).from(excuseRequests).where(eq(excuseRequests.status, "pending"));
     return result?.value ?? 0;
+  }
+
+  // ─── Pay Runs ───────────────────────────────────────────────────────────────
+  async createPayRun(data: InsertPayRun): Promise<PayRun> {
+    const [row] = await db.insert(payRuns).values(data).returning();
+    return row;
+  }
+
+  async getPayRuns(): Promise<PayRun[]> {
+    return db.select().from(payRuns).orderBy(desc(payRuns.createdAt));
+  }
+
+  async getPayRun(id: string): Promise<PayRun | undefined> {
+    const [row] = await db.select().from(payRuns).where(eq(payRuns.id, id));
+    return row;
+  }
+
+  async updatePayRun(id: string, data: Partial<PayRun>): Promise<PayRun | undefined> {
+    const [row] = await db.update(payRuns).set({ ...data, updatedAt: new Date() }).where(eq(payRuns.id, id)).returning();
+    return row;
+  }
+
+  async getPayRunLines(payRunId: string): Promise<PayRunLine[]> {
+    return db.select().from(payRunLines).where(eq(payRunLines.payRunId, payRunId));
+  }
+
+  async getPayRunLine(id: string): Promise<PayRunLine | undefined> {
+    const [row] = await db.select().from(payRunLines).where(eq(payRunLines.id, id));
+    return row;
+  }
+
+  async updatePayRunLine(id: string, data: Partial<PayRunLine>): Promise<PayRunLine | undefined> {
+    const [row] = await db.update(payRunLines).set(data).where(eq(payRunLines.id, id)).returning();
+    return row;
+  }
+
+  // ─── Payroll Calculation Engine ─────────────────────────────────────────────
+  async calculatePayroll(workforceId: string, dateFrom: string, dateTo: string) {
+    const emp = await this.getWorkforceEmployee(workforceId);
+    if (!emp) throw new Error("Employee not found");
+
+    const salary = parseFloat(emp.salary ?? "0");
+    const effectiveTo = emp.endDate && emp.endDate < dateTo ? emp.endDate : dateTo;
+    const effectiveFrom = emp.startDate > dateFrom ? emp.startDate : dateFrom;
+
+    if (effectiveFrom > effectiveTo) {
+      return {
+        totalScheduledMinutes: 0, totalWorkedMinutes: 0, daysWorked: 0,
+        excusedDays: 0, absentDays: 0, lateMinutes: 0, adjustedMinutes: 0,
+        effectiveMinutes: 0, perMinuteRate: 0, grossEarned: 0,
+        absentDeduction: 0, lateDeduction: 0, assetDeductions: 0,
+        totalDeductions: 0, netPayable: 0,
+      };
+    }
+
+    const attendanceRows = await this.getAttendanceForEmployee(workforceId, effectiveFrom, effectiveTo);
+
+    const approvedExcuses = await db.select().from(excuseRequests)
+      .where(and(
+        eq(excuseRequests.workforceId, workforceId),
+        eq(excuseRequests.status, "approved"),
+        gte(excuseRequests.date, effectiveFrom),
+      ));
+    const excuseDateSet = new Set(approvedExcuses.filter(e => e.date <= effectiveTo).map(e => e.date));
+
+    const adjustmentRows = await db.select().from(payrollAdjustments)
+      .where(and(
+        eq(payrollAdjustments.workforceId, workforceId),
+        gte(payrollAdjustments.date, effectiveFrom),
+      ));
+    const adjustmentMap = new Map(adjustmentRows.filter(a => a.date <= effectiveTo).map(a => [a.date, a]));
+
+    let totalScheduledMinutes = 0;
+    let totalWorkedMinutes = 0;
+    let daysWorked = 0;
+    let excusedDays = 0;
+    let absentDays = 0;
+    let lateMinutes = 0;
+    let adjustedMinutes = 0;
+    let effectiveMinutes = 0;
+
+    for (const row of attendanceRows) {
+      const scheduled = row.minutesScheduled ?? 0;
+      const worked = row.minutesWorked ?? 0;
+      totalScheduledMinutes += scheduled;
+
+      if (excuseDateSet.has(row.date)) {
+        excusedDays++;
+        totalWorkedMinutes += scheduled;
+        effectiveMinutes += scheduled;
+        continue;
+      }
+
+      const adj = adjustmentMap.get(row.date);
+      if (adj) {
+        const restored = (adj.originalDeductionMinutes ?? 0) - (adj.adjustedDeductionMinutes ?? 0);
+        adjustedMinutes += restored;
+        totalWorkedMinutes += worked;
+        effectiveMinutes += worked + restored;
+        if (row.status === "absent") absentDays++;
+        else if (row.status === "late") {
+          daysWorked++;
+          lateMinutes += scheduled - worked;
+        } else {
+          daysWorked++;
+        }
+        continue;
+      }
+
+      totalWorkedMinutes += worked;
+      effectiveMinutes += worked;
+
+      if (row.status === "absent") {
+        absentDays++;
+      } else if (row.status === "late") {
+        daysWorked++;
+        lateMinutes += scheduled - worked;
+      } else {
+        daysWorked++;
+      }
+    }
+
+    const loggedDays = attendanceRows.length;
+    let perMinuteRate = 0;
+    if (totalScheduledMinutes > 0 && loggedDays > 0) {
+      const avgScheduled = totalScheduledMinutes / loggedDays;
+      perMinuteRate = (salary / 30) / avgScheduled;
+    }
+
+    const grossEarned = Math.round(effectiveMinutes * perMinuteRate * 100) / 100;
+
+    const absentMinutes = attendanceRows
+      .filter(r => r.status === "absent" && !excuseDateSet.has(r.date) && !adjustmentMap.has(r.date))
+      .reduce((sum, r) => sum + (r.minutesScheduled ?? 0), 0);
+    const absentDeduction = Math.round(absentMinutes * perMinuteRate * 100) / 100;
+
+    const lateDeduction = Math.round(lateMinutes * perMinuteRate * 100) / 100;
+
+    const empAssets = await this.getEmployeeAssets({ workforceId });
+    const allAssets = await this.getAssets(true);
+    const assetMap: Record<string, any> = {};
+    for (const a of allAssets) assetMap[a.id] = a;
+
+    let assetDeductions = 0;
+    for (const ea of empAssets) {
+      if (ea.status === "not_returned" && ea.deductionWaived !== true) {
+        assetDeductions += parseFloat(assetMap[ea.assetId]?.price ?? "0");
+      }
+    }
+    assetDeductions = Math.round(assetDeductions * 100) / 100;
+
+    const totalDeductions = Math.round((absentDeduction + lateDeduction + assetDeductions) * 100) / 100;
+    const netPayable = Math.round(Math.max(0, grossEarned - totalDeductions) * 100) / 100;
+
+    return {
+      totalScheduledMinutes, totalWorkedMinutes, daysWorked, excusedDays,
+      absentDays, lateMinutes, adjustedMinutes, effectiveMinutes,
+      perMinuteRate: Math.round(perMinuteRate * 1000000) / 1000000,
+      grossEarned, absentDeduction, lateDeduction, assetDeductions,
+      totalDeductions, netPayable,
+    };
+  }
+
+  async processPayRun(payRunId: string): Promise<{ linesCreated: number }> {
+    const payRun = await this.getPayRun(payRunId);
+    if (!payRun) throw new Error("Pay run not found");
+    if (payRun.status !== "draft") throw new Error("Pay run must be in draft status to process");
+
+    const conditions: any[] = [eq(workforce.isActive, true), eq(workforce.employmentType, "individual")];
+    if (payRun.eventId) {
+      conditions.push(eq(workforce.eventId, payRun.eventId));
+    }
+
+    const employees = await db.select().from(workforce).where(and(...conditions));
+
+    const eligibleEmployees = employees.filter(emp => {
+      const empStart = emp.startDate;
+      const empEnd = emp.endDate ?? "9999-12-31";
+      return empStart <= payRun.dateTo && empEnd >= payRun.dateFrom;
+    });
+
+    const lines: any[] = [];
+    for (const emp of eligibleEmployees) {
+      const calc = await this.calculatePayroll(emp.id, payRun.dateFrom, payRun.dateTo);
+
+      const lineData: any = {
+        payRunId,
+        workforceId: emp.id,
+        candidateId: emp.candidateId,
+        employeeNumber: emp.employeeNumber,
+        effectiveDateFrom: emp.startDate > payRun.dateFrom ? emp.startDate : payRun.dateFrom,
+        effectiveDateTo: emp.endDate && emp.endDate < payRun.dateTo ? emp.endDate : payRun.dateTo,
+        baseSalary: emp.salary ?? "0",
+        totalScheduledMinutes: calc.totalScheduledMinutes,
+        totalWorkedMinutes: calc.totalWorkedMinutes,
+        daysWorked: calc.daysWorked,
+        excusedDays: calc.excusedDays,
+        absentDays: calc.absentDays,
+        lateMinutes: calc.lateMinutes,
+        adjustedMinutes: calc.adjustedMinutes,
+        effectiveMinutes: calc.effectiveMinutes,
+        perMinuteRate: String(calc.perMinuteRate),
+        grossEarned: String(calc.grossEarned),
+        manualAdditions: [],
+        manualDeductions: [],
+        totalManualAdditions: "0",
+        totalManualDeductions: "0",
+        absentDeduction: String(calc.absentDeduction),
+        lateDeduction: String(calc.lateDeduction),
+        assetDeductions: String(calc.assetDeductions),
+        totalDeductions: String(calc.totalDeductions),
+        netPayable: String(calc.netPayable),
+        paymentMethod: emp.paymentMethod ?? "bank_transfer",
+      };
+
+      if (payRun.mode === "split" && payRun.splitPercentage) {
+        const pct = payRun.splitPercentage / 100;
+        const t1 = Math.round(calc.netPayable * pct * 100) / 100;
+        const t2 = Math.round((calc.netPayable - t1) * 100) / 100;
+        lineData.tranche1Amount = String(t1);
+        lineData.tranche2Amount = String(t2);
+        lineData.tranche1Status = "pending";
+        const offboardingComplete = emp.offboardingStatus === "completed";
+        lineData.tranche2Status = offboardingComplete ? "pending" : "blocked";
+        lineData.tranche2BlockedReason = offboardingComplete ? null : "Offboarding not complete";
+      } else {
+        lineData.tranche1Amount = String(calc.netPayable);
+        lineData.tranche1Status = "pending";
+      }
+
+      lines.push(lineData);
+    }
+
+    if (lines.length > 0) {
+      await db.insert(payRunLines).values(lines);
+    }
+
+    await db.update(payRuns)
+      .set({ status: "processing", updatedAt: new Date() })
+      .where(eq(payRuns.id, payRunId));
+
+    return { linesCreated: lines.length };
+  }
+
+  // ─── Payroll Adjustments ────────────────────────────────────────────────────
+  async createPayrollAdjustment(data: InsertPayrollAdjustment): Promise<PayrollAdjustment> {
+    const [row] = await db.insert(payrollAdjustments).values(data).returning();
+    return row;
+  }
+
+  async getPayrollAdjustments(params: { workforceId?: string; dateFrom?: string; dateTo?: string }): Promise<PayrollAdjustment[]> {
+    const conditions: any[] = [];
+    if (params.workforceId) conditions.push(eq(payrollAdjustments.workforceId, params.workforceId));
+    if (params.dateFrom) conditions.push(gte(payrollAdjustments.date, params.dateFrom));
+    if (params.dateTo) conditions.push(sql`${payrollAdjustments.date} <= ${params.dateTo}`);
+    return db.select().from(payrollAdjustments)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(payrollAdjustments.adjustedAt));
+  }
+
+  async bulkCreatePayrollAdjustments(adjustments: InsertPayrollAdjustment[]): Promise<number> {
+    if (adjustments.length === 0) return 0;
+    const result = await db.insert(payrollAdjustments).values(adjustments)
+      .onConflictDoUpdate({
+        target: [payrollAdjustments.workforceId, payrollAdjustments.date],
+        set: {
+          adjustedDeductionMinutes: sql`EXCLUDED.adjusted_deduction_minutes`,
+          reason: sql`EXCLUDED.reason`,
+          adjustedBy: sql`EXCLUDED.adjusted_by`,
+          adjustedAt: new Date(),
+        },
+      })
+      .returning();
+    return result.length;
+  }
+
+  // ─── Payroll Transactions ───────────────────────────────────────────────────
+  async createPayrollTransaction(data: any): Promise<PayrollTransaction> {
+    const [row] = await db.insert(payrollTransactions).values(data).returning();
+    return row;
+  }
+
+  async getPayrollTransactions(params: { candidateId?: string; workforceId?: string; payRunLineId?: string }): Promise<PayrollTransaction[]> {
+    const conditions: any[] = [];
+    if (params.candidateId) conditions.push(eq(payrollTransactions.candidateId, params.candidateId));
+    if (params.workforceId) conditions.push(eq(payrollTransactions.workforceId, params.workforceId));
+    if (params.payRunLineId) conditions.push(eq(payrollTransactions.payRunLineId, params.payRunLineId));
+    return db.select().from(payrollTransactions)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(payrollTransactions.enteredAt));
+  }
+
+  async getPayrollTransaction(id: string): Promise<PayrollTransaction | undefined> {
+    const [row] = await db.select().from(payrollTransactions).where(eq(payrollTransactions.id, id));
+    return row;
   }
 }
 

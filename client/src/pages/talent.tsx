@@ -1507,6 +1507,16 @@ export default function TalentPage() {
                                     Former Employee{` · ${candidate.workforceSeasonCount || candidate.completedStints} season${(candidate.workforceSeasonCount || candidate.completedStints) !== 1 ? "s" : ""}`}
                                   </span>
                                 )}
+                                {candidate.unpaidSettlements > 0 && (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-300 bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded-sm"
+                                    title={`${candidate.unpaidSettlements} unpaid settlement(s)`}
+                                    data-testid={`badge-unpaid-settlement-${candidate.id}`}
+                                  >
+                                    <AlertTriangle className="h-2.5 w-2.5" />
+                                    Unpaid Settlement
+                                  </span>
+                                )}
                               </div>
                             </TableCell>
                           )}
