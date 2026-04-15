@@ -168,11 +168,17 @@ fun LoginScreen(
                         errorMessage = allFieldsRequired
                         return@Button
                     }
+                    var normalizedUrl = serverUrl.trim().trimEnd('/')
+                    if (normalizedUrl.startsWith("http://")) {
+                        normalizedUrl = "https://" + normalizedUrl.removePrefix("http://")
+                    } else if (!normalizedUrl.startsWith("https://")) {
+                        normalizedUrl = "https://$normalizedUrl"
+                    }
                     isLoading = true
                     errorMessage = null
                     scope.launch {
                         try {
-                            val api = ApiClient.create(serverUrl.trim()) { cookie ->
+                            val api = ApiClient.create(normalizedUrl) { cookie ->
                                 app.sessionManager.authCookie = cookie
                             }
                             ApiClient.onSessionTerminated = {
@@ -198,7 +204,7 @@ fun LoginScreen(
                                     return@launch
                                 }
 
-                                app.sessionManager.serverUrl = serverUrl.trim()
+                                app.sessionManager.serverUrl = normalizedUrl
                                 app.sessionManager.userJson = Gson().toJson(body.user)
                                 app.sessionManager.candidateJson = Gson().toJson(body.candidate)
                                 app.sessionManager.candidateId = body.candidate.id

@@ -60,6 +60,7 @@ interface ApiService {
         @Part("ntpTimestamp") ntpTimestamp: RequestBody,
         @Part("systemClockTimestamp") systemClockTimestamp: RequestBody,
         @Part("lastNtpSyncAt") lastNtpSyncAt: RequestBody,
+        @Part("locationSource") locationSource: RequestBody,
     ): Response<SubmissionResponse>
 
     @GET("api/geofence-zones")

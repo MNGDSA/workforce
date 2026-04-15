@@ -119,14 +119,17 @@ class AttendanceRepository(
                     ntpTimestamp = (submission.ntpTimestamp ?: "").toRequestBody(textType),
                     systemClockTimestamp = (submission.systemClockTimestamp ?: "").toRequestBody(textType),
                     lastNtpSyncAt = (submission.lastNtpSyncAt ?: "").toRequestBody(textType),
+                    locationSource = (submission.locationSource ?: "unknown").toRequestBody(textType),
                 )
 
                 if (response.isSuccessful) {
                     val body = response.body()
                     val sub = body?.submission
                     dao.updateSyncResult(submission.id, sub?.status ?: "synced", sub?.id, sub?.flagReason, sub?.rekognitionConfidence)
+                    try { File(encPhotoPath).delete() } catch (_: Exception) {}
                 } else if (response.code() == 409) {
                     dao.updateSyncResult(submission.id, "synced", null, null)
+                    try { File(encPhotoPath).delete() } catch (_: Exception) {}
                 } else if (response.code() == 401) {
                     sessionExpired = true
                     break
