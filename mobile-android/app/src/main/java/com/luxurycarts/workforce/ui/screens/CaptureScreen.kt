@@ -389,7 +389,7 @@ private suspend fun getLocationTiered(context: android.content.Context): Locatio
             client.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cts.token)
                 .addOnSuccessListener { location ->
                     if (location != null) {
-                        cont.resume(LocationResult(location.latitude, location.longitude, location.accuracy, location, "high_accuracy"))
+                        cont.resume(LocationResult(location.latitude, location.longitude, location.accuracy, location, "gps"))
                     } else {
                         cont.resume(null)
                     }
@@ -419,7 +419,7 @@ private suspend fun getLocationTiered(context: android.content.Context): Locatio
             client.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, cts.token)
                 .addOnSuccessListener { location ->
                     if (location != null) {
-                        cont.resume(LocationResult(location.latitude, location.longitude, location.accuracy, location, "network_coarse"))
+                        cont.resume(LocationResult(location.latitude, location.longitude, location.accuracy, location, "network"))
                     } else {
                         cont.resume(null)
                     }

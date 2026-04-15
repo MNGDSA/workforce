@@ -40,7 +40,7 @@ data class AttendanceEntity(
     @ColumnInfo(name = "ntp_timestamp") val ntpTimestamp: String? = null,
     @ColumnInfo(name = "system_clock_timestamp") val systemClockTimestamp: String? = null,
     @ColumnInfo(name = "last_ntp_sync_at") val lastNtpSyncAt: String? = null,
-    @ColumnInfo(name = "location_source", defaultValue = "high_accuracy") val locationSource: String? = null,
+    @ColumnInfo(name = "location_source", defaultValue = "gps") val locationSource: String? = null,
     @ColumnInfo(name = "created_at_millis", defaultValue = "0") val createdAtMillis: Long = System.currentTimeMillis(),
 )
 
@@ -89,9 +89,15 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // v5→v6: no schema changes, identity migration to preserve data
+            }
+        }
+
         private val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE attendance_submissions ADD COLUMN location_source TEXT DEFAULT 'high_accuracy'")
+                db.execSQL("ALTER TABLE attendance_submissions ADD COLUMN location_source TEXT DEFAULT 'gps'")
                 db.execSQL("ALTER TABLE attendance_submissions ADD COLUMN created_at_millis INTEGER NOT NULL DEFAULT 0")
             }
         }
@@ -103,8 +109,8 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "workforce.db",
                 )
-                    .addMigrations(MIGRATION_6_7)
-                    .fallbackToDestructiveMigrationFrom(1, 2, 3, 4, 5)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7)
+                    .fallbackToDestructiveMigrationFrom(1, 2, 3, 4)
                     .build()
                     .also { INSTANCE = it }
             }
