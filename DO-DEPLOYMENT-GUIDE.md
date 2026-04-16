@@ -55,6 +55,7 @@ A step-by-step guide to deploy the Workforce app on DigitalOcean App Platform.
 5. Generate API keys:
    - Go to **API** > **Spaces Keys** > **Generate New Key**
    - Name it `workforce-app`
+   - Choose **Full Access** (the app needs to read, write, and delete files — uploading attendance photos, documents, and cleaning up old files)
    - Save both the **Key** and the **Secret** — you won't see the secret again
 
 ---
