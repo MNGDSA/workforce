@@ -15,7 +15,7 @@ import {
 import { eq, and, isNull } from "drizzle-orm";
 import { compareFaces } from "./rekognition";
 
-async function getOrgTimezone(): Promise<string> {
+export async function getOrgTimezone(): Promise<string> {
   try {
     const [row] = await db.select().from(systemSettings).where(eq(systemSettings.key, "organization_timezone"));
     return row?.value ?? "Asia/Riyadh";
@@ -77,7 +77,7 @@ export async function getShiftForEmployeeDate(workforceId: string, dateStr: stri
   };
 }
 
-function formatInTimezone(date: Date, timezone: string): { dateStr: string; timeStr: string } {
+export function formatInTimezone(date: Date, timezone: string): { dateStr: string; timeStr: string } {
   const formatter = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" });
   const dateStr = formatter.format(date);
   const timeFmt = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hour12: false });

@@ -47,6 +47,7 @@ import {
   payRunLines,
   payrollTransactions,
   attendanceRecords,
+  attendanceSubmissions,
   otpVerifications,
   users,
   type InsertPayrollAdjustment,
@@ -896,13 +897,18 @@ export async function registerRoutes(
 
   app.get("/api/settings/system", async (_req: Request, res: Response) => {
     try {
-      const [supportEmail, privacyPolicy, termsConditions, ntpServerUrl, orgTimezone, configVersion] = await Promise.all([
+      const [supportEmail, privacyPolicy, termsConditions, ntpServerUrl, orgTimezone, configVersion,
+        attEarlyBuf, attLateBuf, attMinDur, attMaxSubs] = await Promise.all([
         storage.getSystemSetting("support_email"),
         storage.getSystemSetting("privacy_policy"),
         storage.getSystemSetting("terms_conditions"),
         storage.getSystemSetting("ntp_server_url"),
         storage.getSystemSetting("organization_timezone"),
         storage.getSystemSetting("config_version"),
+        storage.getSystemSetting("attendance_early_buffer_minutes"),
+        storage.getSystemSetting("attendance_late_buffer_minutes"),
+        storage.getSystemSetting("attendance_min_shift_duration_minutes"),
+        storage.getSystemSetting("attendance_max_daily_submissions"),
       ]);
       return res.json({
         support_email: supportEmail ?? "",
@@ -911,6 +917,10 @@ export async function registerRoutes(
         ntp_server_url: ntpServerUrl ?? "time.google.com",
         organization_timezone: orgTimezone ?? "Asia/Riyadh",
         config_version: parseInt(configVersion ?? "1", 10),
+        attendance_early_buffer_minutes: parseInt(attEarlyBuf ?? "30", 10),
+        attendance_late_buffer_minutes: parseInt(attLateBuf ?? "60", 10),
+        attendance_min_shift_duration_minutes: parseInt(attMinDur ?? "30", 10),
+        attendance_max_daily_submissions: parseInt(attMaxSubs ?? "2", 10),
       });
     } catch (err) {
       return handleError(res, err);
@@ -944,6 +954,22 @@ export async function registerRoutes(
       if (typeof organization_timezone === "string" && organization_timezone.trim()) {
         await storage.setSystemSetting("organization_timezone", organization_timezone.trim());
         anyChanged = true;
+      }
+      const attKeys = [
+        { field: "attendance_early_buffer_minutes", min: 0, max: 120 },
+        { field: "attendance_late_buffer_minutes", min: 0, max: 240 },
+        { field: "attendance_min_shift_duration_minutes", min: 0, max: 480 },
+        { field: "attendance_max_daily_submissions", min: 1, max: 10 },
+      ] as const;
+      for (const { field, min, max } of attKeys) {
+        const val = req.body[field];
+        if (val !== undefined && val !== null) {
+          const num = parseInt(String(val), 10);
+          if (!isNaN(num) && num >= min && num <= max) {
+            await storage.setSystemSetting(field, String(num));
+            anyChanged = true;
+          }
+        }
       }
       if (anyChanged) {
         const currentVersion = await storage.getSystemSetting("config_version");
@@ -4824,7 +4850,163 @@ export async function registerRoutes(
   });
 
   // ─── Attendance Mobile Middleware ────────────────────────────────────────────
-  const { runVerificationPipeline, approveSubmission, rejectSubmission } = await import("./verification-pipeline");
+  const { runVerificationPipeline, approveSubmission, rejectSubmission, getShiftForEmployeeDate, getOrgTimezone, formatInTimezone, timeToMinutes } = await import("./verification-pipeline");
+
+  async function getAttendanceConfig() {
+    const [earlyBuf, lateBuf, minDur, maxSubs] = await Promise.all([
+      storage.getSystemSetting("attendance_early_buffer_minutes"),
+      storage.getSystemSetting("attendance_late_buffer_minutes"),
+      storage.getSystemSetting("attendance_min_shift_duration_minutes"),
+      storage.getSystemSetting("attendance_max_daily_submissions"),
+    ]);
+    return {
+      earlyBufferMinutes: parseInt(earlyBuf ?? "30", 10),
+      lateBufferMinutes: parseInt(lateBuf ?? "60", 10),
+      minShiftDurationMinutes: parseInt(minDur ?? "30", 10),
+      maxDailySubmissions: parseInt(maxSubs ?? "2", 10),
+    };
+  }
+
+  app.get("/api/attendance-mobile/status", async (req: Request, res: Response) => {
+    try {
+      const workforceId = req.query.workforceId as string;
+      if (!workforceId) return res.status(400).json({ message: "workforceId is required" });
+
+      const userId = getAuthUserId(req);
+      if (!userId) return res.status(401).json({ message: "Authentication required." });
+
+      const wfRecord = await storage.getWorkforceEmployee(workforceId);
+      if (!wfRecord) return res.status(404).json({ message: "Workforce record not found" });
+      if (wfRecord.candidateId) {
+        const candidate = await storage.getCandidate(wfRecord.candidateId);
+        if (!candidate || candidate.userId !== userId) {
+          return res.status(403).json({ message: "Workforce record does not belong to authenticated user." });
+        }
+      }
+
+      const orgTz = await getOrgTimezone();
+      const now = new Date();
+      const { dateStr, timeStr: currentTime } = formatInTimezone(now, orgTz);
+
+      const existing = await db
+        .select()
+        .from(attendanceRecords)
+        .where(
+          and(
+            eq(attendanceRecords.workforceId, workforceId),
+            eq(attendanceRecords.date, dateStr)
+          )
+        );
+
+      const record = existing[0] ?? null;
+      const shiftInfo = await getShiftForEmployeeDate(workforceId, dateStr);
+      const config = await getAttendanceConfig();
+
+      let state: "not_checked_in" | "checked_in" | "completed" = "not_checked_in";
+      if (record) {
+        if (record.clockIn && record.clockOut) {
+          state = "completed";
+        } else if (record.clockIn) {
+          state = "checked_in";
+        }
+      }
+
+      let nextAllowedAction: "check_in" | "check_out" | "none" = "none";
+      if (state === "not_checked_in") nextAllowedAction = "check_in";
+      else if (state === "checked_in") nextAllowedAction = "check_out";
+
+      let shiftWindowOpen = true;
+      let windowMessage: string | null = null;
+      const currentMin = timeToMinutes(currentTime);
+
+      if (shiftInfo && nextAllowedAction !== "none") {
+        const shiftStartMin = timeToMinutes(shiftInfo.shiftStartTime);
+        const shiftEndMin = timeToMinutes(shiftInfo.shiftEndTime);
+        const isOvernight = shiftEndMin <= shiftStartMin;
+
+        const earliestCheckIn = shiftStartMin - config.earlyBufferMinutes;
+        const latestCheckOut = isOvernight
+          ? (shiftEndMin + 24 * 60 + config.lateBufferMinutes)
+          : (shiftEndMin + config.lateBufferMinutes);
+
+        let adjustedCurrent = currentMin;
+        if (isOvernight && currentMin < shiftStartMin - config.earlyBufferMinutes) {
+          adjustedCurrent += 24 * 60;
+        }
+
+        if (nextAllowedAction === "check_in" && adjustedCurrent < earliestCheckIn) {
+          shiftWindowOpen = false;
+          const waitMin = earliestCheckIn - adjustedCurrent;
+          const h = Math.floor(waitMin / 60);
+          const m = waitMin % 60;
+          windowMessage = `Your shift starts at ${shiftInfo.shiftStartTime}. You can check in starting at ${formatMinutesToTime(earliestCheckIn)}` + (h > 0 ? ` (in ${h}h ${m}m)` : ` (in ${m}m)`);
+        } else if (adjustedCurrent > latestCheckOut) {
+          shiftWindowOpen = false;
+          windowMessage = `Your shift ended at ${shiftInfo.shiftEndTime}. The check-out window has closed.`;
+          nextAllowedAction = "none";
+        }
+      }
+
+      if (state === "checked_in" && record?.clockIn) {
+        const clockInMin = timeToMinutes(record.clockIn);
+        let elapsed = currentMin - clockInMin;
+        if (elapsed < 0) elapsed += 24 * 60;
+        if (elapsed < config.minShiftDurationMinutes) {
+          shiftWindowOpen = false;
+          const remaining = config.minShiftDurationMinutes - elapsed;
+          windowMessage = `Minimum shift duration is ${config.minShiftDurationMinutes} minutes. You can check out in ${remaining} minutes.`;
+        }
+      }
+
+      const lastSubmission = await db
+        .select({ submittedAt: attendanceSubmissions.submittedAt })
+        .from(attendanceSubmissions)
+        .where(eq(attendanceSubmissions.workforceId, workforceId))
+        .orderBy(sql`submitted_at DESC`)
+        .limit(1);
+
+      let cooldownUntil: string | null = null;
+      if (lastSubmission[0]) {
+        const lastAt = new Date(lastSubmission[0].submittedAt).getTime();
+        const cooldownEnd = lastAt + 60_000;
+        if (cooldownEnd > now.getTime()) {
+          cooldownUntil = new Date(cooldownEnd).toISOString();
+        }
+      }
+
+      return res.json({
+        state,
+        nextAllowedAction: shiftWindowOpen ? nextAllowedAction : "none",
+        shiftAssigned: !!shiftInfo,
+        shift: shiftInfo ? {
+          startTime: shiftInfo.shiftStartTime,
+          endTime: shiftInfo.shiftEndTime,
+          durationMinutes: shiftInfo.shiftDuration,
+        } : null,
+        clockIn: record?.clockIn ?? null,
+        clockOut: record?.clockOut ?? null,
+        minutesWorked: record?.minutesWorked ?? null,
+        shiftWindowOpen,
+        windowMessage,
+        cooldownUntil,
+        config: {
+          earlyBufferMinutes: config.earlyBufferMinutes,
+          lateBufferMinutes: config.lateBufferMinutes,
+          minShiftDurationMinutes: config.minShiftDurationMinutes,
+          maxDailySubmissions: config.maxDailySubmissions,
+        },
+        date: dateStr,
+        currentTime,
+      });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  function formatMinutesToTime(minutes: number): string {
+    const normalized = ((minutes % (24 * 60)) + 24 * 60) % (24 * 60);
+    const h = Math.floor(normalized / 60);
+    const m = normalized % 60;
+    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+  }
 
   app.post("/api/attendance-mobile/submit", upload.single("photo"), async (req: Request, res: Response) => {
     try {
@@ -4845,6 +5027,8 @@ export async function registerRoutes(
         ntpTimestamp: z.string().optional(),
         systemClockTimestamp: z.string().optional(),
         lastNtpSyncAt: z.string().optional(),
+        locationSource: z.string().optional(),
+        submissionToken: z.string().optional(),
       });
 
       const parsed = schema.parse(req.body);
@@ -4887,6 +5071,113 @@ export async function registerRoutes(
           return res.status(403).json({ message: "Workforce record is inactive. Submission rejected.", terminated: true });
         }
       }
+
+      // ── Pre-pipeline gate: submission boundaries ──
+      if (parsed.submissionToken) {
+        const [existingToken] = await db
+          .select()
+          .from(attendanceSubmissions)
+          .where(eq(attendanceSubmissions.submissionToken, parsed.submissionToken))
+          .limit(1);
+        if (existingToken) {
+          return res.status(200).json({ submission: existingToken, verification: { status: existingToken.status, deduplicated: true } });
+        }
+      }
+
+      const orgTz = await getOrgTimezone();
+      const serverNow = new Date();
+      const { dateStr: todayStr, timeStr: nowTime } = formatInTimezone(serverNow, orgTz);
+      const attConfig = await getAttendanceConfig();
+
+      const todaySubmissions = await db
+        .select({ id: attendanceSubmissions.id })
+        .from(attendanceSubmissions)
+        .where(
+          and(
+            eq(attendanceSubmissions.workforceId, parsed.workforceId),
+            sql`DATE(${attendanceSubmissions.submittedAt} AT TIME ZONE ${orgTz}) = ${todayStr}`
+          )
+        );
+      if (todaySubmissions.length >= attConfig.maxDailySubmissions) {
+        return res.status(429).json({
+          message: `Daily submission limit reached (${attConfig.maxDailySubmissions}). You have already completed attendance for today.`,
+          code: "DAILY_LIMIT_REACHED",
+          maxDailySubmissions: attConfig.maxDailySubmissions,
+        });
+      }
+
+      const todayRecords = await db
+        .select()
+        .from(attendanceRecords)
+        .where(
+          and(
+            eq(attendanceRecords.workforceId, parsed.workforceId),
+            eq(attendanceRecords.date, todayStr)
+          )
+        );
+      const todayRecord = todayRecords[0] ?? null;
+      if (todayRecord?.clockIn && todayRecord?.clockOut) {
+        return res.status(409).json({
+          message: "You have already completed check-in and check-out for today.",
+          code: "ATTENDANCE_COMPLETED",
+          clockIn: todayRecord.clockIn,
+          clockOut: todayRecord.clockOut,
+        });
+      }
+
+      const shiftInfo = await getShiftForEmployeeDate(parsed.workforceId, todayStr);
+      const nowMin = timeToMinutes(nowTime);
+
+      if (shiftInfo) {
+        const shiftStartMin = timeToMinutes(shiftInfo.shiftStartTime);
+        const shiftEndMin = timeToMinutes(shiftInfo.shiftEndTime);
+        const isOvernight = shiftEndMin <= shiftStartMin;
+
+        const earliestCheckIn = shiftStartMin - attConfig.earlyBufferMinutes;
+        const latestCheckOut = isOvernight
+          ? (shiftEndMin + 24 * 60 + attConfig.lateBufferMinutes)
+          : (shiftEndMin + attConfig.lateBufferMinutes);
+
+        let adjustedNow = nowMin;
+        if (isOvernight && nowMin < shiftStartMin - attConfig.earlyBufferMinutes) {
+          adjustedNow += 24 * 60;
+        }
+
+        if (!todayRecord && adjustedNow < earliestCheckIn) {
+          return res.status(403).json({
+            message: `Your shift starts at ${shiftInfo.shiftStartTime}. You can check in from ${formatMinutesToTime(earliestCheckIn)}.`,
+            code: "BEFORE_SHIFT_WINDOW",
+            shiftStart: shiftInfo.shiftStartTime,
+            earliestCheckIn: formatMinutesToTime(earliestCheckIn),
+          });
+        }
+        if (adjustedNow > latestCheckOut) {
+          return res.status(403).json({
+            message: `Your shift ended at ${shiftInfo.shiftEndTime}. The attendance window has closed.`,
+            code: "AFTER_SHIFT_WINDOW",
+            shiftEnd: shiftInfo.shiftEndTime,
+            latestCheckOut: formatMinutesToTime(latestCheckOut % (24 * 60)),
+          });
+        }
+      }
+
+      if (todayRecord?.clockIn && !todayRecord?.clockOut) {
+        const clockInMin = timeToMinutes(todayRecord.clockIn);
+        let elapsed = nowMin - clockInMin;
+        if (elapsed < 0) elapsed += 24 * 60;
+        if (elapsed < attConfig.minShiftDurationMinutes) {
+          return res.status(422).json({
+            message: `Minimum shift duration is ${attConfig.minShiftDurationMinutes} minutes. Please wait ${attConfig.minShiftDurationMinutes - elapsed} more minutes before checking out.`,
+            code: "MIN_DURATION_NOT_MET",
+            clockIn: todayRecord.clockIn,
+            minDurationMinutes: attConfig.minShiftDurationMinutes,
+            elapsedMinutes: elapsed,
+          });
+        }
+      }
+
+      const noShiftAssigned = !shiftInfo;
+      // ── End pre-pipeline gate ──
 
       const photoUrl = `/uploads/${req.file.filename}`;
       const ts = parsed.clientTimestamp || parsed.timestamp;
@@ -4941,24 +5232,39 @@ export async function registerRoutes(
         }
       }
 
-      const submission = await storage.createAttendanceSubmission({
-        workforceId: parsed.workforceId,
-        photoUrl,
-        gpsLat: String(parsed.gpsLat),
-        gpsLng: String(parsed.gpsLng),
-        gpsAccuracy: parsed.gpsAccuracy ? String(parsed.gpsAccuracy) : null,
-        submittedAt: ts ? new Date(ts) : new Date(),
-        status: "pending",
-        mockLocationDetected: parsed.mockLocationDetected ?? null,
-        isEmulator: parsed.isEmulator ?? null,
-        rootDetected: parsed.rootDetected ?? null,
-        locationProvider: parsed.locationProvider ?? null,
-        deviceFingerprint: parsed.deviceFingerprint ?? null,
-        serverReceivedAt,
-        ntpTimestamp: ntpTs,
-        systemClockTimestamp: sysClockTs,
-        lastNtpSyncAt: lastNtpSync,
-      });
+      let submission;
+      try {
+        submission = await storage.createAttendanceSubmission({
+          workforceId: parsed.workforceId,
+          photoUrl,
+          gpsLat: String(parsed.gpsLat),
+          gpsLng: String(parsed.gpsLng),
+          gpsAccuracy: parsed.gpsAccuracy ? String(parsed.gpsAccuracy) : null,
+          submittedAt: ts ? new Date(ts) : new Date(),
+          status: "pending",
+          mockLocationDetected: parsed.mockLocationDetected ?? null,
+          isEmulator: parsed.isEmulator ?? null,
+          rootDetected: parsed.rootDetected ?? null,
+          locationProvider: parsed.locationProvider ?? null,
+          deviceFingerprint: parsed.deviceFingerprint ?? null,
+          serverReceivedAt,
+          ntpTimestamp: ntpTs,
+          systemClockTimestamp: sysClockTs,
+          lastNtpSyncAt: lastNtpSync,
+          locationSource: parsed.locationSource ?? null,
+          submissionToken: parsed.submissionToken ?? null,
+        });
+      } catch (insertErr: any) {
+        if (parsed.submissionToken && insertErr?.code === "23505" && insertErr?.constraint?.includes("token")) {
+          const [dup] = await db
+            .select()
+            .from(attendanceSubmissions)
+            .where(eq(attendanceSubmissions.submissionToken, parsed.submissionToken))
+            .limit(1);
+          if (dup) return res.status(200).json({ submission: dup, verification: { status: dup.status, deduplicated: true } });
+        }
+        throw insertErr;
+      }
 
       if (clockTamperFlags.length > 0) {
         const flagReason = clockTamperFlags.join("; ");
@@ -4996,6 +5302,34 @@ export async function registerRoutes(
           flagReason: "Pipeline error: " + (pipeErr instanceof Error ? pipeErr.message : "Unknown"),
           rekognitionConfidence: "0",
         });
+      }
+
+      if (noShiftAssigned) {
+        try {
+          const candidate = wfRecord.candidateId ? await storage.getCandidate(wfRecord.candidateId) : null;
+          const existingFlagReason = (await storage.getAttendanceSubmission(submission.id))?.flagReason;
+          const noShiftMsg = "No shift assigned to this employee";
+          const mergedReason = existingFlagReason ? `${existingFlagReason}; ${noShiftMsg}` : noShiftMsg;
+          await storage.updateAttendanceSubmission(submission.id, {
+            status: "flagged",
+            flagReason: mergedReason,
+          });
+          await createInboxItem(
+            "attendance_verification",
+            `No shift assigned — ${candidate?.fullNameEn ?? "Unknown"}`,
+            `Employee ${wfRecord.employeeNumber ?? parsed.workforceId} submitted attendance but has no shift assigned for today.`,
+            {
+              workforceId: parsed.workforceId,
+              employeeNumber: wfRecord.employeeNumber,
+              candidateName: candidate?.fullNameEn,
+              reason: "no_shift_assigned",
+            },
+            "medium",
+            { entityType: "attendance_submission", entityId: submission.id },
+          );
+        } catch (noShiftErr) {
+          console.error("[No Shift Flagging] Failed:", noShiftErr);
+        }
       }
 
       const updated = await storage.getAttendanceSubmission(submission.id);

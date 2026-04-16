@@ -1281,12 +1281,15 @@ export const attendanceSubmissions = pgTable(
     ntpTimestamp: timestamp("ntp_timestamp"),
     systemClockTimestamp: timestamp("system_clock_timestamp"),
     lastNtpSyncAt: timestamp("last_ntp_sync_at"),
+    locationSource: varchar("location_source", { length: 32 }),
+    submissionToken: varchar("submission_token", { length: 64 }),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
   },
   (t) => ({
     workforceIdx: index("att_sub_workforce_idx").on(t.workforceId),
     statusIdx: index("att_sub_status_idx").on(t.status),
     submittedAtIdx: index("att_sub_submitted_at_idx").on(t.submittedAt),
+    submissionTokenIdx: uniqueIndex("att_sub_token_idx").on(t.submissionToken),
   })
 );
 

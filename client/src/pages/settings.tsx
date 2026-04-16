@@ -144,6 +144,10 @@ interface SystemSettings {
   ntp_server_url: string;
   organization_timezone: string;
   config_version: number;
+  attendance_early_buffer_minutes: number;
+  attendance_late_buffer_minutes: number;
+  attendance_min_shift_duration_minutes: number;
+  attendance_max_daily_submissions: number;
 }
 
 export default function SettingsPage() {
@@ -157,6 +161,10 @@ export default function SettingsPage() {
   const [useCustomNtp, setUseCustomNtp] = useState(false);
   const [organizationTimezone, setOrganizationTimezone] = useState("Asia/Riyadh");
   const [timezoneSearch, setTimezoneSearch] = useState("");
+  const [attEarlyBuffer, setAttEarlyBuffer] = useState(30);
+  const [attLateBuffer, setAttLateBuffer] = useState(60);
+  const [attMinDuration, setAttMinDuration] = useState(30);
+  const [attMaxSubmissions, setAttMaxSubmissions] = useState(2);
 
   const { data: systemSettings } = useQuery<SystemSettings>({
     queryKey: ["/api/settings/system"],
@@ -178,6 +186,10 @@ export default function SettingsPage() {
         setNtpServerUrl("custom");
       }
       setOrganizationTimezone(systemSettings.organization_timezone ?? "Asia/Riyadh");
+      setAttEarlyBuffer(systemSettings.attendance_early_buffer_minutes ?? 30);
+      setAttLateBuffer(systemSettings.attendance_late_buffer_minutes ?? 60);
+      setAttMinDuration(systemSettings.attendance_min_shift_duration_minutes ?? 30);
+      setAttMaxSubmissions(systemSettings.attendance_max_daily_submissions ?? 2);
     }
   }, [systemSettings]);
 
@@ -199,6 +211,10 @@ export default function SettingsPage() {
       terms_conditions: termsConditions,
       ntp_server_url: effectiveNtpServer,
       organization_timezone: organizationTimezone,
+      attendance_early_buffer_minutes: String(attEarlyBuffer),
+      attendance_late_buffer_minutes: String(attLateBuffer),
+      attendance_min_shift_duration_minutes: String(attMinDuration),
+      attendance_max_daily_submissions: String(attMaxSubmissions),
     });
   };
 
@@ -223,12 +239,18 @@ export default function SettingsPage() {
         </div>
 
         <Tabs defaultValue="general" className="w-full">
-          <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 w-full h-auto gap-2 bg-transparent p-0 mb-6">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 w-full h-auto gap-2 bg-transparent p-0 mb-6">
             <TabsTrigger 
               value="general" 
               className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
             >
               General
+            </TabsTrigger>
+            <TabsTrigger 
+              value="attendance" 
+              className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
+            >
+              Attendance Rules
             </TabsTrigger>
             <TabsTrigger 
               value="security" 
@@ -347,6 +369,89 @@ export default function SettingsPage() {
                       />
                     </div>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="attendance" className="space-y-6 m-0 animate-in fade-in-50 duration-500">
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-white">Attendance Rules</CardTitle>
+                </div>
+                <CardDescription>Configure check-in/check-out boundaries, shift windows, and daily submission limits for the mobile workforce app.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="att-early-buffer" className="text-white">Early Check-In Buffer (minutes)</Label>
+                    <p className="text-xs text-muted-foreground">How many minutes before shift start can workers check in.</p>
+                    <Input
+                      id="att-early-buffer"
+                      data-testid="input-att-early-buffer"
+                      type="number"
+                      min={0}
+                      max={120}
+                      value={attEarlyBuffer}
+                      onChange={(e) => setAttEarlyBuffer(Math.max(0, Math.min(120, parseInt(e.target.value) || 0)))}
+                      className="bg-background border-border text-white max-w-[200px]"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="att-late-buffer" className="text-white">Late Check-Out Buffer (minutes)</Label>
+                    <p className="text-xs text-muted-foreground">How many minutes after shift end can workers check out.</p>
+                    <Input
+                      id="att-late-buffer"
+                      data-testid="input-att-late-buffer"
+                      type="number"
+                      min={0}
+                      max={240}
+                      value={attLateBuffer}
+                      onChange={(e) => setAttLateBuffer(Math.max(0, Math.min(240, parseInt(e.target.value) || 0)))}
+                      className="bg-background border-border text-white max-w-[200px]"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="att-min-duration" className="text-white">Minimum Shift Duration (minutes)</Label>
+                    <p className="text-xs text-muted-foreground">Workers must be checked in for at least this long before they can check out.</p>
+                    <Input
+                      id="att-min-duration"
+                      data-testid="input-att-min-duration"
+                      type="number"
+                      min={0}
+                      max={480}
+                      value={attMinDuration}
+                      onChange={(e) => setAttMinDuration(Math.max(0, Math.min(480, parseInt(e.target.value) || 0)))}
+                      className="bg-background border-border text-white max-w-[200px]"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="att-max-subs" className="text-white">Max Daily Submissions</Label>
+                    <p className="text-xs text-muted-foreground">Maximum number of attendance submissions per worker per day (1 check-in + 1 check-out = 2).</p>
+                    <Input
+                      id="att-max-subs"
+                      data-testid="input-att-max-submissions"
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={attMaxSubmissions}
+                      onChange={(e) => setAttMaxSubmissions(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+                      className="bg-background border-border text-white max-w-[200px]"
+                    />
+                  </div>
+                </div>
+                <Separator className="bg-border" />
+                <div className="bg-muted/30 rounded-md p-4 border border-border">
+                  <h4 className="text-sm font-semibold text-white mb-2">How It Works</h4>
+                  <ul className="text-xs text-muted-foreground space-y-1.5 list-disc list-inside">
+                    <li>Workers can check in up to <strong className="text-white">{attEarlyBuffer} minutes</strong> before their shift starts.</li>
+                    <li>Workers can check out up to <strong className="text-white">{attLateBuffer} minutes</strong> after their shift ends.</li>
+                    <li>Check-out is blocked until <strong className="text-white">{attMinDuration} minutes</strong> have passed since check-in.</li>
+                    <li>Each worker is limited to <strong className="text-white">{attMaxSubmissions} submissions</strong> per day.</li>
+                    <li>Workers without an assigned shift can still submit attendance — their submissions will be flagged for admin review.</li>
+                  </ul>
                 </div>
               </CardContent>
             </Card>
