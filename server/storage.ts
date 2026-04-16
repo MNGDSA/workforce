@@ -1500,21 +1500,23 @@ export class DatabaseStorage implements IStorage {
 
     const empNumber = prevRecords.length > 0 ? prevRecords[0].employeeNumber : await this.generateEmployeeNumber();
 
-    const [created] = await db.insert(workforce).values({
-      employeeNumber: empNumber,
-      candidateId: cand.id,
-      jobId: data.jobId ?? undefined,
-      eventId: data.eventId ?? undefined,
-      salary: data.salary ?? undefined,
-      startDate: data.startDate,
-      isActive: true,
-      employmentType: data.employmentType ?? "individual",
-      smpCompanyId: data.smpCompanyId ?? undefined,
-    }).returning();
+    return await db.transaction(async (tx) => {
+      const [created] = await tx.insert(workforce).values({
+        employeeNumber: empNumber,
+        candidateId: cand.id,
+        jobId: data.jobId ?? undefined,
+        eventId: data.eventId ?? undefined,
+        salary: data.salary ?? undefined,
+        startDate: data.startDate,
+        isActive: true,
+        employmentType: data.employmentType ?? "individual",
+        smpCompanyId: data.smpCompanyId ?? undefined,
+      }).returning();
 
-    await db.update(candidates).set({ status: "hired", updatedAt: new Date() }).where(eq(candidates.id, cand.id));
+      await tx.update(candidates).set({ status: "hired", updatedAt: new Date() }).where(eq(candidates.id, cand.id));
 
-    return created;
+      return created;
+    });
   }
 
   async getWorkforceStats(): Promise<{ total: number; active: number; terminated: number; smpWorkers: number }> {
@@ -1992,43 +1994,43 @@ export class DatabaseStorage implements IStorage {
       employeeNumber = await this.generateEmployeeNumber();
     }
 
-    // employmentType is always explicit — never derived from candidate.source.
-    // Caller MUST pass the correct type. Defaults to "individual" if not provided.
     const derivedEmploymentType: "individual" | "smp" =
       employmentData.employmentType ?? "individual";
 
-    const [workforceRec] = await db.insert(workforce).values({
-      employeeNumber,
-      candidateId: rec.candidateId,
-      jobId: rec.jobId ?? undefined,
-      eventId: employmentData.eventId ?? rec.eventId ?? undefined,
-      smpCompanyId: employmentData.smpCompanyId ?? undefined,
-      employmentType: derivedEmploymentType,
-      salary: employmentData.salary && employmentData.salary.trim() !== "" ? employmentData.salary : undefined,
-      startDate: employmentData.startDate,
-      isActive: true,
-    }).returning();
+    return await db.transaction(async (tx) => {
+      const [workforceRec] = await tx.insert(workforce).values({
+        employeeNumber,
+        candidateId: rec.candidateId,
+        jobId: rec.jobId ?? undefined,
+        eventId: employmentData.eventId ?? rec.eventId ?? undefined,
+        smpCompanyId: employmentData.smpCompanyId ?? undefined,
+        employmentType: derivedEmploymentType,
+        salary: employmentData.salary && employmentData.salary.trim() !== "" ? employmentData.salary : undefined,
+        startDate: employmentData.startDate,
+        isActive: true,
+      }).returning();
 
-    await db.update(onboarding).set({
-      status: "converted",
-      convertedAt: new Date(),
-      convertedBy: convertedBy ?? null,
-      updatedAt: new Date(),
-    }).where(eq(onboarding.id, id));
+      await tx.update(onboarding).set({
+        status: "converted",
+        convertedAt: new Date(),
+        convertedBy: convertedBy ?? null,
+        updatedAt: new Date(),
+      }).where(eq(onboarding.id, id));
 
-    await db.update(candidates).set({
-      status: "hired",
-      updatedAt: new Date(),
-    }).where(eq(candidates.id, rec.candidateId));
-
-    if (rec.applicationId) {
-      await db.update(applications).set({
+      await tx.update(candidates).set({
         status: "hired",
         updatedAt: new Date(),
-      }).where(eq(applications.id, rec.applicationId));
-    }
+      }).where(eq(candidates.id, rec.candidateId));
 
-    return workforceRec;
+      if (rec.applicationId) {
+        await tx.update(applications).set({
+          status: "hired",
+          updatedAt: new Date(),
+        }).where(eq(applications.id, rec.applicationId));
+      }
+
+      return workforceRec;
+    });
   }
 
   // ─── SMS Plugins ────────────────────────────────────────────────────────────

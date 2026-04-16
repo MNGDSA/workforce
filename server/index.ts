@@ -186,8 +186,48 @@ app.use((req, res, next) => {
   runAutoCloseExpiredEvents();
   runEventDateAlertScheduler();
   runCandidateAgeOut();
-  setInterval(runAutoActivateUpcomingEvents, 24 * 60 * 60 * 1000);
-  setInterval(runAutoCloseExpiredEvents, 24 * 60 * 60 * 1000);
-  setInterval(runEventDateAlertScheduler, 24 * 60 * 60 * 1000);
-  setInterval(runCandidateAgeOut, 24 * 60 * 60 * 1000);
+  const schedulerTimers = [
+    setInterval(runAutoActivateUpcomingEvents, 24 * 60 * 60 * 1000),
+    setInterval(runAutoCloseExpiredEvents, 24 * 60 * 60 * 1000),
+    setInterval(runEventDateAlertScheduler, 24 * 60 * 60 * 1000),
+    setInterval(runCandidateAgeOut, 24 * 60 * 60 * 1000),
+  ];
+
+  // ─── Graceful Shutdown ──────────────────────────────────────────────────────
+  let isShuttingDown = false;
+  const SHUTDOWN_TIMEOUT_MS = 15_000;
+
+  async function gracefulShutdown(signal: string) {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    log(`${signal} received — starting graceful shutdown`, "shutdown");
+
+    for (const timer of schedulerTimers) clearInterval(timer);
+    log("Scheduler timers cleared", "shutdown");
+
+    httpServer.close(() => {
+      log("HTTP server closed — no more connections", "shutdown");
+    });
+
+    const forceExit = setTimeout(() => {
+      log(`Shutdown timeout (${SHUTDOWN_TIMEOUT_MS}ms) reached — forcing exit`, "shutdown");
+      process.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS);
+    forceExit.unref();
+
+    try {
+      await new Promise<void>((resolve) => {
+        httpServer.close(() => resolve());
+      });
+      log("All in-flight requests drained", "shutdown");
+    } catch (drainErr) {
+      log(`Error draining connections: ${drainErr}`, "shutdown");
+    }
+
+    log("Graceful shutdown complete", "shutdown");
+    process.exit(0);
+  }
+
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 })();
