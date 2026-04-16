@@ -3090,20 +3090,10 @@ export async function registerRoutes(
     try {
       const parent = await storage.getContractTemplate(req.params.id);
       if (!parent) return res.status(404).json({ message: "Template not found" });
-      const newVersion = await storage.createContractTemplate({
-        name: parent.name,
-        eventId: parent.eventId,
-        version: parent.version + 1,
-        parentTemplateId: parent.id,
-        status: "draft",
-        logoUrl: parent.logoUrl,
-        companyName: parent.companyName,
-        headerText: parent.headerText,
-        footerText: parent.footerText,
+      const newVersion = await storage.createContractTemplateVersion(parent, {
         articles: req.body.articles ?? parent.articles,
         createdBy: req.body.createdBy ?? parent.createdBy,
       });
-      await storage.updateContractTemplate(parent.id, { status: "archived" });
       return res.status(201).json(newVersion);
     } catch (err) { return handleError(res, err); }
   });

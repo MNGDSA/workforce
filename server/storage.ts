@@ -223,7 +223,7 @@ export interface IStorage {
   terminateEmployee(id: string, data: { endDate: string; terminationReason?: string; terminationCategory?: string }): Promise<WorkforceRecord | undefined>;
   reinstateEmployee(nationalId: string, data: { startDate: string; eventId?: string; salary?: string; jobId?: string; employmentType?: "individual" | "smp"; smpCompanyId?: string }): Promise<WorkforceRecord>;
   getWorkforceStats(): Promise<{ total: number; active: number; terminated: number; smpWorkers: number }>;
-  generateEmployeeNumber(): Promise<string>;
+  generateEmployeeNumber(tx?: any): Promise<string>;
 
   // Offboarding
   getOffboardingEmployees(): Promise<any[]>;
@@ -330,6 +330,7 @@ export interface IStorage {
   getContractTemplates(filters?: { eventId?: string; status?: string }): Promise<ContractTemplate[]>;
   getContractTemplate(id: string): Promise<ContractTemplate | undefined>;
   createContractTemplate(data: InsertContractTemplate): Promise<ContractTemplate>;
+  createContractTemplateVersion(parent: ContractTemplate, overrides: { articles?: any; createdBy?: string }): Promise<ContractTemplate>;
   updateContractTemplate(id: string, data: Partial<InsertContractTemplate>): Promise<ContractTemplate | undefined>;
   deleteContractTemplate(id: string): Promise<boolean>;
 
@@ -1175,11 +1176,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ─── Workforce ──────────────────────────────────────────────────────────────
-  async generateEmployeeNumber(): Promise<string> {
-    const [result] = await db.select({ maxNum: sql<string>`MAX(employee_number)` }).from(workforce);
+  async generateEmployeeNumber(tx?: any): Promise<string> {
+    const client = tx ?? db;
+    await client.execute(sql`SELECT pg_advisory_xact_lock(1001)`);
+    const [result] = await client.select({ maxNum: sql<string>`MAX(employee_number)` }).from(workforce);
     const maxNum = result?.maxNum;
     if (!maxNum) return "C000001";
-    const numeric = parseInt(maxNum.substring(1), 10);
+    const numeric = parseInt(String(maxNum).substring(1), 10);
     const next = numeric + 1;
     return `C${String(next).padStart(6, "0")}`;
   }
@@ -1487,20 +1490,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async reinstateEmployee(nationalId: string, data: { startDate: string; eventId?: string; salary?: string; jobId?: string; employmentType?: "individual" | "smp"; smpCompanyId?: string }): Promise<WorkforceRecord> {
-    const prevRecords = await db
-      .select({ employeeNumber: workforce.employeeNumber })
-      .from(workforce)
-      .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
-      .where(eq(candidates.nationalId, nationalId))
-      .orderBy(desc(workforce.createdAt))
-      .limit(1);
-
-    const [cand] = await db.select().from(candidates).where(eq(candidates.nationalId, nationalId));
-    if (!cand) throw new Error("Candidate not found");
-
-    const empNumber = prevRecords.length > 0 ? prevRecords[0].employeeNumber : await this.generateEmployeeNumber();
-
     return await db.transaction(async (tx) => {
+      const prevRecords = await tx
+        .select({ employeeNumber: workforce.employeeNumber })
+        .from(workforce)
+        .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
+        .where(eq(candidates.nationalId, nationalId))
+        .orderBy(desc(workforce.createdAt))
+        .limit(1);
+
+      const [cand] = await tx.select().from(candidates).where(eq(candidates.nationalId, nationalId));
+      if (!cand) throw new Error("Candidate not found");
+
+      const empNumber = prevRecords.length > 0 ? prevRecords[0].employeeNumber : await this.generateEmployeeNumber(tx);
+
       const [created] = await tx.insert(workforce).values({
         employeeNumber: empNumber,
         candidateId: cand.id,
@@ -1969,35 +1972,35 @@ export class DatabaseStorage implements IStorage {
     employmentData: { startDate: string; eventId?: string; salary?: string; employmentType?: "individual" | "smp"; smpCompanyId?: string },
     convertedBy?: string,
   ): Promise<WorkforceRecord> {
-    const rec = await this.getOnboardingRecord(id);
-    if (!rec) throw new Error("Onboarding record not found");
-    if (rec.status === "converted") throw new Error("Already converted to employee");
-    if (rec.status !== "ready") throw new Error(`Cannot convert — status is "${rec.status}", must be "ready"`);
-
-    const [cand] = await db.select().from(candidates).where(eq(candidates.id, rec.candidateId));
-    const isSmpCandidate = cand?.source === "smp" || !rec.applicationId;
-    if (!isSmpCandidate && !rec.hasSignedContract && !rec.contractSignedAt) {
-      throw new Error("Contract must be signed before conversion. Generate and have the candidate sign the employment contract first.");
-    }
-
-    let employeeNumber: string;
-    if (cand?.nationalId) {
-      const prev = await db
-        .select({ employeeNumber: workforce.employeeNumber })
-        .from(workforce)
-        .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
-        .where(eq(candidates.nationalId, cand.nationalId))
-        .orderBy(desc(workforce.createdAt))
-        .limit(1);
-      employeeNumber = prev.length > 0 ? prev[0].employeeNumber : await this.generateEmployeeNumber();
-    } else {
-      employeeNumber = await this.generateEmployeeNumber();
-    }
-
-    const derivedEmploymentType: "individual" | "smp" =
-      employmentData.employmentType ?? "individual";
-
     return await db.transaction(async (tx) => {
+      const [rec] = await tx.select().from(onboarding).where(eq(onboarding.id, id));
+      if (!rec) throw new Error("Onboarding record not found");
+      if (rec.status === "converted") throw new Error("Already converted to employee");
+      if (rec.status !== "ready") throw new Error(`Cannot convert — status is "${rec.status}", must be "ready"`);
+
+      const [cand] = await tx.select().from(candidates).where(eq(candidates.id, rec.candidateId));
+      const isSmpCandidate = cand?.source === "smp" || !rec.applicationId;
+      if (!isSmpCandidate && !rec.hasSignedContract && !rec.contractSignedAt) {
+        throw new Error("Contract must be signed before conversion. Generate and have the candidate sign the employment contract first.");
+      }
+
+      let employeeNumber: string;
+      if (cand?.nationalId) {
+        const prev = await tx
+          .select({ employeeNumber: workforce.employeeNumber })
+          .from(workforce)
+          .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
+          .where(eq(candidates.nationalId, cand.nationalId))
+          .orderBy(desc(workforce.createdAt))
+          .limit(1);
+        employeeNumber = prev.length > 0 ? prev[0].employeeNumber : await this.generateEmployeeNumber(tx);
+      } else {
+        employeeNumber = await this.generateEmployeeNumber(tx);
+      }
+
+      const derivedEmploymentType: "individual" | "smp" =
+        employmentData.employmentType ?? "individual";
+
       const [workforceRec] = await tx.insert(workforce).values({
         employeeNumber,
         candidateId: rec.candidateId,
@@ -2064,13 +2067,16 @@ export class DatabaseStorage implements IStorage {
 
 
   async activateSmsPlugin(id: string): Promise<boolean> {
-    await db.update(smsPlugins).set({ isActive: false, updatedAt: new Date() });
-    const [p] = await db
-      .update(smsPlugins)
-      .set({ isActive: true, updatedAt: new Date() })
-      .where(eq(smsPlugins.id, id))
-      .returning();
-    return !!p;
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(1002)`);
+      await tx.update(smsPlugins).set({ isActive: false, updatedAt: new Date() });
+      const [p] = await tx
+        .update(smsPlugins)
+        .set({ isActive: true, updatedAt: new Date() })
+        .where(eq(smsPlugins.id, id))
+        .returning();
+      return !!p;
+    });
   }
 
   async deleteSmsPlugin(id: string): Promise<boolean> {
@@ -2161,6 +2167,30 @@ export class DatabaseStorage implements IStorage {
   async createContractTemplate(data: InsertContractTemplate): Promise<ContractTemplate> {
     const [row] = await db.insert(contractTemplates).values(data).returning();
     return row;
+  }
+
+  async createContractTemplateVersion(parent: ContractTemplate, overrides: { articles?: any; createdBy?: string }): Promise<ContractTemplate> {
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(1005)`);
+      const [latestParent] = await tx.select().from(contractTemplates).where(eq(contractTemplates.id, parent.id));
+      if (!latestParent) throw new Error("Template not found");
+      const nextVersion = latestParent.version + 1;
+      const [newVersion] = await tx.insert(contractTemplates).values({
+        name: parent.name,
+        eventId: parent.eventId,
+        version: nextVersion,
+        parentTemplateId: parent.id,
+        status: "draft",
+        logoUrl: parent.logoUrl,
+        companyName: parent.companyName,
+        headerText: parent.headerText,
+        footerText: parent.footerText,
+        articles: overrides.articles ?? parent.articles,
+        createdBy: overrides.createdBy ?? parent.createdBy,
+      }).returning();
+      await tx.update(contractTemplates).set({ status: "archived", updatedAt: new Date() }).where(eq(contractTemplates.id, parent.id));
+      return newVersion;
+    });
   }
 
   async updateContractTemplate(id: string, data: Partial<InsertContractTemplate>): Promise<ContractTemplate | undefined> {
@@ -2283,20 +2313,23 @@ export class DatabaseStorage implements IStorage {
   async activateIdCardTemplate(id: string): Promise<boolean> {
     const template = await this.getIdCardTemplate(id);
     if (!template) return false;
-    await db
-      .update(idCardTemplates)
-      .set({ isActive: false, updatedAt: new Date() })
-      .where(
-        template.eventId
-          ? eq(idCardTemplates.eventId, template.eventId)
-          : isNull(idCardTemplates.eventId)
-      );
-    const [updated] = await db
-      .update(idCardTemplates)
-      .set({ isActive: true, updatedAt: new Date() })
-      .where(eq(idCardTemplates.id, id))
-      .returning();
-    return !!updated;
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(1003)`);
+      await tx
+        .update(idCardTemplates)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(
+          template.eventId
+            ? eq(idCardTemplates.eventId, template.eventId)
+            : isNull(idCardTemplates.eventId)
+        );
+      const [updated] = await tx
+        .update(idCardTemplates)
+        .set({ isActive: true, updatedAt: new Date() })
+        .where(eq(idCardTemplates.id, id))
+        .returning();
+      return !!updated;
+    });
   }
 
   // ─── Printer Plugins ────────────────────────────────────────────────────────
@@ -2340,13 +2373,16 @@ export class DatabaseStorage implements IStorage {
   async activatePrinterPlugin(id: string): Promise<boolean> {
     const target = await this.getPrinterPlugin(id);
     if (!target) return false;
-    await db.update(printerPlugins).set({ isActive: false, updatedAt: new Date() });
-    const [updated] = await db
-      .update(printerPlugins)
-      .set({ isActive: true, updatedAt: new Date() })
-      .where(eq(printerPlugins.id, id))
-      .returning();
-    return !!updated;
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(1004)`);
+      await tx.update(printerPlugins).set({ isActive: false, updatedAt: new Date() });
+      const [updated] = await tx
+        .update(printerPlugins)
+        .set({ isActive: true, updatedAt: new Date() })
+        .where(eq(printerPlugins.id, id))
+        .returning();
+      return !!updated;
+    });
   }
 
   // ─── ID Card Print Logs ─────────────────────────────────────────────────────
@@ -2525,30 +2561,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async bulkAssignSchedule(workforceIds: string[], templateId: string, startDate: string, assignedBy?: string, endDate?: string | null): Promise<{ assigned: number; ended: number; skipped: number }> {
-    let ended = 0;
-    let assigned = 0;
-    let skipped = 0;
     const resolvedEndDate = endDate ?? null;
-    for (const wid of workforceIds) {
-      const allExisting = await this.getScheduleAssignments({ workforceId: wid });
-      for (const existing of allExisting) {
-        const existsEnd = existing.endDate ?? "9999-12-31";
-        const newEnd = resolvedEndDate ?? "9999-12-31";
-        const overlaps = existing.startDate < newEnd && existsEnd > startDate;
-        if (overlaps) {
-          if (existing.startDate < startDate) {
-            await this.endScheduleAssignment(existing.id, startDate);
-            ended++;
-          } else {
-            await this.deleteScheduleAssignment(existing.id);
-            ended++;
+    return await db.transaction(async (tx) => {
+      let ended = 0;
+      let assigned = 0;
+      let skipped = 0;
+      for (const wid of workforceIds) {
+        const allExisting = await tx.select().from(scheduleAssignments).where(eq(scheduleAssignments.workforceId, wid)).orderBy(desc(scheduleAssignments.createdAt));
+        for (const existing of allExisting) {
+          const existsEnd = existing.endDate ?? "9999-12-31";
+          const newEnd = resolvedEndDate ?? "9999-12-31";
+          const overlaps = existing.startDate < newEnd && existsEnd > startDate;
+          if (overlaps) {
+            if (existing.startDate < startDate) {
+              await tx.update(scheduleAssignments).set({ endDate: startDate, updatedAt: new Date() }).where(eq(scheduleAssignments.id, existing.id));
+              ended++;
+            } else {
+              await tx.delete(scheduleAssignments).where(eq(scheduleAssignments.id, existing.id));
+              ended++;
+            }
           }
         }
+        await tx.insert(scheduleAssignments).values({ workforceId: wid, templateId, startDate, endDate: resolvedEndDate, assignedBy: assignedBy ?? null });
+        assigned++;
       }
-      await this.createScheduleAssignment({ workforceId: wid, templateId, startDate, endDate: resolvedEndDate, assignedBy: assignedBy ?? null });
-      assigned++;
-    }
-    return { assigned, ended, skipped };
+      return { assigned, ended, skipped };
+    });
   }
 
   // ─── Attendance Records ──────────────────────────────────────────────────────
@@ -2846,45 +2884,47 @@ export class DatabaseStorage implements IStorage {
       finalNetSettlement = String(calc.netPayable);
     } catch (_e) {}
 
-    const [updated] = await db
-      .update(workforce)
-      .set({
-        offboardingStatus: "completed",
-        offboardingCompletedAt: new Date(),
-        isActive: false,
-        finalGrossPay,
-        finalDeductions,
-        finalNetSettlement,
-        updatedAt: new Date(),
-      })
-      .where(eq(workforce.id, workforceId))
-      .returning();
+    return await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(workforce)
+        .set({
+          offboardingStatus: "completed",
+          offboardingCompletedAt: new Date(),
+          isActive: false,
+          finalGrossPay,
+          finalDeductions,
+          finalNetSettlement,
+          updatedAt: new Date(),
+        })
+        .where(eq(workforce.id, workforceId))
+        .returning();
 
-    await db.update(payRunLines)
-      .set({ tranche2Status: "pending", tranche2BlockedReason: null })
-      .where(and(
-        eq(payRunLines.workforceId, workforceId),
-        eq(payRunLines.tranche2Status, "blocked"),
-      ));
+      await tx.update(payRunLines)
+        .set({ tranche2Status: "pending", tranche2BlockedReason: null })
+        .where(and(
+          eq(payRunLines.workforceId, workforceId),
+          eq(payRunLines.tranche2Status, "blocked"),
+        ));
 
-    const otherActive = await db
-      .select({ id: workforce.id })
-      .from(workforce)
-      .where(and(eq(workforce.candidateId, wf.candidateId), eq(workforce.isActive, true)))
-      .limit(1);
-    if (otherActive.length === 0) {
-      await db.update(candidates).set({ status: "available", updatedAt: new Date() }).where(eq(candidates.id, wf.candidateId));
-    }
+      const otherActive = await tx
+        .select({ id: workforce.id })
+        .from(workforce)
+        .where(and(eq(workforce.candidateId, wf.candidateId), eq(workforce.isActive, true)))
+        .limit(1);
+      if (otherActive.length === 0) {
+        await tx.update(candidates).set({ status: "available", updatedAt: new Date() }).where(eq(candidates.id, wf.candidateId));
+      }
 
-    await db.update(applications)
-      .set({ status: "closed", updatedAt: new Date() })
-      .where(and(eq(applications.candidateId, wf.candidateId), eq(applications.status, "hired")));
+      await tx.update(applications)
+        .set({ status: "closed", updatedAt: new Date() })
+        .where(and(eq(applications.candidateId, wf.candidateId), eq(applications.status, "hired")));
 
-    await db.update(onboarding)
-      .set({ status: "terminated", updatedAt: new Date() })
-      .where(and(eq(onboarding.candidateId, wf.candidateId), eq(onboarding.status, "converted")));
+      await tx.update(onboarding)
+        .set({ status: "terminated", updatedAt: new Date() })
+        .where(and(eq(onboarding.candidateId, wf.candidateId), eq(onboarding.status, "converted")));
 
-    return updated;
+      return updated;
+    });
   }
 
   async reassignEmployeeEvent(workforceId: string, eventId: string): Promise<any> {
@@ -3689,15 +3729,17 @@ export class DatabaseStorage implements IStorage {
       lines.push(lineData);
     }
 
-    if (lines.length > 0) {
-      await db.insert(payRunLines).values(lines);
-    }
+    return await db.transaction(async (tx) => {
+      if (lines.length > 0) {
+        await tx.insert(payRunLines).values(lines);
+      }
 
-    await db.update(payRuns)
-      .set({ status: "processing", updatedAt: new Date() })
-      .where(eq(payRuns.id, payRunId));
+      await tx.update(payRuns)
+        .set({ status: "processing", updatedAt: new Date() })
+        .where(eq(payRuns.id, payRunId));
 
-    return { linesCreated: lines.length };
+      return { linesCreated: lines.length };
+    });
   }
 
   // ─── Payroll Adjustments ────────────────────────────────────────────────────

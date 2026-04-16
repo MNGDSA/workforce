@@ -257,20 +257,29 @@ export async function runVerificationPipeline(submissionId: string): Promise<{
         }
       }
 
-      const [record] = await db
-        .insert(attendanceRecords)
-        .values({
-          workforceId: submission.workforceId,
-          date: dateStr,
-          status,
-          clockIn,
-          minutesScheduled,
-          minutesWorked,
-          source: "mobile",
-          notes: `Auto-verified via mobile (confidence: ${confidence}%)`,
-        })
-        .returning();
-      updateData.linkedAttendanceRecordId = record.id;
+      try {
+        const [record] = await db
+          .insert(attendanceRecords)
+          .values({
+            workforceId: submission.workforceId,
+            date: dateStr,
+            status,
+            clockIn,
+            minutesScheduled,
+            minutesWorked,
+            source: "mobile",
+            notes: `Auto-verified via mobile (confidence: ${confidence}%)`,
+          })
+          .returning();
+        updateData.linkedAttendanceRecordId = record.id;
+      } catch (insertErr: any) {
+        if (insertErr?.code === "23505") {
+          const [dup] = await db.select().from(attendanceRecords).where(and(eq(attendanceRecords.workforceId, submission.workforceId), eq(attendanceRecords.date, dateStr)));
+          if (dup) updateData.linkedAttendanceRecordId = dup.id;
+        } else {
+          throw insertErr;
+        }
+      }
     } else if (existing[0].clockIn && !existing[0].clockOut) {
       let minutesWorked: number | null = null;
       const clockInMin = timeToMinutes(existing[0].clockIn);
@@ -386,21 +395,30 @@ export async function approveSubmission(
       }
     }
 
-    const [record] = await db
-      .insert(attendanceRecords)
-      .values({
-        workforceId: submission.workforceId,
-        date: dateStr,
-        status,
-        clockIn,
-        minutesScheduled,
-        minutesWorked,
-        source: "mobile",
-        recordedBy: reviewedBy,
-        notes: `Manually approved by HR${notes ? `: ${notes}` : ""}`,
-      })
-      .returning();
-    linkedRecordId = record.id;
+    try {
+      const [record] = await db
+        .insert(attendanceRecords)
+        .values({
+          workforceId: submission.workforceId,
+          date: dateStr,
+          status,
+          clockIn,
+          minutesScheduled,
+          minutesWorked,
+          source: "mobile",
+          recordedBy: reviewedBy,
+          notes: `Manually approved by HR${notes ? `: ${notes}` : ""}`,
+        })
+        .returning();
+      linkedRecordId = record.id;
+    } catch (insertErr: any) {
+      if (insertErr?.code === "23505") {
+        const [dup] = await db.select().from(attendanceRecords).where(and(eq(attendanceRecords.workforceId, submission.workforceId), eq(attendanceRecords.date, dateStr)));
+        linkedRecordId = dup?.id ?? "";
+      } else {
+        throw insertErr;
+      }
+    }
   } else if (existing[0].clockIn && !existing[0].clockOut) {
     let minutesWorked: number | null = null;
     const clockInMin = timeToMinutes(existing[0].clockIn);

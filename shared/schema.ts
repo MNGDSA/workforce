@@ -228,6 +228,8 @@ export const candidates = pgTable(
     ratingIdx: index("candidates_rating_idx").on(t.rating),
     createdAtIdx: index("candidates_created_at_idx").on(t.createdAt),
     nationalIdIdx: uniqueIndex("candidates_national_id_idx").on(t.nationalId),
+    iqamaNumberIdx: uniqueIndex("candidates_iqama_number_idx").on(t.iqamaNumber),
+    passportNumberIdx: uniqueIndex("candidates_passport_number_idx").on(t.passportNumber),
     statusCityIdx: index("candidates_status_city_idx").on(t.status, t.city),
     fullNameEnIdx: index("candidates_full_name_en_idx").on(t.fullNameEn),
   })
@@ -280,6 +282,7 @@ export const smpCompanies = pgTable(
   },
   (t) => ({
     nameIdx: index("smp_companies_name_idx").on(t.name),
+    crNumberIdx: uniqueIndex("smp_companies_cr_number_idx").on(t.crNumber),
     activeIdx: index("smp_companies_active_idx").on(t.isActive),
   })
 );
@@ -498,7 +501,7 @@ export const workforce = pgTable(
     candidateIdx: index("workforce_candidate_idx").on(t.candidateId),
     eventIdx: index("workforce_event_idx").on(t.eventId),
     activeIdx: index("workforce_active_idx").on(t.isActive),
-    empNumIdx: index("workforce_emp_num_idx").on(t.employeeNumber),
+    empNumIdx: uniqueIndex("workforce_emp_num_unique_idx").on(t.employeeNumber),
     offboardingIdx: index("workforce_offboarding_idx").on(t.offboardingStatus),
   })
 );
@@ -748,6 +751,7 @@ export const contractTemplates = pgTable(
     eventIdx: index("ct_event_idx").on(t.eventId),
     statusIdx: index("ct_status_idx").on(t.status),
     parentIdx: index("ct_parent_idx").on(t.parentTemplateId),
+    nameVersionIdx: uniqueIndex("ct_name_version_idx").on(t.name, t.version),
   })
 );
 
