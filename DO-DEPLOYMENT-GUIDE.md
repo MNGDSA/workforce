@@ -290,9 +290,14 @@ All endpoints require authentication (JWT token from login).
 - The app serves them through its own endpoints — make sure the `SPACES_*` credentials are correct
 - Old `/uploads/...` paths in the database (from development) will redirect to Spaces in production
 
+### "tsx: not found" or "vite: not found" during build
+- All build tools (tsx, vite, esbuild, drizzle-kit, typescript) are in `dependencies` (not `devDependencies`) specifically because DO prunes devDependencies before running the custom build command
+- Only the 3 Replit dev plugins remain in `devDependencies` — they're not needed in production
+- If you see this error, make sure the latest `package.json` is pushed to GitHub
+
 ### "Module not found" errors at runtime
-- Run `npm install` before `npm run build` in your build command
 - The build bundles most dependencies, but some (like AWS SDK) are kept external
+- Make sure the build command includes `npm install` before `npm run build`
 
 ### Multiple instances causing session issues
 - Sessions use server-side memory by default in this setup
