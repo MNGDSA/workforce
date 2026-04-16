@@ -48,7 +48,7 @@ A step-by-step guide to deploy the Workforce app on DigitalOcean App Platform.
 2. Choose **Standard Storage** (not Cold Storage — the app reads/writes files frequently)
 3. Choose these settings:
    - **Region**: Same as your database (e.g. `FRA1`)
-   - **CDN**: Enable if you want faster photo/document loading (optional)
+   - **CDN**: **Enable** (speeds up photo and document loading for workers across regions)
    - **Name**: `workforce-uploads`
    - **File Listing**: Restricted (private)
 4. Click **Create Bucket**
