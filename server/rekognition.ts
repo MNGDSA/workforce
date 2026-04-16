@@ -22,18 +22,9 @@ export async function validateFaceQuality(photoPath: string): Promise<FaceQualit
 
   try {
     const { RekognitionClient, DetectFacesCommand } = await import("@aws-sdk/client-rekognition");
-    const { readFileSync } = await import("fs");
-    const path = await import("path");
+    const { getFileBuffer } = await import("./file-storage");
 
-    if (!photoPath.startsWith("/uploads/")) {
-      throw new Error("Only /uploads/ paths are allowed for face quality check");
-    }
-    const filename = path.basename(photoPath);
-    const safePath = path.resolve("uploads", filename);
-    if (!safePath.startsWith(path.resolve("uploads"))) {
-      throw new Error("Path traversal detected");
-    }
-    const imageBytes = readFileSync(safePath);
+    const imageBytes = await getFileBuffer(photoPath);
 
     const client = new RekognitionClient({
       region: awsRegion,
@@ -199,35 +190,16 @@ export async function compareFaces(
 
   try {
     const { RekognitionClient, CompareFacesCommand } = await import("@aws-sdk/client-rekognition");
-    const { readFileSync } = await import("fs");
-    const path = await import("path");
-    const { resolve } = path;
+    const { getFileBuffer } = await import("./file-storage");
 
     const client = new RekognitionClient({
       region: awsRegion,
       credentials: { accessKeyId: accessKey, secretAccessKey: secretKey },
     });
 
-    async function loadImageBytes(url: string): Promise<Uint8Array> {
-      if (!url.startsWith("/uploads/")) {
-        throw new Error("Only /uploads/ paths are allowed for face comparison");
-      }
-      const filename = path.basename(url);
-      const allowedExts = [".jpg", ".jpeg", ".png", ".webp"];
-      const ext = path.extname(filename).toLowerCase();
-      if (!allowedExts.includes(ext)) {
-        throw new Error(`Unsupported image extension: ${ext}`);
-      }
-      const safePath = resolve("uploads", filename);
-      if (!safePath.startsWith(resolve("uploads"))) {
-        throw new Error("Path traversal detected");
-      }
-      return readFileSync(safePath);
-    }
-
     const [sourceBytes, targetBytes] = await Promise.all([
-      loadImageBytes(sourcePhotoUrl),
-      loadImageBytes(targetPhotoUrl),
+      getFileBuffer(sourcePhotoUrl),
+      getFileBuffer(targetPhotoUrl),
     ]);
 
     const command = new CompareFacesCommand({

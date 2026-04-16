@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import fs from "fs";
 import path from "path";
 
@@ -14,8 +15,8 @@ let s3Client: S3Client | null = null;
 
 function getS3Client(): S3Client {
   if (!s3Client) {
-    if (!spacesEndpoint || !spacesKey || !spacesSecret) {
-      throw new Error("DO Spaces environment variables (SPACES_ENDPOINT, SPACES_KEY, SPACES_SECRET) are required in production");
+    if (!spacesEndpoint || !spacesKey || !spacesSecret || !spacesBucket) {
+      throw new Error("DO Spaces environment variables (SPACES_ENDPOINT, SPACES_BUCKET, SPACES_KEY, SPACES_SECRET) are required in production");
     }
     s3Client = new S3Client({
       endpoint: `https://${spacesEndpoint}`,
@@ -36,20 +37,20 @@ export async function uploadFile(localFilePath: string, filename: string, conten
   }
 
   const client = getS3Client();
-  const fileContent = fs.readFileSync(localFilePath);
   const key = `uploads/${filename}`;
 
-  await client.send(new PutObjectCommand({
-    Bucket: spacesBucket,
-    Key: key,
-    Body: fileContent,
-    ContentType: contentType || "application/octet-stream",
-    ACL: "public-read",
-  }));
-
-  fs.unlinkSync(localFilePath);
-
-  return `https://${spacesBucket}.${spacesEndpoint}/${key}`;
+  try {
+    const fileContent = fs.readFileSync(localFilePath);
+    await client.send(new PutObjectCommand({
+      Bucket: spacesBucket,
+      Key: key,
+      Body: fileContent,
+      ContentType: contentType || "application/octet-stream",
+    }));
+    return `https://${spacesBucket}.${spacesEndpoint}/${key}`;
+  } finally {
+    try { fs.unlinkSync(localFilePath); } catch {}
+  }
 }
 
 export async function deleteFile(fileUrl: string): Promise<void> {
@@ -73,6 +74,35 @@ export async function deleteFile(fileUrl: string): Promise<void> {
       }));
     }
   }
+}
+
+export async function getFileBuffer(fileUrl: string): Promise<Buffer> {
+  if (!isProduction || fileUrl.startsWith("/uploads/")) {
+    const localPath = fileUrl.startsWith("/uploads/")
+      ? path.join(path.resolve("uploads"), path.basename(fileUrl))
+      : fileUrl;
+    return fs.readFileSync(localPath);
+  }
+
+  if (fileUrl.includes(spacesEndpoint)) {
+    const key = fileUrl.split(`${spacesEndpoint}/`)[1];
+    if (key) {
+      const client = getS3Client();
+      const resp = await client.send(new GetObjectCommand({
+        Bucket: spacesBucket,
+        Key: key,
+      }));
+      const chunks: Buffer[] = [];
+      for await (const chunk of resp.Body as any) {
+        chunks.push(Buffer.from(chunk));
+      }
+      return Buffer.concat(chunks);
+    }
+  }
+
+  const resp = await fetch(fileUrl);
+  if (!resp.ok) throw new Error(`Failed to fetch file: ${resp.status}`);
+  return Buffer.from(await resp.arrayBuffer());
 }
 
 export function getPublicUrl(storedUrl: string): string {
