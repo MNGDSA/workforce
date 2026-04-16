@@ -44,14 +44,15 @@ A step-by-step guide to deploy the Workforce app on DigitalOcean App Platform.
 
 ## Step 2: Create a DO Spaces Bucket
 
-1. Go to **DigitalOcean Console** > **Spaces Object Storage** > **Create a Space**
-2. Choose these settings:
+1. Go to **DigitalOcean Console** > **Spaces Object Storage** > **Create Bucket**
+2. Choose **Standard Storage** (not Cold Storage — the app reads/writes files frequently)
+3. Choose these settings:
    - **Region**: Same as your database (e.g. `FRA1`)
    - **CDN**: Enable if you want faster photo/document loading (optional)
    - **Name**: `workforce-uploads`
    - **File Listing**: Restricted (private)
-3. Click **Create a Space**
-4. Generate API keys:
+4. Click **Create Bucket**
+5. Generate API keys:
    - Go to **API** > **Spaces Keys** > **Generate New Key**
    - Name it `workforce-app`
    - Save both the **Key** and the **Secret** — you won't see the secret again
