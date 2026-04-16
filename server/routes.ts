@@ -7,6 +7,7 @@ import fs from "fs";
 import crypto from "crypto";
 import { storage, createInboxItem } from "./storage";
 import { db } from "./db";
+import { uploadFile, deleteFile, getMimeType } from "./file-storage";
 import { getAuthenticatedUser, listUserRepos, getRepo, listRepoIssues, listRepoPullRequests } from "./github";
 import {
   inboxItems,
@@ -152,6 +153,7 @@ import bcrypt from "bcryptjs";
 const UPLOADS_DIR = path.resolve("uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
@@ -223,15 +225,26 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
-  app.use("/uploads", express.static(UPLOADS_DIR, {
-    setHeaders: (res, filePath) => {
-      if (filePath.endsWith(".pdf")) {
-        res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", "inline");
+  if (process.env.NODE_ENV !== "production") {
+    app.use("/uploads", express.static(UPLOADS_DIR, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith(".pdf")) {
+          res.setHeader("Content-Type", "application/pdf");
+          res.setHeader("Content-Disposition", "inline");
+        }
+        res.setHeader("X-Content-Type-Options", "nosniff");
       }
-      res.setHeader("X-Content-Type-Options", "nosniff");
-    }
-  }));
+    }));
+  } else {
+    app.get("/uploads/:filename", (req: Request, res: Response) => {
+      const spacesEndpoint = process.env.SPACES_ENDPOINT || "";
+      const spacesBucket = process.env.SPACES_BUCKET || "";
+      if (spacesEndpoint && spacesBucket) {
+        return res.redirect(301, `https://${spacesBucket}.${spacesEndpoint}/uploads/${req.params.filename}`);
+      }
+      return res.status(404).json({ message: "File not found" });
+    });
+  }
 
   app.use("/api", async (req: Request, res: Response, next) => {
     const url = req.originalUrl || req.path;
@@ -328,13 +341,14 @@ export async function registerRoutes(
       if (!["photo", "nationalId", "iban", "resume"].includes(docType)) {
         return res.status(400).json({ message: "Invalid docType. Must be photo, nationalId, iban, or resume" });
       }
-      const fileUrl = `/uploads/${req.file.filename}`;
+      const localPath = req.file.path;
+      const fileUrl = await uploadFile(localPath, req.file.filename, getMimeType(req.file.filename));
       let photoQualityResult: import("./rekognition").FaceQualityResult | undefined;
 
       if (docType === "photo") {
         const allowedPhotoMimes = ["image/jpeg", "image/jpg", "image/png"];
         if (!allowedPhotoMimes.includes(req.file.mimetype.toLowerCase())) {
-          try { fs.unlinkSync(path.join("uploads", req.file.filename)); } catch {}
+          try { await deleteFile(fileUrl); } catch {}
           return res.status(400).json({ message: "Photo must be a JPG or PNG image" });
         }
         const candidate = await storage.getCandidate(id);
@@ -347,7 +361,7 @@ export async function registerRoutes(
         photoQualityResult = qualityResult;
 
         if (isPhotoChange && qualityResult.qualityCheckSkipped) {
-          try { fs.unlinkSync(path.join("uploads", req.file.filename)); } catch {}
+          try { await deleteFile(fileUrl); } catch {}
           return res.status(503).json({
             message: "Photo verification is temporarily unavailable. Please try again in a few minutes.",
             qualityResult: { passed: false, checks: [{ name: "Face verification service", passed: false, tip: "The verification service is currently unreachable. Your photo cannot be processed until the service is available." }], qualityCheckSkipped: true },
@@ -355,7 +369,7 @@ export async function registerRoutes(
         }
 
         if (!qualityResult.passed && !qualityResult.qualityCheckSkipped) {
-          try { fs.unlinkSync(path.join("uploads", req.file.filename)); } catch {}
+          try { await deleteFile(fileUrl); } catch {}
           return res.status(422).json({
             message: "Photo quality check failed",
             qualityResult,
@@ -449,9 +463,8 @@ export async function registerRoutes(
         iban: candidate.ibanFileUrl,
       };
       const oldFileUrl = fileUrlMap[docType];
-      if (oldFileUrl && oldFileUrl.startsWith("/uploads/")) {
-        const filePath = path.join(UPLOADS_DIR, path.basename(oldFileUrl));
-        fs.promises.unlink(filePath).catch(() => {});
+      if (oldFileUrl) {
+        deleteFile(oldFileUrl).catch(() => {});
       }
       const updatePayload: Record<string, any> = {};
       if (docType === "photo") { updatePayload.photoUrl = null; updatePayload.hasPhoto = false; }
@@ -3101,7 +3114,7 @@ export async function registerRoutes(
   app.post("/api/contract-templates/:id/logo", upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
-      const logoUrl = `/uploads/${req.file.filename}`;
+      const logoUrl = await uploadFile(req.file.path, req.file.filename, getMimeType(req.file.filename));
       const updated = await storage.updateContractTemplate(req.params.id, { logoUrl });
       if (!updated) return res.status(404).json({ message: "Template not found" });
       return res.json(updated);
@@ -3479,7 +3492,7 @@ export async function registerRoutes(
   app.post("/api/id-card-templates/:id/background", upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
-      const imageUrl = `/uploads/${req.file.filename}`;
+      const imageUrl = await uploadFile(req.file.path, req.file.filename, getMimeType(req.file.filename));
       const updateData = { backgroundImageUrl: imageUrl };
       const template = await storage.updateIdCardTemplate(req.params.id, updateData);
       if (!template) return res.status(404).json({ message: "Template not found" });
@@ -5169,7 +5182,7 @@ export async function registerRoutes(
       const noShiftAssigned = !shiftInfo;
       // ── End pre-pipeline gate ──
 
-      const photoUrl = `/uploads/${req.file.filename}`;
+      const photoUrl = await uploadFile(req.file.path, req.file.filename, getMimeType(req.file.filename));
       const ts = parsed.clientTimestamp || parsed.timestamp;
       const serverReceivedAt = new Date();
 

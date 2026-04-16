@@ -66,6 +66,38 @@ The system employs a modern, full-stack architecture.
 
 - **GitHub**: Integrated via Replit OAuth using `@replit/connectors-sdk` and `@octokit/rest` for repository interactions.
 - **PostgreSQL**: Primary database for all persistent data storage.
-- **AWS Rekognition or Azure Face API**: Planned for facial recognition in the Mobile Attendance App.
+- **AWS Rekognition**: Facial recognition for mobile attendance verification and photo quality checks.
 - **Zebra Browser Print SDK and Evolis Premium Suite plugins**: Planned for direct printing in the Employee ID Cards feature.
-- **DigitalOcean Spaces**: Used for object storage in production environments (S3-compatible).
+- **DigitalOcean Spaces**: S3-compatible object storage for file uploads in production (photos, documents, logos).
+
+## Production Deployment (DigitalOcean App Platform)
+
+**Deployment workflow**: Push to GitHub → DO auto-pulls & deploys → User reports runtime errors → Agent fixes & pushes → DO redeploys.
+
+**Build command**: `npm install && npm run build && npm run db:push`
+**Run command**: `NODE_ENV=production node dist/index.cjs`
+
+**Key production files**:
+- `server/db.ts` — Strips `sslmode` from DATABASE_URL, adds `ssl: { rejectUnauthorized: false }` in production
+- `drizzle.config.ts` — Same SSL fix for schema push during build
+- `server/file-storage.ts` — Abstracts file uploads: local filesystem (dev) vs DO Spaces (production)
+- `server/static.ts` — Serves `dist/public` and SPA fallback in production
+- `dist/index.cjs` — Bundled production server (esbuild output)
+- `dist/public/` — Vite-built frontend assets
+
+**Required environment variables on DigitalOcean**:
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | Auto-injected if DB attached to app |
+| `NODE_ENV` | `production` |
+| `PORT` | Auto-set by DO (usually 8080) |
+| `SESSION_SECRET` | 64-char random hex for auth token signing |
+| `SPACES_ENDPOINT` | e.g. `nyc3.digitaloceanspaces.com` |
+| `SPACES_BUCKET` | e.g. `workforce-uploads` |
+| `SPACES_KEY` | DO Spaces access key |
+| `SPACES_SECRET` | DO Spaces secret key |
+| `SPACES_REGION` | e.g. `nyc3` |
+| `AWS_ACCESS_KEY_ID` | For Rekognition face verification |
+| `AWS_SECRET_ACCESS_KEY` | For Rekognition face verification |
+| `AWS_REGION` | e.g. `us-east-1` |
