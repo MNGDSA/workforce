@@ -79,9 +79,13 @@ A step-by-step guide to deploy the Workforce app on DigitalOcean App Platform.
 | **HTTP Port** | `8080` |
 
 6. Set the **Instance Size**:
-   - Choose **Basic** plan
-   - Select **1 vCPU / 1 GB RAM** ($12/mo per instance)
+   - For starting out, choose a **Basic (shared CPU)** plan — $12/mo for 1 vCPU / 1 GB RAM
+   - Shared instances do **not** support auto-scaling — you pick a fixed instance count
    - Set **Instance Count** to `2` (load balancing + zero-downtime deploys)
+   - **For peak season (Ramadan/Hajj)**: Switch to a **Dedicated (Pro)** plan to unlock auto-scaling:
+     - **Pro**: 1 vCPU / 1 GB RAM ($25/mo per instance)
+     - Set auto-scaling: **min 2, max 4** instances
+     - DO will automatically add/remove instances based on CPU and traffic load
 
 7. Set **Network** settings:
    - **HTTP Port**: `8080`
@@ -203,15 +207,15 @@ If you're using AWS Rekognition for attendance face matching:
 | DO Spaces | 250 GB included | $5 |
 | **Total** | | **$44** |
 
-### Peak Season (Ramadan/Hajj) (~$100/month)
+### Peak Season (Ramadan/Hajj) (~$110–120/month)
 
 | Resource | Spec | Monthly Cost |
 |---|---|---|
-| App Platform | 4x Basic ($12 each) or 2x Pro ($25 each) | $48–50 |
+| App Platform | Pro (dedicated), 2–4 instances auto-scaling ($25 each) | $50–100 |
 | Managed PostgreSQL | Basic (2 GB RAM, 25 GB) | $30 |
 | DO Spaces | 250 GB included | $5 |
 | Bandwidth | ~$5–15 for photos/docs | $5–15 |
-| **Total** | | **~$90–100** |
+| **Total** | | **~$90–150** |
 
 ---
 
@@ -226,8 +230,9 @@ If you're using AWS Rekognition for attendance face matching:
 ### How to Scale
 
 1. **App instances**: In the DO dashboard, go to your app > **Settings** > **Scaling**
-   - Increase instance count from 2 to **3–4**
-   - Or upgrade instance size to Professional ($25/mo, 2 vCPU, 2 GB RAM)
+   - Switch from **Basic (shared)** to a **Pro (dedicated)** plan
+   - Enable auto-scaling: set **min 2, max 4** instances
+   - Auto-scaling is only available on dedicated plans — shared plans require manual instance count changes
 2. **Database**: If you see slow queries in logs, upgrade to a larger plan:
    - Go to **Databases** > your cluster > **Resize**
    - Move to the next tier (4 GB RAM, 2 vCPU)
