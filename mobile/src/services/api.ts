@@ -28,7 +28,7 @@ export function setLogoutCallback(cb: () => void): void {
 export async function getBaseUrl(): Promise<string> {
   if (baseUrl) return baseUrl;
   const stored = await SecureStore.getItemAsync(API_BASE_URL_KEY);
-  baseUrl = stored || 'https://your-workforce-app.replit.app';
+  baseUrl = stored || 'https://api.yourcompany.com';
   return baseUrl;
 }
 
