@@ -18,3 +18,9 @@ id = "Jj8jP9BYhxYMrnVZ6jNgb"
 uri = "file://WORKFORCE_Business_Flows.pdf"
 type = "pdf"
 title = "WORKFORCE Business Flows (2 pages)"
+
+[[outputs]]
+id = "gQcoKIxDy6L1YkqGavd5z"
+uri = "file://DO-DEPLOYMENT-GUIDE.md"
+type = "text"
+title = "DigitalOcean Deployment Guide"
