@@ -24,3 +24,9 @@ id = "gQcoKIxDy6L1YkqGavd5z"
 uri = "file://DO-DEPLOYMENT-GUIDE.md"
 type = "text"
 title = "DigitalOcean Deployment Guide"
+
+[[outputs]]
+id = "j5c4YALGrF3g83HaYap4Y"
+uri = "file://env.production.txt"
+type = "text"
+title = "Production Environment Variables"
