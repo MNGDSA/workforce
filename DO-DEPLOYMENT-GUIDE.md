@@ -72,12 +72,22 @@ A step-by-step guide to deploy the Workforce app on DigitalOcean App Platform.
 |---|---|
 | **Type** | Web Service |
 | **Name** | `workforce` |
-| **Region** | Same as your database |
+| **Source** | GitHub — `MNGDSA/workforce`, branch `main` |
+| **Region** | Same as your database (e.g. `FRA1`) |
 | **Build Command** | `npm install && npm run build && npm run db:push` |
 | **Run Command** | `NODE_ENV=production node dist/index.cjs` |
 | **HTTP Port** | `8080` |
-| **Instance Size** | Basic — **$12/mo** (1 vCPU, 1 GB RAM) |
-| **Instance Count** | `2` (for reliability and load handling) |
+
+6. Set the **Instance Size**:
+   - Choose **Basic** plan
+   - Select **1 vCPU / 1 GB RAM** ($12/mo per instance)
+   - Set **Instance Count** to `2` (load balancing + zero-downtime deploys)
+
+7. Set **Network** settings:
+   - **HTTP Port**: `8080`
+   - **Internal/External routing**: Keep as **External** (public-facing — both admin dashboard and mobile app connect to it)
+   - **Health Check Path**: Leave default (`/`) — the app serves the React frontend on `/` which returns 200
+   - **CORS**: Not needed here — the API and frontend are served from the same origin
 
 > **What happens during build?**
 > - `npm install` — installs all dependencies
