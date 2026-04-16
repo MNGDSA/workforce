@@ -2701,7 +2701,7 @@ export async function registerRoutes(
         .where(and(
           eq(workforce.isActive, true),
           sql`${workforce.positionId} IS NOT NULL`,
-          sql`${candidates.status} IN ('active', 'available')`,
+          sql`${candidates.status} IN ('active', 'available', 'hired')`,
         ));
 
       const empsByPosition = new Map<string, typeof employeeRows>();
@@ -2725,7 +2725,7 @@ export async function registerRoutes(
         .where(and(
           eq(workforce.isActive, true),
           sql`${workforce.positionId} IS NULL`,
-          sql`${candidates.status} IN ('active', 'available')`,
+          sql`${candidates.status} IN ('active', 'available', 'hired')`,
         ));
 
       const result = allDepts.map(dept => {
