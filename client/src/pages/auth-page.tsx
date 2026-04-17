@@ -287,8 +287,40 @@ export default function AuthPage() {
     if (resetCountdownRef.current) clearInterval(resetCountdownRef.current);
   }
 
+  const GH = "https://raw.githubusercontent.com/TanStack/tanstack.com/main/public/logos/";
+  const techLogos = [
+    { name: "Google",    url: "/logos/google-g.svg",  nudge: 0, scale: 1.5 },
+    { name: "Apple",     url: `${GH}apple.svg`,                      nudge: 0 },
+    { name: "Microsoft", url: "/logos/microsoft.svg",                nudge: 0, scale: 1.4 },
+    { name: "Amazon",    url: `${GH}amazon.svg`,                     nudge: 5 },
+    { name: "Walmart",   url: `${GH}walmart.svg`,                    nudge: 0 },
+    { name: "Cisco",     url: `${GH}cisco.svg`,                      nudge: 0 },
+    { name: "HP",        url: "/logos/hp-flat.svg",                  nudge: 0 },
+    { name: "DocuSign",  url: `${GH}docusign.svg`,                   nudge: 0 },
+    { name: "Yahoo",     url: "/logos/yahoo-flat.svg",               nudge: 0 },
+    { name: "Honeywell", url: "/logos/honeywell-flat.svg",           nudge: 0 },
+  ];
+  const renderTechLogos = (keyPrefix: string) =>
+    techLogos.map((logo, i) => (
+      <div key={`${keyPrefix}-${i}`} className="group flex items-center gap-2 opacity-50 hover:opacity-100 transition-all duration-200 select-none shrink-0">
+        <img
+          src={logo.url}
+          alt={logo.name}
+          title={logo.name}
+          loading="lazy"
+          decoding="async"
+          style={{
+            ...(logo.nudge ? { transform: `translateY(${logo.nudge}px)` } : {}),
+            ...((logo as any).scale ? { transform: `scale(${(logo as any).scale})` } : {}),
+          }}
+          className="max-w-24 max-h-10 w-full h-auto object-contain grayscale group-hover:grayscale-0 transition-all duration-200"
+        />
+      </div>
+    ));
+
   return (
-    <div className="min-h-screen grid lg:grid-cols-[40%_60%] bg-background font-sans text-foreground overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-background font-sans text-foreground">
+    <div className="flex-1 grid lg:grid-cols-[40%_60%] overflow-hidden">
       {/* ── Left Column: Form ─────────────────────────────────── */}
       <div className="flex flex-col justify-center items-center p-8 lg:p-12 relative z-10">
         <div className="w-full max-w-md space-y-8 animate-in slide-in-from-left-8 duration-700 fade-in">
@@ -558,59 +590,6 @@ export default function AuthPage() {
                 </form>
               </Form>
 
-              {/* ── Trusted-by marquee ── */}
-              {(() => {
-                const GH = "https://raw.githubusercontent.com/TanStack/tanstack.com/main/public/logos/";
-                const logos = [
-                  { name: "Google",    url: "/logos/google-g.svg",  nudge: 0, scale: 1.5 },
-                  { name: "Apple",     url: `${GH}apple.svg`,                      nudge: 0 },
-                  { name: "Microsoft", url: "/logos/microsoft.svg",                nudge: 0, scale: 1.4 },
-                  { name: "Amazon",    url: `${GH}amazon.svg`,                     nudge: 5 },
-                  { name: "Walmart",   url: `${GH}walmart.svg`,                    nudge: 0 },
-                  { name: "Cisco",     url: `${GH}cisco.svg`,                      nudge: 0 },
-                  { name: "HP",        url: "/logos/hp-flat.svg",                  nudge: 0 },
-                  { name: "DocuSign",  url: `${GH}docusign.svg`,                   nudge: 0 },
-                  { name: "Yahoo",     url: "/logos/yahoo-flat.svg",               nudge: 0 },
-                  { name: "Honeywell", url: "/logos/honeywell-flat.svg", nudge: 0 },
-                ];
-                const renderLogos = (keyPrefix: string) =>
-                  logos.map((logo, i) => (
-                    <div key={`${keyPrefix}-${i}`} className="group flex items-center gap-2 opacity-50 hover:opacity-100 transition-all duration-200 select-none shrink-0">
-                      <img
-                        src={logo.url}
-                        alt={logo.name}
-                        title={logo.name}
-                        loading="lazy"
-                        decoding="async"
-                        style={{
-                          ...(logo.nudge ? { transform: `translateY(${logo.nudge}px)` } : {}),
-                          ...((logo as any).scale ? { transform: `scale(${(logo as any).scale})` } : {}),
-                        }}
-                        className="max-w-24 max-h-10 w-full h-auto object-contain grayscale group-hover:grayscale-0 transition-all duration-200"
-                      />
-                    </div>
-                  ));
-                return (
-                  <div className="mt-6 space-y-2">
-                    <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest font-semibold text-center">
-                      Workforce Utilizes Technologies used by
-                    </p>
-                    <div
-                      className="overflow-hidden"
-                      style={{ maskImage: "linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)" }}
-                    >
-                      <div className="flex items-center animate-marquee w-max py-3 hover:[animation-play-state:paused]">
-                        <div className="flex items-center gap-10 shrink-0 pr-10">
-                          {renderLogos("a")}
-                        </div>
-                        <div className="flex items-center gap-10 shrink-0 pr-10" aria-hidden="true">
-                          {renderLogos("b")}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
             </TabsContent>
 
             {/* ── REGISTER TAB ── */}
@@ -799,21 +778,6 @@ export default function AuthPage() {
           </Tabs>
           )}
 
-          <div className="pt-8 border-t border-border/50 text-xs text-muted-foreground space-y-3">
-            <div className="flex items-center justify-center gap-4">
-              <Link href="/privacy-policy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
-              <span className="text-border">·</span>
-              <Link href="/terms-conditions" className="hover:text-foreground transition-colors">Terms & Conditions</Link>
-              <span className="text-border">·</span>
-              <a
-                href={supportEmail ? `mailto:${supportEmail}` : "#"}
-                className="hover:text-foreground transition-colors"
-                data-testid="link-contact-support"
-                {...(supportEmail ? {} : { onClick: (e: React.MouseEvent) => e.preventDefault() })}
-              >Contact Support</a>
-            </div>
-            <p className="text-center">© {new Date().getFullYear()} Luxury Carts Company Ltd.</p>
-          </div>
         </div>
       </div>
 
@@ -825,6 +789,44 @@ export default function AuthPage() {
           className="absolute inset-0 w-full h-full object-cover object-center"
         />
       </div>
+    </div>
+
+      {/* ── Page Footer (pinned to bottom border) ─────────────── */}
+      <footer className="shrink-0 border-t border-border/50 bg-background/95 backdrop-blur-sm" data-testid="footer-auth-page">
+        <div className="max-w-7xl mx-auto px-6 py-4 space-y-2">
+          <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest font-semibold text-center">
+            Workforce Utilizes Technologies used by
+          </p>
+          <div
+            className="overflow-hidden"
+            style={{ maskImage: "linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)" }}
+          >
+            <div className="flex items-center animate-marquee w-max py-2 hover:[animation-play-state:paused]">
+              <div className="flex items-center gap-10 shrink-0 pr-10">
+                {renderTechLogos("a")}
+              </div>
+              <div className="flex items-center gap-10 shrink-0 pr-10" aria-hidden="true">
+                {renderTechLogos("b")}
+              </div>
+            </div>
+          </div>
+          <div className="pt-2 border-t border-border/40 text-xs text-muted-foreground flex flex-col sm:flex-row items-center justify-center sm:justify-between gap-2">
+            <div className="flex items-center justify-center gap-4">
+              <Link href="/privacy-policy" className="hover:text-foreground transition-colors" data-testid="link-privacy-policy">Privacy Policy</Link>
+              <span className="text-border">·</span>
+              <Link href="/terms-conditions" className="hover:text-foreground transition-colors" data-testid="link-terms-conditions">Terms & Conditions</Link>
+              <span className="text-border">·</span>
+              <a
+                href={supportEmail ? `mailto:${supportEmail}` : "#"}
+                className="hover:text-foreground transition-colors"
+                data-testid="link-contact-support"
+                {...(supportEmail ? {} : { onClick: (e: React.MouseEvent) => e.preventDefault() })}
+              >Contact Support</a>
+            </div>
+            <p className="text-center" data-testid="text-copyright">© {new Date().getFullYear()} Luxury Carts Company Ltd.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
