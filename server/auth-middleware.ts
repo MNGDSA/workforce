@@ -91,6 +91,13 @@ function readWfAuthCookie(req: Request): string | null {
   return m ? m[1] : null;
 }
 
+function readBearerToken(req: Request): string | null {
+  const h = req.headers.authorization;
+  if (!h) return null;
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  return m ? m[1].trim() : null;
+}
+
 // We re-implement the same verification used in routes.ts.
 function verifyAuthToken(token: string): string | null {
   try {
@@ -106,7 +113,7 @@ function verifyAuthToken(token: string): string | null {
 }
 
 function getAuthUserId(req: Request): string | null {
-  const tok = readWfAuthCookie(req);
+  const tok = readWfAuthCookie(req) ?? readBearerToken(req);
   if (!tok) return null;
   return verifyAuthToken(tok);
 }

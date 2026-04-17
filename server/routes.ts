@@ -85,10 +85,12 @@ function verifyAuthToken(token: string): string | null {
 
 function getAuthUserId(req: Request): string | null {
   const cookie = req.headers.cookie;
-  if (!cookie) return null;
-  const match = cookie.match(/wf_auth=([^;]+)/);
-  if (!match) return null;
-  return verifyAuthToken(match[1]);
+  const cookieMatch = cookie ? cookie.match(/wf_auth=([^;]+)/) : null;
+  if (cookieMatch) return verifyAuthToken(cookieMatch[1]);
+  const authHeader = req.headers.authorization;
+  const bearerMatch = authHeader ? authHeader.match(/^Bearer\s+(.+)$/i) : null;
+  if (bearerMatch) return verifyAuthToken(bearerMatch[1].trim());
+  return null;
 }
 
 const userActiveCache = new Map<string, { isActive: boolean; ts: number }>();
