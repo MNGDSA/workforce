@@ -40,6 +40,8 @@ import {
   insertGeofenceZoneSchema,
   insertDepartmentSchema,
   insertPositionSchema,
+  ADMIN_ROLES,
+  ASSIGNABLE_ADMIN_ROLES,
   photoChangeRequests,
   departments,
   positions,
@@ -2896,8 +2898,21 @@ export async function registerRoutes(
   });
 
   // ─── Users management (admin) ──────────────────────────────────────────────
-  app.get("/api/users", async (_req: Request, res: Response) => {
+  // Helper hoisted from the Admin Users section (defined later in this file).
+  async function _requireSuperAdminInline(req: Request, res: Response): Promise<boolean> {
+    const userId = getAuthUserId(req);
+    if (!userId) { res.status(401).json({ message: "Authentication required." }); return false; }
+    const me = await storage.getUser(userId);
+    if (!me || me.role !== "super_admin") {
+      res.status(403).json({ message: "Super Admin access required." });
+      return false;
+    }
+    return true;
+  }
+
+  app.get("/api/users", async (req: Request, res: Response) => {
     try {
+      if (!(await _requireSuperAdminInline(req, res))) return;
       const userList = await storage.listUsers();
       return res.json(userList.map((u) => ({ ...u, password: undefined })));
     } catch (err) {
@@ -2907,7 +2922,12 @@ export async function registerRoutes(
 
   app.post("/api/users", async (req: Request, res: Response) => {
     try {
+      if (!(await _requireSuperAdminInline(req, res))) return;
       const data = insertUserSchema.parse(req.body);
+      // Hard rule: only the seed may create a super_admin.
+      if (data.role === "super_admin") {
+        return res.status(403).json({ message: "Cannot create another Super Admin." });
+      }
       const pwRules = [
         { ok: data.password.length >= 8,              msg: "at least 8 characters" },
         { ok: /[A-Z]/.test(data.password),            msg: "one uppercase letter" },
@@ -2930,8 +2950,167 @@ export async function registerRoutes(
   app.patch("/api/users/:id", async (req: Request, res: Response) => {
     try {
       const data = insertUserSchema.partial().omit({ password: true }).parse(req.body);
+      // Block role escalation to super_admin.
+      if (data.role === "super_admin") {
+        return res.status(403).json({ message: "Cannot promote a user to Super Admin." });
+      }
+      // Block any modification of the existing Super Admin.
+      const target = await storage.getUser(req.params.id);
+      if (target?.role === "super_admin") {
+        return res.status(403).json({ message: "The Super Admin record is read-only." });
+      }
       const user = await storage.updateUser(req.params.id, data);
       if (!user) return res.status(404).json({ message: "User not found" });
+      invalidateUserActiveCache(req.params.id);
+      return res.json({ ...user, password: undefined });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // ─── Admin Users management (Super Admin only) ────────────────────────────
+  // Helper: ensure the requester is a Super Admin.
+  async function requireSuperAdmin(req: Request, res: Response): Promise<{ id: string } | null> {
+    const userId = getAuthUserId(req);
+    if (!userId) {
+      res.status(401).json({ message: "Authentication required." });
+      return null;
+    }
+    const me = await storage.getUser(userId);
+    if (!me || me.role !== "super_admin") {
+      res.status(403).json({ message: "Super Admin access required." });
+      return null;
+    }
+    return { id: userId };
+  }
+
+  function validatePassword(pw: string): string | null {
+    const rules = [
+      { ok: pw.length >= 8,           msg: "at least 8 characters" },
+      { ok: /[A-Z]/.test(pw),         msg: "one uppercase letter" },
+      { ok: /[a-z]/.test(pw),         msg: "one lowercase letter" },
+      { ok: /[0-9]/.test(pw),         msg: "one number" },
+      { ok: /[^A-Za-z0-9]/.test(pw),  msg: "one special character" },
+    ];
+    const fails = rules.filter(r => !r.ok);
+    return fails.length ? `Password must contain: ${fails.map(f => f.msg).join(", ")}` : null;
+  }
+
+  // List back-office admin users (excludes candidates and other non-admin roles).
+  app.get("/api/admin-users", async (req: Request, res: Response) => {
+    try {
+      if (!(await requireSuperAdmin(req, res))) return;
+      const all = await storage.listUsers();
+      const adminRoleSet = new Set<string>(ADMIN_ROLES);
+      const filtered = all
+        .filter((u) => adminRoleSet.has(u.role))
+        .map((u) => ({ ...u, password: undefined }));
+      return res.json(filtered);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // Create a new admin user. Role must be one of the assignable admin roles
+  // (super_admin is intentionally not allowed).
+  app.post("/api/admin-users", async (req: Request, res: Response) => {
+    try {
+      if (!(await requireSuperAdmin(req, res))) return;
+      const adminRoleSchema = z.enum(ASSIGNABLE_ADMIN_ROLES);
+      const bodySchema = insertUserSchema.extend({
+        role: adminRoleSchema,
+        fullName: z.string().min(2, "Full name is required"),
+        nationalId: z.string().min(8, "National ID is required"),
+        phone: z.string().min(8, "Phone is required"),
+        email: z.string().email("Valid email is required"),
+        username: z.string().min(3, "Username is required"),
+      });
+      const data = bodySchema.parse(req.body);
+      const pwError = validatePassword(data.password);
+      if (pwError) return res.status(400).json({ message: pwError });
+
+      // Uniqueness checks with friendly messages.
+      if (await storage.getUserByNationalId(data.nationalId!)) {
+        return res.status(409).json({ message: "A user with this National ID already exists." });
+      }
+      if (await storage.getUserByEmail(data.email)) {
+        return res.status(409).json({ message: "A user with this email already exists." });
+      }
+      if (await storage.getUserByUsername(data.username)) {
+        return res.status(409).json({ message: "A user with this username already exists." });
+      }
+      if (data.phone && (await storage.getUserByPhone(data.phone))) {
+        return res.status(409).json({ message: "A user with this phone already exists." });
+      }
+
+      const hashed = await bcrypt.hash(data.password, 10);
+      const user = await storage.createUser({ ...data, password: hashed });
+      return res.status(201).json({ ...user, password: undefined });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // Update an admin user. Allows password reset via optional password field.
+  // Cannot target the Super Admin or set a role to super_admin.
+  app.patch("/api/admin-users/:id", async (req: Request, res: Response) => {
+    try {
+      if (!(await requireSuperAdmin(req, res))) return;
+      const target = await storage.getUser(req.params.id);
+      if (!target) return res.status(404).json({ message: "Admin user not found." });
+      if (target.role === "super_admin") {
+        return res.status(403).json({ message: "The Super Admin record is read-only." });
+      }
+      const adminRoleSchema = z.enum(ASSIGNABLE_ADMIN_ROLES);
+      const bodySchema = z.object({
+        fullName: z.string().min(2).optional(),
+        nationalId: z.string().min(8).optional(),
+        phone: z.string().min(8).optional(),
+        email: z.string().email().optional(),
+        username: z.string().min(3).optional(),
+        role: adminRoleSchema.optional(),
+        isActive: z.boolean().optional(),
+        password: z.string().optional(),
+      });
+      const data = bodySchema.parse(req.body);
+
+      const update: Partial<typeof target> = { ...data };
+      if (data.password && data.password.length > 0) {
+        const pwError = validatePassword(data.password);
+        if (pwError) return res.status(400).json({ message: pwError });
+        update.password = await bcrypt.hash(data.password, 10);
+      } else {
+        delete update.password;
+      }
+
+      // Uniqueness checks for changed fields.
+      if (data.nationalId && data.nationalId !== target.nationalId) {
+        const existing = await storage.getUserByNationalId(data.nationalId);
+        if (existing && existing.id !== target.id) {
+          return res.status(409).json({ message: "Another user already has this National ID." });
+        }
+      }
+      if (data.email && data.email !== target.email) {
+        const existing = await storage.getUserByEmail(data.email);
+        if (existing && existing.id !== target.id) {
+          return res.status(409).json({ message: "Another user already has this email." });
+        }
+      }
+      if (data.username && data.username !== target.username) {
+        const existing = await storage.getUserByUsername(data.username);
+        if (existing && existing.id !== target.id) {
+          return res.status(409).json({ message: "Another user already has this username." });
+        }
+      }
+      if (data.phone && data.phone !== target.phone) {
+        const existing = await storage.getUserByPhone(data.phone);
+        if (existing && existing.id !== target.id) {
+          return res.status(409).json({ message: "Another user already has this phone." });
+        }
+      }
+
+      const user = await storage.updateUser(req.params.id, update as any);
+      if (!user) return res.status(404).json({ message: "Admin user not found." });
       invalidateUserActiveCache(req.params.id);
       return res.json({ ...user, password: undefined });
     } catch (err) {

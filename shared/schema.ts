@@ -92,11 +92,40 @@ export const userRoleEnum = pgEnum("user_role", [
   "super_admin",
   "admin",
   "hr_manager",
+  "hr_specialist",
+  "hr_attendance_reviewer",
+  "auditor",
   "recruiter",
   "interviewer",
   "viewer",
   "candidate",
 ]);
+
+// Roles considered "admin / back-office staff" — surfaced in the
+// Settings → Admin Users management screen.
+export const ADMIN_ROLES = [
+  "super_admin",
+  "admin",
+  "hr_manager",
+  "hr_specialist",
+  "hr_attendance_reviewer",
+  "auditor",
+  "recruiter",
+] as const;
+
+// Roles assignable from the Add/Edit Admin User form.
+// "super_admin" is intentionally excluded — only the seed creates it.
+export const ASSIGNABLE_ADMIN_ROLES = [
+  "admin",
+  "hr_manager",
+  "hr_specialist",
+  "hr_attendance_reviewer",
+  "auditor",
+  "recruiter",
+] as const;
+
+export type AdminRole = typeof ADMIN_ROLES[number];
+export type AssignableAdminRole = typeof ASSIGNABLE_ADMIN_ROLES[number];
 
 // ─── Business Units ─────────────────────────────────────────────────────────
 export const businessUnits = pgTable(

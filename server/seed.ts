@@ -1,250 +1,65 @@
 import { db } from "./db";
-import { users, candidates, automationRules, geofenceZones, events, jobPostings, workforce } from "@shared/schema";
+import { users, automationRules, geofenceZones } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 
 async function seed() {
   console.log("🌱 Seeding database...");
 
-  // ─── Admin Users ──────────────────────────────────────────────────────────
-  const adminPassword = await bcrypt.hash("password123", 12);
-  const candidatePassword = await bcrypt.hash("password123", 12);
+  // ─── Super Admin (Founding) ───────────────────────────────────────────────
+  // Faisal Alamri is the sole Super Admin. Created here on first seed only.
+  // Additional admin users (HR, Auditor, etc.) are created through the
+  // Settings → Admin Users UI and never via this script.
+  const SUPER_ADMIN_NATIONAL_ID = "1071793531";
+  const SUPER_ADMIN_PHONE = "0581766080";
+  const SUPER_ADMIN_FULL_NAME = "Faisal Alamri";
+  const SUPER_ADMIN_EMAIL = "faisal.alamri@workforce.sa";
+  const SUPER_ADMIN_USERNAME = "faisal.alamri";
+  const SUPER_ADMIN_PASSWORD = "Workforce@2026!";
 
-  await db
-    .insert(users)
-    .values([
-      {
-        username: "admin",
-        email: "admin@workforce.sa",
-        password: adminPassword,
-        role: "super_admin",
-        fullName: "System Administrator",
-        phone: "0500000001",
-        nationalId: "1000000001",
-      },
-      {
-        username: "candidate",
-        email: "candidate@workforce.sa",
-        password: candidatePassword,
-        role: "candidate",
-        fullName: "Test Candidate",
-        phone: "0500000002",
-        nationalId: "2000000002",
-      },
-      {
-        username: "newcandidate",
-        email: "newcandidate@workforce.sa",
-        password: candidatePassword,
-        role: "candidate",
-        fullName: "New Candidate",
-        phone: "0500000004",
-        nationalId: "2000000004",
-      },
-      {
-        username: "purecandidate",
-        email: "purecandidate@workforce.sa",
-        password: candidatePassword,
-        role: "candidate",
-        fullName: "Candidate Only",
-        phone: "0500000005",
-        nationalId: "2000000005",
-      },
-      {
-        username: "recruiter1",
-        email: "recruiter@workforce.sa",
-        password: adminPassword,
-        role: "recruiter",
-        fullName: "Ahmad Al-Rashidi",
-        phone: "0500000003",
-        nationalId: "1000000003",
-      },
-    ])
-    .onConflictDoNothing();
-
-  // ─── Candidate Record for Test Candidate ────────────────────────────────
-  const [candidateUser] = await db
+  const existingSuperAdmin = await db
     .select()
     .from(users)
-    .where(eq(users.nationalId, "2000000002"))
+    .where(eq(users.nationalId, SUPER_ADMIN_NATIONAL_ID))
     .limit(1);
 
-  if (candidateUser) {
-    const existingCandidate = await db
-      .select()
-      .from(candidates)
-      .where(eq(candidates.userId, candidateUser.id))
-      .limit(1);
-
-    if (existingCandidate.length === 0) {
+  if (existingSuperAdmin.length === 0) {
+    const hashed = await bcrypt.hash(SUPER_ADMIN_PASSWORD, 12);
+    await db.insert(users).values({
+      username: SUPER_ADMIN_USERNAME,
+      email: SUPER_ADMIN_EMAIL,
+      password: hashed,
+      role: "super_admin",
+      fullName: SUPER_ADMIN_FULL_NAME,
+      phone: SUPER_ADMIN_PHONE,
+      nationalId: SUPER_ADMIN_NATIONAL_ID,
+      isActive: true,
+    });
+    console.log(`  → Created Super Admin: ${SUPER_ADMIN_FULL_NAME} (${SUPER_ADMIN_NATIONAL_ID})`);
+  } else {
+    const existing = existingSuperAdmin[0];
+    if (existing.role === "super_admin") {
+      console.log(`  → Super Admin ${SUPER_ADMIN_FULL_NAME} already provisioned, skipping.`);
+    } else {
+      // National ID is reserved for Faisal. If a non-super-admin record already
+      // holds it (e.g. a candidate self-registered with the same NID), promote
+      // it deterministically rather than leaving the system without a Super Admin.
+      const hashed = await bcrypt.hash(SUPER_ADMIN_PASSWORD, 12);
       await db
-        .insert(candidates)
-        .values({
-          userId: candidateUser.id,
-          fullNameEn: "Test Candidate",
-          fullNameAr: "مرشح تجريبي",
-          nationalId: "2000000002",
-          phone: "0500000002",
-          email: "candidate@workforce.sa",
-          gender: "male",
-          nationality: "saudi",
-          city: "Makkah",
-          region: "Makkah Region",
-          country: "SA",
-          status: "available",
-          source: "individual",
-          profileCompleted: true,
+        .update(users)
+        .set({
+          username: SUPER_ADMIN_USERNAME,
+          email: SUPER_ADMIN_EMAIL,
+          password: hashed,
+          role: "super_admin",
+          fullName: SUPER_ADMIN_FULL_NAME,
+          phone: SUPER_ADMIN_PHONE,
+          isActive: true,
         })
-        .onConflictDoNothing();
-      console.log("  → Created candidate record for Test Candidate");
-    }
-  }
-
-  // ─── Candidate Record for New Candidate (incomplete profile) ────────────
-  const [newCandidateUser] = await db
-    .select()
-    .from(users)
-    .where(eq(users.nationalId, "2000000004"))
-    .limit(1);
-
-  if (newCandidateUser) {
-    const existingNewCandidate = await db
-      .select()
-      .from(candidates)
-      .where(eq(candidates.userId, newCandidateUser.id))
-      .limit(1);
-
-    if (existingNewCandidate.length === 0) {
-      await db
-        .insert(candidates)
-        .values({
-          userId: newCandidateUser.id,
-          fullNameEn: "New Candidate",
-          nationalId: "2000000004",
-          phone: "0500000004",
-          country: "SA",
-          status: "available",
-          source: "individual",
-          profileCompleted: false,
-        })
-        .onConflictDoNothing();
-      console.log("  → Created candidate record for New Candidate (incomplete profile)");
-    }
-  }
-
-  // ─── Candidate Record for Pure Candidate (no workforce) ──────────────────
-  const [pureCandidateUser] = await db
-    .select()
-    .from(users)
-    .where(eq(users.nationalId, "2000000005"))
-    .limit(1);
-
-  if (pureCandidateUser) {
-    const existingPure = await db
-      .select()
-      .from(candidates)
-      .where(eq(candidates.userId, pureCandidateUser.id))
-      .limit(1);
-
-    if (existingPure.length === 0) {
-      await db
-        .insert(candidates)
-        .values({
-          userId: pureCandidateUser.id,
-          fullNameEn: "Candidate Only",
-          fullNameAr: "مرشح فقط",
-          nationalId: "2000000005",
-          phone: "0500000005",
-          email: "purecandidate@workforce.sa",
-          gender: "male",
-          nationality: "saudi",
-          city: "Jeddah",
-          region: "Makkah Region",
-          country: "SA",
-          status: "available",
-          source: "individual",
-          profileCompleted: true,
-        })
-        .onConflictDoNothing();
-      console.log("  → Created candidate record for Pure Candidate (no workforce, candidate mode)");
-    }
-  }
-
-  // ─── Employee-mode Candidate (with workforce record) ─────────────────────
-  const [adminUser] = await db
-    .select()
-    .from(users)
-    .where(eq(users.nationalId, "1000000001"))
-    .limit(1);
-
-  if (candidateUser && adminUser) {
-    const [candidateRecord] = await db
-      .select()
-      .from(candidates)
-      .where(eq(candidates.userId, candidateUser.id))
-      .limit(1);
-
-    if (candidateRecord) {
-      const existingWorkforce = await db
-        .select()
-        .from(workforce)
-        .where(eq(workforce.candidateId, candidateRecord.id))
-        .limit(1);
-
-      if (existingWorkforce.length === 0) {
-        const [seededEvent] = await db
-          .insert(events)
-          .values({
-            name: "Ramadan 2026",
-            description: "Seasonal operations for Ramadan 1447H",
-            eventType: "duration_based",
-            startDate: "2026-03-01",
-            endDate: "2026-04-30",
-            status: "active",
-            targetHeadcount: 5000,
-            filledPositions: 1,
-            region: "Makkah Region",
-            createdBy: adminUser.id,
-          })
-          .onConflictDoNothing()
-          .returning();
-
-        if (seededEvent) {
-          const [seededJob] = await db
-            .insert(jobPostings)
-            .values({
-              title: "Golf Cart Operator",
-              titleAr: "مشغل عربة جولف",
-              description: "Operate golf carts for pilgrim transportation",
-              location: "Masjid Al-Haram",
-              region: "Makkah Region",
-              department: "Operations",
-              type: "seasonal_full_time",
-              salaryMin: "3500.00",
-              salaryMax: "5000.00",
-              status: "active",
-              eventId: seededEvent.id,
-              postedBy: adminUser.id,
-            })
-            .onConflictDoNothing()
-            .returning();
-
-          if (seededJob) {
-            await db
-              .insert(workforce)
-              .values({
-                employeeNumber: "E000001",
-                candidateId: candidateRecord.id,
-                jobId: seededJob.id,
-                eventId: seededEvent.id,
-                salary: "4000.00",
-                startDate: "2026-03-01",
-                isActive: true,
-              })
-              .onConflictDoNothing();
-            console.log("  → Created workforce record for Test Candidate (employee mode)");
-          }
-        }
-      }
+        .where(eq(users.id, existing.id));
+      console.log(
+        `  → Promoted existing record (was role='${existing.role}') for national ID ${SUPER_ADMIN_NATIONAL_ID} to Super Admin.`,
+      );
     }
   }
 
