@@ -11,6 +11,10 @@ function getConnectionString(): string {
 
 const isProduction = process.env.NODE_ENV === "production";
 
+if (isProduction) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+
 export default defineConfig({
   out: "./migrations",
   schema: "./shared/schema.ts",
@@ -19,4 +23,6 @@ export default defineConfig({
     url: getConnectionString(),
     ssl: isProduction ? { rejectUnauthorized: false } : undefined,
   } as any,
+  verbose: true,
+  strict: false,
 });
