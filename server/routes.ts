@@ -58,28 +58,9 @@ import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
 import { validateFaceQuality } from "./rekognition";
 import XLSX from "xlsx";
 
-const AUTH_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
-
-function signAuthToken(userId: string): string {
-  const payload = Buffer.from(JSON.stringify({ uid: userId, iat: Date.now() })).toString("base64url");
-  const sig = crypto.createHmac("sha256", AUTH_SECRET).update(payload).digest("base64url");
-  return `${payload}.${sig}`;
-}
-
-function verifyAuthToken(token: string): string | null {
-  const parts = token.split(".");
-  if (parts.length !== 2) return null;
-  const [payload, sig] = parts;
-  const expected = crypto.createHmac("sha256", AUTH_SECRET).update(payload).digest("base64url");
-  if (sig !== expected) return null;
-  try {
-    const data = JSON.parse(Buffer.from(payload, "base64url").toString());
-    if (!data.uid) return null;
-    const age = Date.now() - (data.iat || 0);
-    if (age > 7 * 24 * 60 * 60 * 1000) return null;
-    return data.uid;
-  } catch { return null; }
-}
+// Auth token signing/verification is centralized in `./auth-token` so this
+// module and `auth-middleware.ts` cannot drift on the secret.
+import { signAuthToken, verifyAuthToken } from "./auth-token";
 
 function getAuthUserId(req: Request): string | null {
   const cookie = req.headers.cookie;
@@ -151,7 +132,7 @@ function validateProfileCompleteness(candidate: Record<string, any>): string[] {
 }
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { requireAuth, requirePermission, requireOwnership, markPublic } from "./auth-middleware";
+import { requireAuth, requirePermission, requireOwnership, markPublic, invalidateRoleCache } from "./auth-middleware";
 
 const UPLOADS_DIR = path.resolve("uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -3348,6 +3329,7 @@ export async function registerRoutes(
       });
       const data = bodySchema.parse(req.body);
       await storage.setRolePermissions(req.params.id, data.permissions);
+      invalidateRoleCache(req.params.id);
       const actorId = getAuthUserId(req); const actor = actorId ? await storage.getUser(actorId) : null;
       await storage.createAuditLog({
         actorId: actor?.id ?? null,

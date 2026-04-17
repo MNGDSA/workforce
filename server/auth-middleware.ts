@@ -22,6 +22,7 @@ import { roles, rolePermissions, auditLogs } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import type { PermissionKey } from "@shared/permissions";
 import { SUPER_ADMIN_SLUG } from "@shared/permissions";
+import { verifyAuthToken } from "./auth-token";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -98,19 +99,8 @@ function readBearerToken(req: Request): string | null {
   return m ? m[1].trim() : null;
 }
 
-// We re-implement the same verification used in routes.ts.
-function verifyAuthToken(token: string): string | null {
-  try {
-    const decoded = Buffer.from(token, "base64url").toString("utf8");
-    const data = JSON.parse(decoded);
-    if (!data.uid) return null;
-    const age = Date.now() - (data.iat || 0);
-    if (age > 7 * 24 * 60 * 60 * 1000) return null;
-    return data.uid;
-  } catch {
-    return null;
-  }
-}
+// HMAC verification lives in `server/auth-token.ts` so routes.ts and this
+// middleware share one secret. See that module for the rationale.
 
 function getAuthUserId(req: Request): string | null {
   const tok = readWfAuthCookie(req) ?? readBearerToken(req);
