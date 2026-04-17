@@ -161,18 +161,15 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   req.authUserId = userId;
   req.authUser = user;
   req.authRoleId = (user as any).roleId ?? null;
-  if (req.authRoleId) {
-    const cached = await getRoleFromCache(req.authRoleId);
-    req.authRoleSlug = cached?.slug ?? null;
-    req.authIsSuperAdmin = cached?.isSuperAdmin ?? false;
-    req.authPermissions = cached?.perms ?? new Set();
-  } else {
-    // Legacy fallback: pre-migration users still have the old `role` enum.
-    const legacyRole = (user as any).role as string | undefined;
-    req.authRoleSlug = legacyRole ?? null;
-    req.authIsSuperAdmin = legacyRole === "super_admin";
-    req.authPermissions = new Set();
+  if (!req.authRoleId) {
+    // Post-T10: every user must have role_id. If somehow missing, deny.
+    audit(req, "401");
+    return res.status(401).json({ message: "Account has no role assigned." });
   }
+  const cached = await getRoleFromCache(req.authRoleId);
+  req.authRoleSlug = cached?.slug ?? null;
+  req.authIsSuperAdmin = cached?.isSuperAdmin ?? false;
+  req.authPermissions = cached?.perms ?? new Set();
   next();
 }
 

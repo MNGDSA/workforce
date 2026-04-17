@@ -64,13 +64,18 @@ async function main() {
   `);
   console.log(`[rbac-migrate] NULL role_id → candidate (orphans cleared)`);
 
-  await db.execute(sql`
-    ALTER TABLE users ALTER COLUMN role_id SET DEFAULT ${candidateRole.id}
-  `);
-  await db.execute(sql`
-    ALTER TABLE users ALTER COLUMN role_id SET NOT NULL
-  `);
+  await db.execute(sql.raw(
+    `ALTER TABLE users ALTER COLUMN role_id SET DEFAULT '${candidateRole.id}'`
+  ));
+  await db.execute(sql`ALTER TABLE users ALTER COLUMN role_id SET NOT NULL`);
   console.log(`[rbac-migrate] role_id default + NOT NULL applied`);
+
+  // 5. T10: drop legacy `role` column + `user_role` enum type now that all
+  //    code paths read from `role_id` and the in-process legacy fallback in
+  //    auth-middleware has been removed in this same commit.
+  await db.execute(sql`ALTER TABLE users DROP COLUMN IF EXISTS role`);
+  await db.execute(sql`DROP TYPE IF EXISTS user_role`);
+  console.log(`[rbac-migrate] legacy role column + user_role enum dropped`);
 
   // 4. Sanity check: every user has a role_id.
   const orphan = await db.execute(sql`SELECT COUNT(*)::int AS n FROM users WHERE role_id IS NULL`);

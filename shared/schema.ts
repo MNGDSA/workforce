@@ -88,44 +88,11 @@ export const notificationStatusEnum = pgEnum("notification_status", [
 
 export const employmentTypeEnum = pgEnum("employment_type", ["individual", "smp"]);
 
-export const userRoleEnum = pgEnum("user_role", [
-  "super_admin",
-  "admin",
-  "hr_manager",
-  "hr_specialist",
-  "hr_attendance_reviewer",
-  "auditor",
-  "recruiter",
-  "interviewer",
-  "viewer",
-  "candidate",
-]);
-
-// Roles considered "admin / back-office staff" — surfaced in the
-// Settings → Admin Users management screen.
-export const ADMIN_ROLES = [
-  "super_admin",
-  "admin",
-  "hr_manager",
-  "hr_specialist",
-  "hr_attendance_reviewer",
-  "auditor",
-  "recruiter",
-] as const;
-
-// Roles assignable from the Add/Edit Admin User form.
-// "super_admin" is intentionally excluded — only the seed creates it.
-export const ASSIGNABLE_ADMIN_ROLES = [
-  "admin",
-  "hr_manager",
-  "hr_specialist",
-  "hr_attendance_reviewer",
-  "auditor",
-  "recruiter",
-] as const;
-
-export type AdminRole = typeof ADMIN_ROLES[number];
-export type AssignableAdminRole = typeof ASSIGNABLE_ADMIN_ROLES[number];
+// NOTE: Legacy `userRoleEnum`, `ADMIN_ROLES`, `ASSIGNABLE_ADMIN_ROLES` removed
+// in T10. Roles are now stored in the `roles` table (see below) with a
+// dynamic permission catalog in `shared/permissions.ts`. The migration
+// `server/migrations/migrate-to-rbac.ts` drops the legacy `users.role` column
+// and `user_role` Postgres enum.
 
 // ─── Business Units ─────────────────────────────────────────────────────────
 export const businessUnits = pgTable(
@@ -152,8 +119,7 @@ export const users = pgTable(
     username: text("username").notNull().unique(),
     email: text("email").notNull().unique(),
     password: text("password").notNull(),
-    role: userRoleEnum("role").notNull().default("recruiter"),
-    roleId: varchar("role_id"),
+    roleId: varchar("role_id").notNull(),
     fullName: text("full_name"),
     phone: text("phone"),
     nationalId: varchar("national_id", { length: 20 }),

@@ -26,7 +26,7 @@
 
 import { db } from "./db";
 import { sql } from "drizzle-orm";
-import { users, automationRules } from "@shared/schema";
+import { users, automationRules, roles } from "@shared/schema";
 import bcrypt from "bcryptjs";
 
 // ─── Tables that are NEVER wiped (config / reference data) ───────────────────
@@ -160,6 +160,15 @@ async function reset() {
   const adminPassword     = await bcrypt.hash("password123", 12);
   const candidatePassword = await bcrypt.hash("password123", 12);
 
+  // Resolve role IDs from the RBAC tables. Boot seed must have run first.
+  const allRoles = await db.select().from(roles);
+  const superAdminRoleId = allRoles.find((r) => r.slug === "super_admin")?.id;
+  const candidateRoleId  = allRoles.find((r) => r.slug === "candidate")?.id;
+  if (!superAdminRoleId || !candidateRoleId) {
+    throw new Error("Reset: system roles missing — boot the server once so seed-rbac runs first.");
+  }
+  // Recruiter is no longer a system role; demo recruiter falls back to Candidate
+  // role so the user exists in the DB. Owner can re-assign in UI.
   await db
     .insert(users)
     .values([
@@ -167,7 +176,7 @@ async function reset() {
         username: "admin",
         email: "admin@workforce.sa",
         password: adminPassword,
-        role: "super_admin",
+        roleId: superAdminRoleId,
         fullName: "System Administrator",
         phone: "0500000001",
         nationalId: "1000000001",
@@ -176,7 +185,7 @@ async function reset() {
         username: "candidate",
         email: "candidate@workforce.sa",
         password: candidatePassword,
-        role: "candidate",
+        roleId: candidateRoleId,
         fullName: "Test Candidate",
         phone: "0500000002",
         nationalId: "2000000002",
@@ -185,7 +194,7 @@ async function reset() {
         username: "recruiter1",
         email: "recruiter@workforce.sa",
         password: adminPassword,
-        role: "recruiter",
+        roleId: candidateRoleId,
         fullName: "Ahmad Al-Rashidi",
         phone: "0500000003",
         nationalId: "1000000003",

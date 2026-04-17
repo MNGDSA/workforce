@@ -387,13 +387,13 @@ export default function DocumentationPage() {
               <DocCard>
                 <SectionHeading icon={Shield} title="RBAC Implementation" description="How role-based access is enforced." />
                 <div className="space-y-3 text-sm text-muted-foreground">
-                  <p>Roles are stored in the <code className="text-primary font-mono text-xs">users.role</code> column as a PostgreSQL enum: <code className="text-primary font-mono text-xs">user_role</code>.</p>
-                  <p>The <code className="text-primary font-mono text-xs">/api/me</code> endpoint returns the current user including their role. The frontend reads this via TanStack Query and gates UI elements accordingly.</p>
-                  <p>The <strong className="text-white">Technical Documentation</strong> tab on this page is only rendered when the role is <code className="text-primary font-mono text-xs">super_admin</code> or <code className="text-primary font-mono text-xs">admin</code>.</p>
-                  <p className="mt-2 text-amber-400 flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                    Server-side RBAC middleware should be added to all mutating endpoints before production deployment.
+                  <p className="text-amber-400 flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span><strong>This section is outdated and pending a full rewrite.</strong> The RBAC system was rebuilt in T1–T10: roles + permissions + role_permissions tables replaced the legacy <code className="text-primary font-mono text-xs">user_role</code> enum.</span>
                   </p>
+                  <p>Roles are now stored in the <code className="text-primary font-mono text-xs">roles</code> table and edited live in <strong className="text-white">Settings → Roles &amp; Access</strong>. <strong className="text-white">Super Admin</strong> and <strong className="text-white">Candidate</strong> are the only system (immutable) roles; every other role is owner-defined.</p>
+                  <p>Permission keys are catalogued in <code className="text-primary font-mono text-xs">shared/permissions.ts</code> (~129 keys grouped by category). Each <code className="text-primary font-mono text-xs">/api/*</code> route declares its required permission via <code className="text-primary font-mono text-xs">requirePermission(&quot;…&quot;)</code> middleware; a boot-time linter fails startup if any route is unguarded.</p>
+                  <p>The <code className="text-primary font-mono text-xs">/api/me</code> endpoint returns <code className="text-primary font-mono text-xs">{`{ role, roleId, isSuperAdmin, permissions[] }`}</code>. The frontend should gate UI elements by permission key, not role string.</p>
                 </div>
               </DocCard>
 

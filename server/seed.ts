@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, automationRules, geofenceZones } from "@shared/schema";
+import { users, automationRules, geofenceZones, roles } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 
@@ -23,13 +23,19 @@ async function seed() {
     .where(eq(users.nationalId, SUPER_ADMIN_NATIONAL_ID))
     .limit(1);
 
+  // Resolve the Super Admin role id from the RBAC tables.
+  const [superAdminRole] = await db.select().from(roles).where(eq(roles.slug, "super_admin"));
+  if (!superAdminRole) {
+    throw new Error("Seed: super_admin role missing — RBAC seed must run first.");
+  }
+
   if (existingSuperAdmin.length === 0) {
     const hashed = await bcrypt.hash(SUPER_ADMIN_PASSWORD, 12);
     await db.insert(users).values({
       username: SUPER_ADMIN_USERNAME,
       email: SUPER_ADMIN_EMAIL,
       password: hashed,
-      role: "super_admin",
+      roleId: superAdminRole.id,
       fullName: SUPER_ADMIN_FULL_NAME,
       phone: SUPER_ADMIN_PHONE,
       nationalId: SUPER_ADMIN_NATIONAL_ID,
@@ -38,7 +44,10 @@ async function seed() {
     console.log(`  → Created Super Admin: ${SUPER_ADMIN_FULL_NAME} (${SUPER_ADMIN_NATIONAL_ID})`);
   } else {
     const existing = existingSuperAdmin[0];
-    if (existing.role === "super_admin") {
+    const existingRole = existing.roleId
+      ? (await db.select().from(roles).where(eq(roles.id, existing.roleId)))[0]
+      : null;
+    if (existingRole?.slug === "super_admin") {
       console.log(`  → Super Admin ${SUPER_ADMIN_FULL_NAME} already provisioned, skipping.`);
     } else {
       // National ID is reserved for Faisal. If a non-super-admin record already
@@ -51,14 +60,13 @@ async function seed() {
           username: SUPER_ADMIN_USERNAME,
           email: SUPER_ADMIN_EMAIL,
           password: hashed,
-          role: "super_admin",
           fullName: SUPER_ADMIN_FULL_NAME,
           phone: SUPER_ADMIN_PHONE,
           isActive: true,
         })
         .where(eq(users.id, existing.id));
       console.log(
-        `  → Promoted existing record (was role='${existing.role}') for national ID ${SUPER_ADMIN_NATIONAL_ID} to Super Admin.`,
+        `  → Promoted existing record (was role='${existingRole?.slug ?? "none"}') for national ID ${SUPER_ADMIN_NATIONAL_ID} to Super Admin.`,
       );
     }
   }

@@ -40,8 +40,6 @@ import {
   insertGeofenceZoneSchema,
   insertDepartmentSchema,
   insertPositionSchema,
-  ADMIN_ROLES,
-  ASSIGNABLE_ADMIN_ROLES,
   photoChangeRequests,
   departments,
   positions,
@@ -524,12 +522,10 @@ export async function registerRoutes(
         : await storage.getUserByUsername("admin");
       if (!user) return res.status(404).json({ message: "No user found" });
 
-      // Resolve effective role + permissions from the new RBAC tables when
-      // the user is on the new role_id model; fall back to the legacy
-      // role enum string otherwise (one migration cycle of dual support).
-      let roleSlug: string | null = (user as any).role ?? null;
+      // Resolve effective role + permissions from the RBAC tables.
+      let roleSlug: string | null = null;
       let permissions: string[] = [];
-      let isSuperAdmin = roleSlug === "super_admin";
+      let isSuperAdmin = false;
       const roleId = (user as any).roleId as string | null | undefined;
       if (roleId) {
         const role = await storage.getRole(roleId);
@@ -588,7 +584,9 @@ export async function registerRoutes(
       const { password: _, ...safeUser } = user;
 
       let candidate = null;
-      if (user.role === "candidate") {
+      const loginRole = user.roleId ? await storage.getRole(user.roleId) : null;
+      const isCandidate = loginRole?.slug === "candidate";
+      if (isCandidate) {
         candidate = await storage.getCandidateByUserId(user.id) ?? null;
         if (!candidate && user.nationalId) {
           candidate = await storage.getCandidateByNationalId(user.nationalId) ?? null;
@@ -2717,12 +2715,7 @@ export async function registerRoutes(
   // ─── Org Chart ──────────────────────────────────────────────────────────────
   app.get("/api/org-chart", requirePermission("org_chart:read"), async (req: Request, res: Response) => {
     try {
-      const userId = getAuthUserId(req);
-      if (!userId) return res.status(401).json({ message: "Unauthorized" });
-      const user = await storage.getUser(userId);
-      if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
-        return res.status(403).json({ message: "Forbidden" });
-      }
+      // Permission already enforced by requirePermission("org_chart:read").
       const allDepts = await db.select().from(departments)
         .where(eq(departments.isActive, true))
         .orderBy(departments.sortOrder, departments.name);
@@ -2928,12 +2921,13 @@ export async function registerRoutes(
   });
 
   // ─── Users management (admin) ──────────────────────────────────────────────
-  // Helper hoisted from the Admin Users section (defined later in this file).
+  // Helper: Super Admin gate, layered on top of requirePermission middleware.
   async function _requireSuperAdminInline(req: Request, res: Response): Promise<boolean> {
-    const userId = getAuthUserId(req);
-    if (!userId) { res.status(401).json({ message: "Authentication required." }); return false; }
-    const me = await storage.getUser(userId);
-    if (!me || me.role !== "super_admin") {
+    if (!req.authUserId) {
+      res.status(401).json({ message: "Authentication required." });
+      return false;
+    }
+    if (!req.authIsSuperAdmin) {
       res.status(403).json({ message: "Super Admin access required." });
       return false;
     }
@@ -2954,9 +2948,12 @@ export async function registerRoutes(
     try {
       if (!(await _requireSuperAdminInline(req, res))) return;
       const data = insertUserSchema.parse(req.body);
-      // Hard rule: only the seed may create a super_admin.
-      if (data.role === "super_admin") {
-        return res.status(403).json({ message: "Cannot create another Super Admin." });
+      // Hard rule: only the boot seed may create a Super Admin.
+      if (data.roleId) {
+        const r = await storage.getRole(data.roleId);
+        if (r?.slug === "super_admin") {
+          return res.status(403).json({ message: "Cannot create another Super Admin." });
+        }
       }
       const pwRules = [
         { ok: data.password.length >= 8,              msg: "at least 8 characters" },
@@ -2980,13 +2977,17 @@ export async function registerRoutes(
   app.patch("/api/users/:id", requirePermission("admin_users:manage"), async (req: Request, res: Response) => {
     try {
       const data = insertUserSchema.partial().omit({ password: true }).parse(req.body);
-      // Block role escalation to super_admin.
-      if (data.role === "super_admin") {
-        return res.status(403).json({ message: "Cannot promote a user to Super Admin." });
+      // Block escalation to Super Admin.
+      if (data.roleId) {
+        const r = await storage.getRole(data.roleId);
+        if (r?.slug === "super_admin") {
+          return res.status(403).json({ message: "Cannot promote a user to Super Admin." });
+        }
       }
       // Block any modification of the existing Super Admin.
       const target = await storage.getUser(req.params.id);
-      if (target?.role === "super_admin") {
+      const targetRole = target?.roleId ? await storage.getRole(target.roleId) : null;
+      if (targetRole?.slug === "super_admin") {
         return res.status(403).json({ message: "The Super Admin record is read-only." });
       }
       const user = await storage.updateUser(req.params.id, data);
@@ -3006,18 +3007,7 @@ export async function registerRoutes(
       res.status(401).json({ message: "Authentication required." });
       return null;
     }
-    const me = await storage.getUser(userId);
-    if (!me) {
-      res.status(403).json({ message: "Super Admin access required." });
-      return null;
-    }
-    // Resolve effective role: prefer roleId, fall back to legacy enum.
-    let isSuperAdmin = me.role === "super_admin";
-    if (!isSuperAdmin && me.roleId) {
-      const role = await storage.getRole(me.roleId);
-      isSuperAdmin = role?.slug === "super_admin";
-    }
-    if (!isSuperAdmin) {
+    if (!req.authIsSuperAdmin) {
       res.status(403).json({ message: "Super Admin access required." });
       return null;
     }
@@ -3041,18 +3031,14 @@ export async function registerRoutes(
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const all = await storage.listUsers();
-      const adminRoleSet = new Set<string>(ADMIN_ROLES);
-      // An "admin user" is anyone whose effective role is NOT a candidate.
-      // Prefer roleId; fall back to legacy enum for unmigrated users.
+      // An "admin user" is anyone whose role is NOT a candidate.
       const allRoles = await storage.listRoles();
       const roleById = new Map(allRoles.map((r) => [r.id, r]));
       const filtered = all
         .filter((u) => {
-          if (u.roleId) {
-            const r = roleById.get(u.roleId);
-            if (r) return r.slug !== "candidate";
-          }
-          return adminRoleSet.has(u.role);
+          if (!u.roleId) return false;
+          const r = roleById.get(u.roleId);
+          return r ? r.slug !== "candidate" : false;
         })
         .map((u) => ({ ...u, password: undefined }));
       return res.json(filtered);
@@ -3066,33 +3052,23 @@ export async function registerRoutes(
   app.post("/api/admin-users", requirePermission("admin_users:manage"), async (req: Request, res: Response) => {
     try {
       if (!(await requireSuperAdmin(req, res))) return;
-      const adminRoleSchema = z.enum(ASSIGNABLE_ADMIN_ROLES);
       const bodySchema = insertUserSchema.extend({
-        // Legacy `role` enum stays accepted for backwards compat; new clients
-        // send `roleId` (UUID of a row in the roles table) instead.
-        role: adminRoleSchema.optional(),
-        roleId: z.string().uuid().optional(),
+        roleId: z.string().uuid(),
         fullName: z.string().min(2, "Full name is required"),
         nationalId: z.string().min(8, "National ID is required"),
         phone: z.string().min(8, "Phone is required"),
         email: z.string().email("Valid email is required"),
         username: z.string().min(3, "Username is required"),
-      }).refine((d) => d.role || d.roleId, { message: "Either role or roleId is required" });
+      });
       const data = bodySchema.parse(req.body);
 
-      // If roleId given, resolve the row and bake the slug into the legacy
-      // `role` field so all the still-unmigrated `user.role === "..."` checks
-      // continue working during the migration window.
-      if (data.roleId) {
-        const role = await storage.getRole(data.roleId);
-        if (!role) return res.status(400).json({ message: "Invalid roleId" });
-        if (role.slug === "super_admin") {
-          return res.status(403).json({ message: "Cannot assign Super Admin via this endpoint." });
-        }
-        const legacyMatch = (ASSIGNABLE_ADMIN_ROLES as readonly string[]).includes(role.slug)
-          ? (role.slug as any)
-          : "admin"; // custom roles fall back to "admin" in the legacy enum
-        (data as any).role = legacyMatch;
+      const role = await storage.getRole(data.roleId);
+      if (!role) return res.status(400).json({ message: "Invalid roleId" });
+      if (role.slug === "super_admin") {
+        return res.status(403).json({ message: "Cannot assign Super Admin via this endpoint." });
+      }
+      if (role.slug === "candidate") {
+        return res.status(400).json({ message: "Use the candidate registration flow for candidate users." });
       }
       const pwError = validatePassword(data.password);
       if (pwError) return res.status(400).json({ message: pwError });
@@ -3126,17 +3102,16 @@ export async function registerRoutes(
       if (!(await requireSuperAdmin(req, res))) return;
       const target = await storage.getUser(req.params.id);
       if (!target) return res.status(404).json({ message: "Admin user not found." });
-      if (target.role === "super_admin") {
+      const targetRole = target.roleId ? await storage.getRole(target.roleId) : null;
+      if (targetRole?.slug === "super_admin") {
         return res.status(403).json({ message: "The Super Admin record is read-only." });
       }
-      const adminRoleSchema = z.enum(ASSIGNABLE_ADMIN_ROLES);
       const bodySchema = z.object({
         fullName: z.string().min(2).optional(),
         nationalId: z.string().min(8).optional(),
         phone: z.string().min(8).optional(),
         email: z.string().email().optional(),
         username: z.string().min(3).optional(),
-        role: adminRoleSchema.optional(),
         roleId: z.string().uuid().optional(),
         isActive: z.boolean().optional(),
         password: z.string().optional(),
@@ -3148,10 +3123,6 @@ export async function registerRoutes(
         if (role.slug === "super_admin") {
           return res.status(403).json({ message: "Cannot assign Super Admin via this endpoint." });
         }
-        const legacyMatch = (ASSIGNABLE_ADMIN_ROLES as readonly string[]).includes(role.slug)
-          ? (role.slug as any)
-          : "admin";
-        (data as any).role = legacyMatch;
       }
 
       const update: Partial<typeof target> = { ...data };
@@ -4444,7 +4415,8 @@ export async function registerRoutes(
       const wfRecord = await storage.getWorkforceEmployee(workforceId);
       if (wfRecord) {
         const user = await storage.getUser(authUserId);
-        if (user?.role !== "admin" && user?.role !== "super_admin") {
+        const isAdmin = req.authIsSuperAdmin || req.authRoleSlug !== "candidate";
+        if (!isAdmin) {
           const candidate = user ? await storage.getCandidateByNationalId(user.nationalId) : null;
           if (!candidate || wfRecord.candidateId !== candidate.id) {
             return res.status(403).json({ message: "Access denied" });
@@ -5078,7 +5050,8 @@ export async function registerRoutes(
       if (!wf) return res.status(404).json({ message: "Employee not found" });
 
       const user = await storage.getUser(authUserId);
-      if (user?.role !== "admin" && user?.role !== "super_admin") {
+      const isAdmin = req.authIsSuperAdmin || req.authRoleSlug !== "candidate";
+      if (!isAdmin) {
         const candidate = user ? await storage.getCandidateByNationalId(user.nationalId) : null;
         if (!candidate || wf.candidateId !== candidate.id) {
           return res.status(403).json({ message: "Access denied" });
@@ -5143,7 +5116,7 @@ export async function registerRoutes(
       const status = req.query.status as string | undefined;
 
       const user = await storage.getUser(authUserId);
-      const isAdmin = user?.role === "admin" || user?.role === "super_admin";
+      const isAdmin = req.authIsSuperAdmin || req.authRoleSlug !== "candidate";
 
       if (!isAdmin && !workforceId) {
         return res.status(400).json({ message: "workforceId is required" });
@@ -6434,8 +6407,7 @@ export async function registerRoutes(
   app.post("/api/pay-runs/:id/lines/:lineId/cash-otp-override", requirePermission("payroll:pay_runs_cash_otp_override"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
-      const [user] = await db.select().from(users).where(eq(users.id, userId ?? ""));
-      if (!user || user.role !== "super_admin") return res.status(403).json({ error: "Super admin only" });
+      if (!req.authIsSuperAdmin) return res.status(403).json({ error: "Super admin only" });
 
       const line = await storage.getPayRunLine(req.params.lineId);
       if (!line) return res.status(404).json({ error: "Line not found" });
