@@ -512,12 +512,39 @@ export async function registerRoutes(
   });
 
   // ─── Current User (dev bypass) ────────────────────────────────────────────
-  app.get("/api/me", async (_req: Request, res: Response) => {
+  app.get("/api/me", async (req: Request, res: Response) => {
     try {
-      const user = await storage.getUserByUsername("admin");
+      const userId = getAuthUserId(req);
+      // Dev fallback: if no cookie, return admin so legacy local dev still works.
+      const user = userId
+        ? await storage.getUser(userId)
+        : await storage.getUserByUsername("admin");
       if (!user) return res.status(404).json({ message: "No user found" });
-      const { passwordHash: _, ...safe } = user;
-      return res.json(safe);
+
+      // Resolve effective role + permissions from the new RBAC tables when
+      // the user is on the new role_id model; fall back to the legacy
+      // role enum string otherwise (one migration cycle of dual support).
+      let roleSlug: string | null = (user as any).role ?? null;
+      let permissions: string[] = [];
+      let isSuperAdmin = roleSlug === "super_admin";
+      const roleId = (user as any).roleId as string | null | undefined;
+      if (roleId) {
+        const role = await storage.getRole(roleId);
+        if (role) {
+          roleSlug = role.slug;
+          isSuperAdmin = role.slug === "super_admin";
+          const eff = await storage.getEffectivePermissionsForRole(roleId);
+          permissions = eff.keys;
+        }
+      }
+      const { password: _pw, ...safe } = user as any;
+      return res.json({
+        ...safe,
+        role: roleSlug,
+        roleId: roleId ?? null,
+        isSuperAdmin,
+        permissions,
+      });
     } catch (err) {
       return handleError(res, err);
     }
@@ -2977,7 +3004,17 @@ export async function registerRoutes(
       return null;
     }
     const me = await storage.getUser(userId);
-    if (!me || me.role !== "super_admin") {
+    if (!me) {
+      res.status(403).json({ message: "Super Admin access required." });
+      return null;
+    }
+    // Resolve effective role: prefer roleId, fall back to legacy enum.
+    let isSuperAdmin = me.role === "super_admin";
+    if (!isSuperAdmin && me.roleId) {
+      const role = await storage.getRole(me.roleId);
+      isSuperAdmin = role?.slug === "super_admin";
+    }
+    if (!isSuperAdmin) {
       res.status(403).json({ message: "Super Admin access required." });
       return null;
     }
@@ -3002,8 +3039,18 @@ export async function registerRoutes(
       if (!(await requireSuperAdmin(req, res))) return;
       const all = await storage.listUsers();
       const adminRoleSet = new Set<string>(ADMIN_ROLES);
+      // An "admin user" is anyone whose effective role is NOT a candidate.
+      // Prefer roleId; fall back to legacy enum for unmigrated users.
+      const allRoles = await storage.listRoles();
+      const roleById = new Map(allRoles.map((r) => [r.id, r]));
       const filtered = all
-        .filter((u) => adminRoleSet.has(u.role))
+        .filter((u) => {
+          if (u.roleId) {
+            const r = roleById.get(u.roleId);
+            if (r) return r.slug !== "candidate";
+          }
+          return adminRoleSet.has(u.role);
+        })
         .map((u) => ({ ...u, password: undefined }));
       return res.json(filtered);
     } catch (err) {
@@ -3018,14 +3065,32 @@ export async function registerRoutes(
       if (!(await requireSuperAdmin(req, res))) return;
       const adminRoleSchema = z.enum(ASSIGNABLE_ADMIN_ROLES);
       const bodySchema = insertUserSchema.extend({
-        role: adminRoleSchema,
+        // Legacy `role` enum stays accepted for backwards compat; new clients
+        // send `roleId` (UUID of a row in the roles table) instead.
+        role: adminRoleSchema.optional(),
+        roleId: z.string().uuid().optional(),
         fullName: z.string().min(2, "Full name is required"),
         nationalId: z.string().min(8, "National ID is required"),
         phone: z.string().min(8, "Phone is required"),
         email: z.string().email("Valid email is required"),
         username: z.string().min(3, "Username is required"),
-      });
+      }).refine((d) => d.role || d.roleId, { message: "Either role or roleId is required" });
       const data = bodySchema.parse(req.body);
+
+      // If roleId given, resolve the row and bake the slug into the legacy
+      // `role` field so all the still-unmigrated `user.role === "..."` checks
+      // continue working during the migration window.
+      if (data.roleId) {
+        const role = await storage.getRole(data.roleId);
+        if (!role) return res.status(400).json({ message: "Invalid roleId" });
+        if (role.slug === "super_admin") {
+          return res.status(403).json({ message: "Cannot assign Super Admin via this endpoint." });
+        }
+        const legacyMatch = (ASSIGNABLE_ADMIN_ROLES as readonly string[]).includes(role.slug)
+          ? (role.slug as any)
+          : "admin"; // custom roles fall back to "admin" in the legacy enum
+        (data as any).role = legacyMatch;
+      }
       const pwError = validatePassword(data.password);
       if (pwError) return res.status(400).json({ message: pwError });
 
@@ -3069,10 +3134,22 @@ export async function registerRoutes(
         email: z.string().email().optional(),
         username: z.string().min(3).optional(),
         role: adminRoleSchema.optional(),
+        roleId: z.string().uuid().optional(),
         isActive: z.boolean().optional(),
         password: z.string().optional(),
       });
       const data = bodySchema.parse(req.body);
+      if (data.roleId) {
+        const role = await storage.getRole(data.roleId);
+        if (!role) return res.status(400).json({ message: "Invalid roleId" });
+        if (role.slug === "super_admin") {
+          return res.status(403).json({ message: "Cannot assign Super Admin via this endpoint." });
+        }
+        const legacyMatch = (ASSIGNABLE_ADMIN_ROLES as readonly string[]).includes(role.slug)
+          ? (role.slug as any)
+          : "admin";
+        (data as any).role = legacyMatch;
+      }
 
       const update: Partial<typeof target> = { ...data };
       if (data.password && data.password.length > 0) {
@@ -3113,6 +3190,201 @@ export async function registerRoutes(
       if (!user) return res.status(404).json({ message: "Admin user not found." });
       invalidateUserActiveCache(req.params.id);
       return res.json({ ...user, password: undefined });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // ─── RBAC: Roles & Permissions ─────────────────────────────────────────────
+  app.get("/api/permissions", async (req: Request, res: Response) => {
+    try {
+      if (!(await requireSuperAdmin(req, res))) return;
+      const perms = await storage.listPermissions();
+      return res.json(perms);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.get("/api/roles", async (req: Request, res: Response) => {
+    try {
+      if (!(await requireSuperAdmin(req, res))) return;
+      const list = await storage.listRoles();
+      return res.json(list);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.get("/api/roles/:id", async (req: Request, res: Response) => {
+    try {
+      if (!(await requireSuperAdmin(req, res))) return;
+      const role = await storage.getRole(req.params.id);
+      if (!role) return res.status(404).json({ message: "Role not found" });
+      return res.json(role);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.get("/api/roles/:id/permissions", async (req: Request, res: Response) => {
+    try {
+      if (!(await requireSuperAdmin(req, res))) return;
+      const role = await storage.getRole(req.params.id);
+      if (!role) return res.status(404).json({ message: "Role not found" });
+      const eff = await storage.getEffectivePermissionsForRole(req.params.id);
+      return res.json({ roleId: role.id, isSuperAdmin: eff.isSuperAdmin, permissions: eff.keys });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/roles", async (req: Request, res: Response) => {
+    try {
+      if (!(await requireSuperAdmin(req, res))) return;
+      const bodySchema = z.object({
+        name: z.string().min(2).max(100),
+        slug: z.string().min(2).max(64).regex(/^[a-z0-9_-]+$/, "Slug must be lowercase alphanumeric with - or _"),
+        description: z.string().max(500).optional(),
+        color: z.string().max(16).optional(),
+      });
+      const data = bodySchema.parse(req.body);
+      if (await storage.getRoleBySlug(data.slug)) {
+        return res.status(409).json({ message: "A role with this slug already exists" });
+      }
+      const created = await storage.createRole(data as any);
+      const actorId = getAuthUserId(req); const actor = actorId ? await storage.getUser(actorId) : null;
+      await storage.createAuditLog({
+        actorId: actor?.id ?? null,
+        actorName: actor?.fullName ?? actor?.username ?? null,
+        action: "role.create",
+        entityType: "role",
+        entityId: created.id,
+        description: `Created role "${created.name}"`,
+        metadata: { slug: created.slug },
+      } as any);
+      return res.status(201).json(created);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.patch("/api/roles/:id", async (req: Request, res: Response) => {
+    try {
+      if (!(await requireSuperAdmin(req, res))) return;
+      const role = await storage.getRole(req.params.id);
+      if (!role) return res.status(404).json({ message: "Role not found" });
+      if (role.isSystem) {
+        return res.status(403).json({ message: "System roles cannot be modified" });
+      }
+      const bodySchema = z.object({
+        name: z.string().min(2).max(100).optional(),
+        description: z.string().max(500).nullable().optional(),
+        color: z.string().max(16).nullable().optional(),
+      });
+      const data = bodySchema.parse(req.body);
+      const updated = await storage.updateRole(req.params.id, data as any);
+      const actorId = getAuthUserId(req); const actor = actorId ? await storage.getUser(actorId) : null;
+      await storage.createAuditLog({
+        actorId: actor?.id ?? null,
+        actorName: actor?.fullName ?? actor?.username ?? null,
+        action: "role.update",
+        entityType: "role",
+        entityId: updated.id,
+        description: `Updated role "${updated.name}"`,
+        metadata: data,
+      } as any);
+      return res.json(updated);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.delete("/api/roles/:id", async (req: Request, res: Response) => {
+    try {
+      if (!(await requireSuperAdmin(req, res))) return;
+      const role = await storage.getRole(req.params.id);
+      if (!role) return res.status(404).json({ message: "Role not found" });
+      const result = await storage.deleteRole(req.params.id);
+      if (!result.ok) {
+        if (result.reason === "system_role") {
+          return res.status(403).json({ message: "System roles cannot be deleted" });
+        }
+        if (result.reason === "in_use") {
+          return res.status(409).json({
+            message: `Role is assigned to ${result.userCount} user(s). Reassign them before deleting.`,
+            userCount: result.userCount,
+          });
+        }
+        return res.status(404).json({ message: "Role not found" });
+      }
+      const actorId = getAuthUserId(req); const actor = actorId ? await storage.getUser(actorId) : null;
+      await storage.createAuditLog({
+        actorId: actor?.id ?? null,
+        actorName: actor?.fullName ?? actor?.username ?? null,
+        action: "role.delete",
+        entityType: "role",
+        entityId: req.params.id,
+        description: `Deleted role "${role.name}"`,
+      } as any);
+      return res.json({ ok: true });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/roles/:id/clone", async (req: Request, res: Response) => {
+    try {
+      if (!(await requireSuperAdmin(req, res))) return;
+      const bodySchema = z.object({
+        name: z.string().min(2).max(100),
+        slug: z.string().min(2).max(64).regex(/^[a-z0-9_-]+$/),
+      });
+      const data = bodySchema.parse(req.body);
+      if (await storage.getRoleBySlug(data.slug)) {
+        return res.status(409).json({ message: "A role with this slug already exists" });
+      }
+      const cloned = await storage.cloneRole(req.params.id, data.name, data.slug);
+      const actorId = getAuthUserId(req); const actor = actorId ? await storage.getUser(actorId) : null;
+      await storage.createAuditLog({
+        actorId: actor?.id ?? null,
+        actorName: actor?.fullName ?? actor?.username ?? null,
+        action: "role.clone",
+        entityType: "role",
+        entityId: cloned.id,
+        description: `Cloned role to "${cloned.name}"`,
+        metadata: { sourceRoleId: req.params.id },
+      } as any);
+      return res.status(201).json(cloned);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.put("/api/roles/:id/permissions", async (req: Request, res: Response) => {
+    try {
+      if (!(await requireSuperAdmin(req, res))) return;
+      const role = await storage.getRole(req.params.id);
+      if (!role) return res.status(404).json({ message: "Role not found" });
+      if (role.isSystem) {
+        return res.status(403).json({ message: "System role permissions cannot be modified" });
+      }
+      const bodySchema = z.object({
+        permissions: z.array(z.string()).max(500),
+      });
+      const data = bodySchema.parse(req.body);
+      await storage.setRolePermissions(req.params.id, data.permissions);
+      const actorId = getAuthUserId(req); const actor = actorId ? await storage.getUser(actorId) : null;
+      await storage.createAuditLog({
+        actorId: actor?.id ?? null,
+        actorName: actor?.fullName ?? actor?.username ?? null,
+        action: "role.set_permissions",
+        entityType: "role",
+        entityId: req.params.id,
+        description: `Updated permissions on role "${role.name}" (${data.permissions.length} keys)`,
+        metadata: { count: data.permissions.length },
+      } as any);
+      return res.json({ ok: true, count: data.permissions.length });
     } catch (err) {
       return handleError(res, err);
     }

@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -56,19 +55,9 @@ import {
   PowerOff,
   Loader2,
   Crown,
+  AlertTriangle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-// Mirror of shared/schema.ts assignable admin roles (must match server enum).
-type AssignableAdminRole =
-  | "admin"
-  | "hr_manager"
-  | "hr_specialist"
-  | "hr_attendance_reviewer"
-  | "auditor"
-  | "recruiter";
-
-type AdminRoleAll = AssignableAdminRole | "super_admin";
 
 interface AdminUser {
   id: string;
@@ -77,58 +66,38 @@ interface AdminUser {
   fullName: string | null;
   phone: string | null;
   nationalId: string | null;
-  role: AdminRoleAll;
+  role: string;
+  roleId: string | null;
   isActive: boolean;
   lastLogin: string | null;
   createdAt: string;
 }
 
-const ROLE_META: Record<AdminRoleAll, { label: string; color: string; description: string }> = {
-  super_admin: {
-    label: "Super Admin",
-    color: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-    description: "Founding owner — full system control. Cannot be edited.",
-  },
-  admin: {
-    label: "Admin",
-    color: "bg-primary/15 text-primary border-primary/30",
-    description: "Full back-office access except super-admin actions.",
-  },
-  hr_manager: {
-    label: "HR Manager",
-    color: "bg-blue-500/15 text-blue-300 border-blue-500/30",
-    description: "Manages HR operations, candidates, and workforce.",
-  },
-  hr_specialist: {
-    label: "HR Specialist",
-    color: "bg-indigo-500/15 text-indigo-300 border-indigo-500/30",
-    description: "Day-to-day HR tasks and candidate processing.",
-  },
-  hr_attendance_reviewer: {
-    label: "HR Attendance Reviewer",
-    color: "bg-violet-500/15 text-violet-300 border-violet-500/30",
-    description: "Reviews and approves attendance and excuse requests.",
-  },
-  auditor: {
-    label: "Auditor",
-    color: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-    description: "Read-only access for compliance and audit reviews.",
-  },
-  recruiter: {
-    label: "Recruiter",
-    color: "bg-sky-500/15 text-sky-300 border-sky-500/30",
-    description: "Manages job postings, applications, and interviews.",
-  },
-};
+interface Role {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  color: string | null;
+  isSystem: boolean;
+}
 
-const ASSIGNABLE_ROLES: AssignableAdminRole[] = [
-  "admin",
-  "hr_manager",
-  "hr_specialist",
-  "hr_attendance_reviewer",
-  "auditor",
-  "recruiter",
-];
+const SYSTEM_ROLE_SLUGS = new Set(["super_admin", "candidate"]);
+
+const PALETTE: Record<string, string> = {
+  red: "bg-red-500/15 text-red-300 border-red-500/30",
+  orange: "bg-orange-500/15 text-orange-300 border-orange-500/30",
+  amber: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+  emerald: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+  cyan: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
+  blue: "bg-blue-500/15 text-blue-300 border-blue-500/30",
+  violet: "bg-violet-500/15 text-violet-300 border-violet-500/30",
+  pink: "bg-pink-500/15 text-pink-300 border-pink-500/30",
+  slate: "bg-muted text-muted-foreground border-border",
+};
+function colorClass(c?: string | null) {
+  return PALETTE[c ?? "slate"] ?? PALETTE.slate;
+}
 
 interface FormState {
   fullName: string;
@@ -137,9 +106,8 @@ interface FormState {
   email: string;
   username: string;
   password: string;
-  role: AssignableAdminRole;
+  roleId: string;
 }
-
 const EMPTY_FORM: FormState = {
   fullName: "",
   nationalId: "",
@@ -147,7 +115,7 @@ const EMPTY_FORM: FormState = {
   email: "",
   username: "",
   password: "",
-  role: "admin",
+  roleId: "",
 };
 
 export function AdminUsersContent() {
@@ -155,7 +123,7 @@ export function AdminUsersContent() {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | AdminRoleAll>("all");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -168,11 +136,31 @@ export function AdminUsersContent() {
     queryKey: ["/api/admin-users"],
   });
 
+  const { data: roles = [] } = useQuery<Role[]>({
+    queryKey: ["/api/roles"],
+    queryFn: () => apiRequest("GET", "/api/roles").then((r) => r.json()),
+  });
+
+  const roleById = useMemo(() => Object.fromEntries(roles.map((r) => [r.id, r])), [roles]);
+  const roleBySlug = useMemo(() => Object.fromEntries(roles.map((r) => [r.slug, r])), [roles]);
+  const assignableRoles = roles.filter((r) => !SYSTEM_ROLE_SLUGS.has(r.slug));
+
+  // Resolve a user's effective role row (prefer roleId, fall back to slug match
+  // on the legacy role string for users who haven't been migrated yet).
+  function userRole(u: AdminUser): Role | null {
+    if (u.roleId && roleById[u.roleId]) return roleById[u.roleId];
+    if (u.role && roleBySlug[u.role]) return roleBySlug[u.role];
+    return null;
+  }
+
   const filtered = useMemo(() => {
     if (!users) return [];
     const q = search.trim().toLowerCase();
     return users.filter((u) => {
-      if (roleFilter !== "all" && u.role !== roleFilter) return false;
+      if (roleFilter !== "all") {
+        const r = userRole(u);
+        if (!r || r.id !== roleFilter) return false;
+      }
       if (statusFilter === "active" && !u.isActive) return false;
       if (statusFilter === "inactive" && u.isActive) return false;
       if (!q) return true;
@@ -184,7 +172,8 @@ export function AdminUsersContent() {
         u.username.toLowerCase().includes(q)
       );
     });
-  }, [users, search, roleFilter, statusFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [users, search, roleFilter, statusFilter, roleById, roleBySlug]);
 
   const createMutation = useMutation({
     mutationFn: async (data: FormState) => {
@@ -236,6 +225,7 @@ export function AdminUsersContent() {
 
   const openEdit = (u: AdminUser) => {
     setEditTarget(u);
+    const r = userRole(u);
     setEditForm({
       fullName: u.fullName ?? "",
       nationalId: u.nationalId ?? "",
@@ -243,7 +233,7 @@ export function AdminUsersContent() {
       email: u.email,
       username: u.username,
       password: "",
-      role: (u.role === "super_admin" ? "admin" : u.role) as AssignableAdminRole,
+      roleId: r && !SYSTEM_ROLE_SLUGS.has(r.slug) ? r.id : "",
     });
   };
 
@@ -281,13 +271,14 @@ export function AdminUsersContent() {
                 <CardTitle className="text-xl text-white">Admin Users</CardTitle>
               </div>
               <CardDescription>
-                Internal back-office staff — admins, HR specialists, attendance reviewers, auditors, and recruiters. These are NOT workforce employees or candidates.
+                Internal back-office staff. Define roles in <strong className="text-white">Settings → Roles &amp; Access</strong>, then assign them here.
               </CardDescription>
             </div>
             <Button
-              onClick={() => { setForm(EMPTY_FORM); setCreateOpen(true); }}
+              onClick={() => { setForm({ ...EMPTY_FORM }); setCreateOpen(true); }}
               className="h-10 bg-primary text-primary-foreground font-semibold"
               data-testid="button-add-admin-user"
+              disabled={assignableRoles.length === 0}
             >
               <UserPlus className="mr-2 h-4 w-4" />
               Add Admin User
@@ -295,6 +286,15 @@ export function AdminUsersContent() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {assignableRoles.length === 0 && (
+            <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-sm px-3 py-2">
+              <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-400">
+                No assignable roles exist yet. Create one from <strong>Settings → Roles &amp; Access → Roles</strong> before adding admin users.
+              </p>
+            </div>
+          )}
+
           {/* Filters */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div className="relative sm:col-span-2">
@@ -307,15 +307,14 @@ export function AdminUsersContent() {
                 data-testid="input-search-admins"
               />
             </div>
-            <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as any)}>
+            <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v)}>
               <SelectTrigger className="bg-muted/30 border-border" data-testid="select-role-filter">
                 <SelectValue placeholder="Filter by role" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All roles</SelectItem>
-                <SelectItem value="super_admin">Super Admin</SelectItem>
-                {ASSIGNABLE_ROLES.map((r) => (
-                  <SelectItem key={r} value={r}>{ROLE_META[r].label}</SelectItem>
+                {roles.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -360,8 +359,8 @@ export function AdminUsersContent() {
                   </TableRow>
                 ) : (
                   filtered.map((u) => {
-                    const meta = ROLE_META[u.role];
-                    const isFounder = u.role === "super_admin";
+                    const r = userRole(u);
+                    const isFounder = r?.slug === "super_admin";
                     return (
                       <TableRow key={u.id} className="border-border" data-testid={`row-admin-${u.id}`}>
                         <TableCell>
@@ -383,16 +382,24 @@ export function AdminUsersContent() {
                         <TableCell className="font-mono text-sm text-white/90">{u.nationalId ?? "—"}</TableCell>
                         <TableCell className="font-mono text-sm text-white/90">{u.phone ?? "—"}</TableCell>
                         <TableCell>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Badge variant="outline" className={meta.color} data-testid={`badge-role-${u.id}`}>
-                                  {meta.label}
-                                </Badge>
-                              </TooltipTrigger>
-                              <TooltipContent><p className="max-w-xs">{meta.description}</p></TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                          {r ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className={colorClass(r.color)} data-testid={`badge-role-${u.id}`}>
+                                    {r.name}
+                                  </Badge>
+                                </TooltipTrigger>
+                                {r.description && (
+                                  <TooltipContent><p className="max-w-xs">{r.description}</p></TooltipContent>
+                                )}
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/30 gap-1">
+                              <Lock className="h-3 w-3" /> No role — login blocked
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell>
                           {u.isActive ? (
@@ -421,12 +428,13 @@ export function AdminUsersContent() {
                           ) : (
                             <div className="flex items-center justify-end gap-1">
                               <Button
-                                variant="ghost"
+                                variant={r ? "ghost" : "outline"}
                                 size="sm"
                                 onClick={() => openEdit(u)}
+                                className={r ? "" : "h-8 px-2 text-xs border-red-500/30 text-red-400 hover:bg-red-500/10"}
                                 data-testid={`button-edit-${u.id}`}
                               >
-                                <Pencil className="h-3.5 w-3.5" />
+                                {r ? <Pencil className="h-3.5 w-3.5" /> : "Set role"}
                               </Button>
                               <Button
                                 variant="ghost"
@@ -459,12 +467,12 @@ export function AdminUsersContent() {
               Create a new internal back-office user. They'll log in with their National ID or phone, plus the password you set here.
             </DialogDescription>
           </DialogHeader>
-          <AdminUserForm value={form} onChange={setForm} mode="create" />
+          <AdminUserForm value={form} onChange={setForm} mode="create" assignableRoles={assignableRoles} />
           <DialogFooter>
             <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button
               onClick={() => createMutation.mutate(form)}
-              disabled={createMutation.isPending}
+              disabled={createMutation.isPending || !form.roleId}
               data-testid="button-submit-create-admin"
             >
               {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -483,12 +491,12 @@ export function AdminUsersContent() {
               Update profile, role, or set a new password. Leave the password field empty to keep it unchanged.
             </DialogDescription>
           </DialogHeader>
-          <AdminUserForm value={editForm} onChange={setEditForm} mode="edit" />
+          <AdminUserForm value={editForm} onChange={setEditForm} mode="edit" assignableRoles={assignableRoles} />
           <DialogFooter>
             <Button variant="ghost" onClick={() => setEditTarget(null)}>Cancel</Button>
             <Button
               onClick={() => editTarget && updateMutation.mutate({ id: editTarget.id, data: editForm })}
-              disabled={updateMutation.isPending}
+              disabled={updateMutation.isPending || !editForm.roleId}
               data-testid="button-submit-edit-admin"
             >
               {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -530,10 +538,12 @@ function AdminUserForm({
   value,
   onChange,
   mode,
+  assignableRoles,
 }: {
   value: FormState;
   onChange: (v: FormState) => void;
   mode: "create" | "edit";
+  assignableRoles: Role[];
 }) {
   const set = (k: keyof FormState, v: string) => onChange({ ...value, [k]: v });
   return (
@@ -560,14 +570,14 @@ function AdminUserForm({
       </div>
       <div className="space-y-1.5 sm:col-span-2">
         <Label className="text-white">Role</Label>
-        <Select value={value.role} onValueChange={(v) => set("role", v)}>
-          <SelectTrigger data-testid="select-role"><SelectValue /></SelectTrigger>
+        <Select value={value.roleId} onValueChange={(v) => set("roleId", v)}>
+          <SelectTrigger data-testid="select-role"><SelectValue placeholder="Select role" /></SelectTrigger>
           <SelectContent>
-            {ASSIGNABLE_ROLES.map((r) => (
-              <SelectItem key={r} value={r}>
+            {assignableRoles.map((r) => (
+              <SelectItem key={r.id} value={r.id}>
                 <div>
-                  <div className="font-medium">{ROLE_META[r].label}</div>
-                  <div className="text-xs text-muted-foreground">{ROLE_META[r].description}</div>
+                  <div className="font-medium">{r.name}</div>
+                  {r.description && <div className="text-xs text-muted-foreground">{r.description}</div>}
                 </div>
               </SelectItem>
             ))}

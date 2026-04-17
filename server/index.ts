@@ -3,6 +3,8 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { storage } from "./storage";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 const app = express();
 const httpServer = createServer(app);
@@ -22,6 +24,32 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+
+// ─── Maintenance Mode (Option B) ───────────────────────────────────────────
+// When MAINTENANCE_MODE=true, every request returns 503 with either an HTML
+// page (browsers) or a JSON envelope (API). Used during prod migrations.
+const MAINTENANCE_PAGE_PATH = join(process.cwd(), "server", "maintenance.html");
+let cachedMaintenanceHtml: string | null = null;
+function getMaintenanceHtml(): string {
+  if (cachedMaintenanceHtml) return cachedMaintenanceHtml;
+  try {
+    cachedMaintenanceHtml = readFileSync(MAINTENANCE_PAGE_PATH, "utf-8");
+  } catch {
+    cachedMaintenanceHtml = "<h1>System Maintenance</h1><p>Workforce is undergoing maintenance. Please try again shortly.</p>";
+  }
+  return cachedMaintenanceHtml!;
+}
+app.use((req, res, next) => {
+  if (process.env.MAINTENANCE_MODE !== "true") return next();
+  res.setHeader("Retry-After", "300");
+  if (req.path.startsWith("/api/")) {
+    return res.status(503).json({
+      maintenance: true,
+      message: "Workforce is undergoing scheduled maintenance. Please try again in a few minutes.",
+    });
+  }
+  res.status(503).type("html").send(getMaintenanceHtml());
+});
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -61,7 +89,26 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Seed RBAC system roles & permission catalog before routes mount,
+  // so requirePermission cache loads against a populated DB.
+  try {
+    const { seedRbac } = await import("./seed-rbac");
+    await seedRbac(log);
+  } catch (err) {
+    log(`RBAC seed failed: ${err}`, "rbac-seed");
+  }
+
   await registerRoutes(httpServer, app);
+
+  // Boot-time RBAC linter — logs which /api/* routes are guarded by the
+  // declarative middleware. Non-fatal in dev; promote to hard fail in prod
+  // by setting RBAC_STRICT_LINT=true once the T7 sweep is complete.
+  try {
+    const { lintRoutes } = await import("./auth-middleware");
+    lintRoutes(app, log);
+  } catch (err) {
+    log(`RBAC linter failed: ${err}`, "rbac-lint");
+  }
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

@@ -84,6 +84,12 @@ import {
   type EmployeeAsset,
   type InsertEmployeeAsset,
   auditLogs,
+  roles,
+  permissions,
+  rolePermissions,
+  type Role,
+  type InsertRole,
+  type Permission,
   type AuditLog,
   type InsertAuditLog,
   inboxItems,
@@ -523,6 +529,20 @@ export interface IStorage {
     scheduledInterviews: number;
     recentApplications: Array<{ candidateName: string; role: string; status: string; appliedAt: Date; photoUrl?: string | null }>;
   }>;
+
+  // ─── RBAC ───
+  listRoles(): Promise<Array<Role & { userCount: number; permissionCount: number }>>;
+  getRole(id: string): Promise<Role | undefined>;
+  getRoleBySlug(slug: string): Promise<Role | undefined>;
+  createRole(data: InsertRole): Promise<Role>;
+  updateRole(id: string, data: Partial<InsertRole>): Promise<Role>;
+  deleteRole(id: string): Promise<{ ok: true } | { ok: false; reason: string; userCount?: number }>;
+  cloneRole(id: string, newName: string, newSlug: string): Promise<Role>;
+  listPermissions(): Promise<Permission[]>;
+  getRolePermissions(roleId: string): Promise<string[]>;
+  setRolePermissions(roleId: string, permissionKeys: string[]): Promise<void>;
+  countUsersWithRole(roleId: string): Promise<number>;
+  getEffectivePermissionsForRole(roleId: string): Promise<{ isSuperAdmin: boolean; keys: string[] }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3793,6 +3813,146 @@ export class DatabaseStorage implements IStorage {
   async getPayrollTransaction(id: string): Promise<PayrollTransaction | undefined> {
     const [row] = await db.select().from(payrollTransactions).where(eq(payrollTransactions.id, id));
     return row;
+  }
+
+  // ─── RBAC ─────────────────────────────────────────────────────────────────
+  async listRoles(): Promise<Array<Role & { userCount: number; permissionCount: number }>> {
+    const rows = await db.select().from(roles).orderBy(roles.isSystem, roles.name);
+    const counts = await Promise.all(
+      rows.map(async (r) => {
+        const [{ uc }] = await db
+          .select({ uc: sql<number>`count(*)::int` })
+          .from(users)
+          .where(eq(users.roleId, r.id));
+        const [{ pc }] = await db
+          .select({ pc: sql<number>`count(*)::int` })
+          .from(rolePermissions)
+          .where(eq(rolePermissions.roleId, r.id));
+        return { ...r, userCount: uc ?? 0, permissionCount: pc ?? 0 };
+      })
+    );
+    return counts;
+  }
+
+  async getRole(id: string): Promise<Role | undefined> {
+    const [row] = await db.select().from(roles).where(eq(roles.id, id));
+    return row;
+  }
+
+  async getRoleBySlug(slug: string): Promise<Role | undefined> {
+    const [row] = await db.select().from(roles).where(eq(roles.slug, slug));
+    return row;
+  }
+
+  async createRole(data: InsertRole): Promise<Role> {
+    const [row] = await db
+      .insert(roles)
+      .values({ ...data, isSystem: false })
+      .returning();
+    return row;
+  }
+
+  async updateRole(id: string, data: Partial<InsertRole>): Promise<Role> {
+    const existing = await this.getRole(id);
+    if (!existing) throw new Error("Role not found");
+    if (existing.isSystem && (data.slug || typeof data.isSystem === "boolean")) {
+      throw new Error("Cannot change slug or system flag of a system role");
+    }
+    const [row] = await db
+      .update(roles)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(roles.id, id))
+      .returning();
+    return row;
+  }
+
+  async deleteRole(id: string) {
+    const role = await this.getRole(id);
+    if (!role) return { ok: false as const, reason: "not_found" };
+    if (role.isSystem) return { ok: false as const, reason: "system_role" };
+    const userCount = await this.countUsersWithRole(id);
+    if (userCount > 0) return { ok: false as const, reason: "in_use", userCount };
+    await db.delete(roles).where(eq(roles.id, id));
+    return { ok: true as const };
+  }
+
+  async cloneRole(id: string, newName: string, newSlug: string): Promise<Role> {
+    const src = await this.getRole(id);
+    if (!src) throw new Error("Source role not found");
+    return await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(roles)
+        .values({
+          name: newName,
+          slug: newSlug,
+          description: src.description,
+          color: src.color,
+          isSystem: false,
+        })
+        .returning();
+      const srcPerms = await tx
+        .select({ key: rolePermissions.permissionKey })
+        .from(rolePermissions)
+        .where(eq(rolePermissions.roleId, id));
+      if (srcPerms.length) {
+        await tx.insert(rolePermissions).values(
+          srcPerms.map((p) => ({ roleId: created.id, permissionKey: p.key }))
+        );
+      }
+      return created;
+    });
+  }
+
+  async listPermissions(): Promise<Permission[]> {
+    return await db.select().from(permissions).orderBy(permissions.category, permissions.key);
+  }
+
+  async getRolePermissions(roleId: string): Promise<string[]> {
+    const rows = await db
+      .select({ key: rolePermissions.permissionKey })
+      .from(rolePermissions)
+      .where(eq(rolePermissions.roleId, roleId));
+    return rows.map((r) => r.key);
+  }
+
+  async setRolePermissions(roleId: string, permissionKeys: string[]): Promise<void> {
+    const role = await this.getRole(roleId);
+    if (!role) throw new Error("Role not found");
+    if (role.isSystem) throw new Error("Cannot modify permissions of a system role");
+    await db.transaction(async (tx) => {
+      await tx.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
+      if (permissionKeys.length) {
+        const validKeys = await tx
+          .select({ key: permissions.key })
+          .from(permissions)
+          .where(inArray(permissions.key, permissionKeys));
+        const validSet = new Set(validKeys.map((k) => k.key));
+        const filtered = permissionKeys.filter((k) => validSet.has(k));
+        if (filtered.length) {
+          await tx.insert(rolePermissions).values(
+            filtered.map((key) => ({ roleId, permissionKey: key }))
+          );
+        }
+      }
+    });
+  }
+
+  async countUsersWithRole(roleId: string): Promise<number> {
+    const [{ c }] = await db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(users)
+      .where(eq(users.roleId, roleId));
+    return c ?? 0;
+  }
+
+  async getEffectivePermissionsForRole(
+    roleId: string
+  ): Promise<{ isSuperAdmin: boolean; keys: string[] }> {
+    const role = await this.getRole(roleId);
+    if (!role) return { isSuperAdmin: false, keys: [] };
+    if (role.slug === "super_admin") return { isSuperAdmin: true, keys: [] };
+    const keys = await this.getRolePermissions(roleId);
+    return { isSuperAdmin: false, keys };
   }
 }
 

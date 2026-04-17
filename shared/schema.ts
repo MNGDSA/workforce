@@ -153,6 +153,7 @@ export const users = pgTable(
     email: text("email").notNull().unique(),
     password: text("password").notNull(),
     role: userRoleEnum("role").notNull().default("recruiter"),
+    roleId: varchar("role_id"),
     fullName: text("full_name"),
     phone: text("phone"),
     nationalId: varchar("national_id", { length: 20 }),
@@ -1188,6 +1189,67 @@ export const auditLogs = pgTable(
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
+
+// ─── RBAC: Roles, Permissions, Role-Permissions ─────────────────────────────
+export const roles = pgTable(
+  "roles",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    name: text("name").notNull().unique(),
+    slug: varchar("slug", { length: 64 }).notNull().unique(),
+    description: text("description"),
+    color: varchar("color", { length: 16 }),
+    isSystem: boolean("is_system").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    slugIdx: uniqueIndex("roles_slug_idx").on(t.slug),
+  })
+);
+
+export const permissions = pgTable(
+  "permissions",
+  {
+    key: varchar("key", { length: 80 }).primaryKey(),
+    resource: varchar("resource", { length: 40 }).notNull(),
+    action: varchar("action", { length: 40 }).notNull(),
+    description: text("description").notNull(),
+    category: varchar("category", { length: 64 }).notNull(),
+  },
+  (t) => ({
+    categoryIdx: index("permissions_category_idx").on(t.category),
+  })
+);
+
+export const rolePermissions = pgTable(
+  "role_permissions",
+  {
+    roleId: varchar("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
+    permissionKey: varchar("permission_key", { length: 80 }).notNull().references(() => permissions.key, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    pk: uniqueIndex("role_permissions_pk").on(t.roleId, t.permissionKey),
+    roleIdx: index("role_permissions_role_idx").on(t.roleId),
+    permIdx: index("role_permissions_perm_idx").on(t.permissionKey),
+  })
+);
+
+export const insertRoleSchema = createInsertSchema(roles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertPermissionSchema = createInsertSchema(permissions);
+export const insertRolePermissionSchema = createInsertSchema(rolePermissions).omit({
+  createdAt: true,
+});
+export type InsertRole = z.infer<typeof insertRoleSchema>;
+export type Role = typeof roles.$inferSelect;
+export type Permission = typeof permissions.$inferSelect;
+export type InsertPermission = z.infer<typeof insertPermissionSchema>;
+export type RolePermission = typeof rolePermissions.$inferSelect;
 
 // ─── Inbox Items ─────────────────────────────────────────────────────────────
 export const inboxItemTypeEnum = pgEnum("inbox_item_type", [

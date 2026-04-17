@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Workforce — System Maintenance</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #111a2e;
+      --text: #e6edf7;
+      --muted: #98a2b3;
+      --accent: #2dd4bf;
+      --border: #1f2a44;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: radial-gradient(1200px 600px at 50% -10%, #14223f 0%, #0b1220 60%) no-repeat fixed, var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .card {
+      max-width: 560px; width: calc(100% - 32px);
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 16px; padding: 40px 32px; text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+    .badge {
+      display: inline-block; padding: 6px 12px; border-radius: 999px;
+      background: rgba(45, 212, 191, 0.12); color: var(--accent);
+      font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+      border: 1px solid rgba(45, 212, 191, 0.3); margin-bottom: 20px;
+    }
+    h1 { font-size: 26px; margin: 0 0 12px; font-weight: 600; }
+    h2 { font-size: 22px; margin: 24px 0 8px; font-weight: 600; direction: rtl; }
+    p { color: var(--muted); line-height: 1.55; margin: 8px 0; font-size: 15px; }
+    p.ar { direction: rtl; font-family: "Tahoma", sans-serif; }
+    .footer {
+      margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border);
+      color: var(--muted); font-size: 13px;
+    }
+    .dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent); margin-right: 8px;
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <span class="badge"><span class="dot"></span>System Maintenance</span>
+    <h1>Workforce is being upgraded</h1>
+    <p>We are deploying a system update. The platform will be back online in a few minutes.</p>
+    <h2>تحديث النظام</h2>
+    <p class="ar">يتم حالياً تحديث منصة Workforce. ستعود الخدمة خلال دقائق قليلة.</p>
+    <div class="footer">
+      Status updates: <strong>workforce.tanaqolapp.com</strong>
+    </div>
+  </main>
+</body>
+</html>
