@@ -1,0 +1,72 @@
+Apr 17 16:41:28  4:41:28 PM [express] serving on port 8080
+Apr 17 16:41:28  4:41:28 PM [scheduler] Auto-close scheduler error: error: relation "events" does not exist
+Apr 17 16:41:28  4:41:28 PM [scheduler] Date alert scheduler error: error: relation "events" does not exist
+Apr 17 16:41:28  4:41:28 PM [scheduler] Auto-activate scheduler error: error: relation "events" does not exist
+Apr 17 16:41:28  4:41:28 PM [scheduler] Candidate age-out scheduler error: error: relation "candidates" does not exist
+Apr 17 16:47:53  error: relation "users" does not exist
+Apr 17 16:47:53      at /workspace/dist/index.cjs:61:14266
+Apr 17 16:47:53      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Apr 17 16:47:53      at async /workspace/dist/index.cjs:67:38269
+Apr 17 16:47:53      at async Y2.getUserByPhone (/workspace/dist/index.cjs:204:10042)
+Apr 17 16:47:53      at async /workspace/dist/index.cjs:211:34833 {
+Apr 17 16:47:53    length: 105,
+Apr 17 16:47:53    severity: 'ERROR',
+Apr 17 16:47:53    code: '42P01',
+Apr 17 16:47:53    detail: undefined,
+Apr 17 16:47:53    hint: undefined,
+Apr 17 16:47:53    position: '185',
+Apr 17 16:47:53    internalPosition: undefined,
+Apr 17 16:47:53    internalQuery: undefined,
+Apr 17 16:47:53    where: undefined,
+Apr 17 16:47:53    schema: undefined,
+Apr 17 16:47:53    table: undefined,
+Apr 17 16:47:53    column: undefined,
+Apr 17 16:47:53    dataType: undefined,
+Apr 17 16:47:53    constraint: undefined,
+Apr 17 16:47:53    file: 'parse_relation.c',
+Apr 17 16:47:53    line: '1449',
+Apr 17 16:47:53    routine: 'parserOpenTable'
+Apr 17 16:47:53  }
+Apr 17 16:47:53  4:47:53 PM [express] POST /api/auth/login 500 in 47ms :: {"message":"relation \"users\" does not exist"}
+Apr 17 16:48:13  4:48:13 PM [express] GET /api/user/ 200 in 3ms
+Apr 17 16:48:22  4:48:22 PM [express] POST /api 200 in 1ms
+Apr 17 16:48:22  4:48:22 PM [express] POST /api/graphql 200 in 1ms
+Apr 17 16:48:22  4:48:22 PM [express] POST /api/graphql 200 in 2ms
+Apr 17 16:48:22  4:48:22 PM [express] POST /api/gql 200 in 2ms
+Apr 17 16:48:22  4:48:22 PM [express] POST /api/gql 200 in 2ms
+Apr 17 16:48:39  4:48:39 PM [express] GET /api/swagger.json 200 in 1ms
+Apr 17 16:41:38  4:41:38 PM [express] serving on port 8080
+Apr 17 16:41:38  4:41:38 PM [scheduler] Auto-close scheduler error: error: relation "events" does not exist
+Apr 17 16:41:38  4:41:38 PM [scheduler] Auto-activate scheduler error: error: relation "events" does not exist
+Apr 17 16:41:38  4:41:38 PM [scheduler] Candidate age-out scheduler error: error: relation "candidates" does not exist
+Apr 17 16:41:38  4:41:38 PM [scheduler] Date alert scheduler error: error: relation "events" does not exist
+Apr 17 16:47:40  error: relation "system_settings" does not exist
+Apr 17 16:47:40      at /workspace/dist/index.cjs:61:14266
+Apr 17 16:47:40      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Apr 17 16:47:40      at async /workspace/dist/index.cjs:67:38269
+Apr 17 16:47:40      at async Y2.getSystemSetting (/workspace/dist/index.cjs:204:44790)
+Apr 17 16:47:40      at async Promise.all (index 0)
+Apr 17 16:47:40      at async /workspace/dist/index.cjs:211:43482 {
+Apr 17 16:47:40    length: 114,
+Apr 17 16:47:40    severity: 'ERROR',
+Apr 17 16:47:40    code: '42P01',
+Apr 17 16:47:40    detail: undefined,
+Apr 17 16:47:40    hint: undefined,
+Apr 17 16:47:40    position: '42',
+Apr 17 16:47:40    internalPosition: undefined,
+Apr 17 16:47:40    internalQuery: undefined,
+Apr 17 16:47:40    where: undefined,
+Apr 17 16:47:40    schema: undefined,
+Apr 17 16:47:40    table: undefined,
+Apr 17 16:47:40    column: undefined,
+Apr 17 16:47:40    dataType: undefined,
+Apr 17 16:47:40    constraint: undefined,
+Apr 17 16:47:40    file: 'parse_relation.c',
+Apr 17 16:47:40    line: '1449',
+Apr 17 16:47:40    routine: 'parserOpenTable'
+Apr 17 16:47:40  }
+Apr 17 16:47:40  4:47:40 PM [express] GET /api/settings/public 500 in 72ms :: {"message":"relation \"system_settings\" does not exist"}
+Apr 17 16:48:22  4:48:22 PM [express] POST /api 200 in 1ms
+Apr 17 16:48:38  4:48:38 PM [express] GET /api-docs/swagger.json 200 in 2ms
+Apr 17 16:48:38  4:48:38 PM [express] GET /api-docs/swagger.json 200 in 2ms
+Apr 17 16:48:39  4:48:39 PM [express] GET /api/swagger.json 200 in 2ms
