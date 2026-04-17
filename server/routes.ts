@@ -153,6 +153,7 @@ function validateProfileCompleteness(candidate: Record<string, any>): string[] {
 }
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import { requireAuth, requirePermission, requireOwnership, markPublic } from "./auth-middleware";
 
 const UPLOADS_DIR = path.resolve("uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -268,7 +269,7 @@ export async function registerRoutes(
     next();
   });
 
-  app.get("/api/ntp-health", async (req: Request, res: Response) => {
+  app.get("/api/ntp-health", requirePermission("system:ntp_check"), async (req: Request, res: Response) => {
     try {
       const server = (req.query.server as string) || "time.google.com";
       const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/;
@@ -315,7 +316,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/config/mobile", async (req: Request, res: Response) => {
+  app.get("/api/config/mobile", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
       if (!userId) {
@@ -337,7 +338,7 @@ export async function registerRoutes(
   });
 
   // ─── Document Upload ───────────────────────────────────────────────────────
-  app.post("/api/candidates/:id/documents", upload.single("file"), async (req: Request, res: Response) => {
+  app.post("/api/candidates/:id/documents", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const docType = req.body.docType as string;
@@ -453,7 +454,7 @@ export async function registerRoutes(
   });
 
   // ─── Document Deletion ───────────────────────────────────────────────────
-  app.delete("/api/candidates/:id/documents/:docType", async (req: Request, res: Response) => {
+  app.delete("/api/candidates/:id/documents/:docType", requireAuth, async (req: Request, res: Response) => {
     try {
       const { id, docType } = req.params;
       if (!["photo", "nationalId", "iban"].includes(docType)) {
@@ -514,7 +515,7 @@ export async function registerRoutes(
   });
 
   // ─── Current User (dev bypass) ────────────────────────────────────────────
-  app.get("/api/me", async (req: Request, res: Response) => {
+  app.get("/api/me", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
       // Dev fallback: if no cookie, return admin so legacy local dev still works.
@@ -553,7 +554,7 @@ export async function registerRoutes(
   });
 
   // ─── Auth ─────────────────────────────────────────────────────────────────
-  app.post("/api/auth/login", async (req: Request, res: Response) => {
+  app.post("/api/auth/login", markPublic, async (req: Request, res: Response) => {
     try {
       const { identifier, password } = req.body;
       if (!identifier || !password) {
@@ -617,7 +618,7 @@ export async function registerRoutes(
   });
 
   // ─── OTP: Request code ─────────────────────────────────────────────────────
-  app.post("/api/auth/otp/request", async (req: Request, res: Response) => {
+  app.post("/api/auth/otp/request", markPublic, async (req: Request, res: Response) => {
     try {
       const { phone } = z.object({ phone: z.string().min(9) }).parse(req.body);
       const normalizedPhone = phone.trim().replace(/\s+/g, "");
@@ -654,7 +655,7 @@ export async function registerRoutes(
   });
 
   // ─── OTP: Verify code ──────────────────────────────────────────────────────
-  app.post("/api/auth/otp/verify", async (req: Request, res: Response) => {
+  app.post("/api/auth/otp/verify", markPublic, async (req: Request, res: Response) => {
     try {
       const { phone, code } = z.object({
         phone: z.string().min(9),
@@ -687,7 +688,7 @@ export async function registerRoutes(
   });
 
   // ─── Registration (requires verified OTP) ──────────────────────────────────
-  app.post("/api/auth/register", async (req: Request, res: Response) => {
+  app.post("/api/auth/register", markPublic, async (req: Request, res: Response) => {
     try {
       const { fullName, phone, nationalId, password, otpId } = req.body as {
         fullName?: string;
@@ -788,7 +789,7 @@ export async function registerRoutes(
   });
 
   // ─── Change password (candidate self-service) ───────────────────────────
-  app.post("/api/auth/change-password", async (req: Request, res: Response) => {
+  app.post("/api/auth/change-password", requireAuth, async (req: Request, res: Response) => {
     try {
       const { candidateId, currentPassword, newPassword } = req.body as {
         candidateId?: string; currentPassword?: string; newPassword?: string;
@@ -827,7 +828,7 @@ export async function registerRoutes(
   });
 
   // ─── Reset password: initiate (lookup by National ID, send OTP) ──────────
-  app.post("/api/auth/reset-password/request", async (req: Request, res: Response) => {
+  app.post("/api/auth/reset-password/request", markPublic, async (req: Request, res: Response) => {
     try {
       const { nationalId } = req.body as { nationalId?: string };
       if (!nationalId) {
@@ -873,7 +874,7 @@ export async function registerRoutes(
   });
 
   // ─── Reset password: finalize (OTP verified, set new password) ──────────
-  app.post("/api/auth/reset-password", async (req: Request, res: Response) => {
+  app.post("/api/auth/reset-password", markPublic, async (req: Request, res: Response) => {
     try {
       const { nationalId, otpId, newPassword } = req.body as {
         nationalId?: string; otpId?: string; newPassword?: string;
@@ -922,7 +923,7 @@ export async function registerRoutes(
   });
 
   // ─── System Settings (public — no auth) ──────────────────────────────────
-  app.get("/api/settings/public", async (_req: Request, res: Response) => {
+  app.get("/api/settings/public", markPublic, async (_req: Request, res: Response) => {
     try {
       const [supportEmail, privacyPolicy, termsConditions] = await Promise.all([
         storage.getSystemSetting("support_email"),
@@ -939,7 +940,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/settings/system", async (_req: Request, res: Response) => {
+  app.get("/api/settings/system", requirePermission("settings:read"), async (_req: Request, res: Response) => {
     try {
       const [supportEmail, privacyPolicy, termsConditions, ntpServerUrl, orgTimezone, configVersion,
         attEarlyBuf, attLateBuf, attMinDur, attMaxSubs] = await Promise.all([
@@ -971,7 +972,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/settings/system", async (req: Request, res: Response) => {
+  app.patch("/api/settings/system", requirePermission("settings:write"), async (req: Request, res: Response) => {
     try {
       const { support_email, privacy_policy, terms_conditions, ntp_server_url, organization_timezone } = req.body;
       let anyChanged = false;
@@ -1027,7 +1028,7 @@ export async function registerRoutes(
   });
 
   // ─── Dashboard ───────────────────────────────────────────────────────────
-  app.get("/api/dashboard/stats", async (_req: Request, res: Response) => {
+  app.get("/api/dashboard/stats", requireAuth, async (_req: Request, res: Response) => {
     try {
       const stats = await storage.getDashboardStats();
       return res.json(stats);
@@ -1037,7 +1038,7 @@ export async function registerRoutes(
   });
 
   // ─── Candidates ──────────────────────────────────────────────────────────
-  app.get("/api/candidates", async (req: Request, res: Response) => {
+  app.get("/api/candidates", requirePermission("candidates:read"), async (req: Request, res: Response) => {
     try {
       const query = candidateQuerySchema.parse(req.query);
       const result = await storage.getCandidates(query);
@@ -1047,7 +1048,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/candidates/by-ids", async (req: Request, res: Response) => {
+  app.get("/api/candidates/by-ids", requirePermission("candidates:read"), async (req: Request, res: Response) => {
     try {
       const ids = Array.isArray(req.query.ids) ? req.query.ids as string[] : req.query.ids ? [req.query.ids as string] : [];
       if (ids.length === 0) return res.json([]);
@@ -1058,7 +1059,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/candidates/export", async (req: Request, res: Response) => {
+  app.get("/api/candidates/export", requirePermission("candidates:export"), async (req: Request, res: Response) => {
     try {
       const result = await storage.exportCandidates();
       return res.json(result);
@@ -1067,7 +1068,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/candidates/stats", async (_req: Request, res: Response) => {
+  app.get("/api/candidates/stats", requirePermission("candidates:read"), async (_req: Request, res: Response) => {
     try {
       const stats = await storage.getCandidateStats();
       return res.json(stats);
@@ -1076,7 +1077,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/candidates/:id/contract-history", async (req: Request, res: Response) => {
+  app.get("/api/candidates/:id/contract-history", requireAuth, async (req: Request, res: Response) => {
     try {
       const contracts = await storage.getContractHistory(req.params.id);
       return res.json(contracts);
@@ -1085,7 +1086,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/candidates/:id", async (req: Request, res: Response) => {
+  app.get("/api/candidates/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const candidate = await storage.getCandidate(req.params.id);
       if (!candidate) return res.status(404).json({ message: "Candidate not found" });
@@ -1095,7 +1096,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/candidates", async (req: Request, res: Response) => {
+  app.post("/api/candidates", requirePermission("candidates:create"), async (req: Request, res: Response) => {
     try {
       const data = insertCandidateSchema.parse(req.body);
       if (data.nationalId) {
@@ -1117,7 +1118,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/candidates/:id", async (req: Request, res: Response) => {
+  app.patch("/api/candidates/:id", requirePermission("candidates:update"), async (req: Request, res: Response) => {
     try {
       const data = insertCandidateSchema.partial().parse(req.body);
 
@@ -1142,7 +1143,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/candidates/:id/archive", async (req: Request, res: Response) => {
+  app.post("/api/candidates/:id/archive", requirePermission("candidates:archive"), async (req: Request, res: Response) => {
     try {
       const archived = await storage.archiveCandidate(req.params.id);
       if (!archived) return res.status(404).json({ message: "Candidate not found or already archived" });
@@ -1152,7 +1153,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/candidates/:id/unarchive", async (req: Request, res: Response) => {
+  app.post("/api/candidates/:id/unarchive", requirePermission("candidates:archive"), async (req: Request, res: Response) => {
     try {
       const restored = await storage.unarchiveCandidate(req.params.id);
       if (!restored) return res.status(404).json({ message: "Candidate not found or not archived" });
@@ -1162,7 +1163,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/candidates/bulk-action", async (req: Request, res: Response) => {
+  app.post("/api/candidates/bulk-action", requirePermission("candidates:bulk"), async (req: Request, res: Response) => {
     try {
       const { ids, action } = req.body;
       if (!Array.isArray(ids) || ids.length === 0) {
@@ -1189,7 +1190,7 @@ export async function registerRoutes(
   });
 
   // Bulk upload endpoint – designed for 70k candidates
-  app.post("/api/candidates/bulk", async (req: Request, res: Response) => {
+  app.post("/api/candidates/bulk", requirePermission("candidates:bulk"), async (req: Request, res: Response) => {
     try {
       const { candidates: rawCandidates } = req.body;
       if (!Array.isArray(rawCandidates) || rawCandidates.length === 0) {
@@ -1238,7 +1239,7 @@ export async function registerRoutes(
 
   // ─── SMP Upload Validation ────────────────────────────────────────────────
   // Validates SMP batch rows before committing: returns NEW, CLEAN, BLOCKED buckets
-  app.post("/api/candidates/smp-validate", async (req: Request, res: Response) => {
+  app.post("/api/candidates/smp-validate", requirePermission("candidates:smp_manage"), async (req: Request, res: Response) => {
     try {
       const { candidates: rows } = req.body;
       if (!Array.isArray(rows) || rows.length === 0) {
@@ -1322,7 +1323,7 @@ export async function registerRoutes(
   // for CLEAN (existing) candidates, and skips BLOCKED rows.
   // CLEAN rows MUST carry confirmed=true from the caller; any CLEAN row without
   // explicit user confirmation is treated as skipped (server enforces this gate).
-  app.post("/api/candidates/smp-commit", async (req: Request, res: Response) => {
+  app.post("/api/candidates/smp-commit", requirePermission("candidates:smp_manage"), async (req: Request, res: Response) => {
     try {
       const { results: validationResults, eventId, jobId } = req.body as {
         results: {
@@ -1484,7 +1485,7 @@ export async function registerRoutes(
   });
 
   // ─── Events ──────────────────────────────────────────────────────────────
-  app.get("/api/events", async (req: Request, res: Response) => {
+  app.get("/api/events", requirePermission("events:read"), async (req: Request, res: Response) => {
     try {
       const includeArchived = req.query.archived === "true";
       const data = await storage.getEvents({ includeArchived });
@@ -1494,7 +1495,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/events/:id", async (req: Request, res: Response) => {
+  app.get("/api/events/:id", requirePermission("events:read"), async (req: Request, res: Response) => {
     try {
       const evt = await storage.getEvent(req.params.id);
       if (!evt) return res.status(404).json({ message: "Event not found" });
@@ -1504,7 +1505,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/events", async (req: Request, res: Response) => {
+  app.post("/api/events", requirePermission("events:create"), async (req: Request, res: Response) => {
     try {
       const data = insertEventSchema.parse(req.body);
       const evt = await storage.createEvent(data);
@@ -1519,7 +1520,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/events/:id", async (req: Request, res: Response) => {
+  app.patch("/api/events/:id", requirePermission("events:update"), async (req: Request, res: Response) => {
     try {
       const data = insertEventSchema.partial().parse(req.body);
       const evt = await storage.updateEvent(req.params.id, data);
@@ -1530,7 +1531,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/events/:id/close", async (req: Request, res: Response) => {
+  app.post("/api/events/:id/close", requirePermission("events:close"), async (req: Request, res: Response) => {
     try {
       const actorId = (req as any).userId ?? undefined;
       const evt = await storage.closeEvent(req.params.id);
@@ -1554,7 +1555,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/events/:id/reopen", async (req: Request, res: Response) => {
+  app.post("/api/events/:id/reopen", requirePermission("events:reopen"), async (req: Request, res: Response) => {
     try {
       const actorId = (req as any).userId ?? undefined;
       const { reason } = req.body as { reason?: string };
@@ -1579,7 +1580,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/events/:id/archive", async (req: Request, res: Response) => {
+  app.post("/api/events/:id/archive", requirePermission("events:archive"), async (req: Request, res: Response) => {
     try {
       const evt = await storage.archiveEvent(req.params.id);
       if (!evt) return res.status(404).json({ message: "Event not found" });
@@ -1594,7 +1595,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/events/:id/unarchive", async (req: Request, res: Response) => {
+  app.post("/api/events/:id/unarchive", requirePermission("events:archive"), async (req: Request, res: Response) => {
     try {
       const evt = await storage.unarchiveEvent(req.params.id);
       if (!evt) return res.status(404).json({ message: "Event not found" });
@@ -1610,7 +1611,7 @@ export async function registerRoutes(
   });
 
   // ─── Job Postings ─────────────────────────────────────────────────────────
-  app.get("/api/jobs", async (req: Request, res: Response) => {
+  app.get("/api/jobs", requirePermission("jobs:read"), async (req: Request, res: Response) => {
     try {
       const { status, eventId } = req.query as Record<string, string>;
       const data = await storage.getJobPostings({ status, eventId });
@@ -1620,7 +1621,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/jobs/stats", async (_req: Request, res: Response) => {
+  app.get("/api/jobs/stats", requirePermission("jobs:read"), async (_req: Request, res: Response) => {
     try {
       const stats = await storage.getJobStats();
       return res.json(stats);
@@ -1629,7 +1630,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/jobs/:id", async (req: Request, res: Response) => {
+  app.get("/api/jobs/:id", markPublic, async (req: Request, res: Response) => {
     try {
       const job = await storage.getJobPosting(req.params.id);
       if (!job) return res.status(404).json({ message: "Job not found" });
@@ -1643,7 +1644,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/jobs", async (req: Request, res: Response) => {
+  app.post("/api/jobs", requirePermission("jobs:create"), async (req: Request, res: Response) => {
     try {
       const body = { ...req.body };
       if (typeof body.salaryMin === "number") body.salaryMin = String(body.salaryMin);
@@ -1656,7 +1657,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/jobs/:id", async (req: Request, res: Response) => {
+  app.patch("/api/jobs/:id", requirePermission("jobs:update"), async (req: Request, res: Response) => {
     try {
       const body = { ...req.body };
       if (typeof body.salaryMin === "number") body.salaryMin = String(body.salaryMin);
@@ -1670,7 +1671,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/jobs/:id/archive", async (req: Request, res: Response) => {
+  app.post("/api/jobs/:id/archive", requirePermission("jobs:archive"), async (req: Request, res: Response) => {
     try {
       const archived = await storage.archiveJobPosting(req.params.id);
       if (!archived) return res.status(404).json({ message: "Job not found or already archived" });
@@ -1680,7 +1681,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/jobs/:id/unarchive", async (req: Request, res: Response) => {
+  app.post("/api/jobs/:id/unarchive", requirePermission("jobs:archive"), async (req: Request, res: Response) => {
     try {
       const restored = await storage.unarchiveJobPosting(req.params.id);
       if (!restored) return res.status(404).json({ message: "Job not found" });
@@ -1691,7 +1692,7 @@ export async function registerRoutes(
   });
 
   // ─── Applications ─────────────────────────────────────────────────────────
-  app.get("/api/applications", async (req: Request, res: Response) => {
+  app.get("/api/applications", requirePermission("applications:read"), async (req: Request, res: Response) => {
     try {
       const { jobId, candidateId, status } = req.query as Record<string, string>;
       const data = await storage.getApplications({ jobId, candidateId, status });
@@ -1702,7 +1703,7 @@ export async function registerRoutes(
   });
 
   // Paginated applicant list (applications joined with candidate names) for interview scheduling
-  app.get("/api/applications/applicants", async (req: Request, res: Response) => {
+  app.get("/api/applications/applicants", requirePermission("applications:read"), async (req: Request, res: Response) => {
     try {
       const { jobId, page = "1", limit = "20", search } = req.query as Record<string, string>;
       if (!jobId) return res.status(400).json({ error: "jobId is required" });
@@ -1718,7 +1719,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/applications/stats", async (_req: Request, res: Response) => {
+  app.get("/api/applications/stats", requirePermission("applications:read"), async (_req: Request, res: Response) => {
     try {
       const stats = await storage.getApplicationStats();
       return res.json(stats);
@@ -1727,7 +1728,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/applications", async (req: Request, res: Response) => {
+  app.post("/api/applications", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertApplicationSchema.parse(req.body);
 
@@ -1791,7 +1792,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/applications/:id", async (req: Request, res: Response) => {
+  app.patch("/api/applications/:id", requirePermission("applications:update"), async (req: Request, res: Response) => {
     try {
       const data = insertApplicationSchema.partial().parse(req.body);
       const app_ = await storage.updateApplication(req.params.id, data);
@@ -1803,7 +1804,7 @@ export async function registerRoutes(
   });
 
   // ─── Interviews ───────────────────────────────────────────────────────────
-  app.get("/api/interviews", async (req: Request, res: Response) => {
+  app.get("/api/interviews", requirePermission("interviews:read"), async (req: Request, res: Response) => {
     try {
       const { status, candidateId, eventId } = req.query as Record<string, string>;
       const data = await storage.getInterviews({ status, candidateId, eventId });
@@ -1813,7 +1814,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/interviews/stats", async (_req: Request, res: Response) => {
+  app.get("/api/interviews/stats", requirePermission("interviews:read"), async (_req: Request, res: Response) => {
     try {
       const stats = await storage.getInterviewStats();
       return res.json(stats);
@@ -1823,7 +1824,7 @@ export async function registerRoutes(
   });
 
   // Must be before /:id to avoid "stats" being treated as an id
-  app.get("/api/interviews/:id", async (req: Request, res: Response) => {
+  app.get("/api/interviews/:id", requirePermission("interviews:read"), async (req: Request, res: Response) => {
     try {
       const detail = await storage.getInterviewDetail(req.params.id);
       if (!detail) return res.status(404).json({ message: "Interview not found" });
@@ -1833,7 +1834,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/interviews", async (req: Request, res: Response) => {
+  app.post("/api/interviews", requirePermission("interviews:create"), async (req: Request, res: Response) => {
     try {
       const data = insertInterviewSchema.parse(req.body);
       const interview = await storage.createInterview(data);
@@ -1879,7 +1880,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/interviews/:id", async (req: Request, res: Response) => {
+  app.patch("/api/interviews/:id", requirePermission("interviews:update"), async (req: Request, res: Response) => {
     try {
       const data = insertInterviewSchema.partial().parse(req.body);
       const interview = await storage.updateInterview(req.params.id, data);
@@ -1902,7 +1903,7 @@ export async function registerRoutes(
   });
 
   // ─── Bulk application status update ────────────────────────────────────────
-  app.post("/api/applications/bulk-status", async (req: Request, res: Response) => {
+  app.post("/api/applications/bulk-status", requirePermission("applications:bulk_status"), async (req: Request, res: Response) => {
     try {
       const { updates } = z.object({
         updates: z.array(z.object({
@@ -1930,7 +1931,7 @@ export async function registerRoutes(
   });
 
   // ─── Onboarding ───────────────────────────────────────────────────────────
-  app.get("/api/onboarding", async (req: Request, res: Response) => {
+  app.get("/api/onboarding", requirePermission("onboarding:read"), async (req: Request, res: Response) => {
     try {
       const { status, eventId, candidateId } = req.query as Record<string, string>;
       const records = await storage.getOnboardingRecords({ status, eventId, candidateId });
@@ -1940,7 +1941,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/onboarding/bulk-convert", async (req: Request, res: Response) => {
+  app.post("/api/onboarding/bulk-convert", requirePermission("onboarding:bulk_convert"), async (req: Request, res: Response) => {
     try {
       // employmentType can be explicitly provided for the whole batch, or derived
       // per-record from the onboarding record's applicationId:
@@ -1997,7 +1998,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/onboarding/:id", async (req: Request, res: Response) => {
+  app.get("/api/onboarding/:id", requirePermission("onboarding:read"), async (req: Request, res: Response) => {
     try {
       const record = await storage.getOnboardingRecord(req.params.id);
       if (!record) return res.status(404).json({ message: "Onboarding record not found" });
@@ -2007,7 +2008,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/onboarding", async (req: Request, res: Response) => {
+  app.post("/api/onboarding", requirePermission("onboarding:create"), async (req: Request, res: Response) => {
     try {
       const data = insertOnboardingSchema.parse(req.body);
       // Prevent duplicate onboarding for same candidate
@@ -2044,7 +2045,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/onboarding/:id", async (req: Request, res: Response) => {
+  app.patch("/api/onboarding/:id", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
     try {
       const data = insertOnboardingSchema.partial().parse(req.body);
       delete data.hasPhoto;
@@ -2077,7 +2078,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/onboarding/:id", async (req: Request, res: Response) => {
+  app.delete("/api/onboarding/:id", requirePermission("onboarding:delete"), async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteOnboardingRecord(req.params.id);
       if (!ok) return res.status(404).json({ message: "Onboarding record not found" });
@@ -2087,7 +2088,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/onboarding/:id/convert", async (req: Request, res: Response) => {
+  app.post("/api/onboarding/:id/convert", requirePermission("onboarding:convert"), async (req: Request, res: Response) => {
     try {
       const { startDate, eventId, salary, smpCompanyId, employmentType: clientEmploymentType } = req.body as Record<string, string>;
       if (!startDate) return res.status(400).json({ message: "startDate is required" });
@@ -2149,7 +2150,7 @@ export async function registerRoutes(
   });
 
   // ─── Workforce (Employees) ────────────────────────────────────────────────
-  app.get("/api/workforce", async (req: Request, res: Response) => {
+  app.get("/api/workforce", requirePermission("workforce:read"), async (req: Request, res: Response) => {
     try {
       const { eventId, isActive, active, search } = req.query as Record<string, string>;
       const activeParam = isActive ?? active;
@@ -2164,7 +2165,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/workforce/stats", async (_req: Request, res: Response) => {
+  app.get("/api/workforce/stats", requirePermission("workforce:read"), async (_req: Request, res: Response) => {
     try {
       const stats = await storage.getWorkforceStats();
       return res.json(stats);
@@ -2173,7 +2174,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/workforce/history/:nationalId", async (req: Request, res: Response) => {
+  app.get("/api/workforce/history/:nationalId", requirePermission("workforce:history_read"), async (req: Request, res: Response) => {
     try {
       const history = await storage.getWorkHistory(req.params.nationalId);
       return res.json(history);
@@ -2182,7 +2183,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/workforce/by-candidate/:candidateId", async (req: Request, res: Response) => {
+  app.get("/api/workforce/by-candidate/:candidateId", requireAuth, async (req: Request, res: Response) => {
     try {
       const record = await storage.getWorkforceByCandidateId(req.params.candidateId);
       return res.json(record ?? null);
@@ -2191,7 +2192,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/workforce/all-by-candidate/:candidateId", async (req: Request, res: Response) => {
+  app.get("/api/workforce/all-by-candidate/:candidateId", requireAuth, async (req: Request, res: Response) => {
     try {
       const records = await storage.getAllWorkforceByCandidateId(req.params.candidateId);
       return res.json(records);
@@ -2200,7 +2201,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/workforce/:id", async (req: Request, res: Response) => {
+  app.get("/api/workforce/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const employee = await storage.getWorkforceEmployee(req.params.id);
       if (!employee) return res.status(404).json({ message: "Employee not found" });
@@ -2210,7 +2211,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/workforce", async (req: Request, res: Response) => {
+  app.post("/api/workforce", requirePermission("workforce:create"), async (req: Request, res: Response) => {
     try {
       const data = insertWorkforceSchema.parse(req.body);
       const record = await storage.createWorkforceRecord(data);
@@ -2223,7 +2224,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/workforce/:id", async (req: Request, res: Response) => {
+  app.patch("/api/workforce/:id", requirePermission("workforce:update"), async (req: Request, res: Response) => {
     try {
       const allowed = ["salary", "notes", "endDate", "supervisorId", "performanceScore", "isActive", "eventId", "positionId"];
       const data: Record<string, any> = {};
@@ -2275,7 +2276,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/workforce/:id/candidate-profile", async (req: Request, res: Response) => {
+  app.patch("/api/workforce/:id/candidate-profile", requirePermission("workforce:update"), async (req: Request, res: Response) => {
     try {
       const emp = await storage.getWorkforceEmployee(req.params.id);
       if (!emp) return res.status(404).json({ message: "Employee not found" });
@@ -2331,7 +2332,7 @@ export async function registerRoutes(
   });
 
   // ─── Bulk Update via Excel upload ────────────────────────────────────────
-  app.post("/api/workforce/bulk-update", uploadXlsx.single("file"), async (req: Request, res: Response) => {
+  app.post("/api/workforce/bulk-update", requirePermission("workforce:bulk"), uploadXlsx.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
@@ -2461,7 +2462,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/workforce/:id/terminate", async (req: Request, res: Response) => {
+  app.post("/api/workforce/:id/terminate", requirePermission("workforce:terminate"), async (req: Request, res: Response) => {
     try {
       const { endDate, terminationReason, terminationCategory } = req.body as { endDate: string; terminationReason?: string; terminationCategory?: string };
       if (!endDate) return res.status(400).json({ message: "endDate is required" });
@@ -2489,7 +2490,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/workforce/reinstate", async (req: Request, res: Response) => {
+  app.post("/api/workforce/reinstate", requirePermission("workforce:reinstate"), async (req: Request, res: Response) => {
     try {
       const { nationalId, startDate, eventId, salary, jobId, smpCompanyId } = req.body as Record<string, string>;
       if (!nationalId || !startDate) return res.status(400).json({ message: "nationalId and startDate are required" });
@@ -2530,7 +2531,7 @@ export async function registerRoutes(
   });
 
   // ─── Automation Rules ─────────────────────────────────────────────────────
-  app.get("/api/automation", async (_req: Request, res: Response) => {
+  app.get("/api/automation", requirePermission("automation:read"), async (_req: Request, res: Response) => {
     try {
       const rules = await storage.getAutomationRules();
       return res.json(rules);
@@ -2539,7 +2540,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/automation", async (req: Request, res: Response) => {
+  app.post("/api/automation", requirePermission("automation:write"), async (req: Request, res: Response) => {
     try {
       const data = insertAutomationRuleSchema.parse(req.body);
       const rule = await storage.createAutomationRule(data);
@@ -2549,7 +2550,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/automation/:id", async (req: Request, res: Response) => {
+  app.patch("/api/automation/:id", requirePermission("automation:write"), async (req: Request, res: Response) => {
     try {
       const data = insertAutomationRuleSchema.partial().parse(req.body);
       const rule = await storage.updateAutomationRule(req.params.id, data);
@@ -2561,7 +2562,7 @@ export async function registerRoutes(
   });
 
   // ─── Notifications ────────────────────────────────────────────────────────
-  app.get("/api/notifications", async (req: Request, res: Response) => {
+  app.get("/api/notifications", requirePermission("notifications:read"), async (req: Request, res: Response) => {
     try {
       const { recipientId, status, limit } = req.query as Record<string, string>;
       const data = await storage.getNotifications({
@@ -2575,7 +2576,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/notifications", async (req: Request, res: Response) => {
+  app.post("/api/notifications", requirePermission("notifications:write"), async (req: Request, res: Response) => {
     try {
       const data = insertNotificationSchema.parse(req.body);
       const notification = await storage.createNotification(data);
@@ -2585,7 +2586,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/notifications/:id/read", async (req: Request, res: Response) => {
+  app.patch("/api/notifications/:id/read", requireAuth, async (req: Request, res: Response) => {
     try {
       const marked = await storage.markNotificationRead(req.params.id);
       if (!marked) return res.status(404).json({ message: "Notification not found" });
@@ -2595,7 +2596,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/notifications/unread-count/:recipientId", async (req: Request, res: Response) => {
+  app.get("/api/notifications/unread-count/:recipientId", requireAuth, async (req: Request, res: Response) => {
     try {
       const count = await storage.getUnreadCount(req.params.recipientId);
       return res.json({ count });
@@ -2605,7 +2606,7 @@ export async function registerRoutes(
   });
 
   // ─── Admin Bell Alerts ────────────────────────────────────────────────────
-  app.get("/api/admin/event-alerts", async (_req: Request, res: Response) => {
+  app.get("/api/admin/event-alerts", requirePermission("admin_alerts:manage"), async (_req: Request, res: Response) => {
     try {
       const [dateAlerts, activityLog, unreadCount] = await Promise.all([
         storage.getEventDateAlerts(),
@@ -2618,7 +2619,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/admin/alerts/:id/read", async (req: Request, res: Response) => {
+  app.patch("/api/admin/alerts/:id/read", requirePermission("admin_alerts:manage"), async (req: Request, res: Response) => {
     try {
       const ok = await storage.markAdminAlertRead(req.params.id);
       if (!ok) return res.status(404).json({ message: "Alert not found" });
@@ -2628,7 +2629,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/alerts/read-all", async (_req: Request, res: Response) => {
+  app.post("/api/admin/alerts/read-all", requirePermission("admin_alerts:manage"), async (_req: Request, res: Response) => {
     try {
       const count = await storage.markAllAdminAlertsRead();
       return res.json({ marked: count });
@@ -2638,7 +2639,7 @@ export async function registerRoutes(
   });
 
   // ─── GitHub Integration ──────────────────────────────────────────────────
-  app.get("/api/github/user", async (_req: Request, res: Response) => {
+  app.get("/api/github/user", requirePermission("integrations:github"), async (_req: Request, res: Response) => {
     try {
       const user = await getAuthenticatedUser();
       return res.json(user);
@@ -2647,7 +2648,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/github/repos", async (_req: Request, res: Response) => {
+  app.get("/api/github/repos", requirePermission("integrations:github"), async (_req: Request, res: Response) => {
     try {
       const repos = await listUserRepos();
       return res.json(repos);
@@ -2656,7 +2657,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/github/repos/:owner/:repo", async (req: Request, res: Response) => {
+  app.get("/api/github/repos/:owner/:repo", requirePermission("integrations:github"), async (req: Request, res: Response) => {
     try {
       const repo = await getRepo(req.params.owner, req.params.repo);
       return res.json(repo);
@@ -2665,7 +2666,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/github/repos/:owner/:repo/issues", async (req: Request, res: Response) => {
+  app.get("/api/github/repos/:owner/:repo/issues", requirePermission("integrations:github"), async (req: Request, res: Response) => {
     try {
       const issues = await listRepoIssues(req.params.owner, req.params.repo);
       return res.json(issues);
@@ -2674,7 +2675,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/github/repos/:owner/:repo/pulls", async (req: Request, res: Response) => {
+  app.get("/api/github/repos/:owner/:repo/pulls", requirePermission("integrations:github"), async (req: Request, res: Response) => {
     try {
       const pulls = await listRepoPullRequests(req.params.owner, req.params.repo);
       return res.json(pulls);
@@ -2684,7 +2685,7 @@ export async function registerRoutes(
   });
 
   // ─── Business Units ────────────────────────────────────────────────────────
-  app.get("/api/business-units", async (_req: Request, res: Response) => {
+  app.get("/api/business-units", requirePermission("business_units:read"), async (_req: Request, res: Response) => {
     try {
       return res.json(await storage.getBusinessUnits());
     } catch (err) {
@@ -2692,7 +2693,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/business-units", async (req: Request, res: Response) => {
+  app.post("/api/business-units", requirePermission("business_units:write"), async (req: Request, res: Response) => {
     try {
       const data = insertBusinessUnitSchema.parse(req.body);
       const bu = await storage.createBusinessUnit(data);
@@ -2702,7 +2703,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/business-units/:id", async (req: Request, res: Response) => {
+  app.patch("/api/business-units/:id", requirePermission("business_units:write"), async (req: Request, res: Response) => {
     try {
       const data = insertBusinessUnitSchema.partial().parse(req.body);
       const bu = await storage.updateBusinessUnit(req.params.id, data);
@@ -2714,7 +2715,7 @@ export async function registerRoutes(
   });
 
   // ─── Org Chart ──────────────────────────────────────────────────────────────
-  app.get("/api/org-chart", async (req: Request, res: Response) => {
+  app.get("/api/org-chart", requirePermission("org_chart:read"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
@@ -2829,14 +2830,14 @@ export async function registerRoutes(
   });
 
   // ─── Departments ───────────────────────────────────────────────────────────
-  app.get("/api/departments", async (req: Request, res: Response) => {
+  app.get("/api/departments", requirePermission("business_units:read"), async (req: Request, res: Response) => {
     try {
       const includeInactive = req.query.includeInactive === "true";
       return res.json(await storage.getDepartments(includeInactive));
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/departments", async (req: Request, res: Response) => {
+  app.post("/api/departments", requirePermission("departments:write"), async (req: Request, res: Response) => {
     try {
       const data = insertDepartmentSchema.parse(req.body);
       const dept = await storage.createDepartment(data);
@@ -2844,7 +2845,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/departments/:id", async (req: Request, res: Response) => {
+  app.patch("/api/departments/:id", requirePermission("departments:write"), async (req: Request, res: Response) => {
     try {
       const data = insertDepartmentSchema.partial().parse(req.body);
       const dept = await storage.updateDepartment(req.params.id, data);
@@ -2853,7 +2854,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/departments/:id/toggle-active", async (req: Request, res: Response) => {
+  app.post("/api/departments/:id/toggle-active", requirePermission("departments:write"), async (req: Request, res: Response) => {
     try {
       const result = await storage.toggleDepartmentActive(req.params.id);
       if (!result.success) return res.status(400).json({ message: result.error });
@@ -2862,7 +2863,7 @@ export async function registerRoutes(
   });
 
   // ─── Positions ────────────────────────────────────────────────────────────
-  app.get("/api/positions", async (req: Request, res: Response) => {
+  app.get("/api/positions", requirePermission("business_units:read"), async (req: Request, res: Response) => {
     try {
       const { departmentId, includeInactive } = req.query;
       if (departmentId) {
@@ -2872,7 +2873,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/positions", async (req: Request, res: Response) => {
+  app.post("/api/positions", requirePermission("positions:write"), async (req: Request, res: Response) => {
     try {
       const data = insertPositionSchema.parse(req.body);
       if (data.parentPositionId) {
@@ -2887,7 +2888,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/positions/:id", async (req: Request, res: Response) => {
+  app.patch("/api/positions/:id", requirePermission("positions:write"), async (req: Request, res: Response) => {
     try {
       const data = insertPositionSchema.partial().parse(req.body);
       if (data.parentPositionId) {
@@ -2918,7 +2919,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/positions/:id/toggle-active", async (req: Request, res: Response) => {
+  app.post("/api/positions/:id/toggle-active", requirePermission("positions:write"), async (req: Request, res: Response) => {
     try {
       const result = await storage.togglePositionActive(req.params.id);
       if (!result.success) return res.status(400).json({ message: result.error });
@@ -2939,7 +2940,7 @@ export async function registerRoutes(
     return true;
   }
 
-  app.get("/api/users", async (req: Request, res: Response) => {
+  app.get("/api/users", requirePermission("admin_users:manage"), async (req: Request, res: Response) => {
     try {
       if (!(await _requireSuperAdminInline(req, res))) return;
       const userList = await storage.listUsers();
@@ -2949,7 +2950,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/users", async (req: Request, res: Response) => {
+  app.post("/api/users", requirePermission("admin_users:manage"), async (req: Request, res: Response) => {
     try {
       if (!(await _requireSuperAdminInline(req, res))) return;
       const data = insertUserSchema.parse(req.body);
@@ -2976,7 +2977,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/users/:id", async (req: Request, res: Response) => {
+  app.patch("/api/users/:id", requirePermission("admin_users:manage"), async (req: Request, res: Response) => {
     try {
       const data = insertUserSchema.partial().omit({ password: true }).parse(req.body);
       // Block role escalation to super_admin.
@@ -3036,7 +3037,7 @@ export async function registerRoutes(
   }
 
   // List back-office admin users (excludes candidates and other non-admin roles).
-  app.get("/api/admin-users", async (req: Request, res: Response) => {
+  app.get("/api/admin-users", requirePermission("admin_users:manage"), async (req: Request, res: Response) => {
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const all = await storage.listUsers();
@@ -3062,7 +3063,7 @@ export async function registerRoutes(
 
   // Create a new admin user. Role must be one of the assignable admin roles
   // (super_admin is intentionally not allowed).
-  app.post("/api/admin-users", async (req: Request, res: Response) => {
+  app.post("/api/admin-users", requirePermission("admin_users:manage"), async (req: Request, res: Response) => {
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const adminRoleSchema = z.enum(ASSIGNABLE_ADMIN_ROLES);
@@ -3120,7 +3121,7 @@ export async function registerRoutes(
 
   // Update an admin user. Allows password reset via optional password field.
   // Cannot target the Super Admin or set a role to super_admin.
-  app.patch("/api/admin-users/:id", async (req: Request, res: Response) => {
+  app.patch("/api/admin-users/:id", requirePermission("admin_users:manage"), async (req: Request, res: Response) => {
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const target = await storage.getUser(req.params.id);
@@ -3198,7 +3199,7 @@ export async function registerRoutes(
   });
 
   // ─── RBAC: Roles & Permissions ─────────────────────────────────────────────
-  app.get("/api/permissions", async (req: Request, res: Response) => {
+  app.get("/api/permissions", requirePermission("roles:read"), async (req: Request, res: Response) => {
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const perms = await storage.listPermissions();
@@ -3208,7 +3209,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/roles", async (req: Request, res: Response) => {
+  app.get("/api/roles", requirePermission("roles:read"), async (req: Request, res: Response) => {
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const list = await storage.listRoles();
@@ -3218,7 +3219,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/roles/:id", async (req: Request, res: Response) => {
+  app.get("/api/roles/:id", requirePermission("roles:read"), async (req: Request, res: Response) => {
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const role = await storage.getRole(req.params.id);
@@ -3229,7 +3230,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/roles/:id/permissions", async (req: Request, res: Response) => {
+  app.get("/api/roles/:id/permissions", requirePermission("roles:read"), async (req: Request, res: Response) => {
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const role = await storage.getRole(req.params.id);
@@ -3241,7 +3242,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/roles", async (req: Request, res: Response) => {
+  app.post("/api/roles", requirePermission("roles:manage"), async (req: Request, res: Response) => {
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const bodySchema = z.object({
@@ -3271,7 +3272,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/roles/:id", async (req: Request, res: Response) => {
+  app.patch("/api/roles/:id", requirePermission("roles:manage"), async (req: Request, res: Response) => {
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const role = await storage.getRole(req.params.id);
@@ -3302,7 +3303,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/roles/:id", async (req: Request, res: Response) => {
+  app.delete("/api/roles/:id", requirePermission("roles:manage"), async (req: Request, res: Response) => {
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const role = await storage.getRole(req.params.id);
@@ -3335,7 +3336,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/roles/:id/clone", async (req: Request, res: Response) => {
+  app.post("/api/roles/:id/clone", requirePermission("roles:manage"), async (req: Request, res: Response) => {
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const bodySchema = z.object({
@@ -3363,7 +3364,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/roles/:id/permissions", async (req: Request, res: Response) => {
+  app.put("/api/roles/:id/permissions", requirePermission("roles:manage"), async (req: Request, res: Response) => {
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const role = await storage.getRole(req.params.id);
@@ -3393,7 +3394,7 @@ export async function registerRoutes(
   });
 
   // ─── SMP Companies ─────────────────────────────────────────────────────────
-  app.get("/api/smp-companies", async (_req: Request, res: Response) => {
+  app.get("/api/smp-companies", requirePermission("smp:read"), async (_req: Request, res: Response) => {
     try {
       const companies = await storage.getSMPCompanies();
       return res.json(companies);
@@ -3402,7 +3403,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/smp-companies/:id", async (req: Request, res: Response) => {
+  app.get("/api/smp-companies/:id", requirePermission("smp:read"), async (req: Request, res: Response) => {
     try {
       const company = await storage.getSMPCompany(req.params.id);
       if (!company) return res.status(404).json({ message: "Company not found" });
@@ -3412,7 +3413,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/smp-companies/:id/workers", async (req: Request, res: Response) => {
+  app.get("/api/smp-companies/:id/workers", requirePermission("smp:read"), async (req: Request, res: Response) => {
     try {
       const workers = await storage.getSMPCompanyWorkers(req.params.id);
       return res.json(workers);
@@ -3421,7 +3422,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/smp-companies", async (req: Request, res: Response) => {
+  app.post("/api/smp-companies", requirePermission("smp:create"), async (req: Request, res: Response) => {
     try {
       const data = insertSMPCompanySchema.parse(req.body);
       const company = await storage.createSMPCompany(data);
@@ -3437,7 +3438,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/smp-companies/:id", async (req: Request, res: Response) => {
+  app.patch("/api/smp-companies/:id", requirePermission("smp:update"), async (req: Request, res: Response) => {
     try {
       const data = insertSMPCompanySchema.partial().parse(req.body);
       const company = await storage.updateSMPCompany(req.params.id, data);
@@ -3448,7 +3449,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/smp-companies/:id", async (req: Request, res: Response) => {
+  app.delete("/api/smp-companies/:id", requirePermission("smp:delete"), async (req: Request, res: Response) => {
     try {
       // Block deletion if the company has linked workforce records (active or historical)
       const workers = await storage.getSMPCompanyWorkers(req.params.id);
@@ -3466,7 +3467,7 @@ export async function registerRoutes(
   });
 
   // SMP Documents (sub-routes under SMP Companies)
-  app.get("/api/smp-companies/:id/documents", async (req: Request, res: Response) => {
+  app.get("/api/smp-companies/:id/documents", requirePermission("smp:documents_read"), async (req: Request, res: Response) => {
     try {
       const docs = await storage.getSMPDocuments(req.params.id);
       return res.json(docs);
@@ -3475,7 +3476,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/smp-companies/:id/documents", async (req: Request, res: Response) => {
+  app.post("/api/smp-companies/:id/documents", requirePermission("smp:documents_write"), async (req: Request, res: Response) => {
     try {
       const { fileUrl, fileName, description, eventId } = req.body;
       if (!fileUrl || !fileName) return res.status(400).json({ message: "fileUrl and fileName are required" });
@@ -3493,7 +3494,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/smp-companies/:companyId/documents/:docId", async (req: Request, res: Response) => {
+  app.delete("/api/smp-companies/:companyId/documents/:docId", requirePermission("smp:documents_write"), async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteSMPDocument(req.params.docId, req.params.companyId);
       if (!ok) return res.status(404).json({ message: "Document not found" });
@@ -3504,7 +3505,7 @@ export async function registerRoutes(
   });
 
   // ─── Contract Templates (Contract Engine) ─────────────────────────────────
-  app.get("/api/contract-templates", async (req: Request, res: Response) => {
+  app.get("/api/contract-templates", requirePermission("contract_templates:read"), async (req: Request, res: Response) => {
     try {
       const { eventId, status } = req.query;
       const data = await storage.getContractTemplates({
@@ -3515,7 +3516,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/contract-templates/:id", async (req: Request, res: Response) => {
+  app.get("/api/contract-templates/:id", requirePermission("contract_templates:read"), async (req: Request, res: Response) => {
     try {
       const t = await storage.getContractTemplate(req.params.id);
       if (!t) return res.status(404).json({ message: "Template not found" });
@@ -3523,7 +3524,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/contract-templates", async (req: Request, res: Response) => {
+  app.post("/api/contract-templates", requirePermission("contract_templates:write"), async (req: Request, res: Response) => {
     try {
       const parsed = insertContractTemplateSchema.parse(req.body);
       const created = await storage.createContractTemplate(parsed);
@@ -3531,7 +3532,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/contract-templates/:id", async (req: Request, res: Response) => {
+  app.patch("/api/contract-templates/:id", requirePermission("contract_templates:write"), async (req: Request, res: Response) => {
     try {
       const existing = await storage.getContractTemplate(req.params.id);
       if (!existing) return res.status(404).json({ message: "Template not found" });
@@ -3540,7 +3541,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.delete("/api/contract-templates/:id", async (req: Request, res: Response) => {
+  app.delete("/api/contract-templates/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const contracts = await storage.getCandidateContracts({ templateId: req.params.id });
       if (contracts.length > 0) {
@@ -3552,7 +3553,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/contract-templates/:id/new-version", async (req: Request, res: Response) => {
+  app.post("/api/contract-templates/:id/new-version", requireAuth, async (req: Request, res: Response) => {
     try {
       const parent = await storage.getContractTemplate(req.params.id);
       if (!parent) return res.status(404).json({ message: "Template not found" });
@@ -3564,7 +3565,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/contract-templates/:id/logo", upload.single("file"), async (req: Request, res: Response) => {
+  app.post("/api/contract-templates/:id/logo", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
       const logoUrl = await uploadFile(req.file.path, req.file.filename, getMimeType(req.file.filename));
@@ -3575,7 +3576,7 @@ export async function registerRoutes(
   });
 
   // ─── Candidate Contracts (generate / sign) ──────────────────────────────
-  app.get("/api/candidate-contracts", async (req: Request, res: Response) => {
+  app.get("/api/candidate-contracts", requirePermission("candidate_contracts:read"), async (req: Request, res: Response) => {
     try {
       const { candidateId, onboardingId, templateId, status } = req.query;
       const data = await storage.getCandidateContracts({
@@ -3588,7 +3589,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/onboarding/:id/generate-contract", async (req: Request, res: Response) => {
+  app.post("/api/onboarding/:id/generate-contract", requireAuth, async (req: Request, res: Response) => {
     try {
       const ob = await storage.getOnboardingRecord(req.params.id);
       if (!ob) return res.status(404).json({ message: "Onboarding record not found" });
@@ -3648,7 +3649,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/onboarding/bulk-generate-contracts", async (req: Request, res: Response) => {
+  app.post("/api/onboarding/bulk-generate-contracts", requireAuth, async (req: Request, res: Response) => {
     try {
       const { onboardingIds, templateId } = req.body;
       if (!templateId || !Array.isArray(onboardingIds) || onboardingIds.length === 0) {
@@ -3706,7 +3707,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/candidate-contracts/:id/sign", async (req: Request, res: Response) => {
+  app.post("/api/candidate-contracts/:id/sign", requireAuth, async (req: Request, res: Response) => {
     try {
       const contract = await storage.getCandidateContract(req.params.id);
       if (!contract) return res.status(404).json({ message: "Contract not found" });
@@ -3749,7 +3750,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/candidate-contracts/:id/preview", async (req: Request, res: Response) => {
+  app.get("/api/candidate-contracts/:id/preview", requireAuth, async (req: Request, res: Response) => {
     try {
       const contract = await storage.getCandidateContract(req.params.id);
       if (!contract) return res.status(404).json({ message: "Contract not found" });
@@ -3764,14 +3765,14 @@ export async function registerRoutes(
   });
 
   // ─── Question Sets ────────────────────────────────────────────────────────
-  app.get("/api/question-sets", async (_req: Request, res: Response) => {
+  app.get("/api/question-sets", requireAuth, async (_req: Request, res: Response) => {
     try {
       const data = await storage.getQuestionSets();
       return res.json(data);
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/question-sets/:id", async (req: Request, res: Response) => {
+  app.get("/api/question-sets/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const qs = await storage.getQuestionSet(req.params.id);
       if (!qs) return res.status(404).json({ message: "Question set not found" });
@@ -3779,7 +3780,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/question-sets", async (req: Request, res: Response) => {
+  app.post("/api/question-sets", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertQuestionSetSchema.parse(req.body);
       const qs = await storage.createQuestionSet(data);
@@ -3787,7 +3788,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/question-sets/:id", async (req: Request, res: Response) => {
+  app.patch("/api/question-sets/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertQuestionSetSchema.partial().parse(req.body);
       const qs = await storage.updateQuestionSet(req.params.id, data);
@@ -3796,7 +3797,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.delete("/api/question-sets/:id", async (req: Request, res: Response) => {
+  app.delete("/api/question-sets/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteQuestionSet(req.params.id);
       if (!ok) return res.status(404).json({ message: "Question set not found" });
@@ -3805,14 +3806,14 @@ export async function registerRoutes(
   });
 
   // ─── SMS Plugins ──────────────────────────────────────────────────────────
-  app.get("/api/sms-plugins", async (_req: Request, res: Response) => {
+  app.get("/api/sms-plugins", requireAuth, async (_req: Request, res: Response) => {
     try {
       const plugins = await storage.getSmsPlugins();
       return res.json(plugins);
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/sms-plugins", async (req: Request, res: Response) => {
+  app.post("/api/sms-plugins", requireAuth, async (req: Request, res: Response) => {
     try {
       const { pluginConfig, credentials } = req.body as { pluginConfig: unknown; credentials?: Record<string, string> };
       if (!pluginConfig) return res.status(400).json({ message: "pluginConfig is required" });
@@ -3833,7 +3834,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/sms-plugins/validate", async (req: Request, res: Response) => {
+  app.post("/api/sms-plugins/validate", requireAuth, async (req: Request, res: Response) => {
     try {
       const validation = validatePluginConfig(req.body);
       if (!validation.valid) return res.status(400).json({ valid: false, error: validation.error });
@@ -3841,7 +3842,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/sms-plugins/:id/credentials", async (req: Request, res: Response) => {
+  app.patch("/api/sms-plugins/:id/credentials", requireAuth, async (req: Request, res: Response) => {
     try {
       const credentials = z.record(z.string()).parse(req.body);
       const plugin = await storage.updateSmsPluginCredentials(req.params.id, credentials);
@@ -3850,7 +3851,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/sms-plugins/:id/activate", async (req: Request, res: Response) => {
+  app.post("/api/sms-plugins/:id/activate", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.activateSmsPlugin(req.params.id);
       if (!ok) return res.status(404).json({ message: "Plugin not found" });
@@ -3858,7 +3859,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/sms-plugins/:id/test", async (req: Request, res: Response) => {
+  app.post("/api/sms-plugins/:id/test", requireAuth, async (req: Request, res: Response) => {
     try {
       const { to, message } = z.object({
         to: z.string().min(7),
@@ -3875,7 +3876,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.delete("/api/sms-plugins/:id", async (req: Request, res: Response) => {
+  app.delete("/api/sms-plugins/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteSmsPlugin(req.params.id);
       if (!ok) return res.status(404).json({ message: "Plugin not found" });
@@ -3884,7 +3885,7 @@ export async function registerRoutes(
   });
 
   // ─── ID Card Templates ──────────────────────────────────────────────────────
-  app.get("/api/id-card-templates", async (req: Request, res: Response) => {
+  app.get("/api/id-card-templates", requireAuth, async (req: Request, res: Response) => {
     try {
       const eventId = req.query.eventId as string | undefined;
       const templates = await storage.getIdCardTemplates(eventId ? { eventId } : undefined);
@@ -3892,7 +3893,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/id-card-templates/active", async (req: Request, res: Response) => {
+  app.get("/api/id-card-templates/active", requireAuth, async (req: Request, res: Response) => {
     try {
       const eventId = req.query.eventId as string | undefined;
       const template = await storage.getActiveIdCardTemplate(eventId);
@@ -3901,7 +3902,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/id-card-templates/:id", async (req: Request, res: Response) => {
+  app.get("/api/id-card-templates/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const template = await storage.getIdCardTemplate(req.params.id);
       if (!template) return res.status(404).json({ message: "Template not found" });
@@ -3909,7 +3910,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/id-card-templates", async (req: Request, res: Response) => {
+  app.post("/api/id-card-templates", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertIdCardTemplateSchema.parse(req.body);
       const template = await storage.createIdCardTemplate(data);
@@ -3917,7 +3918,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/id-card-templates/:id", async (req: Request, res: Response) => {
+  app.patch("/api/id-card-templates/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertIdCardTemplateSchema.partial().parse(req.body);
       const template = await storage.updateIdCardTemplate(req.params.id, data);
@@ -3926,7 +3927,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.delete("/api/id-card-templates/:id", async (req: Request, res: Response) => {
+  app.delete("/api/id-card-templates/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteIdCardTemplate(req.params.id);
       if (!ok) return res.status(404).json({ message: "Template not found" });
@@ -3934,7 +3935,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/id-card-templates/:id/activate", async (req: Request, res: Response) => {
+  app.post("/api/id-card-templates/:id/activate", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.activateIdCardTemplate(req.params.id);
       if (!ok) return res.status(404).json({ message: "Template not found" });
@@ -3942,7 +3943,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/id-card-templates/:id/background", upload.single("file"), async (req: Request, res: Response) => {
+  app.post("/api/id-card-templates/:id/background", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
       const imageUrl = await uploadFile(req.file.path, req.file.filename, getMimeType(req.file.filename));
@@ -3954,14 +3955,14 @@ export async function registerRoutes(
   });
 
   // ─── Printer Plugins ────────────────────────────────────────────────────────
-  app.get("/api/printer-plugins", async (_req: Request, res: Response) => {
+  app.get("/api/printer-plugins", requireAuth, async (_req: Request, res: Response) => {
     try {
       const plugins = await storage.getPrinterPlugins();
       return res.json(plugins);
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/printer-plugins/active", async (_req: Request, res: Response) => {
+  app.get("/api/printer-plugins/active", requireAuth, async (_req: Request, res: Response) => {
     try {
       const plugin = await storage.getActivePrinterPlugin();
       if (!plugin) return res.status(404).json({ message: "No active printer plugin" });
@@ -3969,7 +3970,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/printer-plugins", async (req: Request, res: Response) => {
+  app.post("/api/printer-plugins", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertPrinterPluginSchema.parse(req.body);
       const plugin = await storage.createPrinterPlugin(data);
@@ -3977,7 +3978,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/printer-plugins/:id", async (req: Request, res: Response) => {
+  app.patch("/api/printer-plugins/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertPrinterPluginSchema.partial().parse(req.body);
       const plugin = await storage.updatePrinterPlugin(req.params.id, data);
@@ -3986,7 +3987,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/printer-plugins/:id/activate", async (req: Request, res: Response) => {
+  app.post("/api/printer-plugins/:id/activate", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.activatePrinterPlugin(req.params.id);
       if (!ok) return res.status(404).json({ message: "Plugin not found" });
@@ -3994,7 +3995,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.delete("/api/printer-plugins/:id", async (req: Request, res: Response) => {
+  app.delete("/api/printer-plugins/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.deletePrinterPlugin(req.params.id);
       if (!ok) return res.status(404).json({ message: "Plugin not found" });
@@ -4003,7 +4004,7 @@ export async function registerRoutes(
   });
 
   // ─── ID Card Print Logs ─────────────────────────────────────────────────────
-  app.get("/api/id-card-print-logs", async (req: Request, res: Response) => {
+  app.get("/api/id-card-print-logs", requireAuth, async (req: Request, res: Response) => {
     try {
       const { employeeId, templateId, printedBy, limit } = req.query as Record<string, string>;
       const logs = await storage.getIdCardPrintLogs({
@@ -4016,7 +4017,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/id-card-print-logs", async (req: Request, res: Response) => {
+  app.post("/api/id-card-print-logs", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertIdCardPrintLogSchema.parse(req.body);
       const log = await storage.createIdCardPrintLog(data);
@@ -4024,7 +4025,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/id-card-print-logs/bulk", async (req: Request, res: Response) => {
+  app.post("/api/id-card-print-logs/bulk", requireAuth, async (req: Request, res: Response) => {
     try {
       const body = req.body as { logs?: unknown[] };
       if (!Array.isArray(body.logs) || body.logs.length === 0) {
@@ -4036,7 +4037,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/id-card-print-jobs", async (req: Request, res: Response) => {
+  app.post("/api/id-card-print-jobs", requireAuth, async (req: Request, res: Response) => {
     try {
       const { employeeIds, templateId, printerPluginId, statuses } = req.body as {
         employeeIds: string[];
@@ -4065,14 +4066,14 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/workforce/:id/last-printed", async (req: Request, res: Response) => {
+  app.get("/api/workforce/:id/last-printed", requireAuth, async (req: Request, res: Response) => {
     try {
       const date = await storage.getLastPrintDate(req.params.id);
       return res.json({ lastPrintedAt: date?.toISOString() ?? null });
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/workforce/last-printed-bulk", async (req: Request, res: Response) => {
+  app.post("/api/workforce/last-printed-bulk", requireAuth, async (req: Request, res: Response) => {
     try {
       const { employeeIds } = req.body as { employeeIds?: string[] };
       if (!Array.isArray(employeeIds)) {
@@ -4088,12 +4089,12 @@ export async function registerRoutes(
   });
 
   // ─── Shifts ─────────────────────────────────────────────────────────────────
-  app.get("/api/shifts", async (_req: Request, res: Response) => {
+  app.get("/api/shifts", requireAuth, async (_req: Request, res: Response) => {
     try { return res.json(await storage.getShifts()); }
     catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/shifts/:id", async (req: Request, res: Response) => {
+  app.get("/api/shifts/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const row = await storage.getShift(req.params.id);
       if (!row) return res.status(404).json({ message: "Shift not found" });
@@ -4101,7 +4102,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/shifts", async (req: Request, res: Response) => {
+  app.post("/api/shifts", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertShiftSchema.parse(req.body);
       const row = await storage.createShift(data);
@@ -4109,7 +4110,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/shifts/:id", async (req: Request, res: Response) => {
+  app.patch("/api/shifts/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertShiftSchema.partial().parse(req.body);
       const row = await storage.updateShift(req.params.id, data);
@@ -4118,7 +4119,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.delete("/api/shifts/:id", async (req: Request, res: Response) => {
+  app.delete("/api/shifts/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteShift(req.params.id);
       if (!ok) return res.status(404).json({ message: "Shift not found" });
@@ -4127,14 +4128,14 @@ export async function registerRoutes(
   });
 
   // ─── Schedule Templates ──────────────────────────────────────────────────────
-  app.get("/api/schedule-templates", async (req: Request, res: Response) => {
+  app.get("/api/schedule-templates", requireAuth, async (req: Request, res: Response) => {
     try {
       const { eventId } = req.query as { eventId?: string };
       return res.json(await storage.getScheduleTemplates(eventId ? { eventId } : undefined));
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/schedule-templates/:id", async (req: Request, res: Response) => {
+  app.get("/api/schedule-templates/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const row = await storage.getScheduleTemplate(req.params.id);
       if (!row) return res.status(404).json({ message: "Schedule template not found" });
@@ -4142,7 +4143,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/schedule-templates", async (req: Request, res: Response) => {
+  app.post("/api/schedule-templates", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertScheduleTemplateSchema.parse(req.body);
       const row = await storage.createScheduleTemplate(data);
@@ -4150,7 +4151,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/schedule-templates/:id", async (req: Request, res: Response) => {
+  app.patch("/api/schedule-templates/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertScheduleTemplateSchema.partial().parse(req.body);
       const row = await storage.updateScheduleTemplate(req.params.id, data);
@@ -4159,7 +4160,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.delete("/api/schedule-templates/:id", async (req: Request, res: Response) => {
+  app.delete("/api/schedule-templates/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteScheduleTemplate(req.params.id);
       if (!ok) return res.status(404).json({ message: "Schedule template not found" });
@@ -4168,7 +4169,7 @@ export async function registerRoutes(
   });
 
   // ─── Schedule Assignments ────────────────────────────────────────────────────
-  app.get("/api/schedule-assignments", async (req: Request, res: Response) => {
+  app.get("/api/schedule-assignments", requireAuth, async (req: Request, res: Response) => {
     try {
       const { workforceId, templateId, activeOnly } = req.query as { workforceId?: string; templateId?: string; activeOnly?: string };
       return res.json(await storage.getScheduleAssignments({
@@ -4179,21 +4180,21 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/schedule-assignments/employee/:workforceId/active", async (req: Request, res: Response) => {
+  app.get("/api/schedule-assignments/employee/:workforceId/active", requireAuth, async (req: Request, res: Response) => {
     try {
       const row = await storage.getActiveAssignmentForEmployee(req.params.workforceId);
       return res.json(row ?? null);
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/schedule-assignments/employee/:workforceId", async (req: Request, res: Response) => {
+  app.get("/api/schedule-assignments/employee/:workforceId", requireAuth, async (req: Request, res: Response) => {
     try {
       const rows = await storage.getScheduleAssignments({ workforceId: req.params.workforceId });
       return res.json(rows);
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/schedule-assignments", async (req: Request, res: Response) => {
+  app.post("/api/schedule-assignments", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertScheduleAssignmentSchema.parse(req.body);
       const endDate = data.endDate ?? null;
@@ -4228,7 +4229,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/schedule-assignments/bulk", async (req: Request, res: Response) => {
+  app.post("/api/schedule-assignments/bulk", requireAuth, async (req: Request, res: Response) => {
     try {
       const { workforceIds, templateId, startDate, assignedBy, endDate } = req.body as {
         workforceIds: string[];
@@ -4245,7 +4246,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/schedule-assignments/:id", async (req: Request, res: Response) => {
+  app.patch("/api/schedule-assignments/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertScheduleAssignmentSchema.partial().parse(req.body);
       const existing = await storage.getScheduleAssignment(req.params.id);
@@ -4260,7 +4261,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/schedule-assignments/:id/end", async (req: Request, res: Response) => {
+  app.post("/api/schedule-assignments/:id/end", requireAuth, async (req: Request, res: Response) => {
     try {
       const { endDate } = req.body as { endDate: string };
       if (!endDate) return res.status(400).json({ message: "endDate is required" });
@@ -4270,7 +4271,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.delete("/api/schedule-assignments/:id", async (req: Request, res: Response) => {
+  app.delete("/api/schedule-assignments/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteScheduleAssignment(req.params.id);
       if (!ok) return res.status(404).json({ message: "Assignment not found" });
@@ -4296,14 +4297,14 @@ export async function registerRoutes(
     }
   }
 
-  app.get("/api/attendance", async (req: Request, res: Response) => {
+  app.get("/api/attendance", requirePermission("attendance:read"), async (req: Request, res: Response) => {
     try {
       const { workforceId, dateFrom, dateTo, date } = req.query as { workforceId?: string; dateFrom?: string; dateTo?: string; date?: string };
       return res.json(await storage.getAttendanceRecords({ workforceId, dateFrom, dateTo, date }));
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/attendance", async (req: Request, res: Response) => {
+  app.post("/api/attendance", requirePermission("attendance:create"), async (req: Request, res: Response) => {
     try {
       const data = insertAttendanceRecordSchema.parse(req.body);
       await enrichAttendanceMinutes(data);
@@ -4312,7 +4313,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/attendance/bulk", async (req: Request, res: Response) => {
+  app.post("/api/attendance/bulk", requirePermission("attendance:create"), async (req: Request, res: Response) => {
     try {
       const { records } = req.body as { records: unknown[] };
       if (!Array.isArray(records)) return res.status(400).json({ message: "records array required" });
@@ -4323,7 +4324,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/attendance/:id", async (req: Request, res: Response) => {
+  app.patch("/api/attendance/:id", requirePermission("attendance:update"), async (req: Request, res: Response) => {
     try {
       const existing = await storage.getAttendanceRecord(req.params.id);
       if (!existing) return res.status(404).json({ message: "Attendance record not found" });
@@ -4347,7 +4348,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.delete("/api/attendance/:id", async (req: Request, res: Response) => {
+  app.delete("/api/attendance/:id", requirePermission("attendance:delete"), async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteAttendanceRecord(req.params.id);
       if (!ok) return res.status(404).json({ message: "Attendance record not found" });
@@ -4355,7 +4356,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/attendance/summary", async (req: Request, res: Response) => {
+  app.get("/api/attendance/summary", requirePermission("attendance:dashboard"), async (req: Request, res: Response) => {
     try {
       const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
       if (!dateFrom || !dateTo) return res.status(400).json({ message: "dateFrom and dateTo are required" });
@@ -4370,7 +4371,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/attendance/dashboard-stats", async (req: Request, res: Response) => {
+  app.get("/api/attendance/dashboard-stats", requirePermission("attendance:dashboard"), async (req: Request, res: Response) => {
     try {
       const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
       if (!dateFrom || !dateTo) return res.status(400).json({ message: "dateFrom and dateTo required" });
@@ -4402,7 +4403,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/attendance/export-lateness", async (req: Request, res: Response) => {
+  app.get("/api/attendance/export-lateness", requirePermission("attendance:export"), async (req: Request, res: Response) => {
     try {
       const { dateFrom, dateTo, format } = req.query as { dateFrom?: string; dateTo?: string; format?: string };
       if (!dateFrom || !dateTo) return res.status(400).json({ message: "dateFrom and dateTo required" });
@@ -4435,7 +4436,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/portal/my-shift/:workforceId", async (req: Request, res: Response) => {
+  app.get("/api/portal/my-shift/:workforceId", requireAuth, async (req: Request, res: Response) => {
     try {
       const authUserId = getAuthUserId(req);
       if (!authUserId) return res.status(401).json({ message: "Authentication required" });
@@ -4472,7 +4473,7 @@ export async function registerRoutes(
   });
 
   // Employee portal read-only endpoint: current schedule assignment for candidate portal
-  app.get("/api/portal/schedule/:workforceId", async (req: Request, res: Response) => {
+  app.get("/api/portal/schedule/:workforceId", requireAuth, async (req: Request, res: Response) => {
     try {
       const assignment = await storage.getActiveAssignmentForEmployee(req.params.workforceId);
       if (!assignment) return res.json(null);
@@ -4482,7 +4483,7 @@ export async function registerRoutes(
   });
 
   // ─── Portal: Data Erasure Request ───────────────────────────────────────────
-  app.post("/api/portal/data-erasure-request", async (req: Request, res: Response) => {
+  app.post("/api/portal/data-erasure-request", requireAuth, async (req: Request, res: Response) => {
     try {
       const authUserId = getAuthUserId(req);
       if (!authUserId) {
@@ -4538,11 +4539,11 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/portal/data-deletion-request", async (req: Request, res: Response) => {
+  app.post("/api/portal/data-deletion-request", requireAuth, async (req: Request, res: Response) => {
     return res.status(410).json({ message: "This endpoint has been replaced. Please update your app to the latest version." });
   });
 
-  app.get("/api/portal/data-erasure-status", async (req: Request, res: Response) => {
+  app.get("/api/portal/data-erasure-status", requireAuth, async (req: Request, res: Response) => {
     try {
       const authUserId = getAuthUserId(req);
       if (!authUserId) {
@@ -4573,7 +4574,7 @@ export async function registerRoutes(
   });
 
   // ─── Assets ──────────────────────────────────────────────────────────────────
-  app.get("/api/assets", async (req: Request, res: Response) => {
+  app.get("/api/assets", requirePermission("assets:read"), async (req: Request, res: Response) => {
     try {
       const includeInactive = req.query.includeInactive === "true";
       const rows = await storage.getAssets(includeInactive);
@@ -4581,7 +4582,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/assets", async (req: Request, res: Response) => {
+  app.post("/api/assets", requirePermission("assets:create"), async (req: Request, res: Response) => {
     try {
       const data = insertAssetSchema.parse(req.body);
       const row = await storage.createAsset(data);
@@ -4589,7 +4590,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/assets/:id", async (req: Request, res: Response) => {
+  app.get("/api/assets/:id", requirePermission("assets:read"), async (req: Request, res: Response) => {
     try {
       const row = await storage.getAsset(req.params.id);
       if (!row) return res.status(404).json({ message: "Asset not found" });
@@ -4597,7 +4598,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/assets/:id", async (req: Request, res: Response) => {
+  app.patch("/api/assets/:id", requirePermission("assets:update"), async (req: Request, res: Response) => {
     try {
       if ("price" in req.body)
         return res.status(400).json({ message: "Asset price cannot be changed after creation" });
@@ -4609,7 +4610,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.delete("/api/assets/:id", async (req: Request, res: Response) => {
+  app.delete("/api/assets/:id", requirePermission("assets:delete"), async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteAsset(req.params.id);
       if (!ok) return res.status(404).json({ message: "Asset not found" });
@@ -4618,7 +4619,7 @@ export async function registerRoutes(
   });
 
   // ─── Employee Assets ─────────────────────────────────────────────────────────
-  app.get("/api/employee-assets", async (req: Request, res: Response) => {
+  app.get("/api/employee-assets", requirePermission("employee_assets:read"), async (req: Request, res: Response) => {
     try {
       const { workforceId, status, assetId } = req.query as { workforceId?: string; status?: string; assetId?: string };
       const rows = await storage.getEmployeeAssets({ workforceId, status, assetId });
@@ -4626,7 +4627,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/employee-assets", async (req: Request, res: Response) => {
+  app.post("/api/employee-assets", requirePermission("employee_assets:assign"), async (req: Request, res: Response) => {
     try {
       const data = insertEmployeeAssetSchema.parse(req.body);
       const row = await storage.assignAsset(data);
@@ -4647,7 +4648,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/employee-assets/:id", async (req: Request, res: Response) => {
+  app.get("/api/employee-assets/:id", requirePermission("employee_assets:read"), async (req: Request, res: Response) => {
     try {
       const row = await storage.getEmployeeAsset(req.params.id);
       if (!row) return res.status(404).json({ message: "Assignment not found" });
@@ -4655,7 +4656,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/employee-assets/:id", async (req: Request, res: Response) => {
+  app.patch("/api/employee-assets/:id", requirePermission("employee_assets:update"), async (req: Request, res: Response) => {
     try {
       const existing = await storage.getEmployeeAsset(req.params.id);
       if (!existing) return res.status(404).json({ message: "Assignment not found" });
@@ -4681,7 +4682,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.delete("/api/employee-assets/:id", async (req: Request, res: Response) => {
+  app.delete("/api/employee-assets/:id", requirePermission("employee_assets:delete"), async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteEmployeeAsset(req.params.id);
       if (!ok) return res.status(404).json({ message: "Assignment not found" });
@@ -4689,7 +4690,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/employee-assets/worker/:workforceId/unreturned", async (req: Request, res: Response) => {
+  app.get("/api/employee-assets/worker/:workforceId/unreturned", requireAuth, async (req: Request, res: Response) => {
     try {
       const rows = await storage.getUnreturnedAssetsForWorker(req.params.workforceId);
       return res.json(rows);
@@ -4698,28 +4699,28 @@ export async function registerRoutes(
 
   // ─── Offboarding ──────────────────────────────────────────────────────────────
 
-  app.get("/api/offboarding", async (req: Request, res: Response) => {
+  app.get("/api/offboarding", requirePermission("offboarding:read"), async (req: Request, res: Response) => {
     try {
       const employees = await storage.getOffboardingEmployees();
       return res.json(employees);
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/offboarding/stats", async (req: Request, res: Response) => {
+  app.get("/api/offboarding/stats", requirePermission("offboarding:read"), async (req: Request, res: Response) => {
     try {
       const stats = await storage.getOffboardingStats();
       return res.json(stats);
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/offboarding/:id/settlement", async (req: Request, res: Response) => {
+  app.get("/api/offboarding/:id/settlement", requirePermission("offboarding:read_settlement"), async (req: Request, res: Response) => {
     try {
       const settlement = await storage.getOffboardingSettlement(req.params.id);
       return res.json(settlement);
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/offboarding/:id/start", async (req: Request, res: Response) => {
+  app.post("/api/offboarding/:id/start", requirePermission("offboarding:start"), async (req: Request, res: Response) => {
     try {
       const actorId = (req as any).userId ?? undefined;
       const record = await storage.startOffboarding(req.params.id, actorId);
@@ -4735,7 +4736,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/offboarding/:id/complete", async (req: Request, res: Response) => {
+  app.post("/api/offboarding/:id/complete", requirePermission("offboarding:complete"), async (req: Request, res: Response) => {
     try {
       const actorId = (req as any).userId ?? undefined;
       const emp = await storage.getWorkforceEmployee(req.params.id);
@@ -4755,7 +4756,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/offboarding/bulk-start", async (req: Request, res: Response) => {
+  app.post("/api/offboarding/bulk-start", requirePermission("offboarding:bulk_start"), async (req: Request, res: Response) => {
     try {
       const { ids } = req.body as { ids: string[] };
       if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "ids array is required" });
@@ -4782,7 +4783,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/offboarding/bulk-complete", async (req: Request, res: Response) => {
+  app.post("/api/offboarding/bulk-complete", requirePermission("offboarding:bulk_complete"), async (req: Request, res: Response) => {
     try {
       const { ids } = req.body as { ids: string[] };
       if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "ids array is required" });
@@ -4809,7 +4810,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/offboarding/:id/reassign-event", async (req: Request, res: Response) => {
+  app.post("/api/offboarding/:id/reassign-event", requirePermission("offboarding:reassign_event"), async (req: Request, res: Response) => {
     try {
       const { eventId } = req.body as { eventId: string };
       if (!eventId) return res.status(400).json({ message: "eventId is required" });
@@ -4830,7 +4831,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/employee-assets/:id/confirm", async (req: Request, res: Response) => {
+  app.post("/api/employee-assets/:id/confirm", requirePermission("employee_assets:confirm"), async (req: Request, res: Response) => {
     try {
       const { status } = req.body as { status: "returned" | "not_returned" };
       if (!status || !["returned", "not_returned"].includes(status))
@@ -4841,7 +4842,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/employee-assets/:id/waive-deduction", async (req: Request, res: Response) => {
+  app.post("/api/employee-assets/:id/waive-deduction", requirePermission("employee_assets:waive_deduction"), async (req: Request, res: Response) => {
     try {
       const actorId = (req as any).userId;
       if (!actorId) return res.status(401).json({ message: "Authentication required" });
@@ -4863,7 +4864,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/employee-assets/bulk-status", async (req: Request, res: Response) => {
+  app.post("/api/employee-assets/bulk-status", requirePermission("employee_assets:bulk_status"), async (req: Request, res: Response) => {
     try {
       const { ids, status } = req.body as { ids: string[]; status: "returned" | "not_returned" };
       if (!Array.isArray(ids) || ids.length === 0)
@@ -4882,7 +4883,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/employee-assets/bulk-confirm", async (req: Request, res: Response) => {
+  app.post("/api/employee-assets/bulk-confirm", requirePermission("employee_assets:confirm"), async (req: Request, res: Response) => {
     try {
       const { workforceId, status } = req.body as { workforceId: string; status: "returned" | "not_returned" };
       if (!workforceId || !status || !["returned", "not_returned"].includes(status))
@@ -4903,7 +4904,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/employee-assets/bulk-assign", async (req: Request, res: Response) => {
+  app.post("/api/employee-assets/bulk-assign", requirePermission("employee_assets:assign"), async (req: Request, res: Response) => {
     try {
       const { assetId, workforceIds, assignedAt, notes } = req.body as {
         assetId: string;
@@ -4929,7 +4930,7 @@ export async function registerRoutes(
   });
 
   // ─── Global Search ────────────────────────────────────────────────────────────
-  app.get("/api/search", async (req: Request, res: Response) => {
+  app.get("/api/search", requirePermission("system:search"), async (req: Request, res: Response) => {
     try {
       const { q } = req.query as { q?: string };
       if (!q || q.trim().length < 2) {
@@ -4941,7 +4942,7 @@ export async function registerRoutes(
   });
 
   // ─── Audit Logs ───────────────────────────────────────────────────────────────
-  app.get("/api/audit-logs", async (req: Request, res: Response) => {
+  app.get("/api/audit-logs", requirePermission("audit_logs:read"), async (req: Request, res: Response) => {
     try {
       const { page, limit, search, entityType, actorId } = req.query as Record<string, string>;
       const result = await storage.getAuditLogs({
@@ -4967,7 +4968,7 @@ export async function registerRoutes(
     sortOrder: z.enum(["asc", "desc"]).default("desc"),
   });
 
-  app.get("/api/inbox", async (req: Request, res: Response) => {
+  app.get("/api/inbox", requirePermission("inbox:read"), async (req: Request, res: Response) => {
     try {
       const params = inboxQuerySchema.parse(req.query);
       const result = await storage.getInboxItems(params);
@@ -4975,14 +4976,14 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/inbox/count", async (_req: Request, res: Response) => {
+  app.get("/api/inbox/count", requirePermission("inbox:read"), async (_req: Request, res: Response) => {
     try {
       const count = await storage.countOpenInboxItems();
       return res.json({ count });
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/inbox/:id", async (req: Request, res: Response) => {
+  app.get("/api/inbox/:id", requirePermission("inbox:read"), async (req: Request, res: Response) => {
     try {
       const item = await storage.getInboxItem(req.params.id);
       if (!item) return res.status(404).json({ message: "Inbox item not found" });
@@ -4990,7 +4991,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/inbox", async (req: Request, res: Response) => {
+  app.post("/api/inbox", requirePermission("inbox:manage"), async (req: Request, res: Response) => {
     try {
       const { insertInboxItemSchema } = await import("@shared/schema");
       const data = insertInboxItemSchema.parse(req.body);
@@ -4999,7 +5000,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/inbox/:id/resolve", async (req: Request, res: Response) => {
+  app.patch("/api/inbox/:id/resolve", requirePermission("inbox:manage"), async (req: Request, res: Response) => {
     try {
       const resolvedBy = (req as any).userId ?? "system";
       const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() || undefined : undefined;
@@ -5010,7 +5011,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/inbox/:id/dismiss", async (req: Request, res: Response) => {
+  app.patch("/api/inbox/:id/dismiss", requirePermission("inbox:manage"), async (req: Request, res: Response) => {
     try {
       const resolvedBy = (req as any).userId ?? "system";
       const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() || undefined : undefined;
@@ -5038,7 +5039,7 @@ export async function registerRoutes(
     return false;
   }
 
-  app.post("/api/inbox/bulk-resolve", async (req: Request, res: Response) => {
+  app.post("/api/inbox/bulk-resolve", requirePermission("inbox:manage"), async (req: Request, res: Response) => {
     try {
       const { ids } = inboxBulkSchema.parse(req.body);
       if (await rejectIfProtectedTypes(ids, res)) return;
@@ -5048,7 +5049,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/inbox/bulk-dismiss", async (req: Request, res: Response) => {
+  app.post("/api/inbox/bulk-dismiss", requirePermission("inbox:manage"), async (req: Request, res: Response) => {
     try {
       const { ids } = inboxBulkSchema.parse(req.body);
       if (await rejectIfProtectedTypes(ids, res)) return;
@@ -5066,7 +5067,7 @@ export async function registerRoutes(
     attachmentUrl: z.string().nullable().optional(),
   });
 
-  app.post("/api/excuse-requests", async (req: Request, res: Response) => {
+  app.post("/api/excuse-requests", requireAuth, async (req: Request, res: Response) => {
     try {
       const authUserId = getAuthUserId(req);
       if (!authUserId) return res.status(401).json({ message: "Authentication required" });
@@ -5133,7 +5134,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/excuse-requests", async (req: Request, res: Response) => {
+  app.get("/api/excuse-requests", requireAuth, async (req: Request, res: Response) => {
     try {
       const authUserId = getAuthUserId(req);
       if (!authUserId) return res.status(401).json({ message: "Authentication required" });
@@ -5163,7 +5164,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/excuse-requests/pending-count", async (req: Request, res: Response) => {
+  app.get("/api/excuse-requests/pending-count", requirePermission("excuse_requests:read"), async (req: Request, res: Response) => {
     try {
       const authUserId = getAuthUserId(req);
       if (!authUserId) return res.status(401).json({ message: "Authentication required" });
@@ -5172,7 +5173,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/excuse-requests/:id/approve", async (req: Request, res: Response) => {
+  app.patch("/api/excuse-requests/:id/approve", requirePermission("excuse_requests:approve"), async (req: Request, res: Response) => {
     try {
       const reviewedBy = getAuthUserId(req);
       if (!reviewedBy) return res.status(401).json({ message: "Authentication required" });
@@ -5212,7 +5213,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/excuse-requests/:id/reject", async (req: Request, res: Response) => {
+  app.patch("/api/excuse-requests/:id/reject", requirePermission("excuse_requests:reject"), async (req: Request, res: Response) => {
     try {
       const reviewedBy = getAuthUserId(req);
       if (!reviewedBy) return res.status(401).json({ message: "Authentication required" });
@@ -5253,7 +5254,7 @@ export async function registerRoutes(
   });
 
   // ─── Geofence Zones ──────────────────────────────────────────────────────────
-  app.get("/api/geofence-zones", async (_req: Request, res: Response) => {
+  app.get("/api/geofence-zones", requirePermission("geofence:read"), async (_req: Request, res: Response) => {
     try {
       const includeInactive = _req.query.includeInactive === "true";
       const zones = await storage.getGeofenceZones(includeInactive);
@@ -5261,7 +5262,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/geofence-zones/:id", async (req: Request, res: Response) => {
+  app.get("/api/geofence-zones/:id", requirePermission("geofence:read"), async (req: Request, res: Response) => {
     try {
       const zone = await storage.getGeofenceZone(req.params.id);
       if (!zone) return res.status(404).json({ message: "Zone not found" });
@@ -5269,7 +5270,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/geofence-zones", async (req: Request, res: Response) => {
+  app.post("/api/geofence-zones", requirePermission("geofence:write"), async (req: Request, res: Response) => {
     try {
       const data = insertGeofenceZoneSchema.parse(req.body);
       const zone = await storage.createGeofenceZone(data);
@@ -5278,7 +5279,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/geofence-zones/:id", async (req: Request, res: Response) => {
+  app.patch("/api/geofence-zones/:id", requirePermission("geofence:write"), async (req: Request, res: Response) => {
     try {
       const updateSchema = z.object({
         name: z.string().min(1).optional(),
@@ -5296,7 +5297,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.delete("/api/geofence-zones/:id", async (req: Request, res: Response) => {
+  app.delete("/api/geofence-zones/:id", requirePermission("geofence:write"), async (req: Request, res: Response) => {
     try {
       const deleted = await storage.deleteGeofenceZone(req.params.id);
       if (!deleted) return res.status(404).json({ message: "Zone not found" });
@@ -5323,7 +5324,7 @@ export async function registerRoutes(
     };
   }
 
-  app.get("/api/attendance-mobile/status", async (req: Request, res: Response) => {
+  app.get("/api/attendance-mobile/status", requireAuth, async (req: Request, res: Response) => {
     try {
       const workforceId = req.query.workforceId as string;
       if (!workforceId) return res.status(400).json({ message: "workforceId is required" });
@@ -5464,7 +5465,7 @@ export async function registerRoutes(
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
   }
 
-  app.post("/api/attendance-mobile/submit", upload.single("photo"), async (req: Request, res: Response) => {
+  app.post("/api/attendance-mobile/submit", requireAuth, upload.single("photo"), async (req: Request, res: Response) => {
     try {
       if (!req.file) return res.status(400).json({ message: "Photo is required" });
 
@@ -5793,7 +5794,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/attendance-mobile/submissions", async (req: Request, res: Response) => {
+  app.get("/api/attendance-mobile/submissions", requirePermission("attendance_mobile:review_read"), async (req: Request, res: Response) => {
     try {
       const filters = {
         workforceId: req.query.workforceId as string | undefined,
@@ -5806,7 +5807,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/attendance-mobile/submissions/statuses", async (req: Request, res: Response) => {
+  app.post("/api/attendance-mobile/submissions/statuses", requireAuth, async (req: Request, res: Response) => {
     try {
       const { ids } = req.body ?? {};
       if (!Array.isArray(ids) || ids.length === 0) {
@@ -5824,7 +5825,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/attendance-mobile/submissions/:id", async (req: Request, res: Response) => {
+  app.get("/api/attendance-mobile/submissions/:id", requirePermission("attendance_mobile:review_read"), async (req: Request, res: Response) => {
     try {
       const sub = await storage.getAttendanceSubmission(req.params.id);
       if (!sub) return res.status(404).json({ message: "Submission not found" });
@@ -5832,7 +5833,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/attendance-mobile/submissions/:id/approve", async (req: Request, res: Response) => {
+  app.post("/api/attendance-mobile/submissions/:id/approve", requirePermission("attendance_mobile:approve"), async (req: Request, res: Response) => {
     try {
       const { notes, reviewedBy: bodyReviewedBy } = req.body ?? {};
       let reviewedBy = bodyReviewedBy ?? (req as any).userId;
@@ -5856,7 +5857,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/attendance-mobile/submissions/:id/reject", async (req: Request, res: Response) => {
+  app.post("/api/attendance-mobile/submissions/:id/reject", requirePermission("attendance_mobile:reject"), async (req: Request, res: Response) => {
     try {
       const { notes, reviewedBy: bodyReviewedBy } = req.body ?? {};
       let reviewedBy = bodyReviewedBy ?? (req as any).userId;
@@ -5881,7 +5882,7 @@ export async function registerRoutes(
   });
 
   // ─── Photo Change Request Endpoints ────────────────────────────────────────
-  app.get("/api/photo-change-requests", async (req: Request, res: Response) => {
+  app.get("/api/photo-change-requests", requirePermission("photo_requests:read"), async (req: Request, res: Response) => {
     try {
       const filters = {
         candidateId: req.query.candidateId as string | undefined,
@@ -5892,7 +5893,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/photo-change-requests/:id/approve", async (req: Request, res: Response) => {
+  app.post("/api/photo-change-requests/:id/approve", requirePermission("photo_requests:approve"), async (req: Request, res: Response) => {
     try {
       const { notes, reviewedBy: bodyReviewedBy } = req.body ?? {};
       let reviewedBy = bodyReviewedBy ?? (req as any).userId;
@@ -5943,7 +5944,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/photo-change-requests/:id/reject", async (req: Request, res: Response) => {
+  app.post("/api/photo-change-requests/:id/reject", requirePermission("photo_requests:reject"), async (req: Request, res: Response) => {
     try {
       const { notes, reviewedBy: bodyReviewedBy } = req.body ?? {};
       let reviewedBy = bodyReviewedBy ?? (req as any).userId;
@@ -5975,7 +5976,7 @@ export async function registerRoutes(
 
   // ─── SMS Broadcasts ──────────────────────────────────────────────────────────
 
-  app.get("/api/broadcasts", async (req: Request, res: Response) => {
+  app.get("/api/broadcasts", requirePermission("broadcasts:read"), async (req: Request, res: Response) => {
     try {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
@@ -5984,7 +5985,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/broadcasts/:id", async (req: Request, res: Response) => {
+  app.get("/api/broadcasts/:id", requirePermission("broadcasts:read"), async (req: Request, res: Response) => {
     try {
       const broadcast = await storage.getSmsBroadcast(req.params.id);
       if (!broadcast) return res.status(404).json({ message: "Broadcast not found" });
@@ -5993,7 +5994,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/broadcasts", async (req: Request, res: Response) => {
+  app.post("/api/broadcasts", requirePermission("broadcasts:write"), async (req: Request, res: Response) => {
     try {
       const { messageTemplate, workforceIds } = req.body;
       if (!messageTemplate || typeof messageTemplate !== "string" || !messageTemplate.trim()) {
@@ -6105,7 +6106,7 @@ export async function registerRoutes(
   });
 
   // ─── Pay Runs ────────────────────────────────────────────────────────────────
-  app.get("/api/pay-runs", async (req: Request, res: Response) => {
+  app.get("/api/pay-runs", requirePermission("payroll:pay_runs_read"), async (req: Request, res: Response) => {
     try {
       const runs = await storage.getPayRuns();
       const enriched = await Promise.all(runs.map(async (run) => {
@@ -6124,7 +6125,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/pay-runs", async (req: Request, res: Response) => {
+  app.post("/api/pay-runs", requirePermission("payroll:pay_runs_create"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
       const { name, eventId, dateFrom, dateTo, mode, splitPercentage, tranche1DepositDate, tranche2DepositDate } = req.body;
@@ -6146,7 +6147,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/pay-runs/:id", async (req: Request, res: Response) => {
+  app.get("/api/pay-runs/:id", requirePermission("payroll:pay_runs_read"), async (req: Request, res: Response) => {
     try {
       const run = await storage.getPayRun(req.params.id);
       if (!run) return res.status(404).json({ error: "Pay run not found" });
@@ -6166,7 +6167,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/pay-runs/:id/process", async (req: Request, res: Response) => {
+  app.post("/api/pay-runs/:id/process", requirePermission("payroll:pay_runs_process"), async (req: Request, res: Response) => {
     try {
       const result = await storage.processPayRun(req.params.id);
       await logAudit(req, { action: "process_pay_run", entityType: "pay_run", entityId: req.params.id, description: `Processed pay run: ${result.linesCreated} lines created` });
@@ -6174,7 +6175,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/pay-runs/:id/mark-t1-paid", async (req: Request, res: Response) => {
+  app.post("/api/pay-runs/:id/mark-t1-paid", requirePermission("payroll:pay_runs_approve"), async (req: Request, res: Response) => {
     try {
       const lines = await storage.getPayRunLines(req.params.id);
       let updated = 0;
@@ -6195,7 +6196,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/pay-runs/:id/lines/:lineId/manual-addition", async (req: Request, res: Response) => {
+  app.post("/api/pay-runs/:id/lines/:lineId/manual-addition", requirePermission("payroll:pay_runs_manual_edit"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
       const line = await storage.getPayRunLine(req.params.lineId);
@@ -6210,7 +6211,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/pay-runs/:id/lines/:lineId/manual-deduction", async (req: Request, res: Response) => {
+  app.post("/api/pay-runs/:id/lines/:lineId/manual-deduction", requirePermission("payroll:pay_runs_manual_edit"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
       const line = await storage.getPayRunLine(req.params.lineId);
@@ -6226,7 +6227,7 @@ export async function registerRoutes(
   });
 
   // ─── Payment Transaction Recording ─────────────────────────────────────────
-  app.post("/api/pay-runs/:id/lines/:lineId/record-payment", async (req: Request, res: Response) => {
+  app.post("/api/pay-runs/:id/lines/:lineId/record-payment", requirePermission("payroll:pay_runs_record_payment"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
       const line = await storage.getPayRunLine(req.params.lineId);
@@ -6268,7 +6269,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/pay-runs/:id/import-bank-response", upload.single("file"), async (req: Request, res: Response) => {
+  app.post("/api/pay-runs/:id/import-bank-response", requirePermission("payroll:pay_runs_import_bank"), upload.single("file"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
       if (!req.file) return res.status(400).json({ error: "File required" });
@@ -6348,7 +6349,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/pay-runs/:id/lines/:lineId/record-cash-payment", async (req: Request, res: Response) => {
+  app.post("/api/pay-runs/:id/lines/:lineId/record-cash-payment", requirePermission("payroll:pay_runs_cash_payment"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
       const line = await storage.getPayRunLine(req.params.lineId);
@@ -6430,7 +6431,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/pay-runs/:id/lines/:lineId/cash-otp-override", async (req: Request, res: Response) => {
+  app.post("/api/pay-runs/:id/lines/:lineId/cash-otp-override", requirePermission("payroll:pay_runs_cash_otp_override"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
       const [user] = await db.select().from(users).where(eq(users.id, userId ?? ""));
@@ -6478,7 +6479,7 @@ export async function registerRoutes(
   });
 
   // ─── Payroll Adjustments ────────────────────────────────────────────────────
-  app.post("/api/payroll-adjustments", async (req: Request, res: Response) => {
+  app.post("/api/payroll-adjustments", requirePermission("payroll:adjustments_write"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
       const { workforceId, date, originalDeductionMinutes, adjustedDeductionMinutes, reason } = req.body;
@@ -6494,7 +6495,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/payroll-adjustments/bulk", async (req: Request, res: Response) => {
+  app.post("/api/payroll-adjustments/bulk", requirePermission("payroll:adjustments_write"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
       const { date, reason, workforceIds, eventId, departmentId } = req.body;
@@ -6527,7 +6528,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/payroll-adjustments", async (req: Request, res: Response) => {
+  app.get("/api/payroll-adjustments", requirePermission("payroll:pay_runs_read"), async (req: Request, res: Response) => {
     try {
       const { workforceId, dateFrom, dateTo } = req.query as any;
       const adjustments = await storage.getPayrollAdjustments({ workforceId, dateFrom, dateTo });
@@ -6536,7 +6537,7 @@ export async function registerRoutes(
   });
 
   // ─── Payslips ───────────────────────────────────────────────────────────────
-  app.get("/api/payslips/:candidateId", async (req: Request, res: Response) => {
+  app.get("/api/payslips/:candidateId", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
       if (!userId) return res.status(401).json({ error: "Unauthorized" });
@@ -6585,7 +6586,7 @@ export async function registerRoutes(
   });
 
   // ─── Settlement Payment Tracking ────────────────────────────────────────────
-  app.post("/api/workforce/:id/mark-settlement-paid", async (req: Request, res: Response) => {
+  app.post("/api/workforce/:id/mark-settlement-paid", requirePermission("payroll:pay_runs_record_payment"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
       const { reference } = req.body;
@@ -6601,7 +6602,7 @@ export async function registerRoutes(
   });
 
   // ─── Payment Method Management ──────────────────────────────────────────────
-  app.patch("/api/workforce/:id/payment-method", async (req: Request, res: Response) => {
+  app.patch("/api/workforce/:id/payment-method", requirePermission("workforce:payment_method"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
       const { paymentMethod, reason } = req.body;
@@ -6624,7 +6625,7 @@ export async function registerRoutes(
   });
 
   // ─── Completed Offboarding List ─────────────────────────────────────────────
-  app.get("/api/offboarding/completed", async (req: Request, res: Response) => {
+  app.get("/api/offboarding/completed", requirePermission("offboarding:read"), async (req: Request, res: Response) => {
     try {
       const rows = await db
         .select({
@@ -6662,7 +6663,7 @@ export async function registerRoutes(
   });
 
   // ─── Pay Run Export ─────────────────────────────────────────────────────────
-  app.get("/api/pay-runs/:id/export", async (req: Request, res: Response) => {
+  app.get("/api/pay-runs/:id/export", requirePermission("payroll:pay_runs_export"), async (req: Request, res: Response) => {
     try {
       const run = await storage.getPayRun(req.params.id);
       if (!run) return res.status(404).json({ error: "Pay run not found" });
@@ -6698,7 +6699,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/pay-runs/:id/export-for-bank", async (req: Request, res: Response) => {
+  app.get("/api/pay-runs/:id/export-for-bank", requirePermission("payroll:pay_runs_export"), async (req: Request, res: Response) => {
     try {
       const run = await storage.getPayRun(req.params.id);
       if (!run) return res.status(404).json({ error: "Pay run not found" });

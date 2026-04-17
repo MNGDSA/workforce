@@ -245,25 +245,31 @@ export function markPublic(_req: Request, _res: Response, next: NextFunction) {
 // declarative middleware, the linter's coverage rises monotonically.
 
 export function lintRoutes(app: Express, log: (m: string, src?: string) => void) {
-  const stack: any[] = (app as any)._router?.stack ?? [];
+  // Express 5 exposes the router as `app.router`; Express 4 used `app._router`.
+  const router: any = (app as any).router ?? (app as any)._router;
+  const stack: any[] = router?.stack ?? [];
   const declared = new Set<string>();
+  const allRoutes = new Set<string>();
   function walk(layers: any[], prefix = "") {
     for (const layer of layers) {
       if (layer.route) {
         const fullPath = prefix + (layer.route.path ?? "");
         if (!fullPath.startsWith("/api/")) continue;
+        const methodKey = `${Object.keys(layer.route.methods).join(",").toUpperCase()} ${fullPath}`;
+        allRoutes.add(methodKey);
         const handlers: any[] = layer.route.stack ?? [];
         for (const h of handlers) {
           const fn = h.handle;
           const name = fn?.name ?? "";
+          const src = fn?.toString?.() ?? "";
           if (
             name === "requireAuth" ||
             name === "markPublic" ||
             name.startsWith("bound requireAuth") ||
-            // factory closures get anonymous names; check toString contains tokens
-            /requirePermission|requireOwnership|markPublic/.test(fn?.toString?.() ?? "")
+            /req\.rbacGuard/.test(src) ||
+            /requirePermission|requireOwnership|markPublic/.test(src)
           ) {
-            declared.add(`${Object.keys(layer.route.methods).join(",").toUpperCase()} ${fullPath}`);
+            declared.add(methodKey);
           }
         }
       } else if (layer.name === "router" && layer.handle?.stack) {
@@ -272,8 +278,15 @@ export function lintRoutes(app: Express, log: (m: string, src?: string) => void)
     }
   }
   walk(stack);
-  log(`RBAC linter: ${declared.size} routes registered with declarative guards`, "rbac-lint");
-  // Once T7 sweep completes, every /api/* route should be in `declared`.
-  // The hard-fail mode is gated behind RBAC_STRICT_LINT to allow incremental
-  // migration without breaking the boot.
+  const unguarded = Array.from(allRoutes).filter((r) => !declared.has(r));
+  log(
+    `RBAC linter: ${declared.size}/${allRoutes.size} /api routes have declarative guards (${unguarded.length} unguarded)`,
+    "rbac-lint"
+  );
+  if (unguarded.length > 0 && unguarded.length <= 20) {
+    for (const r of unguarded) log(`  unguarded: ${r}`, "rbac-lint");
+  } else if (unguarded.length > 20) {
+    log(`  (${unguarded.length} unguarded routes; first 5 shown)`, "rbac-lint");
+    for (const r of unguarded.slice(0, 5)) log(`  unguarded: ${r}`, "rbac-lint");
+  }
 }
