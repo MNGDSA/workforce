@@ -1,0 +1,188 @@
+Apr 16 14:02:15  [34m╭────────────[34m[30m[44m git repo clone [0m[0m[34m───────────╼[0m
+Apr 16 14:02:15  [34m│[0m [34m › fetching app source code[0m
+Apr 16 14:02:15  [34m│[0m => Selecting branch "main"
+Apr 16 14:02:17  [34m│[0m => Checking out commit "783404263885b74172cba25d06c36025df9367f7"
+Apr 16 14:02:17  [34m│[0m 
+Apr 16 14:02:17  [34m│[0m [32m ✔ cloned repo to [35m/workspace[0m[0m
+Apr 16 14:02:17  [34m╰────────────────────────────────────────╼[0m
+Apr 16 14:02:17  
+Apr 16 14:02:17  [34m › configuring build-time app environment variables:[0m
+Apr 16 14:02:17       AWS_REGION NODE_ENV SPACES_ENDPOINT SPACES_REGION SPACES_BUCKET AWS_ACCESS_KEY_ID SESSION_SECRET SPACES_KEY SPACES_SECRET AWS_SECRET_ACCESS_KEY
+Apr 16 14:02:17  
+Apr 16 14:02:17  [34m › configuring custom build command to be run at the end of the build:[0m
+Apr 16 14:02:17     [34m│[0m npm install --include=dev && npm run build && npm run db:push
+Apr 16 14:02:17  
+Apr 16 14:02:17  [34m╭────────────[34m[30m[44m buildpack detection [0m[0m[34m───────────╼[0m
+Apr 16 14:02:17  [34m│[0m [34m › using Ubuntu 22.04 stack[0m
+Apr 16 14:02:19  [34m│[0m Detected the following buildpacks suitable to build your app:
+Apr 16 14:02:19  [34m│[0m 
+Apr 16 14:02:19  [34m│[0m    digitalocean/nodejs-appdetect  v0.1.2    
+Apr 16 14:02:19  [34m│[0m    heroku/nodejs                  v0.338.5  (Node.js)
+Apr 16 14:02:19  [34m│[0m    digitalocean/procfile          v0.1.0    (Procfile)
+Apr 16 14:02:19  [34m│[0m    digitalocean/custom            v0.2.0    (Custom Build Command)
+Apr 16 14:02:19  [34m╰─────────────────────────────────────────────╼[0m
+Apr 16 14:02:19  
+Apr 16 14:02:19  [34m╭────────────[34m[30m[44m app build [0m[0m[34m───────────╼[0m
+Apr 16 14:02:19  [34m│[0m [33;1mWarning: [0mno analyzed metadata found at path '/layers/analyzed.toml'
+Apr 16 14:02:19  [34m│[0m Timer: Builder started at 2026-04-16T14:02:19Z
+Apr 16 14:02:20  [34m│[0m        
+Apr 16 14:02:20  [34m│[0m -----> Creating runtime environment
+Apr 16 14:02:20  [34m│[0m        
+Apr 16 14:02:20  [34m│[0m        NPM_CONFIG_LOGLEVEL=error
+Apr 16 14:02:20  [34m│[0m        NODE_VERBOSE=false
+Apr 16 14:02:20  [34m│[0m        NODE_ENV=production
+Apr 16 14:02:20  [34m│[0m        NODE_MODULES_CACHE=true
+Apr 16 14:02:20  [34m│[0m        
+Apr 16 14:02:20  [34m│[0m -----> Installing binaries
+Apr 16 14:02:20  [34m│[0m        engines.node (package.json):   unspecified
+Apr 16 14:02:20  [34m│[0m        engines.npm (package.json):    unspecified (use default)
+Apr 16 14:02:20  [34m│[0m        
+Apr 16 14:02:20  [34m│[0m        Resolving node version 22.x...
+Apr 16 14:02:20  [34m│[0m        Downloading and installing node 22.22.1...
+Apr 16 14:02:21  [34m│[0m        Validating checksum
+Apr 16 14:02:23  [34m│[0m        Using default npm version: 10.9.4
+Apr 16 14:02:24  [34m│[0m        
+Apr 16 14:02:24  [34m│[0m -----> Installing dependencies
+Apr 16 14:02:24  [34m│[0m        Installing node modules
+Apr 16 14:02:42  [34m│[0m        
+Apr 16 14:02:42  [34m│[0m        added 583 packages, and audited 584 packages in 19s
+Apr 16 14:02:42  [34m│[0m        
+Apr 16 14:02:42  [34m│[0m        59 packages are looking for funding
+Apr 16 14:02:42  [34m│[0m          run `npm fund` for details
+Apr 16 14:02:42  [34m│[0m        
+Apr 16 14:02:42  [34m│[0m        16 vulnerabilities (1 low, 5 moderate, 10 high)
+Apr 16 14:02:42  [34m│[0m        
+Apr 16 14:02:42  [34m│[0m        To address issues that do not require attention, run:
+Apr 16 14:02:42  [34m│[0m          npm audit fix
+Apr 16 14:02:42  [34m│[0m        
+Apr 16 14:02:42  [34m│[0m        To address all issues possible (including breaking changes), run:
+Apr 16 14:02:42  [34m│[0m          npm audit fix --force
+Apr 16 14:02:42  [34m│[0m        
+Apr 16 14:02:42  [34m│[0m        Some issues need review, and may require choosing
+Apr 16 14:02:42  [34m│[0m        a different dependency.
+Apr 16 14:02:42  [34m│[0m        
+Apr 16 14:02:42  [34m│[0m        Run `npm audit` for details.
+Apr 16 14:02:42  [34m│[0m        npm notice
+Apr 16 14:02:42  [34m│[0m        npm notice New major version of npm available! 10.9.4 -> 11.12.1
+Apr 16 14:02:42  [34m│[0m        npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.12.1
+Apr 16 14:02:42  [34m│[0m        npm notice To update run: npm install -g npm@11.12.1
+Apr 16 14:02:42  [34m│[0m        npm notice
+Apr 16 14:02:42  [34m│[0m        
+Apr 16 14:02:42  [34m│[0m -----> Build
+Apr 16 14:02:43  [34m│[0m        
+Apr 16 14:02:43  [34m│[0m -----> Caching build
+Apr 16 14:02:43  [34m│[0m        - npm cache
+Apr 16 14:02:43  [34m│[0m        
+Apr 16 14:02:43  [34m│[0m -----> Pruning devDependencies
+Apr 16 14:02:45  [34m│[0m        
+Apr 16 14:02:45  [34m│[0m        up to date, audited 580 packages in 2s
+Apr 16 14:02:45  [34m│[0m        
+Apr 16 14:02:45  [34m│[0m        59 packages are looking for funding
+Apr 16 14:02:45  [34m│[0m          run `npm fund` for details
+Apr 16 14:02:45  [34m│[0m        
+Apr 16 14:02:45  [34m│[0m        14 vulnerabilities (1 low, 5 moderate, 8 high)
+Apr 16 14:02:45  [34m│[0m        
+Apr 16 14:02:45  [34m│[0m        To address issues that do not require attention, run:
+Apr 16 14:02:45  [34m│[0m          npm audit fix
+Apr 16 14:02:45  [34m│[0m        
+Apr 16 14:02:45  [34m│[0m        To address all issues possible (including breaking changes), run:
+Apr 16 14:02:45  [34m│[0m          npm audit fix --force
+Apr 16 14:02:45  [34m│[0m        
+Apr 16 14:02:45  [34m│[0m        Some issues need review, and may require choosing
+Apr 16 14:02:45  [34m│[0m        a different dependency.
+Apr 16 14:02:45  [34m│[0m        
+Apr 16 14:02:45  [34m│[0m        Run `npm audit` for details.
+Apr 16 14:02:45  [34m│[0m        npm notice
+Apr 16 14:02:45  [34m│[0m        npm notice New major version of npm available! 10.9.4 -> 11.12.1
+Apr 16 14:02:45  [34m│[0m        npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.12.1
+Apr 16 14:02:45  [34m│[0m        npm notice To update run: npm install -g npm@11.12.1
+Apr 16 14:02:45  [34m│[0m        npm notice
+Apr 16 14:02:45  [34m│[0m        
+Apr 16 14:02:45  [34m│[0m -----> Build succeeded!
+Apr 16 14:02:46  [34m│[0m Running custom build command: npm install --include=dev && npm run build && npm run db:push
+Apr 16 14:02:46  [34m│[0m npm warn deprecated npmlog@5.0.1: This package is no longer supported.
+Apr 16 14:02:46  [34m│[0m npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+Apr 16 14:02:46  [34m│[0m npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+Apr 16 14:02:47  [34m│[0m npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+Apr 16 14:02:47  [34m│[0m npm warn deprecated are-we-there-yet@2.0.0: This package is no longer supported.
+Apr 16 14:02:47  [34m│[0m npm warn deprecated gauge@3.0.2: This package is no longer supported.
+Apr 16 14:02:47  [34m│[0m npm warn deprecated tar@6.2.1: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+Apr 16 14:02:48  [34m│[0m 
+Apr 16 14:02:48  [34m│[0m added 4 packages, and audited 584 packages in 2s
+Apr 16 14:02:48  [34m│[0m 
+Apr 16 14:02:48  [34m│[0m 59 packages are looking for funding
+Apr 16 14:02:48  [34m│[0m   run `npm fund` for details
+Apr 16 14:02:48  [34m│[0m 
+Apr 16 14:02:48  [34m│[0m 14 vulnerabilities (1 low, 5 moderate, 8 high)
+Apr 16 14:02:48  [34m│[0m 
+Apr 16 14:02:48  [34m│[0m To address issues that do not require attention, run:
+Apr 16 14:02:48  [34m│[0m   npm audit fix
+Apr 16 14:02:48  [34m│[0m 
+Apr 16 14:02:48  [34m│[0m To address all issues possible (including breaking changes), run:
+Apr 16 14:02:48  [34m│[0m   npm audit fix --force
+Apr 16 14:02:48  [34m│[0m 
+Apr 16 14:02:48  [34m│[0m Some issues need review, and may require choosing
+Apr 16 14:02:48  [34m│[0m a different dependency.
+Apr 16 14:02:48  [34m│[0m 
+Apr 16 14:02:48  [34m│[0m Run `npm audit` for details.
+Apr 16 14:02:48  [34m│[0m npm notice
+Apr 16 14:02:48  [34m│[0m npm notice New major version of npm available! 10.9.4 -> 11.12.1
+Apr 16 14:02:48  [34m│[0m npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.12.1
+Apr 16 14:02:48  [34m│[0m npm notice To update run: npm install -g npm@11.12.1
+Apr 16 14:02:48  [34m│[0m npm notice
+Apr 16 14:02:48  [34m│[0m 
+Apr 16 14:02:48  [34m│[0m > rest-express@1.0.0 build
+Apr 16 14:02:48  [34m│[0m > tsx script/build.ts
+Apr 16 14:02:48  [34m│[0m 
+Apr 16 14:02:49  [34m│[0m building client...
+Apr 16 14:02:49  [34m│[0m vite v7.3.2 building client environment for production...
+Apr 16 14:02:49  [34m│[0m transforming...
+Apr 16 14:02:56  [34m│[0m ✓ 2332 modules transformed.
+Apr 16 14:02:56  [34m│[0m rendering chunks...
+Apr 16 14:02:57  [34m│[0m [plugin vite:reporter] 
+Apr 16 14:02:57  [34m│[0m (!) /workspace/node_modules/xlsx/xlsx.mjs is dynamically imported by /workspace/client/src/pages/workforce.tsx, /workspace/client/src/pages/workforce.tsx but also statically imported by /workspace/client/src/pages/job-posting-detail.tsx, /workspace/client/src/pages/job-posting.tsx, /workspace/client/src/pages/reports.tsx, /workspace/client/src/pages/smp-contracts.tsx, /workspace/client/src/pages/talent.tsx, dynamic import will not move module into another chunk.
+Apr 16 14:02:57  [34m│[0m 
+Apr 16 14:02:58  [34m│[0m [meta-images] no deployment domain found, skipping meta tag updates
+Apr 16 14:02:58  [34m│[0m computing gzip size...
+Apr 16 14:02:58  [34m│[0m ../dist/public/index.html                                                  1.43 kB │ gzip:   0.58 kB
+Apr 16 14:02:58  [34m│[0m ../dist/public/assets/Destination_Mecca_14_1776015335379-Bi0emc57.jpg    444.99 kB
+Apr 16 14:02:58  [34m│[0m ../dist/public/assets/leaflet-CIGW-MKW.css                                15.61 kB │ gzip:   6.46 kB
+Apr 16 14:02:58  [34m│[0m ../dist/public/assets/index-Bh3Oazx-.css                                 171.44 kB │ gzip:  25.23 kB
+Apr 16 14:02:58  [34m│[0m ../dist/public/assets/__vite-browser-external-BIHI7g3E.js                  0.03 kB │ gzip:   0.05 kB
+Apr 16 14:02:58  [34m│[0m ../dist/public/assets/leaflet-src-CMhg18FE.js                            149.90 kB │ gzip:  43.48 kB
+Apr 16 14:02:58  [34m│[0m ../dist/public/assets/index-UvdmBxuK.js                                2,373.93 kB │ gzip: 641.49 kB
+Apr 16 14:02:58  [34m│[0m 
+Apr 16 14:02:58  [34m│[0m (!) Some chunks are larger than 500 kB after minification. Consider:
+Apr 16 14:02:58  [34m│[0m - Using dynamic import() to code-split the application
+Apr 16 14:02:58  [34m│[0m - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+Apr 16 14:02:58  [34m│[0m - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+Apr 16 14:02:58  [34m│[0m ✓ built in 8.58s
+Apr 16 14:02:58  [34m│[0m building server...
+Apr 16 14:02:58  [34m│[0m ✘ [ERROR] No matching export in "shared/schema.ts" for import "payrollTransactions"
+Apr 16 14:02:58  [34m│[0m 
+Apr 16 14:02:58  [34m│[0m     server/routes.ts:49:2:
+Apr 16 14:02:58  [34m│[0m       49 │   payrollTransactions,
+Apr 16 14:02:58  [34m│[0m          ╵   ~~~~~~~~~~~~~~~~~~~
+Apr 16 14:02:58  [34m│[0m 
+Apr 16 14:02:58  [34m│[0m 1 error
+Apr 16 14:02:58  [34m│[0m Error: Build failed with 1 error:
+Apr 16 14:02:58  [34m│[0m server/routes.ts:49:2: ERROR: No matching export in "shared/schema.ts" for import "payrollTransactions"
+Apr 16 14:02:58  [34m│[0m     at failureErrorWithLog (/workspace/node_modules/esbuild/lib/main.js:1467:15)
+Apr 16 14:02:58  [34m│[0m     at /workspace/node_modules/esbuild/lib/main.js:926:25
+Apr 16 14:02:58  [34m│[0m     at /workspace/node_modules/esbuild/lib/main.js:878:52
+Apr 16 14:02:58  [34m│[0m     at buildResponseToResult (/workspace/node_modules/esbuild/lib/main.js:924:7)
+Apr 16 14:02:58  [34m│[0m     at /workspace/node_modules/esbuild/lib/main.js:951:16
+Apr 16 14:02:58  [34m│[0m     at responseCallbacks.<computed> (/workspace/node_modules/esbuild/lib/main.js:603:9)
+Apr 16 14:02:58  [34m│[0m     at handleIncomingPacket (/workspace/node_modules/esbuild/lib/main.js:658:12)
+Apr 16 14:02:58  [34m│[0m     at Socket.readFromStdout (/workspace/node_modules/esbuild/lib/main.js:581:7)
+Apr 16 14:02:58  [34m│[0m     at Socket.emit (node:events:519:28)
+Apr 16 14:02:58  [34m│[0m     at addChunk (node:internal/streams/readable:561:12) {
+Apr 16 14:02:58  [34m│[0m   errors: [Getter/Setter],
+Apr 16 14:02:58  [34m│[0m   warnings: [Getter/Setter]
+Apr 16 14:02:58  [34m│[0m }
+Apr 16 14:02:58  [34m│[0m building: exit status 1
+Apr 16 14:02:58  [34m│[0m Timer: Builder ran for 38.902811951s and ended at 2026-04-16T14:02:58Z
+Apr 16 14:02:58  [34m│[0m [31;1mERROR: [0mfailed to build: exit status 1
+Apr 16 14:02:58  [34m│[0m 
+Apr 16 14:02:58  [34m│[0m 
+Apr 16 14:02:58  [34m│[0m [31m ✘ build failed[0m
