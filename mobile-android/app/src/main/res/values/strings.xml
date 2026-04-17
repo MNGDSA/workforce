@@ -199,4 +199,10 @@
     <string name="sign_out">Sign Out</string>
     <string name="sign_out_confirm">Are you sure you want to sign out?</string>
     <string name="sign_out_pending_warning">Warning: You have %1$d pending submission(s) that will be deleted. These have not been synced to the server yet.</string>
+    <string name="sign_out_blocked_title">Cannot Sign Out</string>
+    <string name="sign_out_blocked_message">You have %1$d unsynced attendance record(s). Signing out will permanently delete this data. Please sync first.</string>
+    <string name="sign_out_blocked_message_ar">لديك %1$d سجل حضور غير متزامن. تسجيل الخروج سيحذف هذه البيانات نهائياً. يرجى المزامنة أولاً.</string>
+    <string name="sign_out_connect_hint">Connect to the internet and sync your records before signing out.</string>
+    <string name="sign_out_connect_hint_ar">اتصل بالإنترنت وقم بمزامنة سجلاتك قبل تسجيل الخروج.</string>
+    <string name="sync_now">Sync Now</string>
 </resources>

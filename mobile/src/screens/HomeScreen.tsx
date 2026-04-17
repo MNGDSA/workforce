@@ -7,6 +7,8 @@ import {
   ScrollView,
   RefreshControl,
   Alert,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, spacing, borderRadius } from '../theme';
@@ -36,6 +38,8 @@ export default function HomeScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [online, setOnline] = useState(false);
   const [shiftInfo, setShiftInfo] = useState<ShiftInfo | null>(null);
+  const [showLogoutGuard, setShowLogoutGuard] = useState(false);
+  const [logoutSyncing, setLogoutSyncing] = useState(false);
 
   const loadData = useCallback(async () => {
     if (workforceRecord?.id) {
@@ -93,7 +97,19 @@ export default function HomeScreen({
           </View>
           <View style={styles.headerRight}>
             <View style={[styles.onlineIndicator, { backgroundColor: online ? colors.success : colors.error }]} />
-            <TouchableOpacity onPress={onLogout} style={styles.logoutButton} testID="button-logout">
+            <TouchableOpacity onPress={async () => {
+              if (workforceRecord?.id) {
+                const count = await getPendingCount(workforceRecord.id);
+                setPendingCount(count);
+                const currentOnline = await isOnline();
+                setOnline(currentOnline);
+                if (count > 0) {
+                  setShowLogoutGuard(true);
+                  return;
+                }
+              }
+              onLogout();
+            }} style={styles.logoutButton} testID="button-logout">
               <Ionicons name="log-out-outline" size={22} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
@@ -225,6 +241,84 @@ export default function HomeScreen({
           <Text style={styles.privacyLinkText}>Privacy Policy & Data Rights</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <Modal
+        visible={showLogoutGuard}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLogoutGuard(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconRow}>
+              <Ionicons name="warning-outline" size={32} color={colors.warning} />
+            </View>
+            <Text style={styles.modalTitle} testID="text-logout-guard-title">Cannot Sign Out</Text>
+            <Text style={styles.modalTitleAr} testID="text-logout-guard-title-ar">لا يمكن تسجيل الخروج</Text>
+
+            <Text style={styles.modalMessage} testID="text-logout-guard-message">
+              You have {pendingCount} unsynced attendance record{pendingCount !== 1 ? 's' : ''}. Signing out will permanently delete this data. Please sync first.
+            </Text>
+            <Text style={styles.modalMessageAr} testID="text-logout-guard-message-ar">
+              لديك {pendingCount} سجل حضور غير متزامن. تسجيل الخروج سيحذف هذه البيانات نهائياً. يرجى المزامنة أولاً.
+            </Text>
+
+            {!online && (
+              <>
+                <Text style={styles.modalOffline} testID="text-logout-guard-offline">
+                  You are offline. Connect to the internet to sync your records.
+                </Text>
+                <Text style={styles.modalOfflineAr} testID="text-logout-guard-offline-ar">
+                  أنت غير متصل بالإنترنت. اتصل بالإنترنت لمزامنة سجلاتك.
+                </Text>
+              </>
+            )}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalSyncButton, (!online || logoutSyncing) && styles.modalButtonDisabled]}
+                testID="button-logout-sync-now"
+                disabled={!online || logoutSyncing}
+                onPress={async () => {
+                  setLogoutSyncing(true);
+                  try {
+                    await syncPendingSubmissions();
+                    await loadData();
+                    if (workforceRecord?.id) {
+                      const newCount = await getPendingCount(workforceRecord.id);
+                      setPendingCount(newCount);
+                      if (newCount === 0) {
+                        setShowLogoutGuard(false);
+                        setLogoutSyncing(false);
+                        onLogout();
+                        return;
+                      }
+                    }
+                  } catch {}
+                  setLogoutSyncing(false);
+                }}
+              >
+                {logoutSyncing ? (
+                  <ActivityIndicator size="small" color={colors.text} />
+                ) : (
+                  <>
+                    <Ionicons name="cloud-upload-outline" size={18} color={colors.text} />
+                    <Text style={styles.modalSyncText}>Sync Now / مزامنة الآن</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                testID="button-logout-guard-cancel"
+                onPress={() => setShowLogoutGuard(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel / إلغاء</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -336,4 +430,33 @@ const styles = StyleSheet.create({
     gap: spacing.xs, paddingVertical: spacing.lg, marginTop: spacing.lg,
   },
   privacyLinkText: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center', alignItems: 'center', padding: spacing.xl,
+  },
+  modalCard: {
+    backgroundColor: colors.surface, borderRadius: borderRadius.lg,
+    padding: spacing.xl, width: '100%', maxWidth: 360, gap: spacing.sm,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  modalIconRow: { alignItems: 'center', marginBottom: spacing.sm },
+  modalTitle: { fontFamily: fonts.heading, fontSize: 18, color: colors.text, textAlign: 'center' },
+  modalTitleAr: { fontFamily: fonts.heading, fontSize: 18, color: colors.text, textAlign: 'center', marginBottom: spacing.sm },
+  modalMessage: { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  modalMessageAr: { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: spacing.sm },
+  modalOffline: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.error, textAlign: 'center' },
+  modalOfflineAr: { fontFamily: fonts.bodySemiBold, fontSize: 13, color: colors.error, textAlign: 'center', marginBottom: spacing.sm },
+  modalActions: { gap: spacing.md, marginTop: spacing.md },
+  modalSyncButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: spacing.sm, backgroundColor: colors.primary,
+    paddingVertical: spacing.md, borderRadius: borderRadius.md,
+  },
+  modalSyncText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.text },
+  modalCancelButton: {
+    alignItems: 'center', paddingVertical: spacing.md,
+    borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border,
+  },
+  modalCancelText: { fontFamily: fonts.bodySemiBold, fontSize: 14, color: colors.textMuted },
+  modalButtonDisabled: { opacity: 0.5 },
 });

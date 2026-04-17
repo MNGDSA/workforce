@@ -61,6 +61,7 @@ fun AppNavigation() {
     var forgotPasswordApi by remember { mutableStateOf<ApiService?>(null) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
     var logoutPendingCount by remember { mutableStateOf(0) }
+    var logoutSyncing by remember { mutableStateOf(false) }
 
     if (isLoggedIn && user == null) {
         app.sessionManager.userJson?.let {
@@ -269,47 +270,113 @@ fun AppNavigation() {
         }
 
         if (showLogoutConfirm) {
+            val hasPending = logoutPendingCount > 0
             AlertDialog(
-                onDismissRequest = { showLogoutConfirm = false },
+                onDismissRequest = {
+                    if (!logoutSyncing) {
+                        showLogoutConfirm = false
+                    }
+                },
                 containerColor = Surface,
-                title = { Text(stringResource(R.string.sign_out), color = TextPrimary) },
+                title = {
+                    if (hasPending) {
+                        Text(stringResource(R.string.sign_out_blocked_title), color = WarningAmber)
+                    } else {
+                        Text(stringResource(R.string.sign_out), color = TextPrimary)
+                    }
+                },
                 text = {
                     Column {
-                        Text(
-                            stringResource(R.string.sign_out_confirm),
-                            color = TextMuted,
-                        )
-                        if (logoutPendingCount > 0) {
+                        if (hasPending) {
+                            Text(
+                                stringResource(R.string.sign_out_blocked_message, logoutPendingCount),
+                                color = TextMuted,
+                            )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                stringResource(R.string.sign_out_pending_warning, logoutPendingCount),
+                                stringResource(R.string.sign_out_blocked_message_ar, logoutPendingCount),
+                                color = TextMuted,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                stringResource(R.string.sign_out_connect_hint),
                                 color = WarningAmber,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                stringResource(R.string.sign_out_connect_hint_ar),
+                                color = WarningAmber,
+                            )
+                        } else {
+                            Text(
+                                stringResource(R.string.sign_out_confirm),
+                                color = TextMuted,
                             )
                         }
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = {
-                        showLogoutConfirm = false
-                        scope.launch {
-                            app.sessionManager.workforceId?.let { wfId ->
-                                app.database.attendanceDao().deleteAllForUser(wfId)
+                    if (hasPending) {
+                        TextButton(
+                            enabled = !logoutSyncing,
+                            onClick = {
+                                logoutSyncing = true
+                                scope.launch {
+                                    try {
+                                        SyncWorker.syncNow(app)
+                                        kotlinx.coroutines.delay(3000)
+                                        val wfId = app.sessionManager.workforceId
+                                        val newPending = if (wfId != null) {
+                                            try { app.database.attendanceDao().getPending(wfId).size } catch (_: Exception) { logoutPendingCount }
+                                        } else 0
+                                        logoutPendingCount = newPending
+                                        if (newPending == 0) {
+                                            showLogoutConfirm = false
+                                            app.sessionManager.workforceId?.let { wfId2 ->
+                                                app.database.attendanceDao().deleteAllForUser(wfId2)
+                                            }
+                                            SyncWorker.cancel(app)
+                                            ApiClient.reset()
+                                            app.sessionManager.clear()
+                                            isLoggedIn = false
+                                            user = null
+                                            workforceRecord = null
+                                            apiService = null
+                                            biometricConsentGiven = false
+                                        }
+                                    } catch (_: Exception) {}
+                                    logoutSyncing = false
+                                }
                             }
+                        ) {
+                            Text(stringResource(R.string.sync_now), color = ForestGreen)
                         }
-                        SyncWorker.cancel(app)
-                        ApiClient.reset()
-                        app.sessionManager.clear()
-                        isLoggedIn = false
-                        user = null
-                        workforceRecord = null
-                        apiService = null
-                        biometricConsentGiven = false
-                    }) {
-                        Text(stringResource(R.string.sign_out), color = ErrorRed)
+                    } else {
+                        TextButton(onClick = {
+                            showLogoutConfirm = false
+                            scope.launch {
+                                app.sessionManager.workforceId?.let { wfId ->
+                                    app.database.attendanceDao().deleteAllForUser(wfId)
+                                }
+                            }
+                            SyncWorker.cancel(app)
+                            ApiClient.reset()
+                            app.sessionManager.clear()
+                            isLoggedIn = false
+                            user = null
+                            workforceRecord = null
+                            apiService = null
+                            biometricConsentGiven = false
+                        }) {
+                            Text(stringResource(R.string.sign_out), color = ErrorRed)
+                        }
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showLogoutConfirm = false }) {
+                    TextButton(
+                        enabled = !logoutSyncing,
+                        onClick = { showLogoutConfirm = false }
+                    ) {
                         Text(stringResource(R.string.cancel), color = ForestGreen)
                     }
                 },
