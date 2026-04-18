@@ -296,8 +296,9 @@ export default function AuthPage() {
   // Helper: position absolute icons using logical-property classes so they
   // flip correctly under RTL. We use `start-3` (Tailwind v4 logical) to
   // mean "left in LTR, right in RTL".
-  const iconStartClass = "absolute start-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary group-focus-within:text-primary transition-colors";
-  const inputPaddedStartClass = "ps-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm";
+  const iconStartClass = `absolute ${isRtl ? "right-3" : "left-3"} top-3 h-4 w-4 text-muted-foreground group-hover:text-primary group-focus-within:text-primary transition-colors`;
+  const inputPaddedStartClass = `${isRtl ? "pr-10 text-right" : "pl-10 text-left"} h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm`;
+  const labelStartClass = `block ${isRtl ? "text-right" : "text-left"} text-muted-foreground uppercase text-xs tracking-wider font-semibold`;
 
   return (
     <div className="min-h-screen w-full max-w-full grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[40%_60%] bg-background font-sans text-foreground overflow-x-clip">
@@ -487,7 +488,7 @@ export default function AuthPage() {
                     name="identifier"
                     render={({ field }) => (
                       <FormItem>
-                        <Label className="block text-start text-muted-foreground uppercase text-xs tracking-wider font-semibold">
+                        <Label className={labelStartClass}>
                           {t("auth:login.identifierLabel")}
                         </Label>
                         <FormControl>
@@ -495,8 +496,9 @@ export default function AuthPage() {
                             <CreditCard className={iconStartClass} />
                             <Input
                               placeholder={t("auth:login.identifierPlaceholder")}
-                              className={`${inputPaddedStartClass} font-mono tracking-wide text-start`}
+                              className={`${inputPaddedStartClass} font-mono tracking-wide`}
                               inputMode="numeric"
+                              dir={isRtl ? "rtl" : "ltr"}
                               data-testid="input-identifier"
                               {...field}
                             />
@@ -513,8 +515,8 @@ export default function AuthPage() {
                     render={({ field }) => (
                       <FormItem>
                         <div className="flex items-center justify-between gap-2">
-                          <Label className="text-start text-muted-foreground uppercase text-xs tracking-wider font-semibold">{t("auth:login.passwordLabel")}</Label>
-                          <button type="button" onClick={() => setResetStep("id")} className="text-xs text-muted-foreground hover:text-primary transition-colors text-end" data-testid="link-forgot-password">{t("auth:login.forgotPassword")}</button>
+                          <Label className={labelStartClass}>{t("auth:login.passwordLabel")}</Label>
+                          <button type="button" onClick={() => setResetStep("id")} className={`text-xs text-muted-foreground hover:text-primary transition-colors ${isRtl ? "text-left" : "text-right"}`} data-testid="link-forgot-password">{t("auth:login.forgotPassword")}</button>
                         </div>
                         <FormControl>
                           <div className="relative group">
@@ -522,7 +524,8 @@ export default function AuthPage() {
                             <Input
                               type="password"
                               placeholder="••••••••"
-                              className={`${inputPaddedStartClass} text-start`}
+                              className={inputPaddedStartClass}
+                              dir={isRtl ? "rtl" : "ltr"}
                               data-testid="input-password"
                               {...field}
                             />
