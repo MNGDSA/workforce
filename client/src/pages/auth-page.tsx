@@ -335,6 +335,7 @@ export default function AuthPage() {
                       onChange={(e) => setResetNationalId(e.target.value.replace(/\D/g, ""))}
                       className={`${inputPaddedStartClass} font-mono tracking-wide`}
                       inputMode="numeric"
+                      dir={isRtl ? "rtl" : "ltr"}
                       data-testid="input-reset-national-id"
                     />
                   </div>
@@ -373,6 +374,7 @@ export default function AuthPage() {
                       className={`${inputPaddedStartClass} font-mono tracking-[0.5em] text-center text-lg`}
                       inputMode="numeric"
                       maxLength={6}
+                      dir={isRtl ? "rtl" : "ltr"}
                       data-testid="input-reset-otp"
                     />
                   </div>
@@ -420,6 +422,7 @@ export default function AuthPage() {
                       value={resetNewPassword}
                       onChange={(e) => setResetNewPassword(e.target.value)}
                       className={inputPaddedStartClass}
+                      dir={isRtl ? "rtl" : "ltr"}
                       data-testid="input-reset-new-password"
                     />
                   </div>
@@ -644,7 +647,7 @@ export default function AuthPage() {
               {regStep === "phone" && (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">{t("auth:register.phoneLabel")}</Label>
+                    <Label className={labelStartClass}>{t("auth:register.phoneLabel")}</Label>
                     <div className="relative group">
                       <Phone className={iconStartClass} />
                       <Input
@@ -654,6 +657,7 @@ export default function AuthPage() {
                         className={`${inputPaddedStartClass} font-mono tracking-wide`}
                         inputMode="tel"
                         maxLength={10}
+                        dir={isRtl ? "rtl" : "ltr"}
                         data-testid="input-phone"
                         onKeyDown={(e) => e.key === "Enter" && /^05\d{8}$/.test(regPhone) && sendOtp(regPhone)}
                       />
@@ -689,7 +693,7 @@ export default function AuthPage() {
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">{t("auth:register.otpLabel")}</Label>
+                    <Label className={labelStartClass}>{t("auth:register.otpLabel")}</Label>
                     <Input
                       ref={otpInputRef}
                       placeholder="• • • • • •"
@@ -698,6 +702,7 @@ export default function AuthPage() {
                       className="h-14 text-center text-2xl font-mono tracking-[0.5em] bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm"
                       inputMode="numeric"
                       maxLength={6}
+                      dir={isRtl ? "rtl" : "ltr"}
                       data-testid="input-otp-code"
                       onKeyDown={(e) => e.key === "Enter" && otpCode.length === 6 && verifyOtp()}
                     />
@@ -740,20 +745,20 @@ export default function AuthPage() {
                     <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-4">
                       <FormField control={registerForm.control} name="fullName" render={({ field }) => (
                         <FormItem>
-                          <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">{t("auth:register.fullNameLabel")}</Label>
+                          <Label className={labelStartClass}>{t("auth:register.fullNameLabel")}</Label>
                           <FormControl>
-                            <Input placeholder={t("auth:register.fullNamePlaceholder")} className="h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm" data-testid="input-full-name" {...field} />
+                            <Input placeholder={t("auth:register.fullNamePlaceholder")} className="h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm" dir={isRtl ? "rtl" : "ltr"} data-testid="input-full-name" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )} />
                       <FormField control={registerForm.control} name="nationalId" render={({ field }) => (
                         <FormItem>
-                          <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">{t("auth:register.nationalIdLabel")}</Label>
+                          <Label className={labelStartClass}>{t("auth:register.nationalIdLabel")}</Label>
                           <FormControl>
                             <div className="relative group">
                               <CreditCard className={iconStartClass} />
-                              <Input placeholder={t("auth:register.nationalIdPlaceholder")} className={`${inputPaddedStartClass} font-mono tracking-wide`} inputMode="numeric" data-testid="input-national-id" {...field} />
+                              <Input placeholder={t("auth:register.nationalIdPlaceholder")} className={`${inputPaddedStartClass} font-mono tracking-wide`} inputMode="numeric" dir={isRtl ? "rtl" : "ltr"} data-testid="input-national-id" {...field} />
                             </div>
                           </FormControl>
                           <FormMessage />
@@ -761,11 +766,11 @@ export default function AuthPage() {
                       )} />
                       <FormField control={registerForm.control} name="password" render={({ field }) => (
                         <FormItem>
-                          <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">{t("auth:register.passwordLabel")}</Label>
+                          <Label className={labelStartClass}>{t("auth:register.passwordLabel")}</Label>
                           <FormControl>
                             <div className="relative group">
                               <Lock className={iconStartClass} />
-                              <Input type="password" placeholder={t("auth:register.passwordLabel")} className={inputPaddedStartClass} data-testid="input-register-password" {...field} />
+                              <Input type="password" placeholder={t("auth:register.passwordLabel")} className={inputPaddedStartClass} dir={isRtl ? "rtl" : "ltr"} data-testid="input-register-password" {...field} />
                             </div>
                           </FormControl>
                           {field.value?.length > 0 && (
