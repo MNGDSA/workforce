@@ -4,4 +4,5 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
-uploads/env.production.txt
+uploads/
+env.production.txt
