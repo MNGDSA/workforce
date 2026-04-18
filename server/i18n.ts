@@ -270,6 +270,27 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "common.eventIdRequired":           "eventId is required",
     "common.idsNonEmpty":               "ids must be a non-empty array",
     "common.workforceIdAndStatusRequired": "workforceId and valid status are required",
+
+    // Dynamic / interpolated messages
+    "auth.loginRateLimit":              "Too many failed login attempts. Try again in {{minutes}} minute(s).",
+    "otp.incorrectRemaining":           "Incorrect code. {{remaining}} attempt(s) remaining.",
+    "password.rules":                   "Password must contain: {{rules}}",
+    "candidate.nationalIdExists":       "A candidate with National ID {{id}} already exists",
+    "candidate.phoneExists":            "A candidate with phone {{phone}} already exists",
+    "candidate.profileMissingFields":   "Cannot mark profile as complete. Missing required fields: {{fields}}",
+    "import.validationFailed":          "Validation failed on {{count}} rows",
+    "smp.unconfirmedClean":             "{{count}} CLEAN row(s) were not confirmed by the user. Confirm all CLEAN rows before committing.",
+    "smp.batchCommitted":               "SMP batch committed: {{created}} new, {{attached}} existing attached, {{skipped}} blocked/skipped.",
+    "termination.invalidCategory":      "Invalid terminationCategory. Must be one of: {{categories}}",
+    "role.assignedToUsers":             "Role is assigned to {{count}} user(s). Reassign them before deleting.",
+    "company.hasWorkforce":             "Cannot delete: {{count}} workforce record(s) are linked to this company. Deactivate the company instead.",
+    "inbox.bulkProtected":              "{{count}} item(s) require individual review and cannot be bulk actioned ({{types}}). Please review them one by one.",
+    "excuse.cannotApprove":             "Cannot approve a {{status}} request",
+    "excuse.cannotReject":              "Cannot reject a {{status}} request",
+    "attendance.dailyLimit":            "Daily submission limit reached ({{limit}}). You have already completed attendance for today.",
+    "attendance.beforeShiftStart":      "Your shift starts at {{start}}. You can check in from {{earliest}}.",
+    "attendance.afterShiftEnd":         "Your shift ended at {{end}}. The attendance window has closed.",
+    "attendance.minShiftDuration":      "Minimum shift duration is {{required}} minutes. Please wait {{remaining}} more minutes before checking out.",
   },
   ar: {
     // Auth middleware
@@ -520,6 +541,27 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "common.eventIdRequired":           "معرّف الحدث مطلوب",
     "common.idsNonEmpty":               "يجب أن تكون ids مصفوفة غير فارغة",
     "common.workforceIdAndStatusRequired": "معرّف القوى العاملة وحالة صحيحة مطلوبان",
+
+    // Dynamic / interpolated messages
+    "auth.loginRateLimit":              "محاولات تسجيل دخول فاشلة كثيرة. يرجى المحاولة بعد {{minutes}} دقيقة.",
+    "otp.incorrectRemaining":           "رمز غير صحيح. متبقي {{remaining}} محاولة.",
+    "password.rules":                   "يجب أن تحتوي كلمة المرور على: {{rules}}",
+    "candidate.nationalIdExists":       "يوجد مرشح مسجل برقم الهوية {{id}} بالفعل",
+    "candidate.phoneExists":            "يوجد مرشح مسجل بالرقم {{phone}} بالفعل",
+    "candidate.profileMissingFields":   "لا يمكن إكمال الملف. الحقول المطلوبة الناقصة: {{fields}}",
+    "import.validationFailed":          "فشل التحقق في {{count}} صف",
+    "smp.unconfirmedClean":             "{{count}} صف من النوع CLEAN لم يتم تأكيدها. يرجى تأكيد جميع صفوف CLEAN قبل التثبيت.",
+    "smp.batchCommitted":               "تم تثبيت دفعة SMP: {{created}} جديد، {{attached}} مرتبط بالموجود، {{skipped}} محظور/متجاهل.",
+    "termination.invalidCategory":      "فئة الإنهاء غير صحيحة. يجب أن تكون إحدى: {{categories}}",
+    "role.assignedToUsers":             "الدور مُعيَّن لـ {{count}} مستخدم. أعد توزيعهم قبل الحذف.",
+    "company.hasWorkforce":             "لا يمكن الحذف: {{count}} سجل قوى عاملة مرتبط بهذه الشركة. قم بتعطيل الشركة بدلاً من الحذف.",
+    "inbox.bulkProtected":              "{{count}} عنصر يتطلب مراجعة فردية ولا يمكن تنفيذ الإجراء الجماعي عليه ({{types}}). يرجى مراجعتها فرداً فرداً.",
+    "excuse.cannotApprove":             "لا يمكن اعتماد طلب بحالة {{status}}",
+    "excuse.cannotReject":              "لا يمكن رفض طلب بحالة {{status}}",
+    "attendance.dailyLimit":            "تم الوصول للحد اليومي ({{limit}}). لقد أكملت الحضور لهذا اليوم بالفعل.",
+    "attendance.beforeShiftStart":      "ورديتك تبدأ الساعة {{start}}. يمكنك تسجيل الحضور من الساعة {{earliest}}.",
+    "attendance.afterShiftEnd":         "انتهت ورديتك الساعة {{end}}. تم إغلاق نافذة تسجيل الحضور.",
+    "attendance.minShiftDuration":      "الحد الأدنى لمدة الوردية {{required}} دقيقة. يرجى الانتظار {{remaining}} دقيقة قبل الانصراف.",
   },
 };
 
@@ -549,8 +591,18 @@ export function getLocale(req: Request): ServerLocale {
  * Translate a key for the active request locale. Falls back to English if the
  * key is missing in the requested locale, and finally to the key itself
  * (so missing keys are visible in logs without crashing the response).
+ *
+ * Supports {{name}} placeholders interpolated from the optional params dict.
+ * Numeric values are formatted with `en-US` so output remains Western digits
+ * — this honours the project's absolute Western-numerals rule.
  */
-export function tr(req: Request, key: string): string {
+export function tr(req: Request, key: string, params?: Record<string, string | number>): string {
   const locale = getLocale(req);
-  return MESSAGES[locale][key] ?? MESSAGES.en[key] ?? key;
+  const template = MESSAGES[locale][key] ?? MESSAGES.en[key] ?? key;
+  if (!params) return template;
+  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, name) => {
+    const v = params[name];
+    if (v === undefined || v === null) return "";
+    return typeof v === "number" ? new Intl.NumberFormat("en-US").format(v) : String(v);
+  });
 }

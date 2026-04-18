@@ -645,7 +645,7 @@ export async function registerRoutes(
         res.setHeader("Retry-After", String(rl.retryAfterSec));
         const minutes = Math.ceil(rl.retryAfterSec / 60);
         return res.status(429).json({
-          message: `Too many failed login attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`,
+          message: tr(req, "auth.loginRateLimit", { minutes }),
           retryAfterSec: rl.retryAfterSec,
         });
       }
@@ -773,7 +773,7 @@ export async function registerRoutes(
       if (otp.code !== code.trim()) {
         await storage.incrementOtpAttempts(otp.id);
         const remaining = 4 - otp.attempts;
-        return res.status(400).json({ message: `Incorrect code. ${remaining} attempt${remaining !== 1 ? "s" : ""} remaining.` });
+        return res.status(400).json({ message: tr(req, "otp.incorrectRemaining", { remaining }) });
       }
 
       await storage.markOtpVerified(otp.id);
@@ -805,7 +805,7 @@ export async function registerRoutes(
       const pwFails = pwRules.filter(r => !r.ok);
       if (pwFails.length > 0) {
         return res.status(400).json({
-          message: `Password must contain: ${pwFails.map(f => f.msg).join(", ")}`,
+          message: tr(req, "password.rules", { rules: pwFails.map(f => f.msg).join(", ") }),
         });
       }
 
@@ -900,7 +900,7 @@ export async function registerRoutes(
       ];
       const failed = pwRules.filter((r) => !r.ok).map((r) => r.msg);
       if (failed.length) {
-        return res.status(400).json({ message: `Password must contain: ${failed.join(", ")}` });
+        return res.status(400).json({ message: tr(req, "password.rules", { rules: failed.join(", ") }) });
       }
       const candidate = await storage.getCandidate(candidateId);
       if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
@@ -986,7 +986,7 @@ export async function registerRoutes(
       const pwFails = pwRules.filter(r => !r.ok);
       if (pwFails.length > 0) {
         return res.status(400).json({
-          message: `Password must contain: ${pwFails.map(f => f.msg).join(", ")}`,
+          message: tr(req, "password.rules", { rules: pwFails.map(f => f.msg).join(", ") }),
         });
       }
 
@@ -1210,13 +1210,13 @@ export async function registerRoutes(
       if (data.nationalId) {
         const existing = await storage.getCandidateByNationalId(data.nationalId);
         if (existing) {
-          return res.status(409).json({ message: `A candidate with National ID ${data.nationalId} already exists` });
+          return res.status(409).json({ message: tr(req, "candidate.nationalIdExists", { id: data.nationalId }) });
         }
       }
       if (data.phone) {
         const existing = await storage.getCandidateByPhone(data.phone);
         if (existing) {
-          return res.status(409).json({ message: `A candidate with phone ${data.phone} already exists` });
+          return res.status(409).json({ message: tr(req, "candidate.phoneExists", { phone: data.phone }) });
         }
       }
       const candidate = await storage.createCandidate(data);
@@ -1261,7 +1261,7 @@ export async function registerRoutes(
         const missing = validateProfileCompleteness(merged);
         if (missing.length > 0) {
           return res.status(400).json({
-            message: `Cannot mark profile as complete. Missing required fields: ${missing.join(", ")}`,
+            message: tr(req, "candidate.profileMissingFields", { fields: missing.join(", ") }),
             missingFields: missing,
           });
         }
@@ -1354,7 +1354,7 @@ export async function registerRoutes(
         }
       }
       if (errors.length > 0) {
-        return res.status(400).json({ message: `Validation failed on ${errors.length} rows`, errors: errors.slice(0, 20) });
+        return res.status(400).json({ message: tr(req, "import.validationFailed", { count: errors.length }), errors: errors.slice(0, 20) });
       }
       const result = await storage.bulkInsertCandidates(validated);
       const statusCode = result.skipped > 0 ? 207 : 201;
@@ -1476,7 +1476,7 @@ export async function registerRoutes(
       const unconfirmedClean = validationResults.filter(r => r.status === "clean" && r.confirmed !== true);
       if (unconfirmedClean.length > 0) {
         return res.status(400).json({
-          message: `${unconfirmedClean.length} CLEAN row(s) were not confirmed by the user. Confirm all CLEAN rows before committing.`,
+          message: tr(req, "smp.unconfirmedClean", { count: unconfirmedClean.length }),
         });
       }
 
@@ -1609,7 +1609,7 @@ export async function registerRoutes(
         created: created.length,
         attached: attached.length,
         skipped: skipped.length,
-        message: `SMP batch committed: ${created.length} new, ${attached.length} existing attached, ${skipped.length} blocked/skipped.`,
+        message: tr(req, "smp.batchCommitted", { created: created.length, attached: attached.length, skipped: skipped.length }),
       });
     } catch (err) {
       return handleError(res, err);
@@ -2651,7 +2651,7 @@ export async function registerRoutes(
       if (!endDate) return res.status(400).json({ message: tr(req, "common.endDateRequired") });
       const validCategories = ["end_of_season", "resignation", "performance", "disciplinary", "contract_expiry", "other"];
       if (terminationCategory && !validCategories.includes(terminationCategory)) {
-        return res.status(400).json({ message: `Invalid terminationCategory. Must be one of: ${validCategories.join(", ")}` });
+        return res.status(400).json({ message: tr(req, "termination.invalidCategory", { categories: validCategories.join(", ") }) });
       }
       const record = await storage.terminateEmployee(req.params.id, { endDate, terminationReason, terminationCategory });
       if (!record) return res.status(404).json({ message: tr(req, "employee.notFound") });
@@ -3149,7 +3149,7 @@ export async function registerRoutes(
       ];
       const pwFails = pwRules.filter(r => !r.ok);
       if (pwFails.length > 0) {
-        return res.status(400).json({ message: `Password must contain: ${pwFails.map(f => f.msg).join(", ")}` });
+        return res.status(400).json({ message: tr(req, "password.rules", { rules: pwFails.map(f => f.msg).join(", ") }) });
       }
       const hashed = await bcrypt.hash(data.password, 10);
       const user = await storage.createUser({ ...data, password: hashed });
@@ -3508,7 +3508,7 @@ export async function registerRoutes(
         }
         if (result.reason === "in_use") {
           return res.status(409).json({
-            message: `Role is assigned to ${result.userCount} user(s). Reassign them before deleting.`,
+            message: tr(req, "role.assignedToUsers", { count: result.userCount }),
             userCount: result.userCount,
           });
         }
@@ -3649,7 +3649,7 @@ export async function registerRoutes(
       const workers = await storage.getSMPCompanyWorkers(req.params.id);
       if (workers.length > 0) {
         return res.status(409).json({
-          message: `Cannot delete: ${workers.length} workforce record${workers.length !== 1 ? "s" : ""} are linked to this company. Deactivate the company instead.`,
+          message: tr(req, "company.hasWorkforce", { count: workers.length }),
         });
       }
       const ok = await storage.deleteSMPCompany(req.params.id);
@@ -5265,7 +5265,7 @@ export async function registerRoutes(
     if (protected_.length > 0) {
       const types = [...new Set(protected_.map(i => i!.type))].join(", ");
       res.status(422).json({
-        message: `${protected_.length} item${protected_.length > 1 ? "s" : ""} require individual review and cannot be bulk actioned (${types}). Please review them one by one.`,
+        message: tr(req, "inbox.bulkProtected", { count: protected_.length, types }),
         protectedCount: protected_.length,
       });
       return true;
@@ -5419,7 +5419,7 @@ export async function registerRoutes(
       const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() || null : null;
       const excuse = await storage.getExcuseRequest(req.params.id);
       if (!excuse) return res.status(404).json({ message: tr(req, "excuse.notFound") });
-      if (excuse.status !== "pending") return res.status(422).json({ message: `Cannot approve a ${excuse.status} request` });
+      if (excuse.status !== "pending") return res.status(422).json({ message: tr(req, "excuse.cannotApprove", { status: excuse.status }) });
 
       const updated = await storage.updateExcuseRequest(req.params.id, {
         status: "approved",
@@ -5459,7 +5459,7 @@ export async function registerRoutes(
       const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() || null : null;
       const excuse = await storage.getExcuseRequest(req.params.id);
       if (!excuse) return res.status(404).json({ message: tr(req, "excuse.notFound") });
-      if (excuse.status !== "pending") return res.status(422).json({ message: `Cannot reject a ${excuse.status} request` });
+      if (excuse.status !== "pending") return res.status(422).json({ message: tr(req, "excuse.cannotReject", { status: excuse.status }) });
 
       const updated = await storage.updateExcuseRequest(req.params.id, {
         status: "rejected",
@@ -5792,7 +5792,7 @@ export async function registerRoutes(
         );
       if (todaySubmissions.length >= attConfig.maxDailySubmissions) {
         return res.status(429).json({
-          message: `Daily submission limit reached (${attConfig.maxDailySubmissions}). You have already completed attendance for today.`,
+          message: tr(req, "attendance.dailyLimit", { limit: attConfig.maxDailySubmissions }),
           code: "DAILY_LIMIT_REACHED",
           maxDailySubmissions: attConfig.maxDailySubmissions,
         });
@@ -5837,7 +5837,7 @@ export async function registerRoutes(
 
         if (!todayRecord && adjustedNow < earliestCheckIn) {
           return res.status(403).json({
-            message: `Your shift starts at ${shiftInfo.shiftStartTime}. You can check in from ${formatMinutesToTime(earliestCheckIn)}.`,
+            message: tr(req, "attendance.beforeShiftStart", { start: shiftInfo.shiftStartTime, earliest: formatMinutesToTime(earliestCheckIn) }),
             code: "BEFORE_SHIFT_WINDOW",
             shiftStart: shiftInfo.shiftStartTime,
             earliestCheckIn: formatMinutesToTime(earliestCheckIn),
@@ -5845,7 +5845,7 @@ export async function registerRoutes(
         }
         if (adjustedNow > latestCheckOut) {
           return res.status(403).json({
-            message: `Your shift ended at ${shiftInfo.shiftEndTime}. The attendance window has closed.`,
+            message: tr(req, "attendance.afterShiftEnd", { end: shiftInfo.shiftEndTime }),
             code: "AFTER_SHIFT_WINDOW",
             shiftEnd: shiftInfo.shiftEndTime,
             latestCheckOut: formatMinutesToTime(latestCheckOut % (24 * 60)),
@@ -5859,7 +5859,7 @@ export async function registerRoutes(
         if (elapsed < 0) elapsed += 24 * 60;
         if (elapsed < attConfig.minShiftDurationMinutes) {
           return res.status(422).json({
-            message: `Minimum shift duration is ${attConfig.minShiftDurationMinutes} minutes. Please wait ${attConfig.minShiftDurationMinutes - elapsed} more minutes before checking out.`,
+            message: tr(req, "attendance.minShiftDuration", { required: attConfig.minShiftDurationMinutes, remaining: attConfig.minShiftDurationMinutes - elapsed }),
             code: "MIN_DURATION_NOT_MET",
             clockIn: todayRecord.clockIn,
             minDurationMinutes: attConfig.minShiftDurationMinutes,
