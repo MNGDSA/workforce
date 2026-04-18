@@ -5,9 +5,14 @@ import { createServer } from "http";
 import { storage } from "./storage";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { localeMiddleware } from "./locale-middleware";
 
 const app = express();
 const httpServer = createServer(app);
+
+// Resolve req.locale ("ar" | "en") from query/header/Accept-Language for
+// every request — used by error responses and SMS/email templates.
+app.use(localeMiddleware);
 
 declare module "http" {
   interface IncomingMessage {

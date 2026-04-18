@@ -1,0 +1,22 @@
+{
+  "nav": {
+    "home": "الرئيسية",
+    "jobs": "الوظائف",
+    "applications": "طلباتي",
+    "interviews": "المقابلات",
+    "onboarding": "الاستقطاب",
+    "contract": "العقد",
+    "schedule": "جدولي",
+    "payslips": "قسائم الراتب",
+    "profile": "الملف الشخصي",
+    "logout": "تسجيل الخروج"
+  },
+  "greeting": {
+    "welcome": "أهلاً، {{name}}",
+    "welcomeBack": "أهلاً بعودتك، {{name}}"
+  },
+  "logout": {
+    "confirm": "تسجيل الخروج؟",
+    "description": "ستحتاج لتسجيل الدخول مرة أخرى للوصول لحسابك."
+  }
+}

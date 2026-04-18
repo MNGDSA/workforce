@@ -1,0 +1,42 @@
+{
+  "header": {
+    "back": "Back to opportunities",
+    "backPortal": "Back to portal",
+    "signIn": "Sign In / Sign Up"
+  },
+  "hero": {
+    "applied": "You have applied for this position.",
+    "notFound": "Job not found",
+    "notFoundDescription": "This position may no longer be available."
+  },
+  "details": {
+    "location": "Location",
+    "department": "Department",
+    "type": "Type",
+    "salaryRange": "Salary Range",
+    "deadline": "Application Deadline",
+    "skills": "Required Skills",
+    "description": "About this Position",
+    "requirements": "Requirements"
+  },
+  "cta": {
+    "applyHeader": "Apply",
+    "applyMain": "Apply for this Position",
+    "applyBottom": "Apply Now",
+    "signUpAndApply": "Sign Up & Apply",
+    "submitDescription": "Submit your application — it only takes a minute.",
+    "signupDescription": "Create an account and apply — it only takes a minute."
+  },
+  "dialog": {
+    "applyForPosition": "Apply for Position",
+    "screeningQuestions": "Screening Questions",
+    "submit": "Submit Application",
+    "submitting": "Submitting…",
+    "successTitle": "Application submitted!",
+    "successDescription": "Your application for \"{{title}}\" has been received.",
+    "errorTitle": "Failed to submit",
+    "errorDescription": "Please try again.",
+    "sessionLostTitle": "Please sign in again",
+    "sessionLostDescription": "Your session was lost. Sign in to finish your application."
+  }
+}

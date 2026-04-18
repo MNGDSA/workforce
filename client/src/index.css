@@ -4,8 +4,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: 'Inter', sans-serif;
-  --font-display: 'Space Grotesk', sans-serif;
+  --font-sans: 'Cairo', 'Inter', sans-serif;
+  --font-display: 'Cairo', 'Space Grotesk', sans-serif;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -117,6 +117,26 @@
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-display tracking-tight;
+  }
+
+  /* Bidi-isolation for inline mixed-direction content (IBAN, phone, email,
+     national ID embedded inside Arabic paragraphs). Prevents visual
+     scrambling of Latin sequences inside RTL flow. */
+  bdi, .bidi-isolate {
+    unicode-bidi: isolate;
+  }
+
+  /* Inputs that hold Latin-only data (IBAN, phone, email, national ID)
+     stay LTR even when the surrounding UI is RTL. */
+  input[inputmode="numeric"],
+  input[inputmode="tel"],
+  input[inputmode="email"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="number"],
+  input[data-ltr="true"] {
+    direction: ltr;
+    text-align: start;
   }
 }
 

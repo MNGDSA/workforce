@@ -614,6 +614,24 @@ export async function registerRoutes(
   });
 
   // ─── Auth ─────────────────────────────────────────────────────────────────
+  // Persist the active UI locale on the authenticated user. Public-safe:
+  // unauthenticated callers receive 204 (the client persists locally too).
+  app.post("/api/auth/locale", markPublic, async (req: Request, res: Response) => {
+    try {
+      const locale = String(req.body?.locale || "").toLowerCase();
+      if (locale !== "ar" && locale !== "en") {
+        return res.status(400).json({ message: "Invalid locale. Must be 'ar' or 'en'." });
+      }
+      const userId = (req as any).session?.userId as string | undefined;
+      if (!userId) return res.status(204).end();
+      await db.update(users).set({ locale, updatedAt: new Date() }).where(eq(users.id, userId));
+      res.json({ ok: true, locale });
+    } catch (err) {
+      console.error("[locale] update failed", err);
+      res.status(500).json({ message: "Failed to update locale" });
+    }
+  });
+
   app.post("/api/auth/login", markPublic, async (req: Request, res: Response) => {
     try {
       const { identifier, password } = req.body;

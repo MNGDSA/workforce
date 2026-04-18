@@ -126,6 +126,7 @@ export const users = pgTable(
     nationalId: varchar("national_id", { length: 20 }),
     avatarUrl: text("avatar_url"),
     businessUnitId: varchar("business_unit_id").references(() => businessUnits.id, { onDelete: "set null" }),
+    locale: varchar("locale", { length: 8 }).notNull().default("ar"),
     isActive: boolean("is_active").notNull().default(true),
     lastLogin: timestamp("last_login"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),

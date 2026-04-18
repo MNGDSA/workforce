@@ -1,0 +1,22 @@
+{
+  "nav": {
+    "home": "Home",
+    "jobs": "Jobs",
+    "applications": "My Applications",
+    "interviews": "Interviews",
+    "onboarding": "Onboarding",
+    "contract": "Contract",
+    "schedule": "My Schedule",
+    "payslips": "Payslips",
+    "profile": "Profile",
+    "logout": "Sign Out"
+  },
+  "greeting": {
+    "welcome": "Welcome, {{name}}",
+    "welcomeBack": "Welcome back, {{name}}"
+  },
+  "logout": {
+    "confirm": "Sign out?",
+    "description": "You'll need to sign back in to access your account."
+  }
+}

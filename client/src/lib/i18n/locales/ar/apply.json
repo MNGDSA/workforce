@@ -1,0 +1,42 @@
+{
+  "header": {
+    "back": "العودة للفرص",
+    "backPortal": "العودة للبوابة",
+    "signIn": "تسجيل الدخول / إنشاء حساب"
+  },
+  "hero": {
+    "applied": "لقد تقدّمت لهذه الوظيفة.",
+    "notFound": "الوظيفة غير موجودة",
+    "notFoundDescription": "قد تكون هذه الوظيفة لم تعد متاحة."
+  },
+  "details": {
+    "location": "الموقع",
+    "department": "القسم",
+    "type": "نوع الوظيفة",
+    "salaryRange": "نطاق الراتب",
+    "deadline": "آخر موعد للتقديم",
+    "skills": "المهارات المطلوبة",
+    "description": "عن هذه الوظيفة",
+    "requirements": "المتطلبات"
+  },
+  "cta": {
+    "applyHeader": "تقديم",
+    "applyMain": "تقدّم لهذه الوظيفة",
+    "applyBottom": "تقديم الآن",
+    "signUpAndApply": "أنشئ حساباً وتقدّم",
+    "submitDescription": "أرسل طلبك — لن يستغرق سوى دقيقة.",
+    "signupDescription": "أنشئ حساباً وتقدّم — لن يستغرق سوى دقيقة."
+  },
+  "dialog": {
+    "applyForPosition": "التقديم على الوظيفة",
+    "screeningQuestions": "أسئلة تمهيدية",
+    "submit": "إرسال الطلب",
+    "submitting": "جارٍ الإرسال…",
+    "successTitle": "تم إرسال طلبك!",
+    "successDescription": "تم استلام طلبك لوظيفة \"{{title}}\".",
+    "errorTitle": "تعذّر الإرسال",
+    "errorDescription": "يرجى المحاولة مرة أخرى.",
+    "sessionLostTitle": "يرجى تسجيل الدخول مرة أخرى",
+    "sessionLostDescription": "انتهت جلستك. سجّل الدخول لإكمال تقديم طلبك."
+  }
+}

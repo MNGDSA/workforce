@@ -9,40 +9,16 @@ import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { ArrowRight, Lock, CreditCard, Phone, AlertCircle, Loader2, CheckCircle2, RefreshCw, ShieldCheck } from "lucide-react";
 import meccaBg from "@assets/Destination_Mecca_14_1776015335379.jpg";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { apiRequest } from "@/lib/queryClient";
-
-const loginSchema = z.object({
-  identifier: z
-    .string()
-    .min(8, "Enter your ID Number or Phone Number")
-    .refine(
-      (v) => /^[0-9]+$/.test(v.trim()),
-      "Must contain numbers only (ID Number or Phone Number)"
-    ),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-});
-
-const passwordComplexity = z
-  .string()
-  .min(8, "Password must be at least 8 characters")
-  .refine((v) => /[A-Z]/.test(v), "Must contain at least one uppercase letter")
-  .refine((v) => /[a-z]/.test(v), "Must contain at least one lowercase letter")
-  .refine((v) => /[0-9]/.test(v), "Must contain at least one number")
-  .refine((v) => /[^A-Za-z0-9]/.test(v), "Must contain at least one special character");
-
-const registerSchema = z.object({
-  fullName: z.string().min(2, "Full name is required"),
-  nationalId: z
-    .string()
-    .min(8, "Enter a valid National ID or Iqama number")
-    .refine((v) => /^[0-9]+$/.test(v.trim()), "Numbers only — no letters or spaces"),
-  password: passwordComplexity,
-});
+import { useTranslation } from "react-i18next";
+import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 
 type RegStep = "phone" | "otp" | "details";
 
 export default function AuthPage() {
+  const { t, i18n } = useTranslation(["auth", "common"]);
+  const isRtl = i18n.language?.startsWith("ar");
   const [, setLocation] = useLocation();
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -51,6 +27,33 @@ export default function AuthPage() {
   const urlParams = new URLSearchParams(window.location.search);
   const initialTab = urlParams.get("tab") === "signup" ? "register" : null;
   const returnTo = urlParams.get("returnTo");
+
+  // Locale-aware Zod schemas — re-derived when language changes.
+  const { loginSchema, registerSchema } = useMemo(() => {
+    const ls = z.object({
+      identifier: z
+        .string()
+        .min(8, t("common:errors.invalidNationalId"))
+        .refine((v) => /^[0-9]+$/.test(v.trim()), t("common:errors.invalidNationalId")),
+      password: z.string().min(8, t("auth:register.passwordHint")),
+    });
+    const passwordComplexity = z
+      .string()
+      .min(8, t("auth:register.passwordHint"))
+      .refine((v) => /[A-Z]/.test(v), t("auth:register.passwordHint"))
+      .refine((v) => /[a-z]/.test(v), t("auth:register.passwordHint"))
+      .refine((v) => /[0-9]/.test(v), t("auth:register.passwordHint"))
+      .refine((v) => /[^A-Za-z0-9]/.test(v), t("auth:register.passwordHint"));
+    const rs = z.object({
+      fullName: z.string().min(2, t("common:errors.required")),
+      nationalId: z
+        .string()
+        .min(8, t("common:errors.invalidNationalId"))
+        .refine((v) => /^[0-9]+$/.test(v.trim()), t("common:errors.invalidNationalId")),
+      password: passwordComplexity,
+    });
+    return { loginSchema: ls, registerSchema: rs };
+  }, [t, i18n.language]);
 
   useEffect(() => {
     fetch("/api/settings/public", { credentials: "include" })
@@ -113,7 +116,7 @@ export default function AuthPage() {
         setLocation("/dashboard");
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Login failed";
+      const msg = err instanceof Error ? err.message : t("common:errors.generic");
       setLoginError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
     } finally {
       setIsLoading(false);
@@ -145,7 +148,7 @@ export default function AuthPage() {
       startCountdown(expiresAt);
       setTimeout(() => otpInputRef.current?.focus(), 100);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to send OTP";
+      const msg = err instanceof Error ? err.message : t("common:errors.generic");
       setRegisterError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
     } finally {
       setIsLoading(false);
@@ -162,7 +165,7 @@ export default function AuthPage() {
       if (countdownRef.current) clearInterval(countdownRef.current);
       setRegStep("details");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Verification failed";
+      const msg = err instanceof Error ? err.message : t("common:errors.generic");
       setRegisterError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
     } finally {
       setIsLoading(false);
@@ -186,7 +189,7 @@ export default function AuthPage() {
       }
       setLocation(returnTo || "/candidate-portal");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Registration failed";
+      const msg = err instanceof Error ? err.message : t("common:errors.generic");
       setRegisterError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
     } finally {
       setIsLoading(false);
@@ -219,7 +222,7 @@ export default function AuthPage() {
       startResetCountdown(expiresAt);
       setTimeout(() => resetOtpRef.current?.focus(), 100);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to send OTP";
+      const msg = err instanceof Error ? err.message : t("common:errors.generic");
       setResetError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
     } finally {
       setIsLoading(false);
@@ -236,7 +239,7 @@ export default function AuthPage() {
       if (resetCountdownRef.current) clearInterval(resetCountdownRef.current);
       setResetStep("newpass");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Verification failed";
+      const msg = err instanceof Error ? err.message : t("common:errors.generic");
       setResetError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
     } finally {
       setIsLoading(false);
@@ -245,16 +248,14 @@ export default function AuthPage() {
 
   async function submitNewPassword() {
     setResetError("");
-    const pwRules = [
-      { ok: resetNewPassword.length >= 8,              msg: "at least 8 characters" },
-      { ok: /[A-Z]/.test(resetNewPassword),            msg: "one uppercase letter" },
-      { ok: /[a-z]/.test(resetNewPassword),            msg: "one lowercase letter" },
-      { ok: /[0-9]/.test(resetNewPassword),            msg: "one number" },
-      { ok: /[^A-Za-z0-9]/.test(resetNewPassword),    msg: "one special character" },
-    ];
-    const failed = pwRules.filter((r) => !r.ok).map((r) => r.msg);
-    if (failed.length) {
-      setResetError(`Password must contain: ${failed.join(", ")}`);
+    const pwOk =
+      resetNewPassword.length >= 8 &&
+      /[A-Z]/.test(resetNewPassword) &&
+      /[a-z]/.test(resetNewPassword) &&
+      /[0-9]/.test(resetNewPassword) &&
+      /[^A-Za-z0-9]/.test(resetNewPassword);
+    if (!pwOk) {
+      setResetError(t("auth:register.passwordHint"));
       return;
     }
     setIsLoading(true);
@@ -266,7 +267,7 @@ export default function AuthPage() {
       });
       setResetStep("done");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Reset failed";
+      const msg = err instanceof Error ? err.message : t("common:errors.generic");
       setResetError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
     } finally {
       setIsLoading(false);
@@ -287,22 +288,35 @@ export default function AuthPage() {
     if (resetCountdownRef.current) clearInterval(resetCountdownRef.current);
   }
 
+  const pwRules = [
+    { ok: resetNewPassword.length >= 8, label: t("auth:register.passwordHint") },
+  ];
+
+  // Helper: position absolute icons using logical-property classes so they
+  // flip correctly under RTL. We use `start-3` (Tailwind v4 logical) to
+  // mean "left in LTR, right in RTL".
+  const iconStartClass = "absolute start-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary group-focus-within:text-primary transition-colors";
+  const inputPaddedStartClass = "ps-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm";
+
   return (
     <div className="min-h-screen grid lg:grid-cols-[40%_60%] bg-background font-sans text-foreground overflow-hidden">
       {/* ── Left Column: Form ─────────────────────────────────── */}
       <div className="flex flex-col justify-center items-center p-8 lg:p-12 relative z-10">
         <div className="w-full max-w-md space-y-8 animate-in slide-in-from-left-8 duration-700 fade-in">
 
-          {/* Logo */}
+          {/* Header row: logo + language switcher */}
           <div className="space-y-2">
-            <div className="flex items-center gap-3 mb-6">
-              <img src="/workforce-logo.svg" alt="Workforce" className="h-10 w-10" />
-              <span className="font-display font-bold text-2xl tracking-tight text-white">
-                WORKFORCE
-              </span>
+            <div className="flex items-center justify-between gap-3 mb-6">
+              <div className="flex items-center gap-3">
+                <img src="/workforce-logo.svg" alt="Workforce" className="h-10 w-10" />
+                <span className="font-display font-bold text-2xl tracking-tight text-white">
+                  {t("common:app.name")}
+                </span>
+              </div>
+              <LanguageSwitcher />
             </div>
             <h1 className="font-display text-4xl font-bold tracking-tight text-white">
-              {resetStep ? "Reset Password" : "Welcome back"}
+              {resetStep ? t("auth:reset.title") : t("auth:login.title")}
             </h1>
           </div>
 
@@ -310,14 +324,14 @@ export default function AuthPage() {
             <div className="space-y-5">
               {resetStep === "id" && (
                 <div className="space-y-4">
-                  <p className="text-muted-foreground text-sm">Enter your National ID or Iqama number to receive a verification code on your registered phone.</p>
+                  <p className="text-muted-foreground text-sm">{t("auth:reset.idStepSubtitle")}</p>
                   <div className="relative group">
-                    <CreditCard className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <CreditCard className={iconStartClass} />
                     <Input
-                      placeholder="e.g. 1012345678"
+                      placeholder="1012345678"
                       value={resetNationalId}
                       onChange={(e) => setResetNationalId(e.target.value.replace(/\D/g, ""))}
-                      className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm font-mono tracking-wide"
+                      className={`${inputPaddedStartClass} font-mono tracking-wide`}
                       inputMode="numeric"
                       data-testid="input-reset-national-id"
                     />
@@ -325,7 +339,7 @@ export default function AuthPage() {
                   {resetError && (
                     <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive" data-testid="reset-error">
                       <AlertCircle className="h-4 w-4 shrink-0" />
-                      {resetError}
+                      <bdi>{resetError}</bdi>
                     </div>
                   )}
                   <Button
@@ -334,10 +348,10 @@ export default function AuthPage() {
                     className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm"
                     data-testid="button-send-reset-otp"
                   >
-                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <>Send Verification Code <ArrowRight className="ml-2 h-4 w-4" /></>}
+                    {isLoading ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <>{t("auth:reset.sendCode")} <ArrowRight className={`ms-2 h-4 w-4 ${isRtl ? "rotate-180" : ""}`} /></>}
                   </Button>
                   <button type="button" onClick={closeResetFlow} className="w-full text-center text-xs text-muted-foreground hover:text-primary transition-colors" data-testid="link-back-to-login">
-                    Back to login
+                    {t("auth:reset.backToLogin")}
                   </button>
                 </div>
               )}
@@ -345,16 +359,16 @@ export default function AuthPage() {
               {resetStep === "otp" && (
                 <div className="space-y-4">
                   <p className="text-muted-foreground text-sm">
-                    Enter the code sent to <span className="text-white font-mono">{resetMaskedPhone}</span>
+                    {t("auth:reset.otpStepSubtitle", { phone: resetMaskedPhone })}
                   </p>
                   <div className="relative group">
-                    <ShieldCheck className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <ShieldCheck className={iconStartClass} />
                     <Input
                       ref={resetOtpRef}
-                      placeholder="Enter 6-digit code"
+                      placeholder="••••••"
                       value={resetOtpCode}
                       onChange={(e) => setResetOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                      className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm font-mono tracking-[0.5em] text-center text-lg"
+                      className={`${inputPaddedStartClass} font-mono tracking-[0.5em] text-center text-lg`}
                       inputMode="numeric"
                       maxLength={6}
                       data-testid="input-reset-otp"
@@ -362,18 +376,18 @@ export default function AuthPage() {
                   </div>
                   {resetCountdown > 0 && (
                     <p className="text-xs text-muted-foreground text-center">
-                      Code expires in <span className="text-white font-mono">{Math.floor(resetCountdown / 60)}:{String(resetCountdown % 60).padStart(2, "0")}</span>
+                      <bdi className="text-white font-mono">{Math.floor(resetCountdown / 60)}:{String(resetCountdown % 60).padStart(2, "0")}</bdi>
                     </p>
                   )}
                   {resetCountdown === 0 && (
                     <button type="button" onClick={() => requestResetOtp(resetNationalId)} className="w-full text-center text-xs text-primary hover:text-primary/80 flex items-center justify-center gap-1">
-                      <RefreshCw className="h-3 w-3" /> Resend code
+                      <RefreshCw className="h-3 w-3" /> {t("auth:register.resendOtp")}
                     </button>
                   )}
                   {resetError && (
                     <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive" data-testid="reset-error">
                       <AlertCircle className="h-4 w-4 shrink-0" />
-                      {resetError}
+                      <bdi>{resetError}</bdi>
                     </div>
                   )}
                   <Button
@@ -382,15 +396,10 @@ export default function AuthPage() {
                     className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm"
                     data-testid="button-verify-reset-otp"
                   >
-                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <>Verify Code <ArrowRight className="ml-2 h-4 w-4" /></>}
+                    {isLoading ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <>{t("auth:register.verifyOtp")} <ArrowRight className={`ms-2 h-4 w-4 ${isRtl ? "rotate-180" : ""}`} /></>}
                   </Button>
-                  <div className="text-center pt-1">
-                    <button type="button" onClick={() => { closeResetFlow(); setShowSignUpFromReset(true); }} className="text-xs text-amber-400 hover:text-amber-300 transition-colors" data-testid="link-not-your-phone">
-                      Not your phone number? Sign up with a new one
-                    </button>
-                  </div>
                   <button type="button" onClick={closeResetFlow} className="w-full text-center text-xs text-muted-foreground hover:text-primary transition-colors">
-                    Back to login
+                    {t("auth:reset.backToLogin")}
                   </button>
                 </div>
               )}
@@ -399,48 +408,37 @@ export default function AuthPage() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-sm text-sm text-emerald-400">
                     <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    Phone verified. Set your new password.
+                    {t("auth:reset.newPasswordStepTitle")}
                   </div>
                   <div className="relative group">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <Lock className={iconStartClass} />
                     <Input
                       type="password"
-                      placeholder="Enter new password"
+                      placeholder={t("auth:reset.newPasswordLabel")}
                       value={resetNewPassword}
                       onChange={(e) => setResetNewPassword(e.target.value)}
-                      className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm"
+                      className={inputPaddedStartClass}
                       data-testid="input-reset-new-password"
                     />
                   </div>
                   {resetNewPassword.length > 0 && (
-                    <div className="space-y-1 text-xs" data-testid="reset-password-strength-rules">
-                      {[
-                        { ok: resetNewPassword.length >= 8, label: "At least 8 characters" },
-                        { ok: /[A-Z]/.test(resetNewPassword), label: "One uppercase letter" },
-                        { ok: /[a-z]/.test(resetNewPassword), label: "One lowercase letter" },
-                        { ok: /[0-9]/.test(resetNewPassword), label: "One number" },
-                        { ok: /[^A-Za-z0-9]/.test(resetNewPassword), label: "One special character" },
-                      ].map((rule, i) => (
-                        <div key={i} className={`flex items-center gap-1.5 ${rule.ok ? "text-emerald-400" : "text-muted-foreground"}`}>
-                          <CheckCircle2 className={`h-3 w-3 ${rule.ok ? "text-emerald-400" : "text-zinc-600"}`} />
-                          {rule.label}
-                        </div>
-                      ))}
-                    </div>
+                    <p className="text-xs text-muted-foreground" data-testid="reset-password-strength-rules">
+                      {t("auth:register.passwordHint")}
+                    </p>
                   )}
                   {resetError && (
                     <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive" data-testid="reset-error">
                       <AlertCircle className="h-4 w-4 shrink-0" />
-                      {resetError}
+                      <bdi>{resetError}</bdi>
                     </div>
                   )}
                   <Button
                     onClick={submitNewPassword}
-                    disabled={isLoading || !resetNewPassword.length || !(resetNewPassword.length >= 8 && /[A-Z]/.test(resetNewPassword) && /[a-z]/.test(resetNewPassword) && /[0-9]/.test(resetNewPassword) && /[^A-Za-z0-9]/.test(resetNewPassword))}
+                    disabled={isLoading || !resetNewPassword.length}
                     className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm"
                     data-testid="button-submit-new-password"
                   >
-                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <>Reset Password <ArrowRight className="ml-2 h-4 w-4" /></>}
+                    {isLoading ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <>{t("auth:reset.submit")} <ArrowRight className={`ms-2 h-4 w-4 ${isRtl ? "rotate-180" : ""}`} /></>}
                   </Button>
                 </div>
               )}
@@ -450,8 +448,8 @@ export default function AuthPage() {
                   <div className="flex items-center gap-2 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-sm text-emerald-400">
                     <CheckCircle2 className="h-5 w-5 shrink-0" />
                     <div>
-                      <p className="font-semibold text-sm">Password reset successfully</p>
-                      <p className="text-xs text-emerald-400/80 mt-0.5">You can now log in with your new password.</p>
+                      <p className="font-semibold text-sm">{t("auth:reset.doneTitle")}</p>
+                      <p className="text-xs text-emerald-400/80 mt-0.5">{t("auth:reset.doneSubtitle")}</p>
                     </div>
                   </div>
                   <Button
@@ -459,7 +457,7 @@ export default function AuthPage() {
                     className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm"
                     data-testid="button-back-to-login"
                   >
-                    Back to Login <ArrowRight className="ml-2 h-4 w-4" />
+                    {t("auth:reset.backToLogin")} <ArrowRight className={`ms-2 h-4 w-4 ${isRtl ? "rotate-180" : ""}`} />
                   </Button>
                 </div>
               )}
@@ -469,10 +467,10 @@ export default function AuthPage() {
           <Tabs defaultValue={showSignUpFromReset || initialTab === "register" ? "register" : "login"} key={`${showSignUpFromReset}-${initialTab}`} className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-8 bg-muted/50 p-1 rounded-sm">
               <TabsTrigger value="login" className="rounded-sm data-[state=active]:bg-background data-[state=active]:text-foreground font-medium">
-                Login
+                {t("auth:tabs.login")}
               </TabsTrigger>
               <TabsTrigger value="register" className="rounded-sm data-[state=active]:bg-background data-[state=active]:text-foreground font-medium">
-                Sign Up
+                {t("auth:tabs.register")}
               </TabsTrigger>
             </TabsList>
 
@@ -480,21 +478,20 @@ export default function AuthPage() {
             <TabsContent value="login" className="space-y-4">
               <Form {...loginForm}>
                 <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-5">
-
                   <FormField
                     control={loginForm.control}
                     name="identifier"
                     render={({ field }) => (
                       <FormItem>
                         <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">
-                          ID Number or Phone Number
+                          {t("auth:login.identifierLabel")}
                         </Label>
                         <FormControl>
                           <div className="relative group">
-                            <CreditCard className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                            <CreditCard className={iconStartClass} />
                             <Input
-                              placeholder="e.g. 1012345678 or 0501234567"
-                              className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm font-mono tracking-wide"
+                              placeholder={t("auth:login.identifierPlaceholder")}
+                              className={`${inputPaddedStartClass} font-mono tracking-wide`}
                               inputMode="numeric"
                               data-testid="input-identifier"
                               {...field}
@@ -512,16 +509,16 @@ export default function AuthPage() {
                     render={({ field }) => (
                       <FormItem>
                         <div className="flex items-center justify-between">
-                          <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">Password</Label>
-                          <button type="button" onClick={() => setResetStep("id")} className="text-xs text-muted-foreground hover:text-primary transition-colors" data-testid="link-forgot-password">Forgot password?</button>
+                          <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">{t("auth:login.passwordLabel")}</Label>
+                          <button type="button" onClick={() => setResetStep("id")} className="text-xs text-muted-foreground hover:text-primary transition-colors" data-testid="link-forgot-password">{t("auth:login.forgotPassword")}</button>
                         </div>
                         <FormControl>
                           <div className="relative group">
-                            <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                            <Lock className={iconStartClass} />
                             <Input
                               type="password"
                               placeholder="••••••••"
-                              className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm"
+                              className={inputPaddedStartClass}
                               data-testid="input-password"
                               {...field}
                             />
@@ -536,7 +533,7 @@ export default function AuthPage() {
                   {loginError && (
                     <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive" data-testid="login-error">
                       <AlertCircle className="h-4 w-4 shrink-0" />
-                      {loginError}
+                      <bdi>{loginError}</bdi>
                     </div>
                   )}
 
@@ -547,11 +544,11 @@ export default function AuthPage() {
                     data-testid="button-sign-in"
                   >
                     {isLoading ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="me-2 h-4 w-4 animate-spin" />
                     ) : (
                       <>
-                        Sign In
-                        <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                        {t("auth:login.submit")}
+                        <ArrowRight className={`ms-2 h-4 w-4 group-hover:translate-x-1 transition-transform ${isRtl ? "rotate-180" : ""}`} />
                       </>
                     )}
                   </Button>
@@ -593,17 +590,17 @@ export default function AuthPage() {
                 return (
                   <div className="mt-6 space-y-2">
                     <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest font-semibold text-center">
-                      Workforce Utilizes Technologies used by
+                      {isRtl ? "تستفيد ووركفورس من تقنيات تستخدمها" : "Workforce Utilizes Technologies used by"}
                     </p>
                     <div
                       className="overflow-hidden"
                       style={{ maskImage: "linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)" }}
                     >
                       <div className="flex items-center animate-marquee w-max py-3 hover:[animation-play-state:paused]">
-                        <div className="flex items-center gap-10 shrink-0 pr-10">
+                        <div className="flex items-center gap-10 shrink-0 pe-10">
                           {renderLogos("a")}
                         </div>
-                        <div className="flex items-center gap-10 shrink-0 pr-10" aria-hidden="true">
+                        <div className="flex items-center gap-10 shrink-0 pe-10" aria-hidden="true">
                           {renderLogos("b")}
                         </div>
                       </div>
@@ -624,7 +621,7 @@ export default function AuthPage() {
                       {i < ["phone","otp","details"].indexOf(regStep) ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
                     </div>
                     <span className={`text-xs font-medium hidden sm:inline ${regStep === step ? "text-white" : "text-muted-foreground"}`}>
-                      {step === "phone" ? "Phone" : step === "otp" ? "Verify" : "Details"}
+                      {step === "phone" ? t("auth:register.phoneLabel") : step === "otp" ? t("auth:register.verifyOtp") : t("auth:register.detailsStepTitle")}
                     </span>
                     {i < 2 && <div className="flex-1 h-px bg-border w-4 mx-1" />}
                   </div>
@@ -635,25 +632,25 @@ export default function AuthPage() {
               {regStep === "phone" && (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">Phone Number</Label>
+                    <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">{t("auth:register.phoneLabel")}</Label>
                     <div className="relative group">
-                      <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                      <Phone className={iconStartClass} />
                       <Input
                         placeholder="05xxxxxxxx"
                         value={regPhone}
                         onChange={(e) => { setRegPhone(e.target.value.replace(/\D/g, "").slice(0, 10)); setRegisterError(""); }}
-                        className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm font-mono tracking-wide"
+                        className={`${inputPaddedStartClass} font-mono tracking-wide`}
                         inputMode="tel"
                         maxLength={10}
                         data-testid="input-phone"
                         onKeyDown={(e) => e.key === "Enter" && /^05\d{8}$/.test(regPhone) && sendOtp(regPhone)}
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground">Saudi mobile number starting with 05 (e.g. 0501234567). A 6-digit code will be sent via SMS.</p>
+                    <p className="text-xs text-muted-foreground">{t("auth:register.phoneStepSubtitle")}</p>
                   </div>
                   {registerError && (
                     <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive">
-                      <AlertCircle className="h-4 w-4 shrink-0" />{registerError}
+                      <AlertCircle className="h-4 w-4 shrink-0" /><bdi>{registerError}</bdi>
                     </div>
                   )}
                   <Button
@@ -662,7 +659,7 @@ export default function AuthPage() {
                     className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm shadow-[0_0_20px_rgba(25,90,55,0.3)] transition-all duration-300"
                     data-testid="button-send-otp"
                   >
-                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Phone className="mr-2 h-4 w-4" />Send Verification Code</>}
+                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Phone className="me-2 h-4 w-4" />{t("auth:register.sendOtp")}</>}
                   </Button>
                 </div>
               )}
@@ -673,12 +670,14 @@ export default function AuthPage() {
                   <div className="p-3 bg-primary/5 border border-primary/20 rounded-sm flex items-start gap-2">
                     <ShieldCheck className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                     <div className="text-sm">
-                      <p className="text-white font-medium">Code sent to {regPhone}</p>
-                      <p className="text-muted-foreground text-xs mt-0.5">Check your SMS messages. The code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}.</p>
+                      <p className="text-white font-medium">{t("auth:register.otpStepSubtitle", { phone: regPhone })}</p>
+                      <p className="text-muted-foreground text-xs mt-0.5">
+                        <bdi>{Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</bdi>
+                      </p>
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">6-Digit Code</Label>
+                    <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">{t("auth:register.otpLabel")}</Label>
                     <Input
                       ref={otpInputRef}
                       placeholder="• • • • • •"
@@ -693,7 +692,7 @@ export default function AuthPage() {
                   </div>
                   {registerError && (
                     <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive">
-                      <AlertCircle className="h-4 w-4 shrink-0" />{registerError}
+                      <AlertCircle className="h-4 w-4 shrink-0" /><bdi>{registerError}</bdi>
                     </div>
                   )}
                   <Button
@@ -702,17 +701,17 @@ export default function AuthPage() {
                     className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm shadow-[0_0_20px_rgba(25,90,55,0.3)] transition-all duration-300"
                     data-testid="button-verify-otp"
                   >
-                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="mr-2 h-4 w-4" />Verify Code</>}
+                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="me-2 h-4 w-4" />{t("auth:register.verifyOtp")}</>}
                   </Button>
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <button onClick={() => { setRegStep("phone"); setRegisterError(""); }} className="hover:text-white transition-colors">← Change number</button>
+                    <button onClick={() => { setRegStep("phone"); setRegisterError(""); }} className="hover:text-white transition-colors">{t("auth:register.changePhone")}</button>
                     <button
                       onClick={() => countdown === 0 && sendOtp(regPhone)}
                       disabled={countdown > 0}
                       className={`flex items-center gap-1 transition-colors ${countdown > 0 ? "opacity-40 cursor-not-allowed" : "hover:text-white cursor-pointer"}`}
                     >
                       <RefreshCw className="h-3 w-3" />
-                      {countdown > 0 ? `Resend in ${countdown}s` : "Resend code"}
+                      {countdown > 0 ? t("auth:register.resendIn", { seconds: countdown }) : t("auth:register.resendOtp")}
                     </button>
                   </div>
                 </div>
@@ -723,26 +722,26 @@ export default function AuthPage() {
                 <div className="space-y-4">
                   <div className="p-3 bg-primary/5 border border-primary/20 rounded-sm flex items-center gap-2 text-sm">
                     <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
-                    <span className="text-primary font-medium">Phone verified: {regPhone}</span>
+                    <span className="text-primary font-medium"><bdi>{regPhone}</bdi></span>
                   </div>
                   <Form {...registerForm}>
                     <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-4">
                       <FormField control={registerForm.control} name="fullName" render={({ field }) => (
                         <FormItem>
-                          <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">Full Name</Label>
+                          <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">{t("auth:register.fullNameLabel")}</Label>
                           <FormControl>
-                            <Input placeholder="Ahmed Al-Mansouri" className="h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm" data-testid="input-full-name" {...field} />
+                            <Input placeholder={t("auth:register.fullNamePlaceholder")} className="h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm" data-testid="input-full-name" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )} />
                       <FormField control={registerForm.control} name="nationalId" render={({ field }) => (
                         <FormItem>
-                          <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">National ID or Iqama Number</Label>
+                          <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">{t("auth:register.nationalIdLabel")}</Label>
                           <FormControl>
                             <div className="relative group">
-                              <CreditCard className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                              <Input placeholder="National ID (1xxxxxxxxx) or Iqama (2xxxxxxxxx)" className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm font-mono tracking-wide" inputMode="numeric" data-testid="input-national-id" {...field} />
+                              <CreditCard className={iconStartClass} />
+                              <Input placeholder={t("auth:register.nationalIdPlaceholder")} className={`${inputPaddedStartClass} font-mono tracking-wide`} inputMode="numeric" data-testid="input-national-id" {...field} />
                             </div>
                           </FormControl>
                           <FormMessage />
@@ -750,39 +749,28 @@ export default function AuthPage() {
                       )} />
                       <FormField control={registerForm.control} name="password" render={({ field }) => (
                         <FormItem>
-                          <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">Password</Label>
+                          <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">{t("auth:register.passwordLabel")}</Label>
                           <FormControl>
                             <div className="relative group">
-                              <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                              <Input type="password" placeholder="Enter password" className="pl-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm" data-testid="input-register-password" {...field} />
+                              <Lock className={iconStartClass} />
+                              <Input type="password" placeholder={t("auth:register.passwordLabel")} className={inputPaddedStartClass} data-testid="input-register-password" {...field} />
                             </div>
                           </FormControl>
                           {field.value?.length > 0 && (
-                            <div className="space-y-1 text-xs mt-2" data-testid="register-password-strength-rules">
-                              {[
-                                { ok: field.value.length >= 8, label: "At least 8 characters" },
-                                { ok: /[A-Z]/.test(field.value), label: "One uppercase letter" },
-                                { ok: /[a-z]/.test(field.value), label: "One lowercase letter" },
-                                { ok: /[0-9]/.test(field.value), label: "One number" },
-                                { ok: /[^A-Za-z0-9]/.test(field.value), label: "One special character" },
-                              ].map((rule, i) => (
-                                <div key={i} className={`flex items-center gap-1.5 ${rule.ok ? "text-emerald-400" : "text-muted-foreground"}`}>
-                                  <CheckCircle2 className={`h-3 w-3 ${rule.ok ? "text-emerald-400" : "text-zinc-600"}`} />
-                                  {rule.label}
-                                </div>
-                              ))}
-                            </div>
+                            <p className="text-xs text-muted-foreground mt-2" data-testid="register-password-strength-rules">
+                              {t("auth:register.passwordHint")}
+                            </p>
                           )}
                           <FormMessage />
                         </FormItem>
                       )} />
                       {registerError && (
                         <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive" data-testid="register-error">
-                          <AlertCircle className="h-4 w-4 shrink-0" />{registerError}
+                          <AlertCircle className="h-4 w-4 shrink-0" /><bdi>{registerError}</bdi>
                         </div>
                       )}
                       <Button type="submit" disabled={isLoading} className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold tracking-wide uppercase text-sm rounded-sm shadow-[0_0_20px_rgba(25,90,55,0.3)] hover:shadow-[0_0_30px_rgba(25,90,55,0.5)] transition-all duration-300 group" data-testid="button-register">
-                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Create Account<ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" /></>}
+                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>{t("auth:register.submit")}<ArrowRight className={`ms-2 h-4 w-4 group-hover:translate-x-1 transition-transform ${isRtl ? "rotate-180" : ""}`} /></>}
                       </Button>
                     </form>
                   </Form>
@@ -791,8 +779,7 @@ export default function AuthPage() {
 
               <div className="text-center mt-2">
                 <p className="text-sm text-muted-foreground">
-                  By registering, you agree to our{" "}
-                  <a href="#" className="hover:text-primary transition-colors underline underline-offset-4">Terms of Service</a>
+                  {t("auth:legal.agree", { terms: t("auth:legal.terms"), privacy: t("auth:legal.privacy") })}
                 </p>
               </div>
             </TabsContent>
@@ -800,25 +787,25 @@ export default function AuthPage() {
           )}
 
           <div className="pt-8 border-t border-border/50 text-xs text-muted-foreground space-y-3">
-            <div className="flex items-center justify-center gap-4">
-              <Link href="/privacy-policy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
+            <div className="flex items-center justify-center gap-4 flex-wrap">
+              <Link href="/privacy-policy" className="hover:text-foreground transition-colors">{t("auth:legal.privacy")}</Link>
               <span className="text-border">·</span>
-              <Link href="/terms-conditions" className="hover:text-foreground transition-colors">Terms & Conditions</Link>
+              <Link href="/terms-conditions" className="hover:text-foreground transition-colors">{t("auth:legal.terms")}</Link>
               <span className="text-border">·</span>
               <a
                 href={supportEmail ? `mailto:${supportEmail}` : "#"}
                 className="hover:text-foreground transition-colors"
                 data-testid="link-contact-support"
                 {...(supportEmail ? {} : { onClick: (e: React.MouseEvent) => e.preventDefault() })}
-              >Contact Support</a>
+              >{t("auth:support.needHelp")}</a>
             </div>
-            <p className="text-center">© {new Date().getFullYear()} Luxury Carts Company Ltd.</p>
+            <p className="text-center"><bdi>© {new Date().getFullYear()} Luxury Carts Company Ltd.</bdi></p>
           </div>
         </div>
       </div>
 
       {/* ── Right Column: Mecca image ────────────────────────── */}
-      <div className="hidden lg:block relative overflow-hidden border-l border-white/5">
+      <div className="hidden lg:block relative overflow-hidden border-s border-white/5">
         <img
           src={meccaBg}
           alt="Masjid Al-Haram, Mecca"

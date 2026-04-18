@@ -1,0 +1,55 @@
+import i18n from "i18next";
+import { initReactI18next } from "react-i18next";
+import LanguageDetector from "i18next-browser-languagedetector";
+
+import enCommon from "./locales/en/common.json";
+import enAuth from "./locales/en/auth.json";
+import enApply from "./locales/en/apply.json";
+import enPortal from "./locales/en/portal.json";
+
+import arCommon from "./locales/ar/common.json";
+import arAuth from "./locales/ar/auth.json";
+import arApply from "./locales/ar/apply.json";
+import arPortal from "./locales/ar/portal.json";
+
+export const SUPPORTED_LOCALES = ["ar", "en"] as const;
+export type SupportedLocale = typeof SUPPORTED_LOCALES[number];
+export const DEFAULT_LOCALE: SupportedLocale = "ar";
+
+export const LOCALE_STORAGE_KEY = "workforce_locale";
+
+i18n
+  .use(LanguageDetector)
+  .use(initReactI18next)
+  .init({
+    resources: {
+      en: { common: enCommon, auth: enAuth, apply: enApply, portal: enPortal },
+      ar: { common: arCommon, auth: arAuth, apply: arApply, portal: arPortal },
+    },
+    fallbackLng: DEFAULT_LOCALE,
+    supportedLngs: SUPPORTED_LOCALES as unknown as string[],
+    ns: ["common", "auth", "apply", "portal"],
+    defaultNS: "common",
+    interpolation: { escapeValue: false },
+    detection: {
+      order: ["localStorage", "htmlTag", "navigator"],
+      lookupLocalStorage: LOCALE_STORAGE_KEY,
+      caches: ["localStorage"],
+    },
+    react: { useSuspense: false },
+  });
+
+export function isRtl(locale: string): boolean {
+  return locale.startsWith("ar");
+}
+
+export function setHtmlDirAttr(locale: string) {
+  if (typeof document === "undefined") return;
+  document.documentElement.lang = locale;
+  document.documentElement.dir = isRtl(locale) ? "rtl" : "ltr";
+}
+
+setHtmlDirAttr(i18n.language || DEFAULT_LOCALE);
+i18n.on("languageChanged", (lng) => setHtmlDirAttr(lng));
+
+export default i18n;
