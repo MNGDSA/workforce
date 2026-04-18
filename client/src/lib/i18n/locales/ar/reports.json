@@ -1,0 +1,93 @@
+{
+  "title": "التقارير",
+  "subtitle": "مؤشرات أداء التوظيف عبر المرشحين والطلبات والمقابلات والوظائف.",
+  "exportCsv": "تصدير CSV",
+  "exportExcel": "تصدير Excel",
+  "kpi": {
+    "totalCandidates": "إجمالي المرشحين",
+    "totalCandidatesSub": "المسجلون في النظام",
+    "openPositions": "الوظائف المفتوحة",
+    "openPositionsSub": "من إجمالي {{count}} وظيفة",
+    "activeEvents": "الفعاليات النشطة",
+    "activeEventsSub": "فعاليات التوظيف",
+    "filledJobs": "الوظائف المشغولة",
+    "filledJobsSub": "عبر جميع الوظائف"
+  },
+  "pipeline": {
+    "title": "مسار الطلبات",
+    "totalApps_one": "{{count}} طلب",
+    "totalApps_other": "إجمالي {{count}} طلب",
+    "noApps": "لا توجد طلبات بعد"
+  },
+  "stages": {
+    "new": "جديد",
+    "shortlisted": "في القائمة المختصرة",
+    "interviewed": "تمت مقابلته",
+    "offered": "تم تقديم عرض",
+    "hired": "تم التوظيف",
+    "rejected": "مرفوض",
+    "applied": "تقدّم"
+  },
+  "interviews": {
+    "title": "أداء المقابلات",
+    "subtitle_one": "{{count}} جلسة مقابلة",
+    "subtitle_other": "إجمالي {{count}} جلسة مقابلة",
+    "scheduled": "مجدولة",
+    "completed": "مكتملة",
+    "cancelled": "ملغاة",
+    "completionRate": "نسبة الإكمال",
+    "completedVsTotal": "المكتمل مقابل الإجمالي"
+  },
+  "jobs": {
+    "title": "الوظائف الشاغرة",
+    "count_one": "{{count}} وظيفة",
+    "count_other": "{{count}} وظيفة",
+    "active": "نشطة",
+    "draft": "مسودة",
+    "filled": "مشغولة"
+  },
+  "candidates": {
+    "title": "تفصيل المرشحين",
+    "subtitle_one": "{{count}} مرشح مسجل",
+    "subtitle_other": "{{count}} مرشح مسجل",
+    "byGender": "حسب الجنس",
+    "byNationality": "حسب الجنسية",
+    "byRegion": "حسب المنطقة",
+    "noData": "لا توجد بيانات",
+    "unknown": "غير محدد"
+  },
+  "conversion": {
+    "title": "ملخص تحويل التوظيف",
+    "subtitle": "تحويل المسار الكامل من الطلب إلى التوظيف"
+  },
+  "csv": {
+    "fileName": "تقرير-التوظيف-{{date}}",
+    "headerReport": "التقرير",
+    "headerMetric": "المقياس",
+    "headerValue": "القيمة",
+    "headerCount": "العدد",
+    "headerStage": "المرحلة",
+    "headerPercent": "النسبة من الإجمالي",
+    "sectionOverview": "نظرة عامة",
+    "sectionPipeline": "المسار",
+    "sectionInterviews": "المقابلات",
+    "sectionJobs": "الوظائف",
+    "sectionCandidates": "المرشحون",
+    "metricCandidates": "إجمالي المرشحين",
+    "metricOpen": "الوظائف المفتوحة",
+    "metricEvents": "الفعاليات النشطة",
+    "metricInterviews": "المقابلات المجدولة",
+    "metricNew": "الطلبات الجديدة",
+    "metricTotal": "الإجمالي",
+    "metricCompletionRate": "نسبة الإكمال %",
+    "metricTotalJobs": "إجمالي الوظائف",
+    "rowGender": "الجنس",
+    "rowNationality": "الجنسية",
+    "rowRegion": "المنطقة / المدينة",
+    "sheetOverview": "نظرة عامة",
+    "sheetPipeline": "مسار الطلبات",
+    "sheetInterviews": "المقابلات",
+    "sheetJobs": "الوظائف",
+    "sheetCandidates": "المرشحون"
+  }
+}

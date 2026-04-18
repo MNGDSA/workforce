@@ -1,0 +1,93 @@
+{
+  "title": "Reports",
+  "subtitle": "Recruitment performance metrics across candidates, applications, interviews, and jobs.",
+  "exportCsv": "Export CSV",
+  "exportExcel": "Export Excel",
+  "kpi": {
+    "totalCandidates": "Total Candidates",
+    "totalCandidatesSub": "Registered in system",
+    "openPositions": "Open Positions",
+    "openPositionsSub": "of {{count}} total jobs",
+    "activeEvents": "Active Events",
+    "activeEventsSub": "Hiring events",
+    "filledJobs": "Filled Jobs",
+    "filledJobsSub": "Across all jobs"
+  },
+  "pipeline": {
+    "title": "Application Pipeline",
+    "totalApps_one": "{{count}} total application",
+    "totalApps_other": "{{count}} total applications",
+    "noApps": "No applications yet"
+  },
+  "stages": {
+    "new": "New",
+    "shortlisted": "Shortlisted",
+    "interviewed": "Interviewed",
+    "offered": "Offered",
+    "hired": "Hired",
+    "rejected": "Rejected",
+    "applied": "Applied"
+  },
+  "interviews": {
+    "title": "Interview Performance",
+    "subtitle_one": "{{count}} total interview session",
+    "subtitle_other": "{{count}} total interview sessions",
+    "scheduled": "Scheduled",
+    "completed": "Completed",
+    "cancelled": "Cancelled",
+    "completionRate": "Completion Rate",
+    "completedVsTotal": "Completed vs Total"
+  },
+  "jobs": {
+    "title": "Job Openings",
+    "count_one": "{{count}} job",
+    "count_other": "{{count}} jobs",
+    "active": "Active",
+    "draft": "Draft",
+    "filled": "Filled"
+  },
+  "candidates": {
+    "title": "Candidate Breakdown",
+    "subtitle_one": "{{count}} registered candidate",
+    "subtitle_other": "{{count}} registered candidates",
+    "byGender": "By Gender",
+    "byNationality": "By Nationality",
+    "byRegion": "By Region",
+    "noData": "No data",
+    "unknown": "Unknown"
+  },
+  "conversion": {
+    "title": "Hiring Conversion Summary",
+    "subtitle": "End-to-end funnel conversion from application to hire"
+  },
+  "csv": {
+    "fileName": "recruitment-report-{{date}}",
+    "headerReport": "Report",
+    "headerMetric": "Metric",
+    "headerValue": "Value",
+    "headerCount": "Count",
+    "headerStage": "Stage",
+    "headerPercent": "% of Total",
+    "sectionOverview": "Overview",
+    "sectionPipeline": "Pipeline",
+    "sectionInterviews": "Interviews",
+    "sectionJobs": "Jobs",
+    "sectionCandidates": "Candidates",
+    "metricCandidates": "Total Candidates",
+    "metricOpen": "Open Positions",
+    "metricEvents": "Active Events",
+    "metricInterviews": "Scheduled Interviews",
+    "metricNew": "New Applications",
+    "metricTotal": "Total",
+    "metricCompletionRate": "Completion Rate %",
+    "metricTotalJobs": "Total Jobs",
+    "rowGender": "Gender",
+    "rowNationality": "Nationality",
+    "rowRegion": "Region / City",
+    "sheetOverview": "Overview",
+    "sheetPipeline": "Application Pipeline",
+    "sheetInterviews": "Interviews",
+    "sheetJobs": "Jobs",
+    "sheetCandidates": "Candidates"
+  }
+}
