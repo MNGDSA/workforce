@@ -210,6 +210,35 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
+  const BOOT_TIME = Date.now();
+  app.get("/api/health", async (_req: Request, res: Response) => {
+    res.setHeader("Cache-Control", "no-store");
+    const started = Date.now();
+    let dbStatus: "ok" | "error" = "ok";
+    let dbError: string | undefined;
+    let dbLatencyMs = 0;
+    try {
+      await Promise.race([
+        db.execute(sql`SELECT 1`),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("db ping timeout")), 2000)),
+      ]);
+      dbLatencyMs = Date.now() - started;
+    } catch (err: any) {
+      dbStatus = "error";
+      dbError = err?.message || String(err);
+    }
+    const body = {
+      status: dbStatus === "ok" ? "ok" : "degraded",
+      db: dbStatus,
+      ...(dbError ? { dbError } : {}),
+      dbLatencyMs,
+      uptimeSec: Math.round((Date.now() - BOOT_TIME) / 1000),
+      env: process.env.NODE_ENV || "development",
+      timestamp: new Date().toISOString(),
+    };
+    res.status(dbStatus === "ok" ? 200 : 503).json(body);
+  });
+
   if (process.env.NODE_ENV !== "production") {
     app.use("/uploads", express.static(UPLOADS_DIR, {
       setHeaders: (res, filePath) => {
