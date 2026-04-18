@@ -61,5 +61,6 @@
     "invalidPhone": "Please enter a valid phone number.",
     "invalidEmail": "Please enter a valid email address.",
     "invalidNationalId": "Please enter a valid National ID or Iqama number."
-  }
+  },
+  "tryAgain": "Please try again."
 }

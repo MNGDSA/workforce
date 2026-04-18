@@ -50,7 +50,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
-import { useTranslation } from "react-i18next";
+import { useTranslation, Trans } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -78,7 +78,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { apiRequest } from "@/lib/queryClient";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { toProxiedFileUrl } from "@/lib/file-url";
 import { useToast } from "@/hooks/use-toast";
 import { resolveSaudiBank } from "@/lib/saudi-banks";
@@ -127,6 +127,7 @@ function PhotoCropDialog({ open, imageSrc, onCrop, onClose, onRetry }: {
   onClose: () => void;
   onRetry: () => void;
 }) {
+  const { t } = useTranslation(["portal", "common"]);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedArea, setCroppedArea] = useState<Area | null>(null);
@@ -140,8 +141,8 @@ function PhotoCropDialog({ open, imageSrc, onCrop, onClose, onRetry }: {
       <div className="bg-card border border-border rounded-lg w-[90vw] max-w-md overflow-hidden max-h-[90vh] overflow-y-auto" data-testid="photo-crop-dialog">
         <div className="p-4 border-b border-border flex items-center justify-between">
           <div>
-            <h3 className="text-base font-semibold text-white">Crop your photo</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Drag to position, scroll to zoom. The square area will be your profile photo.</p>
+            <h3 className="text-base font-semibold text-white">{t("portal:photoCrop.title")}</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">{t("portal:photoCrop.hint")}</p>
           </div>
           <button onClick={() => { setQualityChecks(null); onClose(); }} className="text-muted-foreground hover:text-white" data-testid="button-crop-close">
             <X className="h-5 w-5" />
@@ -165,7 +166,7 @@ function PhotoCropDialog({ open, imageSrc, onCrop, onClose, onRetry }: {
           <div className="mx-4 mt-3 p-3 rounded-lg border border-red-800/50 bg-red-950/30" data-testid="quality-checklist">
             <p className="text-sm font-semibold text-red-400 mb-2 flex items-center gap-1.5">
               <AlertCircle className="h-4 w-4" />
-              Photo Quality Check Failed
+              {t("portal:photoCrop.qualityFailed")}
             </p>
             <div className="space-y-1.5">
               {qualityChecks.map((check, i) => (
@@ -192,13 +193,13 @@ function PhotoCropDialog({ open, imageSrc, onCrop, onClose, onRetry }: {
               onClick={() => { setQualityChecks(null); onRetry(); }}
             >
               <Camera className="h-3.5 w-3.5" />
-              Try Different Photo
+              {t("portal:photoCrop.tryDifferent")}
             </Button>
           </div>
         )}
 
         <div className="p-4 flex items-center gap-3">
-          <label className="text-xs text-muted-foreground shrink-0">Zoom</label>
+          <label className="text-xs text-muted-foreground shrink-0">{t("portal:photoCrop.zoom")}</label>
           <input
             type="range" min={1} max={3} step={0.05}
             value={zoom} onChange={(e) => setZoom(Number(e.target.value))}
@@ -226,9 +227,9 @@ function PhotoCropDialog({ open, imageSrc, onCrop, onClose, onRetry }: {
             {processing ? (
               <span className="flex items-center gap-1.5">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-xs">Checking quality…</span>
+                <span className="text-xs">{t("portal:photoCrop.checking")}</span>
               </span>
-            ) : "Save Photo"}
+            ) : t("portal:photoCrop.save")}
           </Button>
         </div>
       </div>
@@ -340,6 +341,7 @@ function ApplyDialog({
   onOpenChange: (v: boolean) => void;
   onSuccess: (jobId: string) => void;
 }) {
+  const { t } = useTranslation(["portal", "common"]);
   const { toast } = useToast();
   const form = useForm<ApplyForm>({
     resolver: zodResolver(applySchema),
@@ -363,13 +365,13 @@ function ApplyDialog({
       return job!.id;
     },
     onSuccess: (jobId) => {
-      toast({ title: "Application submitted!", description: `You applied for "${job?.title}".` });
+      toast({ title: t("portal:apply.submitted"), description: t("portal:apply.submittedDesc", { title: job?.title ?? "" }) });
       onSuccess(jobId);
       form.reset();
       onOpenChange(false);
     },
     onError: () => {
-      toast({ title: "Failed to submit", description: "Please check your details and try again.", variant: "destructive" });
+      toast({ title: t("portal:apply.failed"), description: t("portal:apply.failedDesc"), variant: "destructive" });
     },
   });
 
@@ -379,11 +381,11 @@ function ApplyDialog({
         <DialogHeader>
           <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
             <Briefcase className="h-5 w-5 text-primary" />
-            Apply for Position
+            {t("portal:apply.title")}
           </DialogTitle>
           {job && (
             <DialogDescription className="text-muted-foreground">
-              {job.title} · {job.region ?? job.location ?? "KSA"}
+              <bdi>{job.title}</bdi> · {job.region ?? job.location ?? t("portal:apply.ksa")}
             </DialogDescription>
           )}
         </DialogHeader>
@@ -392,9 +394,9 @@ function ApplyDialog({
           <form onSubmit={form.handleSubmit((d) => apply.mutate(d))} className="space-y-4 pt-1">
             <FormField control={form.control} name="fullNameEn" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Full Name (English)</FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("portal:apply.fullName")}</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. Mohammed Al-Harbi" className="bg-muted/30 border-border" {...field} />
+                  <Input placeholder={t("portal:apply.fullNamePlaceholder")} className="bg-muted/30 border-border" dir="ltr" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -402,9 +404,9 @@ function ApplyDialog({
 
             <FormField control={form.control} name="nationalId" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">National ID / Iqama No.</FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("portal:apply.nationalId")}</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. 1012345678" className="bg-muted/30 border-border" {...field} />
+                  <Input placeholder={t("portal:apply.nationalIdPlaceholder")} className="bg-muted/30 border-border" dir="ltr" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -412,9 +414,9 @@ function ApplyDialog({
 
             <FormField control={form.control} name="phone" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Phone Number</FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("portal:apply.phone")}</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. 0512345678" className="bg-muted/30 border-border" {...field} />
+                  <Input placeholder={t("portal:apply.phonePlaceholder")} className="bg-muted/30 border-border" dir="ltr" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -422,10 +424,10 @@ function ApplyDialog({
 
             <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="outline" className="border-border" onClick={() => onOpenChange(false)}>
-                Cancel
+                {t("portal:common.cancel")}
               </Button>
               <Button type="submit" className="bg-primary text-primary-foreground font-bold min-w-[120px]" disabled={apply.isPending}>
-                {apply.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Application"}
+                {apply.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("portal:apply.submit")}
               </Button>
             </div>
           </form>
@@ -435,34 +437,35 @@ function ApplyDialog({
   );
 }
 
-function salaryLabel(job: JobPosting) {
-  if (job.salaryMin && job.salaryMax) return `${job.salaryMin.toLocaleString()} – ${job.salaryMax.toLocaleString()} SAR/mo`;
-  if (job.salaryMin) return `From ${job.salaryMin.toLocaleString()} SAR/mo`;
+function salaryLabel(job: JobPosting, t: (k: string, opts?: Record<string, unknown>) => string) {
+  if (job.salaryMin && job.salaryMax) return t("portal:salary.rangeMo", { min: formatNumber(job.salaryMin), max: formatNumber(job.salaryMax) });
+  if (job.salaryMin) return t("portal:salary.fromMo", { min: formatNumber(job.salaryMin) });
   return null;
 }
 
-function typeLabel(type: string) {
-  return type === "seasonal_full_time" ? "Seasonal Full-Time" : type === "seasonal_part_time" ? "Seasonal Part-Time" : type === "full_time" ? "Full Time" : type === "part_time" ? "Part Time" : type;
+function typeLabel(type: string, t: (k: string) => string) {
+  const known = ["seasonal_full_time", "seasonal_part_time", "full_time", "part_time"];
+  return known.includes(type) ? t(`portal:jobType.${type}`) : type;
 }
 
-function getApplicationBadge(deadline: string | undefined, status: string) {
+function getApplicationBadge(deadline: string | undefined, status: string, t: (k: string) => string) {
   const isBeforeDeadline = deadline ? new Date() < new Date(deadline) : true;
   if (isBeforeDeadline) {
-    return { label: "Under Review", className: "bg-amber-500/15 text-amber-400 border-amber-500/30 border" };
+    return { label: t("portal:appBadge.underReview"), className: "bg-amber-500/15 text-amber-400 border-amber-500/30 border" };
   }
   switch (status) {
     case "hired":
-      return { label: "Hired", className: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 border" };
+      return { label: t("portal:appBadge.hired"), className: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 border" };
     case "offered":
-      return { label: "Offer Extended", className: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30 border" };
+      return { label: t("portal:appBadge.offered"), className: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30 border" };
     case "shortlisted":
-      return { label: "Shortlisted", className: "bg-blue-500/15 text-blue-400 border-blue-500/30 border" };
+      return { label: t("portal:appBadge.shortlisted"), className: "bg-blue-500/15 text-blue-400 border-blue-500/30 border" };
     case "interviewed":
-      return { label: "Interviewed", className: "bg-violet-500/15 text-violet-400 border-violet-500/30 border" };
+      return { label: t("portal:appBadge.interviewed"), className: "bg-violet-500/15 text-violet-400 border-violet-500/30 border" };
     case "rejected":
-      return { label: "Not Shortlisted", className: "bg-muted/60 text-muted-foreground border-border border" };
+      return { label: t("portal:appBadge.rejected"), className: "bg-muted/60 text-muted-foreground border-border border" };
     default:
-      return { label: "Under Review", className: "bg-amber-500/15 text-amber-400 border-amber-500/30 border" };
+      return { label: t("portal:appBadge.underReview"), className: "bg-amber-500/15 text-amber-400 border-amber-500/30 border" };
   }
 }
 
@@ -472,17 +475,17 @@ type DocKey = "resume" | "nationalId" | "photo" | "iban";
 
 const ALL_DOC_ITEMS: {
   key: DocKey;
-  label: string;
-  hint: string;
+  i18nKey: string;
+  maxMb: number;
   accept: string;
   icon: React.ReactNode;
   smpOnly?: boolean;
   individualOnly?: boolean;
 }[] = [
-  { key: "photo",      label: "Personal Photo",         hint: "JPG or PNG up to 3 MB",   accept: ".jpg,.jpeg,.png",      icon: <ImageIcon className="h-4 w-4" /> },
-  { key: "nationalId", label: "National / Resident ID", hint: "PDF, JPG, PNG up to 5 MB", accept: ".pdf,.jpg,.jpeg,.png", icon: <CreditCard className="h-4 w-4" /> },
-  { key: "resume",     label: "Resume / CV",            hint: "PDF, DOC up to 5 MB",  accept: ".pdf,.doc,.docx",        icon: <FileText className="h-4 w-4" />, individualOnly: true },
-  { key: "iban",       label: "IBAN Certificate",       hint: "PDF, JPG, PNG up to 5 MB", accept: ".pdf,.jpg,.jpeg,.png", icon: <Landmark className="h-4 w-4" />, individualOnly: true },
+  { key: "photo",      i18nKey: "photo",      maxMb: 3, accept: ".jpg,.jpeg,.png",      icon: <ImageIcon className="h-4 w-4" /> },
+  { key: "nationalId", i18nKey: "nationalId", maxMb: 5, accept: ".pdf,.jpg,.jpeg,.png", icon: <CreditCard className="h-4 w-4" /> },
+  { key: "resume",     i18nKey: "resume",     maxMb: 5, accept: ".pdf,.doc,.docx",      icon: <FileText className="h-4 w-4" />, individualOnly: true },
+  { key: "iban",       i18nKey: "iban",       maxMb: 5, accept: ".pdf,.jpg,.jpeg,.png", icon: <Landmark className="h-4 w-4" />, individualOnly: true },
 ];
 
 function ProfileCompletionCard({
@@ -494,6 +497,7 @@ function ProfileCompletionCard({
   candidateId: string;
   isSmp?: boolean;
 }) {
+  const { t } = useTranslation(["portal", "common"]);
   const queryClient = useQueryClient();
   const { data: profile } = useQuery({
     queryKey: ["/api/candidates/profile", candidateId],
@@ -583,16 +587,16 @@ function ProfileCompletionCard({
       if (key === "photo" && body.pendingReview) {
         setPhotoPendingReview(true);
         queryClient.invalidateQueries({ queryKey: ["/api/photo-change-requests", candidateId, "pending"] });
-        toast({ title: "Photo submitted for review", description: "Your new photo has been sent to HR for approval. Your current photo remains active." });
+        toast({ title: t("portal:docs.photoSubmitted"), description: t("portal:docs.photoSubmittedDesc") });
       } else {
         setJustUploaded((p) => ({ ...p, [key]: file.name }));
         queryClient.invalidateQueries({ queryKey: ["/api/candidates/profile", candidateId] });
-        const title = key === "photo" ? "Photo uploaded and verified" : "File uploaded";
-        toast({ title, description: `"${file.name}" saved successfully.` });
+        const title = key === "photo" ? t("portal:docs.photoVerified") : t("portal:docs.fileUploaded");
+        toast({ title, description: t("portal:docs.fileSaved", { name: file.name }) });
       }
       return { ok: true };
     } catch (err: any) {
-      toast({ title: "Upload failed", description: err?.message || "Please try again.", variant: "destructive" });
+      toast({ title: t("portal:docs.uploadFailed"), description: err?.message || t("portal:docs.tryAgain"), variant: "destructive" });
       return { ok: false, error: err?.message };
     } finally {
       setUploading((p) => ({ ...p, [key]: false }));
@@ -604,7 +608,7 @@ function ProfileCompletionCard({
     if (!file) return;
     const maxMb = key === "photo" ? 3 : 5;
     if (file.size > maxMb * 1024 * 1024) {
-      toast({ title: "File too large", description: `Maximum size is ${maxMb} MB.`, variant: "destructive" });
+      toast({ title: t("portal:docs.fileTooLarge"), description: t("portal:docs.maxSize", { n: formatNumber(maxMb) }), variant: "destructive" });
       return;
     }
     if (key === "photo") {
@@ -624,25 +628,27 @@ function ProfileCompletionCard({
     <Card className="bg-card border-border">
       <CardHeader className="pb-3">
         <CardTitle className="text-base font-display text-white">
-          {isSmp ? "Required Documents" : "Profile Completion"}
+          {isSmp ? t("portal:docs.requiredDocs") : t("portal:docs.profileCompletion")}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-1.5">
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Overall Strength</span>
-            <span className={`font-bold ${pct === 100 ? "text-emerald-500" : "text-primary"}`}>{pct}%</span>
+            <span className="text-muted-foreground">{t("portal:docs.overallStrength")}</span>
+            <span className={`font-bold ${pct === 100 ? "text-emerald-500" : "text-primary"}`}>{formatNumber(pct)}%</span>
           </div>
           <Progress value={pct} className="h-2" />
           {pct === 100 && (
             <p className="text-xs text-emerald-500 font-medium flex items-center gap-1">
-              <CheckCircle2 className="h-3 w-3" /> Documents complete!
+              <CheckCircle2 className="h-3 w-3" /> {t("portal:docs.complete")}
             </p>
           )}
         </div>
 
         <div className="space-y-2">
-          {DOC_ITEMS.map(({ key, label, hint, accept, icon }) => {
+          {DOC_ITEMS.map(({ key, i18nKey, maxMb, accept, icon }) => {
+            const label = t(`portal:docs.items.${i18nKey}`);
+            const hint = t(`portal:docs.items.${i18nKey}Hint`, { n: formatNumber(maxMb) });
             const busy = uploading[key];
             const done = isDone(key);
             const uploadedName = justUploaded[key];
@@ -681,12 +687,12 @@ function ProfileCompletionCard({
                     <p className={`text-sm font-medium leading-tight ${isPendingPhotoReview ? "text-amber-400" : done ? "text-emerald-400" : "text-white"}`}>{label}</p>
                     {isPendingPhotoReview
                       ? <p className="text-[11px] text-amber-600 truncate flex items-center gap-1">
-                          <Clock className="h-2.5 w-2.5 inline-block" /> New photo pending HR review
+                          <Clock className="h-2.5 w-2.5 inline-block" /> {t("portal:docs.newPhotoPending")}
                         </p>
                       : done
                         ? <p className="text-[11px] text-emerald-600 truncate flex items-center gap-1">
                             {hasFileUrl && <Download className="h-2.5 w-2.5 inline-block" />}
-                            {uploadedName || (hasFileUrl ? "Click to view" : "Uploaded")}
+                            {uploadedName || (hasFileUrl ? t("portal:docs.clickToView") : t("portal:docs.uploaded"))}
                           </p>
                         : <p className="text-[11px] text-muted-foreground/70">{hint}</p>}
                   </div>
@@ -696,7 +702,7 @@ function ProfileCompletionCard({
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleClick(key); }}
                       className="shrink-0 text-muted-foreground hover:text-primary transition-colors rounded-full p-1"
-                      title="Re-upload"
+                      title={t("portal:docs.reupload")}
                       data-testid={`button-reupload-${key}`}
                     >
                       <RefreshCw className="h-3.5 w-3.5" />
@@ -745,25 +751,28 @@ type MyShiftData = {
   attendance: Array<{ id: string; date: string; status: string; clockIn: string | null; clockOut: string | null; minutesWorked: number | null; minutesScheduled: number | null }>;
 };
 
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
-const STATUS_STYLES: Record<string, { label: string; color: string }> = {
-  present: { label: "Present", color: "text-emerald-400" },
-  absent: { label: "Absent", color: "text-red-400" },
-  late: { label: "Late", color: "text-yellow-400" },
-  excused: { label: "Excused", color: "text-blue-400" },
+const STATUS_COLORS: Record<string, string> = {
+  present: "text-emerald-400",
+  absent: "text-red-400",
+  late: "text-yellow-400",
+  excused: "text-blue-400",
 };
 
 function MyShiftSection({ workforceId }: { workforceId: string }) {
+  const { t } = useTranslation(["portal", "common"]);
   const { data, isLoading } = useQuery<MyShiftData>({
     queryKey: ["/api/portal/my-shift", workforceId],
     queryFn: () => apiRequest("GET", `/api/portal/my-shift/${workforceId}`).then(r => r.json()),
   });
 
+  const statusLabel = (s: string) => STATUS_COLORS[s] ? t(`portal:attendanceStatus.${s}`) : s;
+  const statusColor = (s: string) => STATUS_COLORS[s] ?? "text-zinc-400";
+
   if (isLoading) return (
     <div className="flex items-center justify-center py-12 gap-2 text-zinc-500">
       <Loader2 className="h-5 w-5 animate-spin" />
-      <span className="text-sm">Loading shift info...</span>
+      <span className="text-sm">{t("portal:shift.loading")}</span>
     </div>
   );
 
@@ -772,7 +781,7 @@ function MyShiftSection({ workforceId }: { workforceId: string }) {
       <Card className="bg-card border-border">
         <CardContent className="py-10 text-center">
           <Calendar className="h-8 w-8 text-zinc-500 mx-auto mb-2" />
-          <p className="text-zinc-400 text-sm">No shift schedule assigned yet.</p>
+          <p className="text-zinc-400 text-sm">{t("portal:shift.noShift")}</p>
         </CardContent>
       </Card>
     );
@@ -791,49 +800,48 @@ function MyShiftSection({ workforceId }: { workforceId: string }) {
   const todayShiftId = dayShiftIds[DAY_KEYS[today]];
   const todayShift = todayShiftId ? shiftMap[todayShiftId] : null;
   const todayAtt = data.attendance.find(a => a.date === todayStr);
-  const todayStatus = todayAtt ? (STATUS_STYLES[todayAtt.status] ?? { label: todayAtt.status, color: "text-zinc-400" }) : null;
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-display font-bold text-white">My Shift</h3>
+      <h3 className="text-lg font-display font-bold text-white">{t("portal:shift.title")}</h3>
 
       <Card className="bg-card border-border" data-testid="card-today-shift">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-zinc-400">Today</CardTitle>
+          <CardTitle className="text-sm text-zinc-400">{t("portal:shift.today")}</CardTitle>
         </CardHeader>
         <CardContent>
           {todayShift ? (
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-white font-medium">{todayShift.name}</p>
-                <p className="text-zinc-400 text-sm">{todayShift.startTime} – {todayShift.endTime}</p>
+                <p className="text-white font-medium"><bdi>{todayShift.name}</bdi></p>
+                <p className="text-zinc-400 text-sm" dir="ltr">{todayShift.startTime} – {todayShift.endTime}</p>
               </div>
               <div className="text-right">
                 {todayAtt ? (
                   <div className="space-y-1">
-                    <span className={`text-sm font-semibold ${todayStatus?.color}`} data-testid="text-today-status">{todayStatus?.label}</span>
+                    <span className={`text-sm font-semibold ${statusColor(todayAtt.status)}`} data-testid="text-today-status">{statusLabel(todayAtt.status)}</span>
                     <div className="text-xs text-zinc-400">
-                      {todayAtt.clockIn ? `In: ${todayAtt.clockIn}` : "Not clocked in"}
-                      {todayAtt.clockOut ? ` · Out: ${todayAtt.clockOut}` : todayAtt.clockIn ? " · Not clocked out" : ""}
+                      {todayAtt.clockIn ? t("portal:shift.in", { t: todayAtt.clockIn }) : t("portal:shift.notIn")}
+                      {todayAtt.clockOut ? ` · ${t("portal:shift.out", { t: todayAtt.clockOut })}` : todayAtt.clockIn ? ` · ${t("portal:shift.notOut")}` : ""}
                     </div>
                     {todayAtt.minutesWorked != null && (
-                      <div className="text-xs text-zinc-500">{todayAtt.minutesWorked}/{todayAtt.minutesScheduled ?? "—"} min</div>
+                      <div className="text-xs text-zinc-500">{t("portal:shift.minutes", { worked: formatNumber(todayAtt.minutesWorked), scheduled: todayAtt.minutesScheduled != null ? formatNumber(todayAtt.minutesScheduled) : "—" })}</div>
                     )}
                   </div>
                 ) : (
-                  <span className="text-zinc-500 text-xs" data-testid="text-today-pending">Awaiting attendance</span>
+                  <span className="text-zinc-500 text-xs" data-testid="text-today-pending">{t("portal:shift.awaiting")}</span>
                 )}
               </div>
             </div>
           ) : (
-            <p className="text-zinc-500 text-sm">Day off today</p>
+            <p className="text-zinc-500 text-sm">{t("portal:shift.dayOff")}</p>
           )}
         </CardContent>
       </Card>
 
       <Card className="bg-card border-border">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-zinc-400">Schedule: {tmpl.name}</CardTitle>
+          <CardTitle className="text-sm text-zinc-400">{t("portal:shift.schedule", { name: tmpl.name })}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-7 gap-1">
@@ -845,21 +853,22 @@ function MyShiftSection({ workforceId }: { workforceId: string }) {
               dayDate.setDate(dayDate.getDate() + (idx - today));
               const dayStr = dayDate.toISOString().split("T")[0];
               const dayAtt = data.attendance.find(a => a.date === dayStr);
+              const shortDayKey = ["sunShort","monShort","tueShort","wedShort","thuShort","friShort","satShort"][idx];
               return (
                 <div key={day} className={`rounded p-2 text-center ${isToday ? "bg-primary/15 border border-primary/30" : "bg-muted/20"}`} data-testid={`day-shift-${day}`}>
-                  <div className={`text-[10px] font-bold uppercase ${isToday ? "text-primary" : "text-zinc-500"}`}>{DAY_NAMES[idx].slice(0, 3)}</div>
+                  <div className={`text-[10px] font-bold uppercase ${isToday ? "text-primary" : "text-zinc-500"}`}>{t(`portal:days.${shortDayKey}`)}</div>
                   {shift ? (
                     <>
-                      <div className="text-xs text-white font-medium mt-1">{shift.name}</div>
-                      <div className="text-[10px] text-zinc-400 mt-0.5">{shift.startTime} – {shift.endTime}</div>
+                      <div className="text-xs text-white font-medium mt-1"><bdi>{shift.name}</bdi></div>
+                      <div className="text-[10px] text-zinc-400 mt-0.5" dir="ltr">{shift.startTime} – {shift.endTime}</div>
                       {dayAtt && (
-                        <div className={`text-[9px] mt-0.5 font-semibold ${(STATUS_STYLES[dayAtt.status] ?? { color: "text-zinc-400" }).color}`}>
-                          {dayAtt.minutesWorked != null ? `${dayAtt.minutesWorked}m` : (STATUS_STYLES[dayAtt.status]?.label ?? dayAtt.status)}
+                        <div className={`text-[9px] mt-0.5 font-semibold ${statusColor(dayAtt.status)}`}>
+                          {dayAtt.minutesWorked != null ? t("portal:shift.minutesShort", { n: formatNumber(dayAtt.minutesWorked) }) : statusLabel(dayAtt.status)}
                         </div>
                       )}
                     </>
                   ) : (
-                    <div className="text-[10px] text-zinc-600 mt-1">Off</div>
+                    <div className="text-[10px] text-zinc-600 mt-1">{t("portal:shift.off")}</div>
                   )}
                 </div>
               );
@@ -870,27 +879,26 @@ function MyShiftSection({ workforceId }: { workforceId: string }) {
 
       <Card className="bg-card border-border">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-zinc-400">Recent Attendance</CardTitle>
+          <CardTitle className="text-sm text-zinc-400">{t("portal:shift.recent")}</CardTitle>
         </CardHeader>
         <CardContent>
           {data.attendance.length === 0 ? (
-            <p className="text-zinc-500 text-sm text-center py-4">No attendance records yet.</p>
+            <p className="text-zinc-500 text-sm text-center py-4">{t("portal:shift.noRecords")}</p>
           ) : (
             <div className="space-y-1.5">
               {data.attendance.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 14).map(rec => {
-                const st = STATUS_STYLES[rec.status] ?? { label: rec.status, color: "text-zinc-400" };
                 const dateObj = new Date(rec.date + "T00:00:00");
-                const dayLabel = DAY_NAMES[dateObj.getDay()];
+                const dayKey = DAY_KEYS[dateObj.getDay()];
                 return (
                   <div key={rec.id} className="flex items-center justify-between text-sm py-1.5 px-2 rounded bg-muted/10" data-testid={`attendance-row-${rec.date}`}>
                     <div>
-                      <span className="text-white font-medium">{rec.date}</span>
-                      <span className="text-zinc-500 text-xs ml-2">{dayLabel}</span>
+                      <span className="text-white font-medium" dir="ltr">{formatDate(rec.date)}</span>
+                      <span className="text-zinc-500 text-xs ms-2">{t(`portal:days.${dayKey}`)}</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      {rec.clockIn && <span className="text-zinc-400 text-xs">{rec.clockIn}–{rec.clockOut ?? "?"}</span>}
-                      {rec.minutesWorked != null && <span className="text-zinc-400 text-xs">{rec.minutesWorked}/{rec.minutesScheduled ?? "—"}m</span>}
-                      <span className={`text-xs font-semibold ${st.color}`}>{st.label}</span>
+                      {rec.clockIn && <span className="text-zinc-400 text-xs" dir="ltr">{rec.clockIn}–{rec.clockOut ?? "?"}</span>}
+                      {rec.minutesWorked != null && <span className="text-zinc-400 text-xs">{formatNumber(rec.minutesWorked)}/{rec.minutesScheduled != null ? formatNumber(rec.minutesScheduled) : "—"}{t("portal:shift.minutesShort", { n: "" }).replace(/\s*$/,"")}</span>}
+                      <span className={`text-xs font-semibold ${statusColor(rec.status)}`}>{statusLabel(rec.status)}</span>
                     </div>
                   </div>
                 );
@@ -920,13 +928,14 @@ type ExcuseRequest = {
   reviewNotes: string | null;
 };
 
-const EXCUSE_STATUS_STYLES: Record<string, { label: string; color: string; bg: string }> = {
-  pending: { label: "Pending", color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/30" },
-  approved: { label: "Approved", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30" },
-  rejected: { label: "Rejected", color: "text-red-400", bg: "bg-red-500/10 border-red-500/30" },
+const EXCUSE_STATUS_STYLES: Record<string, { color: string; bg: string }> = {
+  pending: { color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/30" },
+  approved: { color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30" },
+  rejected: { color: "text-red-400", bg: "bg-red-500/10 border-red-500/30" },
 };
 
 function ExcuseRequestSection({ workforceId }: { workforceId: string }) {
+  const { t } = useTranslation(["portal", "common"]);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
@@ -946,10 +955,10 @@ function ExcuseRequestSection({ workforceId }: { workforceId: string }) {
       setShowForm(false);
       setReason("");
       setExcuseDate(new Date().toISOString().split("T")[0]);
-      toast({ title: "Excuse request submitted successfully" });
+      toast({ title: t("portal:excuse.submitted") });
     },
     onError: async (err: any) => {
-      let msg = "Failed to submit excuse request";
+      let msg = t("portal:excuse.failed");
       try { const body = await err.json?.(); if (body?.message) msg = body.message; } catch {}
       toast({ title: msg, variant: "destructive" });
     },
@@ -963,14 +972,14 @@ function ExcuseRequestSection({ workforceId }: { workforceId: string }) {
   if (isLoading) return (
     <div className="flex items-center justify-center py-12 gap-2 text-zinc-500">
       <Loader2 className="h-5 w-5 animate-spin" />
-      <span className="text-sm">Loading excuse requests...</span>
+      <span className="text-sm">{t("portal:excuse.loading")}</span>
     </div>
   );
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-display font-bold text-white">Excuse Requests</h3>
+        <h3 className="text-lg font-display font-bold text-white">{t("portal:excuse.title")}</h3>
         <Button
           size="sm"
           className="gap-1.5"
@@ -978,7 +987,7 @@ function ExcuseRequestSection({ workforceId }: { workforceId: string }) {
           data-testid="button-new-excuse"
         >
           {showForm ? <XCircle className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          {showForm ? "Cancel" : "New Request"}
+          {showForm ? t("portal:excuse.cancel") : t("portal:excuse.newRequest")}
         </Button>
       </div>
 
@@ -986,21 +995,22 @@ function ExcuseRequestSection({ workforceId }: { workforceId: string }) {
         <Card className="bg-card border-border" data-testid="card-excuse-form">
           <CardContent className="pt-5 space-y-4">
             <div>
-              <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Date</label>
+              <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">{t("portal:excuse.date")}</label>
               <Input
                 type="date"
                 value={excuseDate}
                 onChange={e => setExcuseDate(e.target.value)}
                 className="mt-1 bg-muted/30 border-border"
                 data-testid="input-excuse-date"
+                dir="ltr"
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Reason</label>
+              <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">{t("portal:excuse.reason")}</label>
               <Textarea
                 value={reason}
                 onChange={e => setReason(e.target.value)}
-                placeholder="Explain why you need to be excused..."
+                placeholder={t("portal:excuse.reasonPlaceholder")}
                 className="mt-1 bg-muted/30 border-border min-h-[80px]"
                 data-testid="input-excuse-reason"
               />
@@ -1012,7 +1022,7 @@ function ExcuseRequestSection({ workforceId }: { workforceId: string }) {
               data-testid="button-submit-excuse"
             >
               {submitMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Submit Request
+              {t("portal:excuse.submit")}
             </Button>
           </CardContent>
         </Card>
@@ -1022,8 +1032,8 @@ function ExcuseRequestSection({ workforceId }: { workforceId: string }) {
         <Card className="bg-card border-border">
           <CardContent className="py-10 text-center">
             <MessageCircle className="h-8 w-8 text-zinc-500 mx-auto mb-2" />
-            <p className="text-zinc-400 text-sm">No excuse requests yet.</p>
-            <p className="text-zinc-500 text-xs mt-1">Submit a request if you need to be excused from a shift.</p>
+            <p className="text-zinc-400 text-sm">{t("portal:excuse.empty")}</p>
+            <p className="text-zinc-500 text-xs mt-1">{t("portal:excuse.emptyHint")}</p>
           </CardContent>
         </Card>
       ) : (
@@ -1035,22 +1045,22 @@ function ExcuseRequestSection({ workforceId }: { workforceId: string }) {
                 <CardContent className="py-3 px-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-white">{excuse.date}</span>
+                      <span className="text-sm font-medium text-white" dir="ltr">{formatDate(excuse.date)}</span>
                       <Badge variant="outline" className={`text-[10px] ${st.bg} ${st.color}`} data-testid={`badge-excuse-status-${excuse.id}`}>
-                        {st.label}
+                        {t(`portal:excuse.status.${excuse.status}`)}
                       </Badge>
                     </div>
                     <span className="text-[10px] text-zinc-500">
-                      {excuse.hadClockIn ? "Partial (mid-shift)" : "Full day"}
+                      {excuse.hadClockIn ? t("portal:excuse.partial") : t("portal:excuse.full")}
                     </span>
                   </div>
                   <p className="text-sm text-zinc-300">{excuse.reason}</p>
                   {excuse.hadClockIn && excuse.effectiveClockOut && (
-                    <p className="text-xs text-amber-400 mt-1">Effective clock out: {excuse.effectiveClockOut}</p>
+                    <p className="text-xs text-amber-400 mt-1">{t("portal:excuse.effectiveOut", { t: excuse.effectiveClockOut })}</p>
                   )}
                   {excuse.reviewNotes && (
                     <p className="text-xs text-zinc-500 mt-2 border-t border-border pt-2">
-                      HR Notes: {excuse.reviewNotes}
+                      {t("portal:excuse.hrNotes", { notes: excuse.reviewNotes })}
                     </p>
                   )}
                 </CardContent>
@@ -1066,6 +1076,7 @@ function ExcuseRequestSection({ workforceId }: { workforceId: string }) {
 // ─── Placeholder Card ─────────────────────────────────────────────────────────
 
 function PlaceholderCard({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
+  const { t } = useTranslation(["portal", "common"]);
   return (
     <Card className="bg-card border-border">
       <CardContent className="flex flex-col items-center justify-center py-12 text-center gap-3">
@@ -1077,7 +1088,7 @@ function PlaceholderCard({ icon, title, description }: { icon: React.ReactNode; 
           <p className="text-sm text-muted-foreground mt-1">{description}</p>
         </div>
         <Badge variant="outline" className="border-muted-foreground/30 text-muted-foreground text-xs mt-1">
-          Coming Soon
+          {t("portal:common.comingSoon")}
         </Badge>
       </CardContent>
     </Card>
@@ -1103,6 +1114,7 @@ type ContractHistoryItem = {
 };
 
 function PayslipsSection({ candidateId }: { candidateId: string }) {
+  const { t } = useTranslation(["portal", "common"]);
   const { data: payslips = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/payslips", candidateId],
     queryFn: () => apiRequest("GET", `/api/payslips/${candidateId}`).then(r => r.json()),
@@ -1115,46 +1127,46 @@ function PayslipsSection({ candidateId }: { candidateId: string }) {
     <Card className="bg-card border-border">
       <CardContent className="flex flex-col items-center justify-center py-12 text-center">
         <Banknote className="h-10 w-10 text-muted-foreground/40 mb-3" />
-        <p className="text-sm font-medium text-muted-foreground">No payslips yet</p>
-        <p className="text-xs text-muted-foreground/60 mt-1">Payment records will appear here after payroll processing.</p>
+        <p className="text-sm font-medium text-muted-foreground">{t("portal:payslips.empty")}</p>
+        <p className="text-xs text-muted-foreground/60 mt-1">{t("portal:payslips.emptyHint")}</p>
       </CardContent>
     </Card>
   );
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-display font-bold text-white">Payslips</h3>
+      <h3 className="text-lg font-display font-bold text-white">{t("portal:payslips.title")}</h3>
       <div className="space-y-3">
         {payslips.map((slip: any, i: number) => (
           <Card key={i} className="bg-card border-border" data-testid={`payslip-card-${i}`}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-sm font-medium text-white">{slip.payRunName ?? "Payment"}</p>
-                  <p className="text-xs text-muted-foreground">{slip.eventName ?? ""} · {slip.payRunLine?.effectiveDateFrom} → {slip.payRunLine?.effectiveDateTo}</p>
+                  <p className="text-sm font-medium text-white"><bdi>{slip.payRunName ?? t("portal:payslips.payment")}</bdi></p>
+                  <p className="text-xs text-muted-foreground"><bdi>{slip.eventName ?? ""}</bdi> · <span dir="ltr">{slip.payRunLine?.effectiveDateFrom} → {slip.payRunLine?.effectiveDateTo}</span></p>
                 </div>
                 <Badge className={`text-xs border-0 ${slip.paymentMethod === "cash" ? "bg-amber-500/15 text-amber-400" : "bg-emerald-500/15 text-emerald-400"}`}>
-                  {slip.paymentMethod === "cash" ? "Cash" : "Bank Transfer"}
+                  {slip.paymentMethod === "cash" ? t("portal:payslips.cash") : t("portal:payslips.bankTransfer")}
                 </Badge>
               </div>
               <div className="grid grid-cols-3 gap-4 text-xs">
                 <div>
-                  <p className="text-muted-foreground uppercase tracking-wider mb-1">Gross Earned</p>
-                  <p className="text-emerald-400 font-medium">SAR {parseFloat(slip.payRunLine?.grossEarned ?? 0).toLocaleString()}</p>
+                  <p className="text-muted-foreground uppercase tracking-wider mb-1">{t("portal:payslips.grossEarned")}</p>
+                  <p className="text-emerald-400 font-medium">{t("portal:payslips.currency", { n: formatNumber(parseFloat(slip.payRunLine?.grossEarned ?? 0)) })}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground uppercase tracking-wider mb-1">Deductions</p>
-                  <p className="text-red-400 font-medium">-SAR {parseFloat(slip.payRunLine?.totalDeductions ?? 0).toLocaleString()}</p>
+                  <p className="text-muted-foreground uppercase tracking-wider mb-1">{t("portal:payslips.deductions")}</p>
+                  <p className="text-red-400 font-medium">−{t("portal:payslips.currency", { n: formatNumber(parseFloat(slip.payRunLine?.totalDeductions ?? 0)) })}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground uppercase tracking-wider mb-1">Net Paid</p>
-                  <p className="text-white font-bold">SAR {parseFloat(slip.amount ?? 0).toLocaleString()}</p>
+                  <p className="text-muted-foreground uppercase tracking-wider mb-1">{t("portal:payslips.netPaid")}</p>
+                  <p className="text-white font-bold">{t("portal:payslips.currency", { n: formatNumber(parseFloat(slip.amount ?? 0)) })}</p>
                 </div>
               </div>
               {slip.ibanUsed && (
-                <p className="text-[10px] text-muted-foreground mt-2 font-mono">IBAN: {slip.ibanUsed}</p>
+                <p className="text-[10px] text-muted-foreground mt-2 font-mono" dir="ltr">{t("portal:payslips.iban", { iban: slip.ibanUsed })}</p>
               )}
-              <p className="text-[10px] text-muted-foreground mt-1">Paid: {slip.depositDate ?? slip.createdAt}</p>
+              <p className="text-[10px] text-muted-foreground mt-1">{t("portal:payslips.paid", { date: slip.depositDate ? formatDate(slip.depositDate) : formatDate(slip.createdAt) })}</p>
             </CardContent>
           </Card>
         ))}
@@ -1164,6 +1176,7 @@ function PayslipsSection({ candidateId }: { candidateId: string }) {
 }
 
 function WorkHistorySection({ candidateId }: { candidateId: string }) {
+  const { t } = useTranslation(["portal", "common"]);
   const { data: allRecords = [], isLoading } = useQuery<WorkforceRecord[]>({
     queryKey: ["/api/workforce/all-by-candidate", candidateId],
     queryFn: () => apiRequest("GET", `/api/workforce/all-by-candidate/${candidateId}`).then(r => r.json()),
@@ -1214,7 +1227,7 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed border-border rounded-md">
         <History className="h-10 w-10 text-muted-foreground/30 mb-3" />
-        <p className="text-muted-foreground">No work history yet</p>
+        <p className="text-muted-foreground">{t("portal:history.empty")}</p>
       </div>
     );
   }
@@ -1226,7 +1239,11 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
           const start = new Date(rec.startDate);
           const end = rec.endDate ? new Date(rec.endDate) : (rec.isActive ? new Date() : null);
           const durationDays = end ? Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))) : null;
-          const categoryLabel = rec.terminationCategory ? (CATEGORY_LABELS[rec.terminationCategory] ?? rec.terminationCategory) : null;
+          const categoryLabel = rec.terminationCategory
+            ? (["end_of_season","resignation","performance","disciplinary","contract_expiry","other"].includes(rec.terminationCategory)
+                ? t(`portal:termCategory.${rec.terminationCategory}`)
+                : rec.terminationCategory)
+            : null;
           const linkedContract = contractMatchMap.get(rec.id);
 
           return (
@@ -1235,7 +1252,7 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="font-bold text-white font-mono text-sm">{rec.employeeNumber}</span>
+                      <span className="font-bold text-white font-mono text-sm" dir="ltr">{rec.employeeNumber}</span>
                       <Badge
                         className={`text-[10px] h-5 border-0 ${
                           rec.employmentType === "smp"
@@ -1244,7 +1261,7 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
                         }`}
                         data-testid={`badge-employment-type-${rec.id}`}
                       >
-                        {rec.employmentType === "smp" ? "SMP Contract" : "Individual"}
+                        {rec.employmentType === "smp" ? t("portal:history.smpContract") : t("portal:history.individual")}
                       </Badge>
                       <Badge
                         className={`text-[10px] h-5 border-0 ${
@@ -1253,35 +1270,35 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
                             : "bg-muted/40 text-muted-foreground"
                         }`}
                       >
-                        {rec.isActive ? "Active" : categoryLabel ?? "Ended"}
+                        {rec.isActive ? t("portal:history.active") : categoryLabel ?? t("portal:history.ended")}
                       </Badge>
                     </div>
                     {rec.jobTitle && (
-                      <p className="text-sm text-white">{rec.jobTitle}</p>
+                      <p className="text-sm text-white"><bdi>{rec.jobTitle}</bdi></p>
                     )}
                     {rec.eventName && (
                       <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                        <Building2 className="h-3 w-3" /> {rec.eventName}
+                        <Building2 className="h-3 w-3" /> <bdi>{rec.eventName}</bdi>
                       </p>
                     )}
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1" dir="ltr">
                         <Calendar className="h-3 w-3" />
-                        {start.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                        {formatDate(start)}
                         {rec.endDate && (
-                          <> → {new Date(rec.endDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</>
+                          <> → {formatDate(rec.endDate)}</>
                         )}
                       </span>
                       {durationDays !== null && (
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {durationDays} day{durationDays !== 1 ? "s" : ""}
+                          {t("portal:history.duration", { count: durationDays, n: formatNumber(durationDays) })}
                         </span>
                       )}
                       {rec.salary && rec.employmentType !== "smp" && (
                         <span className="flex items-center gap-1">
                           <Banknote className="h-3 w-3" />
-                          {Number(rec.salary).toLocaleString()} SAR/mo
+                          {t("portal:history.salaryMo", { n: formatNumber(Number(rec.salary)) })}
                         </span>
                       )}
                     </div>
@@ -1293,10 +1310,10 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
                           data-testid={`button-view-contract-${rec.id}`}
                         >
                           <FileText className="h-3.5 w-3.5" />
-                          View Contract
+                          {t("portal:history.viewContract")}
                           {linkedContract.signedAt && (
-                            <span className="text-muted-foreground ml-1">
-                              (signed {new Date(linkedContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })})
+                            <span className="text-muted-foreground ms-1">
+                              ({t("portal:history.signedOn", { date: formatDate(linkedContract.signedAt) })})
                             </span>
                           )}
                         </button>
@@ -1305,11 +1322,11 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
                     {!rec.isActive && rec.offboardingCompletedAt && (
                       <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
                         <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                        Offboarding completed {new Date(rec.offboardingCompletedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                        {t("portal:history.offboardingCompleted", { date: formatDate(rec.offboardingCompletedAt) })}
                       </p>
                     )}
                     {!rec.isActive && rec.terminationReason && (
-                      <p className="text-xs text-muted-foreground mt-1 italic">Reason: {rec.terminationReason}</p>
+                      <p className="text-xs text-muted-foreground mt-1 italic">{t("portal:history.reason", { reason: rec.terminationReason })}</p>
                     )}
                   </div>
                 </div>
@@ -1324,14 +1341,14 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
           <div className="bg-card border border-border rounded-lg w-[90vw] max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()} data-testid="contract-history-viewer">
             <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
               <div>
-                <h3 className="text-base font-semibold text-white">Employment Contract</h3>
+                <h3 className="text-base font-semibold text-white">{t("portal:history.contractTitle")}</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {viewingContract.jobTitle && <span>{viewingContract.jobTitle}</span>}
+                  {viewingContract.jobTitle && <bdi>{viewingContract.jobTitle}</bdi>}
                   {viewingContract.jobTitle && viewingContract.eventName && " — "}
-                  {viewingContract.eventName && <span>{viewingContract.eventName}</span>}
+                  {viewingContract.eventName && <bdi>{viewingContract.eventName}</bdi>}
                   {viewingContract.signedAt && (
-                    <span className="ml-2 text-emerald-400">
-                      Signed {new Date(viewingContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+                    <span className="ms-2 text-emerald-400">
+                      {t("portal:history.signedOn", { date: formatDate(viewingContract.signedAt) })}
                     </span>
                   )}
                 </p>
@@ -1373,14 +1390,14 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
                     Object.entries(vars).forEach(([k, v]) => { b = b.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v as string); });
                     return `<h3>${i + 1}. ${a.title}</h3><p style="white-space:pre-wrap">${b}</p>`;
                   }).join("");
-                  printWindow.document.write(`<html><head><title>Contract</title><style>body{font-family:sans-serif;padding:2rem;max-width:700px;margin:auto}h3{margin-top:1.5em}</style></head><body>${html}</body></html>`);
+                  printWindow.document.write(`<html><head><title>${t("portal:contract.printDocTitle")}</title><style>body{font-family:sans-serif;padding:2rem;max-width:700px;margin:auto}h3{margin-top:1.5em}</style></head><body>${html}</body></html>`);
                   printWindow.document.close();
                   printWindow.print();
                 }}
                 data-testid="button-print-contract"
               >
                 <Printer className="h-3.5 w-3.5" />
-                Print / Download
+                {t("portal:history.printDownload")}
               </Button>
             </div>
           </div>
@@ -1394,21 +1411,18 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
 // ─── Termination Banner ───────────────────────────────────────────────────────
 
 function TerminationBanner({ record }: { record: WorkforceRecord }) {
+  const { t } = useTranslation(["portal", "common"]);
+  const reason = record.terminationReason ? t("portal:termination.reasonSep", { reason: record.terminationReason }) : "";
+  const text = record.endDate
+    ? t("portal:termination.endedOn", { date: formatDate(record.endDate), reason })
+    : t("portal:termination.endedOnUnknown", { reason });
   return (
     <div className="bg-red-950/30 border border-red-800/40 rounded-lg p-4 flex items-start gap-3" data-testid="termination-banner">
       <AlertTriangle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
       <div>
-        <p className="text-sm font-semibold text-red-300">Employment Ended</p>
-        <p className="text-xs text-red-400/80 mt-0.5">
-          Your employment ended on{" "}
-          {record.endDate
-            ? new Date(record.endDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
-            : "an unspecified date"}
-          {record.terminationReason ? ` — ${record.terminationReason}` : ""}.
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Your profile and history remain on file. You may reapply for future positions.
-        </p>
+        <p className="text-sm font-semibold text-red-300">{t("portal:termination.ended")}</p>
+        <p className="text-xs text-red-400/80 mt-0.5">{text}</p>
+        <p className="text-xs text-muted-foreground mt-1">{t("portal:termination.preserved")}</p>
       </div>
     </div>
   );
@@ -1427,6 +1441,7 @@ function ContractSection({
   readOnly?: boolean;
   onboardingId?: string;
 }) {
+  const { t } = useTranslation(["portal", "common"]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [contractPreviewOpen, setContractPreviewOpen] = useState(false);
@@ -1460,10 +1475,10 @@ function ContractSection({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/candidate-contracts/mine", candidateId, onboardingId] });
       queryClient.invalidateQueries({ queryKey: ["/api/onboarding/mine", candidateId] });
-      toast({ title: "Contract signed successfully!" });
+      toast({ title: t("portal:contract.signedSuccess") });
       setIsSignModalOpen(false);
     },
-    onError: (e: any) => toast({ title: "Error signing contract", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("portal:contract.signError"), description: e?.message, variant: "destructive" }),
   });
 
   if (!activeContract) {
@@ -1471,8 +1486,8 @@ function ContractSection({
       <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/10 border border-border">
         <FileText className="h-8 w-8 text-muted-foreground" />
         <div>
-          <div className="text-sm font-medium text-zinc-400">No Contract Available</div>
-          <div className="text-xs text-muted-foreground">Your employment contract will appear here for signing prior to your employment.</div>
+          <div className="text-sm font-medium text-zinc-400">{t("portal:contract.noContract")}</div>
+          <div className="text-xs text-muted-foreground">{t("portal:contract.noContractDesc")}</div>
         </div>
       </div>
     );
@@ -1488,15 +1503,15 @@ function ContractSection({
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-sm font-semibold text-white flex items-center gap-2 flex-wrap" data-testid="text-contract-title">
-                Employment Contract
+                {t("portal:contract.title")}
                 <Badge className={`text-[10px] h-5 border-0 ${contractIsSigned ? "bg-emerald-500/15 text-emerald-400" : "bg-yellow-500/15 text-yellow-400"}`}>
-                  {contractIsSigned ? "Signed" : "Awaiting Your Signature"}
+                  {contractIsSigned ? t("portal:contract.signed") : t("portal:contract.awaiting")}
                 </Badge>
               </div>
               <div className="text-xs text-muted-foreground mt-0.5">
                 {contractIsSigned && activeContract.signedAt
-                  ? `Signed on ${new Date(activeContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`
-                  : readOnly ? "Contract is read-only" : "Please review and sign your employment contract"}
+                  ? t("portal:contract.signedOn", { date: formatDate(activeContract.signedAt) })
+                  : readOnly ? t("portal:contract.readOnly") : t("portal:contract.pleaseReview")}
               </div>
             </div>
           </div>
@@ -1509,7 +1524,7 @@ function ContractSection({
               data-testid="button-preview-contract"
             >
               <Eye className="h-3 w-3" />
-              {contractIsSigned ? "View" : "Preview"}
+              {contractIsSigned ? t("portal:contract.view") : t("portal:contract.preview")}
             </Button>
             {!contractIsSigned && !readOnly && (
               <Button
@@ -1519,7 +1534,7 @@ function ContractSection({
                 data-testid="button-sign-contract"
               >
                 <PenTool className="h-3 w-3" />
-                Sign Now
+                {t("portal:contract.signNow")}
               </Button>
             )}
           </div>
@@ -1527,7 +1542,7 @@ function ContractSection({
         {contractIsSigned && activeContract.signedAt && (
           <div className="px-4 pb-3 border-t border-emerald-800/30 pt-3 flex items-center gap-2 text-xs text-emerald-400">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-            This contract has been digitally signed and recorded.
+            {t("portal:contract.digitallySigned")}
           </div>
         )}
       </div>
@@ -1535,12 +1550,12 @@ function ContractSection({
       {/* Contract history for read-only / former view */}
       {myContracts.length > 1 && (
         <div className="mt-3">
-          <p className="text-xs text-muted-foreground mb-2">Contract History ({myContracts.length} total)</p>
+          <p className="text-xs text-muted-foreground mb-2">{t("portal:contract.history", { count: myContracts.length, n: formatNumber(myContracts.length) })}</p>
           <div className="space-y-1.5">
             {myContracts.slice(1).map(c => (
               <div key={c.id} className="flex items-center justify-between text-xs text-muted-foreground bg-muted/10 border border-border rounded px-3 py-2">
-                <span>Contract · {c.status}</span>
-                {c.signedAt && <span>{new Date(c.signedAt).toLocaleDateString("en-GB")}</span>}
+                <span>{t("portal:contract.title")} · {c.status}</span>
+                {c.signedAt && <span dir="ltr">{formatDate(c.signedAt)}</span>}
               </div>
             ))}
           </div>
@@ -1553,10 +1568,10 @@ function ContractSection({
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
               <Eye className="h-5 w-5 text-primary" />
-              Employment Contract
+              {t("portal:contract.title")}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              {contractIsSigned ? "Your signed employment contract" : "Review carefully before signing"}
+              {contractIsSigned ? t("portal:contract.yourSigned") : t("portal:contract.reviewBeforeSign")}
             </DialogDescription>
           </DialogHeader>
           {contractPreview && (
@@ -1588,7 +1603,7 @@ function ContractSection({
                   }
                   return (
                     <div key={idx}>
-                      <h3 className="font-bold text-sm mb-1">Article {idx + 1}: {article.title}</h3>
+                      <h3 className="font-bold text-sm mb-1">{t("portal:contract.article", { n: formatNumber(idx + 1) })}: {article.title}</h3>
                       <p className="text-sm whitespace-pre-wrap leading-relaxed">{body}</p>
                       {Array.isArray(article.subArticles) && article.subArticles.map((sub: any, subIdx: number) => {
                         let subBody = sub.body || "";
@@ -1608,38 +1623,38 @@ function ContractSection({
                   );
                 })}
                 {contractPreview.template?.footerText && (() => {
-                  let t = contractPreview.template.footerText;
+                  let footerText = contractPreview.template.footerText;
                   if (contractPreview.variables) {
                     Object.entries(contractPreview.variables).forEach(([key, val]) => {
-                      t = t.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(val));
+                      footerText = footerText.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(val));
                     });
                   }
-                  return <div className="border-t pt-4 mt-6"><p className="text-sm whitespace-pre-wrap leading-relaxed italic">{t}</p></div>;
+                  return <div className="border-t pt-4 mt-6"><p className="text-sm whitespace-pre-wrap leading-relaxed italic">{footerText}</p></div>;
                 })()}
                 <div className="border-t pt-6 mt-8">
                   <div className="grid grid-cols-2 gap-8">
                     <div className="space-y-2">
-                      <p className="text-sm font-bold">First Party (Employer)</p>
-                      <p className="text-xs text-gray-600">{contractPreview.template?.companyName || "Luxury Carts Company Ltd"}</p>
+                      <p className="text-sm font-bold">{t("portal:contract.firstParty")}</p>
+                      <p className="text-xs text-gray-600"><bdi>{contractPreview.template?.companyName || ""}</bdi></p>
                       <div className="border-b border-gray-400 mt-8 pt-6"></div>
-                      <p className="text-xs text-gray-500">Authorized Signature & Stamp</p>
+                      <p className="text-xs text-gray-500">{t("portal:contract.authorizedSig")}</p>
                     </div>
                     <div className="space-y-2">
-                      <p className="text-sm font-bold">Second Party (Employee)</p>
-                      <p className="text-xs text-gray-600">{contractPreview.variables?.fullName || displayName}</p>
+                      <p className="text-sm font-bold">{t("portal:contract.secondParty")}</p>
+                      <p className="text-xs text-gray-600"><bdi>{contractPreview.variables?.fullName || displayName}</bdi></p>
                       {contractIsSigned && activeContract?.signedAt ? (
                         <div className="mt-4 pt-2 text-center">
                           <div className="inline-block border-2 border-emerald-600 rounded-md px-4 py-2">
-                            <p className="text-xs font-bold text-emerald-700">DIGITALLY SIGNED</p>
-                            <p className="text-[10px] text-gray-500 mt-0.5">
-                              {new Date(activeContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                            <p className="text-xs font-bold text-emerald-700">{t("portal:contract.digitallySignedBadge")}</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5" dir="ltr">
+                              {formatDate(activeContract.signedAt)}
                             </p>
                           </div>
                         </div>
                       ) : (
                         <>
                           <div className="border-b border-gray-400 mt-8 pt-6"></div>
-                          <p className="text-xs text-gray-500">Employee Signature</p>
+                          <p className="text-xs text-gray-500">{t("portal:contract.employeeSig")}</p>
                         </>
                       )}
                     </div>
@@ -1650,15 +1665,15 @@ function ContractSection({
                 )}
               </div>
               <div className="flex justify-end gap-3 mt-4 no-print">
-                <Button variant="outline" onClick={() => setContractPreviewOpen(false)} className="border-border">Close</Button>
+                <Button variant="outline" onClick={() => setContractPreviewOpen(false)} className="border-border">{t("common:close")}</Button>
                 <Button
                   variant="outline"
                   className="border-border gap-2"
-                  onClick={() => printContract('Employment Contract')}
+                  onClick={() => printContract(t("portal:contract.title"))}
                   data-testid="button-print-contract-candidate"
                 >
                   <Download className="h-3.5 w-3.5" />
-                  Print / Export PDF
+                  {t("portal:contract.printPdf")}
                 </Button>
                 {!contractIsSigned && !readOnly && (
                   <Button
@@ -1666,8 +1681,8 @@ function ContractSection({
                     className="bg-primary text-primary-foreground font-bold"
                     data-testid="button-proceed-to-sign"
                   >
-                    <PenTool className="h-3.5 w-3.5 mr-1.5" />
-                    Proceed to Sign
+                    <PenTool className="h-3.5 w-3.5 me-1.5" />
+                    {t("portal:contract.proceedSign")}
                   </Button>
                 )}
               </div>
@@ -1682,26 +1697,26 @@ function ContractSection({
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
               <PenTool className="h-5 w-5 text-primary" />
-              Sign Employment Contract
+              {t("portal:contract.signTitle")}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              By signing, you agree to all terms. This action cannot be undone.
+              {t("portal:contract.signDesc")}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
               <p className="text-sm text-yellow-400 flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 shrink-0" />
-                Please ensure you have read and understood all contract terms.
+                {t("portal:contract.ensureRead")}
               </p>
             </div>
             <div className="bg-muted/20 rounded-lg p-3 text-sm text-muted-foreground space-y-1">
-              <p><strong className="text-white">Date:</strong> {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>
-              <p><strong className="text-white">Method:</strong> Digital signature (IP-recorded)</p>
+              <p><strong className="text-white">{t("portal:contract.dateLabel")}</strong> <span dir="ltr">{formatDate(new Date())}</span></p>
+              <p><strong className="text-white">{t("portal:contract.methodLabel")}</strong> {t("portal:contract.method")}</p>
             </div>
           </div>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setIsSignModalOpen(false)} className="border-border">Cancel</Button>
+            <Button variant="outline" onClick={() => setIsSignModalOpen(false)} className="border-border">{t("common:cancel")}</Button>
             <Button
               onClick={() => signContractMutation.mutate()}
               disabled={signContractMutation.isPending}
@@ -1709,7 +1724,7 @@ function ContractSection({
               data-testid="button-confirm-sign"
             >
               {signContractMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              I Agree & Sign
+              {t("portal:contract.agreeSign")}
             </Button>
           </div>
         </DialogContent>
@@ -1850,12 +1865,12 @@ export default function CandidatePortal() {
       const existing = (() => { try { return JSON.parse(localStorage.getItem("workforce_candidate") || "{}"); } catch { return {}; } })();
       localStorage.setItem("workforce_candidate", JSON.stringify({ ...existing, ...updated }));
       queryClient.invalidateQueries({ queryKey: ["/api/candidates/profile", candidateId] });
-      toast({ title: "Profile updated", description: "Your information has been saved." });
+      toast({ title: t("portal:profile.updated"), description: t("portal:profile.updatedDesc") });
       setProfileOpen(false);
     },
     onError: (err: any) => toast({
-      title: "Save failed",
-      description: err?.message || "Please try again.",
+      title: t("portal:profile.saveFailed"),
+      description: err?.message || t("common:tryAgain"),
       variant: "destructive",
     }),
   });
@@ -1871,10 +1886,10 @@ export default function CandidatePortal() {
         return r.json();
       }),
     onSuccess: () => {
-      toast({ title: "Password changed", description: "Your new password is active." });
+      toast({ title: t("portal:password.changed"), description: t("portal:password.changedDesc") });
       setPwCurrent(""); setPwNew(""); setPwConfirm("");
     },
-    onError: (err: Error) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: t("portal:password.failed"), description: err.message, variant: "destructive" }),
   });
 
   const handleProfileOpen = (open: boolean) => {
@@ -1932,17 +1947,17 @@ export default function CandidatePortal() {
       if (body.pendingReview) {
         queryClient.invalidateQueries({ queryKey: ["/api/photo-change-requests", candidateId, "pending"] });
         toast({
-          title: "Photo submitted for review",
-          description: "Your new photo has been sent to HR for approval. Your current photo remains active until approved.",
+          title: t("portal:photoChange.submitted"),
+          description: t("portal:photoChange.submittedDesc"),
         });
       } else {
         queryClient.invalidateQueries({ queryKey: ["/api/candidates/profile", candidateId] });
-        toast({ title: "Photo uploaded and verified" });
+        toast({ title: t("portal:photoChange.uploaded") });
       }
       setPhotoChangeCropSrc(null);
       return { ok: true };
     } catch (err: any) {
-      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+      toast({ title: t("portal:docs.uploadFailed"), description: err.message, variant: "destructive" });
       return { ok: false, error: err?.message };
     } finally {
       setPhotoChangeUploading(false);
@@ -1965,18 +1980,18 @@ export default function CandidatePortal() {
     raw.region         = profileRegion || undefined;
 
     if (!profileRegion) {
-      toast({ title: "Region Required", description: "Please select your region of residence.", variant: "destructive" });
+      toast({ title: t("portal:profile.regionRequired"), description: t("portal:profile.regionRequiredDesc"), variant: "destructive" });
       return;
     }
 
     if (!isSmp) {
       const iban = ibanValue.trim().toUpperCase();
       if (!iban) {
-        toast({ title: "IBAN Required", description: "Please enter your Saudi IBAN number for salary transfers.", variant: "destructive" });
+        toast({ title: t("portal:profile.ibanRequired"), description: t("portal:profile.ibanRequiredDesc"), variant: "destructive" });
         return;
       }
       if (!/^SA\d{22}$/.test(iban)) {
-        toast({ title: "Invalid IBAN", description: "IBAN must be SA followed by 22 digits (24 characters total)", variant: "destructive" });
+        toast({ title: t("portal:profile.ibanInvalid"), description: t("portal:profile.ibanInvalidDesc"), variant: "destructive" });
         return;
       }
       raw.ibanNumber   = iban;
@@ -1987,22 +2002,22 @@ export default function CandidatePortal() {
   }
 
   const passwordRules = [
-    { test: (p: string) => p.length >= 8,           label: "At least 8 characters" },
-    { test: (p: string) => /[A-Z]/.test(p),         label: "One uppercase letter" },
-    { test: (p: string) => /[a-z]/.test(p),         label: "One lowercase letter" },
-    { test: (p: string) => /[0-9]/.test(p),         label: "One number" },
-    { test: (p: string) => /[^A-Za-z0-9]/.test(p),  label: "One special character" },
+    { test: (p: string) => p.length >= 8,           label: t("portal:password.rules.len") },
+    { test: (p: string) => /[A-Z]/.test(p),         label: t("portal:password.rules.upper") },
+    { test: (p: string) => /[a-z]/.test(p),         label: t("portal:password.rules.lower") },
+    { test: (p: string) => /[0-9]/.test(p),         label: t("portal:password.rules.number") },
+    { test: (p: string) => /[^A-Za-z0-9]/.test(p),  label: t("portal:password.rules.special") },
   ];
   const allPasswordRulesMet = passwordRules.every(r => r.test(pwNew));
 
   function handlePasswordSave(e: React.FormEvent) {
     e.preventDefault();
     if (!allPasswordRulesMet) {
-      toast({ title: "Weak password", description: "Please meet all password requirements.", variant: "destructive" });
+      toast({ title: t("portal:password.weak"), description: t("portal:password.weakDesc"), variant: "destructive" });
       return;
     }
     if (pwNew !== pwConfirm) {
-      toast({ title: "Passwords don't match", description: "Please re-enter your new password.", variant: "destructive" });
+      toast({ title: t("portal:password.mismatch"), description: t("portal:password.mismatchDesc"), variant: "destructive" });
       return;
     }
     changePassword.mutate();
@@ -2033,30 +2048,30 @@ export default function CandidatePortal() {
       case "documents":
         return (
           <div>
-            <h3 className="text-lg font-display font-bold text-white mb-4">My Documents</h3>
+            <h3 className="text-lg font-display font-bold text-white mb-4">{t("portal:myDocs.title")}</h3>
             <ProfileCompletionCard toast={toast} candidateId={candidateId!} isSmp={false} />
           </div>
         );
 
       case "shift":
-        return activeWorkforceRecord ? <MyShiftSection workforceId={activeWorkforceRecord.id} /> : <PlaceholderCard icon={<Calendar className="h-6 w-6" />} title="My Shift" description="Your shift schedule will appear here once you are assigned to a workforce." />;
+        return activeWorkforceRecord ? <MyShiftSection workforceId={activeWorkforceRecord.id} /> : <PlaceholderCard icon={<Calendar className="h-6 w-6" />} title={t("portal:shiftPlaceholder.title")} description={t("portal:shiftPlaceholder.desc")} />;
 
       case "excuses":
-        return activeWorkforceRecord ? <ExcuseRequestSection workforceId={activeWorkforceRecord.id} /> : <PlaceholderCard icon={<MessageCircle className="h-6 w-6" />} title="Excuse Requests" description="Excuse requests will be available once you are assigned to a workforce." />;
+        return activeWorkforceRecord ? <ExcuseRequestSection workforceId={activeWorkforceRecord.id} /> : <PlaceholderCard icon={<MessageCircle className="h-6 w-6" />} title={t("portal:excusePlaceholder.title")} description={t("portal:excusePlaceholder.desc")} />;
 
       case "payslips":
-        return candidateId ? <PayslipsSection candidateId={candidateId} /> : <PlaceholderCard icon={<Banknote className="h-6 w-6" />} title="Payslips" description="Your payslips will appear here once assigned." />;
+        return candidateId ? <PayslipsSection candidateId={candidateId} /> : <PlaceholderCard icon={<Banknote className="h-6 w-6" />} title={t("portal:payslipsPlaceholder.title")} description={t("portal:payslipsPlaceholder.desc")} />;
 
       case "assets":
         if (portalMode === "employee_individual") {
-          return <PlaceholderCard icon={<Package className="h-6 w-6" />} title="Assigned Assets" description="Assets assigned to you will appear here once the asset management module is live." />;
+          return <PlaceholderCard icon={<Package className="h-6 w-6" />} title={t("portal:assetsPlaceholder.title")} description={t("portal:assetsPlaceholder.desc")} />;
         }
         return null;
 
       case "history":
         return (
           <div>
-            <h3 className="text-lg font-display font-bold text-white mb-4">Work History</h3>
+            <h3 className="text-lg font-display font-bold text-white mb-4">{t("portal:nav.history")}</h3>
             <WorkHistorySection candidateId={candidateId!} />
           </div>
         );
@@ -2064,7 +2079,7 @@ export default function CandidatePortal() {
       case "contract":
         return (
           <div>
-            <h3 className="text-lg font-display font-bold text-white mb-4">My Contract</h3>
+            <h3 className="text-lg font-display font-bold text-white mb-4">{t("portal:nav.contract")}</h3>
             <ContractSection
               candidateId={candidateId!}
               candidateName={displayName}
@@ -2079,19 +2094,17 @@ export default function CandidatePortal() {
           <Tabs defaultValue="open">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-display font-bold text-white">
-                Job Opportunities
+                {t("portal:jobs.title")}
               </h3>
               <TabsList className="bg-muted/20">
-                <TabsTrigger value="open">Open Positions</TabsTrigger>
-                <TabsTrigger value="applied">Applied {appliedIds.size > 0 && `(${appliedIds.size})`}</TabsTrigger>
+                <TabsTrigger value="open">{t("portal:jobs.openTab")}</TabsTrigger>
+                <TabsTrigger value="applied">{appliedIds.size > 0 ? t("portal:jobs.appliedCount", { n: formatNumber(appliedIds.size) }) : t("portal:jobs.appliedTab")}</TabsTrigger>
               </TabsList>
             </div>
             {hasWorkHistory && (
               <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs text-emerald-300 flex items-center gap-2" data-testid="jobs-former-employee-message">
                 <UserCheck className="h-4 w-4 shrink-0" />
-                <span>
-                  Welcome back{allWorkforceRecords.find(r => !r.isActive)?.eventName ? ` from ${allWorkforceRecords.find(r => !r.isActive)!.eventName}` : ""}! As a former employee, your work history is on record. We encourage you to apply for upcoming seasonal positions.
-                </span>
+                <span>{t("portal:jobs.formerMessage")}</span>
               </div>
             )}
             <TabsContent value="open" className="space-y-4">
@@ -2102,13 +2115,13 @@ export default function CandidatePortal() {
               ) : jobs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-md">
                   <Briefcase className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                  <p className="text-muted-foreground font-medium">No open positions right now</p>
-                  <p className="text-muted-foreground/60 text-sm mt-1">Check back soon</p>
+                  <p className="text-muted-foreground font-medium">{t("portal:jobs.noOpen")}</p>
+                  <p className="text-muted-foreground/60 text-sm mt-1">{t("portal:jobs.checkBack")}</p>
                 </div>
               ) : (
                 jobs.map(job => {
                   const applied = appliedIds.has(job.id);
-                  const salary = salaryLabel(job);
+                  const salary = salaryLabel(job, t);
                   return (
                     <Card
                       key={job.id}
@@ -2120,11 +2133,11 @@ export default function CandidatePortal() {
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                              <h4 className="font-bold text-white text-base group-hover:text-primary transition-colors">{job.title}</h4>
-                              <Badge variant="outline" className="border-border text-muted-foreground text-xs font-normal">{typeLabel(job.type)}</Badge>
+                              <h4 className="font-bold text-white text-base group-hover:text-primary transition-colors"><bdi>{job.title}</bdi></h4>
+                              <Badge variant="outline" className="border-border text-muted-foreground text-xs font-normal">{typeLabel(job.type, t)}</Badge>
                               {applied && (
                                 <Badge className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 text-xs font-medium gap-1">
-                                  <CheckCircle2 className="h-3 w-3" /> Applied
+                                  <CheckCircle2 className="h-3 w-3" /> {t("portal:badge.applied")}
                                 </Badge>
                               )}
                             </div>
@@ -2136,7 +2149,7 @@ export default function CandidatePortal() {
                                 <span className="flex items-center gap-1 text-white font-medium"><Banknote className="h-3.5 w-3.5 text-muted-foreground" />{salary}</span>
                               )}
                               {job.deadline && (
-                                <span className="flex items-center gap-1 text-xs"><CalendarDays className="h-3.5 w-3.5" />Deadline: {job.deadline}</span>
+                                <span className="flex items-center gap-1 text-xs"><CalendarDays className="h-3.5 w-3.5" />{t("portal:jobs.deadline", { date: formatDate(job.deadline) })}</span>
                               )}
                             </div>
                           </div>
@@ -2147,7 +2160,7 @@ export default function CandidatePortal() {
                                 onClick={() => setLocation(`/jobs/${job.id}`)}
                                 data-testid={`button-apply-${job.id}`}
                               >
-                                Apply Now
+                                {t("portal:jobs.applyNow")}
                               </Button>
                             )}
                           </div>
@@ -2162,7 +2175,7 @@ export default function CandidatePortal() {
               {appliedJobs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-md">
                   <AlertCircle className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                  <p className="text-muted-foreground font-medium">No applications yet</p>
+                  <p className="text-muted-foreground font-medium">{t("portal:jobs.noApplied")}</p>
                 </div>
               ) : (
                 appliedJobs.map(job => (
@@ -2175,14 +2188,14 @@ export default function CandidatePortal() {
                     <CardContent className="p-5">
                       <div className="flex items-center justify-between gap-4">
                         <div>
-                          <div className="font-bold text-white text-base group-hover:text-primary transition-colors">{job.title}</div>
+                          <div className="font-bold text-white text-base group-hover:text-primary transition-colors"><bdi>{job.title}</bdi></div>
                           <div className="text-sm text-muted-foreground flex items-center gap-3 mt-1">
                             {(job.region ?? job.location) && <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{job.region ?? job.location}</span>}
-                            <span className="flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" />{typeLabel(job.type)}</span>
+                            <span className="flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" />{typeLabel(job.type, t)}</span>
                           </div>
                         </div>
                         {(() => {
-                          const badge = getApplicationBadge(job.deadline, appStatusByJob[job.id] ?? "new");
+                          const badge = getApplicationBadge(job.deadline, appStatusByJob[job.id] ?? "new", t);
                           return <Badge className={`${badge.className} font-medium shrink-0`}>{badge.label}</Badge>;
                         })()}
                       </div>
@@ -2213,30 +2226,30 @@ export default function CandidatePortal() {
                       <UserCheck className="h-5 w-5 text-emerald-400" />
                     </div>
                     <div>
-                      <h3 className="text-base font-bold text-emerald-300 font-display">Welcome Back</h3>
-                      <p className="text-xs text-emerald-400/70 mt-0.5">Your service record is preserved. You're eligible to apply for new seasonal positions.</p>
+                      <h3 className="text-base font-bold text-emerald-300 font-display">{t("portal:dashboard.welcomeBack")}</h3>
+                      <p className="text-xs text-emerald-400/70 mt-0.5">{t("portal:dashboard.welcomeBackHint")}</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-lg p-3">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Employee ID</p>
-                      <p className="text-sm font-bold text-white font-mono mt-0.5">{lastCompleted.employeeNumber}</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("portal:dashboard.employeeId")}</p>
+                      <p className="text-sm font-bold text-white font-mono mt-0.5" dir="ltr">{lastCompleted.employeeNumber}</p>
                     </div>
                     {lastCompleted.jobTitle && (
                       <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-lg p-3">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Last Position</p>
-                        <p className="text-sm font-bold text-white mt-0.5">{lastCompleted.jobTitle}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("portal:dashboard.lastPosition")}</p>
+                        <p className="text-sm font-bold text-white mt-0.5"><bdi>{lastCompleted.jobTitle}</bdi></p>
                       </div>
                     )}
                     {lastCompleted.eventName && (
                       <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-lg p-3">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Last Event</p>
-                        <p className="text-sm font-bold text-white mt-0.5">{lastCompleted.eventName}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("portal:dashboard.lastEvent")}</p>
+                        <p className="text-sm font-bold text-white mt-0.5"><bdi>{lastCompleted.eventName}</bdi></p>
                       </div>
                     )}
                     <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-lg p-3">
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Duration</p>
-                      <p className="text-sm font-bold text-white mt-0.5">{feDurationDays} day{feDurationDays !== 1 ? "s" : ""}</p>
+                      <p className="text-sm font-bold text-white mt-0.5">{t("portal:dashboard.duration", { count: feDurationDays, n: formatNumber(feDurationDays) })}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -2253,40 +2266,40 @@ export default function CandidatePortal() {
                 <CardHeader>
                   <CardTitle className="text-lg font-display text-white flex items-center gap-2">
                     <Briefcase className="h-5 w-5 text-primary" />
-                    Employment Details
+                    {t("portal:dashboard.employmentDetails")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="bg-muted/10 rounded-lg border border-border p-4 space-y-1">
-                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Employee Number</p>
-                      <p className="text-lg font-bold text-white font-mono">{activeWorkforceRecord.employeeNumber}</p>
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t("portal:dashboard.employeeNumber")}</p>
+                      <p className="text-lg font-bold text-white font-mono" dir="ltr">{activeWorkforceRecord.employeeNumber}</p>
                     </div>
                     <div className="bg-muted/10 rounded-lg border border-border p-4 space-y-1">
-                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Status</p>
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t("portal:dashboard.status")}</p>
                       <div className="flex items-center gap-2">
                         <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <p className="text-lg font-bold text-emerald-400">Active</p>
+                        <p className="text-lg font-bold text-emerald-400">{t("portal:dashboard.active")}</p>
                       </div>
                     </div>
                     <div className="bg-muted/10 rounded-lg border border-border p-4 space-y-1">
-                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Monthly Salary</p>
-                      <p className="text-lg font-bold text-white">{activeWorkforceRecord.salary ? `${Number(activeWorkforceRecord.salary).toLocaleString()} SAR` : "—"}</p>
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t("portal:dashboard.monthlySalary")}</p>
+                      <p className="text-lg font-bold text-white"><bdi>{activeWorkforceRecord.salary ? formatCurrency(Number(activeWorkforceRecord.salary), "SAR", i18n.language) : "—"}</bdi></p>
                     </div>
                     <div className="bg-muted/10 rounded-lg border border-border p-4 space-y-1">
-                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Start Date</p>
-                      <p className="text-lg font-bold text-white">{new Date(activeWorkforceRecord.startDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t("portal:dashboard.startDate")}</p>
+                      <p className="text-lg font-bold text-white"><bdi>{formatDate(activeWorkforceRecord.startDate, i18n.language)}</bdi></p>
                     </div>
                     {activeWorkforceRecord.jobTitle && (
                       <div className="bg-muted/10 rounded-lg border border-border p-4 space-y-1">
-                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Position</p>
-                        <p className="text-lg font-bold text-white">{activeWorkforceRecord.jobTitle}</p>
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t("portal:dashboard.position")}</p>
+                        <p className="text-lg font-bold text-white"><bdi>{activeWorkforceRecord.jobTitle}</bdi></p>
                       </div>
                     )}
                     {activeWorkforceRecord.eventName && (
                       <div className="bg-muted/10 rounded-lg border border-border p-4 space-y-1">
-                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Assigned Event</p>
-                        <p className="text-lg font-bold text-white">{activeWorkforceRecord.eventName}</p>
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t("portal:dashboard.assignedEvent")}</p>
+                        <p className="text-lg font-bold text-white"><bdi>{activeWorkforceRecord.eventName}</bdi></p>
                       </div>
                     )}
                   </div>
@@ -2300,27 +2313,27 @@ export default function CandidatePortal() {
                 <CardHeader>
                   <CardTitle className="text-lg font-display text-white flex items-center gap-2">
                     <Shield className="h-5 w-5 text-amber-400" />
-                    SMP Employment Details
+                    {t("portal:dashboard.smpDetails")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="bg-muted/10 rounded-lg border border-border p-4 space-y-1">
-                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Employee Number</p>
-                      <p className="text-lg font-bold text-white font-mono">{activeWorkforceRecord.employeeNumber}</p>
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t("portal:dashboard.employeeNumber")}</p>
+                      <p className="text-lg font-bold text-white font-mono" dir="ltr">{activeWorkforceRecord.employeeNumber}</p>
                     </div>
                     <div className="bg-muted/10 rounded-lg border border-border p-4 space-y-1">
-                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Contract Type</p>
-                      <Badge className="bg-amber-500/15 text-amber-400 border-0">SMP Contract</Badge>
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t("portal:dashboard.contractType")}</p>
+                      <Badge className="bg-amber-500/15 text-amber-400 border-0">{t("portal:dashboard.smpContract")}</Badge>
                     </div>
                     <div className="bg-muted/10 rounded-lg border border-border p-4 space-y-1">
-                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Start Date</p>
-                      <p className="text-lg font-bold text-white">{new Date(activeWorkforceRecord.startDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t("portal:dashboard.startDate")}</p>
+                      <p className="text-lg font-bold text-white"><bdi>{formatDate(activeWorkforceRecord.startDate, i18n.language)}</bdi></p>
                     </div>
                     {activeWorkforceRecord.eventName && (
                       <div className="bg-muted/10 rounded-lg border border-border p-4 space-y-1">
-                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Assigned Event</p>
-                        <p className="text-lg font-bold text-white">{activeWorkforceRecord.eventName}</p>
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t("portal:dashboard.assignedEvent")}</p>
+                        <p className="text-lg font-bold text-white"><bdi>{activeWorkforceRecord.eventName}</bdi></p>
                       </div>
                     )}
                   </div>
@@ -2336,11 +2349,19 @@ export default function CandidatePortal() {
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base font-display text-white flex items-center gap-2">
                         <Briefcase className="h-4 w-4 text-primary" />
-                        Open Positions
+                        {t("portal:dashboard.openPositionsTitle")}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="text-sm text-muted-foreground">
-                      <p>There {jobs.length === 1 ? "is" : "are"} <span className="text-white font-bold">{jobs.length}</span> open position{jobs.length !== 1 ? "s" : ""} available. Check the <button type="button" className="text-primary hover:underline bg-transparent border-0 p-0 cursor-pointer font-medium" onClick={() => setActiveNav("jobs")}>Job Opportunities</button> tab to browse and apply.</p>
+                      <Trans
+                        i18nKey="portal:dashboard.openPositions"
+                        count={jobs.length}
+                        values={{ n: formatNumber(jobs.length) }}
+                        components={{
+                          1: <span className="text-white font-bold" />,
+                          2: <button type="button" className="text-primary hover:underline bg-transparent border-0 p-0 cursor-pointer font-medium" onClick={() => setActiveNav("jobs")} />,
+                        }}
+                      />
                     </CardContent>
                   </Card>
                 )}
@@ -2609,12 +2630,10 @@ export default function CandidatePortal() {
             <DialogHeader>
               <DialogTitle className="font-display text-lg font-bold text-white flex items-center gap-2">
                 <Camera className="h-5 w-5 text-primary" />
-                Change Profile Photo
+                {t("portal:photoChange.title")}
               </DialogTitle>
               <DialogDescription className="text-muted-foreground text-sm">
-                {hasPendingPhotoChange
-                  ? "You already have a photo change pending HR review. Submitting a new photo will create another request."
-                  : "Upload a new profile photo. It will be reviewed by HR before becoming active."}
+                {hasPendingPhotoChange ? t("portal:photoChange.descPending") : t("portal:photoChange.desc")}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 pt-2">
@@ -2624,11 +2643,11 @@ export default function CandidatePortal() {
                   <AvatarFallback className="text-lg bg-primary/20 text-primary font-bold">{displayInitials}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
-                  <p className="text-sm text-white font-medium">Current Photo</p>
+                  <p className="text-sm text-white font-medium">{t("portal:photoChange.currentPhoto")}</p>
                   {hasPendingPhotoChange && (
                     <div className="flex items-center gap-1.5 mt-1">
                       <Clock className="h-3 w-3 text-amber-400" />
-                      <span className="text-xs text-amber-400">Change pending review</span>
+                      <span className="text-xs text-amber-400">{t("portal:photoChange.pending")}</span>
                     </div>
                   )}
                 </div>
@@ -2648,7 +2667,7 @@ export default function CandidatePortal() {
                 data-testid="button-select-new-photo"
               >
                 {photoChangeUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-                Select New Photo
+                {t("portal:photoChange.selectNew")}
               </Button>
             </div>
           </DialogContent>
@@ -2670,12 +2689,10 @@ export default function CandidatePortal() {
           <SheetHeader className="pb-4 border-b border-border">
             <SheetTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
               <User className="h-5 w-5 text-primary" />
-              My Profile
+              {t("portal:profile.title")}
             </SheetTitle>
             <SheetDescription className="text-muted-foreground text-sm">
-              {isSmp
-                ? "Update your personal information. Photo and ID are required for SMP contracts."
-                : "Update your personal and professional information."}
+              {isSmp ? t("portal:profile.descSmp") : t("portal:profile.desc")}
             </SheetDescription>
           </SheetHeader>
 
@@ -2683,36 +2700,36 @@ export default function CandidatePortal() {
 
             {/* ── Personal ──────────────────────────────────────────── */}
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Personal</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">{t("portal:profile.personal")}</p>
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-white">First Name</label>
+                    <label className="text-sm font-medium text-white">{t("portal:profile.firstName")}</label>
                     <Input
                       name="firstName"
                       defaultValue={(candidateProfile?.fullNameEn ?? storedCandidate.fullNameEn ?? "").toString().split(" ")[0]}
-                      placeholder="Mohammed"
+                      placeholder={t("portal:profile.firstNamePlaceholder")}
                       className="bg-background border-border"
                       data-testid="input-firstName"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-white">Last Name</label>
+                    <label className="text-sm font-medium text-white">{t("portal:profile.lastName")}</label>
                     <Input
                       name="lastName"
                       defaultValue={(candidateProfile?.fullNameEn ?? storedCandidate.fullNameEn ?? "").toString().split(" ").slice(1).join(" ")}
-                      placeholder="Al-Harbi"
+                      placeholder={t("portal:profile.lastNamePlaceholder")}
                       className="bg-background border-border"
                       data-testid="input-lastName"
                     />
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-white">Nationality</label>
+                  <label className="text-sm font-medium text-white">{t("portal:profile.nationality")}</label>
                   <Input
                     name="nationalityText"
                     defaultValue={String(candidateProfile?.nationalityText ?? candidateProfile?.nationality ?? "")}
-                    placeholder="e.g. Saudi"
+                    placeholder={t("portal:profile.nationalityPlaceholder")}
                     className="bg-background border-border"
                     data-testid="input-nationality"
                   />
@@ -2724,48 +2741,50 @@ export default function CandidatePortal() {
 
             {/* ── Contact ───────────────────────────────────────────── */}
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Contact</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">{t("portal:profile.contact")}</p>
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-white">Phone</label>
+                  <label className="text-sm font-medium text-white">{t("portal:profile.phone")}</label>
                   <Input
                     name="phone"
                     defaultValue={String(candidateProfile?.phone ?? storedCandidate.phone ?? "")}
-                    placeholder="05xxxxxxxx"
+                    placeholder={t("portal:profile.phonePlaceholder")}
                     className="bg-background border-border"
                     data-testid="input-phone"
+                    dir="ltr"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-white">Email</label>
+                  <label className="text-sm font-medium text-white">{t("portal:profile.email")}</label>
                   <Input
                     name="email"
                     type="email"
                     defaultValue={String(candidateProfile?.email ?? "")}
-                    placeholder="your@email.com"
+                    placeholder={t("portal:profile.emailPlaceholder")}
                     className="bg-background border-border"
                     data-testid="input-email"
+                    dir="ltr"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-white">City of Residence</label>
+                  <label className="text-sm font-medium text-white">{t("portal:profile.city")}</label>
                   <Input
                     name="city"
                     defaultValue={String(candidateProfile?.city ?? "")}
-                    placeholder="e.g. Riyadh"
+                    placeholder={t("portal:profile.cityPlaceholder")}
                     className="bg-background border-border"
                     data-testid="input-city"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-white">Region <span className="text-red-400">*</span></label>
+                  <label className="text-sm font-medium text-white">{t("portal:profile.region")} <span className="text-red-400">*</span></label>
                   <Select value={profileRegion} onValueChange={setProfileRegion}>
                     <SelectTrigger className="bg-background border-border" data-testid="select-region">
-                      <SelectValue placeholder="Select your region" />
+                      <SelectValue placeholder={t("portal:profile.selectRegion")} />
                     </SelectTrigger>
                     <SelectContent>
                       {["Riyadh", "Makkah", "Madinah", "Eastern Province", "Asir", "Tabuk", "Hail", "Northern Borders", "Jazan", "Najran", "Al Bahah", "Al Jawf", "Qassim"].map(r => (
-                        <SelectItem key={r} value={r}>{r}</SelectItem>
+                        <SelectItem key={r} value={r}>{t(`portal:profile.regions.${r}`)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -2778,36 +2797,37 @@ export default function CandidatePortal() {
               <>
                 <Separator className="bg-border" />
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Bank Details</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">{t("portal:profile.bankDetails")}</p>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-white">IBAN Number <span className="text-red-400">*</span></label>
+                    <label className="text-sm font-medium text-white">{t("portal:profile.iban")} <span className="text-red-400">*</span></label>
                     <Input
                       value={ibanValue}
                       onChange={e => setIbanValue(e.target.value.toUpperCase())}
-                      placeholder="SA0000000000000000000000"
+                      placeholder={t("portal:profile.ibanPlaceholder")}
                       maxLength={24}
                       className="bg-background border-border font-mono uppercase"
                       data-testid="input-iban"
+                      dir="ltr"
                     />
-                    <p className="text-xs text-muted-foreground">Saudi IBAN: SA followed by 22 digits (24 characters total)</p>
+                    <p className="text-xs text-muted-foreground">{t("portal:profile.ibanHint")}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-3 mt-3">
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-muted-foreground">Bank Name</label>
+                      <label className="text-sm font-medium text-muted-foreground">{t("portal:profile.bankName")}</label>
                       <Input
                         value={detectedBank?.ibanBankName ?? ""}
                         readOnly
-                        placeholder="Auto-detected from IBAN"
+                        placeholder={t("portal:profile.bankNamePlaceholder")}
                         className="bg-muted/10 border-border text-muted-foreground cursor-not-allowed"
                         data-testid="input-bank-name"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-muted-foreground">Bank Code</label>
+                      <label className="text-sm font-medium text-muted-foreground">{t("portal:profile.bankCode")}</label>
                       <Input
                         value={detectedBank?.ibanBankCode ?? ""}
                         readOnly
-                        placeholder="Auto-detected"
+                        placeholder={t("portal:profile.bankCodePlaceholder")}
                         className="bg-muted/10 border-border text-muted-foreground cursor-not-allowed font-mono"
                         data-testid="input-bank-code"
                       />
@@ -2822,50 +2842,49 @@ export default function CandidatePortal() {
             {/* ── Professional — hidden for SMP ─────────────────────── */}
             {!isSmp && (
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Professional</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">{t("portal:profile.professional")}</p>
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-white">Current Role</label>
+                      <label className="text-sm font-medium text-white">{t("portal:profile.currentRole")}</label>
                       <Input
                         name="currentRole"
                         defaultValue={String(candidateProfile?.currentRole ?? "")}
-                        placeholder="e.g. Security Guard"
+                        placeholder={t("portal:profile.currentRolePlaceholder")}
                         className="bg-background border-border"
                         data-testid="input-currentRole"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-white">Current Employer</label>
+                      <label className="text-sm font-medium text-white">{t("portal:profile.currentEmployer")}</label>
                       <Input
                         name="currentEmployer"
                         defaultValue={String(candidateProfile?.currentEmployer ?? "")}
-                        placeholder="Company name"
+                        placeholder={t("portal:profile.currentEmployerPlaceholder")}
                         className="bg-background border-border"
                         data-testid="input-currentEmployer"
                       />
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-white">Education Level</label>
+                    <label className="text-sm font-medium text-white">{t("portal:profile.educationLevel")}</label>
                     <Select value={profileEduLevel} onValueChange={setProfileEduLevel}>
                       <SelectTrigger className="bg-background border-border" data-testid="select-educationLevel">
-                        <SelectValue placeholder="Select education level" />
+                        <SelectValue placeholder={t("portal:profile.selectEducation")} />
                       </SelectTrigger>
                       <SelectContent className="bg-card border-border">
-                        {EDU_OPTIONS.map(opt => (
-                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                        ))}
+                        <SelectItem value="High School and below">{t("portal:profile.education.highSchool")}</SelectItem>
+                        <SelectItem value="University and higher">{t("portal:profile.education.university")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   {profileEduLevel === "University and higher" && (
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-white">Field of Study / Major</label>
+                      <label className="text-sm font-medium text-white">{t("portal:profile.major")}</label>
                       <Input
                         value={profileMajor}
                         onChange={e => setProfileMajor(e.target.value)}
-                        placeholder="e.g. Business Administration"
+                        placeholder={t("portal:profile.majorPlaceholder")}
                         className="bg-background border-border"
                         data-testid="input-major"
                       />
@@ -2873,13 +2892,13 @@ export default function CandidatePortal() {
                   )}
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-white">
-                      Skills <span className="text-muted-foreground font-normal ml-1 text-xs">separate with commas</span>
+                      {t("portal:profile.skills")} <span className="text-muted-foreground font-normal ms-1 text-xs">{t("portal:profile.separateCommas")}</span>
                     </label>
                     <Textarea
                       value={profileSkills}
                       onChange={e => setProfileSkills(e.target.value)}
                       onBlur={() => setProfileSkills(normalizeDisplay(profileSkills))}
-                      placeholder="First Aid, Crowd Control, Customer Service"
+                      placeholder={t("portal:profile.skillsPlaceholder")}
                       className="bg-background border-border resize-none"
                       rows={2}
                       data-testid="input-skills"
@@ -2887,13 +2906,13 @@ export default function CandidatePortal() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-white">
-                      Languages <span className="text-muted-foreground font-normal ml-1 text-xs">separate with commas</span>
+                      {t("portal:profile.languages")} <span className="text-muted-foreground font-normal ms-1 text-xs">{t("portal:profile.separateCommas")}</span>
                     </label>
                     <Textarea
                       value={profileLangs}
                       onChange={e => setProfileLangs(e.target.value)}
                       onBlur={() => setProfileLangs(normalizeDisplay(profileLangs))}
-                      placeholder="Arabic, English, Urdu"
+                      placeholder={t("portal:profile.languagesPlaceholder")}
                       className="bg-background border-border resize-none"
                       rows={2}
                       data-testid="input-languages"
@@ -2910,11 +2929,11 @@ export default function CandidatePortal() {
                 className="flex-1 bg-primary text-primary-foreground font-bold"
                 data-testid="button-save-profile"
               >
-                {saveProfile.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                Save Changes
+                {saveProfile.isPending ? <Loader2 className="h-4 w-4 animate-spin me-2" /> : <Save className="h-4 w-4 me-2" />}
+                {t("portal:profile.save")}
               </Button>
               <Button type="button" variant="outline" onClick={() => setProfileOpen(false)} className="border-border">
-                Cancel
+                {t("portal:profile.cancel")}
               </Button>
             </div>
           </form>
@@ -2925,16 +2944,16 @@ export default function CandidatePortal() {
           <form onSubmit={handlePasswordSave} className="py-6 space-y-3 pb-10">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-2">
               <Lock className="h-3.5 w-3.5" />
-              Change Password
+              {t("portal:password.title")}
             </p>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-white">Current Password</label>
+              <label className="text-sm font-medium text-white">{t("portal:password.current")}</label>
               <div className="relative">
                 <Input
                   type={showPwCur ? "text" : "password"}
                   value={pwCurrent}
                   onChange={e => setPwCurrent(e.target.value)}
-                  placeholder="Enter current password"
+                  placeholder={t("portal:password.currentPlaceholder")}
                   className="bg-background border-border pr-10"
                   data-testid="input-pw-current"
                 />
@@ -2944,13 +2963,13 @@ export default function CandidatePortal() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-white">New Password</label>
+              <label className="text-sm font-medium text-white">{t("portal:password.new")}</label>
               <div className="relative">
                 <Input
                   type={showPwNew ? "text" : "password"}
                   value={pwNew}
                   onChange={e => setPwNew(e.target.value)}
-                  placeholder="Enter new password"
+                  placeholder={t("portal:password.newPlaceholder")}
                   className="bg-background border-border pr-10"
                   data-testid="input-pw-new"
                 />
@@ -2970,12 +2989,12 @@ export default function CandidatePortal() {
               )}
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-white">Confirm New Password</label>
+              <label className="text-sm font-medium text-white">{t("portal:password.confirm")}</label>
               <Input
                 type="password"
                 value={pwConfirm}
                 onChange={e => setPwConfirm(e.target.value)}
-                placeholder="Re-enter new password"
+                placeholder={t("portal:password.confirmPlaceholder")}
                 className="bg-background border-border"
                 data-testid="input-pw-confirm"
               />
@@ -2987,8 +3006,8 @@ export default function CandidatePortal() {
               className="w-full border-border"
               data-testid="button-change-password"
             >
-              {changePassword.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
-              Update Password
+              {changePassword.isPending ? <Loader2 className="h-4 w-4 animate-spin me-2" /> : <Lock className="h-4 w-4 me-2" />}
+              {t("portal:password.update")}
             </Button>
           </form>
         </SheetContent>
