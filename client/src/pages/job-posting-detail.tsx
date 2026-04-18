@@ -13,6 +13,9 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
+import { useTranslation } from "react-i18next";
+import { formatDate, formatNumber } from "@/lib/format";
+import type { TFunction } from "i18next";
 import {
   ArrowLeft,
   MapPin,
@@ -92,20 +95,21 @@ const statusStyles: Record<string, string> = {
   archived: "bg-muted/60 text-muted-foreground",
 };
 
-function typeLabel(type: string) {
-  const map: Record<string, string> = { seasonal_full_time: "Seasonal Full-Time", seasonal_part_time: "Seasonal Part-Time", full_time: "Full Time", part_time: "Part Time", event_based: "Event-based" };
-  return map[type] ?? type;
+function typeLabel(type: string, t: TFunction) {
+  const key = `jobPosting:detail.types.${type}`;
+  const v = t(key);
+  return v === key ? type : v;
 }
 
 function initials(name: string) {
   return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
 
-function salaryLabel(job: JobPosting) {
+function salaryLabel(job: JobPosting, t: TFunction) {
   const min = job.salaryMin ? parseFloat(job.salaryMin) : null;
   const max = job.salaryMax ? parseFloat(job.salaryMax) : null;
-  if (min && max) return `${min.toLocaleString()} – ${max.toLocaleString()} SAR`;
-  if (min) return `From ${min.toLocaleString()} SAR`;
+  if (min && max) return t("jobPosting:detail.salaryRange", { min: formatNumber(min), max: formatNumber(max) });
+  if (min) return t("jobPosting:detail.salaryFrom", { min: formatNumber(min) });
   return null;
 }
 
@@ -147,6 +151,7 @@ export default function JobPostingDetailPage() {
   const params = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { t } = useTranslation(["jobPosting", "common"]);
   const queryClient = useQueryClient();
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
@@ -191,7 +196,7 @@ export default function JobPostingDetailPage() {
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       apiRequest("PATCH", `/api/applications/${id}`, { status }).then((r) => r.json()),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/applications", params.id] }),
-    onError: () => toast({ title: "Update failed", variant: "destructive" }),
+    onError: () => toast({ title: t("jobPosting:detail.updateFailed"), variant: "destructive" }),
   });
 
   const bulkUpdate = useMutation({
@@ -204,7 +209,7 @@ export default function JobPostingDetailPage() {
         errors: data.results.filter((r: { success: boolean }) => !r.success).map((r: { id: string }) => r.id),
       });
     },
-    onError: () => toast({ title: "Bulk update failed", variant: "destructive" }),
+    onError: () => toast({ title: t("jobPosting:detail.bulkUpdateFailed"), variant: "destructive" }),
   });
 
   function handleImport(file: File) {
@@ -216,17 +221,17 @@ export default function JobPostingDetailPage() {
         const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "", range: 1 });
         const missing = BULK_FIXED_COLS.filter((col) => !(col in (rows[0] ?? {})));
         if (missing.length) {
-          toast({ title: "Format error", description: `Missing columns: ${missing.join(", ")}`, variant: "destructive" });
+          toast({ title: t("jobPosting:detail.formatError"), description: t("jobPosting:detail.missingColumns", { cols: missing.join(", ") }), variant: "destructive" });
           return;
         }
         if (rows.length !== applications.length) {
-          toast({ title: "Row count mismatch", description: `File has ${rows.length} rows but job has ${applications.length} applications.`, variant: "destructive" });
+          toast({ title: t("jobPosting:detail.rowCountMismatch"), description: t("jobPosting:detail.rowCountMismatchDesc", { file: formatNumber(rows.length), job: formatNumber(applications.length) }), variant: "destructive" });
           return;
         }
         const knownIds = new Set(applications.map((a) => a.id));
         const unknownIds = rows.filter((r) => !knownIds.has(r["__app_id"]));
         if (unknownIds.length) {
-          toast({ title: "Unknown Application IDs", description: `${unknownIds.length} row(s) have IDs not found.`, variant: "destructive" });
+          toast({ title: t("jobPosting:detail.unknownAppIds"), description: t("jobPosting:detail.unknownAppIdsDesc", { n: formatNumber(unknownIds.length) }), variant: "destructive" });
           return;
         }
         const invalid: string[] = [];
@@ -240,16 +245,16 @@ export default function JobPostingDetailPage() {
           }
         }
         if (invalid.length) {
-          toast({ title: "Invalid status values", description: `${invalid.slice(0, 3).join("; ")}. Valid: ${VALID_STATUSES.join(", ")}`, variant: "destructive" });
+          toast({ title: t("jobPosting:detail.invalidStatus"), description: t("jobPosting:detail.invalidStatusDesc", { samples: invalid.slice(0, 3).join("; "), valid: VALID_STATUSES.join(", ") }), variant: "destructive" });
           return;
         }
         if (updates.length === 0) {
-          toast({ title: "No changes detected" });
+          toast({ title: t("jobPosting:detail.noChanges") });
           return;
         }
         bulkUpdate.mutate(updates);
       } catch {
-        toast({ title: "Failed to parse file", variant: "destructive" });
+        toast({ title: t("jobPosting:detail.parseFailed"), variant: "destructive" });
       }
     };
     reader.readAsArrayBuffer(file);
@@ -288,16 +293,16 @@ export default function JobPostingDetailPage() {
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center py-32 text-center gap-4">
           <Briefcase className="h-14 w-14 text-muted-foreground/30" />
-          <p className="text-white font-bold text-xl">Job not found</p>
+          <p className="text-white font-bold text-xl">{t("jobPosting:detail.notFound")}</p>
           <Button onClick={() => setLocation("/job-posting")} variant="outline" className="border-border">
-            Back to Jobs
+            {t("jobPosting:detail.backToJobs")}
           </Button>
         </div>
       </DashboardLayout>
     );
   }
 
-  const salary = salaryLabel(job);
+  const salary = salaryLabel(job, t);
 
   return (
     <DashboardLayout>
@@ -311,7 +316,7 @@ export default function JobPostingDetailPage() {
             data-testid="button-back-to-jobs"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Jobs
+            {t("jobPosting:detail.backToJobs")}
           </Button>
         </div>
 
@@ -320,13 +325,13 @@ export default function JobPostingDetailPage() {
             <Card className="bg-card border-border">
               <CardContent className="p-5 space-y-4">
                 <div>
-                  <h1 className="text-xl font-display font-bold text-white" data-testid="text-job-title">{job.title}</h1>
+                  <h1 className="text-xl font-display font-bold text-white" data-testid="text-job-title"><bdi>{job.title}</bdi></h1>
                   <div className="flex items-center gap-2 flex-wrap mt-2">
                     <Badge variant="outline" className={`border-0 text-xs ${statusStyles[job.status] ?? "bg-muted text-muted-foreground"}`}>
-                      {job.status}
+                      {t(`jobPosting:status.${job.status}`, { defaultValue: job.status })}
                     </Badge>
                     <Badge variant="outline" className="border-border text-muted-foreground text-xs">
-                      {typeLabel(job.type)}
+                      {typeLabel(job.type, t)}
                     </Badge>
                   </div>
                 </div>
@@ -347,7 +352,7 @@ export default function JobPostingDetailPage() {
                   {job.deadline && (
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Clock className="h-4 w-4 shrink-0" />
-                      <span>Deadline: {new Date(job.deadline).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                      <span>{t("jobPosting:detail.deadline", { date: formatDate(job.deadline) })}</span>
                     </div>
                   )}
                   {job.department && (
@@ -360,7 +365,7 @@ export default function JobPostingDetailPage() {
 
                 {job.description && (
                   <div className="border-t border-border pt-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Description</p>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{t("jobPosting:detail.description")}</p>
                     <p className="text-sm text-muted-foreground whitespace-pre-wrap">{job.description}</p>
                   </div>
                 )}
@@ -369,19 +374,19 @@ export default function JobPostingDetailPage() {
 
             <Card className="bg-card border-border">
               <CardContent className="p-5">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Applicant Summary</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("jobPosting:detail.applicantSummary")}</p>
                 <div className="flex items-center gap-2 mb-3">
                   <UserCheck className="h-5 w-5 text-primary" />
-                  <span className="text-2xl font-bold text-white">{applications.length}</span>
-                  <span className="text-muted-foreground text-sm">total</span>
+                  <span className="text-2xl font-bold text-white">{formatNumber(applications.length)}</span>
+                  <span className="text-muted-foreground text-sm">{t("jobPosting:detail.total")}</span>
                 </div>
                 <div className="space-y-1.5">
                   {Object.entries(statusCounts).map(([status, count]) => (
                     <div key={status} className="flex items-center justify-between text-sm">
                       <Badge variant="outline" className={`border-0 text-xs capitalize ${appStatusStyle[status] ?? "bg-muted text-muted-foreground"}`}>
-                        {status}
+                        {t(`jobPosting:appStatus.${status}`, { defaultValue: status })}
                       </Badge>
-                      <span className="text-white font-medium">{count}</span>
+                      <span className="text-white font-medium">{formatNumber(count)}</span>
                     </div>
                   ))}
                 </div>
@@ -391,14 +396,14 @@ export default function JobPostingDetailPage() {
 
           <div className="flex-1 min-w-0 space-y-4">
             <div className="flex items-center justify-between gap-4 flex-wrap">
-              <h2 className="text-lg font-display font-bold text-white">Applicants</h2>
+              <h2 className="text-lg font-display font-bold text-white">{t("jobPosting:detail.applicants")}</h2>
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                   <Input
                     value={appSearch}
                     onChange={e => setAppSearch(e.target.value)}
-                    placeholder="Search name, ID, phone…"
+                    placeholder={t("jobPosting:detail.searchPlaceholder")}
                     className="pl-8 h-9 w-52 text-sm bg-background border-border"
                     data-testid="input-applicant-search"
                   />
@@ -408,9 +413,9 @@ export default function JobPostingDetailPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-card border-border">
-                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="all">{t("jobPosting:detail.allStatus")}</SelectItem>
                     {VALID_STATUSES.map(s => (
-                      <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
+                      <SelectItem key={s} value={s} className="capitalize">{t(`jobPosting:appStatus.${s}`, { defaultValue: s })}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -423,7 +428,7 @@ export default function JobPostingDetailPage() {
                   data-testid="button-export-applicants"
                 >
                   <FileDown className="h-4 w-4" />
-                  Export
+                  {t("jobPosting:detail.export")}
                 </Button>
                 <Button
                   size="sm"
@@ -434,7 +439,7 @@ export default function JobPostingDetailPage() {
                   data-testid="button-import-applicants"
                 >
                   {bulkUpdate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-                  Import
+                  {t("jobPosting:detail.import")}
                 </Button>
                 <input
                   ref={fileInputRef}
@@ -450,8 +455,8 @@ export default function JobPostingDetailPage() {
               <div className={`p-3 rounded-sm border flex items-start gap-3 text-sm ${importResult.failed === 0 ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-amber-500/10 border-amber-500/30 text-amber-400"}`}>
                 {importResult.failed === 0 ? <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" /> : <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />}
                 <div className="flex-1">
-                  <span className="font-medium">{importResult.succeeded} updated</span>
-                  {importResult.failed > 0 && <span className="ml-2 text-destructive">{importResult.failed} failed</span>}
+                  <span className="font-medium">{t("jobPosting:detail.succeededUpdated", { n: formatNumber(importResult.succeeded) })}</span>
+                  {importResult.failed > 0 && <span className="ms-2 text-destructive">{t("jobPosting:detail.failedCount", { n: formatNumber(importResult.failed) })}</span>}
                 </div>
                 <button onClick={() => setImportResult(null)} className="hover:opacity-70"><X className="h-4 w-4" /></button>
               </div>
@@ -467,24 +472,22 @@ export default function JobPostingDetailPage() {
                   <div className="flex flex-col items-center justify-center py-20 text-center px-6">
                     <Users className="h-12 w-12 text-muted-foreground/30 mb-4" />
                     <p className="text-muted-foreground font-medium">
-                      {applications.length === 0 ? "No applicants yet" : "No applicants match this filter"}
+                      {applications.length === 0 ? t("jobPosting:detail.noApplicantsYet") : t("jobPosting:detail.noMatch")}
                     </p>
                     <p className="text-muted-foreground/60 text-sm mt-1">
-                      {applications.length === 0
-                        ? "Applications submitted via the candidate portal will appear here"
-                        : "Try selecting a different status filter"}
+                      {applications.length === 0 ? t("jobPosting:detail.noApplicantsHint") : t("jobPosting:detail.noMatchHint")}
                     </p>
                   </div>
                 ) : (
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-border text-left">
-                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Candidate</th>
-                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">Contact</th>
-                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
-                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden sm:table-cell">Applied</th>
+                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("jobPosting:detail.colCandidate")}</th>
+                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">{t("jobPosting:detail.colContact")}</th>
+                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("jobPosting:detail.colStatus")}</th>
+                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden sm:table-cell">{t("jobPosting:detail.colApplied")}</th>
                         {hasQuestions && (
-                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Answers</th>
+                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("jobPosting:detail.colAnswers")}</th>
                         )}
                       </tr>
                     </thead>
@@ -507,28 +510,28 @@ export default function JobPostingDetailPage() {
                                   </Avatar>
                                   <div className="min-w-0">
                                     <div className="text-sm font-medium text-white truncate">
-                                      {candidate?.fullNameEn ?? "Unknown Candidate"}
+                                      <bdi>{candidate?.fullNameEn ?? t("jobPosting:detail.unknownCandidate")}</bdi>
                                     </div>
-                                    <div className="text-xs text-muted-foreground font-mono">{candidate?.nationalId ?? "—"}</div>
+                                    <div className="text-xs text-muted-foreground font-mono" dir="ltr">{candidate?.nationalId ?? "—"}</div>
                                   </div>
                                 </div>
                               </td>
                               <td className="px-4 py-3 hidden md:table-cell">
                                 <div className="text-xs text-muted-foreground space-y-0.5">
-                                  {candidate?.email && <div>{candidate.email}</div>}
-                                  {candidate?.phone && <div>{candidate.phone}</div>}
+                                  {candidate?.email && <div dir="ltr">{candidate.email}</div>}
+                                  {candidate?.phone && <div dir="ltr">{candidate.phone}</div>}
                                   {!candidate?.email && !candidate?.phone && <span>—</span>}
                                 </div>
                               </td>
                               <td className="px-4 py-3">
                                 <Badge variant="outline" className={`border-0 text-xs capitalize ${appStatusStyle[app.status] ?? "bg-muted text-muted-foreground"}`}>
-                                  {app.status}
+                                  {t(`jobPosting:appStatus.${app.status}`, { defaultValue: app.status })}
                                 </Badge>
                               </td>
                               <td className="px-4 py-3 hidden sm:table-cell text-xs text-muted-foreground">
                                 <div className="flex items-center gap-1">
                                   <Calendar className="h-3 w-3" />
-                                  {new Date(app.appliedAt).toLocaleDateString("en-SA")}
+                                  <span dir="ltr">{formatDate(app.appliedAt)}</span>
                                 </div>
                               </td>
                               {hasQuestions && (
@@ -545,7 +548,7 @@ export default function JobPostingDetailPage() {
                                       data-testid={`button-view-answers-${app.id}`}
                                     >
                                       <ChevronRight className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
-                                      {isExpanded ? "Hide" : "View"}
+                                      {isExpanded ? t("jobPosting:detail.hide") : t("jobPosting:detail.view")}
                                     </button>
                                   ) : (
                                     <span className="text-xs text-muted-foreground/40">—</span>
@@ -558,7 +561,7 @@ export default function JobPostingDetailPage() {
                                 <td colSpan={hasQuestions ? 5 : 4} className="px-6 pb-4 pt-2">
                                   <div className="border border-border rounded-md p-4 space-y-3 bg-muted/10">
                                     <p className="text-xs text-primary font-semibold uppercase tracking-wider">
-                                      Screening Answers — {questionSet?.name}
+                                      {t("jobPosting:detail.screeningAnswers", { name: questionSet?.name ?? "" })}
                                     </p>
                                     <div className="space-y-2">
                                       {questions.map((q, idx) => (
@@ -567,7 +570,7 @@ export default function JobPostingDetailPage() {
                                           <div className="flex-1 min-w-0">
                                             <p className="text-muted-foreground text-xs">{q.text}</p>
                                             <p className={`font-medium mt-0.5 ${answers[q.id] ? "text-white" : "text-muted-foreground/40 italic"}`}>
-                                              {answers[q.id] || "No answer"}
+                                              {answers[q.id] || t("jobPosting:detail.noAnswer")}
                                             </p>
                                           </div>
                                         </div>
