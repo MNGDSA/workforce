@@ -1,0 +1,326 @@
+{
+  "page": {
+    "title": "Workforce Management",
+    "subtitle": "Manage your employees and details.",
+    "broadcast": "Broadcast",
+    "massUpdate": "Mass Update",
+    "export": "Export",
+    "exportWithCount": "Export ({n})",
+    "exportExcel": "Export to Excel",
+    "exportCsv": "Export to CSV",
+    "printIdCards": "Print ID Cards",
+    "printIdCardsWithCount": "Print ID Cards ({n})"
+  },
+  "stats": {
+    "total": "Total Employees",
+    "totalDesc": "All-time employee records",
+    "active": "Active",
+    "activeDesc": "Currently employed",
+    "terminated": "Terminated",
+    "terminatedDesc": "Past employees"
+  },
+  "filter": {
+    "searchPlaceholder": "Search by Employee ID, ID Number, Name, Phone",
+    "all": "All Status",
+    "activeOnly": "Active Only",
+    "terminatedOnly": "Terminated Only"
+  },
+  "selectionBar": {
+    "selected_zero": "{n} employees selected",
+    "selected_one": "1 employee selected",
+    "selected_two": "{n} employees selected",
+    "selected_few": "{n} employees selected",
+    "selected_many": "{n} employees selected",
+    "selected_other": "{n} employees selected",
+    "printingProgress": "Printing {done}/{total}…",
+    "clearSelection": "Clear Selection"
+  },
+  "list": {
+    "title": "Employee List",
+    "count": "({n})",
+    "empty": "No employees found",
+    "emptyHint": "Employees appear here after conversion from Onboarding."
+  },
+  "columns": {
+    "empNumber": "Emp #",
+    "employee": "Employee",
+    "nationalId": "National ID",
+    "phone": "Phone",
+    "jobEvent": "Job / Event",
+    "salary": "Salary",
+    "lastPrinted": "Last Printed",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "status": "Status",
+    "actions": "Actions",
+    "never": "Never",
+    "inactiveSuffix": "(Inactive)"
+  },
+  "status": {
+    "active": "Active",
+    "terminated": "Terminated",
+    "inOffboarding": "In Offboarding"
+  },
+  "row": {
+    "printIdCardTitle": "Print ID Card"
+  },
+  "dialog": {
+    "details": "Details",
+    "workHistory": "Work History",
+    "schedule": "Schedule",
+    "unknownEmployee": "Unknown",
+    "back": "Back",
+    "employmentContract": "Employment Contract",
+    "signed": "Signed {date}",
+    "printDownload": "Print / Download",
+    "infoSheetSr": "Employee details and work history",
+    "infoLabels": {
+      "empNumber": "Employee #",
+      "nationalId": "National ID",
+      "phone": "Phone",
+      "jobTitle": "Job Title",
+      "position": "Position",
+      "event": "Event",
+      "startDate": "Start Date",
+      "endDate": "End Date",
+      "terminationReason": "Termination Reason",
+      "arabicName": "Arabic Name",
+      "email": "Email",
+      "dateOfBirth": "Date of Birth",
+      "gender": "Gender",
+      "nationality": "Nationality",
+      "maritalStatus": "Marital Status",
+      "iqama": "Iqama #",
+      "location": "Location",
+      "iban": "IBAN",
+      "bankName": "Bank Name",
+      "bankCode": "Bank Code",
+      "accountHolder": "Account Holder",
+      "education": "Education",
+      "university": "University",
+      "major": "Major",
+      "contactName": "Contact Name",
+      "contactPhone": "Contact Phone",
+      "skills": "Skills",
+      "languages": "Languages"
+    },
+    "actions": {
+      "change": "Change",
+      "assign": "Assign",
+      "edit": "Edit",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "position": {
+      "selectPlaceholder": "Select position…",
+      "notAssigned": "Not assigned"
+    },
+    "event": {
+      "selectPlaceholder": "Select event…",
+      "noneWarning": "⚠ No event assigned"
+    },
+    "salary": {
+      "label": "Monthly Salary (SAR)",
+      "placeholder": "e.g. 4500",
+      "notSet": "Not set",
+      "amount": "{n} SAR"
+    },
+    "notes": {
+      "label": "Notes",
+      "empty": "No notes"
+    },
+    "personal": {
+      "title": "Personal Information"
+    },
+    "gender": {
+      "male": "Male",
+      "female": "Female"
+    },
+    "marital": {
+      "single": "Single",
+      "married": "Married",
+      "divorced": "Divorced",
+      "widowed": "Widowed"
+    },
+    "education": {
+      "title": "Education & Skills",
+      "level": "Education Level",
+      "levels": {
+        "High School": "High School",
+        "Diploma": "Diploma",
+        "Bachelor": "Bachelor",
+        "Master": "Master",
+        "PhD": "PhD",
+        "Other": "Other"
+      },
+      "empty": "No education or skills data"
+    },
+    "financial": {
+      "title": "Financial Information",
+      "iban": "IBAN Number",
+      "ibanHint": "Saudi IBAN: SA followed by 22 digits (24 characters total)",
+      "ibanPlaceholder": "SA0000000000000000000000",
+      "bankName": "Bank Name",
+      "bankNamePlaceholder": "Auto-detected from IBAN",
+      "bankCode": "Bank Code",
+      "bankCodePlaceholder": "Auto-detected",
+      "accountFirst": "Account First Name",
+      "accountLast": "Account Last Name",
+      "empty": "No financial data"
+    },
+    "payment": {
+      "title": "Payment Method",
+      "bankTransfer": "Bank Transfer",
+      "cash": "Cash",
+      "cashReasonLabel": "Reason for cash payment",
+      "cashReasonPlaceholder": "e.g. No bank account",
+      "confirmCash": "Confirm Cash",
+      "saving": "Saving…",
+      "reasonLine": "Reason: {reason}"
+    },
+    "emergency": {
+      "title": "Emergency Contact",
+      "empty": "No emergency contact"
+    },
+    "footer": {
+      "printIdCard": "Print ID Card",
+      "terminate": "Terminate Employee",
+      "inOffboardingBadge": "In Offboarding",
+      "viewInOffboarding": "View in Offboarding",
+      "reinstate": "Reinstate Employee"
+    },
+    "history": {
+      "empty": "No work history found",
+      "records": "Employment Records ({n})",
+      "event": "Event",
+      "jobTitle": "Job Title",
+      "start": "Start",
+      "end": "End",
+      "viewContract": "View Contract",
+      "signedSuffix": "(signed {date})"
+    },
+    "schedule": {
+      "current": "Current Schedule",
+      "reassign": "Reassign",
+      "assign": "Assign Schedule",
+      "noneAssigned": "No schedule assigned",
+      "history": "Assignment History",
+      "remove": "Remove",
+      "unknownTemplate": "Unknown Template",
+      "since": "Since {date}",
+      "todayShift": "Today",
+      "todayDayOff": "Today: Day off",
+      "active": "Active"
+    }
+  },
+  "assignDialog": {
+    "titleAssign": "Assign Schedule",
+    "titleReassign": "Reassign Schedule",
+    "descAssign": "Choose a schedule template for this employee.",
+    "descReassign": "This will end the current assignment and start a new one.",
+    "template": "Template",
+    "selectTemplate": "Select template…",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "optional": "(optional)",
+    "cancel": "Cancel",
+    "assign": "Assign"
+  },
+  "terminate": {
+    "title": "Terminate Employee",
+    "description": "This will send {name} ({number}) to the offboarding pipeline.",
+    "warning": "The employee will enter offboarding. Assets must be confirmed and settlement calculated before final exit.",
+    "endDate": "End Date",
+    "category": "Category",
+    "selectCategory": "Select category…",
+    "categories": {
+      "end_of_season": "End of Season",
+      "resignation": "Resignation",
+      "performance": "Performance",
+      "disciplinary": "Disciplinary",
+      "contract_expiry": "Contract Expiry",
+      "other": "Other"
+    },
+    "notes": "Notes",
+    "notesPlaceholder": "Additional details about the termination…",
+    "cancel": "Cancel",
+    "submit": "Send to Offboarding"
+  },
+  "reinstate": {
+    "title": "Reinstate Employee",
+    "description": "Re-activate {name} ({number}) with a new employment period.",
+    "startDate": "Start Date",
+    "event": "Event",
+    "selectEvent": "Select event…",
+    "smpCompany": "SMP Company",
+    "selectSmp": "— Select SMP company —",
+    "smpRequired": "Required — SMP workers must be linked to a company.",
+    "salary": "Monthly Salary (SAR)",
+    "salaryPlaceholder": "e.g. 4500",
+    "cancel": "Cancel",
+    "submit": "Confirm Reinstate"
+  },
+  "bulkUpdate": {
+    "title": "Mass Employee Update",
+    "description": "Download the template, edit employee data in Excel, then upload to apply changes in bulk.",
+    "step1": "Download Template",
+    "step1Desc": "The template is pre-filled with all current employees. Editable columns: <b>Full Name, National ID/Iqama, Phone, Salary, Start Date, Event, Notes</b>. A second sheet lists valid Event names.",
+    "downloadButton": "Download Bulk Update Template (.xlsx)",
+    "step2": "Upload Modified File",
+    "uploadHint": "Click to select your modified Excel file",
+    "uploadFormats": ".xlsx or .xls",
+    "fileSize": "{kb} KB — click to change",
+    "cancel": "Cancel",
+    "apply": "Apply Updates",
+    "processing": "Processing…",
+    "updated": "Updated",
+    "skipped": "Skipped",
+    "errors": "Errors",
+    "rowsWithErrors": "Rows with errors",
+    "summary_zero": "{n} employees successfully updated out of {total} rows processed.",
+    "summary_one": "1 employee successfully updated out of {total} rows processed.",
+    "summary_two": "{n} employees successfully updated out of {total} rows processed.",
+    "summary_few": "{n} employees successfully updated out of {total} rows processed.",
+    "summary_many": "{n} employees successfully updated out of {total} rows processed.",
+    "summary_other": "{n} employees successfully updated out of {total} rows processed.",
+    "uploadAnother": "Upload Another File",
+    "done": "Done"
+  },
+  "toast": {
+    "scheduleAssigned": "Schedule assigned",
+    "scheduleEnded": "Schedule assignment ended",
+    "employeeUpdated": "Employee updated",
+    "profileUpdated": "Profile updated",
+    "sentToOffboarding": "Employee sent to offboarding pipeline",
+    "reinstated": "Employee reinstated",
+    "paymentUpdated": "Payment method updated",
+    "error": "Error",
+    "invalidIban": "Invalid IBAN",
+    "invalidIbanDesc": "IBAN must be SA followed by 22 digits (24 characters total)",
+    "templateDownloaded": "Template downloaded",
+    "templateDownloadedDesc": "Edit the file and upload it back to apply updates.",
+    "uploadFailed": "Upload failed",
+    "exportedExcel_zero": "Exported {n} employees to Excel",
+    "exportedExcel_one": "Exported 1 employee to Excel",
+    "exportedExcel_two": "Exported {n} employees to Excel",
+    "exportedExcel_few": "Exported {n} employees to Excel",
+    "exportedExcel_many": "Exported {n} employees to Excel",
+    "exportedExcel_other": "Exported {n} employees to Excel",
+    "exportedCsv_zero": "Exported {n} employees to CSV",
+    "exportedCsv_one": "Exported 1 employee to CSV",
+    "exportedCsv_two": "Exported {n} employees to CSV",
+    "exportedCsv_few": "Exported {n} employees to CSV",
+    "exportedCsv_many": "Exported {n} employees to CSV",
+    "exportedCsv_other": "Exported {n} employees to CSV",
+    "printFailed": "Print failed",
+    "printAllFailed": "All cards failed to print",
+    "printPartial": "Printed {done}/{total} cards",
+    "printPartialDesc": "{n} failed",
+    "printingCount_zero": "Printing {n} ID cards",
+    "printingCount_one": "Printing 1 ID card",
+    "printingCount_two": "Printing {n} ID cards",
+    "printingCount_few": "Printing {n} ID cards",
+    "printingCount_many": "Printing {n} ID cards",
+    "printingCount_other": "Printing {n} ID cards"
+  }
+}

@@ -1,0 +1,326 @@
+{
+  "page": {
+    "title": "إدارة القوى العاملة",
+    "subtitle": "إدارة موظفيك وتفاصيلهم.",
+    "broadcast": "بث",
+    "massUpdate": "تحديث جماعي",
+    "export": "تصدير",
+    "exportWithCount": "تصدير ({n})",
+    "exportExcel": "تصدير إلى Excel",
+    "exportCsv": "تصدير إلى CSV",
+    "printIdCards": "طباعة بطاقات الهوية",
+    "printIdCardsWithCount": "طباعة بطاقات الهوية ({n})"
+  },
+  "stats": {
+    "total": "إجمالي الموظفين",
+    "totalDesc": "جميع سجلات الموظفين",
+    "active": "نشط",
+    "activeDesc": "موظفون حاليون",
+    "terminated": "منتهية خدمته",
+    "terminatedDesc": "موظفون سابقون"
+  },
+  "filter": {
+    "searchPlaceholder": "ابحث برقم الموظف أو الهوية أو الاسم أو الجوال",
+    "all": "جميع الحالات",
+    "activeOnly": "النشطون فقط",
+    "terminatedOnly": "المنتهية خدمتهم فقط"
+  },
+  "selectionBar": {
+    "selected_zero": "لم يتم تحديد أي موظف",
+    "selected_one": "تم تحديد موظف واحد",
+    "selected_two": "تم تحديد موظفَين",
+    "selected_few": "تم تحديد {n} موظفين",
+    "selected_many": "تم تحديد {n} موظفًا",
+    "selected_other": "تم تحديد {n} موظف",
+    "printingProgress": "جاري الطباعة {done}/{total}…",
+    "clearSelection": "مسح التحديد"
+  },
+  "list": {
+    "title": "قائمة الموظفين",
+    "count": "({n})",
+    "empty": "لا يوجد موظفون",
+    "emptyHint": "يظهر الموظفون هنا بعد التحويل من التأهيل."
+  },
+  "columns": {
+    "empNumber": "رقم الموظف",
+    "employee": "الموظف",
+    "nationalId": "رقم الهوية",
+    "phone": "الجوال",
+    "jobEvent": "الوظيفة / الفعالية",
+    "salary": "الراتب",
+    "lastPrinted": "آخر طباعة",
+    "startDate": "تاريخ البدء",
+    "endDate": "تاريخ الانتهاء",
+    "status": "الحالة",
+    "actions": "إجراءات",
+    "never": "لم تتم",
+    "inactiveSuffix": "(غير نشط)"
+  },
+  "status": {
+    "active": "نشط",
+    "terminated": "منتهية خدمته",
+    "inOffboarding": "قيد إنهاء الخدمة"
+  },
+  "row": {
+    "printIdCardTitle": "طباعة بطاقة الهوية"
+  },
+  "dialog": {
+    "details": "التفاصيل",
+    "workHistory": "سجل العمل",
+    "schedule": "الجدول",
+    "unknownEmployee": "غير معروف",
+    "back": "رجوع",
+    "employmentContract": "عقد العمل",
+    "signed": "تم التوقيع {date}",
+    "printDownload": "طباعة / تنزيل",
+    "infoSheetSr": "تفاصيل الموظف وسجل العمل",
+    "infoLabels": {
+      "empNumber": "رقم الموظف",
+      "nationalId": "رقم الهوية",
+      "phone": "الجوال",
+      "jobTitle": "المسمى الوظيفي",
+      "position": "المنصب",
+      "event": "الفعالية",
+      "startDate": "تاريخ البدء",
+      "endDate": "تاريخ الانتهاء",
+      "terminationReason": "سبب إنهاء الخدمة",
+      "arabicName": "الاسم بالعربية",
+      "email": "البريد الإلكتروني",
+      "dateOfBirth": "تاريخ الميلاد",
+      "gender": "الجنس",
+      "nationality": "الجنسية",
+      "maritalStatus": "الحالة الاجتماعية",
+      "iqama": "رقم الإقامة",
+      "location": "الموقع",
+      "iban": "الآيبان",
+      "bankName": "اسم البنك",
+      "bankCode": "رمز البنك",
+      "accountHolder": "صاحب الحساب",
+      "education": "التعليم",
+      "university": "الجامعة",
+      "major": "التخصص",
+      "contactName": "اسم جهة الاتصال",
+      "contactPhone": "هاتف جهة الاتصال",
+      "skills": "المهارات",
+      "languages": "اللغات"
+    },
+    "actions": {
+      "change": "تغيير",
+      "assign": "تعيين",
+      "edit": "تعديل",
+      "save": "حفظ",
+      "cancel": "إلغاء"
+    },
+    "position": {
+      "selectPlaceholder": "اختر منصبًا…",
+      "notAssigned": "غير معيَّن"
+    },
+    "event": {
+      "selectPlaceholder": "اختر فعالية…",
+      "noneWarning": "⚠ لا توجد فعالية مُعيَّنة"
+    },
+    "salary": {
+      "label": "الراتب الشهري (ريال)",
+      "placeholder": "مثال: 4500",
+      "notSet": "غير محدَّد",
+      "amount": "{n} ريال"
+    },
+    "notes": {
+      "label": "ملاحظات",
+      "empty": "لا توجد ملاحظات"
+    },
+    "personal": {
+      "title": "المعلومات الشخصية"
+    },
+    "gender": {
+      "male": "ذكر",
+      "female": "أنثى"
+    },
+    "marital": {
+      "single": "أعزب",
+      "married": "متزوج",
+      "divorced": "مطلق",
+      "widowed": "أرمل"
+    },
+    "education": {
+      "title": "التعليم والمهارات",
+      "level": "المستوى التعليمي",
+      "levels": {
+        "High School": "ثانوي",
+        "Diploma": "دبلوم",
+        "Bachelor": "بكالوريوس",
+        "Master": "ماجستير",
+        "PhD": "دكتوراه",
+        "Other": "أخرى"
+      },
+      "empty": "لا توجد بيانات تعليم أو مهارات"
+    },
+    "financial": {
+      "title": "المعلومات المالية",
+      "iban": "رقم الآيبان",
+      "ibanHint": "الآيبان السعودي: SA يليه 22 رقمًا (24 خانة)",
+      "ibanPlaceholder": "SA0000000000000000000000",
+      "bankName": "اسم البنك",
+      "bankNamePlaceholder": "يُكتشف تلقائيًا من الآيبان",
+      "bankCode": "رمز البنك",
+      "bankCodePlaceholder": "يُكتشف تلقائيًا",
+      "accountFirst": "الاسم الأول لصاحب الحساب",
+      "accountLast": "اسم العائلة لصاحب الحساب",
+      "empty": "لا توجد بيانات مالية"
+    },
+    "payment": {
+      "title": "طريقة الدفع",
+      "bankTransfer": "تحويل بنكي",
+      "cash": "نقدًا",
+      "cashReasonLabel": "سبب الدفع نقدًا",
+      "cashReasonPlaceholder": "مثال: لا يوجد حساب بنكي",
+      "confirmCash": "تأكيد النقد",
+      "saving": "جاري الحفظ…",
+      "reasonLine": "السبب: {reason}"
+    },
+    "emergency": {
+      "title": "جهة الاتصال للطوارئ",
+      "empty": "لا توجد جهة اتصال للطوارئ"
+    },
+    "footer": {
+      "printIdCard": "طباعة بطاقة الهوية",
+      "terminate": "إنهاء خدمة الموظف",
+      "inOffboardingBadge": "قيد إنهاء الخدمة",
+      "viewInOffboarding": "عرض في إنهاء الخدمة",
+      "reinstate": "إعادة التوظيف"
+    },
+    "history": {
+      "empty": "لا يوجد سجل عمل",
+      "records": "سجلات العمل ({n})",
+      "event": "الفعالية",
+      "jobTitle": "المسمى الوظيفي",
+      "start": "البدء",
+      "end": "الانتهاء",
+      "viewContract": "عرض العقد",
+      "signedSuffix": "(تم التوقيع {date})"
+    },
+    "schedule": {
+      "current": "الجدول الحالي",
+      "reassign": "إعادة التعيين",
+      "assign": "تعيين جدول",
+      "noneAssigned": "لا يوجد جدول معيَّن",
+      "history": "سجل التعيينات",
+      "remove": "إزالة",
+      "unknownTemplate": "قالب غير معروف",
+      "since": "منذ {date}",
+      "todayShift": "اليوم",
+      "todayDayOff": "اليوم: إجازة",
+      "active": "نشط"
+    }
+  },
+  "assignDialog": {
+    "titleAssign": "تعيين جدول",
+    "titleReassign": "إعادة تعيين الجدول",
+    "descAssign": "اختر قالب جدول لهذا الموظف.",
+    "descReassign": "سيؤدي هذا إلى إنهاء التعيين الحالي وبدء تعيين جديد.",
+    "template": "القالب",
+    "selectTemplate": "اختر قالبًا…",
+    "startDate": "تاريخ البدء",
+    "endDate": "تاريخ الانتهاء",
+    "optional": "(اختياري)",
+    "cancel": "إلغاء",
+    "assign": "تعيين"
+  },
+  "terminate": {
+    "title": "إنهاء خدمة الموظف",
+    "description": "سيتم إرسال {name} ({number}) إلى مسار إنهاء الخدمة.",
+    "warning": "سيدخل الموظف مرحلة إنهاء الخدمة. يجب تأكيد الأصول وحساب التسوية قبل الخروج النهائي.",
+    "endDate": "تاريخ الانتهاء",
+    "category": "الفئة",
+    "selectCategory": "اختر فئة…",
+    "categories": {
+      "end_of_season": "نهاية الموسم",
+      "resignation": "استقالة",
+      "performance": "أداء",
+      "disciplinary": "تأديبي",
+      "contract_expiry": "انتهاء العقد",
+      "other": "أخرى"
+    },
+    "notes": "ملاحظات",
+    "notesPlaceholder": "تفاصيل إضافية حول إنهاء الخدمة…",
+    "cancel": "إلغاء",
+    "submit": "إرسال إلى إنهاء الخدمة"
+  },
+  "reinstate": {
+    "title": "إعادة توظيف",
+    "description": "إعادة تنشيط {name} ({number}) بفترة عمل جديدة.",
+    "startDate": "تاريخ البدء",
+    "event": "الفعالية",
+    "selectEvent": "اختر فعالية…",
+    "smpCompany": "شركة SMP",
+    "selectSmp": "— اختر شركة SMP —",
+    "smpRequired": "مطلوب — يجب ربط عمال SMP بشركة.",
+    "salary": "الراتب الشهري (ريال)",
+    "salaryPlaceholder": "مثال: 4500",
+    "cancel": "إلغاء",
+    "submit": "تأكيد الإعادة"
+  },
+  "bulkUpdate": {
+    "title": "تحديث جماعي للموظفين",
+    "description": "نزّل القالب، عدّل بيانات الموظفين في Excel، ثم ارفعه لتطبيق التغييرات دفعة واحدة.",
+    "step1": "تنزيل القالب",
+    "step1Desc": "القالب مُعبَّأ مسبقًا بجميع الموظفين الحاليين. الأعمدة القابلة للتعديل: <b>الاسم الكامل، الهوية/الإقامة، الجوال، الراتب، تاريخ البدء، الفعالية، الملاحظات</b>. توجد ورقة ثانية بأسماء الفعاليات الصالحة.",
+    "downloadButton": "تنزيل قالب التحديث الجماعي (.xlsx)",
+    "step2": "رفع الملف المعدَّل",
+    "uploadHint": "انقر لاختيار ملف Excel المعدَّل",
+    "uploadFormats": ".xlsx أو .xls",
+    "fileSize": "{kb} كيلوبايت — انقر للتغيير",
+    "cancel": "إلغاء",
+    "apply": "تطبيق التحديثات",
+    "processing": "جاري المعالجة…",
+    "updated": "تم التحديث",
+    "skipped": "متخطَّى",
+    "errors": "أخطاء",
+    "rowsWithErrors": "الصفوف ذات الأخطاء",
+    "summary_zero": "لم يتم تحديث أي موظف من أصل {total} صفًا.",
+    "summary_one": "تم تحديث موظف واحد بنجاح من أصل {total} صفًا.",
+    "summary_two": "تم تحديث موظفَين بنجاح من أصل {total} صفًا.",
+    "summary_few": "تم تحديث {n} موظفين بنجاح من أصل {total} صفًا.",
+    "summary_many": "تم تحديث {n} موظفًا بنجاح من أصل {total} صفًا.",
+    "summary_other": "تم تحديث {n} موظف بنجاح من أصل {total} صفًا.",
+    "uploadAnother": "رفع ملف آخر",
+    "done": "تم"
+  },
+  "toast": {
+    "scheduleAssigned": "تم تعيين الجدول",
+    "scheduleEnded": "تم إنهاء تعيين الجدول",
+    "employeeUpdated": "تم تحديث الموظف",
+    "profileUpdated": "تم تحديث الملف",
+    "sentToOffboarding": "تم إرسال الموظف إلى مسار إنهاء الخدمة",
+    "reinstated": "تمت إعادة توظيف الموظف",
+    "paymentUpdated": "تم تحديث طريقة الدفع",
+    "error": "خطأ",
+    "invalidIban": "آيبان غير صالح",
+    "invalidIbanDesc": "يجب أن يبدأ الآيبان بـ SA متبوعًا بـ 22 رقمًا (24 خانة)",
+    "templateDownloaded": "تم تنزيل القالب",
+    "templateDownloadedDesc": "عدّل الملف وارفعه مرة أخرى لتطبيق التحديثات.",
+    "uploadFailed": "فشل الرفع",
+    "exportedExcel_zero": "لم يتم تصدير أي موظف إلى Excel",
+    "exportedExcel_one": "تم تصدير موظف واحد إلى Excel",
+    "exportedExcel_two": "تم تصدير موظفَين إلى Excel",
+    "exportedExcel_few": "تم تصدير {n} موظفين إلى Excel",
+    "exportedExcel_many": "تم تصدير {n} موظفًا إلى Excel",
+    "exportedExcel_other": "تم تصدير {n} موظف إلى Excel",
+    "exportedCsv_zero": "لم يتم تصدير أي موظف إلى CSV",
+    "exportedCsv_one": "تم تصدير موظف واحد إلى CSV",
+    "exportedCsv_two": "تم تصدير موظفَين إلى CSV",
+    "exportedCsv_few": "تم تصدير {n} موظفين إلى CSV",
+    "exportedCsv_many": "تم تصدير {n} موظفًا إلى CSV",
+    "exportedCsv_other": "تم تصدير {n} موظف إلى CSV",
+    "printFailed": "فشلت الطباعة",
+    "printAllFailed": "فشلت طباعة جميع البطاقات",
+    "printPartial": "تمت طباعة {done}/{total} بطاقات",
+    "printPartialDesc": "فشل {n}",
+    "printingCount_zero": "لا توجد بطاقات للطباعة",
+    "printingCount_one": "جاري طباعة بطاقة واحدة",
+    "printingCount_two": "جاري طباعة بطاقتَين",
+    "printingCount_few": "جاري طباعة {n} بطاقات",
+    "printingCount_many": "جاري طباعة {n} بطاقة",
+    "printingCount_other": "جاري طباعة {n} بطاقة"
+  }
+}

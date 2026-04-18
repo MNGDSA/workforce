@@ -97,6 +97,8 @@ import {
   type EmployeeCardData,
   type PrinterPluginConfig,
 } from "@/lib/id-card-renderer";
+import { useTranslation } from "react-i18next";
+import { formatNumber, formatDate as formatDateI18n } from "@/lib/format";
 
 type Employee = {
   id: string;
@@ -171,19 +173,21 @@ type WorkHistory = {
 type SortField = "employeeNumber" | "fullNameEn" | "nationalId" | "salary" | "startDate" | "endDate" | "phone";
 type SortDir = "asc" | "desc";
 
-function statusBadge(isActive: boolean, offboardingStatus?: string | null) {
-  if (offboardingStatus === "in_progress") {
-    return { label: "In Offboarding", className: "bg-amber-500/10 text-amber-400 border-amber-500/30" };
-  }
-  return isActive
-    ? { label: "Active", className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" }
-    : { label: "Terminated", className: "bg-red-500/10 text-red-400 border-red-500/30" };
+function useStatusBadge() {
+  const { t } = useTranslation("workforce");
+  return (isActive: boolean, offboardingStatus?: string | null) => {
+    if (offboardingStatus === "in_progress") {
+      return { label: t("status.inOffboarding"), className: "bg-amber-500/10 text-amber-400 border-amber-500/30" };
+    }
+    return isActive
+      ? { label: t("status.active"), className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" }
+      : { label: t("status.terminated"), className: "bg-red-500/10 text-red-400 border-red-500/30" };
+  };
 }
 
 function formatDate(iso: string | null | undefined) {
   if (!iso) return "—";
-  const d = new Date(iso.includes("T") ? iso : iso + "T00:00:00");
-  return d.toLocaleDateString("en-SA", { month: "short", day: "numeric", year: "numeric" });
+  return formatDateI18n(iso, "en", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function exportToCSV(employees: Employee[]) {
@@ -274,6 +278,7 @@ function ActiveAssignmentCard({
   endAssignmentMutation: { isPending: boolean; mutate: (id: string) => void };
   formatDate: (d: string) => string;
 }) {
+  const { t } = useTranslation("workforce");
   const template = scheduleTemplates.find(t => t.id === activeAssignment.templateId);
   const DAY_KEYS = ["sundayShiftId", "mondayShiftId", "tuesdayShiftId", "wednesdayShiftId", "thursdayShiftId", "fridayShiftId", "saturdayShiftId"] as const;
   const todayKey = DAY_KEYS[new Date().getDay()] as keyof ScheduleTemplateWithDays;
@@ -283,18 +288,18 @@ function ActiveAssignmentCard({
     <div className="border border-emerald-800/50 bg-emerald-950/10 rounded-lg p-4 space-y-2">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-semibold text-white text-sm">{template?.name ?? "Unknown Template"}</p>
-          <p className="text-xs text-zinc-400 mt-0.5">Since {formatDate(activeAssignment.startDate)}</p>
+          <p className="font-semibold text-white text-sm"><bdi>{template?.name ?? t("dialog.schedule.unknownTemplate")}</bdi></p>
+          <p className="text-xs text-zinc-400 mt-0.5">{t("dialog.schedule.since", { date: formatDate(activeAssignment.startDate) })}</p>
           {todayShift ? (
             <div className="flex items-center gap-1.5 mt-1.5">
               <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: todayShift.color }} />
               <span className="text-xs text-zinc-300">
-                Today: <span className="font-medium text-white">{todayShift.name}</span>
-                <span className="text-zinc-500 ml-1">({todayShift.startTime}–{todayShift.endTime})</span>
+                {t("dialog.schedule.todayShift")}: <span className="font-medium text-white"><bdi>{todayShift.name}</bdi></span>
+                <span className="text-zinc-500 ms-1" dir="ltr">({todayShift.startTime}–{todayShift.endTime})</span>
               </span>
             </div>
           ) : template ? (
-            <p className="text-xs text-zinc-500 mt-1">Today: Day off</p>
+            <p className="text-xs text-zinc-500 mt-1">{t("dialog.schedule.todayDayOff")}</p>
           ) : null}
         </div>
         <Button
@@ -305,7 +310,7 @@ function ActiveAssignmentCard({
           onClick={() => endAssignmentMutation.mutate(activeAssignment.id)}
           data-testid="button-end-schedule-assignment"
         >
-          {endAssignmentMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Remove"}
+          {endAssignmentMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("dialog.schedule.remove")}
         </Button>
       </div>
     </div>
@@ -330,6 +335,8 @@ function EmployeeDetailDialog({
   const { toast } = useToast();
   const qc = useQueryClient();
   const [, setLocation] = useLocation();
+  const { t } = useTranslation("workforce");
+  const statusBadge = useStatusBadge();
   const [tab, setTab] = useState<"details" | "history" | "schedule">("details");
   const [editSalary, setEditSalary] = useState(false);
   const [salaryValue, setSalaryValue] = useState("");
@@ -448,9 +455,9 @@ function EmployeeDetailDialog({
       qc.invalidateQueries({ queryKey: ["/api/schedule-assignments/employee", employee?.id] });
       refetchAssignment();
       setAssignScheduleOpen(false);
-      toast({ title: "Schedule assigned" });
+      toast({ title: t("toast.scheduleAssigned") });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("toast.error"), description: e.message, variant: "destructive" }),
   });
 
   const endAssignmentMutation = useMutation({
@@ -460,9 +467,9 @@ function EmployeeDetailDialog({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/schedule-assignments/employee", employee?.id] });
       refetchAssignment();
-      toast({ title: "Schedule assignment ended" });
+      toast({ title: t("toast.scheduleEnded") });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("toast.error"), description: e.message, variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
@@ -474,9 +481,9 @@ function EmployeeDetailDialog({
       setEditNotes(false);
       setEditPosition(false);
       onUpdated();
-      toast({ title: "Employee updated" });
+      toast({ title: t("toast.employeeUpdated") });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("toast.error"), description: e.message, variant: "destructive" }),
   });
 
   const profileMutation = useMutation({
@@ -489,9 +496,9 @@ function EmployeeDetailDialog({
       setEditEmergency(false);
       setEditEducation(false);
       if (onEmployeeRefreshed) onEmployeeRefreshed(updatedEmployee);
-      toast({ title: "Profile updated" });
+      toast({ title: t("toast.profileUpdated") });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("toast.error"), description: e.message, variant: "destructive" }),
   });
 
   const terminateMutation = useMutation({
@@ -505,9 +512,9 @@ function EmployeeDetailDialog({
       setTerminateForm({ endDate: "", reason: "", category: "" });
       onOpenChange(false);
       onUpdated();
-      toast({ title: "Employee sent to offboarding pipeline" });
+      toast({ title: t("toast.sentToOffboarding") });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("toast.error"), description: e.message, variant: "destructive" }),
   });
 
   const { data: smpCompanies = [] } = useQuery<{ id: string; name: string; isActive: boolean }[]>({
@@ -526,9 +533,9 @@ function EmployeeDetailDialog({
       setReinstateForm({ startDate: "", eventId: "", salary: "", smpCompanyId: "" });
       onOpenChange(false);
       onUpdated();
-      toast({ title: "Employee reinstated" });
+      toast({ title: t("toast.reinstated") });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("toast.error"), description: e.message, variant: "destructive" }),
   });
 
   if (!employee) return null;
@@ -551,14 +558,14 @@ function EmployeeDetailDialog({
                   <ChevronLeft className="h-5 w-5" />
                 </button>
                 <div>
-                  <h3 className="text-base font-semibold text-white">Employment Contract</h3>
+                  <h3 className="text-base font-semibold text-white">{t("dialog.employmentContract")}</h3>
                   <p className="text-xs text-zinc-500 mt-0.5">
-                    {viewingAdminContract.jobTitle && <span>{viewingAdminContract.jobTitle}</span>}
+                    {viewingAdminContract.jobTitle && <span><bdi>{viewingAdminContract.jobTitle}</bdi></span>}
                     {viewingAdminContract.jobTitle && viewingAdminContract.eventName && " — "}
-                    {viewingAdminContract.eventName && <span>{viewingAdminContract.eventName}</span>}
+                    {viewingAdminContract.eventName && <span><bdi>{viewingAdminContract.eventName}</bdi></span>}
                     {viewingAdminContract.signedAt && (
-                      <span className="ml-2 text-emerald-400">
-                        Signed {new Date(viewingAdminContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+                      <span className="ms-2 text-emerald-400">
+                        {t("dialog.signed", { date: formatDateI18n(viewingAdminContract.signedAt, "en", { day: "numeric", month: "long", year: "numeric" }) })}
                       </span>
                     )}
                   </p>
@@ -604,7 +611,7 @@ function EmployeeDetailDialog({
                   data-testid="button-print-admin-contract"
                 >
                   <Printer className="h-3.5 w-3.5" />
-                  Print / Download
+                  {t("dialog.printDownload")}
                 </Button>
               </div>
             </div>
@@ -619,13 +626,13 @@ function EmployeeDetailDialog({
               </Avatar>
               <div>
                 <div className="flex items-center gap-2">
-                  {employee.fullNameEn ?? "Unknown"}
+                  <bdi>{employee.fullNameEn ?? t("dialog.unknownEmployee")}</bdi>
                   <Badge variant="outline" className={`text-[10px] font-mono ${st.className}`}>{st.label}</Badge>
                 </div>
-                <div className="text-xs text-zinc-500 font-mono font-normal">{employee.employeeNumber}</div>
+                <div className="text-xs text-zinc-500 font-mono font-normal" dir="ltr">{employee.employeeNumber}</div>
               </div>
             </DialogTitle>
-            <DialogDescription className="sr-only">Employee details and work history</DialogDescription>
+            <DialogDescription className="sr-only">{t("dialog.infoSheetSr")}</DialogDescription>
           </DialogHeader>
 
           <div className="flex rounded-md overflow-hidden border border-zinc-800 bg-zinc-900/50 mt-2">
@@ -636,7 +643,7 @@ function EmployeeDetailDialog({
               }`}
               data-testid="tab-employee-details"
             >
-              <Eye className="h-3.5 w-3.5" /> Details
+              <Eye className="h-3.5 w-3.5" /> {t("dialog.details")}
             </button>
             <button
               onClick={() => setTab("history")}
@@ -645,7 +652,7 @@ function EmployeeDetailDialog({
               }`}
               data-testid="tab-employee-history"
             >
-              <History className="h-3.5 w-3.5" /> Work History
+              <History className="h-3.5 w-3.5" /> {t("dialog.workHistory")}
             </button>
             <button
               onClick={() => setTab("schedule")}
@@ -654,23 +661,23 @@ function EmployeeDetailDialog({
               }`}
               data-testid="tab-employee-schedule"
             >
-              <Clock className="h-3.5 w-3.5" /> Schedule
+              <Clock className="h-3.5 w-3.5" /> {t("dialog.schedule")}
             </button>
           </div>
 
           {tab === "details" && (
             <div className="space-y-4 mt-2">
               <div className="grid grid-cols-2 gap-4">
-                <InfoRow icon={<Hash className="h-3.5 w-3.5" />} label="Employee #" value={employee.employeeNumber} mono />
-                <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="National ID" value={employee.nationalId ?? "—"} mono />
-                <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label="Phone" value={employee.phone ?? "—"} />
-                <InfoRow icon={<Briefcase className="h-3.5 w-3.5" />} label="Job Title" value={employee.jobTitle ?? "—"} />
+                <InfoRow icon={<Hash className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.empNumber")} value={employee.employeeNumber} mono />
+                <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.nationalId")} value={employee.nationalId ?? "—"} mono />
+                <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.phone")} value={employee.phone ?? "—"} />
+                <InfoRow icon={<Briefcase className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.jobTitle")} value={employee.jobTitle ?? "—"} />
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-500 text-xs flex items-center gap-1"><Building2 className="h-3 w-3" /> Position</span>
+                    <span className="text-zinc-500 text-xs flex items-center gap-1"><Building2 className="h-3 w-3" /> {t("dialog.infoLabels.position")}</span>
                     {employee.isActive && !editPosition && (
                       <Button variant="ghost" size="sm" className="h-5 text-[11px] text-primary px-1" onClick={() => { setEditPosition(true); setPositionValue(employee.positionId ?? ""); }}>
-                        {employee.positionId ? "Change" : "Assign"}
+                        {employee.positionId ? t("dialog.actions.change") : t("dialog.actions.assign")}
                       </Button>
                     )}
                   </div>
@@ -678,39 +685,39 @@ function EmployeeDetailDialog({
                     <div className="flex gap-2">
                       <Select value={positionValue} onValueChange={setPositionValue}>
                         <SelectTrigger data-testid="select-employee-position" className="bg-zinc-900 border-zinc-700 text-white h-8 text-sm flex-1">
-                          <SelectValue placeholder="Select position…" />
+                          <SelectValue placeholder={t("dialog.position.selectPlaceholder")} />
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
-                          <SelectItem value="__none__" className="text-zinc-400 focus:bg-zinc-800 italic">None (unassign)</SelectItem>
+                          <SelectItem value="__none__" className="text-zinc-400 focus:bg-zinc-800 italic">{t("dialog.position.notAssigned")}</SelectItem>
                           {positionsList.filter(p => p.isActive).map(pos => (
                             <SelectItem key={pos.id} value={pos.id} className="text-white focus:bg-zinc-800">{pos.title}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                       <Button size="sm" className="h-8 bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ positionId: positionValue === "__none__" ? null : positionValue }, { onSuccess: () => setEditPosition(false) })}>
-                        {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                        {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("dialog.actions.save")}
                       </Button>
-                      <Button size="sm" variant="outline" className="h-8 border-zinc-700" onClick={() => setEditPosition(false)}>Cancel</Button>
+                      <Button size="sm" variant="outline" className="h-8 border-zinc-700" onClick={() => setEditPosition(false)}>{t("dialog.actions.cancel")}</Button>
                     </div>
                   ) : (
                     <p className="text-white text-sm" data-testid="text-employee-position">
                       {employee.positionTitle ? (
                         <>
-                          {employee.positionTitle}
-                          {employee.positionIsActive === false && <span className="text-amber-400 text-xs ml-1">(Inactive)</span>}
+                          <bdi>{employee.positionTitle}</bdi>
+                          {employee.positionIsActive === false && <span className="text-amber-400 text-xs ms-1">{t("columns.inactiveSuffix")}</span>}
                         </>
                       ) : (
-                        <span className="text-zinc-500 text-xs italic">Not assigned</span>
+                        <span className="text-zinc-500 text-xs italic">{t("dialog.position.notAssigned")}</span>
                       )}
                     </p>
                   )}
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-500 text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Event</span>
+                    <span className="text-zinc-500 text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> {t("dialog.infoLabels.event")}</span>
                     {employee.isActive && !editEvent && (
                       <Button variant="ghost" size="sm" className="h-5 text-[11px] text-primary px-1" onClick={() => { setEditEvent(true); setEventValue(employee.eventId ?? ""); }}>
-                        {employee.eventId ? "Change" : "Assign"}
+                        {employee.eventId ? t("dialog.actions.change") : t("dialog.actions.assign")}
                       </Button>
                     )}
                   </div>
@@ -718,30 +725,30 @@ function EmployeeDetailDialog({
                     <div className="flex gap-2">
                       <Select value={eventValue} onValueChange={setEventValue}>
                         <SelectTrigger data-testid="select-employee-event" className="bg-zinc-900 border-zinc-700 text-white h-8 text-sm flex-1">
-                          <SelectValue placeholder="Select event…" />
+                          <SelectValue placeholder={t("dialog.event.selectPlaceholder")} />
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
                           {eventsList.map(ev => (
-                            <SelectItem key={ev.id} value={ev.id} className="text-white focus:bg-zinc-800">{ev.name}</SelectItem>
+                            <SelectItem key={ev.id} value={ev.id} className="text-white focus:bg-zinc-800"><bdi>{ev.name}</bdi></SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                       <Button size="sm" className="h-8 bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white" disabled={updateMutation.isPending || !eventValue} onClick={() => updateMutation.mutate({ eventId: eventValue }, { onSuccess: () => setEditEvent(false) })}>
-                        {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                        {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("dialog.actions.save")}
                       </Button>
-                      <Button size="sm" variant="outline" className="h-8 border-zinc-700" onClick={() => setEditEvent(false)}>Cancel</Button>
+                      <Button size="sm" variant="outline" className="h-8 border-zinc-700" onClick={() => setEditEvent(false)}>{t("dialog.actions.cancel")}</Button>
                     </div>
                   ) : (
                     <p className="text-white text-sm" data-testid="text-employee-event">
-                      {employee.eventName ?? <span className="text-amber-400 text-xs italic">⚠ No event assigned</span>}
+                      {employee.eventName ? <bdi>{employee.eventName}</bdi> : <span className="text-amber-400 text-xs italic">{t("dialog.event.noneWarning")}</span>}
                     </p>
                   )}
                 </div>
-                <InfoRow icon={<Clock className="h-3.5 w-3.5" />} label="Start Date" value={formatDate(employee.startDate)} />
+                <InfoRow icon={<Clock className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.startDate")} value={formatDate(employee.startDate)} />
                 {!employee.isActive && (
                   <>
-                    <InfoRow icon={<XCircle className="h-3.5 w-3.5" />} label="End Date" value={formatDate(employee.endDate)} />
-                    <InfoRow icon={<AlertTriangle className="h-3.5 w-3.5" />} label="Termination Reason" value={employee.terminationReason ?? "—"} />
+                    <InfoRow icon={<XCircle className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.endDate")} value={formatDate(employee.endDate)} />
+                    <InfoRow icon={<AlertTriangle className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.terminationReason")} value={employee.terminationReason ?? "—"} />
                   </>
                 )}
               </div>
@@ -751,11 +758,11 @@ function EmployeeDetailDialog({
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                    <DollarSign className="h-3.5 w-3.5" /> Monthly Salary (SAR)
+                    <DollarSign className="h-3.5 w-3.5" /> {t("dialog.salary.label")}
                   </Label>
                   {employee.isActive && !editSalary && (
                     <Button variant="ghost" size="sm" className="h-6 text-xs text-primary" onClick={() => { setEditSalary(true); setSalaryValue(employee.salary ?? ""); }}>
-                      Edit
+                      {t("dialog.actions.edit")}
                     </Button>
                   )}
                 </div>
@@ -767,7 +774,8 @@ function EmployeeDetailDialog({
                       value={salaryValue}
                       onChange={e => setSalaryValue(e.target.value)}
                       className="bg-zinc-900 border-zinc-700 text-white flex-1"
-                      placeholder="e.g. 4500"
+                      placeholder={t("dialog.salary.placeholder")}
+                      dir="ltr"
                     />
                     <Button
                       size="sm"
@@ -775,13 +783,13 @@ function EmployeeDetailDialog({
                       disabled={updateMutation.isPending}
                       onClick={() => updateMutation.mutate({ salary: salaryValue || undefined })}
                     >
-                      {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                      {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("dialog.actions.save")}
                     </Button>
-                    <Button size="sm" variant="outline" className="border-zinc-700" onClick={() => setEditSalary(false)}>Cancel</Button>
+                    <Button size="sm" variant="outline" className="border-zinc-700" onClick={() => setEditSalary(false)}>{t("dialog.actions.cancel")}</Button>
                   </div>
                 ) : (
                   <p className="text-white font-medium text-lg" data-testid="text-employee-salary">
-                    {employee.salary ? `${Number(employee.salary).toLocaleString()} SAR` : "Not set"}
+                    {employee.salary ? t("dialog.salary.amount", { n: formatNumber(Number(employee.salary)) }) : t("dialog.salary.notSet")}
                   </p>
                 )}
               </div>
@@ -790,10 +798,10 @@ function EmployeeDetailDialog({
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label className="text-zinc-400 text-xs uppercase tracking-wider">Notes</Label>
+                  <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("dialog.notes.label")}</Label>
                   {employee.isActive && !editNotes && (
                     <Button variant="ghost" size="sm" className="h-6 text-xs text-primary" onClick={() => { setEditNotes(true); setNotesValue(employee.notes ?? ""); }}>
-                      Edit
+                      {t("dialog.actions.edit")}
                     </Button>
                   )}
                 </div>
@@ -807,19 +815,19 @@ function EmployeeDetailDialog({
                       rows={3}
                     />
                     <div className="flex gap-2 justify-end">
-                      <Button size="sm" variant="outline" className="border-zinc-700" onClick={() => setEditNotes(false)}>Cancel</Button>
+                      <Button size="sm" variant="outline" className="border-zinc-700" onClick={() => setEditNotes(false)}>{t("dialog.actions.cancel")}</Button>
                       <Button
                         size="sm"
                         className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
                         disabled={updateMutation.isPending}
                         onClick={() => updateMutation.mutate({ notes: notesValue || undefined })}
                       >
-                        {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                        {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("dialog.actions.save")}
                       </Button>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-zinc-300 text-sm">{employee.notes || "No notes"}</p>
+                  <p className="text-zinc-300 text-sm">{employee.notes || t("dialog.notes.empty")}</p>
                 )}
               </div>
 
@@ -827,7 +835,7 @@ function EmployeeDetailDialog({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                    <User className="h-3.5 w-3.5" /> Personal Information
+                    <User className="h-3.5 w-3.5" /> {t("dialog.personal.title")}
                   </Label>
                   {!editPersonal ? (
                     <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500 hover:text-zinc-300" data-testid="button-edit-personal"
@@ -846,53 +854,53 @@ function EmployeeDetailDialog({
                         });
                         setEditPersonal(true);
                       }}
-                    ><Pencil className="h-3 w-3 mr-1" /> Edit</Button>
+                    ><Pencil className="h-3 w-3 me-1" /> {t("dialog.actions.edit")}</Button>
                   ) : (
                     <div className="flex gap-1">
                       <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500" onClick={() => setEditPersonal(false)} data-testid="button-cancel-personal"><X className="h-3 w-3" /></Button>
                       <Button size="sm" className="h-6 px-2 text-xs bg-emerald-700 hover:bg-emerald-600" data-testid="button-save-personal"
                         disabled={profileMutation.isPending}
                         onClick={() => profileMutation.mutate(personalForm)}
-                      ><Save className="h-3 w-3 mr-1" /> Save</Button>
+                      ><Save className="h-3 w-3 me-1" /> {t("dialog.actions.save")}</Button>
                     </div>
                   )}
                 </div>
                 {editPersonal ? (
                   <div className="grid grid-cols-2 gap-3">
-                    <div><label className="text-zinc-500 text-xs">Arabic Name</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.fullNameAr} onChange={e => setPersonalForm(f => ({ ...f, fullNameAr: e.target.value }))} data-testid="input-personal-fullNameAr" /></div>
-                    <div><label className="text-zinc-500 text-xs">Email</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.email} onChange={e => setPersonalForm(f => ({ ...f, email: e.target.value }))} data-testid="input-personal-email" /></div>
-                    <div><label className="text-zinc-500 text-xs">Phone</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.phone} onChange={e => setPersonalForm(f => ({ ...f, phone: e.target.value }))} data-testid="input-personal-phone" /></div>
-                    <div><label className="text-zinc-500 text-xs">Date of Birth</label><Input type="date" className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.dateOfBirth} onChange={e => setPersonalForm(f => ({ ...f, dateOfBirth: e.target.value }))} data-testid="input-personal-dob" /></div>
+                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.arabicName")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.fullNameAr} onChange={e => setPersonalForm(f => ({ ...f, fullNameAr: e.target.value }))} data-testid="input-personal-fullNameAr" /></div>
+                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.email")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.email} onChange={e => setPersonalForm(f => ({ ...f, email: e.target.value }))} data-testid="input-personal-email" dir="ltr" /></div>
+                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.phone")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.phone} onChange={e => setPersonalForm(f => ({ ...f, phone: e.target.value }))} data-testid="input-personal-phone" dir="ltr" /></div>
+                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.dateOfBirth")}</label><Input type="date" className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.dateOfBirth} onChange={e => setPersonalForm(f => ({ ...f, dateOfBirth: e.target.value }))} data-testid="input-personal-dob" /></div>
                     <div>
-                      <label className="text-zinc-500 text-xs">Gender</label>
+                      <label className="text-zinc-500 text-xs">{t("dialog.infoLabels.gender")}</label>
                       <Select value={personalForm.gender} onValueChange={v => setPersonalForm(f => ({ ...f, gender: v }))}>
                         <SelectTrigger className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" data-testid="select-personal-gender"><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="male">Male</SelectItem><SelectItem value="female">Female</SelectItem></SelectContent>
+                        <SelectContent><SelectItem value="male">{t("dialog.gender.male")}</SelectItem><SelectItem value="female">{t("dialog.gender.female")}</SelectItem></SelectContent>
                       </Select>
                     </div>
-                    <div><label className="text-zinc-500 text-xs">Nationality</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.nationalityText} onChange={e => setPersonalForm(f => ({ ...f, nationalityText: e.target.value }))} data-testid="input-personal-nationality" /></div>
+                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.nationality")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.nationalityText} onChange={e => setPersonalForm(f => ({ ...f, nationalityText: e.target.value }))} data-testid="input-personal-nationality" /></div>
                     <div>
-                      <label className="text-zinc-500 text-xs">Marital Status</label>
+                      <label className="text-zinc-500 text-xs">{t("dialog.infoLabels.maritalStatus")}</label>
                       <Select value={personalForm.maritalStatus} onValueChange={v => setPersonalForm(f => ({ ...f, maritalStatus: v }))}>
                         <SelectTrigger className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" data-testid="select-personal-marital"><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="single">Single</SelectItem><SelectItem value="married">Married</SelectItem><SelectItem value="divorced">Divorced</SelectItem><SelectItem value="widowed">Widowed</SelectItem></SelectContent>
+                        <SelectContent><SelectItem value="single">{t("dialog.marital.single")}</SelectItem><SelectItem value="married">{t("dialog.marital.married")}</SelectItem><SelectItem value="divorced">{t("dialog.marital.divorced")}</SelectItem><SelectItem value="widowed">{t("dialog.marital.widowed")}</SelectItem></SelectContent>
                       </Select>
                     </div>
-                    <div><label className="text-zinc-500 text-xs">Iqama #</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700 font-mono" value={personalForm.iqamaNumber} onChange={e => setPersonalForm(f => ({ ...f, iqamaNumber: e.target.value }))} data-testid="input-personal-iqama" /></div>
-                    <div><label className="text-zinc-500 text-xs">City</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.city} onChange={e => setPersonalForm(f => ({ ...f, city: e.target.value }))} data-testid="input-personal-city" /></div>
-                    <div><label className="text-zinc-500 text-xs">Region</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.region} onChange={e => setPersonalForm(f => ({ ...f, region: e.target.value }))} data-testid="input-personal-region" /></div>
+                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.iqama")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700 font-mono" value={personalForm.iqamaNumber} onChange={e => setPersonalForm(f => ({ ...f, iqamaNumber: e.target.value }))} data-testid="input-personal-iqama" dir="ltr" /></div>
+                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.location")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.city} onChange={e => setPersonalForm(f => ({ ...f, city: e.target.value }))} data-testid="input-personal-city" /></div>
+                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.location")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.region} onChange={e => setPersonalForm(f => ({ ...f, region: e.target.value }))} data-testid="input-personal-region" /></div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-4">
-                    {employee.fullNameAr && <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Arabic Name" value={employee.fullNameAr} />}
-                    {employee.email && <InfoRow icon={<Mail className="h-3.5 w-3.5" />} label="Email" value={employee.email} />}
-                    {employee.phone && <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label="Phone" value={employee.phone} />}
-                    {employee.dateOfBirth && <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label="Date of Birth" value={formatDate(employee.dateOfBirth)} />}
-                    {employee.gender && <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Gender" value={employee.gender.charAt(0).toUpperCase() + employee.gender.slice(1)} />}
-                    {employee.nationalityText && <InfoRow icon={<Globe className="h-3.5 w-3.5" />} label="Nationality" value={employee.nationalityText} />}
-                    {employee.maritalStatus && <InfoRow icon={<Heart className="h-3.5 w-3.5" />} label="Marital Status" value={employee.maritalStatus.charAt(0).toUpperCase() + employee.maritalStatus.slice(1)} />}
-                    {employee.iqamaNumber && <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="Iqama #" value={employee.iqamaNumber} mono />}
-                    {(employee.city || employee.region) && <InfoRow icon={<MapPin className="h-3.5 w-3.5" />} label="Location" value={[employee.city, employee.region].filter(Boolean).join(", ")} />}
+                    {employee.fullNameAr && <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.arabicName")} value={<bdi>{employee.fullNameAr}</bdi> as any} />}
+                    {employee.email && <InfoRow icon={<Mail className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.email")} value={employee.email} />}
+                    {employee.phone && <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.phone")} value={employee.phone} />}
+                    {employee.dateOfBirth && <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.dateOfBirth")} value={formatDate(employee.dateOfBirth)} />}
+                    {employee.gender && <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.gender")} value={t(`dialog.gender.${employee.gender}` as any, { defaultValue: employee.gender })} />}
+                    {employee.nationalityText && <InfoRow icon={<Globe className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.nationality")} value={employee.nationalityText} />}
+                    {employee.maritalStatus && <InfoRow icon={<Heart className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.maritalStatus")} value={t(`dialog.marital.${employee.maritalStatus}` as any, { defaultValue: employee.maritalStatus })} />}
+                    {employee.iqamaNumber && <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.iqama")} value={employee.iqamaNumber} mono />}
+                    {(employee.city || employee.region) && <InfoRow icon={<MapPin className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.location")} value={[employee.city, employee.region].filter(Boolean).join(", ")} />}
                   </div>
                 )}
               </div>
@@ -901,7 +909,7 @@ function EmployeeDetailDialog({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                    <GraduationCap className="h-3.5 w-3.5" /> Education & Skills
+                    <GraduationCap className="h-3.5 w-3.5" /> {t("dialog.education.title")}
                   </Label>
                   {!editEducation ? (
                     <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500 hover:text-zinc-300" data-testid="button-edit-education"
@@ -913,46 +921,46 @@ function EmployeeDetailDialog({
                         });
                         setEditEducation(true);
                       }}
-                    ><Pencil className="h-3 w-3 mr-1" /> Edit</Button>
+                    ><Pencil className="h-3 w-3 me-1" /> {t("dialog.actions.edit")}</Button>
                   ) : (
                     <div className="flex gap-1">
                       <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500" onClick={() => setEditEducation(false)} data-testid="button-cancel-education"><X className="h-3 w-3" /></Button>
                       <Button size="sm" className="h-6 px-2 text-xs bg-emerald-700 hover:bg-emerald-600" data-testid="button-save-education"
                         disabled={profileMutation.isPending}
                         onClick={() => profileMutation.mutate(educationForm)}
-                      ><Save className="h-3 w-3 mr-1" /> Save</Button>
+                      ><Save className="h-3 w-3 me-1" /> {t("dialog.actions.save")}</Button>
                     </div>
                   )}
                 </div>
                 {editEducation ? (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-zinc-500 text-xs">Education Level</label>
+                      <label className="text-zinc-500 text-xs">{t("dialog.education.level")}</label>
                       <Select value={educationForm.educationLevel} onValueChange={v => setEducationForm(f => ({ ...f, educationLevel: v }))}>
                         <SelectTrigger className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" data-testid="select-education-level"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="High School">High School</SelectItem>
-                          <SelectItem value="Diploma">Diploma</SelectItem>
-                          <SelectItem value="Bachelor">Bachelor</SelectItem>
-                          <SelectItem value="Master">Master</SelectItem>
-                          <SelectItem value="PhD">PhD</SelectItem>
-                          <SelectItem value="Other">Other</SelectItem>
+                          <SelectItem value="High School">{t("dialog.education.levels.High School")}</SelectItem>
+                          <SelectItem value="Diploma">{t("dialog.education.levels.Diploma")}</SelectItem>
+                          <SelectItem value="Bachelor">{t("dialog.education.levels.Bachelor")}</SelectItem>
+                          <SelectItem value="Master">{t("dialog.education.levels.Master")}</SelectItem>
+                          <SelectItem value="PhD">{t("dialog.education.levels.PhD")}</SelectItem>
+                          <SelectItem value="Other">{t("dialog.education.levels.Other")}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    <div><label className="text-zinc-500 text-xs">University</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={educationForm.university} onChange={e => setEducationForm(f => ({ ...f, university: e.target.value }))} data-testid="input-education-university" /></div>
-                    <div><label className="text-zinc-500 text-xs">Major</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={educationForm.major} onChange={e => setEducationForm(f => ({ ...f, major: e.target.value }))} data-testid="input-education-major" /></div>
+                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.university")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={educationForm.university} onChange={e => setEducationForm(f => ({ ...f, university: e.target.value }))} data-testid="input-education-university" /></div>
+                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.major")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={educationForm.major} onChange={e => setEducationForm(f => ({ ...f, major: e.target.value }))} data-testid="input-education-major" /></div>
                   </div>
                 ) : (
                   <>
                     <div className="grid grid-cols-2 gap-4">
-                      {employee.educationLevel && <InfoRow icon={<GraduationCap className="h-3.5 w-3.5" />} label="Education" value={employee.educationLevel} />}
-                      {employee.university && <InfoRow icon={<Building className="h-3.5 w-3.5" />} label="University" value={employee.university} />}
-                      {employee.major && <InfoRow icon={<GraduationCap className="h-3.5 w-3.5" />} label="Major" value={employee.major} />}
+                      {employee.educationLevel && <InfoRow icon={<GraduationCap className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.education")} value={t(`dialog.education.levels.${employee.educationLevel}` as any, { defaultValue: employee.educationLevel })} />}
+                      {employee.university && <InfoRow icon={<Building className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.university")} value={employee.university} />}
+                      {employee.major && <InfoRow icon={<GraduationCap className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.major")} value={employee.major} />}
                     </div>
                     {employee.skills && employee.skills.length > 0 && (
                       <div className="mt-3">
-                        <span className="text-zinc-500 text-xs">Skills</span>
+                        <span className="text-zinc-500 text-xs">{t("dialog.infoLabels.skills")}</span>
                         <div className="flex flex-wrap gap-1.5 mt-1">
                           {employee.skills.map((s: string, i: number) => (
                             <span key={i} className="bg-zinc-800 text-zinc-300 text-xs px-2 py-0.5 rounded">{s}</span>
@@ -962,7 +970,7 @@ function EmployeeDetailDialog({
                     )}
                     {employee.languages && employee.languages.length > 0 && (
                       <div className="mt-3">
-                        <span className="text-zinc-500 text-xs">Languages</span>
+                        <span className="text-zinc-500 text-xs">{t("dialog.infoLabels.languages")}</span>
                         <div className="flex flex-wrap gap-1.5 mt-1">
                           {employee.languages.map((l: string, i: number) => (
                             <span key={i} className="bg-zinc-800 text-zinc-300 text-xs px-2 py-0.5 rounded">{l}</span>
@@ -971,7 +979,7 @@ function EmployeeDetailDialog({
                       </div>
                     )}
                     {!employee.educationLevel && !employee.skills?.length && !employee.languages?.length && (
-                      <p className="text-zinc-500 text-sm">No education or skills data</p>
+                      <p className="text-zinc-500 text-sm">{t("dialog.education.empty")}</p>
                     )}
                   </>
                 )}
@@ -981,7 +989,7 @@ function EmployeeDetailDialog({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                    <CreditCard className="h-3.5 w-3.5" /> Financial Information
+                    <CreditCard className="h-3.5 w-3.5" /> {t("dialog.financial.title")}
                   </Label>
                   {!editFinancial ? (
                     <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500 hover:text-zinc-300" data-testid="button-edit-financial"
@@ -995,7 +1003,7 @@ function EmployeeDetailDialog({
                         });
                         setEditFinancial(true);
                       }}
-                    ><Pencil className="h-3 w-3 mr-1" /> Edit</Button>
+                    ><Pencil className="h-3 w-3 me-1" /> {t("dialog.actions.edit")}</Button>
                   ) : (
                     <div className="flex gap-1">
                       <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500" onClick={() => setEditFinancial(false)} data-testid="button-cancel-financial"><X className="h-3 w-3" /></Button>
@@ -1004,12 +1012,12 @@ function EmployeeDetailDialog({
                         onClick={() => {
                           const iban = (financialForm.ibanNumber ?? "").trim().toUpperCase();
                           if (iban && !/^SA\d{22}$/.test(iban)) {
-                            toast({ title: "Invalid IBAN", description: "IBAN must be SA followed by 22 digits (24 characters total)", variant: "destructive" });
+                            toast({ title: t("toast.invalidIban"), description: t("toast.invalidIbanDesc"), variant: "destructive" });
                             return;
                           }
                           profileMutation.mutate(financialForm);
                         }}
-                      ><Save className="h-3 w-3 mr-1" /> Save</Button>
+                      ><Save className="h-3 w-3 me-1" /> {t("dialog.actions.save")}</Button>
                     </div>
                   )}
                 </div>
@@ -1019,8 +1027,8 @@ function EmployeeDetailDialog({
                     return (
                       <div className="space-y-3">
                         <div className="space-y-1">
-                          <label className="text-zinc-500 text-xs">IBAN Number</label>
-                          <Input className="h-8 text-sm bg-zinc-900 border-zinc-700 font-mono uppercase" value={financialForm.ibanNumber} onChange={e => {
+                          <label className="text-zinc-500 text-xs">{t("dialog.financial.iban")}</label>
+                          <Input className="h-8 text-sm bg-zinc-900 border-zinc-700 font-mono uppercase" dir="ltr" value={financialForm.ibanNumber} onChange={e => {
                             const val = e.target.value.toUpperCase();
                             const bank = resolveSaudiBank(val);
                             setFinancialForm(f => ({
@@ -1029,26 +1037,26 @@ function EmployeeDetailDialog({
                               ibanBankName: bank?.ibanBankName ?? "",
                               ibanBankCode: bank?.ibanBankCode ?? "",
                             }));
-                          }} maxLength={24} placeholder="SA0000000000000000000000" data-testid="input-financial-iban" />
-                          <p className="text-[10px] text-zinc-600">Saudi IBAN: SA followed by 22 digits (24 characters total)</p>
+                          }} maxLength={24} placeholder={t("dialog.financial.ibanPlaceholder")} data-testid="input-financial-iban" />
+                          <p className="text-[10px] text-zinc-600">{t("dialog.financial.ibanHint")}</p>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <label className="text-zinc-500 text-xs">Bank Name</label>
-                            <Input className="h-8 text-sm bg-zinc-900/50 border-zinc-700 text-zinc-400 cursor-not-allowed" value={detected?.ibanBankName ?? financialForm.ibanBankName ?? ""} readOnly placeholder="Auto-detected from IBAN" data-testid="input-financial-bankName" />
+                            <label className="text-zinc-500 text-xs">{t("dialog.financial.bankName")}</label>
+                            <Input className="h-8 text-sm bg-zinc-900/50 border-zinc-700 text-zinc-400 cursor-not-allowed" value={detected?.ibanBankName ?? financialForm.ibanBankName ?? ""} readOnly placeholder={t("dialog.financial.bankNamePlaceholder")} data-testid="input-financial-bankName" />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-zinc-500 text-xs">Bank Code</label>
-                            <Input className="h-8 text-sm bg-zinc-900/50 border-zinc-700 font-mono text-zinc-400 cursor-not-allowed" value={detected?.ibanBankCode ?? financialForm.ibanBankCode ?? ""} readOnly placeholder="Auto-detected" data-testid="input-financial-bankCode" />
+                            <label className="text-zinc-500 text-xs">{t("dialog.financial.bankCode")}</label>
+                            <Input className="h-8 text-sm bg-zinc-900/50 border-zinc-700 font-mono text-zinc-400 cursor-not-allowed" dir="ltr" value={detected?.ibanBankCode ?? financialForm.ibanBankCode ?? ""} readOnly placeholder={t("dialog.financial.bankCodePlaceholder")} data-testid="input-financial-bankCode" />
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <label className="text-zinc-500 text-xs">Account First Name</label>
+                            <label className="text-zinc-500 text-xs">{t("dialog.financial.accountFirst")}</label>
                             <Input className="h-8 text-sm bg-zinc-900 border-zinc-700" value={financialForm.ibanAccountFirstName} onChange={e => setFinancialForm(f => ({ ...f, ibanAccountFirstName: e.target.value }))} data-testid="input-financial-firstName" />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-zinc-500 text-xs">Account Last Name</label>
+                            <label className="text-zinc-500 text-xs">{t("dialog.financial.accountLast")}</label>
                             <Input className="h-8 text-sm bg-zinc-900 border-zinc-700" value={financialForm.ibanAccountLastName} onChange={e => setFinancialForm(f => ({ ...f, ibanAccountLastName: e.target.value }))} data-testid="input-financial-lastName" />
                           </div>
                         </div>
@@ -1058,18 +1066,18 @@ function EmployeeDetailDialog({
                 ) : (
                   <div className="space-y-3">
                     {employee.iban ? (
-                      <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="IBAN" value={employee.iban} mono />
+                      <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.iban")} value={<span dir="ltr">{employee.iban}</span>} mono />
                     ) : null}
                     {(employee.ibanBankName || employee.ibanBankCode) ? (
                       <div className="grid grid-cols-2 gap-3">
-                        {employee.ibanBankName ? <InfoRow icon={<Building className="h-3.5 w-3.5" />} label="Bank Name" value={employee.ibanBankName} /> : null}
-                        {employee.ibanBankCode ? <InfoRow icon={<Hash className="h-3.5 w-3.5" />} label="Bank Code" value={employee.ibanBankCode} mono /> : null}
+                        {employee.ibanBankName ? <InfoRow icon={<Building className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.bankName")} value={employee.ibanBankName} /> : null}
+                        {employee.ibanBankCode ? <InfoRow icon={<Hash className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.bankCode")} value={<span dir="ltr">{employee.ibanBankCode}</span>} mono /> : null}
                       </div>
                     ) : null}
                     {employee.ibanAccountFirstName ? (
-                      <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Account Holder" value={`${employee.ibanAccountFirstName} ${employee.ibanAccountLastName ?? ""}`.trim()} />
+                      <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.accountHolder")} value={<bdi>{`${employee.ibanAccountFirstName} ${employee.ibanAccountLastName ?? ""}`.trim()}</bdi>} />
                     ) : null}
-                    {!employee.iban && !employee.ibanBankName && <p className="text-zinc-500 text-sm">No financial data</p>}
+                    {!employee.iban && !employee.ibanBankName && <p className="text-zinc-500 text-sm">{t("dialog.financial.empty")}</p>}
                   </div>
                 )}
               </div>
@@ -1077,7 +1085,7 @@ function EmployeeDetailDialog({
               <Separator className="bg-zinc-800" />
               <div>
                 <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-3">
-                  <Banknote className="h-3.5 w-3.5" /> Payment Method
+                  <Banknote className="h-3.5 w-3.5" /> {t("dialog.payment.title")}
                 </Label>
                 <PaymentMethodToggle employee={employee} />
               </div>
@@ -1086,7 +1094,7 @@ function EmployeeDetailDialog({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                    <ShieldAlert className="h-3.5 w-3.5" /> Emergency Contact
+                    <ShieldAlert className="h-3.5 w-3.5" /> {t("dialog.emergency.title")}
                   </Label>
                   {!editEmergency ? (
                     <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500 hover:text-zinc-300" data-testid="button-edit-emergency"
@@ -1097,27 +1105,27 @@ function EmployeeDetailDialog({
                         });
                         setEditEmergency(true);
                       }}
-                    ><Pencil className="h-3 w-3 mr-1" /> Edit</Button>
+                    ><Pencil className="h-3 w-3 me-1" /> {t("dialog.actions.edit")}</Button>
                   ) : (
                     <div className="flex gap-1">
                       <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500" onClick={() => setEditEmergency(false)} data-testid="button-cancel-emergency"><X className="h-3 w-3" /></Button>
                       <Button size="sm" className="h-6 px-2 text-xs bg-emerald-700 hover:bg-emerald-600" data-testid="button-save-emergency"
                         disabled={profileMutation.isPending}
                         onClick={() => profileMutation.mutate(emergencyForm)}
-                      ><Save className="h-3 w-3 mr-1" /> Save</Button>
+                      ><Save className="h-3 w-3 me-1" /> {t("dialog.actions.save")}</Button>
                     </div>
                   )}
                 </div>
                 {editEmergency ? (
                   <div className="grid grid-cols-2 gap-3">
-                    <div><label className="text-zinc-500 text-xs">Contact Name</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={emergencyForm.emergencyContactName} onChange={e => setEmergencyForm(f => ({ ...f, emergencyContactName: e.target.value }))} data-testid="input-emergency-name" /></div>
-                    <div><label className="text-zinc-500 text-xs">Contact Phone</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={emergencyForm.emergencyContactPhone} onChange={e => setEmergencyForm(f => ({ ...f, emergencyContactPhone: e.target.value }))} data-testid="input-emergency-phone" /></div>
+                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.contactName")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={emergencyForm.emergencyContactName} onChange={e => setEmergencyForm(f => ({ ...f, emergencyContactName: e.target.value }))} data-testid="input-emergency-name" /></div>
+                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.contactPhone")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={emergencyForm.emergencyContactPhone} onChange={e => setEmergencyForm(f => ({ ...f, emergencyContactPhone: e.target.value }))} data-testid="input-emergency-phone" dir="ltr" /></div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-4">
-                    {employee.emergencyContactName ? <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Contact Name" value={employee.emergencyContactName} /> : null}
-                    {employee.emergencyContactPhone ? <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label="Contact Phone" value={employee.emergencyContactPhone} /> : null}
-                    {!employee.emergencyContactName && !employee.emergencyContactPhone && <p className="text-zinc-500 text-sm col-span-2">No emergency contact</p>}
+                    {employee.emergencyContactName ? <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.contactName")} value={<bdi>{employee.emergencyContactName}</bdi>} /> : null}
+                    {employee.emergencyContactPhone ? <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.contactPhone")} value={<span dir="ltr">{employee.emergencyContactPhone}</span>} /> : null}
+                    {!employee.emergencyContactName && !employee.emergencyContactPhone && <p className="text-zinc-500 text-sm col-span-2">{t("dialog.emergency.empty")}</p>}
                   </div>
                 )}
               </div>
@@ -1136,7 +1144,7 @@ function EmployeeDetailDialog({
                       }}
                       data-testid="button-print-id-card"
                     >
-                      <Printer className="h-4 w-4" /> Print ID Card
+                      <Printer className="h-4 w-4" /> {t("dialog.footer.printIdCard")}
                     </Button>
                   )}
                   {employee.isActive && !employee.offboardingStatus ? (
@@ -1146,12 +1154,12 @@ function EmployeeDetailDialog({
                       onClick={() => setTerminateOpen(true)}
                       data-testid="button-terminate-employee"
                     >
-                      <UserX className="h-4 w-4" /> Terminate Employee
+                      <UserX className="h-4 w-4" /> {t("dialog.footer.terminate")}
                     </Button>
                   ) : employee.offboardingStatus === "in_progress" ? (
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 py-1.5 px-3 text-sm">
-                        In Offboarding
+                        {t("dialog.footer.inOffboardingBadge")}
                       </Badge>
                       <Button
                         variant="outline"
@@ -1160,7 +1168,7 @@ function EmployeeDetailDialog({
                         onClick={() => { onOpenChange(false); setLocation("/offboarding"); }}
                         data-testid="button-view-offboarding"
                       >
-                        <LogOut className="h-4 w-4" /> View in Offboarding
+                        <LogOut className="h-4 w-4" /> {t("dialog.footer.viewInOffboarding")}
                       </Button>
                     </div>
                   ) : !employee.isActive ? (
@@ -1173,7 +1181,7 @@ function EmployeeDetailDialog({
                       }}
                       data-testid="button-reinstate-employee"
                     >
-                      <CheckCircle2 className="h-4 w-4" /> Reinstate Employee
+                      <CheckCircle2 className="h-4 w-4" /> {t("dialog.footer.reinstate")}
                     </Button>
                   ) : null}
                 </div>
@@ -1190,12 +1198,12 @@ function EmployeeDetailDialog({
               ) : history.length === 0 ? (
                 <div className="text-center py-12 text-zinc-500">
                   <History className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">No work history found</p>
+                  <p className="text-sm">{t("dialog.history.empty")}</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
-                    Employment Records ({history.length})
+                    {t("dialog.history.records", { n: formatNumber(history.length) })}
                   </p>
                   {history.map((h, idx) => {
                     const linkedContract = adminContractMap.get(h.id);
@@ -1209,28 +1217,28 @@ function EmployeeDetailDialog({
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <code className="text-xs font-mono text-zinc-400">{h.employeeNumber}</code>
+                          <code className="text-xs font-mono text-zinc-400" dir="ltr">{h.employeeNumber}</code>
                           <Badge variant="outline" className={h.isActive ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[10px]" : "bg-red-500/10 text-red-400 border-red-500/30 text-[10px]"}>
-                            {h.isActive ? "Active" : "Terminated"}
+                            {h.isActive ? t("status.active") : t("status.terminated")}
                           </Badge>
                         </div>
-                        {h.salary && <span className="text-sm text-zinc-300 font-medium">{Number(h.salary).toLocaleString()} SAR</span>}
+                        {h.salary && <span className="text-sm text-zinc-300 font-medium">{t("dialog.salary.amount", { n: formatNumber(Number(h.salary)) })}</span>}
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div>
-                          <span className="text-zinc-500 text-xs">Event</span>
-                          <p className="text-zinc-200">{h.eventName ?? "—"}</p>
+                          <span className="text-zinc-500 text-xs">{t("dialog.history.event")}</span>
+                          <p className="text-zinc-200"><bdi>{h.eventName ?? "—"}</bdi></p>
                         </div>
                         <div>
-                          <span className="text-zinc-500 text-xs">Job Title</span>
-                          <p className="text-zinc-200">{h.jobTitle ?? "—"}</p>
+                          <span className="text-zinc-500 text-xs">{t("dialog.history.jobTitle")}</span>
+                          <p className="text-zinc-200"><bdi>{h.jobTitle ?? "—"}</bdi></p>
                         </div>
                         <div>
-                          <span className="text-zinc-500 text-xs">Start</span>
+                          <span className="text-zinc-500 text-xs">{t("dialog.history.start")}</span>
                           <p className="text-zinc-200">{formatDate(h.startDate)}</p>
                         </div>
                         <div>
-                          <span className="text-zinc-500 text-xs">End</span>
+                          <span className="text-zinc-500 text-xs">{t("dialog.history.end")}</span>
                           <p className="text-zinc-200">{formatDate(h.endDate)}</p>
                         </div>
                       </div>
@@ -1241,10 +1249,10 @@ function EmployeeDetailDialog({
                           data-testid={`button-view-contract-history-${idx}`}
                         >
                           <FileText className="h-3.5 w-3.5" />
-                          View Contract
+                          {t("dialog.history.viewContract")}
                           {linkedContract.signedAt && (
-                            <span className="text-zinc-500 ml-1">
-                              (signed {new Date(linkedContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })})
+                            <span className="text-zinc-500 ms-1">
+                              {t("dialog.history.signedSuffix", { date: formatDateI18n(linkedContract.signedAt, "en", { day: "numeric", month: "short", year: "numeric" }) })}
                             </span>
                           )}
                         </button>
@@ -1265,7 +1273,7 @@ function EmployeeDetailDialog({
           {tab === "schedule" && (
             <div className="space-y-4 mt-2">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Current Schedule</p>
+                <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{t("dialog.schedule.current")}</p>
                 {employee.isActive && (
                   <Button
                     size="sm"
@@ -1274,8 +1282,8 @@ function EmployeeDetailDialog({
                     onClick={() => setAssignScheduleOpen(true)}
                     data-testid="button-assign-schedule-employee"
                   >
-                    <Clock className="h-3.5 w-3.5 mr-1" />
-                    {activeAssignment ? "Reassign" : "Assign Schedule"}
+                    <Clock className="h-3.5 w-3.5 me-1" />
+                    {activeAssignment ? t("dialog.schedule.reassign") : t("dialog.schedule.assign")}
                   </Button>
                 )}
               </div>
@@ -1289,22 +1297,22 @@ function EmployeeDetailDialog({
                 />
               ) : (
                 <div className="border border-zinc-800 rounded-lg p-4 text-center text-zinc-500 text-sm">
-                  No schedule assigned
+                  {t("dialog.schedule.noneAssigned")}
                 </div>
               )}
 
               {assignmentHistory.length > 1 && (
                 <>
                   <Separator className="bg-zinc-800" />
-                  <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Assignment History</p>
+                  <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{t("dialog.schedule.history")}</p>
                   <div className="space-y-2">
                     {assignmentHistory.filter(a => a.endDate != null || a.id !== activeAssignment?.id).map(a => (
                       <div key={a.id} className="flex items-center justify-between text-xs border border-zinc-800 rounded p-3">
                         <span className="text-zinc-300">
-                          {scheduleTemplates.find(t => t.id === a.templateId)?.name ?? a.templateId}
+                          <bdi>{scheduleTemplates.find(tt => tt.id === a.templateId)?.name ?? a.templateId}</bdi>
                         </span>
-                        <span className="text-zinc-500">
-                          {formatDate(a.startDate)} – {a.endDate ? formatDate(a.endDate) : "Active"}
+                        <span className="text-zinc-500" dir="ltr">
+                          {formatDate(a.startDate)} – {a.endDate ? formatDate(a.endDate) : t("dialog.schedule.active")}
                         </span>
                       </div>
                     ))}
@@ -1317,27 +1325,27 @@ function EmployeeDetailDialog({
       <Dialog open={assignScheduleOpen} onOpenChange={setAssignScheduleOpen}>
         <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-sm">
           <DialogHeader>
-            <DialogTitle>{activeAssignment ? "Reassign Schedule" : "Assign Schedule"}</DialogTitle>
+            <DialogTitle>{activeAssignment ? t("assignDialog.titleReassign") : t("assignDialog.titleAssign")}</DialogTitle>
             <DialogDescription className="text-zinc-400 text-sm">
-              {activeAssignment ? "This will end the current assignment and start a new one." : "Choose a schedule template for this employee."}
+              {activeAssignment ? t("assignDialog.descReassign") : t("assignDialog.descAssign")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Template</Label>
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("assignDialog.template")}</Label>
               <Select value={scheduleTemplateId} onValueChange={setScheduleTemplateId}>
                 <SelectTrigger data-testid="select-schedule-template" className="bg-zinc-900 border-zinc-700 text-white">
-                  <SelectValue placeholder="Select template..." />
+                  <SelectValue placeholder={t("assignDialog.selectTemplate")} />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-zinc-700">
-                  {scheduleTemplates.map(t => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  {scheduleTemplates.map(tpl => (
+                    <SelectItem key={tpl.id} value={tpl.id}><bdi>{tpl.name}</bdi></SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Start Date</Label>
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("assignDialog.startDate")}</Label>
               <Input
                 data-testid="input-schedule-start-date"
                 type="date"
@@ -1347,7 +1355,7 @@ function EmployeeDetailDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">End Date <span className="text-zinc-600 text-xs font-normal normal-case">(optional)</span></Label>
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("assignDialog.endDate")} <span className="text-zinc-600 text-xs font-normal normal-case">{t("assignDialog.optional")}</span></Label>
               <Input
                 data-testid="input-schedule-end-date"
                 type="date"
@@ -1359,15 +1367,15 @@ function EmployeeDetailDialog({
             </div>
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <Button variant="outline" className="border-zinc-700" onClick={() => setAssignScheduleOpen(false)}>Cancel</Button>
+            <Button variant="outline" className="border-zinc-700" onClick={() => setAssignScheduleOpen(false)}>{t("assignDialog.cancel")}</Button>
             <Button
               data-testid="button-confirm-assign-schedule"
               className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
               disabled={!scheduleTemplateId || assignScheduleMutation.isPending}
               onClick={() => assignScheduleMutation.mutate()}
             >
-              {assignScheduleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              Assign
+              {assignScheduleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin me-1" /> : null}
+              {t("assignDialog.assign")}
             </Button>
           </div>
         </DialogContent>
@@ -1378,19 +1386,19 @@ function EmployeeDetailDialog({
           <DialogHeader>
             <DialogTitle className="font-display text-lg flex items-center gap-2 text-red-400">
               <UserX className="h-5 w-5" />
-              Terminate Employee
+              {t("terminate.title")}
             </DialogTitle>
             <DialogDescription className="text-zinc-400 text-sm">
-              This will send {employee.fullNameEn ?? "this employee"} ({employee.employeeNumber}) to the offboarding pipeline.
+              {t("terminate.description", { name: employee.fullNameEn ?? t("dialog.unknownEmployee"), number: employee.employeeNumber })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="bg-amber-950/20 border border-amber-800/40 rounded-lg p-3 text-sm text-amber-300 flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-              The employee will enter offboarding. Assets must be confirmed and settlement calculated before final exit.
+              {t("terminate.warning")}
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-sm">End Date <span className="text-red-400">*</span></Label>
+              <Label className="text-zinc-400 text-sm">{t("terminate.endDate")} <span className="text-red-400">*</span></Label>
               <DatePickerField
                 data-testid="input-terminate-enddate"
                 value={terminateForm.endDate}
@@ -1399,35 +1407,35 @@ function EmployeeDetailDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-sm">Category <span className="text-red-400">*</span></Label>
+              <Label className="text-zinc-400 text-sm">{t("terminate.category")} <span className="text-red-400">*</span></Label>
               <select
                 data-testid="select-terminate-category"
                 value={terminateForm.category}
                 onChange={e => setTerminateForm(f => ({ ...f, category: e.target.value }))}
                 className="w-full bg-zinc-900 border border-zinc-700 text-white rounded-md px-3 py-2 text-sm"
               >
-                <option value="">Select category…</option>
-                <option value="end_of_season">End of Season</option>
-                <option value="resignation">Resignation</option>
-                <option value="performance">Performance</option>
-                <option value="disciplinary">Disciplinary</option>
-                <option value="contract_expiry">Contract Expiry</option>
-                <option value="other">Other</option>
+                <option value="">{t("terminate.selectCategory")}</option>
+                <option value="end_of_season">{t("terminate.categories.end_of_season")}</option>
+                <option value="resignation">{t("terminate.categories.resignation")}</option>
+                <option value="performance">{t("terminate.categories.performance")}</option>
+                <option value="disciplinary">{t("terminate.categories.disciplinary")}</option>
+                <option value="contract_expiry">{t("terminate.categories.contract_expiry")}</option>
+                <option value="other">{t("terminate.categories.other")}</option>
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-sm">Notes</Label>
+              <Label className="text-zinc-400 text-sm">{t("terminate.notes")}</Label>
               <Textarea
                 data-testid="textarea-terminate-reason"
                 value={terminateForm.reason}
                 onChange={e => setTerminateForm(f => ({ ...f, reason: e.target.value }))}
                 className="bg-zinc-900 border-zinc-700 text-white resize-none"
                 rows={2}
-                placeholder="Additional details about the termination…"
+                placeholder={t("terminate.notesPlaceholder")}
               />
             </div>
             <div className="flex gap-2 justify-end pt-1">
-              <Button variant="outline" className="border-zinc-700 text-zinc-300" onClick={() => setTerminateOpen(false)}>Cancel</Button>
+              <Button variant="outline" className="border-zinc-700 text-zinc-300" onClick={() => setTerminateOpen(false)}>{t("terminate.cancel")}</Button>
               <Button
                 data-testid="button-confirm-terminate"
                 disabled={!terminateForm.endDate || !terminateForm.category || terminateMutation.isPending}
@@ -1438,7 +1446,7 @@ function EmployeeDetailDialog({
                 })}
                 className="bg-red-600 hover:bg-red-700 text-white gap-2"
               >
-                {terminateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><UserX className="h-4 w-4" /> Send to Offboarding</>}
+                {terminateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><UserX className="h-4 w-4" /> {t("terminate.submit")}</>}
               </Button>
             </div>
           </div>
@@ -1450,15 +1458,15 @@ function EmployeeDetailDialog({
           <DialogHeader>
             <DialogTitle className="font-display text-lg flex items-center gap-2 text-emerald-400">
               <CheckCircle2 className="h-5 w-5" />
-              Reinstate Employee
+              {t("reinstate.title")}
             </DialogTitle>
             <DialogDescription className="text-zinc-400 text-sm">
-              Re-activate {employee.fullNameEn ?? "this employee"} ({employee.employeeNumber}) with a new employment period.
+              {t("reinstate.description", { name: employee.fullNameEn ?? t("dialog.unknownEmployee"), number: employee.employeeNumber })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-sm">Start Date <span className="text-red-400">*</span></Label>
+              <Label className="text-zinc-400 text-sm">{t("reinstate.startDate")} <span className="text-red-400">*</span></Label>
               <DatePickerField
                 data-testid="input-reinstate-startdate"
                 value={reinstateForm.startDate}
@@ -1467,48 +1475,49 @@ function EmployeeDetailDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-sm">Event</Label>
+              <Label className="text-zinc-400 text-sm">{t("reinstate.event")}</Label>
               <Select value={reinstateForm.eventId} onValueChange={v => setReinstateForm(f => ({ ...f, eventId: v }))}>
                 <SelectTrigger data-testid="select-reinstate-event" className="bg-zinc-900 border-zinc-700 text-white">
-                  <SelectValue placeholder="Select event…" />
+                  <SelectValue placeholder={t("reinstate.selectEvent")} />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
                   {eventsList.map(ev => (
-                    <SelectItem key={ev.id} value={ev.id} className="text-white focus:bg-zinc-800">{ev.name}</SelectItem>
+                    <SelectItem key={ev.id} value={ev.id} className="text-white focus:bg-zinc-800"><bdi>{ev.name}</bdi></SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             {employee.employmentType === "smp" && (
               <div className="space-y-1.5">
-                <Label className="text-zinc-400 text-sm">SMP Company <span className="text-red-400">*</span></Label>
+                <Label className="text-zinc-400 text-sm">{t("reinstate.smpCompany")} <span className="text-red-400">*</span></Label>
                 <select
                   data-testid="select-reinstate-smp-company"
                   value={reinstateForm.smpCompanyId}
                   onChange={e => setReinstateForm(f => ({ ...f, smpCompanyId: e.target.value }))}
                   className="w-full h-10 bg-zinc-900 border border-zinc-700 rounded-md px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
                 >
-                  <option value="" className="bg-zinc-900 text-zinc-400">— Select SMP company —</option>
+                  <option value="" className="bg-zinc-900 text-zinc-400">{t("reinstate.selectSmp")}</option>
                   {smpCompanies.map(c => (
                     <option key={c.id} value={c.id} className="bg-zinc-900 text-white">{c.name}</option>
                   ))}
                 </select>
-                <p className="text-[11px] text-red-400/70">Required — SMP workers must be linked to a company.</p>
+                <p className="text-[11px] text-red-400/70">{t("reinstate.smpRequired")}</p>
               </div>
             )}
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-sm">Monthly Salary (SAR)</Label>
+              <Label className="text-zinc-400 text-sm">{t("reinstate.salary")}</Label>
               <Input
                 data-testid="input-reinstate-salary"
                 type="number"
-                placeholder="e.g. 4500"
+                dir="ltr"
+                placeholder={t("reinstate.salaryPlaceholder")}
                 value={reinstateForm.salary}
                 onChange={e => setReinstateForm(f => ({ ...f, salary: e.target.value }))}
                 className="bg-zinc-900 border-zinc-700 text-white"
               />
             </div>
             <div className="flex gap-2 justify-end pt-1">
-              <Button variant="outline" className="border-zinc-700 text-zinc-300" onClick={() => setReinstateOpen(false)}>Cancel</Button>
+              <Button variant="outline" className="border-zinc-700 text-zinc-300" onClick={() => setReinstateOpen(false)}>{t("reinstate.cancel")}</Button>
               <Button
                 data-testid="button-confirm-reinstate"
                 disabled={
@@ -1529,7 +1538,7 @@ function EmployeeDetailDialog({
                 }}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
               >
-                {reinstateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="h-4 w-4" /> Confirm Reinstate</>}
+                {reinstateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="h-4 w-4" /> {t("reinstate.submit")}</>}
               </Button>
             </div>
           </div>
@@ -1546,14 +1555,15 @@ function EmployeeDetailDialog({
 function PaymentMethodToggle({ employee }: { employee: Employee }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { t } = useTranslation("workforce");
   const [showCashReason, setShowCashReason] = useState(false);
   const [reason, setReason] = useState("");
 
   const toggleMut = useMutation({
     mutationFn: (data: { paymentMethod: string; reason: string }) =>
       apiRequest("PATCH", `/api/workforce/${employee.id}/payment-method`, data).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/workforce"] }); toast({ title: "Payment method updated" }); setShowCashReason(false); setReason(""); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/workforce"] }); toast({ title: t("toast.paymentUpdated") }); setShowCashReason(false); setReason(""); },
+    onError: (e: any) => toast({ title: t("toast.error"), description: e.message, variant: "destructive" }),
   });
 
   const current = employee.paymentMethod ?? "bank_transfer";
@@ -1570,7 +1580,7 @@ function PaymentMethodToggle({ employee }: { employee: Employee }) {
           }`}
           data-testid="button-payment-method-bank"
         >
-          <Landmark className="h-3.5 w-3.5" /> Bank Transfer
+          <Landmark className="h-3.5 w-3.5" /> {t("dialog.payment.bankTransfer")}
         </button>
         <button
           onClick={() => { if (current !== "cash") setShowCashReason(true); }}
@@ -1581,29 +1591,29 @@ function PaymentMethodToggle({ employee }: { employee: Employee }) {
           }`}
           data-testid="button-payment-method-cash"
         >
-          <Coins className="h-3.5 w-3.5" /> Cash
+          <Coins className="h-3.5 w-3.5" /> {t("dialog.payment.cash")}
         </button>
       </div>
       {showCashReason && (
         <div className="space-y-2 p-3 bg-amber-500/5 border border-amber-500/20 rounded-sm">
-          <label className="text-zinc-400 text-xs">Reason for cash payment</label>
-          <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. No bank account" className="h-7 text-xs bg-zinc-900 border-zinc-700" data-testid="input-cash-reason" />
+          <label className="text-zinc-400 text-xs">{t("dialog.payment.cashReasonLabel")}</label>
+          <Input value={reason} onChange={e => setReason(e.target.value)} placeholder={t("dialog.payment.cashReasonPlaceholder")} className="h-7 text-xs bg-zinc-900 border-zinc-700" data-testid="input-cash-reason" />
           <div className="flex gap-2">
             <Button size="sm" className="h-6 text-xs bg-amber-600 hover:bg-amber-700" disabled={!reason.trim() || toggleMut.isPending} onClick={() => toggleMut.mutate({ paymentMethod: "cash", reason })} data-testid="button-confirm-cash">
-              {toggleMut.isPending ? "Saving..." : "Confirm Cash"}
+              {toggleMut.isPending ? t("dialog.payment.saving") : t("dialog.payment.confirmCash")}
             </Button>
-            <Button size="sm" variant="ghost" className="h-6 text-xs text-zinc-500" onClick={() => { setShowCashReason(false); setReason(""); }} data-testid="button-cancel-cash">Cancel</Button>
+            <Button size="sm" variant="ghost" className="h-6 text-xs text-zinc-500" onClick={() => { setShowCashReason(false); setReason(""); }} data-testid="button-cancel-cash">{t("dialog.actions.cancel")}</Button>
           </div>
         </div>
       )}
       {employee.paymentMethodReason && !showCashReason && (
-        <p className="text-[10px] text-zinc-500">Reason: {employee.paymentMethodReason}</p>
+        <p className="text-[10px] text-zinc-500">{t("dialog.payment.reasonLine", { reason: employee.paymentMethodReason })}</p>
       )}
     </div>
   );
 }
 
-function InfoRow({ icon, label, value, mono }: { icon: React.ReactNode; label: string; value: string; mono?: boolean }) {
+function InfoRow({ icon, label, value, mono }: { icon: React.ReactNode; label: string; value: React.ReactNode; mono?: boolean }) {
   return (
     <div className="bg-zinc-900/50 rounded-md p-3 border border-zinc-800/50">
       <div className="flex items-center gap-1.5 text-zinc-500 text-[10px] uppercase tracking-wider font-semibold mb-1">
@@ -1630,6 +1640,8 @@ export default function WorkforcePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { t: tt } = useTranslation("workforce");
+  const statusBadge = useStatusBadge();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "terminated">("active");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -1707,7 +1719,7 @@ export default function WorkforcePage() {
       XLSX.utils.book_append_sheet(wb, smpSheet, "SMP Companies (Reference)");
     }
     XLSX.writeFile(wb, `workforce_bulk_update_${new Date().toISOString().slice(0, 10)}.xlsx`);
-    toast({ title: "Template downloaded", description: "Edit the file and upload it back to apply updates." });
+    toast({ title: tt("toast.templateDownloaded"), description: tt("toast.templateDownloadedDesc") });
   }
 
   async function handleBulkUpdateSubmit() {
@@ -1723,7 +1735,7 @@ export default function WorkforcePage() {
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
       qc.invalidateQueries({ queryKey: ["/api/workforce/stats"] });
     } catch (e: any) {
-      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+      toast({ title: tt("toast.uploadFailed"), description: e.message, variant: "destructive" });
     } finally {
       setBulkUpdateLoading(false);
     }
@@ -1794,13 +1806,13 @@ export default function WorkforcePage() {
   function handleExportCSV() {
     const data = selectedIds.size > 0 ? selectedEmployees : sortedEmployees;
     exportToCSV(data);
-    toast({ title: `Exported ${data.length} employees to CSV` });
+    toast({ title: tt("toast.exportedCsv", { count: data.length, n: formatNumber(data.length) }) });
   }
 
   async function handleExportExcel() {
     const data = selectedIds.size > 0 ? selectedEmployees : sortedEmployees;
     await exportToExcel(data);
-    toast({ title: `Exported ${data.length} employees to Excel` });
+    toast({ title: tt("toast.exportedExcel", { count: data.length, n: formatNumber(data.length) }) });
   }
 
   async function handlePrintIdCards(emps: Employee[]) {
@@ -1876,17 +1888,17 @@ export default function WorkforcePage() {
       const failCount = results.filter(r => r.status === "failed").length;
 
       if (failCount === results.length) {
-        toast({ title: "Print failed", description: "All cards failed to print", variant: "destructive" });
+        toast({ title: tt("toast.printFailed"), description: tt("toast.printAllFailed"), variant: "destructive" });
       } else if (failCount > 0) {
-        toast({ title: `Printed ${successCount + pendingCount}/${results.length} cards`, description: `${failCount} failed` });
+        toast({ title: tt("toast.printPartial", { done: formatNumber(successCount + pendingCount), total: formatNumber(results.length) }), description: tt("toast.printPartialDesc", { n: formatNumber(failCount) }) });
       } else {
-        toast({ title: `Printing ${emps.length} ID card${emps.length !== 1 ? "s" : ""}` });
+        toast({ title: tt("toast.printingCount", { count: emps.length, n: formatNumber(emps.length) }) });
       }
 
       qc.invalidateQueries({ queryKey: ["/api/workforce/last-printed-bulk"] });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
-      toast({ title: "Print failed", description: message, variant: "destructive" });
+      toast({ title: tt("toast.printFailed"), description: message, variant: "destructive" });
     } finally {
       setPrintingIds(new Set());
       setPrintProgress(null);
@@ -1898,8 +1910,8 @@ export default function WorkforcePage() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white tracking-tight" data-testid="text-page-title">Workforce Management</h1>
-            <p className="text-muted-foreground mt-1">Manage your employees and details.</p>
+            <h1 className="text-3xl font-display font-bold text-white tracking-tight" data-testid="text-page-title">{tt("page.title")}</h1>
+            <p className="text-muted-foreground mt-1">{tt("page.subtitle")}</p>
           </div>
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <Button
@@ -1909,7 +1921,7 @@ export default function WorkforcePage() {
               onClick={() => setLocation("/broadcast")}
             >
               <Radio className="h-4 w-4" />
-              Broadcast
+              {tt("page.broadcast")}
             </Button>
             <Button
               variant="outline"
@@ -1918,7 +1930,7 @@ export default function WorkforcePage() {
               onClick={() => { setBulkUpdateOpen(true); setBulkUpdateFile(null); setBulkUpdateResult(null); }}
             >
               <Upload className="h-4 w-4" />
-              Mass Update
+              {tt("page.massUpdate")}
             </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1927,17 +1939,17 @@ export default function WorkforcePage() {
                 data-testid="button-export"
               >
                 <Download className="h-4 w-4" />
-                Export{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+                {selectedIds.size > 0 ? tt("page.exportWithCount", { n: formatNumber(selectedIds.size) }) : tt("page.export")}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem onClick={handleExportExcel} className="gap-2" data-testid="menu-export-excel">
                 <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
-                Export to Excel
+                {tt("page.exportExcel")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleExportCSV} className="gap-2" data-testid="menu-export-csv">
                 <FileText className="h-4 w-4 text-blue-400" />
-                Export to CSV
+                {tt("page.exportCsv")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => handlePrintIdCards(selectedIds.size > 0 ? selectedEmployees : sortedEmployees)}
@@ -1945,7 +1957,7 @@ export default function WorkforcePage() {
                 data-testid="menu-print-id-cards"
               >
                 <Printer className="h-4 w-4 text-amber-400" />
-                Print ID Cards{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+                {selectedIds.size > 0 ? tt("page.printIdCardsWithCount", { n: formatNumber(selectedIds.size) }) : tt("page.printIdCards")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1955,41 +1967,41 @@ export default function WorkforcePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="bg-card border-border shadow-sm border-l-4 border-l-primary">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Employees</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{tt("stats.total")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-employees">{stats?.total ?? 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">All-time employee records</p>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-employees">{formatNumber(stats?.total ?? 0)}</div>
+              <p className="text-xs text-muted-foreground mt-1">{tt("stats.totalDesc")}</p>
             </CardContent>
           </Card>
 
           <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Active</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{tt("stats.active")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-emerald-400" data-testid="stat-active-employees">{stats?.active ?? 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">Currently employed</p>
+              <div className="text-4xl font-bold font-display text-emerald-400" data-testid="stat-active-employees">{formatNumber(stats?.active ?? 0)}</div>
+              <p className="text-xs text-muted-foreground mt-1">{tt("stats.activeDesc")}</p>
             </CardContent>
           </Card>
 
           <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Terminated</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{tt("stats.terminated")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-red-400" data-testid="stat-terminated-employees">{stats?.terminated ?? 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">Past employees</p>
+              <div className="text-4xl font-bold font-display text-red-400" data-testid="stat-terminated-employees">{formatNumber(stats?.terminated ?? 0)}</div>
+              <p className="text-xs text-muted-foreground mt-1">{tt("stats.terminatedDesc")}</p>
             </CardContent>
           </Card>
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 items-center bg-card p-4 rounded-sm border border-border">
           <div className="relative flex-1 w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
-              placeholder="Search by Employee ID, ID Number, Name, Phone"
-              className="pl-10 h-12 bg-muted/30 border-border focus-visible:ring-primary/20 text-base"
+              placeholder={tt("filter.searchPlaceholder")}
+              className="ps-10 h-12 bg-muted/30 border-border focus-visible:ring-primary/20 text-base"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               data-testid="input-search-employees"
@@ -1997,19 +2009,19 @@ export default function WorkforcePage() {
           </div>
           <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v as any); setSelectedIds(new Set()); }}>
             <SelectTrigger className="w-full md:w-[180px] h-12 bg-background border-border" data-testid="select-status-filter">
-              <SelectValue placeholder="Active Only" />
+              <SelectValue placeholder={tt("filter.activeOnly")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="active">Active Only</SelectItem>
-              <SelectItem value="terminated">Terminated Only</SelectItem>
+              <SelectItem value="all">{tt("filter.all")}</SelectItem>
+              <SelectItem value="active">{tt("filter.activeOnly")}</SelectItem>
+              <SelectItem value="terminated">{tt("filter.terminatedOnly")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-3 bg-primary/10 border border-primary/30 rounded-sm px-4 py-2.5">
-            <span className="text-sm font-medium text-primary">{selectedIds.size} employee{selectedIds.size !== 1 ? "s" : ""} selected</span>
+            <span className="text-sm font-medium text-primary">{tt("selectionBar.selected", { count: selectedIds.size, n: formatNumber(selectedIds.size) })}</span>
             <span className="text-zinc-600">|</span>
             <Button
               variant="ghost"
@@ -2025,12 +2037,12 @@ export default function WorkforcePage() {
                 <Printer className="h-3.5 w-3.5" />
               )}
               {printProgress
-                ? `Printing ${printProgress.done}/${printProgress.total}...`
-                : `Print ID Cards (${selectedIds.size})`}
+                ? tt("selectionBar.printingProgress", { done: formatNumber(printProgress.done), total: formatNumber(printProgress.total) })
+                : tt("page.printIdCardsWithCount", { n: formatNumber(selectedIds.size) })}
             </Button>
             <span className="text-zinc-600">|</span>
             <Button variant="ghost" size="sm" className="text-xs text-zinc-400 hover:text-white" onClick={() => setSelectedIds(new Set())}>
-              Clear Selection
+              {tt("selectionBar.clearSelection")}
             </Button>
           </div>
         )}
@@ -2038,8 +2050,8 @@ export default function WorkforcePage() {
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-lg font-display text-white">
-              Employee List
-              <span className="ml-2 text-sm font-normal text-muted-foreground">({sortedEmployees.length})</span>
+              {tt("list.title")}
+              <span className="ms-2 text-sm font-normal text-muted-foreground">{tt("list.count", { n: formatNumber(sortedEmployees.length) })}</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -2050,8 +2062,8 @@ export default function WorkforcePage() {
             ) : sortedEmployees.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <Users className="h-12 w-12 text-muted-foreground/20 mb-4" />
-                <p className="text-muted-foreground">No employees found</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">Employees appear here after conversion from Onboarding.</p>
+                <p className="text-muted-foreground">{tt("list.empty")}</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">{tt("list.emptyHint")}</p>
               </div>
             ) : (
               <Table>
@@ -2065,32 +2077,32 @@ export default function WorkforcePage() {
                       />
                     </TableHead>
                     <TableHead className="w-[100px] text-muted-foreground">
-                      <SortableHeader label="Emp #" field="employeeNumber" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                      <SortableHeader label={tt("columns.empNumber")} field="employeeNumber" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     </TableHead>
                     <TableHead className="text-muted-foreground">
-                      <SortableHeader label="Employee" field="fullNameEn" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                      <SortableHeader label={tt("columns.employee")} field="fullNameEn" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     </TableHead>
                     <TableHead className="text-muted-foreground hidden md:table-cell">
-                      <SortableHeader label="National ID" field="nationalId" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                      <SortableHeader label={tt("columns.nationalId")} field="nationalId" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     </TableHead>
                     <TableHead className="text-muted-foreground hidden lg:table-cell">
-                      <SortableHeader label="Phone" field="phone" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                      <SortableHeader label={tt("columns.phone")} field="phone" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     </TableHead>
-                    <TableHead className="text-muted-foreground hidden xl:table-cell">Job / Event</TableHead>
+                    <TableHead className="text-muted-foreground hidden xl:table-cell">{tt("columns.jobEvent")}</TableHead>
                     <TableHead className="text-muted-foreground hidden lg:table-cell text-right">
-                      <SortableHeader label="Salary" field="salary" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                      <SortableHeader label={tt("columns.salary")} field="salary" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     </TableHead>
-                    <TableHead className="text-muted-foreground hidden xl:table-cell">Last Printed</TableHead>
+                    <TableHead className="text-muted-foreground hidden xl:table-cell">{tt("columns.lastPrinted")}</TableHead>
                     <TableHead className="text-muted-foreground hidden md:table-cell">
-                      <SortableHeader label="Start Date" field="startDate" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                      <SortableHeader label={tt("columns.startDate")} field="startDate" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     </TableHead>
                     {showTerminated && (
                       <TableHead className="text-muted-foreground hidden md:table-cell">
-                        <SortableHeader label="End Date" field="endDate" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                        <SortableHeader label={tt("columns.endDate")} field="endDate" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                       </TableHead>
                     )}
-                    <TableHead className="text-muted-foreground">Status</TableHead>
-                    <TableHead className="text-right text-muted-foreground pr-4">Actions</TableHead>
+                    <TableHead className="text-muted-foreground">{tt("columns.status")}</TableHead>
+                    <TableHead className="text-right text-muted-foreground pr-4">{tt("columns.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2116,7 +2128,7 @@ export default function WorkforcePage() {
                           onClick={() => setSelectedEmployee(emp)}
                           data-testid={`text-empnum-${emp.id}`}
                         >
-                          {emp.employeeNumber}
+                          <span dir="ltr">{emp.employeeNumber}</span>
                         </TableCell>
                         <TableCell className="py-3" onClick={() => setSelectedEmployee(emp)}>
                           <div className="flex items-center gap-3">
@@ -2124,38 +2136,38 @@ export default function WorkforcePage() {
                               <AvatarImage src={emp.photoUrl ?? undefined} />
                               <AvatarFallback className="bg-zinc-800 text-zinc-400 text-xs">{initials}</AvatarFallback>
                             </Avatar>
-                            <div className="font-medium text-white text-sm">{emp.fullNameEn ?? "—"}</div>
+                            <div className="font-medium text-white text-sm"><bdi>{emp.fullNameEn ?? "—"}</bdi></div>
                           </div>
                         </TableCell>
-                        <TableCell className="hidden md:table-cell font-mono text-xs text-zinc-400" onClick={() => setSelectedEmployee(emp)}>
+                        <TableCell className="hidden md:table-cell font-mono text-xs text-zinc-400" onClick={() => setSelectedEmployee(emp)} dir="ltr">
                           {emp.nationalId ?? "—"}
                         </TableCell>
-                        <TableCell className="hidden lg:table-cell text-sm text-zinc-400" onClick={() => setSelectedEmployee(emp)}>
+                        <TableCell className="hidden lg:table-cell text-sm text-zinc-400" onClick={() => setSelectedEmployee(emp)} dir="ltr">
                           {emp.phone ?? "—"}
                         </TableCell>
                         <TableCell className="hidden xl:table-cell" onClick={() => setSelectedEmployee(emp)}>
                           <div className="space-y-0.5">
-                            <div className="text-sm text-white">{emp.jobTitle ?? "—"}</div>
+                            <div className="text-sm text-white"><bdi>{emp.jobTitle ?? "—"}</bdi></div>
                             {emp.positionTitle && (
                               <div className="text-xs text-emerald-400/70">
-                                {emp.positionTitle}
-                                {emp.positionIsActive === false && <span className="text-amber-400 ml-1">(Inactive)</span>}
+                                <bdi>{emp.positionTitle}</bdi>
+                                {emp.positionIsActive === false && <span className="text-amber-400 ms-1">{tt("columns.inactiveSuffix")}</span>}
                               </div>
                             )}
-                            {emp.eventName && <div className="text-xs text-primary/70">{emp.eventName}</div>}
+                            {emp.eventName && <div className="text-xs text-primary/70"><bdi>{emp.eventName}</bdi></div>}
                           </div>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell text-right text-sm text-white font-medium" onClick={() => setSelectedEmployee(emp)}>
-                          {emp.salary ? `${Number(emp.salary).toLocaleString()}` : "—"}
+                          {emp.salary ? formatNumber(Number(emp.salary)) : "—"}
                         </TableCell>
                         <TableCell className="hidden xl:table-cell text-xs text-zinc-400" onClick={() => setSelectedEmployee(emp)} data-testid={`text-last-printed-${emp.id}`}>
-                          {lastPrintDates[emp.id] ? formatDate(lastPrintDates[emp.id]) : <span className="text-zinc-600">Never</span>}
+                          {lastPrintDates[emp.id] ? <span dir="ltr">{formatDate(lastPrintDates[emp.id])}</span> : <span className="text-zinc-600">{tt("columns.never")}</span>}
                         </TableCell>
-                        <TableCell className="hidden md:table-cell text-sm text-zinc-400" onClick={() => setSelectedEmployee(emp)}>
+                        <TableCell className="hidden md:table-cell text-sm text-zinc-400" onClick={() => setSelectedEmployee(emp)} dir="ltr">
                           {formatDate(emp.startDate)}
                         </TableCell>
                         {showTerminated && (
-                          <TableCell className="hidden md:table-cell text-sm text-zinc-400" onClick={() => setSelectedEmployee(emp)}>
+                          <TableCell className="hidden md:table-cell text-sm text-zinc-400" onClick={() => setSelectedEmployee(emp)} dir="ltr">
                             {emp.endDate ? formatDate(emp.endDate) : "—"}
                           </TableCell>
                         )}
@@ -2173,7 +2185,7 @@ export default function WorkforcePage() {
                               onClick={(e) => { e.stopPropagation(); handlePrintIdCards([emp]); }}
                               disabled={printingIds.has(emp.id)}
                               data-testid={`button-print-id-${emp.id}`}
-                              title="Print ID Card"
+                              title={tt("row.printIdCardTitle")}
                             >
                               {printingIds.has(emp.id) ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2220,10 +2232,10 @@ export default function WorkforcePage() {
           <DialogHeader>
             <DialogTitle className="font-display text-lg flex items-center gap-2">
               <Upload className="h-5 w-5 text-primary" />
-              Mass Employee Update
+              {tt("bulkUpdate.title")}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground text-sm">
-              Download the template, edit employee data in Excel, then upload to apply changes in bulk.
+              {tt("bulkUpdate.description")}
             </DialogDescription>
           </DialogHeader>
 
@@ -2233,14 +2245,15 @@ export default function WorkforcePage() {
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-bold">1</span>
-                  Download Template
+                  {tt("bulkUpdate.step1")}
                 </div>
-                <div className="bg-muted/30 border border-border/50 rounded-md p-3 text-sm text-muted-foreground">
-                  The template is pre-filled with all current employees. Editable columns: <span className="text-foreground font-medium">Full Name, National ID/Iqama, Phone, Salary, Start Date, Event, Notes</span>. A second sheet lists valid Event names.
-                </div>
+                <div
+                  className="bg-muted/30 border border-border/50 rounded-md p-3 text-sm text-muted-foreground [&_b]:text-foreground [&_b]:font-medium"
+                  dangerouslySetInnerHTML={{ __html: tt("bulkUpdate.step1Desc") }}
+                />
                 <Button variant="outline" className="w-full gap-2 border-primary/40 text-primary hover:bg-primary/10" onClick={downloadBulkTemplate} data-testid="button-download-template">
                   <FileSpreadsheet className="h-4 w-4" />
-                  Download Bulk Update Template (.xlsx)
+                  {tt("bulkUpdate.downloadButton")}
                 </Button>
               </div>
 
@@ -2248,7 +2261,7 @@ export default function WorkforcePage() {
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-bold">2</span>
-                  Upload Modified File
+                  {tt("bulkUpdate.step2")}
                 </div>
                 <label
                   htmlFor="bulk-update-file"
@@ -2258,14 +2271,14 @@ export default function WorkforcePage() {
                   {bulkUpdateFile ? (
                     <>
                       <FileSpreadsheet className="h-6 w-6 text-emerald-400" />
-                      <span className="font-medium text-foreground">{bulkUpdateFile.name}</span>
-                      <span className="text-xs">{(bulkUpdateFile.size / 1024).toFixed(1)} KB — click to change</span>
+                      <span className="font-medium text-foreground"><bdi>{bulkUpdateFile.name}</bdi></span>
+                      <span className="text-xs">{tt("bulkUpdate.fileSize", { kb: formatNumber(Number((bulkUpdateFile.size / 1024).toFixed(1))) })}</span>
                     </>
                   ) : (
                     <>
                       <Upload className="h-6 w-6" />
-                      <span>Click to select your modified Excel file</span>
-                      <span className="text-xs">.xlsx or .xls</span>
+                      <span>{tt("bulkUpdate.uploadHint")}</span>
+                      <span className="text-xs">{tt("bulkUpdate.uploadFormats")}</span>
                     </>
                   )}
                 </label>
@@ -2280,14 +2293,14 @@ export default function WorkforcePage() {
               </div>
 
               <div className="flex gap-2 justify-end pt-1">
-                <Button variant="outline" className="border-border" onClick={() => setBulkUpdateOpen(false)}>Cancel</Button>
+                <Button variant="outline" className="border-border" onClick={() => setBulkUpdateOpen(false)}>{tt("bulkUpdate.cancel")}</Button>
                 <Button
                   data-testid="button-submit-bulk-update"
                   disabled={!bulkUpdateFile || bulkUpdateLoading}
                   onClick={handleBulkUpdateSubmit}
                   className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
                 >
-                  {bulkUpdateLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing…</> : <><Upload className="h-4 w-4" /> Apply Updates</>}
+                  {bulkUpdateLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> {tt("bulkUpdate.processing")}</> : <><Upload className="h-4 w-4" /> {tt("bulkUpdate.apply")}</>}
                 </Button>
               </div>
             </div>
@@ -2296,25 +2309,25 @@ export default function WorkforcePage() {
             <div className="space-y-4 mt-1">
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-emerald-950/30 border border-emerald-700/40 rounded-md p-3 text-center">
-                  <p className="text-2xl font-bold text-emerald-400">{bulkUpdateResult.updated}</p>
-                  <p className="text-xs text-emerald-300/70 mt-0.5">Updated</p>
+                  <p className="text-2xl font-bold text-emerald-400">{formatNumber(bulkUpdateResult.updated)}</p>
+                  <p className="text-xs text-emerald-300/70 mt-0.5">{tt("bulkUpdate.updated")}</p>
                 </div>
                 <div className="bg-muted/20 border border-border/40 rounded-md p-3 text-center">
-                  <p className="text-2xl font-bold text-muted-foreground">{bulkUpdateResult.skipped}</p>
-                  <p className="text-xs text-muted-foreground/70 mt-0.5">Skipped</p>
+                  <p className="text-2xl font-bold text-muted-foreground">{formatNumber(bulkUpdateResult.skipped)}</p>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">{tt("bulkUpdate.skipped")}</p>
                 </div>
                 <div className={`rounded-md p-3 text-center border ${bulkUpdateResult.errors.length > 0 ? "bg-red-950/30 border-red-700/40" : "bg-muted/20 border-border/40"}`}>
-                  <p className={`text-2xl font-bold ${bulkUpdateResult.errors.length > 0 ? "text-red-400" : "text-muted-foreground"}`}>{bulkUpdateResult.errors.length}</p>
-                  <p className="text-xs text-muted-foreground/70 mt-0.5">Errors</p>
+                  <p className={`text-2xl font-bold ${bulkUpdateResult.errors.length > 0 ? "text-red-400" : "text-muted-foreground"}`}>{formatNumber(bulkUpdateResult.errors.length)}</p>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">{tt("bulkUpdate.errors")}</p>
                 </div>
               </div>
 
               {bulkUpdateResult.errors.length > 0 && (
                 <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-red-400 flex items-center gap-1.5"><AlertCircle className="h-3.5 w-3.5" /> Rows with errors</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-red-400 flex items-center gap-1.5"><AlertCircle className="h-3.5 w-3.5" /> {tt("bulkUpdate.rowsWithErrors")}</p>
                   {bulkUpdateResult.errors.map((e, i) => (
                     <div key={i} className="flex items-start gap-2 text-sm bg-red-950/20 border border-red-800/30 rounded p-2">
-                      <span className="font-mono text-xs text-red-300 shrink-0 mt-0.5">{e.employeeNumber}</span>
+                      <span className="font-mono text-xs text-red-300 shrink-0 mt-0.5" dir="ltr">{e.employeeNumber}</span>
                       <span className="text-red-200/80">{e.reason}</span>
                     </div>
                   ))}
@@ -2324,16 +2337,16 @@ export default function WorkforcePage() {
               {bulkUpdateResult.updated > 0 && (
                 <div className="flex items-center gap-2 text-sm text-emerald-400">
                   <CheckCircle2 className="h-4 w-4" />
-                  {bulkUpdateResult.updated} employee{bulkUpdateResult.updated !== 1 ? "s" : ""} successfully updated out of {bulkUpdateResult.total} rows processed.
+                  {tt("bulkUpdate.summary", { count: bulkUpdateResult.updated, n: formatNumber(bulkUpdateResult.updated), total: formatNumber(bulkUpdateResult.total) })}
                 </div>
               )}
 
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" className="border-border" onClick={() => { setBulkUpdateResult(null); setBulkUpdateFile(null); }}>
-                  Upload Another File
+                  {tt("bulkUpdate.uploadAnother")}
                 </Button>
                 <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setBulkUpdateOpen(false)}>
-                  Done
+                  {tt("bulkUpdate.done")}
                 </Button>
               </div>
             </div>
