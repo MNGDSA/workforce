@@ -2389,7 +2389,7 @@ export default function CandidatePortal() {
         <div className="flex items-center gap-2.5">
           <img src="/workforce-logo.svg" alt="Workforce" className="h-8 w-8" />
           <span className="font-display font-bold text-xl tracking-tight text-white hidden sm:inline-block">
-            WORKFORCE
+            {t("common:app.name")}
           </span>
           <div className="ms-3"><LanguageSwitcher /></div>
         </div>

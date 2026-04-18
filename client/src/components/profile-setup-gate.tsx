@@ -745,7 +745,7 @@ function Step3Form({
 export default function ProfileSetupGate({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { t, i18n } = useTranslation(["profileSetup"]);
+  const { t, i18n } = useTranslation(["profileSetup", "common"]);
 
   const STEPS = [
     { id: 1, label: t("profileSetup:steps.personal"),  icon: User },
@@ -852,7 +852,7 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
         <div className="flex items-center gap-2.5">
           <img src="/workforce-logo.svg" alt="Workforce" className="h-8 w-8" />
           <span className="font-display font-bold text-lg text-white">
-            WORKFORCE
+            {t("common:app.name")}
           </span>
         </div>
         <button
