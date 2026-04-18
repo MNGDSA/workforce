@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,12 +62,12 @@ import {
   X,
   Loader2,
   Users,
-  MinusSquare,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import DashboardLayout from "@/components/layout";
+import { formatNumber } from "@/lib/format";
 
 interface Asset {
   id: string;
@@ -105,12 +106,6 @@ interface WorkforceRow {
 
 const CATEGORIES = ["Equipment", "Uniform", "Badge", "Device", "Vehicle", "Tools", "Other"];
 
-const statusConfig = {
-  assigned:     { label: "Assigned",     className: "bg-blue-500/10 text-blue-400 border-blue-500/30",      icon: PackageCheck },
-  returned:     { label: "Returned",     className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30", icon: CheckCircle2 },
-  not_returned: { label: "Not Returned", className: "bg-red-500/10 text-red-400 border-red-500/30",          icon: PackageX },
-};
-
 function localDate() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -118,9 +113,15 @@ function localDate() {
 
 const TH = "text-xs font-medium uppercase tracking-wider text-muted-foreground";
 
+function fmtMoney(n: number, lang: string) {
+  return formatNumber(n, lang, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export default function AssetsPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { t, i18n } = useTranslation(["assets", "common"]);
+  const lang = i18n.language;
 
   // ─── Catalog state ─────────────────────────────────────────────────────────
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -188,36 +189,38 @@ export default function AssetsPage() {
     enabled: bulkAssignOpen,
   });
 
+  const errToast = (e: any) => toast({ title: t("assets:errGeneric"), description: e.message, variant: "destructive" });
+
   // ─── Mutations ─────────────────────────────────────────────────────────────
   const createAsset = useMutation({
     mutationFn: (data: object) => apiRequest("POST", "/api/assets", data).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/assets"] }); setAssetDialog({ open: false }); toast({ title: "Asset created" }); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/assets"] }); setAssetDialog({ open: false }); toast({ title: t("assets:assetDialog.toast.created") }); },
+    onError: errToast,
   });
   const updateAsset = useMutation({
     mutationFn: ({ id, data }: { id: string; data: object }) => apiRequest("PATCH", `/api/assets/${id}`, data).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/assets"] }); setAssetDialog({ open: false }); toast({ title: "Asset updated" }); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/assets"] }); setAssetDialog({ open: false }); toast({ title: t("assets:assetDialog.toast.updated") }); },
+    onError: errToast,
   });
   const deleteAsset = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/assets/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/assets"] }); setDeleteAssetId(null); toast({ title: "Asset deleted" }); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/assets"] }); setDeleteAssetId(null); toast({ title: t("assets:assetDialog.toast.deleted") }); },
+    onError: errToast,
   });
   const assignAsset = useMutation({
     mutationFn: (data: object) => apiRequest("POST", "/api/employee-assets", data).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/employee-assets"] }); setAssignDialog(false); toast({ title: "Asset assigned" }); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/employee-assets"] }); setAssignDialog(false); toast({ title: t("assets:assignDialog.toast.assigned") }); },
+    onError: errToast,
   });
   const updateAssignment = useMutation({
     mutationFn: ({ id, data }: { id: string; data: object }) => apiRequest("PATCH", `/api/employee-assets/${id}`, data).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/employee-assets"] }); toast({ title: "Assignment updated" }); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/employee-assets"] }); toast({ title: t("assets:assignDialog.toast.updated") }); },
+    onError: errToast,
   });
   const deleteAssignment = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/employee-assets/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/employee-assets"] }); setDeleteAssignId(null); toast({ title: "Assignment removed" }); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/employee-assets"] }); setDeleteAssignId(null); toast({ title: t("assets:assignDialog.toast.removed") }); },
+    onError: errToast,
   });
 
   const bulkStatusMut = useMutation({
@@ -228,9 +231,10 @@ export default function AssetsPage() {
       setSelectedIds(new Set());
       setBulkDialog(null);
       const count = data?.updated ?? ids.length;
-      toast({ title: `${count} assignment(s) marked as ${status === "returned" ? "Returned" : "Not Returned"}` });
+      const key = status === "returned" ? "assets:bulkStatus.toastReturned" : "assets:bulkStatus.toastLost";
+      toast({ title: t(key, { count, replace: { n: formatNumber(count, lang) } }) });
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: errToast,
   });
 
   const bulkAssignMut = useMutation({
@@ -238,7 +242,7 @@ export default function AssetsPage() {
       apiRequest("POST", "/api/employee-assets/bulk-assign", data).then(r => r.json()),
     onSuccess: (data: { created: number; skipped: number }) => {
       qc.invalidateQueries({ queryKey: ["/api/employee-assets"] });
-      const assetName = assetList.find(a => a.id === bulkAssetId)?.name ?? "Asset";
+      const assetName = assetList.find(a => a.id === bulkAssetId)?.name ?? t("assets:assignDialog.lblAsset");
       setBulkConfirmOpen(false);
       setBulkAssignOpen(false);
       setBulkSelectedIds(new Set());
@@ -248,11 +252,16 @@ export default function AssetsPage() {
       setBulkEventFilter("all");
       setBulkDeptFilter("all");
       setBulkTypeFilter("all");
-      toast({
-        title: `Assigned "${assetName}" to ${data.created} employee${data.created !== 1 ? "s" : ""}${data.skipped > 0 ? ` (${data.skipped} skipped — already assigned)` : ""}`,
+      const main = t("assets:bulkAssign.toast.summary", {
+        count: data.created,
+        replace: { asset: assetName, created: formatNumber(data.created, lang) },
       });
+      const skip = data.skipped > 0
+        ? t("assets:bulkAssign.toast.skippedSuffix", { replace: { n: formatNumber(data.skipped, lang) } })
+        : "";
+      toast({ title: `${main}${skip}` });
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: errToast,
   });
 
   // ─── Derived data ──────────────────────────────────────────────────────────
@@ -360,12 +369,12 @@ export default function AssetsPage() {
   function requestReturn(ea: EmployeeAsset) {
     const asset = assetMap.get(ea.assetId);
     const emp = workforceMap.get(ea.workforceId);
-    setConfirmReturn({ id: ea.id, assetName: asset?.name ?? "Asset", empName: emp?.fullNameEn ?? `#${emp?.employeeNumber}` });
+    setConfirmReturn({ id: ea.id, assetName: asset?.name ?? t("assets:assignDialog.lblAsset"), empName: emp?.fullNameEn ?? `#${emp?.employeeNumber}` });
   }
   function requestLost(ea: EmployeeAsset) {
     const asset = assetMap.get(ea.assetId);
     const emp = workforceMap.get(ea.workforceId);
-    setConfirmLost({ id: ea.id, assetName: asset?.name ?? "Asset", empName: emp?.fullNameEn ?? `#${emp?.employeeNumber}`, price: asset?.price ?? "0" });
+    setConfirmLost({ id: ea.id, assetName: asset?.name ?? t("assets:assignDialog.lblAsset"), empName: emp?.fullNameEn ?? `#${emp?.employeeNumber}`, price: asset?.price ?? "0" });
   }
   function doMarkReturned() {
     if (!confirmReturn) return;
@@ -398,7 +407,6 @@ export default function AssetsPage() {
     }
   }
   function openBulkDialog(status: "returned" | "not_returned") {
-    // Derive count/value from the exact IDs being submitted, not just the current filter view
     const allAssignmentsMap = new Map(assignments.map(ea => [ea.id, ea]));
     const selected = Array.from(selectedIds)
       .map(id => allAssignmentsMap.get(id))
@@ -418,12 +426,30 @@ export default function AssetsPage() {
   const isPending = createAsset.isPending || updateAsset.isPending;
   const isAssigning = assignAsset.isPending;
 
+  const sarMoney = (n: number) => `${t("common:sar", { defaultValue: "SAR" })} ${fmtMoney(n, lang)}`;
+
   const statCards = [
-    { label: "Catalog Items",   value: String(assetList.filter(a => a.isActive).length),  icon: Package,       iconColor: "text-primary",    accentClass: "border-l-primary" },
-    { label: "Assigned",        value: String(assignments.filter(a => a.status === "assigned").length), icon: PackageCheck, iconColor: "text-blue-400",   accentClass: "border-l-blue-400" },
-    { label: "Asset Value Out", value: `SAR ${totalValue.toLocaleString("en", { minimumFractionDigits: 2 })}`, icon: UserCheck, iconColor: "text-amber-400",  accentClass: "border-l-amber-400" },
-    { label: "Not Returned",    value: `SAR ${notReturnedValue.toLocaleString("en", { minimumFractionDigits: 2 })}`, icon: AlertTriangle, iconColor: "text-red-400", accentClass: "border-l-red-400" },
+    { label: t("assets:stat.catalogItems"), value: formatNumber(assetList.filter(a => a.isActive).length, lang), icon: Package,       iconColor: "text-primary",    accentClass: "border-l-primary",    testid: "stat-catalog-items" },
+    { label: t("assets:stat.assigned"),     value: formatNumber(assignments.filter(a => a.status === "assigned").length, lang), icon: PackageCheck, iconColor: "text-blue-400",   accentClass: "border-l-blue-400",   testid: "stat-assigned" },
+    { label: t("assets:stat.valueOut"),     value: sarMoney(totalValue),       icon: UserCheck,     iconColor: "text-amber-400",  accentClass: "border-l-amber-400",  testid: "stat-value-out" },
+    { label: t("assets:stat.notReturned"),  value: sarMoney(notReturnedValue), icon: AlertTriangle, iconColor: "text-red-400",    accentClass: "border-l-red-400",    testid: "stat-not-returned" },
   ];
+
+  const STATUS_LABEL: Record<EmployeeAsset["status"], string> = {
+    assigned:     t("assets:status.assigned"),
+    returned:     t("assets:status.returned"),
+    not_returned: t("assets:status.notReturned"),
+  };
+  const STATUS_CLASS: Record<EmployeeAsset["status"], string> = {
+    assigned:     "bg-blue-500/10 text-blue-400 border-blue-500/30",
+    returned:     "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+    not_returned: "bg-red-500/10 text-red-400 border-red-500/30",
+  };
+  const STATUS_ICON: Record<EmployeeAsset["status"], typeof PackageCheck> = {
+    assigned:     PackageCheck,
+    returned:     CheckCircle2,
+    not_returned: PackageX,
+  };
 
   return (
     <>
@@ -437,20 +463,20 @@ export default function AssetsPage() {
             <Package className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-display font-bold text-foreground tracking-tight">Asset Management</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Track equipment issued to employees</p>
+            <h1 className="text-2xl font-display font-bold text-foreground tracking-tight">{t("assets:title")}</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{t("assets:subtitle")}</p>
           </div>
         </div>
         <Button onClick={openNewAsset} className="gap-2 rounded-sm font-semibold" data-testid="button-new-asset">
           <Plus className="h-4 w-4" />
-          New Asset
+          {t("assets:btnNewAsset")}
         </Button>
       </div>
 
       {/* ─── Stat Cards ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map(c => (
-          <Card key={c.label} className={cn("bg-card border-border shadow-sm border-l-4", c.accentClass)}>
+          <Card key={c.testid} className={cn("bg-card border-border shadow-sm border-l-4", c.accentClass)}>
             <CardHeader className="pb-2 pt-4 px-5">
               <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                 <c.icon className={cn("h-4 w-4 shrink-0", c.iconColor)} />
@@ -458,10 +484,7 @@ export default function AssetsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pb-4 px-5">
-              <div
-                className="text-2xl font-bold text-foreground"
-                data-testid={`stat-${c.label.toLowerCase().replace(/ /g, "-")}`}
-              >
+              <div className="text-2xl font-bold text-foreground" dir="ltr" data-testid={c.testid}>
                 {c.value}
               </div>
             </CardContent>
@@ -473,10 +496,10 @@ export default function AssetsPage() {
       <Tabs defaultValue="catalog">
         <TabsList className="rounded-sm bg-muted/40 border border-border/50">
           <TabsTrigger value="catalog" className="rounded-sm data-[state=active]:bg-card data-[state=active]:text-foreground" data-testid="tab-catalog">
-            Asset Catalog
+            {t("assets:tab.catalog")}
           </TabsTrigger>
           <TabsTrigger value="assignments" className="rounded-sm data-[state=active]:bg-card data-[state=active]:text-foreground" data-testid="tab-assignments">
-            Assignments
+            {t("assets:tab.assignments")}
           </TabsTrigger>
         </TabsList>
 
@@ -484,12 +507,12 @@ export default function AssetsPage() {
         <TabsContent value="catalog" className="mt-4 space-y-4">
           <div className="flex items-center gap-3">
             <div className="relative max-w-sm flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
-                placeholder="Search by name or category…"
+                placeholder={t("assets:catalog.searchPh")}
                 value={catalogSearch}
                 onChange={e => setCatalogSearch(e.target.value)}
-                className="pl-9 rounded-sm"
+                className="ps-9 rounded-sm"
                 data-testid="input-catalog-search"
               />
             </div>
@@ -499,18 +522,18 @@ export default function AssetsPage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-border/50 hover:bg-transparent">
-                  <TableHead className={`${TH} pl-5`}>Asset Name</TableHead>
-                  <TableHead className={TH}>Category</TableHead>
-                  <TableHead className={`${TH} text-right`}>Price (SAR)</TableHead>
-                  <TableHead className={TH}>Status</TableHead>
-                  <TableHead className={`${TH} pr-5 text-right`}>Actions</TableHead>
+                  <TableHead className={`${TH} ps-5`}>{t("assets:catalog.th.name")}</TableHead>
+                  <TableHead className={TH}>{t("assets:catalog.th.category")}</TableHead>
+                  <TableHead className={`${TH} text-end`}>{t("assets:catalog.th.price")}</TableHead>
+                  <TableHead className={TH}>{t("assets:catalog.th.status")}</TableHead>
+                  <TableHead className={`${TH} pe-5 text-end`}>{t("assets:catalog.th.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loadingAssets ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-14 text-muted-foreground">
-                      Loading assets…
+                      {t("assets:catalog.loading")}
                     </TableCell>
                   </TableRow>
                 ) : filteredAssets.length === 0 ? (
@@ -518,22 +541,22 @@ export default function AssetsPage() {
                     <TableCell colSpan={5} className="text-center py-14">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <Package className="h-8 w-8 opacity-30" />
-                        <span className="text-sm">No assets in catalog yet</span>
-                        <Button variant="outline" size="sm" className="rounded-sm mt-1" onClick={openNewAsset}>Add first asset</Button>
+                        <span className="text-sm">{t("assets:catalog.empty")}</span>
+                        <Button variant="outline" size="sm" className="rounded-sm mt-1" onClick={openNewAsset}>{t("assets:catalog.addFirst")}</Button>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : filteredAssets.map(asset => (
                   <TableRow key={asset.id} data-testid={`row-asset-${asset.id}`} className="border-border/30 hover:bg-muted/[0.08] transition-colors">
-                    <TableCell className="pl-5">
-                      <div className="font-medium text-foreground">{asset.name}</div>
-                      {asset.description && <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{asset.description}</div>}
+                    <TableCell className="ps-5">
+                      <div className="font-medium text-foreground"><bdi>{asset.name}</bdi></div>
+                      {asset.description && <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1"><bdi>{asset.description}</bdi></div>}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {asset.category ?? <span className="text-muted-foreground/40">—</span>}
+                      {asset.category ? <bdi>{t(`assets:category.${asset.category}` as any, asset.category)}</bdi> : <span className="text-muted-foreground/40">—</span>}
                     </TableCell>
-                    <TableCell className="text-right font-mono font-semibold text-foreground">
-                      {parseFloat(asset.price).toLocaleString("en", { minimumFractionDigits: 2 })}
+                    <TableCell className="text-end font-mono font-semibold text-foreground" dir="ltr">
+                      {fmtMoney(parseFloat(asset.price), lang)}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -545,10 +568,10 @@ export default function AssetsPage() {
                             : "bg-muted/30 text-muted-foreground border-border"
                         )}
                       >
-                        {asset.isActive ? "Active" : "Inactive"}
+                        {asset.isActive ? t("assets:active") : t("assets:inactive")}
                       </Badge>
                     </TableCell>
-                    <TableCell className="pr-5 text-right">
+                    <TableCell className="pe-5 text-end">
                       <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
@@ -577,12 +600,12 @@ export default function AssetsPage() {
         <TabsContent value="assignments" className="mt-4 space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative min-w-[220px] flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
-                placeholder="Search name, ID #, national ID, phone, or asset…"
+                placeholder={t("assets:assignments.searchPh")}
                 value={assignSearch}
                 onChange={e => setAssignSearch(e.target.value)}
-                className="pl-9 rounded-sm"
+                className="ps-9 rounded-sm"
                 data-testid="input-assign-search"
               />
             </div>
@@ -593,14 +616,14 @@ export default function AssetsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="assigned">Assigned</SelectItem>
-                  <SelectItem value="returned">Returned</SelectItem>
-                  <SelectItem value="not_returned">Not Returned</SelectItem>
+                  <SelectItem value="all">{t("assets:assignments.filter.all")}</SelectItem>
+                  <SelectItem value="assigned">{t("assets:assignments.filter.assigned")}</SelectItem>
+                  <SelectItem value="returned">{t("assets:assignments.filter.returned")}</SelectItem>
+                  <SelectItem value="not_returned">{t("assets:assignments.filter.notReturned")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex gap-2 ml-auto">
+            <div className="flex gap-2 ms-auto">
               <Button
                 variant="outline"
                 onClick={() => { setBulkAssetId(""); setBulkAssignDate(localDate()); setBulkAssignNotes(""); setBulkEmpSearch(""); setBulkEventFilter("all"); setBulkDeptFilter("all"); setBulkTypeFilter("all"); setBulkSelectedIds(new Set()); setBulkAssignOpen(true); }}
@@ -608,7 +631,7 @@ export default function AssetsPage() {
                 data-testid="button-bulk-assign"
               >
                 <Users className="h-4 w-4" />
-                Bulk Assign
+                {t("assets:assignments.btnBulkAssign")}
               </Button>
               <Button
                 onClick={() => { setAssignForm({ workforceId: "", assetId: "", assignedAt: localDate(), notes: "" }); setEmpSearch(""); setAssignDialog(true); }}
@@ -616,7 +639,7 @@ export default function AssetsPage() {
                 data-testid="button-assign-asset"
               >
                 <Plus className="h-4 w-4" />
-                Assign Asset
+                {t("assets:assignments.btnAssign")}
               </Button>
             </div>
           </div>
@@ -625,47 +648,46 @@ export default function AssetsPage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-border/50 hover:bg-transparent">
-                  <TableHead className="pl-4 w-10">
+                  <TableHead className="ps-4 w-10">
                     <button
                       onClick={toggleAll}
                       className="flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                       data-testid="checkbox-select-all"
-                      title={allSelected ? "Deselect all" : "Select all assigned"}
+                      title={allSelected ? t("assets:assignments.deselectAllTitle") : t("assets:assignments.selectAllTitle")}
                     >
                       {allSelected
                         ? <SquareCheck className="h-4 w-4 text-primary" />
                         : <Square className="h-4 w-4" />}
                     </button>
                   </TableHead>
-                  <TableHead className={`${TH}`}>Employee</TableHead>
-                  <TableHead className={TH}>Type</TableHead>
-                  <TableHead className={TH}>Asset</TableHead>
-                  <TableHead className={`${TH} text-right`}>Price (SAR)</TableHead>
-                  <TableHead className={TH}>Assigned</TableHead>
-                  <TableHead className={TH}>Returned</TableHead>
-                  <TableHead className={TH}>Status</TableHead>
-                  <TableHead className={`${TH} pr-5 text-right`}>Actions</TableHead>
+                  <TableHead className={TH}>{t("assets:assignments.th.employee")}</TableHead>
+                  <TableHead className={TH}>{t("assets:assignments.th.type")}</TableHead>
+                  <TableHead className={TH}>{t("assets:assignments.th.asset")}</TableHead>
+                  <TableHead className={`${TH} text-end`}>{t("assets:assignments.th.price")}</TableHead>
+                  <TableHead className={TH}>{t("assets:assignments.th.assigned")}</TableHead>
+                  <TableHead className={TH}>{t("assets:assignments.th.returned")}</TableHead>
+                  <TableHead className={TH}>{t("assets:assignments.th.status")}</TableHead>
+                  <TableHead className={`${TH} pe-5 text-end`}>{t("assets:assignments.th.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loadingAssign ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-14 text-muted-foreground">Loading…</TableCell>
+                    <TableCell colSpan={9} className="text-center py-14 text-muted-foreground">{t("assets:assignments.loading")}</TableCell>
                   </TableRow>
                 ) : filteredAssignments.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center py-14">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <PackageCheck className="h-8 w-8 opacity-30" />
-                        <span className="text-sm">No assignments found</span>
+                        <span className="text-sm">{t("assets:assignments.empty")}</span>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : filteredAssignments.map(ea => {
                   const emp = workforceMap.get(ea.workforceId);
                   const asset = assetMap.get(ea.assetId);
-                  const sc = statusConfig[ea.status];
-                  const StatusIcon = sc.icon;
+                  const StatusIcon = STATUS_ICON[ea.status];
                   const isSelectable = ea.status === "assigned";
                   const isChecked = selectedIds.has(ea.id);
                   return (
@@ -677,7 +699,7 @@ export default function AssetsPage() {
                         isChecked && "bg-primary/[0.04]"
                       )}
                     >
-                      <TableCell className="pl-4 w-10">
+                      <TableCell className="ps-4 w-10">
                         {isSelectable ? (
                           <button
                             onClick={() => toggleRow(ea.id)}
@@ -693,8 +715,8 @@ export default function AssetsPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium text-foreground">{emp?.fullNameEn ?? "—"}</div>
-                        <div className="text-xs text-muted-foreground font-mono">{emp?.employeeNumber ?? ""}</div>
+                        <div className="font-medium text-foreground"><bdi>{emp?.fullNameEn ?? "—"}</bdi></div>
+                        <div className="text-xs text-muted-foreground font-mono" dir="ltr">{emp?.employeeNumber ?? ""}</div>
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -706,25 +728,25 @@ export default function AssetsPage() {
                               : "bg-primary/10 text-primary border-primary/30"
                           )}
                         >
-                          {emp?.employmentType === "smp" ? "SMP" : "Individual"}
+                          {emp?.employmentType === "smp" ? t("assets:type.smp") : t("assets:type.individual")}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium text-foreground">{asset?.name ?? "—"}</div>
-                        {asset?.category && <div className="text-xs text-muted-foreground">{asset.category}</div>}
+                        <div className="font-medium text-foreground"><bdi>{asset?.name ?? "—"}</bdi></div>
+                        {asset?.category && <div className="text-xs text-muted-foreground"><bdi>{t(`assets:category.${asset.category}` as any, asset.category)}</bdi></div>}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-sm text-foreground">
-                        {parseFloat(asset?.price ?? "0").toLocaleString("en", { minimumFractionDigits: 2 })}
+                      <TableCell className="text-end font-mono text-sm text-foreground" dir="ltr">
+                        {fmtMoney(parseFloat(asset?.price ?? "0"), lang)}
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground tabular-nums">{ea.assignedAt}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground tabular-nums">{ea.returnedAt ?? "—"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground tabular-nums" dir="ltr">{ea.assignedAt}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground tabular-nums" dir="ltr">{ea.returnedAt ?? "—"}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={cn("text-[11px] font-medium inline-flex items-center gap-1", sc.className)}>
+                        <Badge variant="outline" className={cn("text-[11px] font-medium inline-flex items-center gap-1", STATUS_CLASS[ea.status])}>
                           <StatusIcon className="h-3 w-3" />
-                          {sc.label}
+                          {STATUS_LABEL[ea.status]}
                         </Badge>
                       </TableCell>
-                      <TableCell className="pr-5 text-right">
+                      <TableCell className="pe-5 text-end">
                         <div className="flex items-center justify-end gap-1">
                           {ea.status === "assigned" && (
                             <>
@@ -734,8 +756,8 @@ export default function AssetsPage() {
                                 onClick={() => requestReturn(ea)}
                                 data-testid={`button-return-${ea.id}`}
                               >
-                                <RotateCcw className="h-3 w-3 mr-1" />
-                                Return
+                                <RotateCcw className="h-3 w-3 me-1" />
+                                {t("assets:assignments.btnReturn")}
                               </Button>
                               <Button
                                 variant="ghost" size="sm"
@@ -743,8 +765,8 @@ export default function AssetsPage() {
                                 onClick={() => requestLost(ea)}
                                 data-testid={`button-not-returned-${ea.id}`}
                               >
-                                <PackageX className="h-3 w-3 mr-1" />
-                                Lost
+                                <PackageX className="h-3 w-3 me-1" />
+                                {t("assets:assignments.btnLost")}
                               </Button>
                             </>
                           )}
@@ -771,18 +793,18 @@ export default function AssetsPage() {
       <Dialog open={assetDialog.open} onOpenChange={o => setAssetDialog({ open: o })}>
         <DialogContent className="bg-card border-border text-foreground max-w-md rounded-sm">
           <DialogHeader>
-            <DialogTitle>{assetDialog.editing ? "Edit Asset" : "New Asset"}</DialogTitle>
+            <DialogTitle>{assetDialog.editing ? t("assets:assetDialog.titleEdit") : t("assets:assetDialog.titleNew")}</DialogTitle>
             <DialogDescription className="text-muted-foreground text-sm">
-              {assetDialog.editing ? "Update the details for this catalog asset." : "Add a new asset to the catalog. Assign it to employees from the Assignments tab."}
+              {assetDialog.editing ? t("assets:assetDialog.descEdit") : t("assets:assetDialog.descNew")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-1">
             <div className="space-y-1.5">
-              <Label htmlFor="asset-name">Asset Name <span className="text-red-400">*</span></Label>
+              <Label htmlFor="asset-name">{t("assets:assetDialog.lblName")} <span className="text-red-400">*</span></Label>
               <Input
                 id="asset-name"
-                placeholder="e.g. Walkie Talkie"
+                placeholder={t("assets:assetDialog.phName")}
                 value={assetForm.name}
                 onChange={e => setAssetForm(f => ({ ...f, name: e.target.value }))}
                 className="rounded-sm"
@@ -792,26 +814,26 @@ export default function AssetsPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="asset-category">Category</Label>
+                <Label htmlFor="asset-category">{t("assets:assetDialog.lblCategory")}</Label>
                 <Select value={assetForm.category} onValueChange={v => setAssetForm(f => ({ ...f, category: v }))}>
                   <SelectTrigger id="asset-category" className="rounded-sm" data-testid="select-asset-category">
-                    <SelectValue placeholder="Select…" />
+                    <SelectValue placeholder={t("assets:assetDialog.phCategory")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {CATEGORIES.map(c => <SelectItem key={c} value={c}>{t(`assets:category.${c}` as any, c)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="asset-price">
-                  Price (SAR)
+                  {t("assets:assetDialog.lblPrice")}
                   {!assetDialog.editing && <span className="text-red-400"> *</span>}
                 </Label>
                 {assetDialog.editing ? (
                   <div className="flex items-center gap-2 h-9 px-3 rounded-sm border border-border/50 bg-muted/30 text-sm text-muted-foreground" data-testid="display-asset-price">
                     <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-                    <span className="font-mono font-semibold text-foreground">{parseFloat(assetForm.price || "0").toLocaleString("en", { minimumFractionDigits: 2 })}</span>
-                    <span className="text-xs text-muted-foreground/60 ml-auto">Locked</span>
+                    <span className="font-mono font-semibold text-foreground" dir="ltr">{fmtMoney(parseFloat(assetForm.price || "0"), lang)}</span>
+                    <span className="text-xs text-muted-foreground/60 ms-auto">{t("assets:assetDialog.locked")}</span>
                   </div>
                 ) : (
                   <Input
@@ -819,10 +841,11 @@ export default function AssetsPage() {
                     type="number"
                     min="0"
                     step="0.01"
-                    placeholder="0.00"
+                    placeholder={t("assets:assetDialog.phPrice")}
                     value={assetForm.price}
                     onChange={e => setAssetForm(f => ({ ...f, price: e.target.value }))}
                     className="rounded-sm"
+                    dir="ltr"
                     data-testid="input-asset-price"
                   />
                 )}
@@ -831,15 +854,15 @@ export default function AssetsPage() {
             {assetDialog.editing && (
               <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
                 <Lock className="h-3 w-3 shrink-0" />
-                Asset price is locked after creation and cannot be changed.
+                {t("assets:assetDialog.lockedHint")}
               </p>
             )}
 
             <div className="space-y-1.5">
-              <Label htmlFor="asset-desc">Description</Label>
+              <Label htmlFor="asset-desc">{t("assets:assetDialog.lblDesc")}</Label>
               <Textarea
                 id="asset-desc"
-                placeholder="Optional notes about this asset…"
+                placeholder={t("assets:assetDialog.phDesc")}
                 value={assetForm.description}
                 onChange={e => setAssetForm(f => ({ ...f, description: e.target.value }))}
                 className="rounded-sm resize-none h-20"
@@ -848,7 +871,7 @@ export default function AssetsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Catalog Status</Label>
+              <Label>{t("assets:assetDialog.lblStatus")}</Label>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -861,7 +884,7 @@ export default function AssetsPage() {
                   )}
                   data-testid="button-asset-active"
                 >
-                  Active
+                  {t("assets:active")}
                 </button>
                 <button
                   type="button"
@@ -874,21 +897,21 @@ export default function AssetsPage() {
                   )}
                   data-testid="button-asset-inactive"
                 >
-                  Inactive
+                  {t("assets:inactive")}
                 </button>
               </div>
             </div>
           </div>
 
           <DialogFooter className="pt-2">
-            <Button variant="outline" className="rounded-sm" onClick={() => setAssetDialog({ open: false })}>Cancel</Button>
+            <Button variant="outline" className="rounded-sm" onClick={() => setAssetDialog({ open: false })}>{t("common:cancel")}</Button>
             <Button
               className="rounded-sm"
               onClick={submitAsset}
               disabled={!assetForm.name.trim() || (!assetDialog.editing && !assetForm.price) || isPending}
               data-testid="button-save-asset"
             >
-              {isPending ? "Saving…" : assetDialog.editing ? "Save Changes" : "Create Asset"}
+              {isPending ? t("assets:assetDialog.saving") : assetDialog.editing ? t("assets:assetDialog.btnSave") : t("assets:assetDialog.btnCreate")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -898,49 +921,49 @@ export default function AssetsPage() {
       <Dialog open={assignDialog} onOpenChange={setAssignDialog}>
         <DialogContent className="bg-card border-border text-foreground max-w-md rounded-sm">
           <DialogHeader>
-            <DialogTitle>Assign Asset to Employee</DialogTitle>
+            <DialogTitle>{t("assets:assignDialog.title")}</DialogTitle>
             <DialogDescription className="text-muted-foreground text-sm">
-              Select an employee and an asset from the catalog. You can mark it returned or lost later.
+              {t("assets:assignDialog.desc")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-1">
             <div className="space-y-1.5">
-              <Label>Employee <span className="text-red-400">*</span></Label>
+              <Label>{t("assets:assignDialog.lblEmployee")} <span className="text-red-400">*</span></Label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
-                  placeholder="Search name, ID #, national ID, phone…"
+                  placeholder={t("assets:assignDialog.phSearch")}
                   value={empSearch}
                   onChange={e => { setEmpSearch(e.target.value); if (assignForm.workforceId) setAssignForm(f => ({ ...f, workforceId: "" })); }}
-                  className="pl-9 rounded-sm"
+                  className="ps-9 rounded-sm"
                   data-testid="input-emp-search"
                 />
               </div>
               {empSearch && !assignForm.workforceId && (
                 <div className="border border-border rounded-sm bg-popover shadow-md max-h-44 overflow-y-auto divide-y divide-border/50">
                   {filteredEmployees.length === 0
-                    ? <div className="px-3 py-3 text-sm text-muted-foreground">No employees found</div>
+                    ? <div className="px-3 py-3 text-sm text-muted-foreground">{t("assets:assignDialog.noEmployees")}</div>
                     : filteredEmployees.map(w => (
                       <button
                         key={w.id}
                         type="button"
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-muted/40 transition-colors flex items-center gap-2"
+                        className="w-full px-3 py-2 text-start text-sm hover:bg-muted/40 transition-colors flex items-center gap-2"
                         onClick={() => { setAssignForm(f => ({ ...f, workforceId: w.id })); setEmpSearch(w.fullNameEn ?? w.employeeNumber); }}
                         data-testid={`emp-option-${w.id}`}
                       >
-                        <span className="font-medium text-foreground">{w.fullNameEn ?? "—"}</span>
-                        <span className="text-muted-foreground font-mono text-xs">#{w.employeeNumber}</span>
+                        <span className="font-medium text-foreground"><bdi>{w.fullNameEn ?? "—"}</bdi></span>
+                        <span className="text-muted-foreground font-mono text-xs" dir="ltr">#{w.employeeNumber}</span>
                         <Badge
                           variant="outline"
                           className={cn(
-                            "ml-auto text-[10px] font-medium",
+                            "ms-auto text-[10px] font-medium",
                             w.employmentType === "smp"
                               ? "bg-violet-500/10 text-violet-400 border-violet-500/30"
                               : "bg-primary/10 text-primary border-primary/30"
                           )}
                         >
-                          {w.employmentType === "smp" ? "SMP" : "Individual"}
+                          {w.employmentType === "smp" ? t("assets:type.smp") : t("assets:type.individual")}
                         </Badge>
                       </button>
                     ))
@@ -950,22 +973,22 @@ export default function AssetsPage() {
               {assignForm.workforceId && (
                 <p className="text-xs text-emerald-400 flex items-center gap-1">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  Employee selected — clear the search to pick a different one
+                  {t("assets:assignDialog.selectedHint")}
                 </p>
               )}
             </div>
 
             <div className="space-y-1.5">
-              <Label>Asset <span className="text-red-400">*</span></Label>
+              <Label>{t("assets:assignDialog.lblAsset")} <span className="text-red-400">*</span></Label>
               <Select value={assignForm.assetId} onValueChange={v => setAssignForm(f => ({ ...f, assetId: v }))}>
                 <SelectTrigger className="rounded-sm" data-testid="select-assign-asset">
-                  <SelectValue placeholder="Select an asset…" />
+                  <SelectValue placeholder={t("assets:assignDialog.phAsset")} />
                 </SelectTrigger>
                 <SelectContent>
                   {assetList.filter(a => a.isActive).map(a => (
                     <SelectItem key={a.id} value={a.id}>
-                      <span className="font-medium">{a.name}</span>
-                      <span className="ml-2 text-muted-foreground text-xs">SAR {parseFloat(a.price).toLocaleString("en", { minimumFractionDigits: 2 })}</span>
+                      <span className="font-medium"><bdi>{a.name}</bdi></span>
+                      <span className="ms-2 text-muted-foreground text-xs" dir="ltr">{`SAR ${fmtMoney(parseFloat(a.price), lang)}`}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -973,22 +996,23 @@ export default function AssetsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="assigned-at">Assignment Date <span className="text-red-400">*</span></Label>
+              <Label htmlFor="assigned-at">{t("assets:assignDialog.lblDate")} <span className="text-red-400">*</span></Label>
               <Input
                 id="assigned-at"
                 type="date"
                 value={assignForm.assignedAt}
                 onChange={e => setAssignForm(f => ({ ...f, assignedAt: e.target.value }))}
                 className="rounded-sm"
+                dir="ltr"
                 data-testid="input-assigned-date"
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="assign-notes">Notes</Label>
+              <Label htmlFor="assign-notes">{t("assets:assignDialog.lblNotes")}</Label>
               <Textarea
                 id="assign-notes"
-                placeholder="Optional notes…"
+                placeholder={t("assets:assignDialog.phNotes")}
                 value={assignForm.notes}
                 onChange={e => setAssignForm(f => ({ ...f, notes: e.target.value }))}
                 className="rounded-sm resize-none h-16"
@@ -998,14 +1022,14 @@ export default function AssetsPage() {
           </div>
 
           <DialogFooter className="pt-2">
-            <Button variant="outline" className="rounded-sm" onClick={() => setAssignDialog(false)}>Cancel</Button>
+            <Button variant="outline" className="rounded-sm" onClick={() => setAssignDialog(false)}>{t("common:cancel")}</Button>
             <Button
               className="rounded-sm"
               onClick={submitAssign}
               disabled={!assignForm.workforceId || !assignForm.assetId || !assignForm.assignedAt || isAssigning}
               data-testid="button-save-assign"
             >
-              {isAssigning ? "Assigning…" : "Assign Asset"}
+              {isAssigning ? t("assets:assignDialog.saving") : t("assets:assignDialog.btnSave")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1015,44 +1039,45 @@ export default function AssetsPage() {
       <Dialog open={bulkAssignOpen} onOpenChange={setBulkAssignOpen}>
         <DialogContent className="bg-card border-border text-foreground max-w-3xl rounded-sm max-h-[90vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Bulk Assign Asset</DialogTitle>
+            <DialogTitle>{t("assets:bulkAssign.title")}</DialogTitle>
             <DialogDescription className="text-muted-foreground text-sm">
-              Select an asset, filter employees, then assign to all selected at once.
+              {t("assets:bulkAssign.desc")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-1 flex-1 overflow-hidden flex flex-col">
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label>Asset <span className="text-red-400">*</span></Label>
+                <Label>{t("assets:bulkAssign.lblAsset")} <span className="text-red-400">*</span></Label>
                 <Select value={bulkAssetId} onValueChange={setBulkAssetId}>
                   <SelectTrigger className="rounded-sm" data-testid="select-bulk-asset">
-                    <SelectValue placeholder="Select an asset…" />
+                    <SelectValue placeholder={t("assets:bulkAssign.phAsset")} />
                   </SelectTrigger>
                   <SelectContent>
                     {assetList.filter(a => a.isActive).map(a => (
                       <SelectItem key={a.id} value={a.id}>
-                        <span className="font-medium">{a.name}</span>
-                        <span className="ml-2 text-muted-foreground text-xs">SAR {parseFloat(a.price).toLocaleString("en", { minimumFractionDigits: 2 })}</span>
+                        <span className="font-medium"><bdi>{a.name}</bdi></span>
+                        <span className="ms-2 text-muted-foreground text-xs" dir="ltr">{`SAR ${fmtMoney(parseFloat(a.price), lang)}`}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Assignment Date <span className="text-red-400">*</span></Label>
+                <Label>{t("assets:bulkAssign.lblDate")} <span className="text-red-400">*</span></Label>
                 <Input
                   type="date"
                   value={bulkAssignDate}
                   onChange={e => setBulkAssignDate(e.target.value)}
                   className="rounded-sm"
+                  dir="ltr"
                   data-testid="input-bulk-assign-date"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Notes</Label>
+                <Label>{t("assets:bulkAssign.lblNotes")}</Label>
                 <Input
-                  placeholder="Optional notes…"
+                  placeholder={t("assets:bulkAssign.phNotes")}
                   value={bulkAssignNotes}
                   onChange={e => setBulkAssignNotes(e.target.value)}
                   className="rounded-sm"
@@ -1063,12 +1088,12 @@ export default function AssetsPage() {
 
             <div className="flex items-center gap-2 flex-wrap">
               <div className="relative flex-1 min-w-[180px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
-                  placeholder="Search name, ID #, national ID, phone…"
+                  placeholder={t("assets:bulkAssign.phSearch")}
                   value={bulkEmpSearch}
                   onChange={e => setBulkEmpSearch(e.target.value)}
-                  className="pl-9 rounded-sm h-9"
+                  className="ps-9 rounded-sm h-9"
                   data-testid="input-bulk-emp-search"
                 />
               </div>
@@ -1077,8 +1102,8 @@ export default function AssetsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Events</SelectItem>
-                  {events.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                  <SelectItem value="all">{t("assets:bulkAssign.filter.allEvents")}</SelectItem>
+                  {events.map(e => <SelectItem key={e.id} value={e.id}><bdi>{e.name}</bdi></SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={bulkDeptFilter} onValueChange={v => { setBulkDeptFilter(v); setBulkSelectedIds(new Set()); }}>
@@ -1086,8 +1111,8 @@ export default function AssetsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Departments</SelectItem>
-                  {deptOptions.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                  <SelectItem value="all">{t("assets:bulkAssign.filter.allDepts")}</SelectItem>
+                  {deptOptions.map(d => <SelectItem key={d} value={d}><bdi>{d}</bdi></SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={bulkTypeFilter} onValueChange={v => { setBulkTypeFilter(v); setBulkSelectedIds(new Set()); }}>
@@ -1095,9 +1120,9 @@ export default function AssetsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="individual">Individual</SelectItem>
-                  <SelectItem value="smp">SMP</SelectItem>
+                  <SelectItem value="all">{t("assets:bulkAssign.filter.allTypes")}</SelectItem>
+                  <SelectItem value="individual">{t("assets:type.individual")}</SelectItem>
+                  <SelectItem value="smp">{t("assets:type.smp")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1106,7 +1131,7 @@ export default function AssetsPage() {
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow className="border-border/50 hover:bg-transparent">
-                    <TableHead className="w-10 pl-3">
+                    <TableHead className="w-10 ps-3">
                       <Checkbox
                         checked={bulkAllSelected}
                         onCheckedChange={(checked) => {
@@ -1119,19 +1144,19 @@ export default function AssetsPage() {
                         data-testid="checkbox-bulk-select-all"
                       />
                     </TableHead>
-                    <TableHead className={TH}>Emp #</TableHead>
-                    <TableHead className={TH}>Name</TableHead>
-                    <TableHead className={TH}>National ID</TableHead>
-                    <TableHead className={TH}>Event</TableHead>
-                    <TableHead className={TH}>Dept / Position</TableHead>
-                    <TableHead className={TH}>Type</TableHead>
+                    <TableHead className={TH}>{t("assets:bulkAssign.th.empNo")}</TableHead>
+                    <TableHead className={TH}>{t("assets:bulkAssign.th.name")}</TableHead>
+                    <TableHead className={TH}>{t("assets:bulkAssign.th.nationalId")}</TableHead>
+                    <TableHead className={TH}>{t("assets:bulkAssign.th.event")}</TableHead>
+                    <TableHead className={TH}>{t("assets:bulkAssign.th.deptPosition")}</TableHead>
+                    <TableHead className={TH}>{t("assets:bulkAssign.th.type")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {bulkFilteredEmployees.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                        No active employees match the current filters
+                        {t("assets:bulkAssign.noMatch")}
                       </TableCell>
                     </TableRow>
                   ) : bulkFilteredEmployees.map(w => (
@@ -1146,7 +1171,7 @@ export default function AssetsPage() {
                         });
                       }}
                     >
-                      <TableCell className="pl-3">
+                      <TableCell className="ps-3">
                         <Checkbox
                           checked={bulkSelectedIds.has(w.id)}
                           onCheckedChange={(checked) => {
@@ -1159,14 +1184,14 @@ export default function AssetsPage() {
                           data-testid={`checkbox-bulk-emp-${w.id}`}
                         />
                       </TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{w.employeeNumber}</TableCell>
-                      <TableCell className="font-medium text-sm">{w.fullNameEn ?? "—"}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{w.nationalId ?? "—"}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{w.eventName ?? "—"}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{w.departmentName ? `${w.departmentName}${w.positionTitle ? ` / ${w.positionTitle}` : ""}` : w.positionTitle ?? "—"}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground" dir="ltr">{w.employeeNumber}</TableCell>
+                      <TableCell className="font-medium text-sm"><bdi>{w.fullNameEn ?? "—"}</bdi></TableCell>
+                      <TableCell className="text-xs text-muted-foreground" dir="ltr">{w.nationalId ?? "—"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground"><bdi>{w.eventName ?? "—"}</bdi></TableCell>
+                      <TableCell className="text-xs text-muted-foreground"><bdi>{w.departmentName ? `${w.departmentName}${w.positionTitle ? ` / ${w.positionTitle}` : ""}` : w.positionTitle ?? "—"}</bdi></TableCell>
                       <TableCell>
                         <Badge variant="outline" className={cn("text-[10px]", w.employmentType === "smp" ? "bg-violet-500/10 text-violet-400 border-violet-500/30" : "bg-primary/10 text-primary border-primary/30")}>
-                          {w.employmentType === "smp" ? "SMP" : "Individual"}
+                          {w.employmentType === "smp" ? t("assets:type.smp") : t("assets:type.individual")}
                         </Badge>
                       </TableCell>
                     </TableRow>
@@ -1177,8 +1202,8 @@ export default function AssetsPage() {
 
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">
-                {bulkFilteredEmployees.length} employee{bulkFilteredEmployees.length !== 1 ? "s" : ""} shown
-                {bulkSelectedIds.size > 0 && <> · <span className="text-primary font-semibold">{bulkSelectedIds.size} selected</span></>}
+                {t("assets:bulkAssign.shown", { count: bulkFilteredEmployees.length, replace: { n: formatNumber(bulkFilteredEmployees.length, lang) } })}
+                {bulkSelectedIds.size > 0 && <> · <span className="text-primary font-semibold">{t("assets:bulkAssign.selected", { replace: { n: formatNumber(bulkSelectedIds.size, lang) } })}</span></>}
               </span>
               {bulkSomeSelected && !bulkAllSelected && (
                 <Button
@@ -1188,21 +1213,21 @@ export default function AssetsPage() {
                   onClick={() => setBulkSelectedIds(new Set(bulkFilteredEmployees.map(w => w.id)))}
                   data-testid="button-select-all-filtered"
                 >
-                  Select all {bulkFilteredEmployees.length} matching
+                  {t("assets:bulkAssign.selectAllMatching", { replace: { n: formatNumber(bulkFilteredEmployees.length, lang) } })}
                 </Button>
               )}
             </div>
           </div>
 
           <DialogFooter className="pt-2">
-            <Button variant="outline" className="rounded-sm" onClick={() => setBulkAssignOpen(false)}>Cancel</Button>
+            <Button variant="outline" className="rounded-sm" onClick={() => setBulkAssignOpen(false)}>{t("common:cancel")}</Button>
             <Button
               className="rounded-sm"
               disabled={!bulkAssetId || !bulkAssignDate || bulkSelectedIds.size === 0}
               onClick={() => setBulkConfirmOpen(true)}
               data-testid="button-bulk-assign-submit"
             >
-              Assign to {bulkSelectedIds.size} Employee{bulkSelectedIds.size !== 1 ? "s" : ""}
+              {t("assets:bulkAssign.btnSubmit", { count: bulkSelectedIds.size, replace: { n: formatNumber(bulkSelectedIds.size, lang) } })}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1212,20 +1237,23 @@ export default function AssetsPage() {
       <AlertDialog open={bulkConfirmOpen} onOpenChange={setBulkConfirmOpen}>
         <AlertDialogContent className="bg-card border-border text-foreground rounded-sm">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Bulk Assignment</AlertDialogTitle>
+            <AlertDialogTitle>{t("assets:bulkAssign.confirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground space-y-2">
               <span className="block">
-                Assign <span className="text-foreground font-semibold">"{assetList.find(a => a.id === bulkAssetId)?.name ?? "Asset"}"</span> to{" "}
-                <span className="text-foreground font-semibold">{bulkSelectedIds.size} employee{bulkSelectedIds.size !== 1 ? "s" : ""}</span> on{" "}
-                <span className="text-foreground font-semibold">{bulkAssignDate}</span>?
+                {t("assets:bulkAssign.confirmLine1", {
+                  count: bulkSelectedIds.size,
+                  replace: {
+                    asset: assetList.find(a => a.id === bulkAssetId)?.name ?? t("assets:assignDialog.lblAsset"),
+                    n: formatNumber(bulkSelectedIds.size, lang),
+                    date: bulkAssignDate,
+                  },
+                })}
               </span>
-              <span className="block text-sm">
-                Employees who already have this asset assigned will be skipped. This action cannot be undone.
-              </span>
+              <span className="block text-sm">{t("assets:bulkAssign.confirmNote")}</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-sm">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-sm">{t("common:cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="rounded-sm bg-primary hover:bg-primary/90"
               disabled={bulkAssignMut.isPending}
@@ -1240,7 +1268,7 @@ export default function AssetsPage() {
               }}
               data-testid="button-bulk-assign-confirm"
             >
-              {bulkAssignMut.isPending ? "Assigning…" : `Yes, Assign`}
+              {bulkAssignMut.isPending ? t("assets:bulkAssign.confirmBtnPending") : t("assets:bulkAssign.confirmBtn")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1250,18 +1278,18 @@ export default function AssetsPage() {
       <AlertDialog open={!!deleteAssetId} onOpenChange={o => !o && setDeleteAssetId(null)}>
         <AlertDialogContent className="bg-card border-border text-foreground rounded-sm">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Asset?</AlertDialogTitle>
+            <AlertDialogTitle>{t("assets:deleteAsset.title")}</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              This removes the asset from the catalog. Existing assignment records are preserved.
+              {t("assets:deleteAsset.desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-sm">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-sm">{t("common:cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="rounded-sm bg-destructive hover:bg-destructive/90 text-destructive-foreground"
               onClick={() => deleteAssetId && deleteAsset.mutate(deleteAssetId)}
             >
-              Delete Asset
+              {t("assets:deleteAsset.btn")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1271,18 +1299,18 @@ export default function AssetsPage() {
       <AlertDialog open={!!deleteAssignId} onOpenChange={o => !o && setDeleteAssignId(null)}>
         <AlertDialogContent className="bg-card border-border text-foreground rounded-sm">
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove Assignment?</AlertDialogTitle>
+            <AlertDialogTitle>{t("assets:deleteAssign.title")}</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              This permanently removes the asset assignment record.
+              {t("assets:deleteAssign.desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-sm">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-sm">{t("common:cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="rounded-sm bg-destructive hover:bg-destructive/90 text-destructive-foreground"
               onClick={() => deleteAssignId && deleteAssignment.mutate(deleteAssignId)}
             >
-              Remove
+              {t("assets:deleteAssign.btn")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1292,22 +1320,20 @@ export default function AssetsPage() {
       <AlertDialog open={!!confirmReturn} onOpenChange={o => !o && setConfirmReturn(null)}>
         <AlertDialogContent className="bg-card border-border text-foreground rounded-sm">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Asset Return</AlertDialogTitle>
+            <AlertDialogTitle>{t("assets:confirmReturn.title")}</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              Mark <span className="font-semibold text-foreground">"{confirmReturn?.assetName}"</span> as returned
-              by <span className="font-semibold text-foreground">{confirmReturn?.empName}</span>?
-              This will record today as the return date.
+              {t("assets:confirmReturn.desc", { replace: { asset: confirmReturn?.assetName ?? "", emp: confirmReturn?.empName ?? "" } })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-sm">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-sm">{t("common:cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="rounded-sm bg-emerald-600 hover:bg-emerald-700 text-white"
               onClick={doMarkReturned}
               data-testid="button-confirm-return"
             >
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Confirm Return
+              <RotateCcw className="h-4 w-4 me-2" />
+              {t("assets:confirmReturn.btn")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1317,24 +1343,23 @@ export default function AssetsPage() {
       <AlertDialog open={!!confirmLost} onOpenChange={o => !o && setConfirmLost(null)}>
         <AlertDialogContent className="bg-card border-border text-foreground rounded-sm">
           <AlertDialogHeader>
-            <AlertDialogTitle>Mark Asset as Lost?</AlertDialogTitle>
+            <AlertDialogTitle>{t("assets:confirmLost.title")}</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              Mark <span className="font-semibold text-foreground">"{confirmLost?.assetName}"</span> as not returned
-              by <span className="font-semibold text-foreground">{confirmLost?.empName}</span>?
+              {t("assets:confirmLost.desc", { replace: { asset: confirmLost?.assetName ?? "", emp: confirmLost?.empName ?? "" } })}
               {confirmLost?.price && parseFloat(confirmLost.price) > 0 && (
-                <> This asset is valued at <span className="font-semibold text-red-400">SAR {parseFloat(confirmLost.price).toLocaleString("en", { minimumFractionDigits: 2 })}</span> and may be deducted from their settlement.</>
+                t("assets:confirmLost.valueNote", { replace: { price: fmtMoney(parseFloat(confirmLost.price), lang) } })
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-sm">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-sm">{t("common:cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="rounded-sm bg-destructive hover:bg-destructive/90 text-destructive-foreground"
               onClick={doMarkLost}
               data-testid="button-confirm-lost"
             >
-              <PackageX className="h-4 w-4 mr-2" />
-              Mark as Lost
+              <PackageX className="h-4 w-4 me-2" />
+              {t("assets:confirmLost.btn")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1345,18 +1370,21 @@ export default function AssetsPage() {
         <AlertDialogContent className="bg-card border-border text-foreground rounded-sm">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {bulkDialog?.status === "returned" ? "Mark All as Returned?" : "Mark All as Lost?"}
+              {bulkDialog?.status === "returned" ? t("assets:bulkStatus.titleReturned") : t("assets:bulkStatus.titleLost")}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              You are about to update <span className="font-semibold text-foreground">{bulkDialog?.count} assignment(s)</span> with
-              a total asset value of <span className="font-semibold text-foreground">SAR {(bulkDialog?.totalValue ?? 0).toLocaleString("en", { minimumFractionDigits: 2 })}</span>.
-              {bulkDialog?.status === "not_returned" && (
-                <> Assets marked as not returned may be deducted from employee settlements.</>
-              )}
+              {t("assets:bulkStatus.desc", {
+                count: bulkDialog?.count ?? 0,
+                replace: {
+                  n: formatNumber(bulkDialog?.count ?? 0, lang),
+                  value: fmtMoney(bulkDialog?.totalValue ?? 0, lang),
+                },
+              })}
+              {bulkDialog?.status === "not_returned" && t("assets:bulkStatus.lostNote")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-sm">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-sm">{t("common:cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className={cn(
                 "rounded-sm",
@@ -1369,10 +1397,10 @@ export default function AssetsPage() {
               data-testid="button-confirm-bulk"
             >
               {bulkStatusMut.isPending
-                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing…</>
+                ? <><Loader2 className="h-4 w-4 me-2 animate-spin" /> {t("assets:bulkStatus.processing")}</>
                 : bulkDialog?.status === "returned"
-                  ? <><RotateCcw className="h-4 w-4 mr-2" /> Confirm — Mark Returned</>
-                  : <><PackageX className="h-4 w-4 mr-2" /> Confirm — Mark Lost</>}
+                  ? <><RotateCcw className="h-4 w-4 me-2" /> {t("assets:bulkStatus.btnReturned")}</>
+                  : <><PackageX className="h-4 w-4 me-2" /> {t("assets:bulkStatus.btnLost")}</>}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1382,9 +1410,9 @@ export default function AssetsPage() {
 
     {/* ─── Floating Bulk Action Bar ─────────────────────────────────────────── */}
     {someSelected && createPortal(
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 bg-card border border-border shadow-2xl rounded-lg px-5 py-3 animate-in slide-in-from-bottom-4">
+      <div className="fixed bottom-6 start-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 bg-card border border-border shadow-2xl rounded-lg px-5 py-3 animate-in slide-in-from-bottom-4">
         <span className="text-sm font-medium text-foreground">
-          <span className="text-primary font-bold">{selectedIds.size}</span> assignment{selectedIds.size !== 1 ? "s" : ""} selected
+          {t("assets:floatBar.selected", { count: selectedIds.size, replace: { n: formatNumber(selectedIds.size, lang) } })}
         </span>
         <div className="w-px h-4 bg-border" />
         <Button
@@ -1394,8 +1422,8 @@ export default function AssetsPage() {
           onClick={() => openBulkDialog("returned")}
           data-testid="button-bulk-mark-returned"
         >
-          <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-          Mark Returned
+          <RotateCcw className="h-3.5 w-3.5 me-1.5" />
+          {t("assets:floatBar.btnReturned")}
         </Button>
         <Button
           size="sm"
@@ -1404,8 +1432,8 @@ export default function AssetsPage() {
           onClick={() => openBulkDialog("not_returned")}
           data-testid="button-bulk-mark-lost"
         >
-          <PackageX className="h-3.5 w-3.5 mr-1.5" />
-          Mark Lost
+          <PackageX className="h-3.5 w-3.5 me-1.5" />
+          {t("assets:floatBar.btnLost")}
         </Button>
         <Button
           size="sm"
@@ -1413,6 +1441,7 @@ export default function AssetsPage() {
           className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
           onClick={() => setSelectedIds(new Set())}
           data-testid="button-clear-selection"
+          aria-label={t("assets:floatBar.clear")}
         >
           <X className="h-4 w-4" />
         </Button>

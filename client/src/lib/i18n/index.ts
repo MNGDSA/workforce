@@ -30,6 +30,7 @@ import enInbox from "./locales/en/inbox.json";
 import enJobPosting from "./locales/en/jobPosting.json";
 import enInterviews from "./locales/en/interviews.json";
 import enRolesAccess from "./locales/en/rolesAccess.json";
+import enAssets from "./locales/en/assets.json";
 
 import arCommon from "./locales/ar/common.json";
 import arAuth from "./locales/ar/auth.json";
@@ -59,6 +60,7 @@ import arInbox from "./locales/ar/inbox.json";
 import arJobPosting from "./locales/ar/jobPosting.json";
 import arInterviews from "./locales/ar/interviews.json";
 import arRolesAccess from "./locales/ar/rolesAccess.json";
+import arAssets from "./locales/ar/assets.json";
 
 export const SUPPORTED_LOCALES = ["ar", "en"] as const;
 export type SupportedLocale = typeof SUPPORTED_LOCALES[number];
@@ -71,12 +73,12 @@ i18n
   .use(initReactI18next)
   .init({
     resources: {
-      en: { common: enCommon, auth: enAuth, apply: enApply, portal: enPortal, layout: enLayout, dashboard: enDashboard, profile: enProfile, audit: enAudit, geofences: enGeofences, reports: enReports, automation: enAutomation, payroll: enPayroll, adminUsers: enAdminUsers, settings: enSettings, questionSets: enQuestionSets, orgChart: enOrgChart, notifications: enNotifications, departments: enDepartments, legal: enLegal, broadcast: enBroadcast, scheduleInterview: enScheduleInterview, events: enEvents, smpContracts: enSmpContracts, offboarding: enOffboarding, inbox: enInbox, jobPosting: enJobPosting, interviews: enInterviews, rolesAccess: enRolesAccess },
-      ar: { common: arCommon, auth: arAuth, apply: arApply, portal: arPortal, layout: arLayout, dashboard: arDashboard, profile: arProfile, audit: arAudit, geofences: arGeofences, reports: arReports, automation: arAutomation, payroll: arPayroll, adminUsers: arAdminUsers, settings: arSettings, questionSets: arQuestionSets, orgChart: arOrgChart, notifications: arNotifications, departments: arDepartments, legal: arLegal, broadcast: arBroadcast, scheduleInterview: arScheduleInterview, events: arEvents, smpContracts: arSmpContracts, offboarding: arOffboarding, inbox: arInbox, jobPosting: arJobPosting, interviews: arInterviews, rolesAccess: arRolesAccess },
+      en: { common: enCommon, auth: enAuth, apply: enApply, portal: enPortal, layout: enLayout, dashboard: enDashboard, profile: enProfile, audit: enAudit, geofences: enGeofences, reports: enReports, automation: enAutomation, payroll: enPayroll, adminUsers: enAdminUsers, settings: enSettings, questionSets: enQuestionSets, orgChart: enOrgChart, notifications: enNotifications, departments: enDepartments, legal: enLegal, broadcast: enBroadcast, scheduleInterview: enScheduleInterview, events: enEvents, smpContracts: enSmpContracts, offboarding: enOffboarding, inbox: enInbox, jobPosting: enJobPosting, interviews: enInterviews, rolesAccess: enRolesAccess, assets: enAssets },
+      ar: { common: arCommon, auth: arAuth, apply: arApply, portal: arPortal, layout: arLayout, dashboard: arDashboard, profile: arProfile, audit: arAudit, geofences: arGeofences, reports: arReports, automation: arAutomation, payroll: arPayroll, adminUsers: arAdminUsers, settings: arSettings, questionSets: arQuestionSets, orgChart: arOrgChart, notifications: arNotifications, departments: arDepartments, legal: arLegal, broadcast: arBroadcast, scheduleInterview: arScheduleInterview, events: arEvents, smpContracts: arSmpContracts, offboarding: arOffboarding, inbox: arInbox, jobPosting: arJobPosting, interviews: arInterviews, rolesAccess: arRolesAccess, assets: arAssets },
     },
     fallbackLng: DEFAULT_LOCALE,
     supportedLngs: SUPPORTED_LOCALES as unknown as string[],
-    ns: ["common", "auth", "apply", "portal", "layout", "dashboard", "profile", "audit", "geofences", "reports", "automation", "payroll", "adminUsers", "settings", "questionSets", "orgChart", "notifications", "departments", "legal", "broadcast", "scheduleInterview", "events", "smpContracts", "offboarding", "inbox", "jobPosting", "interviews", "rolesAccess"],
+    ns: ["common", "auth", "apply", "portal", "layout", "dashboard", "profile", "audit", "geofences", "reports", "automation", "payroll", "adminUsers", "settings", "questionSets", "orgChart", "notifications", "departments", "legal", "broadcast", "scheduleInterview", "events", "smpContracts", "offboarding", "inbox", "jobPosting", "interviews", "rolesAccess", "assets"],
     defaultNS: "common",
     interpolation: { escapeValue: false },
     detection: {

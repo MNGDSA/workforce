@@ -1,0 +1,228 @@
+{
+  "title": "Asset Management",
+  "subtitle": "Track equipment issued to employees",
+  "btnNewAsset": "New Asset",
+  "stat": {
+    "catalogItems": "Catalog Items",
+    "assigned": "Assigned",
+    "valueOut": "Asset Value Out",
+    "notReturned": "Not Returned"
+  },
+  "tab": {
+    "catalog": "Asset Catalog",
+    "assignments": "Assignments"
+  },
+  "catalog": {
+    "searchPh": "Search by name or category…",
+    "th": {
+      "name": "Asset Name",
+      "category": "Category",
+      "price": "Price (SAR)",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "loading": "Loading assets…",
+    "empty": "No assets in catalog yet",
+    "addFirst": "Add first asset"
+  },
+  "assignments": {
+    "searchPh": "Search name, ID #, national ID, phone, or asset…",
+    "btnBulkAssign": "Bulk Assign",
+    "btnAssign": "Assign Asset",
+    "filter": {
+      "all": "All Statuses",
+      "assigned": "Assigned",
+      "returned": "Returned",
+      "notReturned": "Not Returned"
+    },
+    "th": {
+      "employee": "Employee",
+      "type": "Type",
+      "asset": "Asset",
+      "price": "Price (SAR)",
+      "assigned": "Assigned",
+      "returned": "Returned",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "loading": "Loading…",
+    "empty": "No assignments found",
+    "selectAllTitle": "Select all assigned",
+    "deselectAllTitle": "Deselect all",
+    "btnReturn": "Return",
+    "btnLost": "Lost"
+  },
+  "status": {
+    "assigned": "Assigned",
+    "returned": "Returned",
+    "notReturned": "Not Returned"
+  },
+  "type": {
+    "smp": "SMP",
+    "individual": "Individual"
+  },
+  "active": "Active",
+  "inactive": "Inactive",
+  "assetDialog": {
+    "titleNew": "New Asset",
+    "titleEdit": "Edit Asset",
+    "descNew": "Add a new asset to the catalog. Assign it to employees from the Assignments tab.",
+    "descEdit": "Update the details for this catalog asset.",
+    "lblName": "Asset Name",
+    "phName": "e.g. Walkie Talkie",
+    "lblCategory": "Category",
+    "phCategory": "Select…",
+    "lblPrice": "Price (SAR)",
+    "phPrice": "0.00",
+    "lockedHint": "Asset price is locked after creation and cannot be changed.",
+    "locked": "Locked",
+    "lblDesc": "Description",
+    "phDesc": "Optional notes about this asset…",
+    "lblStatus": "Catalog Status",
+    "btnCreate": "Create Asset",
+    "btnSave": "Save Changes",
+    "saving": "Saving…",
+    "toast": {
+      "created": "Asset created",
+      "updated": "Asset updated",
+      "deleted": "Asset deleted"
+    }
+  },
+  "category": {
+    "Equipment": "Equipment",
+    "Uniform": "Uniform",
+    "Badge": "Badge",
+    "Device": "Device",
+    "Vehicle": "Vehicle",
+    "Tools": "Tools",
+    "Other": "Other"
+  },
+  "assignDialog": {
+    "title": "Assign Asset to Employee",
+    "desc": "Select an employee and an asset from the catalog. You can mark it returned or lost later.",
+    "lblEmployee": "Employee",
+    "phSearch": "Search name, ID #, national ID, phone…",
+    "noEmployees": "No employees found",
+    "selectedHint": "Employee selected — clear the search to pick a different one",
+    "lblAsset": "Asset",
+    "phAsset": "Select an asset…",
+    "lblDate": "Assignment Date",
+    "lblNotes": "Notes",
+    "phNotes": "Optional notes…",
+    "btnSave": "Assign Asset",
+    "saving": "Assigning…",
+    "toast": {
+      "assigned": "Asset assigned",
+      "removed": "Assignment removed",
+      "updated": "Assignment updated"
+    }
+  },
+  "bulkAssign": {
+    "title": "Bulk Assign Asset",
+    "desc": "Select an asset, filter employees, then assign to all selected at once.",
+    "lblAsset": "Asset",
+    "phAsset": "Select an asset…",
+    "lblDate": "Assignment Date",
+    "lblNotes": "Notes",
+    "phNotes": "Optional notes…",
+    "phSearch": "Search name, ID #, national ID, phone…",
+    "filter": {
+      "allEvents": "All Events",
+      "allDepts": "All Departments",
+      "allTypes": "All Types"
+    },
+    "th": {
+      "empNo": "Emp #",
+      "name": "Name",
+      "nationalId": "National ID",
+      "event": "Event",
+      "deptPosition": "Dept / Position",
+      "type": "Type"
+    },
+    "noMatch": "No active employees match the current filters",
+    "shown_zero": "{{n}} employees shown",
+    "shown_one": "{{n}} employee shown",
+    "shown_two": "{{n}} employees shown",
+    "shown_few": "{{n}} employees shown",
+    "shown_many": "{{n}} employees shown",
+    "shown_other": "{{n}} employees shown",
+    "selected": "{{n}} selected",
+    "selectAllMatching": "Select all {{n}} matching",
+    "btnSubmit_zero": "Assign to {{n}} Employees",
+    "btnSubmit_one": "Assign to {{n}} Employee",
+    "btnSubmit_two": "Assign to {{n}} Employees",
+    "btnSubmit_few": "Assign to {{n}} Employees",
+    "btnSubmit_many": "Assign to {{n}} Employees",
+    "btnSubmit_other": "Assign to {{n}} Employees",
+    "confirmTitle": "Confirm Bulk Assignment",
+    "confirmLine1": "Assign \"{{asset}}\" to {{n}} employees on {{date}}?",
+    "confirmLine1_one": "Assign \"{{asset}}\" to {{n}} employee on {{date}}?",
+    "confirmNote": "Employees who already have this asset assigned will be skipped. This action cannot be undone.",
+    "confirmBtn": "Yes, Assign",
+    "confirmBtnPending": "Assigning…",
+    "toast": {
+      "summary": "Assigned \"{{asset}}\" to {{created}} employees",
+      "summary_one": "Assigned \"{{asset}}\" to {{created}} employee",
+      "summary_two": "Assigned \"{{asset}}\" to {{created}} employees",
+      "summary_few": "Assigned \"{{asset}}\" to {{created}} employees",
+      "summary_many": "Assigned \"{{asset}}\" to {{created}} employees",
+      "summary_other": "Assigned \"{{asset}}\" to {{created}} employees",
+      "skippedSuffix": " ({{n}} skipped — already assigned)"
+    }
+  },
+  "deleteAsset": {
+    "title": "Delete Asset?",
+    "desc": "This removes the asset from the catalog. Existing assignment records are preserved.",
+    "btn": "Delete Asset"
+  },
+  "deleteAssign": {
+    "title": "Remove Assignment?",
+    "desc": "This permanently removes the asset assignment record.",
+    "btn": "Remove"
+  },
+  "confirmReturn": {
+    "title": "Confirm Asset Return",
+    "desc": "Mark \"{{asset}}\" as returned by {{emp}}? This will record today as the return date.",
+    "btn": "Confirm Return"
+  },
+  "confirmLost": {
+    "title": "Mark Asset as Lost?",
+    "desc": "Mark \"{{asset}}\" as not returned by {{emp}}?",
+    "valueNote": " This asset is valued at SAR {{price}} and may be deducted from their settlement.",
+    "btn": "Mark as Lost"
+  },
+  "bulkStatus": {
+    "titleReturned": "Mark All as Returned?",
+    "titleLost": "Mark All as Lost?",
+    "desc": "You are about to update {{n}} assignments with a total asset value of SAR {{value}}.",
+    "desc_one": "You are about to update {{n}} assignment with a total asset value of SAR {{value}}.",
+    "lostNote": " Assets marked as not returned may be deducted from employee settlements.",
+    "btnReturned": "Confirm — Mark Returned",
+    "btnLost": "Confirm — Mark Lost",
+    "processing": "Processing…",
+    "toastReturned_one": "{{n}} assignment marked as Returned",
+    "toastReturned_zero": "{{n}} assignments marked as Returned",
+    "toastReturned_two": "{{n}} assignments marked as Returned",
+    "toastReturned_few": "{{n}} assignments marked as Returned",
+    "toastReturned_many": "{{n}} assignments marked as Returned",
+    "toastReturned_other": "{{n}} assignments marked as Returned",
+    "toastLost_one": "{{n}} assignment marked as Not Returned",
+    "toastLost_zero": "{{n}} assignments marked as Not Returned",
+    "toastLost_two": "{{n}} assignments marked as Not Returned",
+    "toastLost_few": "{{n}} assignments marked as Not Returned",
+    "toastLost_many": "{{n}} assignments marked as Not Returned",
+    "toastLost_other": "{{n}} assignments marked as Not Returned"
+  },
+  "floatBar": {
+    "selected_zero": "{{n}} assignments selected",
+    "selected_one": "{{n}} assignment selected",
+    "selected_two": "{{n}} assignments selected",
+    "selected_few": "{{n}} assignments selected",
+    "selected_many": "{{n}} assignments selected",
+    "selected_other": "{{n}} assignments selected",
+    "btnReturned": "Mark Returned",
+    "btnLost": "Mark Lost",
+    "clear": "Clear selection"
+  },
+  "errGeneric": "Error"
+}
