@@ -1,0 +1,97 @@
+{
+  "page": {
+    "title": "بث الرسائل النصية",
+    "subtitle": "أرسل رسائل نصية جماعية إلى القوى العاملة",
+    "back": "رجوع"
+  },
+  "tabs": {
+    "compose": "إنشاء",
+    "history": "السجل"
+  },
+  "compose": {
+    "templateTitle": "قالب الرسالة",
+    "insertVariable": "إدراج متغيّر",
+    "messagePh": "اكتب رسالتك هنا... استخدم وسوماً مثل {name} للتخصيص.",
+    "chars": "{{count}} حرفاً",
+    "segments_zero": "{{count}} مقطع",
+    "segments_one": "مقطع واحد",
+    "segments_two": "مقطعان",
+    "segments_few": "{{count}} مقاطع",
+    "segments_many": "{{count}} مقطعاً",
+    "segments_other": "{{count}} مقطع",
+    "unicode": "يونيكود (عربي)",
+    "gsm7": "GSM-7",
+    "perSegment": "{{n}}/مقطع",
+    "recipients": "المستلمون:",
+    "withoutPhone": "({{count}} بدون رقم هاتف)",
+    "send": "إرسال البث",
+    "previewTitle": "معاينة"
+  },
+  "tags": {
+    "name": "الاسم",
+    "employee_number": "رقم الموظف",
+    "position": "المنصب",
+    "department": "الإدارة",
+    "event": "الفعالية"
+  },
+  "recipients": {
+    "title": "اختيار المستلمين",
+    "active": "{{count}} نشط",
+    "clear": "مسح ({{count}})",
+    "search": "ابحث بالاسم أو الرقم أو الهاتف...",
+    "filterPosition": "المنصب",
+    "filterDepartment": "الإدارة",
+    "filterType": "النوع",
+    "filterEvent": "الفعالية",
+    "allPositions": "كل المناصب",
+    "allDepartments": "كل الإدارات",
+    "allTypes": "كل الأنواع",
+    "allEvents": "كل الفعاليات",
+    "individual": "فردي",
+    "smp": "مزوّد",
+    "phoneCol": "الهاتف",
+    "loading": "جارٍ تحميل القوى العاملة...",
+    "noMatch": "لا يوجد موظفون يطابقون عوامل التصفية",
+    "noPhone": "لا يوجد هاتف",
+    "unknown": "غير معروف",
+    "countSelected": "{{count}} موظف · {{selected}} محدد",
+    "countOnly_zero": "{{count}} موظف",
+    "countOnly_one": "موظف واحد",
+    "countOnly_two": "موظفان",
+    "countOnly_few": "{{count}} موظفين",
+    "countOnly_many": "{{count}} موظفاً",
+    "countOnly_other": "{{count}} موظف"
+  },
+  "history": {
+    "title": "سجل البث",
+    "empty": "لا توجد عمليات بث بعد",
+    "composeFirst": "أرسل أول بث لك",
+    "sentBadge": "تم إرسال {{count}}",
+    "failedBadge": "فشل {{count}}",
+    "sending": "جارٍ الإرسال...",
+    "recipientsLabel": "المستلمون ({{count}})",
+    "totalRecipients": "{{count}} مستلم"
+  },
+  "confirm": {
+    "title": "تأكيد البث",
+    "body_zero": "أنت على وشك إرسال رسالة نصية إلى <strong>{{count}}</strong> موظف.",
+    "body_one": "أنت على وشك إرسال رسالة نصية إلى موظف واحد.",
+    "body_two": "أنت على وشك إرسال رسالة نصية إلى موظفَين.",
+    "body_few": "أنت على وشك إرسال رسالة نصية إلى <strong>{{count}}</strong> موظفين.",
+    "body_many": "أنت على وشك إرسال رسالة نصية إلى <strong>{{count}}</strong> موظفاً.",
+    "body_other": "أنت على وشك إرسال رسالة نصية إلى <strong>{{count}}</strong> موظف.",
+    "skipNote": "{{count}} من الموظفين المختارين لا يملكون رقم هاتف وسيتم تخطّيهم.",
+    "warn": "لا يمكن التراجع عن هذا الإجراء. سيتم إرسال كل رسالة عبر مزوّد البث النصي النشط.",
+    "cancel": "إلغاء",
+    "sendTo": "إرسال إلى {{count}} مستلم"
+  },
+  "toast": {
+    "sentTitle": "تم إرسال البث",
+    "sentDesc": "تم وضع الرسائل في الطابور لـ {{count}} مستلم.",
+    "failedTitle": "فشل البث",
+    "emptyTitle": "رسالة فارغة",
+    "emptyDesc": "يرجى كتابة الرسالة أولاً.",
+    "noRecipientsTitle": "لا يوجد مستلمون",
+    "noRecipientsDesc": "اختر موظفاً واحداً على الأقل."
+  }
+}

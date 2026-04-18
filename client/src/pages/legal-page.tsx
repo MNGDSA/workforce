@@ -2,15 +2,18 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, Loader2, FileText, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
+import { formatNumber } from "@/lib/format";
 
 type PageType = "privacy" | "terms";
 
 export default function LegalPage({ type }: { type: PageType }) {
+  const { t, i18n } = useTranslation(["legal"]);
   const [, setLocation] = useLocation();
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const title = type === "privacy" ? "Privacy Policy" : "Terms & Conditions";
+  const title = type === "privacy" ? t("legal:privacy") : t("legal:terms");
   const Icon = type === "privacy" ? Shield : FileText;
 
   useEffect(() => {
@@ -34,8 +37,8 @@ export default function LegalPage({ type }: { type: PageType }) {
             className="text-muted-foreground hover:text-white gap-1.5"
             data-testid="button-back-to-login"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Login
+            <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
+            {t("legal:back")}
           </Button>
         </div>
       </header>
@@ -47,7 +50,7 @@ export default function LegalPage({ type }: { type: PageType }) {
           </div>
           <div>
             <h1 className="text-2xl font-display font-bold text-white" data-testid="text-legal-title">{title}</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Luxury Carts Company Ltd.</p>
+            <p className="text-sm text-muted-foreground mt-0.5">{t("legal:company")}</p>
           </div>
         </div>
 
@@ -66,15 +69,15 @@ export default function LegalPage({ type }: { type: PageType }) {
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Icon className="h-12 w-12 text-muted-foreground/30 mb-4" />
-            <p className="text-muted-foreground font-medium">No content available yet</p>
-            <p className="text-muted-foreground/60 text-sm mt-1">This page will be updated soon.</p>
+            <p className="text-muted-foreground font-medium">{t("legal:noContent")}</p>
+            <p className="text-muted-foreground/60 text-sm mt-1">{t("legal:comingSoon")}</p>
           </div>
         )}
       </main>
 
       <footer className="border-t border-border/50 py-6">
         <p className="text-center text-xs text-muted-foreground">
-          © {new Date().getFullYear()} Luxury Carts Company Ltd.
+          {t("legal:copyright", { year: formatNumber(new Date().getFullYear(), i18n.language) })}
         </p>
       </footer>
     </div>

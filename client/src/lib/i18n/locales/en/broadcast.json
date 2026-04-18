@@ -1,0 +1,85 @@
+{
+  "page": {
+    "title": "SMS Broadcast",
+    "subtitle": "Send mass SMS messages to your workforce",
+    "back": "Back"
+  },
+  "tabs": {
+    "compose": "Compose",
+    "history": "History"
+  },
+  "compose": {
+    "templateTitle": "Message Template",
+    "insertVariable": "Insert Variable",
+    "messagePh": "Type your message here... Use tags like {name} to personalize.",
+    "chars": "{{count}} chars",
+    "segments_one": "{{count}} segment",
+    "segments_other": "{{count}} segments",
+    "unicode": "Unicode (Arabic)",
+    "gsm7": "GSM-7",
+    "perSegment": "{{n}}/segment",
+    "recipients": "Recipients:",
+    "withoutPhone": "({{count}} without phone)",
+    "send": "Send Broadcast",
+    "previewTitle": "Preview"
+  },
+  "tags": {
+    "name": "Name",
+    "employee_number": "Employee #",
+    "position": "Position",
+    "department": "Department",
+    "event": "Event"
+  },
+  "recipients": {
+    "title": "Select Recipients",
+    "active": "{{count}} active",
+    "clear": "Clear ({{count}})",
+    "search": "Search by name, ID, or phone...",
+    "filterPosition": "Position",
+    "filterDepartment": "Department",
+    "filterType": "Type",
+    "filterEvent": "Event",
+    "allPositions": "All Positions",
+    "allDepartments": "All Departments",
+    "allTypes": "All Types",
+    "allEvents": "All Events",
+    "individual": "Individual",
+    "smp": "SMP",
+    "phoneCol": "Phone",
+    "loading": "Loading workforce...",
+    "noMatch": "No employees match your filters",
+    "noPhone": "No phone",
+    "unknown": "Unknown",
+    "countSelected": "{{count}} employees · {{selected}} selected",
+    "countOnly_one": "{{count}} employee",
+    "countOnly_other": "{{count}} employees"
+  },
+  "history": {
+    "title": "Broadcast History",
+    "empty": "No broadcasts yet",
+    "composeFirst": "Send your first broadcast",
+    "sentBadge": "{{count}} sent",
+    "failedBadge": "{{count}} failed",
+    "sending": "Sending...",
+    "recipientsLabel": "Recipients ({{count}})",
+    "totalRecipients": "{{count}} recipients"
+  },
+  "confirm": {
+    "title": "Confirm Broadcast",
+    "body_one": "You are about to send an SMS to <strong>{{count}}</strong> employee.",
+    "body_other": "You are about to send an SMS to <strong>{{count}}</strong> employees.",
+    "skipNote": "{{count}} selected employee(s) have no phone number and will be skipped.",
+    "warn": "This action cannot be undone. Each SMS will be sent via the active SMS gateway plugin.",
+    "cancel": "Cancel",
+    "sendTo": "Send to {{count}} recipients"
+  },
+  "toast": {
+    "sentTitle": "Broadcast Sent",
+    "sentDesc": "SMS queued for {{count}} recipients.",
+    "failedTitle": "Broadcast Failed",
+    "emptyTitle": "Empty Message",
+    "emptyDesc": "Please write a message first.",
+    "noRecipientsTitle": "No Recipients",
+    "noRecipientsDesc": "Select at least one employee."
+  }
+}

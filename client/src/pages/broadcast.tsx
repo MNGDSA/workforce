@@ -46,6 +46,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
+import { useTranslation, Trans } from "react-i18next";
+import { formatNumber } from "@/lib/format";
 
 interface WorkforceEmployee {
   id: string;
@@ -83,13 +85,13 @@ interface RecipientRecord {
   sentAt: string | null;
 }
 
-const TEMPLATE_TAGS = [
-  { tag: "{name}", label: "Name", icon: "👤" },
-  { tag: "{employee_number}", label: "Employee #", icon: "#" },
-  { tag: "{position}", label: "Position", icon: "💼" },
-  { tag: "{department}", label: "Department", icon: "🏢" },
-  { tag: "{event}", label: "Event", icon: "📅" },
-];
+const TEMPLATE_TAG_KEYS = [
+  { tag: "{name}", key: "name" },
+  { tag: "{employee_number}", key: "employee_number" },
+  { tag: "{position}", key: "position" },
+  { tag: "{department}", key: "department" },
+  { tag: "{event}", key: "event" },
+] as const;
 
 function requiresUnicode(text: string): boolean {
   const gsm7 = new Set([
@@ -107,6 +109,7 @@ function getCharCount(text: string) {
 }
 
 export default function BroadcastPage() {
+  const { t, i18n } = useTranslation(["broadcast"]);
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -147,13 +150,13 @@ export default function BroadcastPage() {
     mutationFn: (body: { messageTemplate: string; workforceIds: string[] }) =>
       apiRequest("POST", "/api/broadcasts", body).then(r => r.json()),
     onSuccess: (data) => {
-      toast({ title: "Broadcast Sent", description: `SMS queued for ${data.recipientCount} recipients.` });
+      toast({ title: t("broadcast:toast.sentTitle"), description: t("broadcast:toast.sentDesc", { count: data.recipientCount }) });
       setMessage("");
       setSelectedIds(new Set());
       qc.invalidateQueries({ queryKey: ["/api/broadcasts"] });
       setTab("history");
     },
-    onError: (e: Error) => toast({ title: "Broadcast Failed", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("broadcast:toast.failedTitle"), description: e.message, variant: "destructive" }),
   });
 
   const activeEmployees = useMemo(() => employees.filter(e => e.isActive), [employees]);
@@ -242,11 +245,11 @@ export default function BroadcastPage() {
 
   const handleSend = () => {
     if (!message.trim()) {
-      toast({ title: "Empty Message", description: "Please write a message first.", variant: "destructive" });
+      toast({ title: t("broadcast:toast.emptyTitle"), description: t("broadcast:toast.emptyDesc"), variant: "destructive" });
       return;
     }
     if (selectedIds.size === 0) {
-      toast({ title: "No Recipients", description: "Select at least one employee.", variant: "destructive" });
+      toast({ title: t("broadcast:toast.noRecipientsTitle"), description: t("broadcast:toast.noRecipientsDesc"), variant: "destructive" });
       return;
     }
     setConfirmOpen(true);
@@ -271,13 +274,13 @@ export default function BroadcastPage() {
             className="text-muted-foreground hover:text-white shrink-0"
             data-testid="button-back-workforce"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="h-5 w-5 rtl:rotate-180" />
           </Button>
           <div className="flex-1">
             <h1 className="text-3xl font-display font-bold text-white tracking-tight" data-testid="text-page-title">
-              SMS Broadcast
+              {t("broadcast:page.title")}
             </h1>
-            <p className="text-muted-foreground mt-1">Send mass SMS messages to your workforce</p>
+            <p className="text-muted-foreground mt-1">{t("broadcast:page.subtitle")}</p>
           </div>
           <div className="flex gap-2">
             <Button
@@ -292,7 +295,7 @@ export default function BroadcastPage() {
               data-testid="tab-compose"
             >
               <MessageSquare className="h-4 w-4" />
-              Compose
+              {t("broadcast:tabs.compose")}
             </Button>
             <Button
               variant={tab === "history" ? "default" : "outline"}
@@ -306,9 +309,9 @@ export default function BroadcastPage() {
               data-testid="tab-history"
             >
               <History className="h-4 w-4" />
-              History
+              {t("broadcast:tabs.history")}
               {broadcasts.length > 0 && (
-                <Badge variant="secondary" className="ml-1 text-xs">{broadcasts.length}</Badge>
+                <Badge variant="secondary" className="ms-1 text-xs">{formatNumber(broadcasts.length, i18n.language)}</Badge>
               )}
             </Button>
           </div>
@@ -321,21 +324,23 @@ export default function BroadcastPage() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base text-white flex items-center gap-2">
                     <MessageSquare className="h-4 w-4 text-primary" />
-                    Message Template
+                    {t("broadcast:compose.templateTitle")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-semibold">Insert Variable</p>
+                    <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-semibold">{t("broadcast:compose.insertVariable")}</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {TEMPLATE_TAGS.map(t => (
+                      {TEMPLATE_TAG_KEYS.map(tk => (
                         <button
-                          key={t.tag}
-                          onClick={() => insertTag(t.tag)}
+                          key={tk.tag}
+                          onClick={() => insertTag(tk.tag)}
+                          title={t(`broadcast:tags.${tk.key}`)}
                           className="px-2.5 py-1.5 rounded-md bg-primary/10 border border-primary/20 text-primary text-xs font-mono hover:bg-primary/20 transition-colors cursor-pointer"
-                          data-testid={`tag-${t.tag.replace(/[{}]/g, "")}`}
+                          dir="ltr"
+                          data-testid={`tag-${tk.tag.replace(/[{}]/g, "")}`}
                         >
-                          {t.tag}
+                          {tk.tag}
                         </button>
                       ))}
                     </div>
@@ -345,7 +350,7 @@ export default function BroadcastPage() {
                     ref={textareaRef}
                     value={message}
                     onChange={e => setMessage(e.target.value)}
-                    placeholder="Type your message here... Use tags like {name} to personalize."
+                    placeholder={t("broadcast:compose.messagePh")}
                     rows={6}
                     className="bg-muted/30 border-border font-mono text-sm resize-none"
                     data-testid="input-message"
@@ -353,13 +358,13 @@ export default function BroadcastPage() {
 
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <div className="flex items-center gap-3">
-                      <span>{charInfo.chars} chars</span>
-                      <span>{charInfo.segments} segment{charInfo.segments !== 1 ? "s" : ""}</span>
+                      <span>{t("broadcast:compose.chars", { count: charInfo.chars, replace: { count: formatNumber(charInfo.chars, i18n.language) } })}</span>
+                      <span>{t("broadcast:compose.segments", { count: charInfo.segments, replace: { count: formatNumber(charInfo.segments, i18n.language) } })}</span>
                     </div>
                     <span className={cn(
                       charInfo.isUnicode ? "text-amber-400" : "text-muted-foreground"
                     )}>
-                      {charInfo.isUnicode ? "Unicode (Arabic)" : "GSM-7"} · {charInfo.maxPerSegment}/segment
+                      {charInfo.isUnicode ? t("broadcast:compose.unicode") : t("broadcast:compose.gsm7")} · {t("broadcast:compose.perSegment", { n: formatNumber(charInfo.maxPerSegment, i18n.language) })}
                     </span>
                   </div>
 
@@ -367,11 +372,11 @@ export default function BroadcastPage() {
 
                   <div className="flex items-center justify-between">
                     <div className="text-sm">
-                      <span className="text-muted-foreground">Recipients: </span>
-                      <span className="text-white font-semibold">{selectedIds.size}</span>
+                      <span className="text-muted-foreground">{t("broadcast:compose.recipients")} </span>
+                      <span className="text-white font-semibold">{formatNumber(selectedIds.size, i18n.language)}</span>
                       {recipientsWithPhone < selectedIds.size && (
-                        <span className="text-amber-400 text-xs ml-2">
-                          ({selectedIds.size - recipientsWithPhone} without phone)
+                        <span className="text-amber-400 text-xs ms-2">
+                          {t("broadcast:compose.withoutPhone", { count: formatNumber(selectedIds.size - recipientsWithPhone, i18n.language) })}
                         </span>
                       )}
                     </div>
@@ -386,7 +391,7 @@ export default function BroadcastPage() {
                       ) : (
                         <Send className="h-4 w-4" />
                       )}
-                      Send Broadcast
+                      {t("broadcast:compose.send")}
                     </Button>
                   </div>
                 </CardContent>
@@ -395,7 +400,7 @@ export default function BroadcastPage() {
               {message && (
                 <Card className="bg-card border-border">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider">Preview</CardTitle>
+                    <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider">{t("broadcast:compose.previewTitle")}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="bg-muted/20 rounded-md p-3 text-sm text-white font-mono whitespace-pre-wrap" data-testid="text-message-preview">
@@ -417,9 +422,9 @@ export default function BroadcastPage() {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base text-white flex items-center gap-2">
                       <Users className="h-4 w-4 text-primary" />
-                      Select Recipients
-                      <Badge variant="secondary" className="text-xs ml-1">
-                        {activeEmployees.length} active
+                      {t("broadcast:recipients.title")}
+                      <Badge variant="secondary" className="text-xs ms-1">
+                        {t("broadcast:recipients.active", { count: formatNumber(activeEmployees.length, i18n.language) })}
                       </Badge>
                     </CardTitle>
                     {selectedIds.size > 0 && (
@@ -430,7 +435,7 @@ export default function BroadcastPage() {
                         className="text-xs text-muted-foreground hover:text-white"
                         data-testid="button-clear-selection"
                       >
-                        Clear ({selectedIds.size})
+                        {t("broadcast:recipients.clear", { count: formatNumber(selectedIds.size, i18n.language) })}
                       </Button>
                     )}
                   </div>
@@ -438,12 +443,12 @@ export default function BroadcastPage() {
                 <CardContent className="space-y-3">
                   <div className="flex flex-col sm:flex-row gap-2">
                     <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         value={search}
                         onChange={e => setSearch(e.target.value)}
-                        placeholder="Search by name, ID, or phone..."
-                        className="pl-9 bg-muted/30 border-border"
+                        placeholder={t("broadcast:recipients.search")}
+                        className="ps-9 bg-muted/30 border-border"
                         data-testid="input-search-employees"
                       />
                     </div>
@@ -452,39 +457,39 @@ export default function BroadcastPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <Select value={positionFilter} onValueChange={setPositionFilter}>
                       <SelectTrigger className="bg-muted/30 border-border text-xs h-9" data-testid="filter-position">
-                        <SelectValue placeholder="Position" />
+                        <SelectValue placeholder={t("broadcast:recipients.filterPosition")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Positions</SelectItem>
-                        {positions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                        <SelectItem value="all">{t("broadcast:recipients.allPositions")}</SelectItem>
+                        {positions.map(p => <SelectItem key={p} value={p}><bdi>{p}</bdi></SelectItem>)}
                       </SelectContent>
                     </Select>
                     <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
                       <SelectTrigger className="bg-muted/30 border-border text-xs h-9" data-testid="filter-department">
-                        <SelectValue placeholder="Department" />
+                        <SelectValue placeholder={t("broadcast:recipients.filterDepartment")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Departments</SelectItem>
-                        {departmentsList.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                        <SelectItem value="all">{t("broadcast:recipients.allDepartments")}</SelectItem>
+                        {departmentsList.map(d => <SelectItem key={d} value={d}><bdi>{d}</bdi></SelectItem>)}
                       </SelectContent>
                     </Select>
                     <Select value={typeFilter} onValueChange={setTypeFilter}>
                       <SelectTrigger className="bg-muted/30 border-border text-xs h-9" data-testid="filter-type">
-                        <SelectValue placeholder="Type" />
+                        <SelectValue placeholder={t("broadcast:recipients.filterType")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Types</SelectItem>
-                        <SelectItem value="individual">Individual</SelectItem>
-                        <SelectItem value="smp">SMP</SelectItem>
+                        <SelectItem value="all">{t("broadcast:recipients.allTypes")}</SelectItem>
+                        <SelectItem value="individual">{t("broadcast:recipients.individual")}</SelectItem>
+                        <SelectItem value="smp">{t("broadcast:recipients.smp")}</SelectItem>
                       </SelectContent>
                     </Select>
                     <Select value={eventFilter} onValueChange={setEventFilter}>
                       <SelectTrigger className="bg-muted/30 border-border text-xs h-9" data-testid="filter-event">
-                        <SelectValue placeholder="Event" />
+                        <SelectValue placeholder={t("broadcast:recipients.filterEvent")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Events</SelectItem>
-                        {eventsList.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                        <SelectItem value="all">{t("broadcast:recipients.allEvents")}</SelectItem>
+                        {eventsList.map(e => <SelectItem key={e} value={e}><bdi>{e}</bdi></SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -498,22 +503,23 @@ export default function BroadcastPage() {
                         className={someFilteredSelected && !allFilteredSelected ? "data-[state=checked]:bg-primary/50" : ""}
                       />
                       <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider flex-1">
-                        {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? "s" : ""}
-                        {selectedIds.size > 0 && ` · ${selectedIds.size} selected`}
+                        {selectedIds.size > 0
+                          ? t("broadcast:recipients.countSelected", { count: formatNumber(filteredEmployees.length, i18n.language), selected: formatNumber(selectedIds.size, i18n.language) })
+                          : t("broadcast:recipients.countOnly", { count: filteredEmployees.length, replace: { count: formatNumber(filteredEmployees.length, i18n.language) } })}
                       </span>
-                      <span className="text-xs text-muted-foreground">Phone</span>
+                      <span className="text-xs text-muted-foreground">{t("broadcast:recipients.phoneCol")}</span>
                     </div>
 
                     <div className="max-h-[480px] overflow-y-auto">
                       {loadingEmployees ? (
                         <div className="p-8 text-center">
                           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mx-auto" />
-                          <p className="text-sm text-muted-foreground mt-2">Loading workforce...</p>
+                          <p className="text-sm text-muted-foreground mt-2">{t("broadcast:recipients.loading")}</p>
                         </div>
                       ) : filteredEmployees.length === 0 ? (
                         <div className="p-8 text-center">
                           <Users className="h-8 w-8 text-muted-foreground/30 mx-auto" />
-                          <p className="text-sm text-muted-foreground mt-2">No employees match your filters</p>
+                          <p className="text-sm text-muted-foreground mt-2">{t("broadcast:recipients.noMatch")}</p>
                         </div>
                       ) : (
                         filteredEmployees.map(emp => (
@@ -542,24 +548,24 @@ export default function BroadcastPage() {
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-sm text-white font-medium truncate">
-                                    {emp.fullNameEn || emp.fullNameAr || "Unknown"}
+                                    <bdi>{emp.fullNameEn || emp.fullNameAr || t("broadcast:recipients.unknown")}</bdi>
                                   </span>
-                                  <span className="text-xs text-muted-foreground font-mono">{emp.employeeNumber}</span>
+                                  <span className="text-xs text-muted-foreground font-mono" dir="ltr">{emp.employeeNumber}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                  {emp.positionTitle && <span>{emp.positionTitle}</span>}
+                                  {emp.positionTitle && <span><bdi>{emp.positionTitle}</bdi></span>}
                                   {emp.positionTitle && emp.departmentName && <span>·</span>}
-                                  {emp.departmentName && <span>{emp.departmentName}</span>}
+                                  {emp.departmentName && <span><bdi>{emp.departmentName}</bdi></span>}
                                   {emp.employmentType === "smp" && (
-                                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-amber-500/30 text-amber-400">SMP</Badge>
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-amber-500/30 text-amber-400">{t("broadcast:recipients.smp")}</Badge>
                                   )}
                                 </div>
                               </div>
                             </div>
-                            <div className="shrink-0 text-xs text-muted-foreground font-mono">
+                            <div className="shrink-0 text-xs text-muted-foreground font-mono" dir="ltr">
                               {emp.phone || (
                                 <span className="text-amber-400 flex items-center gap-1">
-                                  <AlertTriangle className="h-3 w-3" /> No phone
+                                  <AlertTriangle className="h-3 w-3" /> {t("broadcast:recipients.noPhone")}
                                 </span>
                               )}
                             </div>
@@ -579,7 +585,7 @@ export default function BroadcastPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base text-white flex items-center gap-2">
                 <History className="h-4 w-4 text-primary" />
-                Broadcast History
+                {t("broadcast:history.title")}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -590,9 +596,9 @@ export default function BroadcastPage() {
               ) : broadcasts.length === 0 ? (
                 <div className="p-8 text-center">
                   <Radio className="h-8 w-8 text-muted-foreground/30 mx-auto" />
-                  <p className="text-sm text-muted-foreground mt-2">No broadcasts yet</p>
+                  <p className="text-sm text-muted-foreground mt-2">{t("broadcast:history.empty")}</p>
                   <Button variant="outline" size="sm" className="mt-3 border-border" onClick={() => setTab("compose")} data-testid="button-compose-first">
-                    Send your first broadcast
+                    {t("broadcast:history.composeFirst")}
                   </Button>
                 </div>
               ) : (
@@ -604,7 +610,7 @@ export default function BroadcastPage() {
                       <div key={b.id} className="border border-border rounded-md overflow-hidden">
                         <button
                           onClick={() => setExpandedBroadcast(isExpanded ? null : b.id)}
-                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/10 transition-colors text-left"
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/10 transition-colors text-start"
                           data-testid={`broadcast-row-${b.id}`}
                         >
                           <div className={cn(
@@ -620,25 +626,25 @@ export default function BroadcastPage() {
                              <XCircle className="h-4 w-4" />}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-white truncate font-mono">{b.messageTemplate}</p>
+                            <p className="text-sm text-white truncate font-mono"><bdi>{b.messageTemplate}</bdi></p>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              {new Date(b.createdAt).toLocaleString()} · {b.totalRecipients} recipients
+                              {new Date(b.createdAt).toLocaleString(i18n.language === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : i18n.language)} · {t("broadcast:history.totalRecipients", { count: formatNumber(b.totalRecipients, i18n.language) })}
                             </p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             {b.sentCount > 0 && (
                               <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/20 text-xs">
-                                {b.sentCount} sent
+                                {t("broadcast:history.sentBadge", { count: formatNumber(b.sentCount, i18n.language) })}
                               </Badge>
                             )}
                             {b.failedCount > 0 && (
                               <Badge className="bg-red-500/15 text-red-400 border-red-500/20 text-xs">
-                                {b.failedCount} failed
+                                {t("broadcast:history.failedBadge", { count: formatNumber(b.failedCount, i18n.language) })}
                               </Badge>
                             )}
                             {b.status === "sending" && (
                               <Badge className="bg-blue-500/15 text-blue-400 border-blue-500/20 text-xs">
-                                Sending...
+                                {t("broadcast:history.sending")}
                               </Badge>
                             )}
                             {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
@@ -649,7 +655,7 @@ export default function BroadcastPage() {
                           <div className="border-t border-border bg-muted/5">
                             <div className="px-4 py-2 bg-muted/10 border-b border-border/50">
                               <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                                Recipients ({detail.recipients.length})
+                                {t("broadcast:history.recipientsLabel", { count: formatNumber(detail.recipients.length, i18n.language) })}
                               </p>
                             </div>
                             <div className="max-h-[300px] overflow-y-auto">
@@ -662,8 +668,8 @@ export default function BroadcastPage() {
                                   ) : (
                                     <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
                                   )}
-                                  <span className="text-white flex-1 min-w-0 truncate">{r.recipientName || "Unknown"}</span>
-                                  <span className="text-muted-foreground font-mono text-xs shrink-0">{r.phone}</span>
+                                  <span className="text-white flex-1 min-w-0 truncate"><bdi>{r.recipientName || t("broadcast:recipients.unknown")}</bdi></span>
+                                  <span className="text-muted-foreground font-mono text-xs shrink-0" dir="ltr">{r.phone}</span>
                                   {r.error && (
                                     <span className="text-red-400 text-xs truncate max-w-[200px]" title={r.error}>{r.error}</span>
                                   )}
@@ -685,22 +691,29 @@ export default function BroadcastPage() {
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Broadcast</AlertDialogTitle>
-            <AlertDialogDescription>
-              You are about to send an SMS to <strong>{recipientsWithPhone}</strong> employee{recipientsWithPhone !== 1 ? "s" : ""}.
-              {selectedIds.size > recipientsWithPhone && (
-                <span className="block mt-1 text-amber-400">
-                  {selectedIds.size - recipientsWithPhone} selected employee(s) have no phone number and will be skipped.
-                </span>
-              )}
-              <span className="block mt-2">This action cannot be undone. Each SMS will be sent via the active SMS gateway plugin.</span>
+            <AlertDialogTitle>{t("broadcast:confirm.title")}</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                <Trans
+                  i18nKey="broadcast:confirm.body"
+                  count={recipientsWithPhone}
+                  values={{ count: formatNumber(recipientsWithPhone, i18n.language) }}
+                  components={{ strong: <strong /> }}
+                />
+                {selectedIds.size > recipientsWithPhone && (
+                  <span className="block mt-1 text-amber-400">
+                    {t("broadcast:confirm.skipNote", { count: formatNumber(selectedIds.size - recipientsWithPhone, i18n.language) })}
+                  </span>
+                )}
+                <span className="block mt-2">{t("broadcast:confirm.warn")}</span>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("broadcast:confirm.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmSend} className="bg-primary text-primary-foreground" data-testid="button-confirm-send">
-              <Send className="h-4 w-4 mr-2" />
-              Send to {recipientsWithPhone} recipients
+              <Send className="h-4 w-4 me-2" />
+              {t("broadcast:confirm.sendTo", { count: formatNumber(recipientsWithPhone, i18n.language) })}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
