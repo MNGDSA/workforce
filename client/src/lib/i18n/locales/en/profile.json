@@ -1,0 +1,37 @@
+{
+  "title": "My Profile",
+  "subtitle": "Your account information and security settings.",
+  "accountDetails": "Account Details",
+  "accountDetailsSub": "Your registered identity information",
+  "fields": {
+    "fullName": "Full Name",
+    "role": "Role",
+    "email": "Email",
+    "phone": "Phone",
+    "nationalId": "National ID"
+  },
+  "changePassword": "Change Password",
+  "changePasswordSub": "Choose a strong password of at least 8 characters",
+  "currentPassword": "Current Password",
+  "newPassword": "New Password",
+  "confirmPassword": "Confirm New Password",
+  "currentPasswordPlaceholder": "Enter current password",
+  "newPasswordPlaceholder": "At least 8 characters",
+  "confirmPasswordPlaceholder": "Repeat new password",
+  "passwordsDoNotMatch": "Passwords do not match",
+  "passwordsDoNotMatchError": "New passwords do not match.",
+  "passwordTooShort": "New password must be at least 8 characters.",
+  "updatePassword": "Update Password",
+  "updating": "Updating…",
+  "passwordUpdated": "Password updated",
+  "passwordUpdatedDesc": "Your password has been changed successfully.",
+  "passwordUpdateFailed": "Failed to update password",
+  "roles": {
+    "administrator": "Administrator",
+    "recruiter": "Recruiter",
+    "manager": "Manager",
+    "staff": "Staff"
+  },
+  "defaultName": "Admin User",
+  "idPrefix": "ID"
+}

@@ -1,0 +1,37 @@
+{
+  "title": "ملفي الشخصي",
+  "subtitle": "معلومات حسابك وإعدادات الأمان.",
+  "accountDetails": "تفاصيل الحساب",
+  "accountDetailsSub": "معلومات هويتك المسجلة",
+  "fields": {
+    "fullName": "الاسم الكامل",
+    "role": "الدور",
+    "email": "البريد الإلكتروني",
+    "phone": "الهاتف",
+    "nationalId": "الهوية الوطنية"
+  },
+  "changePassword": "تغيير كلمة المرور",
+  "changePasswordSub": "اختر كلمة مرور قوية لا تقل عن 8 أحرف",
+  "currentPassword": "كلمة المرور الحالية",
+  "newPassword": "كلمة المرور الجديدة",
+  "confirmPassword": "تأكيد كلمة المرور الجديدة",
+  "currentPasswordPlaceholder": "أدخل كلمة المرور الحالية",
+  "newPasswordPlaceholder": "8 أحرف على الأقل",
+  "confirmPasswordPlaceholder": "كرر كلمة المرور الجديدة",
+  "passwordsDoNotMatch": "كلمتا المرور غير متطابقتين",
+  "passwordsDoNotMatchError": "كلمتا المرور الجديدتان غير متطابقتين.",
+  "passwordTooShort": "يجب أن تكون كلمة المرور الجديدة 8 أحرف على الأقل.",
+  "updatePassword": "تحديث كلمة المرور",
+  "updating": "جارٍ التحديث…",
+  "passwordUpdated": "تم تحديث كلمة المرور",
+  "passwordUpdatedDesc": "تم تغيير كلمة المرور بنجاح.",
+  "passwordUpdateFailed": "فشل تحديث كلمة المرور",
+  "roles": {
+    "administrator": "مدير النظام",
+    "recruiter": "موظف توظيف",
+    "manager": "مدير",
+    "staff": "موظف"
+  },
+  "defaultName": "مستخدم مسؤول",
+  "idPrefix": "هوية"
+}

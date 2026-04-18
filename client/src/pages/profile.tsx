@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import DashboardLayout from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ type MeUser = {
 };
 
 export default function ProfilePage() {
+  const { t } = useTranslation(["profile", "common"]);
   const { toast } = useToast();
 
   const sessionUser = useMemo(() => {
@@ -47,14 +49,14 @@ export default function ProfilePage() {
     sessionUser?.fullNameEn ||
     meUser?.fullName ||
     meUser?.name ||
-    (sessionUser?.nationalId ? `ID ${sessionUser.nationalId}` : "Admin User");
+    (sessionUser?.nationalId ? `${t("profile:idPrefix")} ${sessionUser.nationalId}` : t("profile:defaultName"));
 
   const rawRole = meUser?.role ?? sessionUser?.role ?? "";
   const displayRole: string =
-    rawRole === "admin" || rawRole === "super_admin" ? "Administrator" :
-    rawRole === "recruiter" ? "Recruiter" :
-    rawRole === "manager" ? "Manager" :
-    rawRole || "Staff";
+    rawRole === "admin" || rawRole === "super_admin" ? t("profile:roles.administrator") :
+    rawRole === "recruiter" ? t("profile:roles.recruiter") :
+    rawRole === "manager" ? t("profile:roles.manager") :
+    rawRole || t("profile:roles.staff");
 
   const initials = displayName
     .split(" ")
@@ -72,19 +74,19 @@ export default function ProfilePage() {
 
   const changePwdMutation = useMutation({
     mutationFn: async () => {
-      if (newPwd !== confirmPwd) throw new Error("New passwords do not match.");
-      if (newPwd.length < 8) throw new Error("New password must be at least 8 characters.");
+      if (newPwd !== confirmPwd) throw new Error(t("profile:passwordsDoNotMatchError"));
+      if (newPwd.length < 8) throw new Error(t("profile:passwordTooShort"));
       await apiRequest("POST", "/api/auth/change-password", {
         currentPassword: currentPwd,
         newPassword: newPwd,
       });
     },
     onSuccess: () => {
-      toast({ title: "Password updated", description: "Your password has been changed successfully." });
+      toast({ title: t("profile:passwordUpdated"), description: t("profile:passwordUpdatedDesc") });
       setCurrentPwd(""); setNewPwd(""); setConfirmPwd("");
     },
     onError: (err: Error) => {
-      toast({ title: "Failed to update password", description: err.message, variant: "destructive" });
+      toast({ title: t("profile:passwordUpdateFailed"), description: err.message, variant: "destructive" });
     },
   });
 
@@ -100,9 +102,9 @@ export default function ProfilePage() {
         <div>
           <h1 className="text-3xl font-display font-bold text-white tracking-tight flex items-center gap-3">
             <User className="h-7 w-7 text-primary" />
-            My Profile
+            {t("profile:title")}
           </h1>
-          <p className="text-muted-foreground mt-1">Your account information and security settings.</p>
+          <p className="text-muted-foreground mt-1">{t("profile:subtitle")}</p>
         </div>
 
         {/* Identity card */}
@@ -113,7 +115,7 @@ export default function ProfilePage() {
                 <span className="text-2xl font-display font-bold text-primary">{initials}</span>
               </div>
               <div>
-                <p className="text-xl font-display font-bold text-white">{displayName}</p>
+                <p className="text-xl font-display font-bold text-white"><bdi>{displayName}</bdi></p>
                 <Badge className={`mt-1 text-xs border ${roleBadgeColor}`}>{displayRole}</Badge>
               </div>
             </div>
@@ -125,24 +127,24 @@ export default function ProfilePage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base text-white flex items-center gap-2">
               <IdCard className="h-4 w-4 text-primary" />
-              Account Details
+              {t("profile:accountDetails")}
             </CardTitle>
-            <CardDescription>Your registered identity information</CardDescription>
+            <CardDescription>{t("profile:accountDetailsSub")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <User className="h-3 w-3" /> Full Name
+                  <User className="h-3 w-3" /> {t("profile:fields.fullName")}
                 </Label>
                 <p className="text-sm text-white font-medium bg-muted/20 border border-border rounded-md px-3 py-2">
-                  {meUser?.fullName || meUser?.name || displayName}
+                  <bdi>{meUser?.fullName || meUser?.name || displayName}</bdi>
                 </p>
               </div>
 
               <div className="space-y-1.5">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <Shield className="h-3 w-3" /> Role
+                  <Shield className="h-3 w-3" /> {t("profile:fields.role")}
                 </Label>
                 <p className="text-sm text-white font-medium bg-muted/20 border border-border rounded-md px-3 py-2 capitalize">
                   {meUser?.role ?? sessionUser?.role ?? "—"}
@@ -151,18 +153,18 @@ export default function ProfilePage() {
 
               <div className="space-y-1.5">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <Mail className="h-3 w-3" /> Email
+                  <Mail className="h-3 w-3" /> {t("profile:fields.email")}
                 </Label>
-                <p className="text-sm text-white font-medium bg-muted/20 border border-border rounded-md px-3 py-2">
+                <p className="text-sm text-white font-medium bg-muted/20 border border-border rounded-md px-3 py-2" dir="ltr">
                   {meUser?.email || sessionUser?.email || "—"}
                 </p>
               </div>
 
               <div className="space-y-1.5">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <Phone className="h-3 w-3" /> Phone
+                  <Phone className="h-3 w-3" /> {t("profile:fields.phone")}
                 </Label>
-                <p className="text-sm text-white font-medium bg-muted/20 border border-border rounded-md px-3 py-2">
+                <p className="text-sm text-white font-medium bg-muted/20 border border-border rounded-md px-3 py-2" dir="ltr">
                   {meUser?.phone || sessionUser?.phone || "—"}
                 </p>
               </div>
@@ -170,9 +172,9 @@ export default function ProfilePage() {
               {(meUser?.nationalId || sessionUser?.nationalId) && (
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <IdCard className="h-3 w-3" /> National ID
+                    <IdCard className="h-3 w-3" /> {t("profile:fields.nationalId")}
                   </Label>
-                  <p className="text-sm text-white font-mono bg-muted/20 border border-border rounded-md px-3 py-2">
+                  <p className="text-sm text-white font-mono bg-muted/20 border border-border rounded-md px-3 py-2" dir="ltr">
                     {meUser?.nationalId ?? sessionUser?.nationalId}
                   </p>
                 </div>
@@ -186,27 +188,28 @@ export default function ProfilePage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base text-white flex items-center gap-2">
               <KeyRound className="h-4 w-4 text-primary" />
-              Change Password
+              {t("profile:changePassword")}
             </CardTitle>
-            <CardDescription>Choose a strong password of at least 8 characters</CardDescription>
+            <CardDescription>{t("profile:changePasswordSub")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="current-pwd" className="text-sm text-white">Current Password</Label>
+              <Label htmlFor="current-pwd" className="text-sm text-white">{t("profile:currentPassword")}</Label>
               <div className="relative">
                 <Input
                   id="current-pwd"
                   type={showCurrent ? "text" : "password"}
                   value={currentPwd}
                   onChange={(e) => setCurrentPwd(e.target.value)}
-                  className="bg-muted/30 border-border pr-10"
-                  placeholder="Enter current password"
+                  className="bg-muted/30 border-border pe-10"
+                  placeholder={t("profile:currentPasswordPlaceholder")}
                   data-testid="input-current-password"
+                  dir="ltr"
                 />
                 <button
                   type="button"
                   onClick={() => setShowCurrent(!showCurrent)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+                  className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
                 >
                   {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -216,21 +219,22 @@ export default function ProfilePage() {
             <Separator className="bg-border/50" />
 
             <div className="space-y-1.5">
-              <Label htmlFor="new-pwd" className="text-sm text-white">New Password</Label>
+              <Label htmlFor="new-pwd" className="text-sm text-white">{t("profile:newPassword")}</Label>
               <div className="relative">
                 <Input
                   id="new-pwd"
                   type={showNew ? "text" : "password"}
                   value={newPwd}
                   onChange={(e) => setNewPwd(e.target.value)}
-                  className="bg-muted/30 border-border pr-10"
-                  placeholder="At least 8 characters"
+                  className="bg-muted/30 border-border pe-10"
+                  placeholder={t("profile:newPasswordPlaceholder")}
                   data-testid="input-new-password"
+                  dir="ltr"
                 />
                 <button
                   type="button"
                   onClick={() => setShowNew(!showNew)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+                  className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
                 >
                   {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -238,18 +242,19 @@ export default function ProfilePage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="confirm-pwd" className="text-sm text-white">Confirm New Password</Label>
+              <Label htmlFor="confirm-pwd" className="text-sm text-white">{t("profile:confirmPassword")}</Label>
               <Input
                 id="confirm-pwd"
                 type="password"
                 value={confirmPwd}
                 onChange={(e) => setConfirmPwd(e.target.value)}
                 className={`bg-muted/30 border-border ${confirmPwd && confirmPwd !== newPwd ? "border-destructive focus-visible:ring-destructive" : ""}`}
-                placeholder="Repeat new password"
+                placeholder={t("profile:confirmPasswordPlaceholder")}
                 data-testid="input-confirm-password"
+                dir="ltr"
               />
               {confirmPwd && confirmPwd !== newPwd && (
-                <p className="text-xs text-destructive">Passwords do not match</p>
+                <p className="text-xs text-destructive">{t("profile:passwordsDoNotMatch")}</p>
               )}
             </div>
 
@@ -259,8 +264,8 @@ export default function ProfilePage() {
               className="bg-primary text-primary-foreground font-bold w-full sm:w-auto"
               data-testid="button-change-password"
             >
-              <Save className="mr-2 h-4 w-4" />
-              {changePwdMutation.isPending ? "Updating…" : "Update Password"}
+              <Save className="me-2 h-4 w-4" />
+              {changePwdMutation.isPending ? t("profile:updating") : t("profile:updatePassword")}
             </Button>
           </CardContent>
         </Card>

@@ -8,6 +8,7 @@ import enApply from "./locales/en/apply.json";
 import enPortal from "./locales/en/portal.json";
 import enLayout from "./locales/en/layout.json";
 import enDashboard from "./locales/en/dashboard.json";
+import enProfile from "./locales/en/profile.json";
 
 import arCommon from "./locales/ar/common.json";
 import arAuth from "./locales/ar/auth.json";
@@ -15,6 +16,7 @@ import arApply from "./locales/ar/apply.json";
 import arPortal from "./locales/ar/portal.json";
 import arLayout from "./locales/ar/layout.json";
 import arDashboard from "./locales/ar/dashboard.json";
+import arProfile from "./locales/ar/profile.json";
 
 export const SUPPORTED_LOCALES = ["ar", "en"] as const;
 export type SupportedLocale = typeof SUPPORTED_LOCALES[number];
@@ -27,12 +29,12 @@ i18n
   .use(initReactI18next)
   .init({
     resources: {
-      en: { common: enCommon, auth: enAuth, apply: enApply, portal: enPortal, layout: enLayout, dashboard: enDashboard },
-      ar: { common: arCommon, auth: arAuth, apply: arApply, portal: arPortal, layout: arLayout, dashboard: arDashboard },
+      en: { common: enCommon, auth: enAuth, apply: enApply, portal: enPortal, layout: enLayout, dashboard: enDashboard, profile: enProfile },
+      ar: { common: arCommon, auth: arAuth, apply: arApply, portal: arPortal, layout: arLayout, dashboard: arDashboard, profile: arProfile },
     },
     fallbackLng: DEFAULT_LOCALE,
     supportedLngs: SUPPORTED_LOCALES as unknown as string[],
-    ns: ["common", "auth", "apply", "portal", "layout", "dashboard"],
+    ns: ["common", "auth", "apply", "portal", "layout", "dashboard", "profile"],
     defaultNS: "common",
     interpolation: { escapeValue: false },
     detection: {
