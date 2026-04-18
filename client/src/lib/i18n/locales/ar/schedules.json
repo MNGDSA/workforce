@@ -1,0 +1,160 @@
+{
+  "page": {
+    "title": "الحضور",
+    "subtitle": "اللوحة الرئيسية، تعريفات الورديات، قوالب الجداول، جداول الموظفين، ومتابعة الحضور.",
+    "loading": "جارٍ التحميل..."
+  },
+  "tabs": {
+    "dashboard": "اللوحة",
+    "shifts": "الورديات",
+    "templates": "القوالب",
+    "roster": "الجدول",
+    "attendance": "الحضور"
+  },
+  "common": {
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "today": "اليوم",
+    "from": "من",
+    "to": "إلى",
+    "employee": "الموظف",
+    "off": "راحة",
+    "dayOff": "يوم إجازة",
+    "unassigned": "غير معيَّن",
+    "end": "إنهاء",
+    "noActiveEmployees": "لا يوجد موظفون نشطون",
+    "saveChanges": "حفظ التغييرات",
+    "error": "خطأ"
+  },
+  "days": {
+    "monShort": "إث", "tueShort": "ثل", "wedShort": "أر", "thuShort": "خم",
+    "friShort": "جم", "satShort": "سب", "sunShort": "أح"
+  },
+  "attendance": {
+    "status": {
+      "present": "حاضر",
+      "absent": "غائب",
+      "late": "متأخر",
+      "excused": "بعذر"
+    },
+    "viewDaily": "يومي",
+    "viewSummary": "ملخّص",
+    "saveAttendance": "حفظ الحضور",
+    "saved": "تم حفظ الحضور",
+    "noShiftToday": "لا يوجد موظفون لديهم وردية في {{date}}.",
+    "noShiftHint": "يُستثنى الموظفون أصحاب الإجازة أو غير المعيَّنين في هذا اليوم.",
+    "noSummaryData": "لا توجد بيانات حضور للفترة المختارة.",
+    "shift": "الوردية",
+    "statusCol": "الحالة",
+    "clockIn": "الدخول",
+    "clockOut": "الخروج",
+    "minsWorked": "الدقائق المعمولة",
+    "missingClockOut": "لم يُسجَّل الخروج",
+    "worked": "حضور",
+    "late": "تأخير",
+    "excused": "بعذر",
+    "lateMins": "دقائق التأخير",
+    "totalCol": "الإجمالي",
+    "scheduled": "المجدوَل"
+  },
+  "shifts": {
+    "countDefined_zero": "لا توجد أنواع ورديات",
+    "countDefined_one": "نوع وردية واحد",
+    "countDefined_two": "نوعا ورديات",
+    "countDefined_few": "{{n}} أنواع ورديات",
+    "countDefined_many": "{{n}} نوعًا من الورديات",
+    "countDefined_other": "{{n}} أنواع ورديات",
+    "newShift": "وردية جديدة",
+    "editShift": "تعديل الوردية",
+    "noShiftsTitle": "لا توجد أنواع ورديات بعد. أنشئ أول وردية للبدء.",
+    "deleteTitle": "حذف الوردية",
+    "deleteDesc": "سيؤدي هذا إلى حذف نوع الوردية نهائيًا. قد يتأثّر الموظفون المسجَّلون عليها حاليًا.",
+    "shiftDeleted": "تم حذف الوردية",
+    "shiftCreated": "تم إنشاء الوردية",
+    "shiftUpdated": "تم تحديث الوردية",
+    "fields": {
+      "name": "اسم الوردية",
+      "namePlaceholder": "مثال: وردية صباحية",
+      "startTime": "وقت البدء",
+      "endTime": "وقت الانتهاء",
+      "color": "اللون"
+    },
+    "createShift": "إنشاء وردية",
+    "shiftFormDesc": "حدّد نوع الوردية بأوقاتها ولونها"
+  },
+  "templates": {
+    "countDefined_zero": "لا توجد قوالب",
+    "countDefined_one": "قالب واحد",
+    "countDefined_two": "قالبان",
+    "countDefined_few": "{{n}} قوالب",
+    "countDefined_many": "{{n}} قالبًا",
+    "countDefined_other": "{{n}} قوالب",
+    "newTemplate": "قالب جديد",
+    "createShiftsFirst": "أنشئ الورديات أولًا",
+    "noTemplatesTitle": "لا توجد قوالب جداول بعد.",
+    "createShiftsHint": "أنشئ أنواع الورديات أولًا.",
+    "createFirstHint": "أنشئ أول قالب لك.",
+    "editTemplate": "تعديل قالب الجدول",
+    "createTemplate": "إنشاء قالب",
+    "deleteTitle": "حذف القالب",
+    "deleteDesc": "سيؤدي هذا إلى حذف قالب الجدول نهائيًا.",
+    "templateDeleted": "تم حذف القالب",
+    "templateCreated": "تم إنشاء القالب",
+    "templateUpdated": "تم تحديث القالب",
+    "fields": {
+      "name": "اسم القالب",
+      "namePlaceholder": "مثال: أسبوع عمل قياسي",
+      "weeklyPattern": "النمط الأسبوعي"
+    },
+    "templateFormDesc": "حدّد نمط الجدول الأسبوعي"
+  },
+  "assign": {
+    "title": "تعيين جدول",
+    "desc": "تعيين قالب جدول للموظفين",
+    "template": "قالب الجدول",
+    "templatePlaceholder": "اختر القالب...",
+    "startDate": "تاريخ البدء",
+    "endDate": "تاريخ الانتهاء",
+    "endDateOptional": "(اختياري — اتركه فارغًا للمدّة المفتوحة)",
+    "employees": "الموظفون ({{n}} محدّد)",
+    "selectAll": "تحديد الكل",
+    "deselectAll": "إلغاء التحديد",
+    "searchPlaceholder": "ابحث عن الموظفين...",
+    "noEmployees": "لا يوجد موظفون",
+    "assignBtn_zero": "اختر موظفين",
+    "assignBtn_one": "تعيين لموظف واحد",
+    "assignBtn_two": "تعيين لموظفَين",
+    "assignBtn_few": "تعيين لـ {{n}} موظفين",
+    "assignBtn_many": "تعيين لـ {{n}} موظفًا",
+    "assignBtn_other": "تعيين لـ {{n}} موظف",
+    "assigned": "تم تعيين الجدول بنجاح",
+    "ended": "تم إنهاء التعيين",
+    "endTitle": "إنهاء تعيين الجدول",
+    "endDesc": "اختر تاريخ إنهاء هذا التعيين. سيتم حفظ السجلّ.",
+    "endAssignment": "إنهاء التعيين"
+  },
+  "roster": {
+    "week": "أسبوع",
+    "month": "شهر",
+    "assignSchedule": "تعيين جدول",
+    "schedule": "الجدول"
+  },
+  "dashboard": {
+    "loading": "جارٍ تحميل اللوحة...",
+    "stats": {
+      "presentDays": "أيام الحضور",
+      "absentDays": "أيام الغياب",
+      "lateDays": "أيام التأخير",
+      "totalLateMinutes": "إجمالي دقائق التأخير",
+      "attendanceRate": "نسبة الحضور",
+      "excusedDays": "أيام العذر",
+      "pendingExcuses": "أعذار قيد المراجعة"
+    },
+    "topLate": "الأكثر تأخّرًا (أعلى 50)",
+    "topAbsent": "الأكثر غيابًا (أعلى 50)",
+    "noLateness": "لا توجد بيانات تأخير لهذه الفترة",
+    "noAbsence": "لا توجد بيانات غياب لهذه الفترة",
+    "csv": "CSV",
+    "excel": "Excel"
+  }
+}

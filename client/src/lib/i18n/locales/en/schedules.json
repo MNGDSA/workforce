@@ -1,0 +1,148 @@
+{
+  "page": {
+    "title": "Attendance",
+    "subtitle": "Dashboard, shift definitions, schedule templates, employee rosters, and attendance tracking.",
+    "loading": "Loading..."
+  },
+  "tabs": {
+    "dashboard": "Dashboard",
+    "shifts": "Shifts",
+    "templates": "Templates",
+    "roster": "Roster",
+    "attendance": "Attendance"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "today": "Today",
+    "from": "From",
+    "to": "To",
+    "employee": "Employee",
+    "off": "off",
+    "dayOff": "Day Off",
+    "unassigned": "Unassigned",
+    "end": "End",
+    "noActiveEmployees": "No active employees found",
+    "saveChanges": "Save Changes",
+    "error": "Error"
+  },
+  "days": {
+    "monShort": "Mon", "tueShort": "Tue", "wedShort": "Wed", "thuShort": "Thu",
+    "friShort": "Fri", "satShort": "Sat", "sunShort": "Sun"
+  },
+  "attendance": {
+    "status": {
+      "present": "Present",
+      "absent": "Absent",
+      "late": "Late",
+      "excused": "Excused"
+    },
+    "viewDaily": "Daily",
+    "viewSummary": "Summary",
+    "saveAttendance": "Save Attendance",
+    "saved": "Attendance saved",
+    "noShiftToday": "No employees have a shift on {{date}}.",
+    "noShiftHint": "Employees with a day-off or no assignment on this day are excluded.",
+    "noSummaryData": "No attendance data for selected period.",
+    "shift": "Shift",
+    "statusCol": "Status",
+    "clockIn": "Clock In",
+    "clockOut": "Clock Out",
+    "minsWorked": "Mins Worked",
+    "missingClockOut": "Missing clock-out",
+    "worked": "Worked",
+    "late": "Late",
+    "excused": "Excused",
+    "lateMins": "Late Mins",
+    "totalCol": "Total",
+    "scheduled": "Scheduled"
+  },
+  "shifts": {
+    "countDefined_one": "{{n}} shift type defined",
+    "countDefined_other": "{{n}} shift types defined",
+    "newShift": "New Shift",
+    "editShift": "Edit Shift",
+    "noShiftsTitle": "No shift types yet. Create your first shift to get started.",
+    "deleteTitle": "Delete Shift",
+    "deleteDesc": "This will permanently delete the shift type. Employees currently on this shift may be affected.",
+    "shiftDeleted": "Shift deleted",
+    "shiftCreated": "Shift created",
+    "shiftUpdated": "Shift updated",
+    "fields": {
+      "name": "Shift Name",
+      "namePlaceholder": "e.g. Morning Shift",
+      "startTime": "Start Time",
+      "endTime": "End Time",
+      "color": "Color"
+    },
+    "createShift": "Create Shift",
+    "shiftFormDesc": "Define a shift type with times and color"
+  },
+  "templates": {
+    "countDefined_one": "{{n}} template defined",
+    "countDefined_other": "{{n}} templates defined",
+    "newTemplate": "New Template",
+    "createShiftsFirst": "Create shifts first",
+    "noTemplatesTitle": "No schedule templates yet.",
+    "createShiftsHint": "Create shift types first.",
+    "createFirstHint": "Create your first template.",
+    "editTemplate": "Edit Schedule Template",
+    "createTemplate": "Create Template",
+    "deleteTitle": "Delete Template",
+    "deleteDesc": "This will permanently delete the schedule template.",
+    "templateDeleted": "Template deleted",
+    "templateCreated": "Template created",
+    "templateUpdated": "Template updated",
+    "fields": {
+      "name": "Template Name",
+      "namePlaceholder": "e.g. Standard Work Week",
+      "weeklyPattern": "Weekly Pattern"
+    },
+    "templateFormDesc": "Define a weekly schedule pattern"
+  },
+  "assign": {
+    "title": "Assign Schedule",
+    "desc": "Assign a schedule template to employees",
+    "template": "Schedule Template",
+    "templatePlaceholder": "Select template...",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "endDateOptional": "(optional, leave blank for open-ended)",
+    "employees": "Employees ({{n}} selected)",
+    "selectAll": "Select All",
+    "deselectAll": "Deselect All",
+    "searchPlaceholder": "Search employees...",
+    "noEmployees": "No employees found",
+    "assignBtn_one": "Assign to {{n}} Employee",
+    "assignBtn_other": "Assign to {{n}} Employees",
+    "assigned": "Schedule assigned successfully",
+    "ended": "Assignment ended",
+    "endTitle": "End Schedule Assignment",
+    "endDesc": "Choose the date to end this assignment. History will be preserved.",
+    "endAssignment": "End Assignment"
+  },
+  "roster": {
+    "week": "Week",
+    "month": "Month",
+    "assignSchedule": "Assign Schedule",
+    "schedule": "Schedule"
+  },
+  "dashboard": {
+    "loading": "Loading dashboard...",
+    "stats": {
+      "presentDays": "Present Days",
+      "absentDays": "Absent Days",
+      "lateDays": "Late Days",
+      "totalLateMinutes": "Total Late Minutes",
+      "attendanceRate": "Attendance Rate",
+      "excusedDays": "Excused Days",
+      "pendingExcuses": "Pending Excuses"
+    },
+    "topLate": "Most Late (Top 50)",
+    "topAbsent": "Most Absent (Top 50)",
+    "noLateness": "No lateness data for this period",
+    "noAbsence": "No absence data for this period",
+    "csv": "CSV",
+    "excel": "Excel"
+  }
+}

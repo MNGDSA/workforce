@@ -52,6 +52,8 @@ import {
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
+import { formatNumber, formatDate } from "@/lib/format";
 
 type Shift = {
   id: string;
@@ -122,20 +124,22 @@ type WorkedDaySummary = {
 
 const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
 type Day = typeof DAYS[number];
-const DAY_LABELS: Record<Day, string> = {
-  monday: "Mon", tuesday: "Tue", wednesday: "Wed", thursday: "Thu",
-  friday: "Fri", saturday: "Sat", sunday: "Sun",
-};
-const DAY_FULL_LABELS: Record<Day, string> = {
-  monday: "Monday", tuesday: "Tuesday", wednesday: "Wednesday", thursday: "Thursday",
-  friday: "Friday", saturday: "Saturday", sunday: "Sunday",
+const DAY_KEYS: Record<Day, string> = {
+  monday: "schedules:days.monShort",
+  tuesday: "schedules:days.tueShort",
+  wednesday: "schedules:days.wedShort",
+  thursday: "schedules:days.thuShort",
+  friday: "schedules:days.friShort",
+  saturday: "schedules:days.satShort",
+  sunday: "schedules:days.sunShort",
 };
 
-const ATTENDANCE_STATUSES = [
-  { value: "present", label: "Present", icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30" },
-  { value: "absent", label: "Absent", icon: XCircle, color: "text-red-400", bg: "bg-red-500/10 border-red-500/30" },
-  { value: "late", label: "Late", icon: AlertCircle, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/30" },
-  { value: "excused", label: "Excused", icon: Shield, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/30" },
+type AttendanceStatusValue = "present" | "absent" | "late" | "excused";
+const ATTENDANCE_STATUSES: { value: AttendanceStatusValue; tKey: string; icon: typeof CheckCircle2; color: string; bg: string }[] = [
+  { value: "present", tKey: "schedules:attendance.status.present", icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30" },
+  { value: "absent", tKey: "schedules:attendance.status.absent", icon: XCircle, color: "text-red-400", bg: "bg-red-500/10 border-red-500/30" },
+  { value: "late", tKey: "schedules:attendance.status.late", icon: AlertCircle, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/30" },
+  { value: "excused", tKey: "schedules:attendance.status.excused", icon: Shield, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/30" },
 ];
 
 function getStatusInfo(status: string) {
@@ -149,8 +153,7 @@ function localDateStr(d: Date = new Date()): string {
 function formatTime(t: string) {
   if (!t) return "";
   const [h, m] = t.split(":");
-  const hour = parseInt(h, 10);
-  return `${hour % 12 || 12}:${m} ${hour < 12 ? "AM" : "PM"}`;
+  return `${h.padStart(2, "0")}:${m}`;
 }
 
 function ShiftBadge({ shift }: { shift: Shift | undefined }) {
@@ -177,6 +180,7 @@ function ShiftFormDialog({
   initial?: Shift | null;
   onSaved: () => void;
 }) {
+  const { t } = useTranslation(["schedules", "common"]);
   const { toast } = useToast();
   const qc = useQueryClient();
   const [form, setForm] = useState({
@@ -193,55 +197,57 @@ function ShiftFormDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/shifts"] });
-      toast({ title: initial ? "Shift updated" : "Shift created" });
+      toast({ title: initial ? t("schedules:shifts.shiftUpdated") : t("schedules:shifts.shiftCreated") });
       onSaved();
       onOpenChange(false);
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("schedules:common.error"), description: e.message, variant: "destructive" }),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-card border-border text-foreground max-w-md">
         <DialogHeader>
-          <DialogTitle>{initial ? "Edit Shift" : "New Shift"}</DialogTitle>
-          <DialogDescription className="sr-only">Define a shift type with times and color</DialogDescription>
+          <DialogTitle>{initial ? t("schedules:shifts.editShift") : t("schedules:shifts.newShift")}</DialogTitle>
+          <DialogDescription className="sr-only">{t("schedules:shifts.shiftFormDesc")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-zinc-400 text-xs uppercase tracking-wider">Shift Name</Label>
+            <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("schedules:shifts.fields.name")}</Label>
             <Input
               data-testid="input-shift-name"
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              placeholder="e.g. Morning Shift"
+              placeholder={t("schedules:shifts.fields.namePlaceholder")}
               className="bg-background border-input text-foreground"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Start Time</Label>
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("schedules:shifts.fields.startTime")}</Label>
               <Input
                 data-testid="input-shift-start"
                 type="time"
                 value={form.startTime}
                 onChange={e => setForm(f => ({ ...f, startTime: e.target.value }))}
                 className="bg-background border-input text-foreground"
+                dir="ltr"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">End Time</Label>
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("schedules:shifts.fields.endTime")}</Label>
               <Input
                 data-testid="input-shift-end"
                 type="time"
                 value={form.endTime}
                 onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))}
                 className="bg-background border-input text-foreground"
+                dir="ltr"
               />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-zinc-400 text-xs uppercase tracking-wider">Color</Label>
+            <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("schedules:shifts.fields.color")}</Label>
             <div className="flex items-center gap-3">
               <input
                 data-testid="input-shift-color"
@@ -255,19 +261,20 @@ function ShiftFormDialog({
                 onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
                 className="bg-background border-input text-foreground font-mono uppercase flex-1"
                 maxLength={7}
+                dir="ltr"
               />
             </div>
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <Button variant="outline" className="border-zinc-700" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button variant="outline" className="border-zinc-700" onClick={() => onOpenChange(false)}>{t("schedules:common.cancel")}</Button>
             <Button
               data-testid="button-save-shift"
               className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
               disabled={mutation.isPending || !form.name}
               onClick={() => mutation.mutate(form)}
             >
-              {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              {initial ? "Save Changes" : "Create Shift"}
+              {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin me-1" /> : null}
+              {initial ? t("schedules:common.saveChanges") : t("schedules:shifts.createShift")}
             </Button>
           </div>
         </div>
@@ -290,6 +297,7 @@ function TemplateFormDialog({
   shifts: Shift[];
   onSaved: () => void;
 }) {
+  const { t } = useTranslation(["schedules", "common"]);
   const { toast } = useToast();
   const qc = useQueryClient();
   type DayShifts = Record<Day, string | null>;
@@ -321,11 +329,11 @@ function TemplateFormDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/schedule-templates"] });
-      toast({ title: initial ? "Template updated" : "Template created" });
+      toast({ title: initial ? t("schedules:templates.templateUpdated") : t("schedules:templates.templateCreated") });
       onSaved();
       onOpenChange(false);
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("schedules:common.error"), description: e.message, variant: "destructive" }),
   });
 
   const shiftById = useMemo(() => {
@@ -338,22 +346,22 @@ function TemplateFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-card border-border text-foreground max-w-lg">
         <DialogHeader>
-          <DialogTitle>{initial ? "Edit Schedule Template" : "New Schedule Template"}</DialogTitle>
-          <DialogDescription className="sr-only">Define a weekly schedule pattern</DialogDescription>
+          <DialogTitle>{initial ? t("schedules:templates.editTemplate") : t("schedules:templates.createTemplate")}</DialogTitle>
+          <DialogDescription className="sr-only">{t("schedules:templates.templateFormDesc")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-zinc-400 text-xs uppercase tracking-wider">Template Name</Label>
+            <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("schedules:templates.fields.name")}</Label>
             <Input
               data-testid="input-template-name"
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              placeholder="e.g. Standard Work Week"
+              placeholder={t("schedules:templates.fields.namePlaceholder")}
               className="bg-background border-input text-foreground"
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-zinc-400 text-xs uppercase tracking-wider">Weekly Pattern</Label>
+            <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("schedules:templates.fields.weeklyPattern")}</Label>
             <div className="border border-border/50 rounded-lg overflow-hidden">
               {DAYS.map((day, idx) => {
                 const shiftId = form[day];
@@ -363,7 +371,7 @@ function TemplateFormDialog({
                     key={day}
                     className={`flex items-center gap-3 px-3 py-2 ${idx < DAYS.length - 1 ? "border-b border-border/40" : ""}`}
                   >
-                    <span className="text-xs font-medium text-zinc-400 w-8">{DAY_LABELS[day]}</span>
+                    <span className="text-xs font-medium text-zinc-400 w-8">{t(DAY_KEYS[day])}</span>
                     <Select
                       value={shiftId ?? "off"}
                       onValueChange={v => setForm(f => ({ ...f, [day]: v === "off" ? null : v }))}
@@ -376,20 +384,20 @@ function TemplateFormDialog({
                           {shift ? (
                             <span className="flex items-center gap-1.5">
                               <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: shift.color }} />
-                              {shift.name} ({formatTime(shift.startTime)} – {formatTime(shift.endTime)})
+                              <bdi>{shift.name}</bdi> <span dir="ltr">({formatTime(shift.startTime)} – {formatTime(shift.endTime)})</span>
                             </span>
                           ) : (
-                            <span className="text-zinc-500">Day Off</span>
+                            <span className="text-zinc-500">{t("schedules:common.dayOff")}</span>
                           )}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent className="bg-popover border-border">
-                        <SelectItem value="off" className="text-zinc-400 text-xs">Day Off</SelectItem>
+                        <SelectItem value="off" className="text-zinc-400 text-xs">{t("schedules:common.dayOff")}</SelectItem>
                         {shifts.map(s => (
                           <SelectItem key={s.id} value={s.id} className="text-xs">
                             <span className="flex items-center gap-1.5">
                               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-                              {s.name} ({formatTime(s.startTime)} – {formatTime(s.endTime)})
+                              <bdi>{s.name}</bdi> <span dir="ltr">({formatTime(s.startTime)} – {formatTime(s.endTime)})</span>
                             </span>
                           </SelectItem>
                         ))}
@@ -401,15 +409,15 @@ function TemplateFormDialog({
             </div>
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <Button variant="outline" className="border-zinc-700" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button variant="outline" className="border-zinc-700" onClick={() => onOpenChange(false)}>{t("schedules:common.cancel")}</Button>
             <Button
               data-testid="button-save-template"
               className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
               disabled={mutation.isPending || !form.name}
               onClick={() => mutation.mutate(form)}
             >
-              {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              {initial ? "Save Changes" : "Create Template"}
+              {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin me-1" /> : null}
+              {initial ? t("schedules:common.saveChanges") : t("schedules:templates.createTemplate")}
             </Button>
           </div>
         </div>
@@ -434,6 +442,7 @@ function AssignScheduleDialog({
   preselectedIds?: string[];
   onAssigned: () => void;
 }) {
+  const { t } = useTranslation(["schedules", "common"]);
   const { toast } = useToast();
   const qc = useQueryClient();
   const [templateId, setTemplateId] = useState("");
@@ -460,11 +469,11 @@ function AssignScheduleDialog({
         qc.invalidateQueries({ queryKey: ["/api/schedule-assignments/employee", wid] });
         qc.invalidateQueries({ queryKey: ["/api/schedule-assignments/employee", wid, "active"] });
       });
-      toast({ title: "Schedule assigned successfully" });
+      toast({ title: t("schedules:assign.assigned") });
       onAssigned();
       onOpenChange(false);
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("schedules:common.error"), description: e.message, variant: "destructive" }),
   });
 
   const toggleAll = () => {
@@ -476,37 +485,38 @@ function AssignScheduleDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-card border-border text-foreground max-w-xl max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Assign Schedule</DialogTitle>
-          <DialogDescription className="sr-only">Assign a schedule template to employees</DialogDescription>
+          <DialogTitle>{t("schedules:assign.title")}</DialogTitle>
+          <DialogDescription className="sr-only">{t("schedules:assign.desc")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 overflow-y-auto flex-1">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Schedule Template</Label>
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("schedules:assign.template")}</Label>
               <Select value={templateId} onValueChange={setTemplateId}>
                 <SelectTrigger data-testid="select-assign-template" className="bg-background border-input text-foreground">
-                  <SelectValue placeholder="Select template..." />
+                  <SelectValue placeholder={t("schedules:assign.templatePlaceholder")} />
                 </SelectTrigger>
                 <SelectContent className="bg-popover border-border">
-                  {templates.map(t => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  {templates.map(tpl => (
+                    <SelectItem key={tpl.id} value={tpl.id}><bdi>{tpl.name}</bdi></SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Start Date</Label>
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("schedules:assign.startDate")}</Label>
               <Input
                 data-testid="input-assign-start-date"
                 type="date"
                 value={startDate}
                 onChange={e => setStartDate(e.target.value)}
                 className="bg-background border-input text-foreground"
+                dir="ltr"
               />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-zinc-400 text-xs uppercase tracking-wider">End Date <span className="text-zinc-600 normal-case">(optional, leave blank for open-ended)</span></Label>
+            <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("schedules:assign.endDate")} <span className="text-zinc-600 normal-case">{t("schedules:assign.endDateOptional")}</span></Label>
             <Input
               data-testid="input-assign-end-date"
               type="date"
@@ -514,22 +524,23 @@ function AssignScheduleDialog({
               min={startDate}
               onChange={e => setEndDate(e.target.value)}
               className="bg-background border-input text-foreground"
+              dir="ltr"
             />
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label className="text-zinc-400 text-xs uppercase tracking-wider">
-                Employees ({selectedIds.size} selected)
+                {t("schedules:assign.employees", { n: formatNumber(selectedIds.size) })}
               </Label>
               <Button variant="ghost" size="sm" className="h-6 text-xs text-primary" onClick={toggleAll}>
-                {selectedIds.size === filtered.length ? "Deselect All" : "Select All"}
+                {selectedIds.size === filtered.length ? t("schedules:assign.deselectAll") : t("schedules:assign.selectAll")}
               </Button>
             </div>
             <Input
               data-testid="input-assign-search"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search employees..."
+              placeholder={t("schedules:assign.searchPlaceholder")}
               className="bg-background border-input text-foreground text-sm h-8"
             />
             <div className="border border-border/50 rounded-lg divide-y divide-border/30 max-h-64 overflow-y-auto">
@@ -549,26 +560,26 @@ function AssignScheduleDialog({
                     }}
                     className="accent-[hsl(155,45%,45%)]"
                   />
-                  <span className="font-mono text-xs text-primary">{emp.employeeNumber}</span>
-                  <span className="text-sm text-white">{emp.fullNameEn ?? "—"}</span>
+                  <span className="font-mono text-xs text-primary" dir="ltr">{emp.employeeNumber}</span>
+                  <span className="text-sm text-white"><bdi>{emp.fullNameEn ?? "—"}</bdi></span>
                 </label>
               ))}
               {filtered.length === 0 && (
-                <div className="px-3 py-4 text-xs text-zinc-500 text-center">No employees found</div>
+                <div className="px-3 py-4 text-xs text-zinc-500 text-center">{t("schedules:assign.noEmployees")}</div>
               )}
             </div>
           </div>
         </div>
         <div className="flex gap-2 justify-end pt-2 border-t border-border/40 mt-2">
-          <Button variant="outline" className="border-zinc-700" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" className="border-zinc-700" onClick={() => onOpenChange(false)}>{t("schedules:common.cancel")}</Button>
           <Button
             data-testid="button-confirm-assign"
             className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
             disabled={mutation.isPending || !templateId || selectedIds.size === 0}
             onClick={() => mutation.mutate()}
           >
-            {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-            Assign to {selectedIds.size} Employee{selectedIds.size !== 1 ? "s" : ""}
+            {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin me-1" /> : null}
+            {t("schedules:assign.assignBtn", { count: selectedIds.size, n: formatNumber(selectedIds.size) })}
           </Button>
         </div>
       </DialogContent>
@@ -578,6 +589,7 @@ function AssignScheduleDialog({
 
 // ─── Shifts Tab ────────────────────────────────────────────────────────────────
 function ShiftsTab({ shifts }: { shifts: Shift[] }) {
+  const { t } = useTranslation(["schedules", "common"]);
   const { toast } = useToast();
   const qc = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
@@ -588,30 +600,30 @@ function ShiftsTab({ shifts }: { shifts: Shift[] }) {
     mutationFn: (id: string) => apiRequest("DELETE", `/api/shifts/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/shifts"] });
-      toast({ title: "Shift deleted" });
+      toast({ title: t("schedules:shifts.shiftDeleted") });
       setDeleteId(null);
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("schedules:common.error"), description: e.message, variant: "destructive" }),
   });
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-zinc-400">{shifts.length} shift type{shifts.length !== 1 ? "s" : ""} defined</p>
+        <p className="text-sm text-zinc-400">{t("schedules:shifts.countDefined", { count: shifts.length, n: formatNumber(shifts.length) })}</p>
         <Button
           data-testid="button-new-shift"
           size="sm"
           className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
           onClick={() => setCreateOpen(true)}
         >
-          <Plus className="h-4 w-4 mr-1" /> New Shift
+          <Plus className="h-4 w-4 me-1" /> {t("schedules:shifts.newShift")}
         </Button>
       </div>
 
       {shifts.length === 0 ? (
         <div className="text-center py-16 text-zinc-500">
           <Clock className="h-12 w-12 mx-auto mb-3 opacity-20" />
-          <p>No shift types yet. Create your first shift to get started.</p>
+          <p>{t("schedules:shifts.noShiftsTitle")}</p>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -624,8 +636,8 @@ function ShiftsTab({ shifts }: { shifts: Shift[] }) {
               <div className="flex items-center gap-3">
                 <div className="w-3 h-10 rounded-full flex-shrink-0" style={{ backgroundColor: shift.color }} />
                 <div>
-                  <div className="font-semibold text-white text-sm">{shift.name}</div>
-                  <div className="text-xs text-zinc-400 mt-0.5">
+                  <div className="font-semibold text-white text-sm"><bdi>{shift.name}</bdi></div>
+                  <div className="text-xs text-zinc-400 mt-0.5" dir="ltr">
                     {formatTime(shift.startTime)} – {formatTime(shift.endTime)}
                   </div>
                 </div>
@@ -662,19 +674,19 @@ function ShiftsTab({ shifts }: { shifts: Shift[] }) {
       <Dialog open={!!deleteId} onOpenChange={v => !v && setDeleteId(null)}>
         <DialogContent className="bg-card border-border text-foreground max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete Shift</DialogTitle>
-            <DialogDescription className="text-zinc-400">This will permanently delete the shift type. Employees currently on this shift may be affected.</DialogDescription>
+            <DialogTitle>{t("schedules:shifts.deleteTitle")}</DialogTitle>
+            <DialogDescription className="text-zinc-400">{t("schedules:shifts.deleteDesc")}</DialogDescription>
           </DialogHeader>
           <div className="flex gap-2 justify-end pt-2">
-            <Button variant="outline" className="border-zinc-700" onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button variant="outline" className="border-zinc-700" onClick={() => setDeleteId(null)}>{t("schedules:common.cancel")}</Button>
             <Button
               variant="destructive"
               data-testid="button-confirm-delete-shift"
               disabled={deleteMutation.isPending}
               onClick={() => deleteId && deleteMutation.mutate(deleteId)}
             >
-              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              Delete
+              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin me-1" /> : null}
+              {t("schedules:common.delete")}
             </Button>
           </div>
         </DialogContent>
@@ -685,6 +697,7 @@ function ShiftsTab({ shifts }: { shifts: Shift[] }) {
 
 // ─── Templates Tab ─────────────────────────────────────────────────────────────
 function TemplatesTab({ shifts, templates }: { shifts: Shift[]; templates: ScheduleTemplate[] }) {
+  const { t } = useTranslation(["schedules", "common"]);
   const { toast } = useToast();
   const qc = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
@@ -701,32 +714,32 @@ function TemplatesTab({ shifts, templates }: { shifts: Shift[]; templates: Sched
     mutationFn: (id: string) => apiRequest("DELETE", `/api/schedule-templates/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/schedule-templates"] });
-      toast({ title: "Template deleted" });
+      toast({ title: t("schedules:templates.templateDeleted") });
       setDeleteId(null);
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("schedules:common.error"), description: e.message, variant: "destructive" }),
   });
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-zinc-400">{templates.length} template{templates.length !== 1 ? "s" : ""} defined</p>
+        <p className="text-sm text-zinc-400">{t("schedules:templates.countDefined", { count: templates.length, n: formatNumber(templates.length) })}</p>
         <Button
           data-testid="button-new-template"
           size="sm"
           className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
           onClick={() => setCreateOpen(true)}
           disabled={shifts.length === 0}
-          title={shifts.length === 0 ? "Create shifts first" : undefined}
+          title={shifts.length === 0 ? t("schedules:templates.createShiftsFirst") : undefined}
         >
-          <Plus className="h-4 w-4 mr-1" /> New Template
+          <Plus className="h-4 w-4 me-1" /> {t("schedules:templates.newTemplate")}
         </Button>
       </div>
 
       {templates.length === 0 ? (
         <div className="text-center py-16 text-zinc-500">
           <Calendar className="h-12 w-12 mx-auto mb-3 opacity-20" />
-          <p>No schedule templates yet. {shifts.length === 0 ? "Create shift types first." : "Create your first template."}</p>
+          <p>{t("schedules:templates.noTemplatesTitle")} {shifts.length === 0 ? t("schedules:templates.createShiftsHint") : t("schedules:templates.createFirstHint")}</p>
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -739,7 +752,7 @@ function TemplatesTab({ shifts, templates }: { shifts: Shift[]; templates: Sched
             return (
               <div key={tpl.id} data-testid={`card-template-${tpl.id}`} className="border border-border/50 rounded-lg bg-muted/[0.06]">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
-                  <div className="font-semibold text-white">{tpl.name}</div>
+                  <div className="font-semibold text-white"><bdi>{tpl.name}</bdi></div>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-white" onClick={() => setEditTarget(tpl)} data-testid={`button-edit-template-${tpl.id}`}>
                       <Pencil className="h-3.5 w-3.5" />
@@ -755,14 +768,14 @@ function TemplatesTab({ shifts, templates }: { shifts: Shift[]; templates: Sched
                     const shift = shiftId ? shiftById[shiftId] : undefined;
                     return (
                       <div key={day} className="flex flex-col items-center gap-1 px-1">
-                        <span className="text-[10px] text-zinc-500 font-medium">{DAY_LABELS[day]}</span>
+                        <span className="text-[10px] text-zinc-500 font-medium">{t(DAY_KEYS[day])}</span>
                         {shift ? (
                           <div className="w-full rounded py-1 flex items-center justify-center" style={{ backgroundColor: shift.color + "22" }}>
-                            <span className="text-[9px] font-bold" style={{ color: shift.color }}>{shift.name.slice(0, 3)}</span>
+                            <span className="text-[9px] font-bold" style={{ color: shift.color }}><bdi>{shift.name.slice(0, 3)}</bdi></span>
                           </div>
                         ) : (
                           <div className="w-full rounded py-1 bg-muted/20 flex items-center justify-center">
-                            <span className="text-[9px] text-zinc-600">off</span>
+                            <span className="text-[9px] text-zinc-600">{t("schedules:common.off")}</span>
                           </div>
                         )}
                       </div>
@@ -782,14 +795,14 @@ function TemplatesTab({ shifts, templates }: { shifts: Shift[]; templates: Sched
       <Dialog open={!!deleteId} onOpenChange={v => !v && setDeleteId(null)}>
         <DialogContent className="bg-card border-border text-foreground max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete Template</DialogTitle>
-            <DialogDescription className="text-zinc-400">This will permanently delete the schedule template.</DialogDescription>
+            <DialogTitle>{t("schedules:templates.deleteTitle")}</DialogTitle>
+            <DialogDescription className="text-zinc-400">{t("schedules:templates.deleteDesc")}</DialogDescription>
           </DialogHeader>
           <div className="flex gap-2 justify-end pt-2">
-            <Button variant="outline" className="border-zinc-700" onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button variant="outline" className="border-zinc-700" onClick={() => setDeleteId(null)}>{t("schedules:common.cancel")}</Button>
             <Button variant="destructive" disabled={deleteMutation.isPending} onClick={() => deleteId && deleteMutation.mutate(deleteId)}>
-              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              Delete
+              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin me-1" /> : null}
+              {t("schedules:common.delete")}
             </Button>
           </div>
         </DialogContent>
@@ -800,6 +813,8 @@ function TemplatesTab({ shifts, templates }: { shifts: Shift[]; templates: Sched
 
 // ─── Roster Tab ────────────────────────────────────────────────────────────────
 function RosterTab({ employees, shifts, templates }: { employees: Employee[]; shifts: Shift[]; templates: ScheduleTemplate[] }) {
+  const { t, i18n } = useTranslation(["schedules", "common"]);
+  const locale = i18n.language;
   const { toast } = useToast();
   const qc = useQueryClient();
   const [assignOpen, setAssignOpen] = useState(false);
@@ -873,15 +888,14 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
         qc.invalidateQueries({ queryKey: ["/api/schedule-assignments/employee", data.workforceId] });
         qc.invalidateQueries({ queryKey: ["/api/schedule-assignments/employee", data.workforceId, "active"] });
       }
-      toast({ title: "Assignment ended" });
+      toast({ title: t("schedules:assign.ended") });
       setEndAssignId(null);
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("schedules:common.error"), description: e.message, variant: "destructive" }),
   });
 
   const formatShortDate = (iso: string) => {
-    const d = new Date(iso + "T00:00:00");
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return formatDate(iso + "T00:00:00", locale, { month: "short", day: "numeric" });
   };
 
   const monthStart = useMemo(() => {
@@ -891,8 +905,8 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
   }, [monthOffset]);
 
   const monthLabel = useMemo(() => {
-    return monthStart.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  }, [monthStart]);
+    return formatDate(monthStart, locale, { month: "long", year: "numeric" });
+  }, [monthStart, locale]);
 
   const monthDates = useMemo(() => {
     const days: string[] = [];
@@ -914,14 +928,14 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
               className={`text-xs font-semibold py-1.5 px-3 transition-colors ${rosterView === "week" ? "bg-[hsl(155,45%,45%)] text-white" : "text-zinc-400 hover:text-white"}`}
               data-testid="button-roster-week"
             >
-              Week
+              {t("schedules:roster.week")}
             </button>
             <button
               onClick={() => setRosterView("month")}
               className={`text-xs font-semibold py-1.5 px-3 transition-colors ${rosterView === "month" ? "bg-[hsl(155,45%,45%)] text-white" : "text-zinc-400 hover:text-white"}`}
               data-testid="button-roster-month"
             >
-              Month
+              {t("schedules:roster.month")}
             </button>
           </div>
           {rosterView === "week" ? (
@@ -929,14 +943,14 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
               <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400" onClick={() => setWeekOffset(o => o - 1)} data-testid="button-prev-week">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="text-sm font-medium text-white">
+              <span className="text-sm font-medium text-white" dir="ltr">
                 {formatShortDate(weekDates[0])} – {formatShortDate(weekDates[6])}
               </span>
               <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400" onClick={() => setWeekOffset(o => o + 1)} data-testid="button-next-week">
                 <ChevronRight className="h-4 w-4" />
               </Button>
               {weekOffset !== 0 && (
-                <Button variant="ghost" size="sm" className="h-7 text-xs text-primary" onClick={() => setWeekOffset(0)}>Today</Button>
+                <Button variant="ghost" size="sm" className="h-7 text-xs text-primary" onClick={() => setWeekOffset(0)}>{t("schedules:common.today")}</Button>
               )}
             </>
           ) : (
@@ -949,7 +963,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
                 <ChevronRight className="h-4 w-4" />
               </Button>
               {monthOffset !== 0 && (
-                <Button variant="ghost" size="sm" className="h-7 text-xs text-primary" onClick={() => setMonthOffset(0)}>Today</Button>
+                <Button variant="ghost" size="sm" className="h-7 text-xs text-primary" onClick={() => setMonthOffset(0)}>{t("schedules:common.today")}</Button>
               )}
             </>
           )}
@@ -961,7 +975,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
           onClick={() => setAssignOpen(true)}
           disabled={templates.length === 0 || activeEmployees.length === 0}
         >
-          <Users className="h-4 w-4 mr-1" /> Assign Schedule
+          <Users className="h-4 w-4 me-1" /> {t("schedules:roster.assignSchedule")}
         </Button>
       </div>
 
@@ -970,20 +984,20 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
           <table className="w-full border-collapse text-xs">
             <thead>
               <tr className="border-b border-border/40">
-                <th className="text-left text-zinc-400 py-2 px-3 font-medium min-w-[160px]">Employee</th>
+                <th className="text-start text-zinc-400 py-2 px-3 font-medium min-w-[160px]">{t("schedules:common.employee")}</th>
                 {DAYS.map((day, i) => (
                   <th key={day} className="text-center text-zinc-400 py-2 px-2 font-medium min-w-[80px]">
-                    <div>{DAY_LABELS[day]}</div>
-                    <div className="text-[10px] text-zinc-600">{formatShortDate(weekDates[i])}</div>
+                    <div>{t(DAY_KEYS[day])}</div>
+                    <div className="text-[10px] text-zinc-600" dir="ltr">{formatShortDate(weekDates[i])}</div>
                   </th>
                 ))}
-                <th className="text-zinc-400 py-2 px-3 font-medium">Schedule</th>
+                <th className="text-zinc-400 py-2 px-3 font-medium">{t("schedules:roster.schedule")}</th>
               </tr>
             </thead>
             <tbody>
               {activeEmployees.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-zinc-500">No active employees found</td>
+                  <td colSpan={9} className="text-center py-12 text-zinc-500">{t("schedules:common.noActiveEmployees")}</td>
                 </tr>
               ) : (
                 activeEmployees.map(emp => {
@@ -992,8 +1006,8 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
                   return (
                     <tr key={emp.id} className="border-b border-border/30 hover:bg-muted/[0.08]" data-testid={`row-roster-${emp.id}`}>
                       <td className="py-2 px-3">
-                        <div className="font-medium text-white">{emp.fullNameEn ?? "—"}</div>
-                        <div className="text-[10px] text-primary font-mono">{emp.employeeNumber}</div>
+                        <div className="font-medium text-white"><bdi>{emp.fullNameEn ?? "—"}</bdi></div>
+                        <div className="text-[10px] text-primary font-mono" dir="ltr">{emp.employeeNumber}</div>
                       </td>
                       {DAYS.map((_, i) => {
                         const shift = getShiftForDate(emp.id, weekDates[i]);
@@ -1004,7 +1018,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
                                 className="rounded px-1 py-0.5 text-[10px] font-semibold inline-block"
                                 style={{ backgroundColor: shift.color + "22", color: shift.color }}
                               >
-                                {shift.name.slice(0, 4)}
+                                <bdi>{shift.name.slice(0, 4)}</bdi>
                               </div>
                             ) : (
                               <span className="text-zinc-700">—</span>
@@ -1015,7 +1029,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
                       <td className="py-2 px-3">
                         {template ? (
                           <div className="flex items-center gap-2">
-                            <span className="text-zinc-300 text-xs">{template.name}</span>
+                            <span className="text-zinc-300 text-xs"><bdi>{template.name}</bdi></span>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1023,11 +1037,11 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
                               onClick={() => setEndAssignId(activeAssignment!.id)}
                               data-testid={`button-end-assign-${emp.id}`}
                             >
-                              End
+                              {t("schedules:common.end")}
                             </Button>
                           </div>
                         ) : (
-                          <span className="text-zinc-600 text-xs">Unassigned</span>
+                          <span className="text-zinc-600 text-xs">{t("schedules:common.unassigned")}</span>
                         )}
                       </td>
                     </tr>
@@ -1044,7 +1058,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
           <table className="w-full border-collapse text-xs">
             <thead>
               <tr className="border-b border-border/40">
-                <th className="text-left text-zinc-400 py-2 px-3 font-medium min-w-[140px] sticky left-0 bg-card z-10">Employee</th>
+                <th className="text-start text-zinc-400 py-2 px-3 font-medium min-w-[140px] sticky start-0 bg-card z-10">{t("schedules:common.employee")}</th>
                 {monthDates.map(date => {
                   const d = new Date(date + "T00:00:00");
                   const today = localDateStr();
@@ -1053,8 +1067,8 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
                       key={date}
                       className={`text-center text-zinc-400 py-2 px-0.5 font-medium min-w-[28px] ${date === today ? "text-primary" : ""}`}
                     >
-                      <div className="text-[9px] text-zinc-600">{d.toLocaleDateString("en-US", { weekday: "narrow" })}</div>
-                      <div className={date === today ? "text-primary font-bold" : ""}>{d.getDate()}</div>
+                      <div className="text-[9px] text-zinc-600">{formatDate(d, locale, { weekday: "narrow" })}</div>
+                      <div className={date === today ? "text-primary font-bold" : ""}>{formatNumber(d.getDate())}</div>
                     </th>
                   );
                 })}
@@ -1063,14 +1077,14 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
             <tbody>
               {activeEmployees.length === 0 ? (
                 <tr>
-                  <td colSpan={monthDates.length + 1} className="text-center py-12 text-zinc-500">No active employees found</td>
+                  <td colSpan={monthDates.length + 1} className="text-center py-12 text-zinc-500">{t("schedules:common.noActiveEmployees")}</td>
                 </tr>
               ) : (
                 activeEmployees.map(emp => (
                   <tr key={emp.id} className="border-b border-border/30 hover:bg-muted/[0.08]" data-testid={`row-roster-month-${emp.id}`}>
-                    <td className="py-1.5 px-3 sticky left-0 bg-card z-10">
-                      <div className="font-medium text-white truncate max-w-[120px]">{emp.fullNameEn ?? "—"}</div>
-                      <div className="text-[9px] text-primary font-mono">{emp.employeeNumber}</div>
+                    <td className="py-1.5 px-3 sticky start-0 bg-card z-10">
+                      <div className="font-medium text-white truncate max-w-[120px]"><bdi>{emp.fullNameEn ?? "—"}</bdi></div>
+                      <div className="text-[9px] text-primary font-mono" dir="ltr">{emp.employeeNumber}</div>
                     </td>
                     {monthDates.map(date => {
                       const shift = getShiftForDate(emp.id, date);
@@ -1082,7 +1096,7 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
                               className="rounded w-5 h-5 mx-auto flex items-center justify-center text-[8px] font-bold"
                               style={{ backgroundColor: shift.color + "33", color: shift.color }}
                             >
-                              {shift.name.slice(0, 1)}
+                              <bdi>{shift.name.slice(0, 1)}</bdi>
                             </div>
                           ) : (
                             <div className="w-5 h-5 mx-auto" />
@@ -1108,31 +1122,32 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
       <Dialog open={!!endAssignId} onOpenChange={v => !v && setEndAssignId(null)}>
         <DialogContent className="bg-card border-border text-foreground max-w-sm">
           <DialogHeader>
-            <DialogTitle>End Schedule Assignment</DialogTitle>
-            <DialogDescription className="text-zinc-400">Choose the date to end this assignment. History will be preserved.</DialogDescription>
+            <DialogTitle>{t("schedules:assign.endTitle")}</DialogTitle>
+            <DialogDescription className="text-zinc-400">{t("schedules:assign.endDesc")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">End Date</Label>
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("schedules:assign.endDate")}</Label>
               <Input
                 data-testid="input-end-date"
                 type="date"
                 value={endDate}
                 onChange={e => setEndDate(e.target.value)}
                 className="bg-background border-input text-foreground"
+                dir="ltr"
               />
             </div>
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <Button variant="outline" className="border-zinc-700" onClick={() => setEndAssignId(null)}>Cancel</Button>
+            <Button variant="outline" className="border-zinc-700" onClick={() => setEndAssignId(null)}>{t("schedules:common.cancel")}</Button>
             <Button
               variant="destructive"
               data-testid="button-confirm-end-assign"
               disabled={endMutation.isPending}
               onClick={() => endAssignId && endMutation.mutate(endAssignId)}
             >
-              {endMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              End Assignment
+              {endMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin me-1" /> : null}
+              {t("schedules:assign.endAssignment")}
             </Button>
           </div>
         </DialogContent>
@@ -1143,6 +1158,8 @@ function RosterTab({ employees, shifts, templates }: { employees: Employee[]; sh
 
 // ─── Attendance Tab ─────────────────────────────────────────────────────────────
 function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]; shifts: Shift[]; templates: ScheduleTemplate[] }) {
+  const { t, i18n } = useTranslation(["schedules", "common"]);
+  const locale = i18n.language;
   const { toast } = useToast();
   const qc = useQueryClient();
   const [view, setView] = useState<"daily" | "summary">("daily");
@@ -1235,9 +1252,9 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
       setLocalStatuses({});
       setLocalClockIn({});
       setLocalClockOut({});
-      toast({ title: "Attendance saved" });
+      toast({ title: t("schedules:attendance.saved") });
     } catch (e) {
-      toast({ title: "Error", description: String(e), variant: "destructive" });
+      toast({ title: t("schedules:common.error"), description: String(e), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -1272,14 +1289,14 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
             className={`text-xs font-semibold py-2 px-4 transition-colors ${view === "daily" ? "bg-[hsl(155,45%,45%)] text-white" : "text-zinc-400 hover:text-white"}`}
             data-testid="tab-attendance-daily"
           >
-            Daily
+            {t("schedules:attendance.viewDaily")}
           </button>
           <button
             onClick={() => setView("summary")}
             className={`text-xs font-semibold py-2 px-4 transition-colors ${view === "summary" ? "bg-[hsl(155,45%,45%)] text-white" : "text-zinc-400 hover:text-white"}`}
             data-testid="tab-attendance-summary"
           >
-            Summary
+            {t("schedules:attendance.viewSummary")}
           </button>
         </div>
         {view === "daily" && (
@@ -1290,6 +1307,7 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
               value={selectedDate}
               onChange={e => setSelectedDate(e.target.value)}
               className="bg-background border-input text-foreground h-8 text-xs"
+              dir="ltr"
             />
             <Button
               data-testid="button-save-attendance"
@@ -1298,28 +1316,30 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
               disabled={saving || scheduledEmployeesWithShift.length === 0}
               onClick={saveAll}
             >
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
-              Save Attendance
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin me-1" /> : null}
+              {t("schedules:attendance.saveAttendance")}
             </Button>
           </div>
         )}
         {view === "summary" && (
           <div className="flex items-center gap-2">
-            <Label className="text-zinc-400 text-xs">From</Label>
+            <Label className="text-zinc-400 text-xs">{t("schedules:common.from")}</Label>
             <Input
               data-testid="input-summary-from"
               type="date"
               value={summaryFrom}
               onChange={e => setSummaryFrom(e.target.value)}
               className="bg-background border-input text-foreground h-8 text-xs"
+              dir="ltr"
             />
-            <Label className="text-zinc-400 text-xs">To</Label>
+            <Label className="text-zinc-400 text-xs">{t("schedules:common.to")}</Label>
             <Input
               data-testid="input-summary-to"
               type="date"
               value={summaryTo}
               onChange={e => setSummaryTo(e.target.value)}
               className="bg-background border-input text-foreground h-8 text-xs"
+              dir="ltr"
             />
           </div>
         )}
@@ -1330,20 +1350,20 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
           {scheduledEmployeesWithShift.length === 0 ? (
             <div className="text-center py-16 text-zinc-500">
               <ClipboardList className="h-12 w-12 mx-auto mb-3 opacity-20" />
-              <p>No employees have a shift on {selectedDate}.</p>
-              <p className="text-xs mt-1">Employees with a day-off or no assignment on this day are excluded.</p>
+              <p>{t("schedules:attendance.noShiftToday", { date: formatDate(selectedDate + "T00:00:00", locale) })}</p>
+              <p className="text-xs mt-1">{t("schedules:attendance.noShiftHint")}</p>
             </div>
           ) : (
             <div className="border border-border/50 rounded-lg overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow className="border-border/40 hover:bg-transparent">
-                    <TableHead className="text-zinc-400">Employee</TableHead>
-                    <TableHead className="text-zinc-400">Shift</TableHead>
-                    <TableHead className="text-zinc-400">Status</TableHead>
-                    <TableHead className="text-zinc-400">Clock In</TableHead>
-                    <TableHead className="text-zinc-400">Clock Out</TableHead>
-                    <TableHead className="text-zinc-400 text-center">Mins Worked</TableHead>
+                    <TableHead className="text-zinc-400">{t("schedules:common.employee")}</TableHead>
+                    <TableHead className="text-zinc-400">{t("schedules:attendance.shift")}</TableHead>
+                    <TableHead className="text-zinc-400">{t("schedules:attendance.statusCol")}</TableHead>
+                    <TableHead className="text-zinc-400">{t("schedules:attendance.clockIn")}</TableHead>
+                    <TableHead className="text-zinc-400">{t("schedules:attendance.clockOut")}</TableHead>
+                    <TableHead className="text-zinc-400 text-center">{t("schedules:attendance.minsWorked")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1358,8 +1378,8 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
                     return (
                       <TableRow key={emp.id} className="border-border/30 hover:bg-muted/[0.08]" data-testid={`row-attendance-${emp.id}`}>
                         <TableCell>
-                          <div className="font-medium text-white text-sm">{emp.fullNameEn ?? "—"}</div>
-                          <div className="text-[10px] text-primary font-mono">{emp.employeeNumber}</div>
+                          <div className="font-medium text-white text-sm"><bdi>{emp.fullNameEn ?? "—"}</bdi></div>
+                          <div className="text-[10px] text-primary font-mono" dir="ltr">{emp.employeeNumber}</div>
                         </TableCell>
                         <TableCell>
                           <ShiftBadge shift={shift} />
@@ -1379,13 +1399,13 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
                               <SelectContent className="bg-popover border-border">
                                 {ATTENDANCE_STATUSES.map(s => (
                                   <SelectItem key={s.value} value={s.value} className="text-xs">
-                                    {s.label}
+                                    {t(s.tKey)}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                             {hasMissingClockOut && (
-                              <span title="Missing clock-out" className="text-amber-400" data-testid={`badge-missing-clockout-${emp.id}`}>
+                              <span title={t("schedules:attendance.missingClockOut")} className="text-amber-400" data-testid={`badge-missing-clockout-${emp.id}`}>
                                 <AlertCircle className="h-3.5 w-3.5" />
                               </span>
                             )}
@@ -1399,6 +1419,7 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
                             onChange={e => setLocalClockIn(prev => ({ ...prev, [emp.id]: e.target.value }))}
                             placeholder={formatTime(shift.startTime)}
                             className="bg-background border-input text-foreground h-7 text-xs w-[100px]"
+                            dir="ltr"
                           />
                         </TableCell>
                         <TableCell>
@@ -1409,11 +1430,12 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
                             onChange={e => setLocalClockOut(prev => ({ ...prev, [emp.id]: e.target.value }))}
                             placeholder={formatTime(shift.endTime)}
                             className="bg-background border-input text-foreground h-7 text-xs w-[100px]"
+                            dir="ltr"
                           />
                         </TableCell>
                         <TableCell className="text-center">
-                          <span className="text-xs text-zinc-300" data-testid={`text-minutes-${emp.id}`}>
-                            {existing?.minutesWorked != null ? `${existing.minutesWorked}/${existing.minutesScheduled ?? "—"}` : "—"}
+                          <span className="text-xs text-zinc-300" data-testid={`text-minutes-${emp.id}`} dir="ltr">
+                            {existing?.minutesWorked != null ? `${formatNumber(existing.minutesWorked)}/${existing.minutesScheduled != null ? formatNumber(existing.minutesScheduled) : "—"}` : "—"}
                           </span>
                         </TableCell>
                       </TableRow>
@@ -1431,39 +1453,39 @@ function AttendanceTab({ employees, shifts, templates }: { employees: Employee[]
           {summaryData.length === 0 ? (
             <div className="text-center py-16 text-zinc-500">
               <BarChart3 className="h-12 w-12 mx-auto mb-3 opacity-20" />
-              <p>No attendance data for selected period.</p>
+              <p>{t("schedules:attendance.noSummaryData")}</p>
             </div>
           ) : (
             <div className="border border-border/50 rounded-lg overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow className="border-border/40 hover:bg-transparent">
-                    <TableHead className="text-zinc-400">Employee</TableHead>
-                    <TableHead className="text-zinc-400 text-center">Worked</TableHead>
-                    <TableHead className="text-zinc-400 text-center">Absent</TableHead>
-                    <TableHead className="text-zinc-400 text-center">Late</TableHead>
-                    <TableHead className="text-zinc-400 text-center">Excused</TableHead>
-                    <TableHead className="text-zinc-400 text-center">Late Mins</TableHead>
-                    <TableHead className="text-zinc-400 text-center">Total</TableHead>
+                    <TableHead className="text-zinc-400">{t("schedules:common.employee")}</TableHead>
+                    <TableHead className="text-zinc-400 text-center">{t("schedules:attendance.worked")}</TableHead>
+                    <TableHead className="text-zinc-400 text-center">{t("schedules:attendance.status.absent")}</TableHead>
+                    <TableHead className="text-zinc-400 text-center">{t("schedules:attendance.late")}</TableHead>
+                    <TableHead className="text-zinc-400 text-center">{t("schedules:attendance.excused")}</TableHead>
+                    <TableHead className="text-zinc-400 text-center">{t("schedules:attendance.lateMins")}</TableHead>
+                    <TableHead className="text-zinc-400 text-center">{t("schedules:attendance.totalCol")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {summaryData.map(row => (
                     <TableRow key={row.workforceId} className="border-border/30 hover:bg-muted/[0.08]" data-testid={`row-summary-${row.workforceId}`}>
                       <TableCell>
-                        <div className="font-medium text-white text-sm">{row.fullNameEn ?? "—"}</div>
-                        <div className="text-[10px] text-primary font-mono">{row.employeeNumber}</div>
+                        <div className="font-medium text-white text-sm"><bdi>{row.fullNameEn ?? "—"}</bdi></div>
+                        <div className="text-[10px] text-primary font-mono" dir="ltr">{row.employeeNumber}</div>
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 border text-xs" data-testid={`text-worked-${row.workforceId}`}>
-                          {row.workedDays}
+                          {formatNumber(row.workedDays)}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-center text-red-400 text-sm">{row.absentDays}</TableCell>
-                      <TableCell className="text-center text-yellow-400 text-sm">{row.lateDays}</TableCell>
-                      <TableCell className="text-center text-blue-400 text-sm">{row.excusedDays}</TableCell>
-                      <TableCell className="text-center text-amber-400 text-sm" data-testid={`text-late-mins-${row.workforceId}`}>{row.totalMinutesLate}</TableCell>
-                      <TableCell className="text-center text-zinc-400 text-sm">{row.totalScheduledDays}</TableCell>
+                      <TableCell className="text-center text-red-400 text-sm">{formatNumber(row.absentDays)}</TableCell>
+                      <TableCell className="text-center text-yellow-400 text-sm">{formatNumber(row.lateDays)}</TableCell>
+                      <TableCell className="text-center text-blue-400 text-sm">{formatNumber(row.excusedDays)}</TableCell>
+                      <TableCell className="text-center text-amber-400 text-sm" data-testid={`text-late-mins-${row.workforceId}`}>{formatNumber(row.totalMinutesLate)}</TableCell>
+                      <TableCell className="text-center text-zinc-400 text-sm">{formatNumber(row.totalScheduledDays)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -1487,6 +1509,7 @@ type DashboardStats = {
 };
 
 function DashboardTab() {
+  const { t } = useTranslation(["schedules", "common"]);
   const [dateFrom, setDateFrom] = useState(() => {
     const d = new Date(); d.setDate(1); return localDateStr(d);
   });
@@ -1506,42 +1529,42 @@ function DashboardTab() {
     window.open(`/api/attendance/export-lateness?dateFrom=${dateFrom}&dateTo=${dateTo}&format=${format}`, "_blank");
   };
 
-  const t = stats?.totals ?? { present: 0, absent: 0, late: 0, excused: 0, totalRecords: 0, totalMinutesWorked: 0, totalMinutesScheduled: 0, totalMinutesLate: 0 };
-  const attendanceRate = t.totalRecords > 0 ? Math.round((t.present / t.totalRecords) * 100) : 0;
+  const totals = stats?.totals ?? { present: 0, absent: 0, late: 0, excused: 0, totalRecords: 0, totalMinutesWorked: 0, totalMinutesScheduled: 0, totalMinutesLate: 0 };
+  const attendanceRate = totals.totalRecords > 0 ? Math.round((totals.present / totals.totalRecords) * 100) : 0;
 
   const statCards = [
-    { label: "Present Days", value: t.present, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30", icon: CheckCircle2 },
-    { label: "Absent Days", value: t.absent, color: "text-red-400", bg: "bg-red-500/10 border-red-500/30", icon: XCircle },
-    { label: "Late Days", value: t.late, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/30", icon: AlertCircle },
-    { label: "Total Late Minutes", value: t.totalMinutesLate, color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/30", icon: TrendingUp },
-    { label: "Attendance Rate", value: `${attendanceRate}%`, color: "text-primary", bg: "bg-primary/10 border-primary/30", icon: BarChart3 },
-    { label: "Excused Days", value: t.excused, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/30", icon: Shield },
-    { label: "Pending Excuses", value: pendingExcuses?.count ?? 0, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/30", icon: MessageCircle },
+    { key: "present-days", label: t("schedules:dashboard.stats.presentDays"), value: formatNumber(totals.present), color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30", icon: CheckCircle2 },
+    { key: "absent-days", label: t("schedules:dashboard.stats.absentDays"), value: formatNumber(totals.absent), color: "text-red-400", bg: "bg-red-500/10 border-red-500/30", icon: XCircle },
+    { key: "late-days", label: t("schedules:dashboard.stats.lateDays"), value: formatNumber(totals.late), color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/30", icon: AlertCircle },
+    { key: "total-late-minutes", label: t("schedules:dashboard.stats.totalLateMinutes"), value: formatNumber(totals.totalMinutesLate), color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/30", icon: TrendingUp },
+    { key: "attendance-rate", label: t("schedules:dashboard.stats.attendanceRate"), value: `${formatNumber(attendanceRate)}%`, color: "text-primary", bg: "bg-primary/10 border-primary/30", icon: BarChart3 },
+    { key: "excused-days", label: t("schedules:dashboard.stats.excusedDays"), value: formatNumber(totals.excused), color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/30", icon: Shield },
+    { key: "pending-excuses", label: t("schedules:dashboard.stats.pendingExcuses"), value: formatNumber(pendingExcuses?.count ?? 0), color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/30", icon: MessageCircle },
   ];
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <Label className="text-zinc-400 text-xs">From</Label>
-          <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bg-background border-input text-foreground h-8 text-xs w-[140px]" data-testid="input-dashboard-from" />
+          <Label className="text-zinc-400 text-xs">{t("schedules:common.from")}</Label>
+          <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bg-background border-input text-foreground h-8 text-xs w-[140px]" data-testid="input-dashboard-from" dir="ltr" />
         </div>
         <div className="flex items-center gap-2">
-          <Label className="text-zinc-400 text-xs">To</Label>
-          <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="bg-background border-input text-foreground h-8 text-xs w-[140px]" data-testid="input-dashboard-to" />
+          <Label className="text-zinc-400 text-xs">{t("schedules:common.to")}</Label>
+          <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="bg-background border-input text-foreground h-8 text-xs w-[140px]" data-testid="input-dashboard-to" dir="ltr" />
         </div>
       </div>
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16 gap-3 text-zinc-500">
           <Loader2 className="h-5 w-5 animate-spin" />
-          <span className="text-sm">Loading dashboard...</span>
+          <span className="text-sm">{t("schedules:dashboard.loading")}</span>
         </div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             {statCards.map(sc => (
-              <div key={sc.label} className={`rounded-lg border p-3 ${sc.bg}`} data-testid={`stat-card-${sc.label.toLowerCase().replace(/\s+/g, "-")}`}>
+              <div key={sc.key} className={`rounded-lg border p-3 ${sc.bg}`} data-testid={`stat-card-${sc.key}`}>
                 <div className="flex items-center gap-1.5 mb-1">
                   <sc.icon className={`h-3.5 w-3.5 ${sc.color}`} />
                   <span className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider">{sc.label}</span>
@@ -1554,13 +1577,13 @@ function DashboardTab() {
           <div className="grid lg:grid-cols-2 gap-6">
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-bold text-white font-display">Most Late (Top 50)</h3>
+                <h3 className="text-sm font-bold text-white font-display">{t("schedules:dashboard.topLate")}</h3>
                 <div className="flex gap-1">
                   <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => handleExport("csv")} data-testid="button-export-csv">
-                    <Download className="h-3 w-3" /> CSV
+                    <Download className="h-3 w-3" /> {t("schedules:dashboard.csv")}
                   </Button>
                   <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => handleExport("xlsx")} data-testid="button-export-xlsx">
-                    <Download className="h-3 w-3" /> Excel
+                    <Download className="h-3 w-3" /> {t("schedules:dashboard.excel")}
                   </Button>
                 </div>
               </div>
@@ -1569,25 +1592,25 @@ function DashboardTab() {
                   <TableHeader>
                     <TableRow className="border-border/40 hover:bg-transparent">
                       <TableHead className="text-zinc-400 text-xs">#</TableHead>
-                      <TableHead className="text-zinc-400 text-xs">Employee</TableHead>
-                      <TableHead className="text-zinc-400 text-xs text-center">Late Days</TableHead>
-                      <TableHead className="text-zinc-400 text-xs text-center">Late Mins</TableHead>
+                      <TableHead className="text-zinc-400 text-xs">{t("schedules:common.employee")}</TableHead>
+                      <TableHead className="text-zinc-400 text-xs text-center">{t("schedules:dashboard.stats.lateDays")}</TableHead>
+                      <TableHead className="text-zinc-400 text-xs text-center">{t("schedules:attendance.lateMins")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {(stats?.topLate ?? []).filter(r => r.totalMinutesLate > 0).map((row, i) => (
                       <TableRow key={row.workforceId} className="border-border/30 hover:bg-muted/[0.08]" data-testid={`row-top-late-${row.workforceId}`}>
-                        <TableCell className="text-zinc-500 text-xs">{i + 1}</TableCell>
+                        <TableCell className="text-zinc-500 text-xs">{formatNumber(i + 1)}</TableCell>
                         <TableCell>
-                          <div className="text-sm text-white font-medium">{row.fullNameEn ?? "—"}</div>
-                          <div className="text-[10px] text-primary font-mono">{row.employeeNumber}</div>
+                          <div className="text-sm text-white font-medium"><bdi>{row.fullNameEn ?? "—"}</bdi></div>
+                          <div className="text-[10px] text-primary font-mono" dir="ltr">{row.employeeNumber}</div>
                         </TableCell>
-                        <TableCell className="text-center text-yellow-400 text-sm">{row.lateDays}</TableCell>
-                        <TableCell className="text-center text-amber-400 text-sm font-bold">{row.totalMinutesLate}</TableCell>
+                        <TableCell className="text-center text-yellow-400 text-sm">{formatNumber(row.lateDays)}</TableCell>
+                        <TableCell className="text-center text-amber-400 text-sm font-bold">{formatNumber(row.totalMinutesLate)}</TableCell>
                       </TableRow>
                     ))}
                     {(stats?.topLate ?? []).filter(r => r.totalMinutesLate > 0).length === 0 && (
-                      <TableRow><TableCell colSpan={4} className="text-center text-zinc-500 py-8 text-sm">No lateness data for this period</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={4} className="text-center text-zinc-500 py-8 text-sm">{t("schedules:dashboard.noLateness")}</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -1595,31 +1618,31 @@ function DashboardTab() {
             </div>
 
             <div>
-              <h3 className="text-sm font-bold text-white font-display mb-3">Most Absent (Top 50)</h3>
+              <h3 className="text-sm font-bold text-white font-display mb-3">{t("schedules:dashboard.topAbsent")}</h3>
               <div className="border border-border/50 rounded-lg overflow-hidden max-h-[400px] overflow-y-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="border-border/40 hover:bg-transparent">
                       <TableHead className="text-zinc-400 text-xs">#</TableHead>
-                      <TableHead className="text-zinc-400 text-xs">Employee</TableHead>
-                      <TableHead className="text-zinc-400 text-xs text-center">Absent Days</TableHead>
-                      <TableHead className="text-zinc-400 text-xs text-center">Scheduled</TableHead>
+                      <TableHead className="text-zinc-400 text-xs">{t("schedules:common.employee")}</TableHead>
+                      <TableHead className="text-zinc-400 text-xs text-center">{t("schedules:dashboard.stats.absentDays")}</TableHead>
+                      <TableHead className="text-zinc-400 text-xs text-center">{t("schedules:attendance.scheduled")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {(stats?.topAbsent ?? []).filter(r => r.absentDays > 0).map((row, i) => (
                       <TableRow key={row.workforceId} className="border-border/30 hover:bg-muted/[0.08]" data-testid={`row-top-absent-${row.workforceId}`}>
-                        <TableCell className="text-zinc-500 text-xs">{i + 1}</TableCell>
+                        <TableCell className="text-zinc-500 text-xs">{formatNumber(i + 1)}</TableCell>
                         <TableCell>
-                          <div className="text-sm text-white font-medium">{row.fullNameEn ?? "—"}</div>
-                          <div className="text-[10px] text-primary font-mono">{row.employeeNumber}</div>
+                          <div className="text-sm text-white font-medium"><bdi>{row.fullNameEn ?? "—"}</bdi></div>
+                          <div className="text-[10px] text-primary font-mono" dir="ltr">{row.employeeNumber}</div>
                         </TableCell>
-                        <TableCell className="text-center text-red-400 text-sm font-bold">{row.absentDays}</TableCell>
-                        <TableCell className="text-center text-zinc-400 text-sm">{row.totalScheduledDays}</TableCell>
+                        <TableCell className="text-center text-red-400 text-sm font-bold">{formatNumber(row.absentDays)}</TableCell>
+                        <TableCell className="text-center text-zinc-400 text-sm">{formatNumber(row.totalScheduledDays)}</TableCell>
                       </TableRow>
                     ))}
                     {(stats?.topAbsent ?? []).filter(r => r.absentDays > 0).length === 0 && (
-                      <TableRow><TableCell colSpan={4} className="text-center text-zinc-500 py-8 text-sm">No absence data for this period</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={4} className="text-center text-zinc-500 py-8 text-sm">{t("schedules:dashboard.noAbsence")}</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -1634,6 +1657,7 @@ function DashboardTab() {
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function SchedulesPage() {
+  const { t } = useTranslation(["schedules", "common"]);
   const [tab, setTab] = useState<"dashboard" | "shifts" | "templates" | "roster" | "attendance">("dashboard");
 
   const { data: shifts = [], isLoading: shiftsLoading } = useQuery<Shift[]>({
@@ -1654,19 +1678,19 @@ export default function SchedulesPage() {
   const loading = shiftsLoading || templatesLoading || empLoading;
 
   const TABS = [
-    { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { key: "shifts", label: "Shifts", icon: Clock },
-    { key: "templates", label: "Templates", icon: Calendar },
-    { key: "roster", label: "Roster", icon: Users },
-    { key: "attendance", label: "Attendance", icon: ClipboardList },
+    { key: "dashboard", label: t("schedules:tabs.dashboard"), icon: LayoutDashboard },
+    { key: "shifts", label: t("schedules:tabs.shifts"), icon: Clock },
+    { key: "templates", label: t("schedules:tabs.templates"), icon: Calendar },
+    { key: "roster", label: t("schedules:tabs.roster"), icon: Users },
+    { key: "attendance", label: t("schedules:tabs.attendance"), icon: ClipboardList },
   ] as const;
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-white font-display">Attendance</h1>
-          <p className="text-zinc-400 text-sm mt-1">Dashboard, shift definitions, schedule templates, employee rosters, and attendance tracking.</p>
+          <h1 className="text-2xl font-bold text-white font-display">{t("schedules:page.title")}</h1>
+          <p className="text-zinc-400 text-sm mt-1">{t("schedules:page.subtitle")}</p>
         </div>
 
         <div className="flex rounded-md overflow-hidden border border-border/50 bg-muted/20 w-fit">
@@ -1689,7 +1713,7 @@ export default function SchedulesPage() {
             {loading ? (
               <div className="flex items-center justify-center py-16 gap-3 text-zinc-500">
                 <Loader2 className="h-5 w-5 animate-spin" />
-                <span className="text-sm">Loading...</span>
+                <span className="text-sm">{t("schedules:page.loading")}</span>
               </div>
             ) : (
               <>
