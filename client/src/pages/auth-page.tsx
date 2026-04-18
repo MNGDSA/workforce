@@ -818,7 +818,11 @@ export default function AuthPage() {
             </div>
             <p className="text-center">
               {isRtl ? (
-                <bdi>© {formatNumber(new Date().getFullYear(), { useGrouping: false })} شركة العربة الفاخرة</bdi>
+                <span dir="rtl">
+                  <bdi>© {formatNumber(new Date().getFullYear(), { useGrouping: false })}</bdi>
+                  {" "}
+                  <bdi>شركة العربة الفاخرة</bdi>
+                </span>
               ) : (
                 <bdi>© {new Date().getFullYear()} Luxury Carts Company Ltd.</bdi>
               )}
