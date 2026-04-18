@@ -131,6 +131,7 @@ import {
   type PayrollTransaction,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte, getTableColumns } from "drizzle-orm";
+import { countFilledForEvent, countFilledForEvents } from "./headcount";
 
 function computeCandidateStatusFromLogin(lastLoginAt: Date | null): "available" | "inactive" {
   if (!lastLoginAt) return "inactive";
@@ -901,27 +902,18 @@ export class DatabaseStorage implements IStorage {
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(desc(events.createdAt));
 
-    if (eventsData.length === 0) return eventsData;
+    if (eventsData.length === 0) return eventsData as any;
 
     const eventIds = eventsData.map(e => e.id).filter(Boolean) as string[];
-    const counts = await db
-      .select({ eventId: workforce.eventId, total: count() })
-      .from(workforce)
-      .where(and(inArray(workforce.eventId, eventIds), eq(workforce.isActive, true)))
-      .groupBy(workforce.eventId);
-    const countMap = Object.fromEntries(counts.map(c => [c.eventId!, Number(c.total)]));
-
-    return eventsData.map(e => ({ ...e, filledPositions: countMap[e.id] ?? 0 }));
+    const countMap = await countFilledForEvents(eventIds);
+    return eventsData.map(e => ({ ...e, filledPositions: countMap.get(e.id) ?? 0 })) as any;
   }
 
   async getEvent(id: string): Promise<Event | undefined> {
     const [evt] = await db.select().from(events).where(eq(events.id, id));
     if (!evt) return undefined;
-    const [{ total } = { total: 0 }] = await db
-      .select({ total: count() })
-      .from(workforce)
-      .where(and(eq(workforce.eventId, id), eq(workforce.isActive, true)));
-    return { ...evt, filledPositions: Number(total) };
+    const filled = await countFilledForEvent(id);
+    return { ...evt, filledPositions: filled } as any;
   }
 
   async createEvent(event: InsertEvent): Promise<Event> {

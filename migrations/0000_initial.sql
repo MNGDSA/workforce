@@ -276,7 +276,6 @@ CREATE TABLE "events" (
 	"end_date" text,
 	"status" "event_status" DEFAULT 'upcoming' NOT NULL,
 	"target_headcount" integer DEFAULT 0 NOT NULL,
-	"filled_positions" integer DEFAULT 0 NOT NULL,
 	"budget" numeric(14, 2),
 	"region" text,
 	"created_by" varchar,

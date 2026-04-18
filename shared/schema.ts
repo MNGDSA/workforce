@@ -247,7 +247,10 @@ export const events = pgTable(
     endDate: text("end_date"),
     status: eventStatusEnum("status").notNull().default("upcoming"),
     targetHeadcount: integer("target_headcount").notNull().default(0),
-    filledPositions: integer("filled_positions").notNull().default(0),
+    // NOTE: filled_positions column was removed in Task #64. Filled
+    // headcount is now always computed from the workforce table via
+    // server/headcount.ts (single source of truth) and attached to event
+    // payloads at read time as `filledPositions: number`.
     budget: decimal("budget", { precision: 14, scale: 2 }),
     region: text("region"),
     createdBy: varchar("created_by").references(() => users.id),
@@ -501,6 +504,12 @@ export const workforce = pgTable(
     activeIdx: index("workforce_active_idx").on(t.isActive),
     empNumIdx: uniqueIndex("workforce_emp_num_unique_idx").on(t.employeeNumber),
     offboardingIdx: index("workforce_offboarding_idx").on(t.offboardingStatus),
+    // Task #64 — partial index supporting the headcount Golden Rule.
+    // Keeps the events-list count step cheap at the 10K-worker scale
+    // (Task #37). Matches activeWorkforceFilter() in server/headcount.ts.
+    eventActiveIdx: index("workforce_event_active_idx")
+      .on(t.eventId)
+      .where(sql`is_active = true AND offboarding_status IS NULL`),
   })
 );
 

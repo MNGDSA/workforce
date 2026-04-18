@@ -2449,13 +2449,6 @@
           "notNull": true,
           "default": 0
         },
-        "filled_positions": {
-          "name": "filled_positions",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
         "budget": {
           "name": "budget",
           "type": "numeric(14, 2)",

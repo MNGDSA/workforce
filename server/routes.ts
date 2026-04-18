@@ -2444,6 +2444,20 @@ export async function registerRoutes(
           }
         }
       }
+      // Task #64 — capture before/after snapshot for the fields that
+      // directly affect event filled-position counts (Golden Rule).
+      // Only the fields actually mutable through this route are listed.
+      // offboardingStatus / startDate are owned by the dedicated
+      // offboarding & reinstate routes which carry their own audit entries.
+      const headcountFields = ["eventId", "isActive", "endDate"] as const;
+      const headcountDiff: Record<string, { before: any; after: any }> = {};
+      if (before) {
+        for (const f of headcountFields) {
+          if (f in data && (data as any)[f] !== (before as any)[f]) {
+            headcountDiff[f] = { before: (before as any)[f] ?? null, after: (data as any)[f] ?? null };
+          }
+        }
+      }
       await logAudit(req, {
         action: "workforce.updated",
         entityType: "workforce",
@@ -2451,7 +2465,10 @@ export async function registerRoutes(
         employeeNumber: empNum,
         subjectName,
         description: `Updated employee #${empNum ?? "—"} "${subjectName ?? req.params.id}"${changes.length > 0 ? ": " + changes.join(", ") : ""}`,
-        metadata: { changes: data },
+        metadata: {
+          changes: data,
+          ...(Object.keys(headcountDiff).length > 0 ? { headcountImpact: headcountDiff } : {}),
+        },
       });
       return res.json(record);
     } catch (err) {

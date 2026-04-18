@@ -25,6 +25,11 @@ Any floating UI elements (dropdowns, tooltips, popovers, autocompletes) rendered
 
 For tooltip info icons, use Lucide's `Info` icon directly without wrapping it in a `rounded-full border` button to avoid a double-circle effect. Use a plain unstyled button with only `text-muted-foreground hover:text-primary` classes.
 
+## Headcount — Single Source of Truth (Task #64)
+The "filled positions" count for any event is computed live from the workforce table via the helper in `server/headcount.ts`. The Golden Rule:
+a worker counts as filled iff `event_id matches AND is_active=true AND offboarding_status IS NULL AND (end_date IS NULL OR end_date::date >= CURRENT_DATE)`.
+Never inline-recompute this rule. Always go through `countFilledForEvent` / `countFilledForEvents`. The dead `events.filled_positions` column has been dropped; a partial index `workforce_event_active_idx` keeps the count cheap at the 10K-worker scale.
+
 ## System Architecture
 
 The system employs a modern, full-stack architecture.
