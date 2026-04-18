@@ -1232,7 +1232,21 @@ export async function registerRoutes(
       if (!isAdmin) {
         const existing = await storage.getCandidate(req.params.id);
         if (!existing) return res.status(404).json({ message: "Candidate not found" });
-        if (existing.userId !== req.authUserId) {
+        // Ownership check — accept any of:
+        //  (a) candidate.userId already matches the auth user
+        //  (b) candidate.userId is null AND nationalId matches the auth user (claim it)
+        //  (c) candidate.nationalId matches the auth user's nationalId (heal stale link)
+        let isOwner = existing.userId === req.authUserId;
+        if (!isOwner) {
+          const me = await storage.getUser(req.authUserId!);
+          const sameNid = !!me?.nationalId && !!existing.nationalId && me.nationalId === existing.nationalId;
+          if (sameNid && (!existing.userId || existing.userId !== req.authUserId)) {
+            await storage.updateCandidate(existing.id, { userId: req.authUserId! });
+            isOwner = true;
+            console.log(`[candidates:patch] Healed userId on candidate ${existing.id} → ${req.authUserId}`);
+          }
+        }
+        if (!isOwner) {
           return res.status(403).json({ message: "You can only update your own profile." });
         }
       }
