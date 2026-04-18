@@ -1,0 +1,158 @@
+{
+  "page": {
+    "title": "طلبات التوظيف",
+    "subtitle": "إدارة ونشر إعلانات الوظائف.",
+    "btnPost": "نشر وظيفة"
+  },
+  "stats": {
+    "total": "إجمالي الوظائف",
+    "active": "النشطة",
+    "drafts": "المسودات",
+    "filled": "تم شغلها"
+  },
+  "filters": {
+    "searchPh": "ابحث بالعنوان أو الموقع...",
+    "allEvents": "جميع الفعاليات",
+    "all": "الكل",
+    "active": "نشطة",
+    "draft": "مسودة",
+    "closed": "مغلقة"
+  },
+  "status": {
+    "active": "نشطة",
+    "draft": "مسودة",
+    "closed": "منتهية",
+    "filled": "تم شغلها"
+  },
+  "jobType": {
+    "seasonal_full_time": "موسمية – دوام كامل",
+    "seasonal_part_time": "موسمية – دوام جزئي",
+    "full_time": "دوام كامل",
+    "part_time": "دوام جزئي",
+    "event_based": "حسب الفعالية",
+    "seasonalFTShort": "موسمية كاملة",
+    "seasonalPTShort": "موسمية جزئية"
+  },
+  "table": {
+    "applications": "الطلبات",
+    "count": "({{n}})",
+    "h": {
+      "title": "عنوان الوظيفة",
+      "location": "الموقع",
+      "type": "النوع",
+      "salary": "نطاق الراتب",
+      "status": "الحالة",
+      "posted": "تاريخ النشر",
+      "actions": "الإجراءات"
+    },
+    "salaryRange": "{{min}} – {{max}} ر.س",
+    "empty": "لا توجد وظائف",
+    "emptyHint": "انشر وظيفة لاستقطاب المرشحين",
+    "createFirst": "أنشئ وظيفتك الأولى",
+    "loading": "جارٍ التحميل..."
+  },
+  "actions": {
+    "viewApplicants": "عرض المتقدمين",
+    "edit": "تعديل الوظيفة",
+    "publish": "نشر",
+    "archive": "أرشفة"
+  },
+  "dialog": {
+    "edit": "تعديل الوظيفة",
+    "post": "نشر وظيفة",
+    "editingDesc": "تعديل: {{title}}",
+    "createDesc": "أنشئ إعلان وظيفة موسمية مرتبطاً بفعالية.",
+    "event": "الفعالية",
+    "selectEvent": "اختر فعالية",
+    "title": "عنوان الوظيفة",
+    "titlePh": "مثال: حارس أمن",
+    "type": "نوع الوظيفة",
+    "city": "المدينة / الموقع",
+    "cityPh": "مثال: الرياض",
+    "region": "المنطقة",
+    "selectRegion": "اختر",
+    "salaryMin": "الحد الأدنى (ر.س)",
+    "salaryMax": "الحد الأعلى (ر.س)",
+    "deadline": "آخر موعد للتقديم",
+    "description": "الوصف",
+    "descriptionPh": "صف الدور والمسؤوليات...",
+    "requirements": "المتطلبات",
+    "requirementsPh": "اذكر المؤهلات والخبرات والمهارات المطلوبة...",
+    "questionSet": "مجموعة أسئلة الفرز",
+    "questionSetPh": "بدون (اختياري)",
+    "none": "بدون",
+    "cancel": "إلغاء",
+    "saveDraft": "حفظ كمسودة",
+    "update": "تحديث الوظيفة",
+    "post2": "نشر الوظيفة",
+    "toastUpdated": "تم تحديث الوظيفة بنجاح",
+    "toastPosted": "تم نشر الوظيفة بنجاح",
+    "toastUpdateFail": "فشل تحديث الوظيفة",
+    "toastPostFail": "فشل نشر الوظيفة",
+    "toastFailDesc": "يرجى التحقق من جميع الحقول المطلوبة والمحاولة مرة أخرى."
+  },
+  "appStatus": {
+    "all": "الكل",
+    "new": "جديد",
+    "reviewing": "قيد المراجعة",
+    "shortlisted": "ضمن القائمة المختصرة",
+    "interviewed": "تمت المقابلة",
+    "offered": "تم تقديم عرض",
+    "hired": "تم التعيين",
+    "rejected": "مرفوض",
+    "withdrawn": "منسحب",
+    "closed": "مغلق"
+  },
+  "applicants": {
+    "applicants_zero": "لا متقدمين",
+    "applicants_one": "متقدم",
+    "applicants_two": "متقدمان",
+    "applicants_few": "متقدمين",
+    "applicants_many": "متقدماً",
+    "applicants_other": "متقدم",
+    "btnExport": "تصدير",
+    "btnImport": "استيراد",
+    "searchPh": "ابحث بالاسم أو الهوية أو الجوال أو البريد...",
+    "filterAllN": "الكل ({{n}})",
+    "filterCount": "{{label}} ({{n}})",
+    "h": {
+      "candidate": "المرشح",
+      "contact": "بيانات التواصل",
+      "status": "الحالة",
+      "applied": "تاريخ التقديم",
+      "answers": "الإجابات"
+    },
+    "viewAnswers": "عرض",
+    "hideAnswers": "إخفاء",
+    "noAnswer": "بدون إجابة",
+    "screeningAnswers": "إجابات الفرز — {{name}}",
+    "loading": "جارٍ التحميل...",
+    "noApplicants": "لا يوجد متقدمون بعد",
+    "noApplicantsHint": "ستظهر هنا الطلبات المُقدَّمة عبر بوابة المرشحين",
+    "noResults": "لا توجد نتائج",
+    "noResultsHint": "جرّب اسماً أو رقم هوية أو حالة مختلفة",
+    "unknown": "مرشح غير معروف",
+    "imp": {
+      "succeeded_one": "تم تطبيق {{count}} تحديث",
+      "succeeded_other": "تم تطبيق {{count}} تحديث",
+      "failed_one": "فشل {{count}}",
+      "failed_other": "فشل {{count}}",
+      "errorIds": "أخطاء: {{ids}}"
+    },
+    "toast": {
+      "bulkFail": "فشل التحديث الجماعي",
+      "formatErr": "خطأ في التنسيق",
+      "missingCols": "أعمدة مفقودة: {{cols}}",
+      "rowMismatch": "عدد الصفوف غير مطابق",
+      "rowMismatchDesc": "الملف يحتوي على {{rows}} صف بيانات بينما الوظيفة تحتوي على {{apps}} طلب. لا تُضِف أو تحذف صفوفاً.",
+      "unknownIds": "معرّفات طلبات غير معروفة",
+      "unknownIdsDesc": "{{n}} صف يحتوي على معرّفات غير موجودة في هذه الوظيفة. لا تُعدّل عمود __app_id.",
+      "invalidStatus": "قيم حالة غير صالحة",
+      "invalidStatusDesc": "{{detail}}. القيم الصالحة: {{valid}}",
+      "noChanges": "لا توجد تغييرات",
+      "noChangesDesc": "عمود الحالة الجديدة يطابق الحالة الحالية لكل الصفوف.",
+      "parseFail": "فشل قراءة الملف",
+      "parseFailDesc": "تأكد أن الملف بصيغة .xlsx صالحة مُصدَّرة من هذا النظام."
+    }
+  }
+}

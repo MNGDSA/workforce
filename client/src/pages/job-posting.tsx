@@ -10,69 +10,36 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect, Fragment, useRef } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useTranslation } from "react-i18next";
+import { formatNumber } from "@/lib/format";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import {
-  Briefcase,
-  Plus,
-  Search,
-  MapPin,
-  Building,
-  MoreHorizontal,
-  Loader2,
-  Users,
-  X,
-  FileDown,
-  FileUp,
-  ChevronRight,
-  Calendar,
-  UserCheck,
-  Save,
-  CheckCircle2,
-  AlertTriangle,
-  Filter,
+  Briefcase, Plus, Search, MapPin, Building, MoreHorizontal, Loader2, Users, X,
+  FileDown, FileUp, ChevronRight, Calendar, UserCheck, Save, CheckCircle2, AlertTriangle, Filter,
 } from "lucide-react";
-import { useRef } from "react";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { formatDistanceToNow } from "date-fns";
+import { ar as arLocale } from "date-fns/locale";
 import type { JobPosting } from "@shared/schema";
 import { KSA_REGIONS } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
-// ─── Status styles ─────────────────────────────────────────────────────────
 const statusStyles: Record<string, string> = {
   active: "bg-green-500/10 text-green-500",
   draft: "bg-muted text-muted-foreground",
@@ -80,23 +47,18 @@ const statusStyles: Record<string, string> = {
   filled: "bg-blue-500/10 text-blue-400",
 };
 
-const statusLabel: Record<string, string> = {
-  active: "Active",
-  draft: "Draft",
-  closed: "Ended",
-  filled: "Filled",
+const appStatusStyle: Record<string, string> = {
+  new: "bg-blue-500/10 text-blue-400",
+  reviewing: "bg-amber-500/10 text-amber-400",
+  shortlisted: "bg-primary/10 text-primary",
+  interviewed: "bg-purple-500/10 text-purple-400",
+  offered: "bg-cyan-500/10 text-cyan-400",
+  hired: "bg-emerald-500/10 text-emerald-400",
+  rejected: "bg-destructive/10 text-destructive",
+  withdrawn: "bg-muted text-muted-foreground",
+  closed: "bg-zinc-500/10 text-zinc-400",
 };
 
-const jobTypeLabel: Record<string, string> = {
-  seasonal_full_time: "Seasonal FT",
-  seasonal_part_time: "Seasonal PT",
-  full_time: "Full Time",
-  part_time: "Part Time",
-  event_based: "Event-based",
-};
-
-
-// ─── Post Job Dialog ─────────────────────────────────────────────────────────
 const postJobSchema = z.object({
   title: z.string().min(3, "Job title is required"),
   eventId: z.string().min(1, "Event is required"),
@@ -121,6 +83,7 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { t } = useTranslation(["jobPosting"]);
   const isEdit = !!initialJob;
 
   const { data: questionSets = [] } = useQuery<{ id: string; name: string }[]>({
@@ -140,22 +103,21 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
     defaultValues: { title: "", eventId: "", type: "seasonal_full_time", location: "", region: "", deadline: "", description: "", requirements: "", status: "active", questionSetId: "" },
   });
 
-  // Pre-fill form when editing an existing job
   useEffect(() => {
     if (open && initialJob) {
       form.reset({
-        title:       initialJob.title ?? "",
-        eventId:     initialJob.eventId ?? "",
-        type:        (initialJob.type === "seasonal_full_time" || initialJob.type === "seasonal_part_time") ? initialJob.type : "seasonal_full_time",
-        location:    initialJob.location ?? "",
-        region:      initialJob.region ?? "",
-        deadline:    initialJob.deadline ?? "",
+        title: initialJob.title ?? "",
+        eventId: initialJob.eventId ?? "",
+        type: (initialJob.type === "seasonal_full_time" || initialJob.type === "seasonal_part_time") ? initialJob.type : "seasonal_full_time",
+        location: initialJob.location ?? "",
+        region: initialJob.region ?? "",
+        deadline: initialJob.deadline ?? "",
         description: initialJob.description ?? "",
-        requirements:initialJob.requirements ?? "",
-        status:      (initialJob.status === "draft" || initialJob.status === "active") ? initialJob.status : "active",
+        requirements: initialJob.requirements ?? "",
+        status: (initialJob.status === "draft" || initialJob.status === "active") ? initialJob.status : "active",
         questionSetId: initialJob.questionSetId ?? "",
-        salaryMin:   initialJob.salaryMin != null ? Number(initialJob.salaryMin) : undefined,
-        salaryMax:   initialJob.salaryMax != null ? Number(initialJob.salaryMax) : undefined,
+        salaryMin: initialJob.salaryMin != null ? Number(initialJob.salaryMin) : undefined,
+        salaryMax: initialJob.salaryMax != null ? Number(initialJob.salaryMax) : undefined,
       });
     } else if (open && !initialJob) {
       form.reset({ title: "", eventId: "", type: "seasonal_full_time", location: "", region: "", deadline: "", description: "", requirements: "", status: "active", questionSetId: "" });
@@ -167,30 +129,20 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
       const payload: Record<string, unknown> = { ...data };
       if (!payload.deadline) delete payload.deadline;
       if (!payload.questionSetId) delete payload.questionSetId;
-      if (payload.salaryMin != null && payload.salaryMin !== "") {
-        payload.salaryMin = String(payload.salaryMin);
-      } else {
-        delete payload.salaryMin;
-      }
-      if (payload.salaryMax != null && payload.salaryMax !== "") {
-        payload.salaryMax = String(payload.salaryMax);
-      } else {
-        delete payload.salaryMax;
-      }
-      if (isEdit) {
-        return apiRequest("PATCH", `/api/jobs/${initialJob!.id}`, payload).then(r => r.json());
-      }
+      if (payload.salaryMin != null && payload.salaryMin !== "") payload.salaryMin = String(payload.salaryMin); else delete payload.salaryMin;
+      if (payload.salaryMax != null && payload.salaryMax !== "") payload.salaryMax = String(payload.salaryMax); else delete payload.salaryMax;
+      if (isEdit) return apiRequest("PATCH", `/api/jobs/${initialJob!.id}`, payload).then(r => r.json());
       return apiRequest("POST", "/api/jobs", payload).then(r => r.json());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs/stats"] });
-      toast({ title: isEdit ? "Job updated successfully" : "Job posted successfully" });
+      toast({ title: isEdit ? t("jobPosting:dialog.toastUpdated") : t("jobPosting:dialog.toastPosted") });
       form.reset();
       onOpenChange(false);
     },
     onError: () => {
-      toast({ title: isEdit ? "Failed to update job" : "Failed to post job", description: "Please check all required fields and try again.", variant: "destructive" });
+      toast({ title: isEdit ? t("jobPosting:dialog.toastUpdateFail") : t("jobPosting:dialog.toastPostFail"), description: t("jobPosting:dialog.toastFailDesc"), variant: "destructive" });
     },
   });
 
@@ -200,10 +152,10 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
         <DialogHeader>
           <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
             <Briefcase className="h-5 w-5 text-primary" />
-            {isEdit ? "Edit Job" : "Post a Job"}
+            {isEdit ? t("jobPosting:dialog.edit") : t("jobPosting:dialog.post")}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            {isEdit ? `Editing: ${initialJob?.title}` : "Create a seasonal job posting linked to an event."}
+            {isEdit ? t("jobPosting:dialog.editingDesc", { title: initialJob?.title ?? "" }) : t("jobPosting:dialog.createDesc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -213,16 +165,16 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
             <FormField control={form.control} name="eventId" render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                  Event <span className="text-primary">*</span>
+                  {t("jobPosting:dialog.event")} <span className="text-primary">*</span>
                 </FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger className="h-10 bg-muted/30 border-border focus:ring-primary/20 rounded-sm" data-testid="select-postjob-event">
-                      <SelectValue placeholder="Select event" />
+                      <SelectValue placeholder={t("jobPosting:dialog.selectEvent")} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {events.map(ev => <SelectItem key={ev.id} value={ev.id}>{ev.name}</SelectItem>)}
+                    {events.map(ev => <SelectItem key={ev.id} value={ev.id}><bdi>{ev.name}</bdi></SelectItem>)}
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -233,10 +185,10 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
               <FormField control={form.control} name="title" render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                    Job Title <span className="text-primary">*</span>
+                    {t("jobPosting:dialog.title")} <span className="text-primary">*</span>
                   </FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Security Guard" className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-title" {...field} />
+                    <Input placeholder={t("jobPosting:dialog.titlePh")} className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-title" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -245,7 +197,7 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
               <FormField control={form.control} name="type" render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                    Job Type <span className="text-primary">*</span>
+                    {t("jobPosting:dialog.type")} <span className="text-primary">*</span>
                   </FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
@@ -254,8 +206,8 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="seasonal_full_time">Seasonal Full-Time</SelectItem>
-                      <SelectItem value="seasonal_part_time">Seasonal Part-Time</SelectItem>
+                      <SelectItem value="seasonal_full_time">{t("jobPosting:jobType.seasonal_full_time")}</SelectItem>
+                      <SelectItem value="seasonal_part_time">{t("jobPosting:jobType.seasonal_part_time")}</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -266,9 +218,9 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="location" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">City / Location</FormLabel>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("jobPosting:dialog.city")}</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Riyadh" className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-location" {...field} />
+                    <Input placeholder={t("jobPosting:dialog.cityPh")} className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-location" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -276,15 +228,15 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
 
               <FormField control={form.control} name="region" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Region</FormLabel>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("jobPosting:dialog.region")}</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger className="h-10 bg-muted/30 border-border focus:ring-primary/20 rounded-sm" data-testid="select-postjob-region">
-                        <SelectValue placeholder="Select" />
+                        <SelectValue placeholder={t("jobPosting:dialog.selectRegion")} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {KSA_REGIONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                      {KSA_REGIONS.map(r => <SelectItem key={r} value={r}><bdi>{r}</bdi></SelectItem>)}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -295,9 +247,9 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="salaryMin" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Min (SAR)</FormLabel>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("jobPosting:dialog.salaryMin")}</FormLabel>
                   <FormControl>
-                    <Input type="number" min={0} placeholder="3000" className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-salary-min" {...field} value={field.value ?? ""} />
+                    <Input type="number" min={0} placeholder="3000" dir="ltr" className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-salary-min" {...field} value={field.value ?? ""} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -305,9 +257,9 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
 
               <FormField control={form.control} name="salaryMax" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Max (SAR)</FormLabel>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("jobPosting:dialog.salaryMax")}</FormLabel>
                   <FormControl>
-                    <Input type="number" min={0} placeholder="6000" className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-salary-max" {...field} value={field.value ?? ""} />
+                    <Input type="number" min={0} placeholder="6000" dir="ltr" className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-salary-max" {...field} value={field.value ?? ""} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -316,7 +268,7 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
 
             <FormField control={form.control} name="deadline" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Application Deadline</FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("jobPosting:dialog.deadline")}</FormLabel>
                 <FormControl>
                   <DatePickerField value={field.value} onChange={field.onChange} className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm" data-testid="input-postjob-deadline" />
                 </FormControl>
@@ -326,9 +278,9 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
 
             <FormField control={form.control} name="description" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Description</FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("jobPosting:dialog.description")}</FormLabel>
                 <FormControl>
-                  <Textarea placeholder="Describe the role and responsibilities..." rows={3} className="bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm resize-none" data-testid="textarea-postjob-description" {...field} />
+                  <Textarea placeholder={t("jobPosting:dialog.descriptionPh")} rows={3} className="bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm resize-none" data-testid="textarea-postjob-description" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -336,9 +288,9 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
 
             <FormField control={form.control} name="requirements" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Requirements</FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("jobPosting:dialog.requirements")}</FormLabel>
                 <FormControl>
-                  <Textarea placeholder="List qualifications, experience, and skills required..." rows={3} className="bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm resize-none" data-testid="textarea-postjob-requirements" {...field} />
+                  <Textarea placeholder={t("jobPosting:dialog.requirementsPh")} rows={3} className="bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm resize-none" data-testid="textarea-postjob-requirements" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -346,20 +298,20 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
 
             <FormField control={form.control} name="questionSetId" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Screening Question Set</FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("jobPosting:dialog.questionSet")}</FormLabel>
                 <Select
                   onValueChange={(v) => field.onChange(v === "none" ? null : v)}
                   value={field.value || "none"}
                 >
                   <FormControl>
                     <SelectTrigger className="h-10 bg-muted/30 border-border focus:ring-primary/20 rounded-sm" data-testid="select-postjob-questionset">
-                      <SelectValue placeholder="None (optional)" />
+                      <SelectValue placeholder={t("jobPosting:dialog.questionSetPh")} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent className="bg-card border-border">
-                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="none">{t("jobPosting:dialog.none")}</SelectItem>
                     {questionSets.map(qs => (
-                      <SelectItem key={qs.id} value={qs.id}>{qs.name}</SelectItem>
+                      <SelectItem key={qs.id} value={qs.id}><bdi>{qs.name}</bdi></SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -369,14 +321,14 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
 
             <DialogFooter className="pt-1 flex gap-2 sm:justify-between">
               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground" data-testid="button-cancel-postjob">
-                Cancel
+                {t("jobPosting:dialog.cancel")}
               </Button>
               <div className="flex gap-2">
                 <Button type="submit" variant="outline" disabled={postJob.isPending} onClick={() => form.setValue("status", "draft")} className="border-border bg-background hover:bg-muted" data-testid="button-postjob-draft">
-                  {postJob.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save as Draft"}
+                  {postJob.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("jobPosting:dialog.saveDraft")}
                 </Button>
                 <Button type="submit" disabled={postJob.isPending} onClick={() => form.setValue("status", "active")} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold uppercase tracking-wide text-xs rounded-sm" data-testid="button-postjob-publish">
-                  {postJob.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : isEdit ? <><Save className="mr-1.5 h-4 w-4" />Update Job</> : <><Plus className="mr-1.5 h-4 w-4" />Post Job</>}
+                  {postJob.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : isEdit ? <><Save className="me-1.5 h-4 w-4" />{t("jobPosting:dialog.update")}</> : <><Plus className="me-1.5 h-4 w-4" />{t("jobPosting:dialog.post2")}</>}
                 </Button>
               </div>
             </DialogFooter>
@@ -387,7 +339,6 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
   );
 }
 
-// ─── Applicants Sheet ────────────────────────────────────────────────────────
 type Application = {
   id: string;
   candidateId: string;
@@ -411,18 +362,6 @@ type CandidateInfo = {
 
 type ExportQuestion = { id: string; text: string };
 
-const appStatusStyle: Record<string, string> = {
-  new:         "bg-blue-500/10 text-blue-400",
-  reviewing:   "bg-amber-500/10 text-amber-400",
-  shortlisted: "bg-primary/10 text-primary",
-  interviewed: "bg-purple-500/10 text-purple-400",
-  offered:     "bg-cyan-500/10 text-cyan-400",
-  hired:       "bg-emerald-500/10 text-emerald-400",
-  rejected:    "bg-destructive/10 text-destructive",
-  withdrawn:   "bg-muted text-muted-foreground",
-  closed:      "bg-zinc-500/10 text-zinc-400",
-};
-
 function initials(name: string) {
   return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
@@ -437,7 +376,6 @@ function exportToExcel(
   questions: ExportQuestion[] = [],
 ) {
   const candidateMap = Object.fromEntries(candidates.map((c) => [c.id, c]));
-
   const questionHeaders = questions.map((q, i) => `Q${i + 1}: ${q.text}`);
   const headers = [...BULK_FIXED_COLS, ...questionHeaders];
 
@@ -445,13 +383,13 @@ function exportToExcel(
     const c = candidateMap[app.candidateId];
     const answers = app.questionSetAnswers?.answers ?? {};
     return [
-      app.id,                                                                   // __app_id
+      app.id,
       c?.fullNameEn ?? "Unknown",
       c?.nationalId ?? "",
       c?.email ?? "",
       c?.phone ?? "",
-      app.status,                                                               // Current Status (read-only)
-      app.status,                                                               // New Status (editable)
+      app.status,
+      app.status,
       ...questions.map((q) => answers[q.id] ?? ""),
     ];
   });
@@ -488,6 +426,8 @@ function ApplicantsSheet({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { t, i18n } = useTranslation(["jobPosting"]);
+  const isAr = i18n.language.startsWith("ar");
 
   const { data: applications = [], isLoading } = useQuery<Application[]>({
     queryKey: ["/api/applications", job?.id],
@@ -509,7 +449,6 @@ function ApplicantsSheet({
   });
   const candidateMap = Object.fromEntries(candidates.map((c) => [c.id, c]));
 
-  // Fetch question set for this job (to get question texts for export + display)
   const { data: questionSet } = useQuery<{ id: string; name: string; questions: ExportQuestion[] }>({
     queryKey: ["/api/question-sets", job?.questionSetId],
     queryFn: () => apiRequest("GET", `/api/question-sets/${job!.questionSetId}`).then((r) => r.json()),
@@ -518,7 +457,6 @@ function ApplicantsSheet({
   const questions: ExportQuestion[] = (questionSet?.questions ?? []) as ExportQuestion[];
   const hasQuestions = questions.length > 0;
 
-  // ── Search + filter ──────────────────────────────────────────────────────
   const filteredApplications = applications.filter(app => {
     const candidate = candidateMap[app.candidateId];
     const q = appSearch.trim().toLowerCase();
@@ -531,7 +469,6 @@ function ApplicantsSheet({
     return matchesSearch && matchesStatus;
   });
 
-  // ── Bulk status mutation ──────────────────────────────────────────────────
   const bulkUpdate = useMutation({
     mutationFn: (updates: { id: string; status: string }[]) =>
       apiRequest("POST", "/api/applications/bulk-status", { updates }).then((r) => r.json()),
@@ -539,10 +476,9 @@ function ApplicantsSheet({
       queryClient.invalidateQueries({ queryKey: ["/api/applications", job?.id] });
       setImportResult({ succeeded: data.succeeded, failed: data.failed, errors: data.results.filter((r: { success: boolean }) => !r.success).map((r: { id: string }) => r.id) });
     },
-    onError: () => toast({ title: "Bulk update failed", variant: "destructive" }),
+    onError: () => toast({ title: t("jobPosting:applicants.toast.bulkFail"), variant: "destructive" }),
   });
 
-  // ── Excel import handler ──────────────────────────────────────────────────
   function handleImport(file: File) {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -551,28 +487,24 @@ function ApplicantsSheet({
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "", range: 1 });
 
-        // Validate columns
         const missing = BULK_FIXED_COLS.filter((col) => !(col in (rows[0] ?? {})));
         if (missing.length) {
-          toast({ title: "Format error", description: `Missing columns: ${missing.join(", ")}`, variant: "destructive" });
+          toast({ title: t("jobPosting:applicants.toast.formatErr"), description: t("jobPosting:applicants.toast.missingCols", { cols: missing.join(", ") }), variant: "destructive" });
           return;
         }
 
-        // Validate row count matches current applications
         if (rows.length !== applications.length) {
-          toast({ title: "Row count mismatch", description: `File has ${rows.length} data rows but job has ${applications.length} applications. Do not add or remove rows.`, variant: "destructive" });
+          toast({ title: t("jobPosting:applicants.toast.rowMismatch"), description: t("jobPosting:applicants.toast.rowMismatchDesc", { rows: formatNumber(rows.length, i18n.language), apps: formatNumber(applications.length, i18n.language) }), variant: "destructive" });
           return;
         }
 
-        // Validate app IDs all exist
         const knownIds = new Set(applications.map((a) => a.id));
         const unknownIds = rows.filter((r) => !knownIds.has(r["__app_id"])).map((r) => r["__app_id"]);
         if (unknownIds.length) {
-          toast({ title: "Unknown Application IDs", description: `${unknownIds.length} row(s) have IDs not found in this job. Do not edit the __app_id column.`, variant: "destructive" });
+          toast({ title: t("jobPosting:applicants.toast.unknownIds"), description: t("jobPosting:applicants.toast.unknownIdsDesc", { n: formatNumber(unknownIds.length, i18n.language) }), variant: "destructive" });
           return;
         }
 
-        // Validate status values and collect changes
         const invalid: string[] = [];
         const updates: { id: string; status: string }[] = [];
         for (const row of rows) {
@@ -584,17 +516,18 @@ function ApplicantsSheet({
           }
         }
         if (invalid.length) {
-          toast({ title: "Invalid status values", description: `${invalid.slice(0, 3).join("; ")}${invalid.length > 3 ? ` (+${invalid.length - 3} more)` : ""}. Valid: ${VALID_STATUSES.join(", ")}`, variant: "destructive" });
+          const detail = `${invalid.slice(0, 3).join("; ")}${invalid.length > 3 ? ` (+${formatNumber(invalid.length - 3, i18n.language)} more)` : ""}`;
+          toast({ title: t("jobPosting:applicants.toast.invalidStatus"), description: t("jobPosting:applicants.toast.invalidStatusDesc", { detail, valid: VALID_STATUSES.join(", ") }), variant: "destructive" });
           return;
         }
         if (updates.length === 0) {
-          toast({ title: "No changes detected", description: "The New Status column matches Current Status for all rows." });
+          toast({ title: t("jobPosting:applicants.toast.noChanges"), description: t("jobPosting:applicants.toast.noChangesDesc") });
           return;
         }
 
         bulkUpdate.mutate(updates);
       } catch {
-        toast({ title: "Failed to parse file", description: "Ensure the file is a valid .xlsx exported from this system.", variant: "destructive" });
+        toast({ title: t("jobPosting:applicants.toast.parseFail"), description: t("jobPosting:applicants.toast.parseFailDesc"), variant: "destructive" });
       }
     };
     reader.readAsArrayBuffer(file);
@@ -603,27 +536,28 @@ function ApplicantsSheet({
 
   if (!job) return null;
 
+  const statusKeys = ["all", "new", "shortlisted", "interviewed", "offered", "hired", "rejected", "closed"];
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-2xl bg-card border-border flex flex-col p-0">
+      <SheetContent side={isAr ? "left" : "right"} className="w-full sm:max-w-2xl bg-card border-border flex flex-col p-0">
         <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
           <div>
-            <SheetTitle className="font-display text-xl font-bold text-white">{job.title}</SheetTitle>
+            <SheetTitle className="font-display text-xl font-bold text-white"><bdi>{job.title}</bdi></SheetTitle>
             <div className="text-muted-foreground mt-1 flex items-center gap-3 flex-wrap text-sm">
-              {job.region && <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{job.region}</span>}
+              {job.region && <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /><bdi>{job.region}</bdi></span>}
               <Badge variant="outline" className={`border-0 text-xs ${statusStyles[job.status] ?? "bg-muted text-muted-foreground"}`}>
-                {statusLabel[job.status] ?? job.status}
+                {t(`jobPosting:status.${job.status}`, { defaultValue: job.status })}
               </Badge>
             </div>
           </div>
 
-          {/* Summary bar */}
           <div className="flex items-center justify-between gap-4 mt-3">
             <div className="flex items-center gap-4 flex-wrap">
               <div className="flex items-center gap-1.5 text-sm">
                 <UserCheck className="h-4 w-4 text-primary" />
-                <span className="text-white font-bold">{applications.length}</span>
-                <span className="text-muted-foreground">applicant{applications.length !== 1 ? "s" : ""}</span>
+                <span className="text-white font-bold" dir="ltr">{formatNumber(applications.length, i18n.language)}</span>
+                <span className="text-muted-foreground">{t("jobPosting:applicants.applicants", { count: applications.length })}</span>
               </div>
               {applications.length > 0 && (
                 <div className="flex gap-1.5 flex-wrap">
@@ -634,7 +568,7 @@ function ApplicantsSheet({
                     }, {})
                   ).map(([status, count]) => (
                     <Badge key={status} variant="outline" className={`border-0 text-xs ${appStatusStyle[status] ?? "bg-muted text-muted-foreground"}`}>
-                      {count} {status}
+                      <span dir="ltr">{formatNumber(count, i18n.language)}</span>{" "}{t(`jobPosting:appStatus.${status}`, { defaultValue: status })}
                     </Badge>
                   ))}
                 </div>
@@ -650,7 +584,7 @@ function ApplicantsSheet({
                 data-testid="button-export-applicants"
               >
                 <FileDown className="h-4 w-4" />
-                Export
+                {t("jobPosting:applicants.btnExport")}
               </Button>
               <Button
                 size="sm"
@@ -661,7 +595,7 @@ function ApplicantsSheet({
                 data-testid="button-import-applicants"
               >
                 {bulkUpdate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-                Import
+                {t("jobPosting:applicants.btnImport")}
               </Button>
               <input
                 ref={fileInputRef}
@@ -674,47 +608,51 @@ function ApplicantsSheet({
           </div>
         </SheetHeader>
 
-        {/* Import result banner */}
         {importResult && (
           <div className={`mx-6 mt-4 p-3 rounded-sm border flex items-start gap-3 text-sm ${importResult.failed === 0 ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-amber-500/10 border-amber-500/30 text-amber-400"}`}>
-            {importResult.failed === 0 ? <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" /> : <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />}
+            {importResult.failed === 0 ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
             <div className="flex-1">
-              <span className="font-medium">{importResult.succeeded} status{importResult.succeeded !== 1 ? "es" : ""} updated successfully</span>
-              {importResult.failed > 0 && <span className="ml-2 text-destructive">{importResult.failed} failed</span>}
+              <span className="font-medium">{t("jobPosting:applicants.imp.succeeded", { count: importResult.succeeded, replace: { count: formatNumber(importResult.succeeded, i18n.language) } })}</span>
+              {importResult.failed > 0 && <span className="ms-2">· {t("jobPosting:applicants.imp.failed", { count: importResult.failed, replace: { count: formatNumber(importResult.failed, i18n.language) } })}</span>}
+              {importResult.errors.length > 0 && (
+                <p className="text-xs mt-1 opacity-80" dir="ltr">{t("jobPosting:applicants.imp.errorIds", { ids: importResult.errors.slice(0, 5).join(", ") })}</p>
+              )}
             </div>
-            <button onClick={() => setImportResult(null)} className="hover:opacity-70"><X className="h-4 w-4" /></button>
+            <button onClick={() => setImportResult(null)} className="text-muted-foreground hover:text-white"><X className="h-4 w-4" /></button>
           </div>
         )}
 
-        {/* Search + Status filter bar — fixed row, never scrolls */}
         {applications.length > 0 && (
-          <div className="shrink-0 px-6 py-3 border-b border-border bg-card flex items-center gap-2 flex-wrap">
-            <div className="relative flex-1 min-w-[160px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <div className="px-6 py-3 border-b border-border space-y-2">
+            <div className="relative">
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
+                placeholder={t("jobPosting:applicants.searchPh")}
+                className="ps-9 h-8 text-xs bg-muted/30 border-border"
                 value={appSearch}
                 onChange={e => setAppSearch(e.target.value)}
-                placeholder="Search name, ID, phone, email…"
-                className="pl-8 h-8 text-sm bg-muted/20 border-border"
                 data-testid="input-applicant-search"
               />
             </div>
             <div className="flex items-center gap-1 flex-wrap">
               <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              {["all", "new", "shortlisted", "interviewed", "offered", "hired", "rejected", "closed"].map(s => (
-                <button
-                  key={s}
-                  onClick={() => setAppStatusFilter(s)}
-                  className={`px-2 py-0.5 rounded-sm text-xs font-medium transition-colors border ${
-                    appStatusFilter === s
-                      ? "bg-primary border-primary text-primary-foreground"
-                      : "bg-muted/20 border-border text-muted-foreground hover:border-primary/40"
-                  }`}
-                  data-testid={`filter-status-${s}`}
-                >
-                  {s === "all" ? `All (${applications.length})` : `${s} (${applications.filter(a => a.status === s).length})`}
-                </button>
-              ))}
+              {statusKeys.map(s => {
+                const count = s === "all" ? applications.length : applications.filter(a => a.status === s).length;
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setAppStatusFilter(s)}
+                    className={`px-2 py-0.5 rounded-sm text-xs font-medium transition-colors border ${
+                      appStatusFilter === s
+                        ? "bg-primary border-primary text-primary-foreground"
+                        : "bg-muted/20 border-border text-muted-foreground hover:border-primary/40"
+                    }`}
+                    data-testid={`filter-status-${s}`}
+                  >
+                    {t("jobPosting:applicants.filterCount", { label: t(`jobPosting:appStatus.${s}`), n: formatNumber(count, i18n.language) })}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -727,25 +665,25 @@ function ApplicantsSheet({
           ) : applications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center px-6">
               <Users className="h-12 w-12 text-muted-foreground/30 mb-4" />
-              <p className="text-muted-foreground font-medium">No applicants yet</p>
-              <p className="text-muted-foreground/60 text-sm mt-1">Applications submitted via the candidate portal will appear here</p>
+              <p className="text-muted-foreground font-medium">{t("jobPosting:applicants.noApplicants")}</p>
+              <p className="text-muted-foreground/60 text-sm mt-1">{t("jobPosting:applicants.noApplicantsHint")}</p>
             </div>
           ) : filteredApplications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center px-6">
               <Search className="h-10 w-10 text-muted-foreground/30 mb-3" />
-              <p className="text-muted-foreground font-medium">No results</p>
-              <p className="text-muted-foreground/60 text-sm mt-1">Try a different name, ID, or status filter</p>
+              <p className="text-muted-foreground font-medium">{t("jobPosting:applicants.noResults")}</p>
+              <p className="text-muted-foreground/60 text-sm mt-1">{t("jobPosting:applicants.noResultsHint")}</p>
             </div>
           ) : (
             <table className="w-full">
               <thead>
-                <tr className="border-b border-border text-left">
-                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Candidate</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">Contact</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden sm:table-cell">Applied</th>
+                <tr className="border-b border-border text-start">
+                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground text-start">{t("jobPosting:applicants.h.candidate")}</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell text-start">{t("jobPosting:applicants.h.contact")}</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground text-start">{t("jobPosting:applicants.h.status")}</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden sm:table-cell text-start">{t("jobPosting:applicants.h.applied")}</th>
                   {hasQuestions && (
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Answers</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground text-start">{t("jobPosting:applicants.h.answers")}</th>
                   )}
                 </tr>
               </thead>
@@ -768,28 +706,28 @@ function ApplicantsSheet({
                             </Avatar>
                             <div className="min-w-0">
                               <div className="text-sm font-medium text-white truncate">
-                                {candidate?.fullNameEn ?? "Unknown Candidate"}
+                                <bdi>{candidate?.fullNameEn ?? t("jobPosting:applicants.unknown")}</bdi>
                               </div>
-                              <div className="text-xs text-muted-foreground font-mono">{candidate?.nationalId ?? "—"}</div>
+                              <div className="text-xs text-muted-foreground font-mono" dir="ltr">{candidate?.nationalId ?? "—"}</div>
                             </div>
                           </div>
                         </td>
                         <td className="px-4 py-3 hidden md:table-cell">
                           <div className="text-xs text-muted-foreground space-y-0.5">
-                            {candidate?.email && <div>{candidate.email}</div>}
-                            {candidate?.phone && <div>{candidate.phone}</div>}
+                            {candidate?.email && <div dir="ltr">{candidate.email}</div>}
+                            {candidate?.phone && <div dir="ltr">{candidate.phone}</div>}
                             {!candidate?.email && !candidate?.phone && <span>—</span>}
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <Badge variant="outline" className={`border-0 text-xs capitalize ${appStatusStyle[app.status] ?? "bg-muted text-muted-foreground"}`}>
-                            {app.status}
+                          <Badge variant="outline" className={`border-0 text-xs ${appStatusStyle[app.status] ?? "bg-muted text-muted-foreground"}`}>
+                            {t(`jobPosting:appStatus.${app.status}`, { defaultValue: app.status })}
                           </Badge>
                         </td>
                         <td className="px-4 py-3 hidden sm:table-cell text-xs text-muted-foreground">
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1" dir="ltr">
                             <Calendar className="h-3 w-3" />
-                            {new Date(app.appliedAt).toLocaleDateString("en-SA")}
+                            {new Date(app.appliedAt).toLocaleDateString(isAr ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB")}
                           </div>
                         </td>
                         {hasQuestions && (
@@ -805,8 +743,8 @@ function ApplicantsSheet({
                                 }`}
                                 data-testid={`button-view-answers-${app.id}`}
                               >
-                                <ChevronRight className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
-                                {isExpanded ? "Hide" : "View"}
+                                <ChevronRight className={`h-3 w-3 transition-transform rtl:rotate-180 ${isExpanded ? "rotate-90 rtl:rotate-90" : ""}`} />
+                                {isExpanded ? t("jobPosting:applicants.hideAnswers") : t("jobPosting:applicants.viewAnswers")}
                               </button>
                             ) : (
                               <span className="text-xs text-muted-foreground/40">—</span>
@@ -819,16 +757,16 @@ function ApplicantsSheet({
                           <td colSpan={hasQuestions ? 5 : 4} className="px-6 pb-4 pt-2">
                             <div className="border border-border rounded-md p-4 space-y-3 bg-muted/10">
                               <p className="text-xs text-primary font-semibold uppercase tracking-wider">
-                                Screening Answers — {questionSet?.name}
+                                {t("jobPosting:applicants.screeningAnswers", { name: questionSet?.name ?? "" })}
                               </p>
                               <div className="space-y-2">
                                 {questions.map((q, idx) => (
                                   <div key={q.id} className="flex items-start gap-3 text-sm">
-                                    <span className="text-xs font-bold text-primary/60 mt-0.5 shrink-0 w-5 text-right">{idx + 1}.</span>
+                                    <span className="text-xs font-bold text-primary/60 mt-0.5 shrink-0 w-5 text-end" dir="ltr">{formatNumber(idx + 1, i18n.language)}.</span>
                                     <div className="flex-1 min-w-0">
-                                      <p className="text-muted-foreground text-xs">{q.text}</p>
+                                      <p className="text-muted-foreground text-xs"><bdi>{q.text}</bdi></p>
                                       <p className={`font-medium mt-0.5 ${answers[q.id] ? "text-white" : "text-muted-foreground/40 italic"}`}>
-                                        {answers[q.id] || "No answer"}
+                                        <bdi>{answers[q.id] || t("jobPosting:applicants.noAnswer")}</bdi>
                                       </p>
                                     </div>
                                   </div>
@@ -850,10 +788,11 @@ function ApplicantsSheet({
   );
 }
 
-// ─── Main Page ──────────────────────────────────────────────────────────────
 export default function JobPostingPage() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const { t, i18n } = useTranslation(["jobPosting"]);
+  const isAr = i18n.language.startsWith("ar");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [eventFilter, setEventFilter] = useState("all");
@@ -911,54 +850,52 @@ export default function JobPostingPage() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white tracking-tight">Job Applications</h1>
-            <p className="text-muted-foreground mt-1">Manage and publish job applications.</p>
+            <h1 className="text-3xl font-display font-bold text-white tracking-tight">{t("jobPosting:page.title")}</h1>
+            <p className="text-muted-foreground mt-1">{t("jobPosting:page.subtitle")}</p>
           </div>
           <Button
             onClick={() => setPostJobOpen(true)}
             className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs rounded-sm shadow-[0_0_20px_rgba(25,90,55,0.25)] hover:shadow-[0_0_30px_rgba(25,90,55,0.45)] transition-all"
             data-testid="button-post-job"
           >
-            <Plus className="mr-2 h-4 w-4" />
-            Post Job
+            <Plus className="me-2 h-4 w-4" />
+            {t("jobPosting:page.btnPost")}
           </Button>
         </div>
 
-        {/* Metrics */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="bg-card border-border shadow-sm border-l-4 border-l-primary">
+          <Card className="bg-card border-border shadow-sm border-s-4 border-l-primary">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Jobs</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("jobPosting:stats.total")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-jobs">{stats?.total ?? "—"}</div>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-jobs" dir="ltr">{stats?.total != null ? formatNumber(stats.total, i18n.language) : "—"}</div>
             </CardContent>
           </Card>
           <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Active</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("jobPosting:stats.active")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-green-500" data-testid="stat-active-jobs">{stats?.active ?? "—"}</div>
+              <div className="text-4xl font-bold font-display text-green-500" data-testid="stat-active-jobs" dir="ltr">{stats?.active != null ? formatNumber(stats.active, i18n.language) : "—"}</div>
             </CardContent>
           </Card>
           <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Drafts</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("jobPosting:stats.drafts")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-muted-foreground" data-testid="stat-draft-jobs">{stats?.draft ?? "—"}</div>
+              <div className="text-4xl font-bold font-display text-muted-foreground" data-testid="stat-draft-jobs" dir="ltr">{stats?.draft != null ? formatNumber(stats.draft, i18n.language) : "—"}</div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Search & Filter */}
         <div className="flex flex-col md:flex-row gap-3 items-center bg-card p-4 rounded-sm border border-border">
           <div className="relative flex-1 w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
-              placeholder="Search by job title, location..."
-              className="pl-10 h-10 bg-muted/30 border-border focus-visible:ring-primary/20"
+              placeholder={t("jobPosting:filters.searchPh")}
+              className="ps-10 h-10 bg-muted/30 border-border focus-visible:ring-primary/20"
               value={search}
               onChange={e => setSearch(e.target.value)}
               data-testid="input-search-jobs"
@@ -966,37 +903,36 @@ export default function JobPostingPage() {
           </div>
           <Select value={eventFilter} onValueChange={setEventFilter}>
             <SelectTrigger className="w-[180px] bg-muted/30 border-border" data-testid="select-event-filter-jobs">
-              <SelectValue placeholder="All Events" />
+              <SelectValue placeholder={t("jobPosting:filters.allEvents")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Events</SelectItem>
+              <SelectItem value="all">{t("jobPosting:filters.allEvents")}</SelectItem>
               {eventsList.map((evt) => (
-                <SelectItem key={evt.id} value={evt.id}>{evt.name}</SelectItem>
+                <SelectItem key={evt.id} value={evt.id}><bdi>{evt.name}</bdi></SelectItem>
               ))}
             </SelectContent>
           </Select>
           <div className="flex gap-2 flex-wrap">
-            {["all", "active", "draft", "closed"].map(s => (
+            {(["all", "active", "draft", "closed"] as const).map(s => (
               <Button
                 key={s}
                 variant={statusFilter === s ? "default" : "outline"}
                 size="sm"
-                className={`h-10 capitalize ${statusFilter === s ? "bg-primary text-primary-foreground" : "border-border bg-background"}`}
+                className={`h-10 ${statusFilter === s ? "bg-primary text-primary-foreground" : "border-border bg-background"}`}
                 onClick={() => setStatusFilter(s)}
                 data-testid={`filter-status-${s}`}
               >
-                {s}
+                {t(`jobPosting:filters.${s}`)}
               </Button>
             ))}
           </div>
         </div>
 
-        {/* Table */}
         <Card className="bg-card border-border">
           <CardHeader className="py-3 px-4">
             <CardTitle className="text-base font-display text-white">
-              Applications
-              {filtered.length > 0 && <span className="text-muted-foreground font-normal text-sm ml-2">({filtered.length})</span>}
+              {t("jobPosting:table.applications")}
+              {filtered.length > 0 && <span className="text-muted-foreground font-normal text-sm ms-2" dir="ltr">{t("jobPosting:table.count", { n: formatNumber(filtered.length, i18n.language) })}</span>}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -1007,28 +943,28 @@ export default function JobPostingPage() {
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Briefcase className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                <p className="text-muted-foreground font-medium">No jobs found</p>
-                <p className="text-muted-foreground/60 text-sm mt-1">Post a job application to attract candidates</p>
+                <p className="text-muted-foreground font-medium">{t("jobPosting:table.empty")}</p>
+                <p className="text-muted-foreground/60 text-sm mt-1">{t("jobPosting:table.emptyHint")}</p>
                 <Button
                   onClick={() => setPostJobOpen(true)}
                   className="mt-4 h-9 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wide rounded-sm"
                   data-testid="button-create-first-job"
                 >
-                  <Plus className="mr-1.5 h-3.5 w-3.5" />
-                  Create Your First Job
+                  <Plus className="me-1.5 h-3.5 w-3.5" />
+                  {t("jobPosting:table.createFirst")}
                 </Button>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="text-muted-foreground">Job Title</TableHead>
-                    <TableHead className="text-muted-foreground hidden md:table-cell">Location</TableHead>
-                    <TableHead className="text-muted-foreground hidden md:table-cell">Type</TableHead>
-                    <TableHead className="text-muted-foreground hidden lg:table-cell">Salary Range</TableHead>
-                    <TableHead className="text-muted-foreground">Status</TableHead>
-                    <TableHead className="text-muted-foreground hidden md:table-cell">Posted</TableHead>
-                    <TableHead className="text-right text-muted-foreground">Actions</TableHead>
+                    <TableHead className="text-muted-foreground">{t("jobPosting:table.h.title")}</TableHead>
+                    <TableHead className="text-muted-foreground hidden md:table-cell">{t("jobPosting:table.h.location")}</TableHead>
+                    <TableHead className="text-muted-foreground hidden md:table-cell">{t("jobPosting:table.h.type")}</TableHead>
+                    <TableHead className="text-muted-foreground hidden lg:table-cell">{t("jobPosting:table.h.salary")}</TableHead>
+                    <TableHead className="text-muted-foreground">{t("jobPosting:table.h.status")}</TableHead>
+                    <TableHead className="text-muted-foreground hidden md:table-cell">{t("jobPosting:table.h.posted")}</TableHead>
+                    <TableHead className="text-end text-muted-foreground">{t("jobPosting:table.h.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1042,22 +978,22 @@ export default function JobPostingPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <div className="min-w-0">
-                            <div className="font-medium text-white">{job.title}</div>
+                            <div className="font-medium text-white"><bdi>{job.title}</bdi></div>
                             {job.department && (
                               <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
                                 <Building className="h-3 w-3" />
-                                {job.department} · {jobTypeLabel[job.type] ?? job.type}
+                                <bdi>{job.department}</bdi> · {t(`jobPosting:jobType.${job.type}`, { defaultValue: job.type })}
                               </div>
                             )}
                           </div>
-                          <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0 ml-1" />
+                          <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0 ms-1 rtl:rotate-180" />
                         </div>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         {job.location && (
                           <div className="flex items-center gap-1 text-sm text-muted-foreground">
                             <MapPin className="h-3 w-3" />
-                            {job.location}
+                            <bdi>{job.location}</bdi>
                           </div>
                         )}
                       </TableCell>
@@ -1067,13 +1003,16 @@ export default function JobPostingPage() {
                           className="border-0 text-xs font-medium bg-primary/10 text-primary"
                           data-testid={`type-job-${job.id}`}
                         >
-                          {job.type === "seasonal_part_time" ? "Seasonal PT" : "Seasonal FT"}
+                          {job.type === "seasonal_part_time" ? t("jobPosting:jobType.seasonalPTShort") : t("jobPosting:jobType.seasonalFTShort")}
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
                         {job.salaryMin && job.salaryMax ? (
-                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                            {Number(job.salaryMin).toLocaleString()} – {Number(job.salaryMax).toLocaleString()} SAR
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground" dir="ltr">
+                            {t("jobPosting:table.salaryRange", {
+                              min: formatNumber(Number(job.salaryMin), i18n.language),
+                              max: formatNumber(Number(job.salaryMax), i18n.language),
+                            })}
                           </div>
                         ) : (
                           <span className="text-muted-foreground text-sm">—</span>
@@ -1085,13 +1024,13 @@ export default function JobPostingPage() {
                           className={`font-medium border-0 text-xs ${statusStyles[job.status] ?? "bg-muted text-muted-foreground"}`}
                           data-testid={`status-job-${job.id}`}
                         >
-                          {statusLabel[job.status] ?? job.status}
+                          {t(`jobPosting:status.${job.status}`, { defaultValue: job.status })}
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
-                        {formatDistanceToNow(new Date(job.createdAt), { addSuffix: true })}
+                        {formatDistanceToNow(new Date(job.createdAt), { addSuffix: true, locale: isAr ? arLocale : undefined })}
                       </TableCell>
-                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <TableCell className="text-end" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white" data-testid={`button-job-actions-${job.id}`}>
@@ -1100,15 +1039,15 @@ export default function JobPostingPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-44">
                             <DropdownMenuItem onClick={() => setLocation(`/job-posting/${job.id}`)}>
-                              View Applicants
+                              {t("jobPosting:actions.viewApplicants")}
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => { setEditingJob(job); setPostJobOpen(true); }}>
-                              Edit Job
+                              {t("jobPosting:actions.edit")}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {job.status === "draft" && (
                               <DropdownMenuItem onClick={() => updateJob.mutate({ id: job.id, status: "active" })}>
-                                Publish
+                                {t("jobPosting:actions.publish")}
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuSeparator />
@@ -1116,7 +1055,7 @@ export default function JobPostingPage() {
                               className="text-destructive"
                               onClick={() => archiveJob.mutate(job.id)}
                             >
-                              Archive
+                              {t("jobPosting:actions.archive")}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -1130,13 +1069,11 @@ export default function JobPostingPage() {
         </Card>
       </div>
 
-      {/* Post Job Dialog */}
       <PostJobDialog
         open={postJobOpen}
         onOpenChange={(v) => { setPostJobOpen(v); if (!v) setEditingJob(null); }}
         initialJob={editingJob}
       />
-      {/* Applicants Sheet */}
       <ApplicantsSheet job={selectedJob} open={sheetOpen} onOpenChange={setSheetOpen} />
     </DashboardLayout>
   );

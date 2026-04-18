@@ -1,0 +1,154 @@
+{
+  "page": {
+    "title": "Job Applications",
+    "subtitle": "Manage and publish job applications.",
+    "btnPost": "Post Job"
+  },
+  "stats": {
+    "total": "Total Jobs",
+    "active": "Active",
+    "drafts": "Drafts",
+    "filled": "Filled"
+  },
+  "filters": {
+    "searchPh": "Search by job title, location...",
+    "allEvents": "All Events",
+    "all": "All",
+    "active": "Active",
+    "draft": "Draft",
+    "closed": "Closed"
+  },
+  "status": {
+    "active": "Active",
+    "draft": "Draft",
+    "closed": "Ended",
+    "filled": "Filled"
+  },
+  "jobType": {
+    "seasonal_full_time": "Seasonal Full-Time",
+    "seasonal_part_time": "Seasonal Part-Time",
+    "full_time": "Full Time",
+    "part_time": "Part Time",
+    "event_based": "Event-based",
+    "seasonalFTShort": "Seasonal FT",
+    "seasonalPTShort": "Seasonal PT"
+  },
+  "table": {
+    "applications": "Applications",
+    "count": "({{n}})",
+    "h": {
+      "title": "Job Title",
+      "location": "Location",
+      "type": "Type",
+      "salary": "Salary Range",
+      "status": "Status",
+      "posted": "Posted",
+      "actions": "Actions"
+    },
+    "salaryRange": "{{min}} – {{max}} SAR",
+    "empty": "No jobs found",
+    "emptyHint": "Post a job application to attract candidates",
+    "createFirst": "Create Your First Job",
+    "loading": "Loading..."
+  },
+  "actions": {
+    "viewApplicants": "View Applicants",
+    "edit": "Edit Job",
+    "publish": "Publish",
+    "archive": "Archive"
+  },
+  "dialog": {
+    "edit": "Edit Job",
+    "post": "Post a Job",
+    "editingDesc": "Editing: {{title}}",
+    "createDesc": "Create a seasonal job posting linked to an event.",
+    "event": "Event",
+    "selectEvent": "Select event",
+    "title": "Job Title",
+    "titlePh": "e.g. Security Guard",
+    "type": "Job Type",
+    "city": "City / Location",
+    "cityPh": "e.g. Riyadh",
+    "region": "Region",
+    "selectRegion": "Select",
+    "salaryMin": "Min (SAR)",
+    "salaryMax": "Max (SAR)",
+    "deadline": "Application Deadline",
+    "description": "Description",
+    "descriptionPh": "Describe the role and responsibilities...",
+    "requirements": "Requirements",
+    "requirementsPh": "List qualifications, experience, and skills required...",
+    "questionSet": "Screening Question Set",
+    "questionSetPh": "None (optional)",
+    "none": "None",
+    "cancel": "Cancel",
+    "saveDraft": "Save as Draft",
+    "update": "Update Job",
+    "post2": "Post Job",
+    "toastUpdated": "Job updated successfully",
+    "toastPosted": "Job posted successfully",
+    "toastUpdateFail": "Failed to update job",
+    "toastPostFail": "Failed to post job",
+    "toastFailDesc": "Please check all required fields and try again."
+  },
+  "appStatus": {
+    "all": "All",
+    "new": "new",
+    "reviewing": "reviewing",
+    "shortlisted": "shortlisted",
+    "interviewed": "interviewed",
+    "offered": "offered",
+    "hired": "hired",
+    "rejected": "rejected",
+    "withdrawn": "withdrawn",
+    "closed": "closed"
+  },
+  "applicants": {
+    "applicants_one": "applicant",
+    "applicants_other": "applicants",
+    "btnExport": "Export",
+    "btnImport": "Import",
+    "searchPh": "Search by name, ID, phone, or email...",
+    "filterAllN": "All ({{n}})",
+    "filterCount": "{{label}} ({{n}})",
+    "h": {
+      "candidate": "Candidate",
+      "contact": "Contact",
+      "status": "Status",
+      "applied": "Applied",
+      "answers": "Answers"
+    },
+    "viewAnswers": "View",
+    "hideAnswers": "Hide",
+    "noAnswer": "No answer",
+    "screeningAnswers": "Screening Answers — {{name}}",
+    "loading": "Loading...",
+    "noApplicants": "No applicants yet",
+    "noApplicantsHint": "Applications submitted via the candidate portal will appear here",
+    "noResults": "No results",
+    "noResultsHint": "Try a different name, ID, or status filter",
+    "unknown": "Unknown Candidate",
+    "imp": {
+      "succeeded_one": "{{count}} update applied",
+      "succeeded_other": "{{count}} updates applied",
+      "failed_one": "{{count}} failed",
+      "failed_other": "{{count}} failed",
+      "errorIds": "Errors: {{ids}}"
+    },
+    "toast": {
+      "bulkFail": "Bulk update failed",
+      "formatErr": "Format error",
+      "missingCols": "Missing columns: {{cols}}",
+      "rowMismatch": "Row count mismatch",
+      "rowMismatchDesc": "File has {{rows}} data rows but job has {{apps}} applications. Do not add or remove rows.",
+      "unknownIds": "Unknown Application IDs",
+      "unknownIdsDesc": "{{n}} row(s) have IDs not found in this job. Do not edit the __app_id column.",
+      "invalidStatus": "Invalid status values",
+      "invalidStatusDesc": "{{detail}}. Valid: {{valid}}",
+      "noChanges": "No changes detected",
+      "noChangesDesc": "The New Status column matches Current Status for all rows.",
+      "parseFail": "Failed to parse file",
+      "parseFailDesc": "Ensure the file is a valid .xlsx exported from this system."
+    }
+  }
+}
