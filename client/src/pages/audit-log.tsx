@@ -17,6 +17,7 @@ import {
   Package,
   CalendarDays,
   Loader2,
+  ChevronDown,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -118,6 +119,22 @@ export default function AuditLogPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [entityFilter, setEntityFilter] = useState("all");
   const [page, setPage] = useState(1);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const hasMetadata = (m: Record<string, any> | null | undefined): boolean => {
+    if (!m) return false;
+    if (typeof m !== "object") return false;
+    return Object.keys(m).length > 0;
+  };
 
   const debounceSearch = useCallback(
     (() => {
@@ -230,56 +247,90 @@ export default function AuditLogPage() {
                 const EntityIcon = ENTITY_ICONS[log.entityType ?? ""] ?? UserCircle2;
                 const actionLabel = ACTION_LABELS[log.action] ?? log.action;
                 const actionColor = ACTION_COLORS[log.action] ?? "bg-muted/30 text-muted-foreground border-border";
+                const expandable = hasMetadata(log.metadata);
+                const isExpanded = expandedIds.has(log.id);
                 return (
-                  <div
-                    key={log.id}
-                    data-testid={`audit-row-${i}`}
-                    className="flex items-start gap-4 px-4 py-3.5 hover:bg-muted/[0.06] transition-colors"
-                  >
-                    {/* Actor Avatar */}
-                    <div className="shrink-0 mt-0.5 w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-                      <span className="text-xs font-bold text-primary">{getInitials(log.actorName)}</span>
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                        <span className="font-medium text-sm text-foreground" data-testid={`audit-actor-${i}`}>
-                          {log.actorName ?? "System"}
-                        </span>
-                        <Badge
-                          variant="outline"
-                          className={`text-[11px] px-1.5 py-0 border ${actionColor}`}
-                          data-testid={`audit-action-${i}`}
-                        >
-                          {actionLabel}
-                        </Badge>
-                        {log.entityType && (
-                          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                            <EntityIcon className="h-3 w-3" />
-                            {log.entityType}
-                          </span>
-                        )}
+                  <div key={log.id} data-testid={`audit-row-${i}`}>
+                    <div
+                      className={`flex items-start gap-4 px-4 py-3.5 transition-colors ${
+                        expandable ? "cursor-pointer hover:bg-muted/[0.08]" : "hover:bg-muted/[0.06]"
+                      }`}
+                      onClick={() => expandable && toggleExpand(log.id)}
+                      role={expandable ? "button" : undefined}
+                      aria-expanded={expandable ? isExpanded : undefined}
+                    >
+                      {/* Actor Avatar */}
+                      <div className="shrink-0 mt-0.5 w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                        <span className="text-xs font-bold text-primary">{getInitials(log.actorName)}</span>
                       </div>
-                      <p className="text-sm text-muted-foreground leading-snug" data-testid={`audit-desc-${i}`}>
-                        {log.description}
-                      </p>
-                      {(log.employeeNumber || log.subjectName) && (
-                        <div className="flex gap-2 mt-1 flex-wrap">
-                          {log.employeeNumber && (
-                            <span className="text-[11px] bg-muted/40 border border-border/50 rounded px-1.5 py-0.5 font-mono text-muted-foreground">
-                              #{log.employeeNumber}
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                          <span className="font-medium text-sm text-foreground" data-testid={`audit-actor-${i}`}>
+                            {log.actorName ?? "System"}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className={`text-[11px] px-1.5 py-0 border ${actionColor}`}
+                            data-testid={`audit-action-${i}`}
+                          >
+                            {actionLabel}
+                          </Badge>
+                          {log.entityType && (
+                            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                              <EntityIcon className="h-3 w-3" />
+                              {log.entityType}
                             </span>
                           )}
                         </div>
-                      )}
+                        <p className="text-sm text-muted-foreground leading-snug" data-testid={`audit-desc-${i}`}>
+                          {log.description}
+                        </p>
+                        {(log.employeeNumber || log.subjectName) && (
+                          <div className="flex gap-2 mt-1 flex-wrap">
+                            {log.employeeNumber && (
+                              <span className="text-[11px] bg-muted/40 border border-border/50 rounded px-1.5 py-0.5 font-mono text-muted-foreground">
+                                #{log.employeeNumber}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Timestamp + chevron */}
+                      <div className="shrink-0 text-right flex items-start gap-2" data-testid={`audit-time-${i}`}>
+                        <div>
+                          <span className="text-[11px] text-muted-foreground">{timeAgo(log.createdAt)}</span>
+                          <p className="text-[10px] text-muted-foreground/60 mt-0.5">{formatDate(log.createdAt)}</p>
+                        </div>
+                        {expandable && (
+                          <ChevronDown
+                            className={`h-4 w-4 mt-0.5 text-muted-foreground/60 transition-transform ${
+                              isExpanded ? "rotate-180" : ""
+                            }`}
+                            data-testid={`audit-expand-${i}`}
+                          />
+                        )}
+                      </div>
                     </div>
 
-                    {/* Timestamp */}
-                    <div className="shrink-0 text-right" data-testid={`audit-time-${i}`}>
-                      <span className="text-[11px] text-muted-foreground">{timeAgo(log.createdAt)}</span>
-                      <p className="text-[10px] text-muted-foreground/60 mt-0.5">{formatDate(log.createdAt)}</p>
-                    </div>
+                    {/* Expanded metadata */}
+                    {expandable && isExpanded && (
+                      <div
+                        className="px-4 pb-4 pl-16 -mt-1"
+                        data-testid={`audit-metadata-${i}`}
+                      >
+                        <div className="rounded-md border border-border/60 bg-muted/30 p-3">
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-1.5">
+                            Details
+                          </div>
+                          <pre className="text-[12px] font-mono text-foreground/90 whitespace-pre-wrap break-words leading-relaxed">
+{JSON.stringify(log.metadata, null, 2)}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
