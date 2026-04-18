@@ -3,6 +3,7 @@ import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  ArrowRight,
   MapPin,
   Banknote,
   CalendarDays,
@@ -16,12 +17,14 @@ import {
   LogIn,
   UserPlus,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import ApplyJobDialog from "@/components/apply-job-dialog";
+import { LanguageSwitcher } from "@/components/i18n/language-switcher";
+import { formatNumber } from "@/lib/format";
 
 type JobPosting = {
   id: string;
@@ -40,26 +43,6 @@ type JobPosting = {
   skills?: string[];
 };
 
-function typeLabel(type: string) {
-  const map: Record<string, string> = {
-    seasonal_full_time: "Seasonal Full-Time",
-    seasonal_part_time: "Seasonal Part-Time",
-    full_time: "Full Time",
-    part_time: "Part Time",
-    event_based: "Event-based",
-    contract: "Contract",
-  };
-  return map[type] ?? type;
-}
-
-function salaryLabel(job: JobPosting) {
-  const min = job.salaryMin ? parseFloat(job.salaryMin) : null;
-  const max = job.salaryMax ? parseFloat(job.salaryMax) : null;
-  if (min && max) return `${min.toLocaleString()} – ${max.toLocaleString()} SAR / month`;
-  if (min) return `From ${min.toLocaleString()} SAR / month`;
-  return null;
-}
-
 function WhatsAppIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -72,6 +55,9 @@ export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { t, i18n } = useTranslation(["apply", "common"]);
+  const isRtl = i18n.language?.startsWith("ar");
+  const StartArrow = isRtl ? ArrowRight : ArrowLeft;
   const [applyOpen, setApplyOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
 
@@ -100,7 +86,7 @@ export default function JobDetailPage() {
   function handleCopyLink() {
     navigator.clipboard.writeText(window.location.href);
     setLinkCopied(true);
-    toast({ title: "Link copied", description: "Job link copied to clipboard." });
+    toast({ title: t("common:actions.linkCopied"), description: t("common:actions.linkCopiedDescription") });
     setTimeout(() => setLinkCopied(false), 2000);
   }
 
@@ -118,6 +104,18 @@ export default function JobDetailPage() {
     }
   }
 
+  function typeLabel(type: string) {
+    return t(`apply:types.${type}`, { defaultValue: type });
+  }
+
+  function salaryLabel(j: JobPosting) {
+    const min = j.salaryMin ? parseFloat(j.salaryMin) : null;
+    const max = j.salaryMax ? parseFloat(j.salaryMax) : null;
+    if (min && max) return t("apply:details.salaryRangeMonth", { min: formatNumber(min, i18n.language), max: formatNumber(max, i18n.language) });
+    if (min) return t("apply:details.salaryFromMonth", { min: formatNumber(min, i18n.language) });
+    return null;
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -129,21 +127,24 @@ export default function JobDetailPage() {
   if (isError || !job) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <header className="h-14 border-b border-border px-4 lg:px-8 flex items-center gap-2">
-          <img src="/workforce-logo.svg" alt="Workforce" className="h-7 w-7" />
-          <span className="font-display font-bold text-lg tracking-tight text-white">WORKFORCE</span>
+        <header className="h-14 border-b border-border px-4 lg:px-8 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <img src="/workforce-logo.svg" alt="Workforce" className="h-7 w-7" />
+            <span className="font-display font-bold text-lg tracking-tight text-white">{t("common:app.name")}</span>
+          </div>
+          <LanguageSwitcher />
         </header>
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
           <Briefcase className="h-14 w-14 text-muted-foreground/30" />
-          <p className="text-white font-bold text-xl" data-testid="text-job-not-found">Job not found</p>
-          <p className="text-muted-foreground text-sm">This position may no longer be available.</p>
+          <p className="text-white font-bold text-xl" data-testid="text-job-not-found">{t("apply:hero.notFound")}</p>
+          <p className="text-muted-foreground text-sm">{t("apply:hero.notFoundDescription")}</p>
           {isLoggedIn ? (
             <Button onClick={() => setLocation("/candidate-portal")} variant="outline" className="border-border mt-2" data-testid="button-back-portal">
-              Back to Portal
+              {t("apply:header.backPortal")}
             </Button>
           ) : (
             <Button onClick={() => setLocation("/auth")} variant="outline" className="border-border mt-2" data-testid="button-go-login">
-              Sign In / Sign Up
+              {t("apply:header.signIn")}
             </Button>
           )}
         </div>
@@ -152,6 +153,8 @@ export default function JobDetailPage() {
   }
 
   const salary = salaryLabel(job);
+  const displayTitle = isRtl && job.titleAr ? job.titleAr : job.title;
+  const subtitle = isRtl ? job.title : job.titleAr;
 
   return (
     <div className="min-h-screen bg-background font-sans text-foreground">
@@ -164,23 +167,24 @@ export default function JobDetailPage() {
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-white transition-colors"
             data-testid="button-back"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Back to opportunities
+            <StartArrow className="h-4 w-4" />
+            {t("apply:header.back")}
           </button>
         ) : (
           <div className="flex items-center gap-2">
             <img src="/workforce-logo.svg" alt="Workforce" className="h-7 w-7" />
-            <span className="font-display font-bold text-lg tracking-tight text-white">WORKFORCE</span>
+            <span className="font-display font-bold text-lg tracking-tight text-white">{t("common:app.name")}</span>
           </div>
         )}
         <div className="flex items-center gap-1.5">
+          <LanguageSwitcher />
           <Button
             variant="ghost"
             size="icon"
             onClick={handleCopyLink}
             className="text-muted-foreground hover:text-white"
             data-testid="button-copy-link"
-            title="Copy link"
+            title={t("common:actions.copyLink")}
           >
             {linkCopied ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <LinkIcon className="h-4 w-4" />}
           </Button>
@@ -190,7 +194,7 @@ export default function JobDetailPage() {
             onClick={handleWhatsAppShare}
             className="text-muted-foreground hover:text-green-500"
             data-testid="button-share-whatsapp"
-            title="Share on WhatsApp"
+            title={t("common:actions.shareWhatsApp")}
           >
             <WhatsAppIcon className="h-4 w-4" />
           </Button>
@@ -201,11 +205,11 @@ export default function JobDetailPage() {
                 onClick={handleApplyClick}
                 data-testid="button-apply-header"
               >
-                Apply Now
+                {t("apply:cta.applyHeader")}
               </Button>
             ) : (
               <Button variant="outline" disabled className="border-emerald-500/40 text-emerald-500 bg-emerald-500/10 font-bold h-9 px-5 text-sm">
-                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Applied
+                <CheckCircle2 className="me-1.5 h-3.5 w-3.5" /> {t("apply:cta.applied")}
               </Button>
             )
           ) : (
@@ -217,15 +221,15 @@ export default function JobDetailPage() {
                 className="text-muted-foreground hover:text-white text-sm h-9"
                 data-testid="button-login"
               >
-                <LogIn className="h-3.5 w-3.5 mr-1.5" />
-                Login
+                <LogIn className="h-3.5 w-3.5 me-1.5" />
+                {t("auth:tabs.login", { defaultValue: "Login", ns: "auth" })}
               </Button>
               <Button
                 className="bg-primary text-primary-foreground font-bold h-9 px-5 text-sm"
                 onClick={handleApplyClick}
                 data-testid="button-apply-header"
               >
-                Apply Now
+                {t("apply:cta.applyHeader")}
               </Button>
             </div>
           )}
@@ -252,34 +256,34 @@ export default function JobDetailPage() {
                   : "border-border text-muted-foreground"
               }
             >
-              {job.status === "active" ? "Accepting Applications" : job.status}
+              {job.status === "active" ? t("apply:hero.acceptingApplications") : job.status}
             </Badge>
           </div>
 
           <h1 className="font-display text-3xl lg:text-4xl font-bold text-white leading-tight" data-testid="text-job-title">
-            {job.title}
+            <bdi>{displayTitle}</bdi>
           </h1>
-          {job.titleAr && (
-            <p className="text-xl text-muted-foreground font-medium" dir="rtl">{job.titleAr}</p>
+          {subtitle && (
+            <p className="text-xl text-muted-foreground font-medium" dir="auto"><bdi>{subtitle}</bdi></p>
           )}
 
           <div className="flex flex-wrap gap-x-6 gap-y-3 pt-1">
             {(job.region ?? job.location) && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <MapPin className="h-4 w-4 text-primary/70 shrink-0" />
-                <span>{job.region ?? job.location}</span>
+                <span><bdi>{job.region ?? job.location}</bdi></span>
               </div>
             )}
             {salary && (
               <div className="flex items-center gap-2 text-sm font-semibold text-white">
                 <Banknote className="h-4 w-4 text-primary/70 shrink-0" />
-                <span>{salary}</span>
+                <span><bdi>{salary}</bdi></span>
               </div>
             )}
             {job.deadline && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CalendarDays className="h-4 w-4 text-primary/70 shrink-0" />
-                <span>Apply by {job.deadline}</span>
+                <span>{t("apply:details.deadlineApplyBy", { date: job.deadline })}</span>
               </div>
             )}
           </div>
@@ -292,8 +296,8 @@ export default function JobDetailPage() {
               onClick={handleApplyClick}
               data-testid="button-apply-main"
             >
-              {isLoggedIn ? "Apply for this Position" : (
-                <><UserPlus className="h-4 w-4 mr-2" /> Sign Up & Apply</>
+              {isLoggedIn ? t("apply:cta.applyMain") : (
+                <><UserPlus className="h-4 w-4 me-2" /> {t("apply:cta.signUpAndApply")}</>
               )}
             </Button>
           </div>
@@ -301,8 +305,8 @@ export default function JobDetailPage() {
           <div className="flex items-center gap-3 p-4 rounded-md bg-emerald-500/10 border border-emerald-500/25">
             <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
             <div>
-              <p className="text-sm font-semibold text-emerald-400">Application submitted</p>
-              <p className="text-xs text-emerald-600 mt-0.5">We'll review your application and be in touch.</p>
+              <p className="text-sm font-semibold text-emerald-400">{t("apply:cta.appSubmitted")}</p>
+              <p className="text-xs text-emerald-600 mt-0.5">{t("apply:cta.appSubmittedDesc")}</p>
             </div>
           </div>
         )}
@@ -311,10 +315,10 @@ export default function JobDetailPage() {
           <section className="space-y-3">
             <h2 className="font-display font-bold text-lg text-white flex items-center gap-2">
               <Briefcase className="h-4 w-4 text-primary" />
-              About the Role
+              {t("apply:details.descriptionHeader")}
             </h2>
             <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap bg-muted/10 rounded-md p-4 border border-border">
-              {job.description}
+              <bdi>{job.description}</bdi>
             </div>
           </section>
         )}
@@ -323,13 +327,13 @@ export default function JobDetailPage() {
           <section className="space-y-3">
             <h2 className="font-display font-bold text-lg text-white flex items-center gap-2">
               <Clock className="h-4 w-4 text-primary" />
-              Requirements
+              {t("apply:details.requirements")}
             </h2>
             <div className="space-y-2">
               {job.requirements.split("\n").filter(Boolean).map((line, i) => (
                 <div key={i} className="flex items-start gap-3 text-sm text-muted-foreground">
                   <CheckCircle2 className="h-4 w-4 text-primary/60 mt-0.5 shrink-0" />
-                  <span>{line.replace(/^[-•*]\s*/, "")}</span>
+                  <span><bdi>{line.replace(/^[-•*]\s*/, "")}</bdi></span>
                 </div>
               ))}
             </div>
@@ -340,24 +344,24 @@ export default function JobDetailPage() {
           <section className="space-y-3">
             <h2 className="font-display font-bold text-lg text-white flex items-center gap-2">
               <Tag className="h-4 w-4 text-primary" />
-              Skills & Keywords
+              {t("apply:details.skillsHeader")}
             </h2>
             <div className="flex flex-wrap gap-2">
               {job.skills.map((skill) => (
                 <Badge key={skill} variant="outline" className="border-primary/30 text-primary bg-primary/10 font-medium">
-                  {skill}
+                  <bdi>{skill}</bdi>
                 </Badge>
               ))}
             </div>
           </section>
         )}
 
-        <div className="flex items-center gap-3 p-4 bg-muted/10 rounded-md border border-border">
+        <div className="flex items-center gap-3 p-4 bg-muted/10 rounded-md border border-border flex-wrap">
           <h3 className="text-sm font-semibold text-white flex items-center gap-2">
             <Share2 className="h-4 w-4 text-primary" />
-            Share this job
+            {t("apply:share.header")}
           </h3>
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-2 ms-auto">
             <Button
               variant="outline"
               size="sm"
@@ -366,7 +370,7 @@ export default function JobDetailPage() {
               data-testid="button-copy-link-section"
             >
               {linkCopied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <LinkIcon className="h-3.5 w-3.5" />}
-              {linkCopied ? "Copied!" : "Copy Link"}
+              {linkCopied ? t("apply:share.copied") : t("apply:share.copyLink")}
             </Button>
             <Button
               variant="outline"
@@ -376,7 +380,7 @@ export default function JobDetailPage() {
               data-testid="button-share-whatsapp-section"
             >
               <WhatsAppIcon className="h-3.5 w-3.5" />
-              WhatsApp
+              {t("apply:share.whatsapp")}
             </Button>
           </div>
         </div>
@@ -384,9 +388,9 @@ export default function JobDetailPage() {
         {!applied && (
           <div className="pb-8 pt-2 border-t border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <p className="font-semibold text-white">Interested in this role?</p>
+              <p className="font-semibold text-white">{t("apply:interested.title")}</p>
               <p className="text-sm text-muted-foreground">
-                {isLoggedIn ? "Submit your application — it only takes a minute." : "Create an account and apply — it only takes a minute."}
+                {isLoggedIn ? t("apply:interested.loggedIn") : t("apply:interested.guest")}
               </p>
             </div>
             <Button
@@ -394,7 +398,7 @@ export default function JobDetailPage() {
               onClick={handleApplyClick}
               data-testid="button-apply-bottom"
             >
-              {isLoggedIn ? "Apply Now" : "Sign Up & Apply"}
+              {isLoggedIn ? t("apply:cta.applyBottom") : t("apply:cta.signUpAndApply")}
             </Button>
           </div>
         )}
@@ -402,7 +406,7 @@ export default function JobDetailPage() {
 
       <footer className="border-t border-border py-6 flex items-center justify-center gap-2">
         <img src="/workforce-logo.svg" alt="Workforce" className="h-5 w-5" />
-        <span className="font-display font-bold text-sm tracking-tight text-muted-foreground">WORKFORCE</span>
+        <span className="font-display font-bold text-sm tracking-tight text-muted-foreground">{t("common:app.name")}</span>
       </footer>
 
       {isLoggedIn && (

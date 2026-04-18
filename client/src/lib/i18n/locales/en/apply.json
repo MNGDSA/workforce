@@ -7,7 +7,8 @@
   "hero": {
     "applied": "You have applied for this position.",
     "notFound": "Job not found",
-    "notFoundDescription": "This position may no longer be available."
+    "notFoundDescription": "This position may no longer be available.",
+    "acceptingApplications": "Accepting Applications"
   },
   "details": {
     "location": "Location",
@@ -15,23 +16,62 @@
     "type": "Type",
     "salaryRange": "Salary Range",
     "deadline": "Application Deadline",
+    "deadlineApplyBy": "Apply by {{date}}",
+    "salaryFromMonth": "From {{min}} SAR / month",
+    "salaryRangeMonth": "{{min}} – {{max}} SAR / month",
     "skills": "Required Skills",
+    "skillsHeader": "Skills & Keywords",
     "description": "About this Position",
+    "descriptionHeader": "About the Role",
     "requirements": "Requirements"
   },
+  "share": {
+    "header": "Share this job",
+    "copyLink": "Copy Link",
+    "copied": "Copied!",
+    "whatsapp": "WhatsApp"
+  },
+  "interested": {
+    "title": "Interested in this role?",
+    "loggedIn": "Submit your application — it only takes a minute.",
+    "guest": "Create an account and apply — it only takes a minute."
+  },
   "cta": {
-    "applyHeader": "Apply",
+    "applyHeader": "Apply Now",
     "applyMain": "Apply for this Position",
     "applyBottom": "Apply Now",
     "signUpAndApply": "Sign Up & Apply",
+    "applied": "Applied",
+    "appSubmitted": "Application submitted",
+    "appSubmittedDesc": "We'll review your application and be in touch.",
     "submitDescription": "Submit your application — it only takes a minute.",
     "signupDescription": "Create an account and apply — it only takes a minute."
+  },
+  "types": {
+    "seasonal_full_time": "Seasonal Full-Time",
+    "seasonal_part_time": "Seasonal Part-Time",
+    "full_time": "Full Time",
+    "part_time": "Part Time",
+    "event_based": "Event-based",
+    "contract": "Contract"
   },
   "dialog": {
     "applyForPosition": "Apply for Position",
     "screeningQuestions": "Screening Questions",
     "submit": "Submit Application",
     "submitting": "Submitting…",
+    "applyingAs": "Applying as",
+    "confirmDescription": "You are about to submit an application for \"{{title}}\". Your profile information will be used for this application.",
+    "confirmAndApply": "Confirm & Apply",
+    "cancel": "Cancel",
+    "back": "Back",
+    "questionRequired": "This question is required",
+    "yes": "Yes",
+    "no": "No",
+    "placeholderText": "Your answer…",
+    "rankingHelper": "Click to rank in order of preference (1st choice first)",
+    "rankingRemaining_one": "{{count}} item left to rank",
+    "rankingRemaining_other": "{{count}} items left to rank",
     "successTitle": "Application submitted!",
     "successDescription": "Your application for \"{{title}}\" has been received.",
     "errorTitle": "Failed to submit",

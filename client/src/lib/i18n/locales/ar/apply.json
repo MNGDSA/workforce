@@ -7,7 +7,8 @@
   "hero": {
     "applied": "لقد تقدّمت لهذه الوظيفة.",
     "notFound": "الوظيفة غير موجودة",
-    "notFoundDescription": "قد تكون هذه الوظيفة لم تعد متاحة."
+    "notFoundDescription": "قد تكون هذه الوظيفة لم تعد متاحة.",
+    "acceptingApplications": "تستقبل الطلبات"
   },
   "details": {
     "location": "الموقع",
@@ -15,23 +16,66 @@
     "type": "نوع الوظيفة",
     "salaryRange": "نطاق الراتب",
     "deadline": "آخر موعد للتقديم",
+    "deadlineApplyBy": "آخر موعد: {{date}}",
+    "salaryFromMonth": "ابتداءً من {{min}} ر.س / شهرياً",
+    "salaryRangeMonth": "{{min}} – {{max}} ر.س / شهرياً",
     "skills": "المهارات المطلوبة",
+    "skillsHeader": "المهارات والكلمات المفتاحية",
     "description": "عن هذه الوظيفة",
+    "descriptionHeader": "عن الوظيفة",
     "requirements": "المتطلبات"
   },
+  "share": {
+    "header": "شارك هذه الوظيفة",
+    "copyLink": "نسخ الرابط",
+    "copied": "تم النسخ!",
+    "whatsapp": "واتساب"
+  },
+  "interested": {
+    "title": "هل تهمك هذه الوظيفة؟",
+    "loggedIn": "أرسل طلبك — لن يستغرق سوى دقيقة.",
+    "guest": "أنشئ حساباً وتقدّم — لن يستغرق سوى دقيقة."
+  },
   "cta": {
-    "applyHeader": "تقديم",
+    "applyHeader": "تقديم الآن",
     "applyMain": "تقدّم لهذه الوظيفة",
     "applyBottom": "تقديم الآن",
     "signUpAndApply": "أنشئ حساباً وتقدّم",
+    "applied": "تم التقديم",
+    "appSubmitted": "تم إرسال طلبك",
+    "appSubmittedDesc": "سنراجع طلبك ونتواصل معك.",
     "submitDescription": "أرسل طلبك — لن يستغرق سوى دقيقة.",
     "signupDescription": "أنشئ حساباً وتقدّم — لن يستغرق سوى دقيقة."
+  },
+  "types": {
+    "seasonal_full_time": "موسمي - دوام كامل",
+    "seasonal_part_time": "موسمي - دوام جزئي",
+    "full_time": "دوام كامل",
+    "part_time": "دوام جزئي",
+    "event_based": "حسب الفعالية",
+    "contract": "عقد"
   },
   "dialog": {
     "applyForPosition": "التقديم على الوظيفة",
     "screeningQuestions": "أسئلة تمهيدية",
     "submit": "إرسال الطلب",
     "submitting": "جارٍ الإرسال…",
+    "applyingAs": "تقدّم باسم",
+    "confirmDescription": "أنت على وشك إرسال طلب للوظيفة \"{{title}}\". ستُستخدم بيانات ملفك الشخصي في هذا الطلب.",
+    "confirmAndApply": "تأكيد وتقديم",
+    "cancel": "إلغاء",
+    "back": "رجوع",
+    "questionRequired": "هذا السؤال مطلوب",
+    "yes": "نعم",
+    "no": "لا",
+    "placeholderText": "إجابتك…",
+    "rankingHelper": "اضغط لترتيبها حسب الأفضلية (الخيار الأول أولاً)",
+    "rankingRemaining_zero": "اكتمل الترتيب",
+    "rankingRemaining_one": "بقي عنصر واحد للترتيب",
+    "rankingRemaining_two": "بقي عنصران للترتيب",
+    "rankingRemaining_few": "بقي {{count}} عناصر للترتيب",
+    "rankingRemaining_many": "بقي {{count}} عنصراً للترتيب",
+    "rankingRemaining_other": "بقي {{count}} عنصر للترتيب",
     "successTitle": "تم إرسال طلبك!",
     "successDescription": "تم استلام طلبك لوظيفة \"{{title}}\".",
     "errorTitle": "تعذّر الإرسال",

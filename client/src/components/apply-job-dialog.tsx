@@ -2,9 +2,10 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
-  Briefcase, Loader2, ChevronLeft,
+  Briefcase, Loader2, ChevronLeft, ChevronRight,
   CheckCircle2, ClipboardList, AlignLeft, Hash, ToggleLeft, ListChecks, User, ListOrdered,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -51,29 +52,29 @@ function ConfirmView({ job, candidate, onConfirm, onCancel, isSubmitting }: {
   onCancel: () => void;
   isSubmitting: boolean;
 }) {
+  const { t } = useTranslation(["apply"]);
   return (
     <div className="space-y-5 pt-1">
       <div className="bg-muted/10 border border-border rounded-md p-4 space-y-2">
-        <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-3">Applying as</p>
+        <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-3">{t("apply:dialog.applyingAs")}</p>
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
             <User className="h-4 w-4 text-primary" />
           </div>
           <div>
-            <p className="font-semibold text-white text-sm">{candidate.fullNameEn || "—"}</p>
-            <p className="text-xs text-muted-foreground font-mono">{candidate.nationalId || candidate.phone || "—"}</p>
+            <p className="font-semibold text-white text-sm"><bdi>{candidate.fullNameEn || "—"}</bdi></p>
+            <p className="text-xs text-muted-foreground font-mono"><bdi>{candidate.nationalId || candidate.phone || "—"}</bdi></p>
           </div>
         </div>
       </div>
 
       <p className="text-sm text-muted-foreground">
-        You are about to submit an application for <span className="text-white font-medium">"{job.title}"</span>.
-        Your profile information will be used for this application.
+        {t("apply:dialog.confirmDescription", { title: job.title })}
       </p>
 
       <div className="flex justify-end gap-3 pt-1">
         <Button variant="outline" className="border-border" onClick={onCancel} data-testid="button-apply-cancel">
-          Cancel
+          {t("apply:dialog.cancel")}
         </Button>
         <Button
           className="bg-primary text-primary-foreground font-bold min-w-[160px] gap-2"
@@ -83,7 +84,7 @@ function ConfirmView({ job, candidate, onConfirm, onCancel, isSubmitting }: {
         >
           {isSubmitting
             ? <Loader2 className="h-4 w-4 animate-spin" />
-            : <><CheckCircle2 className="h-4 w-4" /> Confirm & Apply</>}
+            : <><CheckCircle2 className="h-4 w-4" /> {t("apply:dialog.confirmAndApply")}</>}
         </Button>
       </div>
     </div>
@@ -99,6 +100,9 @@ function QuestionsView({ questionSet, onBack, onSubmit, isSubmitting, showBack }
   isSubmitting: boolean;
   showBack: boolean;
 }) {
+  const { t, i18n } = useTranslation(["apply"]);
+  const isRtl = i18n.language?.startsWith("ar");
+  const BackIcon = isRtl ? ChevronRight : ChevronLeft;
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [errors, setErrors]   = useState<Record<string, string>>({});
 
@@ -113,7 +117,7 @@ function QuestionsView({ questionSet, onBack, onSubmit, isSubmitting, showBack }
     const newErrors: Record<string, string> = {};
     for (const q of questions) {
       if (q.required && !answers[q.id]?.trim()) {
-        newErrors[q.id] = "This question is required";
+        newErrors[q.id] = t("apply:dialog.questionRequired");
       }
     }
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
@@ -124,20 +128,20 @@ function QuestionsView({ questionSet, onBack, onSubmit, isSubmitting, showBack }
     <div className="space-y-5 pt-1">
       {questionSet.description && (
         <p className="text-sm text-muted-foreground bg-muted/10 rounded-md p-3 border border-border">
-          {questionSet.description}
+          <bdi>{questionSet.description}</bdi>
         </p>
       )}
 
-      <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+      <div className="space-y-4 max-h-[400px] overflow-y-auto pe-1">
         {questions.map((q, idx) => {
           const Icon = TYPE_ICON[q.type];
           return (
             <div key={q.id} className="space-y-2">
               <div className="flex items-start gap-2">
-                <span className="text-xs font-bold text-primary mt-0.5 shrink-0">{idx + 1}.</span>
+                <span className="text-xs font-bold text-primary mt-0.5 shrink-0"><bdi>{idx + 1}.</bdi></span>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-white">{q.text}</span>
+                    <span className="text-sm font-medium text-white"><bdi>{q.text}</bdi></span>
                     {q.required && <span className="text-red-400 text-xs">*</span>}
                     <Badge variant="outline" className="border-border text-muted-foreground text-[10px] flex items-center gap-1">
                       <Icon className="h-2.5 w-2.5" />
@@ -146,18 +150,21 @@ function QuestionsView({ questionSet, onBack, onSubmit, isSubmitting, showBack }
 
                   {q.type === "yes_no" && (
                     <div className="flex gap-2 mt-2">
-                      {["Yes", "No"].map((opt) => (
+                      {[
+                        { value: "Yes", label: t("apply:dialog.yes") },
+                        { value: "No", label: t("apply:dialog.no") },
+                      ].map((opt) => (
                         <button
-                          key={opt} type="button"
-                          onClick={() => setAnswer(q.id, opt)}
-                          data-testid={`button-answer-${q.id}-${opt}`}
+                          key={opt.value} type="button"
+                          onClick={() => setAnswer(q.id, opt.value)}
+                          data-testid={`button-answer-${q.id}-${opt.value}`}
                           className={`flex-1 h-9 rounded-sm border text-sm font-medium transition-colors ${
-                            answers[q.id] === opt
+                            answers[q.id] === opt.value
                               ? "bg-primary border-primary text-primary-foreground"
                               : "bg-muted/20 border-border text-muted-foreground hover:border-primary/50"
                           }`}
                         >
-                          {opt}
+                          {opt.label}
                         </button>
                       ))}
                     </div>
@@ -176,7 +183,7 @@ function QuestionsView({ questionSet, onBack, onSubmit, isSubmitting, showBack }
                               : "bg-muted/20 border-border text-muted-foreground hover:border-primary/50"
                           }`}
                         >
-                          {opt}
+                          <bdi>{opt}</bdi>
                         </button>
                       ))}
                     </div>
@@ -186,7 +193,7 @@ function QuestionsView({ questionSet, onBack, onSubmit, isSubmitting, showBack }
                     <Textarea
                       value={answers[q.id] ?? ""}
                       onChange={(e) => setAnswer(q.id, e.target.value)}
-                      placeholder="Your answer..."
+                      placeholder={t("apply:dialog.placeholderText")}
                       className="bg-muted/30 border-border mt-2 resize-none text-sm"
                       rows={2}
                       data-testid={`textarea-answer-${q.id}`}
@@ -218,7 +225,7 @@ function QuestionsView({ questionSet, onBack, onSubmit, isSubmitting, showBack }
                     };
                     return (
                       <div className="mt-2 space-y-1.5">
-                        <p className="text-[11px] text-muted-foreground">Click to rank in order of preference (1st choice first)</p>
+                        <p className="text-[11px] text-muted-foreground">{t("apply:dialog.rankingHelper")}</p>
                         <div className="space-y-1">
                           {opts.map((opt) => {
                             const rank = ranked.indexOf(opt);
@@ -229,7 +236,7 @@ function QuestionsView({ questionSet, onBack, onSubmit, isSubmitting, showBack }
                                 type="button"
                                 onClick={() => toggleRank(opt)}
                                 data-testid={`button-rank-${q.id}-${opt}`}
-                                className={`w-full flex items-center gap-3 px-3 h-9 rounded-sm border text-xs font-medium text-left transition-colors ${
+                                className={`w-full flex items-center gap-3 px-3 h-9 rounded-sm border text-xs font-medium text-start transition-colors ${
                                   isRanked
                                     ? "bg-primary/10 border-primary/40 text-white"
                                     : "bg-muted/20 border-border text-muted-foreground hover:border-primary/50"
@@ -238,15 +245,15 @@ function QuestionsView({ questionSet, onBack, onSubmit, isSubmitting, showBack }
                                 <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
                                   isRanked ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
                                 }`}>
-                                  {isRanked ? rank + 1 : "·"}
+                                  <bdi>{isRanked ? rank + 1 : "·"}</bdi>
                                 </span>
-                                {opt}
+                                <bdi>{opt}</bdi>
                               </button>
                             );
                           })}
                         </div>
                         {ranked.length > 0 && ranked.length < opts.length && (
-                          <p className="text-[11px] text-amber-400/80">{opts.length - ranked.length} item{opts.length - ranked.length > 1 ? "s" : ""} left to rank</p>
+                          <p className="text-[11px] text-amber-400/80">{t("apply:dialog.rankingRemaining", { count: opts.length - ranked.length })}</p>
                         )}
                       </div>
                     );
@@ -265,7 +272,7 @@ function QuestionsView({ questionSet, onBack, onSubmit, isSubmitting, showBack }
       <div className={`flex gap-3 pt-2 border-t border-border ${showBack ? "justify-between" : "justify-end"}`}>
         {showBack && (
           <Button type="button" variant="outline" className="border-border gap-2" onClick={onBack} data-testid="button-qs-back">
-            <ChevronLeft className="h-4 w-4" /> Back
+            <BackIcon className="h-4 w-4" /> {t("apply:dialog.back")}
           </Button>
         )}
         <Button
@@ -276,7 +283,7 @@ function QuestionsView({ questionSet, onBack, onSubmit, isSubmitting, showBack }
         >
           {isSubmitting
             ? <Loader2 className="h-4 w-4 animate-spin" />
-            : <><CheckCircle2 className="h-4 w-4" /> Submit Application</>}
+            : <><CheckCircle2 className="h-4 w-4" /> {t("apply:dialog.submit")}</>}
         </Button>
       </div>
     </div>
@@ -293,6 +300,7 @@ export default function ApplyJobDialog({
   onOpenChange: (v: boolean) => void;
   onSuccess: (jobId: string) => void;
 }) {
+  const { t } = useTranslation(["apply"]);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
@@ -315,12 +323,6 @@ export default function ApplyJobDialog({
 
   const apply = useMutation({
     mutationFn: async (answers?: Record<string, string>) => {
-      // Candidate identity must come from the authenticated session that
-      // /api/auth/register (or /api/auth/login) established. If localStorage
-      // has been wiped between sign-up and submit (clear site data, weird
-      // tab restore, etc.) we cannot create candidates from the public
-      // dialog — the public path is OTP-gated registration only. Bounce
-      // them back through /auth and let returnTo bring them right back.
       if (!candidate.id) {
         throw new Error("SESSION_LOST");
       }
@@ -335,15 +337,18 @@ export default function ApplyJobDialog({
       return job!.id;
     },
     onSuccess: (jobId) => {
-      toast({ title: "Application submitted!", description: `Your application for "${job?.title}" has been received.` });
+      toast({
+        title: t("apply:dialog.successTitle"),
+        description: t("apply:dialog.successDescription", { title: job?.title ?? "" }),
+      });
       onSuccess(jobId);
       onOpenChange(false);
     },
     onError: (e: any) => {
       if (e?.message === "SESSION_LOST") {
         toast({
-          title: "Please sign in again",
-          description: "Your session was lost. Sign in to finish your application.",
+          title: t("apply:dialog.sessionLostTitle"),
+          description: t("apply:dialog.sessionLostDescription"),
           variant: "destructive",
         });
         onOpenChange(false);
@@ -351,7 +356,11 @@ export default function ApplyJobDialog({
         setLocation(`/auth?tab=signup&returnTo=${ret}`);
         return;
       }
-      toast({ title: "Failed to submit", description: e?.message || "Please try again.", variant: "destructive" });
+      toast({
+        title: t("apply:dialog.errorTitle"),
+        description: e?.message || t("apply:dialog.errorDescription"),
+        variant: "destructive",
+      });
     },
   });
 
@@ -367,12 +376,12 @@ export default function ApplyJobDialog({
         <DialogHeader>
           <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
             {hasQuestions
-              ? <><ClipboardList className="h-5 w-5 text-primary" /> {questionSet?.name ?? "Screening Questions"}</>
-              : <><Briefcase className="h-5 w-5 text-primary" /> Apply for Position</>}
+              ? <><ClipboardList className="h-5 w-5 text-primary" /> <bdi>{questionSet?.name ?? t("apply:dialog.screeningQuestions")}</bdi></>
+              : <><Briefcase className="h-5 w-5 text-primary" /> {t("apply:dialog.applyForPosition")}</>}
           </DialogTitle>
           {job && (
             <DialogDescription className="text-muted-foreground">
-              {job.title} · {job.region ?? job.location ?? "KSA"}
+              <bdi>{job.title}</bdi> · <bdi>{job.region ?? job.location ?? "KSA"}</bdi>
             </DialogDescription>
           )}
         </DialogHeader>
