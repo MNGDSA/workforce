@@ -1,0 +1,138 @@
+{
+  "title": "Payroll",
+  "subtitle": "Manage pay runs, settlements, and payment tracking",
+  "newPayRun": "New Pay Run",
+  "stats": {
+    "totalPayroll": "Total Payroll",
+    "employees": "Employees on Payroll",
+    "pending": "Pending",
+    "completed": "Completed Runs"
+  },
+  "list": {
+    "title": "Pay Runs",
+    "count_one": "{{count}} run",
+    "count_other": "{{count}} runs",
+    "empty": "No pay runs yet. Create your first one.",
+    "view": "View"
+  },
+  "table": {
+    "name": "Name",
+    "event": "Event",
+    "period": "Period",
+    "mode": "Mode",
+    "employees": "Employees",
+    "totalSar": "Total (SAR)",
+    "status": "Status"
+  },
+  "modes": {
+    "full": "Full",
+    "fullOption": "Full — Single Payment",
+    "splitOption": "Split — Two Tranches",
+    "split": "Split {{a}}/{{b}}"
+  },
+  "status": {
+    "draft": "Draft",
+    "processing": "Processing",
+    "t1_paid": "T1 Paid",
+    "completed": "Completed",
+    "pending": "Pending",
+    "paid": "Paid",
+    "blocked": "Blocked"
+  },
+  "create": {
+    "title": "Create Pay Run",
+    "name": "Name",
+    "namePlaceholder": "e.g. Ramadan 2026 — Final",
+    "event": "Event (optional)",
+    "selectEvent": "Select event",
+    "noEvent": "No Event",
+    "dateFrom": "Date From",
+    "dateTo": "Date To",
+    "mode": "Mode",
+    "splitPct": "Split Percentage (Tranche 1)",
+    "t1Date": "T1 Deposit Date",
+    "t2Date": "T2 Deposit Date",
+    "cancel": "Cancel",
+    "submit": "Create Pay Run",
+    "submitting": "Creating..."
+  },
+  "detail": {
+    "totalNet": "Total Net",
+    "employees": "Employees",
+    "bankCash": "({{bank}} bank, {{cash}} cash)",
+    "t2Ready": "T2 Ready",
+    "t2Blocked": "T2 Blocked",
+    "pendingOffboarding": "pending offboarding",
+    "process": "Process Pay Run",
+    "markT1Paid": "Mark T1 Paid",
+    "importBank": "Import Bank Response",
+    "exportBank": "Export for Bank",
+    "csv": "CSV",
+    "override": "Override",
+    "employeePayroll": "Employee Payroll",
+    "search": "Search...",
+    "emptyDraft": "Process the pay run to generate employee lines.",
+    "emptyMatch": "No employees match.",
+    "cash": "Cash",
+    "pay": "Pay"
+  },
+  "cols": {
+    "employee": "Employee",
+    "baseSalary": "Base Salary",
+    "daysWorked": "Days Worked",
+    "excused": "Excused",
+    "manualPlus": "Manual +",
+    "grossEarned": "Gross Earned",
+    "absent": "Absent",
+    "late": "Late",
+    "assets": "Assets",
+    "manualMinus": "Manual -",
+    "totalDed": "Total Ded.",
+    "netPayable": "Net Payable",
+    "t1": "T1",
+    "t2": "T2",
+    "txn": "Txn"
+  },
+  "absentCell": "{{days}}d (-{{amount}})",
+  "lateCell": "{{minutes}}m (-{{amount}})",
+  "payment": {
+    "title": "Record Payment",
+    "employee": "Employee:",
+    "amount": "Amount:",
+    "txnId": "Bank Transaction ID",
+    "txnPlaceholder": "TRX-2026-...",
+    "depositDate": "Deposit Date",
+    "cancel": "Cancel",
+    "submit": "Record Payment",
+    "submitting": "Recording..."
+  },
+  "import": {
+    "title": "Import Bank Response",
+    "file": "CSV File",
+    "ibanCol": "IBAN Column Name",
+    "ibanPlaceholder": "e.g. IBAN",
+    "txnCol": "Transaction ID Column Name",
+    "txnPlaceholder": "e.g. Transaction ID",
+    "cancel": "Cancel",
+    "submit": "Import & Match",
+    "submitting": "Importing..."
+  },
+  "override": {
+    "title": "Bulk Override",
+    "intro": "Waive all deductions for a specific date across employees in this pay run.",
+    "date": "Date",
+    "reason": "Reason",
+    "reasonPlaceholder": "e.g. Public holiday — waive all absence deductions",
+    "submit": "Apply Override",
+    "submitting": "Applying..."
+  },
+  "toasts": {
+    "created": "Pay run created",
+    "processed": "Pay run processed",
+    "t1Paid": "Tranche 1 marked as paid",
+    "paymentRecorded": "Payment recorded",
+    "importComplete": "Import complete: {{matched}} matched, {{skipped}} skipped, {{notFound}} not found",
+    "overrideApplied": "Override applied to {{count}} employees",
+    "error": "Error"
+  }
+}

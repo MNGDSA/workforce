@@ -1,0 +1,138 @@
+{
+  "title": "الرواتب",
+  "subtitle": "إدارة دورات الرواتب والتسويات وتتبع المدفوعات",
+  "newPayRun": "دورة رواتب جديدة",
+  "stats": {
+    "totalPayroll": "إجمالي الرواتب",
+    "employees": "الموظفون في الرواتب",
+    "pending": "قيد الانتظار",
+    "completed": "الدورات المكتملة"
+  },
+  "list": {
+    "title": "دورات الرواتب",
+    "count_one": "{{count}} دورة",
+    "count_other": "{{count}} دورة",
+    "empty": "لا توجد دورات رواتب بعد. أنشئ أول دورة.",
+    "view": "عرض"
+  },
+  "table": {
+    "name": "الاسم",
+    "event": "الفعالية",
+    "period": "الفترة",
+    "mode": "الوضع",
+    "employees": "الموظفون",
+    "totalSar": "الإجمالي (ر.س)",
+    "status": "الحالة"
+  },
+  "modes": {
+    "full": "كامل",
+    "fullOption": "كامل — دفعة واحدة",
+    "splitOption": "مقسّم — دفعتان",
+    "split": "مقسّم {{a}}/{{b}}"
+  },
+  "status": {
+    "draft": "مسودة",
+    "processing": "قيد المعالجة",
+    "t1_paid": "T1 مدفوعة",
+    "completed": "مكتملة",
+    "pending": "قيد الانتظار",
+    "paid": "مدفوعة",
+    "blocked": "محظورة"
+  },
+  "create": {
+    "title": "إنشاء دورة رواتب",
+    "name": "الاسم",
+    "namePlaceholder": "مثال: رمضان 2026 — النهائية",
+    "event": "الفعالية (اختياري)",
+    "selectEvent": "اختر فعالية",
+    "noEvent": "بدون فعالية",
+    "dateFrom": "من تاريخ",
+    "dateTo": "إلى تاريخ",
+    "mode": "الوضع",
+    "splitPct": "نسبة التقسيم (الدفعة 1)",
+    "t1Date": "تاريخ إيداع T1",
+    "t2Date": "تاريخ إيداع T2",
+    "cancel": "إلغاء",
+    "submit": "إنشاء دورة الرواتب",
+    "submitting": "جارٍ الإنشاء..."
+  },
+  "detail": {
+    "totalNet": "صافي الإجمالي",
+    "employees": "الموظفون",
+    "bankCash": "({{bank}} بنك، {{cash}} نقدًا)",
+    "t2Ready": "T2 جاهزة",
+    "t2Blocked": "T2 محظورة",
+    "pendingOffboarding": "بانتظار إنهاء الخدمة",
+    "process": "معالجة دورة الرواتب",
+    "markT1Paid": "تعليم T1 كمدفوعة",
+    "importBank": "استيراد رد البنك",
+    "exportBank": "تصدير للبنك",
+    "csv": "CSV",
+    "override": "تجاوز",
+    "employeePayroll": "رواتب الموظفين",
+    "search": "بحث...",
+    "emptyDraft": "عالج دورة الرواتب لإنشاء سطور الموظفين.",
+    "emptyMatch": "لا يوجد موظفون مطابقون.",
+    "cash": "نقدًا",
+    "pay": "ادفع"
+  },
+  "cols": {
+    "employee": "الموظف",
+    "baseSalary": "الراتب الأساسي",
+    "daysWorked": "أيام العمل",
+    "excused": "معذور",
+    "manualPlus": "إضافة يدوية",
+    "grossEarned": "الإجمالي المكتسب",
+    "absent": "غياب",
+    "late": "تأخير",
+    "assets": "الأصول",
+    "manualMinus": "خصم يدوي",
+    "totalDed": "إجمالي الخصم",
+    "netPayable": "الصافي المستحق",
+    "t1": "T1",
+    "t2": "T2",
+    "txn": "العملية"
+  },
+  "absentCell": "{{days}} ي (-{{amount}})",
+  "lateCell": "{{minutes}} د (-{{amount}})",
+  "payment": {
+    "title": "تسجيل دفعة",
+    "employee": "الموظف:",
+    "amount": "المبلغ:",
+    "txnId": "رقم العملية البنكية",
+    "txnPlaceholder": "TRX-2026-...",
+    "depositDate": "تاريخ الإيداع",
+    "cancel": "إلغاء",
+    "submit": "تسجيل الدفعة",
+    "submitting": "جارٍ التسجيل..."
+  },
+  "import": {
+    "title": "استيراد رد البنك",
+    "file": "ملف CSV",
+    "ibanCol": "اسم عمود IBAN",
+    "ibanPlaceholder": "مثال: IBAN",
+    "txnCol": "اسم عمود رقم العملية",
+    "txnPlaceholder": "مثال: Transaction ID",
+    "cancel": "إلغاء",
+    "submit": "استيراد ومطابقة",
+    "submitting": "جارٍ الاستيراد..."
+  },
+  "override": {
+    "title": "تجاوز جماعي",
+    "intro": "إلغاء جميع الخصومات لتاريخ محدد للموظفين في دورة الرواتب هذه.",
+    "date": "التاريخ",
+    "reason": "السبب",
+    "reasonPlaceholder": "مثال: عطلة رسمية — إلغاء جميع خصومات الغياب",
+    "submit": "تطبيق التجاوز",
+    "submitting": "جارٍ التطبيق..."
+  },
+  "toasts": {
+    "created": "تم إنشاء دورة الرواتب",
+    "processed": "تمت معالجة دورة الرواتب",
+    "t1Paid": "تم تعليم الدفعة الأولى كمدفوعة",
+    "paymentRecorded": "تم تسجيل الدفعة",
+    "importComplete": "اكتمل الاستيراد: {{matched}} مطابق، {{skipped}} متخطى، {{notFound}} غير موجود",
+    "overrideApplied": "تم تطبيق التجاوز على {{count}} موظف",
+    "error": "خطأ"
+  }
+}
