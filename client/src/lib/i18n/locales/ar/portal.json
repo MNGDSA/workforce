@@ -1,15 +1,46 @@
 {
   "nav": {
-    "home": "الرئيسية",
-    "jobs": "الوظائف",
-    "applications": "طلباتي",
-    "interviews": "المقابلات",
-    "onboarding": "الاستقطاب",
-    "contract": "العقد",
-    "schedule": "جدولي",
+    "dashboard": "الرئيسية",
+    "jobs": "الوظائف المتاحة",
+    "documents": "المستندات",
+    "contract": "عقدي",
     "payslips": "قسائم الراتب",
-    "profile": "الملف الشخصي",
-    "logout": "تسجيل الخروج"
+    "shift": "وردياتي",
+    "excuses": "الأعذار",
+    "assets": "العهد",
+    "history": "سجل العمل"
+  },
+  "title": {
+    "candidate": "بوابة المتقدم",
+    "employee": "بوابة الموظف",
+    "employeeSmp": "بوابة الموظف (تعاقد موسمي)"
+  },
+  "subtitle": {
+    "candidateNew": "تصفح الوظائف المتاحة وأدِر طلباتك.",
+    "candidateReturning": "تصفح الوظائف المتاحة وأدِر طلباتك. سجل عملك السابق محفوظ.",
+    "employee": "أدِر بياناتك الوظيفية وملفك الشخصي.",
+    "employeeSmp": "جدول وردياتك وسجل عملك."
+  },
+  "menu": {
+    "profile": "ملفي الشخصي",
+    "signOut": "تسجيل الخروج"
+  },
+  "badge": {
+    "smpContract": "تعاقد موسمي",
+    "activeEmployee": "موظف نشط",
+    "formerEmployee": "موظف سابق",
+    "smpWorker": "عامل تعاقد موسمي",
+    "employee": "موظف",
+    "jobSeeker": "باحث عن عمل",
+    "lastId": "آخر رقم: {{id}}",
+    "photoPending": "تغيير الصورة قيد المراجعة",
+    "changePhoto": "تغيير الصورة"
+  },
+  "profileCard": {
+    "employeeId": "الرقم الوظيفي",
+    "monthlySalary": "الراتب الشهري",
+    "startDate": "تاريخ المباشرة",
+    "event": "الموسم"
   },
   "greeting": {
     "welcome": "أهلاً، {{name}}",

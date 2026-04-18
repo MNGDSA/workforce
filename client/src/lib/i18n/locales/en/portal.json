@@ -1,15 +1,46 @@
 {
   "nav": {
-    "home": "Home",
-    "jobs": "Jobs",
-    "applications": "My Applications",
-    "interviews": "Interviews",
-    "onboarding": "Onboarding",
-    "contract": "Contract",
-    "schedule": "My Schedule",
+    "dashboard": "Dashboard",
+    "jobs": "Job Opportunities",
+    "documents": "Documents",
+    "contract": "My Contract",
     "payslips": "Payslips",
-    "profile": "Profile",
-    "logout": "Sign Out"
+    "shift": "My Shift",
+    "excuses": "Excuses",
+    "assets": "Assets",
+    "history": "Work History"
+  },
+  "title": {
+    "candidate": "Candidate Portal",
+    "employee": "Employee Portal",
+    "employeeSmp": "Employee Portal (SMP)"
+  },
+  "subtitle": {
+    "candidateNew": "Browse open positions and manage your applications.",
+    "candidateReturning": "Browse open positions and manage your applications. Your employment history is preserved.",
+    "employee": "Manage your employment details and profile.",
+    "employeeSmp": "Your shift schedule and work history."
+  },
+  "menu": {
+    "profile": "My Profile",
+    "signOut": "Sign Out"
+  },
+  "badge": {
+    "smpContract": "SMP Contract",
+    "activeEmployee": "Active Employee",
+    "formerEmployee": "Former Employee",
+    "smpWorker": "SMP Worker",
+    "employee": "Employee",
+    "jobSeeker": "Job Seeker",
+    "lastId": "Last ID: {{id}}",
+    "photoPending": "Photo change pending review",
+    "changePhoto": "Change Photo"
+  },
+  "profileCard": {
+    "employeeId": "Employee ID",
+    "monthlySalary": "Monthly Salary",
+    "startDate": "Start Date",
+    "event": "Event"
   },
   "greeting": {
     "welcome": "Welcome, {{name}}",

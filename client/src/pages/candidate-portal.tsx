@@ -50,6 +50,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +78,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { apiRequest } from "@/lib/queryClient";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { toProxiedFileUrl } from "@/lib/file-url";
 import { useToast } from "@/hooks/use-toast";
 import { resolveSaudiBank } from "@/lib/saudi-banks";
@@ -316,6 +318,7 @@ const NAV_LABELS: Record<NavKey, string> = {
   assets: "Assets",
   history: "Work History",
 };
+// Source-of-truth English fallback retained for tests; runtime nav labels use t("portal:nav.<key>") below.
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1718,6 +1721,7 @@ function ContractSection({
 // ─── Main Portal ──────────────────────────────────────────────────────────────
 
 export default function CandidatePortal() {
+  const { t, i18n } = useTranslation(["portal", "common"]);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -2013,14 +2017,14 @@ export default function CandidatePortal() {
 
   // ── Portal mode label ────────────────────────────────────────────────────
   const portalTitle = isEmployee
-    ? (isSmp ? "Employee Portal (SMP)" : "Employee Portal")
-    : "Candidate Portal";
+    ? (isSmp ? t("portal:title.employeeSmp") : t("portal:title.employee"))
+    : t("portal:title.candidate");
 
   const portalSubtitle = isEmployee
-    ? (isSmp ? "Your shift schedule and work history." : "Manage your employment details and profile.")
+    ? (isSmp ? t("portal:subtitle.employeeSmp") : t("portal:subtitle.employee"))
     : hasWorkHistory
-    ? "Browse open positions and manage your applications. Your employment history is preserved."
-    : "Browse open positions and manage your applications.";
+    ? t("portal:subtitle.candidateReturning")
+    : t("portal:subtitle.candidateNew");
 
   // ── Content for current mode/tab ─────────────────────────────────────────
 
@@ -2371,7 +2375,7 @@ export default function CandidatePortal() {
                 className={`transition-colors cursor-pointer bg-transparent border-0 p-0 font-medium text-sm ${active ? "text-primary" : "text-muted-foreground hover:text-white"}`}
                 data-testid={`nav-${key}`}
               >
-                {NAV_LABELS[key]}
+                {t(`portal:nav.${key}`, NAV_LABELS[key])}
               </button>
             );
           })}
@@ -2400,7 +2404,7 @@ export default function CandidatePortal() {
                   data-testid="menu-item-profile"
                 >
                   <User className="h-4 w-4 text-primary" />
-                  My Profile
+                  {t("portal:menu.profile")}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-border" />
                 <DropdownMenuItem
@@ -2409,7 +2413,7 @@ export default function CandidatePortal() {
                   data-testid="menu-item-signout"
                 >
                   <LogOut className="h-4 w-4" />
-                  Sign Out
+                  {t("portal:menu.signOut")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -2432,8 +2436,8 @@ export default function CandidatePortal() {
               className={`text-sm px-3 py-1 ${isSmp ? "bg-amber-500/15 text-amber-400 border border-amber-500/30" : "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"}`}
               data-testid="badge-portal-mode"
             >
-              <BadgeCheck className="h-4 w-4 mr-1.5" />
-              {isSmp ? "SMP Contract" : "Active Employee"}
+              <BadgeCheck className="h-4 w-4 me-1.5" />
+              {isSmp ? t("portal:badge.smpContract") : t("portal:badge.activeEmployee")}
             </Badge>
           )}
         </div>
@@ -2460,14 +2464,14 @@ export default function CandidatePortal() {
                     {isEmployee ? (
                       <div className="flex flex-col items-center gap-0.5">
                         <Camera className="h-5 w-5 text-white" />
-                        <span className="text-[9px] text-white font-medium leading-tight">Change Photo</span>
+                        <span className="text-[9px] text-white font-medium leading-tight">{t("portal:badge.changePhoto")}</span>
                       </div>
                     ) : (
                       <User className="h-6 w-6 text-white" />
                     )}
                   </span>
                   {hasPendingPhotoChange && (
-                    <span className="absolute -top-1 -right-1 flex items-center justify-center h-5 w-5 rounded-full bg-amber-500 border-2 border-card z-10" title="Photo change pending review" data-testid="badge-photo-pending">
+                    <span className="absolute -top-1 -right-1 flex items-center justify-center h-5 w-5 rounded-full bg-amber-500 border-2 border-card z-10" title={t("portal:badge.photoPending")} data-testid="badge-photo-pending">
                       <Clock className="h-3 w-3 text-white" />
                     </span>
                   )}
@@ -2481,13 +2485,13 @@ export default function CandidatePortal() {
                   <h3 className="font-bold text-lg text-white">{displayName}</h3>
                   <p className="text-muted-foreground text-sm">
                     {isEmployee
-                      ? (activeWorkforceRecord?.jobTitle ?? (isSmp ? "SMP Worker" : "Employee"))
-                      : String(candidateProfile?.currentRole ?? "Job Seeker")}
+                      ? (activeWorkforceRecord?.jobTitle ?? (isSmp ? t("portal:badge.smpWorker") : t("portal:badge.employee")))
+                      : String(candidateProfile?.currentRole ?? t("portal:badge.jobSeeker"))}
                   </p>
                   {isEmployee && (
                     <Badge className={`mt-2 text-xs gap-1 ${isSmp ? "bg-amber-500/15 text-amber-400 border border-amber-500/30" : "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"}`}>
                       <BadgeCheck className="h-3 w-3" />
-                      {isSmp ? "SMP Contract" : "Active Employee"}
+                      {isSmp ? t("portal:badge.smpContract") : t("portal:badge.activeEmployee")}
                     </Badge>
                   )}
                   {!isEmployee && hasWorkHistory && (() => {
@@ -2495,11 +2499,11 @@ export default function CandidatePortal() {
                     return (
                       <div className="mt-2 space-y-1 flex flex-col items-center">
                         <Badge className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs gap-1" data-testid="badge-former-employee">
-                          <UserCheck className="h-3 w-3" /> Former Employee
+                          <UserCheck className="h-3 w-3" /> {t("portal:badge.formerEmployee")}
                         </Badge>
                         {lastCompleted && (
                           <span className="text-[10px] text-muted-foreground font-mono" data-testid="text-last-employee-number">
-                            Last ID: {lastCompleted.employeeNumber}
+                            <bdi>{t("portal:badge.lastId", { id: lastCompleted.employeeNumber })}</bdi>
                           </span>
                         )}
                       </div>
@@ -2514,8 +2518,8 @@ export default function CandidatePortal() {
                         <Hash className="h-4 w-4 text-primary" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Employee ID</p>
-                        <p className="text-sm font-bold text-white font-mono" data-testid="text-employee-number">{activeWorkforceRecord.employeeNumber}</p>
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t("portal:profileCard.employeeId")}</p>
+                        <p className="text-sm font-bold text-white font-mono" data-testid="text-employee-number" dir="ltr">{activeWorkforceRecord.employeeNumber}</p>
                       </div>
                     </div>
                     {!isSmp && activeWorkforceRecord.salary && (
@@ -2524,8 +2528,8 @@ export default function CandidatePortal() {
                           <Banknote className="h-4 w-4 text-emerald-400" />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Monthly Salary</p>
-                          <p className="text-sm font-bold text-white" data-testid="text-employee-salary">{Number(activeWorkforceRecord.salary).toLocaleString()} SAR</p>
+                          <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t("portal:profileCard.monthlySalary")}</p>
+                          <p className="text-sm font-bold text-white" data-testid="text-employee-salary"><bdi>{formatCurrency(Number(activeWorkforceRecord.salary), "SAR", i18n.language)}</bdi></p>
                         </div>
                       </div>
                     )}
@@ -2534,9 +2538,9 @@ export default function CandidatePortal() {
                         <Clock className="h-4 w-4 text-blue-400" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Start Date</p>
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t("portal:profileCard.startDate")}</p>
                         <p className="text-sm font-bold text-white" data-testid="text-employee-start-date">
-                          {new Date(activeWorkforceRecord.startDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                          <bdi>{formatDate(activeWorkforceRecord.startDate, i18n.language)}</bdi>
                         </p>
                       </div>
                     </div>
@@ -2546,7 +2550,7 @@ export default function CandidatePortal() {
                           <Building2 className="h-4 w-4 text-violet-400" />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Event</p>
+                          <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t("portal:profileCard.event")}</p>
                           <p className="text-sm font-bold text-white" data-testid="text-employee-event">{activeWorkforceRecord.eventName}</p>
                         </div>
                       </div>
