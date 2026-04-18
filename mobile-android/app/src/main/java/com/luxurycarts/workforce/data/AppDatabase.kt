@@ -89,6 +89,9 @@ interface AttendanceDao {
 
     @Query("UPDATE attendance_submissions SET sync_status = 'permanently_rejected', flag_reason = :code WHERE id = :id")
     suspend fun markPermanentlyRejected(id: String, code: String)
+
+    @Query("UPDATE attendance_submissions SET submission_token = :token WHERE id = :id AND submission_token IS NULL")
+    suspend fun setSubmissionTokenIfMissing(id: String, token: String)
 }
 
 @Database(entities = [AttendanceEntity::class], version = 8, exportSchema = false)

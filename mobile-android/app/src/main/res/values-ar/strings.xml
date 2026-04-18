@@ -199,7 +199,7 @@
     <string name="sign_out">تسجيل الخروج</string>
     <string name="sign_out_confirm">هل أنت متأكد أنك تريد تسجيل الخروج؟</string>
     <string name="sign_out_pending_warning">تحذير: لديك %1$d تسجيل(ات) معلقة سيتم حذفها. لم تتم مزامنتها مع الخادم بعد.</string>
-    <string name="sign_out_blocked_title">Cannot Sign Out / لا يمكن تسجيل الخروج</string>
+    <string name="sign_out_blocked_title">لا يمكن تسجيل الخروج</string>
     <string name="sign_out_blocked_message">You have %1$d unsynced attendance record(s). Signing out will permanently delete this data. Please sync first.</string>
     <string name="sign_out_blocked_message_ar">لديك %1$d سجل حضور غير متزامن. تسجيل الخروج سيحذف هذه البيانات نهائياً. يرجى المزامنة أولاً.</string>
     <string name="sign_out_connect_hint">Connect to the internet and sync your records before signing out.</string>

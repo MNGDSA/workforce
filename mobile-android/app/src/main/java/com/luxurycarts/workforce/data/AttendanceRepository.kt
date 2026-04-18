@@ -104,7 +104,11 @@ class AttendanceRepository(
                 val plainWorkforceId = EncryptionService.decrypt(submission.workforceId)
                 val textType = "text/plain".toMediaType()
 
-                val token = submission.submissionToken ?: UUID.randomUUID().toString()
+                val token = submission.submissionToken ?: run {
+                    val newToken = UUID.randomUUID().toString()
+                    dao.setSubmissionTokenIfMissing(submission.id, newToken)
+                    newToken
+                }
                 val response = apiService.submitAttendance(
                     workforceId = plainWorkforceId.toRequestBody(textType),
                     gpsLat = EncryptionService.decrypt(submission.encryptedGpsLat).toRequestBody(textType),
