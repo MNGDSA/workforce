@@ -720,7 +720,7 @@ export default function AuthPage() {
                   >
                     {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="me-2 h-4 w-4" />{t("auth:register.verifyOtp")}</>}
                   </Button>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <div className={`flex items-center justify-between text-xs text-muted-foreground ${isRtl ? "flex-row-reverse" : ""}`}>
                     <button onClick={() => { setRegStep("phone"); setRegisterError(""); }} className="hover:text-white transition-colors">{t("auth:register.changePhone")}</button>
                     <button
                       onClick={() => countdown === 0 && sendOtp(regPhone)}
