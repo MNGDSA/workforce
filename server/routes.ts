@@ -75,15 +75,21 @@ function getAuthUserId(req: Request): string | null {
 const userActiveCache = new Map<string, { isActive: boolean; ts: number }>();
 const USER_ACTIVE_CACHE_TTL = 60_000;
 
-async function isUserActive(userId: string): Promise<boolean> {
+type UserActiveResult = "active" | "disabled" | "missing";
+
+async function isUserActive(userId: string): Promise<UserActiveResult> {
   const cached = userActiveCache.get(userId);
   if (cached && Date.now() - cached.ts < USER_ACTIVE_CACHE_TTL) {
-    return cached.isActive;
+    return cached.isActive ? "active" : "disabled";
   }
   const user = await storage.getUser(userId);
-  const active = user?.isActive ?? false;
+  if (!user) {
+    userActiveCache.delete(userId);
+    return "missing";
+  }
+  const active = user.isActive ?? false;
   userActiveCache.set(userId, { isActive: active, ts: Date.now() });
-  return active;
+  return active ? "active" : "disabled";
 }
 
 function invalidateUserActiveCache(userId: string) {
@@ -271,8 +277,15 @@ export async function registerRoutes(
     }
     const userId = getAuthUserId(req);
     if (!userId) return next();
-    const active = await isUserActive(userId);
-    if (!active) {
+    const status = await isUserActive(userId);
+    if (status === "missing") {
+      // Session points to a user that no longer exists (e.g. deleted/re-registered).
+      // Force the client to clear the bad session and log in again.
+      try { (req.session as any)?.destroy?.(() => undefined); } catch {}
+      res.clearCookie("connect.sid");
+      return res.status(401).json({ message: "Session expired. Please sign in again.", sessionInvalid: true });
+    }
+    if (status === "disabled") {
       return res.status(403).json({ message: "Account is disabled. Contact support.", terminated: true });
     }
     next();
