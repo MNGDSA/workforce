@@ -335,7 +335,7 @@ function EmployeeDetailDialog({
   const { toast } = useToast();
   const qc = useQueryClient();
   const [, setLocation] = useLocation();
-  const { t } = useTranslation("workforce");
+  const { t, i18n } = useTranslation("workforce");
   const statusBadge = useStatusBadge();
   const [tab, setTab] = useState<"details" | "history" | "schedule">("details");
   const [editSalary, setEditSalary] = useState(false);
@@ -604,7 +604,9 @@ function EmployeeDetailDialog({
                       Object.entries(vars).forEach(([k, v]) => { b = b.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v as string); });
                       return `<h3>${i + 1}. ${a.title}</h3><p style="white-space:pre-wrap">${b}</p>`;
                     }).join("");
-                    printWindow.document.write(`<html><head><title>Contract</title><style>body{font-family:sans-serif;padding:2rem;max-width:700px;margin:auto}h3{margin-top:1.5em}</style></head><body>${html}</body></html>`);
+                    const dirAttr = i18n.language?.startsWith("ar") ? "rtl" : "ltr";
+                    const langAttr = i18n.language?.startsWith("ar") ? "ar" : "en";
+                    printWindow.document.write(`<html lang="${langAttr}" dir="${dirAttr}"><head><meta charset="utf-8"><title>${t("dialog.employmentContract")}</title><style>body{font-family:'Cairo',sans-serif;padding:2rem;max-width:700px;margin:auto}h3{margin-top:1.5em}</style></head><body>${html}</body></html>`);
                     printWindow.document.close();
                     printWindow.print();
                   }}

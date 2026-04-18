@@ -1059,12 +1059,20 @@ export default function TalentPage() {
       if (data.mode === "smp" || data.mode === "mixed") {
         const smp = data.smp;
         const indiv = data.individual;
-        let description = smp.message ?? `${smp.created ?? 0} new, ${smp.attached ?? 0} existing attached to SMP pipeline.`;
+        let description = smp.message ?? t("upload.toast.smpDescDefault", {
+          created: formatNumber(smp.created ?? 0),
+          attached: formatNumber(smp.attached ?? 0),
+        });
         if (data.mode === "mixed" && indiv) {
-          description += ` ${indiv.inserted ?? 0} individual candidate(s) imported${indiv.skipped > 0 ? `, ${indiv.skipped} skipped (duplicates)` : ""}.`;
+          description += " " + t("upload.toast.mixedAppend", {
+            imported: formatNumber(indiv.inserted ?? 0),
+            skippedSuffix: indiv.skipped > 0
+              ? t("upload.toast.skippedSuffix", { skipped: formatNumber(indiv.skipped) })
+              : "",
+          });
         }
         toast({
-          title: data.mode === "mixed" ? "Batch Upload Complete" : "SMP Batch Committed",
+          title: data.mode === "mixed" ? t("upload.toast.batchComplete") : t("upload.toast.smpCommitted"),
           description,
           ...(data.mode === "mixed" && indiv?.skipped > 0 ? { variant: "default" } : {}),
         });
@@ -1077,11 +1085,25 @@ export default function TalentPage() {
       } else {
         const indiv = data.individual;
         if (indiv.skipped > 0) {
-          const dupDetails = indiv.duplicates?.map((d: any) => `Row ${d.row}: ${d.reason}`).join("\n") ?? "";
-          setUploadError(`${indiv.inserted} imported, ${indiv.skipped} skipped (duplicates):\n${dupDetails}`);
-          toast({ title: "Upload Partial", description: `${indiv.inserted} imported, ${indiv.skipped} duplicates skipped.`, variant: "destructive" });
+          const dupDetails = indiv.duplicates?.map((d: any) => t("upload.toast.dupRow", { row: formatNumber(d.row), reason: d.reason })).join("\n") ?? "";
+          setUploadError(t("upload.toast.partialError", {
+            imported: formatNumber(indiv.inserted),
+            skipped: formatNumber(indiv.skipped),
+            details: dupDetails,
+          }));
+          toast({
+            title: t("upload.toast.partial"),
+            description: t("upload.toast.partialDesc", {
+              imported: formatNumber(indiv.inserted),
+              skipped: formatNumber(indiv.skipped),
+            }),
+            variant: "destructive",
+          });
         } else {
-          toast({ title: "Upload Complete", description: `${indiv.inserted} candidates imported successfully.` });
+          toast({
+            title: t("upload.toast.complete"),
+            description: t("upload.toast.completeDesc", { imported: formatNumber(indiv.inserted) }),
+          });
           setUploadOpen(false);
           setUploadFile(null);
           setUploadPreview(null);

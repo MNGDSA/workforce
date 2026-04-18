@@ -310,6 +310,7 @@
     "employeeId": "رقم الموظف",
     "lastPosition": "آخر منصب",
     "lastEvent": "آخر فعالية",
+    "durationLabel": "المدة",
     "duration_zero": "{{n}} يوم",
     "duration_one": "يوم واحد",
     "duration_two": "يومان",
@@ -463,7 +464,11 @@
     "brand": "WORKFORCE"
   },
   "fallback": {
-    "candidate": "Candidate",
-    "employee": "Employee"
+    "candidate": "مرشح",
+    "employee": "موظف"
+  },
+  "candidate": {
+    "appliedStat": "المتقدَّم لها",
+    "interviewsStat": "المقابلات"
   }
 }

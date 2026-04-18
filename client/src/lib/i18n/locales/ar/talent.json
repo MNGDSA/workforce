@@ -253,6 +253,19 @@
     "salaryFmt": "{{amount}} ر.س"
   },
   "upload": {
+    "toast": {
+      "smpDescDefault": "{{created}} جديد، {{attached}} موجود تم ربطه بمسار الوساطة.",
+      "mixedAppend": "تم استيراد {{imported}} مرشح فردي{{skippedSuffix}}.",
+      "skippedSuffix": "، تم تخطّي {{skipped}} (مكرر)",
+      "batchComplete": "اكتمل الرفع الجماعي",
+      "smpCommitted": "تم إيداع دفعة الوساطة",
+      "partial": "رفع جزئي",
+      "complete": "اكتمل الرفع",
+      "partialDesc": "تم استيراد {{imported}}، وتخطّي {{skipped}} مكررًا.",
+      "completeDesc": "تم استيراد {{imported}} مرشحًا بنجاح.",
+      "partialError": "تم استيراد {{imported}}، وتخطّي {{skipped}} (مكرر):\n{{details}}",
+      "dupRow": "صف {{row}}: {{reason}}"
+    },
     "title": "رفع جماعي للمرشحين",
     "desc": "ارفع ملف Excel أو CSV لإضافة المرشحين إلى قائمة المواهب. حمّل القالب لمطابقة التنسيق المطلوب.",
     "tplXlsx": "تحميل قالب Excel",

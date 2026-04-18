@@ -226,6 +226,19 @@
     "salaryFmt": "{{amount}} SAR"
   },
   "upload": {
+    "toast": {
+      "smpDescDefault": "{{created}} new, {{attached}} existing attached to SMP pipeline.",
+      "mixedAppend": "{{imported}} individual candidate(s) imported{{skippedSuffix}}.",
+      "skippedSuffix": ", {{skipped}} skipped (duplicates)",
+      "batchComplete": "Batch Upload Complete",
+      "smpCommitted": "SMP Batch Committed",
+      "partial": "Upload Partial",
+      "complete": "Upload Complete",
+      "partialDesc": "{{imported}} imported, {{skipped}} duplicates skipped.",
+      "completeDesc": "{{imported}} candidates imported successfully.",
+      "partialError": "{{imported}} imported, {{skipped}} skipped (duplicates):\n{{details}}",
+      "dupRow": "Row {{row}}: {{reason}}"
+    },
     "title": "Bulk Upload Candidates",
     "desc": "Upload an Excel or CSV file to add candidates to the talent pool. Download the template to match the required format.",
     "tplXlsx": "Download Excel Template",

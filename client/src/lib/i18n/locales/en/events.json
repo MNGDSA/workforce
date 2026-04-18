@@ -140,5 +140,8 @@
     "successDesc": "Event is now active again.",
     "errorTitle": "Error",
     "errorDesc": "Failed to reopen event."
+  },
+  "tooltip": {
+    "moreInfo": "More information"
   }
 }

@@ -310,6 +310,7 @@
     "employeeId": "Employee ID",
     "lastPosition": "Last Position",
     "lastEvent": "Last Event",
+    "durationLabel": "Duration",
     "duration_zero": "{{n}} days",
     "duration_one": "{{n}} day",
     "duration_two": "{{n}} days",
@@ -465,5 +466,9 @@
   "fallback": {
     "candidate": "Candidate",
     "employee": "Employee"
+  },
+  "candidate": {
+    "appliedStat": "Applied",
+    "interviewsStat": "Interviews"
   }
 }

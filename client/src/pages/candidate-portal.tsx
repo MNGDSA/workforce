@@ -2248,7 +2248,7 @@ export default function CandidatePortal() {
                       </div>
                     )}
                     <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-lg p-3">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Duration</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("portal:dashboard.durationLabel")}</p>
                       <p className="text-sm font-bold text-white mt-0.5">{t("portal:dashboard.duration", { count: feDurationDays, n: formatNumber(feDurationDays) })}</p>
                     </div>
                   </div>
@@ -2582,12 +2582,12 @@ export default function CandidatePortal() {
                 {portalMode === "candidate" && (
                   <div className="mt-6 grid grid-cols-2 gap-4 border-t border-border pt-5">
                     <div>
-                      <div className="text-2xl font-bold text-white">{appliedIds.size}</div>
-                      <div className="text-xs text-muted-foreground uppercase tracking-wider">Applied</div>
+                      <div className="text-2xl font-bold text-white"><bdi>{formatNumber(appliedIds.size)}</bdi></div>
+                      <div className="text-xs text-muted-foreground uppercase tracking-wider">{t("portal:candidate.appliedStat")}</div>
                     </div>
                     <div>
-                      <div className="text-2xl font-bold text-white">{myInterviews.length}</div>
-                      <div className="text-xs text-muted-foreground uppercase tracking-wider">Interviews</div>
+                      <div className="text-2xl font-bold text-white"><bdi>{formatNumber(myInterviews.length)}</bdi></div>
+                      <div className="text-xs text-muted-foreground uppercase tracking-wider">{t("portal:candidate.interviewsStat")}</div>
                     </div>
                   </div>
                 )}

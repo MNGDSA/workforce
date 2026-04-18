@@ -378,6 +378,7 @@ function CreateEventDialog({
 }
 
 function InfoTooltip({ text }: { text: string }) {
+  const { t } = useTranslation(["events"]);
   const [visible, setVisible] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -398,7 +399,7 @@ function InfoTooltip({ text }: { text: string }) {
         className="inline-flex items-center justify-center text-muted-foreground/50 hover:text-primary transition-colors"
         onMouseEnter={show}
         onMouseLeave={() => setVisible(false)}
-        aria-label="More information"
+        aria-label={t("events:tooltip.moreInfo")}
       >
         <Info className="h-3.5 w-3.5" />
       </button>
