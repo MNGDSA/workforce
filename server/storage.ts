@@ -916,7 +916,12 @@ export class DatabaseStorage implements IStorage {
 
   async getEvent(id: string): Promise<Event | undefined> {
     const [evt] = await db.select().from(events).where(eq(events.id, id));
-    return evt;
+    if (!evt) return undefined;
+    const [{ total } = { total: 0 }] = await db
+      .select({ total: count() })
+      .from(workforce)
+      .where(and(eq(workforce.eventId, id), eq(workforce.isActive, true)));
+    return { ...evt, filledPositions: Number(total) };
   }
 
   async createEvent(event: InsertEvent): Promise<Event> {
