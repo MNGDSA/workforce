@@ -683,10 +683,10 @@ export default function AuthPage() {
               {/* ── Step 2: OTP ── */}
               {regStep === "otp" && (
                 <div className="space-y-4">
-                  <div className="p-3 bg-primary/5 border border-primary/20 rounded-sm flex items-start gap-2">
+                  <div className={`p-3 bg-primary/5 border border-primary/20 rounded-sm flex items-start gap-2 ${isRtl ? "flex-row-reverse" : ""}`}>
                     <ShieldCheck className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                    <div className="text-sm">
-                      <p className="text-white font-medium">{t("auth:register.otpStepSubtitle", { phone: regPhone })}</p>
+                    <div className={`text-sm ${isRtl ? "text-right" : "text-left"}`}>
+                      <p className="text-white font-medium"><bdi>{t("auth:register.otpStepSubtitle", { phone: regPhone })}</bdi></p>
                       <p className="text-muted-foreground text-xs mt-0.5">
                         <bdi>{Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</bdi>
                       </p>
