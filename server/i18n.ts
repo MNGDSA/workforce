@@ -329,6 +329,20 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "doc.label.nationalId"                : "National ID / Iqama",
     "doc.label.iban"                      : "IBAN Certificate",
     "doc.label.document"                  : "document",
+
+    // Final hardcoded message cleanup (Task #61)
+    "common.jobIdRequired"                : "jobId is required",
+    "payroll.bankTxnFieldsRequired"       : "bankTransactionId and depositDate required",
+    "payroll.ibanMappingsRequired"        : "ibanColumn and txnIdColumn mappings required",
+    "payroll.adjustmentFieldsRequired"    : "workforceId, date, reason required",
+    "payroll.adjustmentBulkFieldsRequired": "date and reason required",
+    "workforce.paymentMethodInvalid"      : "paymentMethod must be 'bank_transfer' or 'cash'",
+    "ntp.invalidHostname"                 : "Invalid hostname",
+    "ntp.internalAddressBlocked"          : "Internal addresses not allowed",
+    "ntp.dnsResolutionFailed"             : "DNS resolution failed",
+    "ntp.resolvesToInternal"              : "Resolves to internal address",
+    "import.profileMissingFields"         : "Profile marked complete but missing: {{fields}}",
+    "import.invalidRow"                   : "invalid",
   },
   ar: {
     // Auth middleware
@@ -638,6 +652,20 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "doc.label.nationalId"                : "بطاقة الهوية / الإقامة",
     "doc.label.iban"                      : "شهادة الآيبان",
     "doc.label.document"                  : "المستند",
+
+    // Final hardcoded message cleanup (Task #61)
+    "common.jobIdRequired"                : "معرّف الوظيفة (jobId) مطلوب",
+    "payroll.bankTxnFieldsRequired"       : "رقم العملية البنكية وتاريخ الإيداع مطلوبان",
+    "payroll.ibanMappingsRequired"        : "تحديد عمودَي الآيبان ومعرّف العملية مطلوب",
+    "payroll.adjustmentFieldsRequired"    : "معرّف الموظف والتاريخ والسبب مطلوبة",
+    "payroll.adjustmentBulkFieldsRequired": "التاريخ والسبب مطلوبان",
+    "workforce.paymentMethodInvalid"      : "طريقة الدفع يجب أن تكون 'bank_transfer' أو 'cash'",
+    "ntp.invalidHostname"                 : "اسم المضيف غير صحيح",
+    "ntp.internalAddressBlocked"          : "العناوين الداخلية غير مسموح بها",
+    "ntp.dnsResolutionFailed"             : "فشل تحويل اسم المجال (DNS)",
+    "ntp.resolvesToInternal"              : "يشير اسم المضيف إلى عنوان داخلي",
+    "import.profileMissingFields"         : "تم وضع علامة اكتمال الملف ولكن تنقص الحقول التالية: {{fields}}",
+    "import.invalidRow"                   : "غير صالح",
   },
 };
 

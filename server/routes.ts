@@ -319,11 +319,11 @@ export async function registerRoutes(
       const server = (req.query.server as string) || "time.google.com";
       const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/;
       if (!hostnameRegex.test(server) || server.length > 253) {
-        return res.status(400).json({ reachable: false, server, detail: "Invalid hostname" });
+        return res.status(400).json({ reachable: false, server, detail: tr(req, "ntp.invalidHostname") });
       }
       const blockedPatterns = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|0\.|169\.254\.|::1|fc00|fd00|fe80)/i;
       if (blockedPatterns.test(server)) {
-        return res.status(400).json({ reachable: false, server, detail: "Internal addresses not allowed" });
+        return res.status(400).json({ reachable: false, server, detail: tr(req, "ntp.internalAddressBlocked") });
       }
 
       const dgram = await import("dgram");
@@ -335,11 +335,11 @@ export async function registerRoutes(
       try {
         resolvedAddresses = await resolve(server);
       } catch {
-        return res.json({ reachable: false, server, detail: "DNS resolution failed" });
+        return res.json({ reachable: false, server, detail: tr(req, "ntp.dnsResolutionFailed") });
       }
       const privateIpRegex = /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|0\.|169\.254\.)/;
       if (resolvedAddresses.some((addr: string) => privateIpRegex.test(addr))) {
-        return res.status(400).json({ reachable: false, server, detail: "Resolves to internal address" });
+        return res.status(400).json({ reachable: false, server, detail: tr(req, "ntp.resolvesToInternal") });
       }
 
       const ntpProbe = (): Promise<boolean> => new Promise((ok) => {
@@ -1373,13 +1373,13 @@ export async function registerRoutes(
           if (parsed.profileCompleted) {
             const missing = validateProfileCompleteness(parsed);
             if (missing.length > 0) {
-              errors.push({ row: i + 1, message: `Profile marked complete but missing: ${missing.join(", ")}` });
+              errors.push({ row: i + 1, message: tr(req, "import.profileMissingFields", { fields: missing.join(", ") }) });
               continue;
             }
           }
           validated.push(parsed);
         } catch (e) {
-          errors.push({ row: i + 1, message: e instanceof z.ZodError ? e.errors.map(er => `${er.path.join(".")}: ${er.message}`).join("; ") : "invalid" });
+          errors.push({ row: i + 1, message: e instanceof z.ZodError ? e.errors.map(er => `${er.path.join(".")}: ${er.message}`).join("; ") : tr(req, "import.invalidRow") });
         }
       }
       if (errors.length > 0) {
@@ -1878,7 +1878,7 @@ export async function registerRoutes(
   app.get("/api/applications/applicants", requirePermission("applications:read"), async (req: Request, res: Response) => {
     try {
       const { jobId, page = "1", limit = "20", search } = req.query as Record<string, string>;
-      if (!jobId) return res.status(400).json({ error: "jobId is required" });
+      if (!jobId) return res.status(400).json({ error: tr(req, "common.jobIdRequired") });
       const result = await storage.getApplicantsForJob({
         jobId,
         page: Math.max(1, parseInt(page, 10) || 1),
@@ -6520,7 +6520,7 @@ export async function registerRoutes(
       if (!line) return res.status(404).json({ error: tr(req, "error.lineNotFound") });
 
       const { bankTransactionId, trancheNumber, depositDate, notes } = req.body;
-      if (!bankTransactionId || !depositDate) return res.status(400).json({ error: "bankTransactionId and depositDate required" });
+      if (!bankTransactionId || !depositDate) return res.status(400).json({ error: tr(req, "payroll.bankTxnFieldsRequired") });
 
       const tranche = trancheNumber ?? 1;
       if (tranche === 2 && line.tranche2Status === "blocked") {
@@ -6561,7 +6561,7 @@ export async function registerRoutes(
       if (!req.file) return res.status(400).json({ error: tr(req, "error.fileRequired") });
 
       const { ibanColumn, txnIdColumn, depositDate } = req.body;
-      if (!ibanColumn || !txnIdColumn) return res.status(400).json({ error: "ibanColumn and txnIdColumn mappings required" });
+      if (!ibanColumn || !txnIdColumn) return res.status(400).json({ error: tr(req, "payroll.ibanMappingsRequired") });
 
       const fileContent = fs.readFileSync(req.file.path, "utf-8");
       const lines = fileContent.split("\n").map(l => l.trim()).filter(l => l.length > 0);
@@ -6769,7 +6769,7 @@ export async function registerRoutes(
     try {
       const userId = getAuthUserId(req);
       const { workforceId, date, originalDeductionMinutes, adjustedDeductionMinutes, reason } = req.body;
-      if (!workforceId || !date || !reason) return res.status(400).json({ error: "workforceId, date, reason required" });
+      if (!workforceId || !date || !reason) return res.status(400).json({ error: tr(req, "payroll.adjustmentFieldsRequired") });
       const adj = await storage.createPayrollAdjustment({
         workforceId, date,
         originalDeductionMinutes: originalDeductionMinutes ?? 0,
@@ -6785,7 +6785,7 @@ export async function registerRoutes(
     try {
       const userId = getAuthUserId(req);
       const { date, reason, workforceIds, eventId, departmentId } = req.body;
-      if (!date || !reason) return res.status(400).json({ error: "date and reason required" });
+      if (!date || !reason) return res.status(400).json({ error: tr(req, "payroll.adjustmentBulkFieldsRequired") });
 
       let targetIds: string[] = workforceIds ?? [];
       if (!workforceIds || workforceIds.length === 0) {
@@ -6902,7 +6902,7 @@ export async function registerRoutes(
       const userId = getAuthUserId(req);
       const { paymentMethod, reason } = req.body;
       if (!paymentMethod || !["bank_transfer", "cash"].includes(paymentMethod)) {
-        return res.status(400).json({ error: "paymentMethod must be 'bank_transfer' or 'cash'" });
+        return res.status(400).json({ error: tr(req, "workforce.paymentMethodInvalid") });
       }
       if (paymentMethod === "cash" && !reason) {
         return res.status(400).json({ error: tr(req, "error.cashReasonRequired") });

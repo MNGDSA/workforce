@@ -246,43 +246,62 @@ function renderCardBodyHtml(template: Partial<IdCardTemplate>, employee: CardEmp
 </div>`;
 }
 
-export function renderCardToHtml(template: Partial<IdCardTemplate>, employee: CardEmployeeData): string {
+const CAIRO_FONT_FACE_CSS = (origin: string) => {
+  const ARABIC_RANGE = "U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC";
+  const LATIN_RANGE = "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD";
+  const weights = [400, 500, 700];
+  return weights.flatMap(w => [
+    `@font-face{font-family:'Cairo';font-style:normal;font-weight:${w};font-display:block;src:url('${origin}/fonts/cairo/cairo-${w}-arabic.woff2') format('woff2');unicode-range:${ARABIC_RANGE};}`,
+    `@font-face{font-family:'Cairo';font-style:normal;font-weight:${w};font-display:block;src:url('${origin}/fonts/cairo/cairo-${w}-latin.woff2') format('woff2');unicode-range:${LATIN_RANGE};}`,
+  ]).join("\n");
+};
+
+function buildCardDocument(
+  template: Partial<IdCardTemplate>,
+  employees: CardEmployeeData[],
+  origin: string,
+  forPrint: boolean,
+): string {
   const bgColor = esc(template.backgroundColor || "#0f5a3a");
   const txtColor = esc(template.textColor || "#ffffff");
-  const body = renderCardBodyHtml(template, employee);
+  const pages = employees.map(emp => renderCardBodyHtml(template, emp)).join("\n");
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<style>@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;700&family=Inter:wght@400;500;700&display=swap');
+<style>
+${CAIRO_FONT_FACE_CSS(origin)}
 @page { size: 85.6mm 54mm; margin: 0; }
-body { margin: 0; font-family: 'Cairo', 'Inter', sans-serif; font-variant-numeric: tabular-nums; }
+html, body { margin: 0; padding: 0; font-family: 'Cairo', 'Inter', sans-serif; font-variant-numeric: tabular-nums; }
 body, body * { font-variant-numeric: tabular-nums; }
 .card { width: 85.6mm; height: 54mm; background: ${bgColor}; color: ${txtColor}; position: relative; overflow: hidden; page-break-after: always; }
-</style></head><body>
-${body}
-</body></html>`;
+${forPrint ? "@media print { body { margin: 0; } }" : ""}
+</style></head><body>${pages}</body></html>`;
+}
+
+export function renderCardToHtml(template: Partial<IdCardTemplate>, employee: CardEmployeeData): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  return buildCardDocument(template, [employee], origin, false);
 }
 
 export function printCards(template: Partial<IdCardTemplate>, employees: CardEmployeeData[]) {
-  const bgColor = esc(template.backgroundColor || "#0f5a3a");
-  const txtColor = esc(template.textColor || "#ffffff");
-
-  const pages = employees.map(emp => renderCardBodyHtml(template, emp)).join("\n");
-
-  const fullHtml = `<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<style>@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;700&family=Inter:wght@400;500;700&display=swap');
-@page { size: 85.6mm 54mm; margin: 0; }
-body { margin: 0; font-family: 'Cairo', 'Inter', sans-serif; font-variant-numeric: tabular-nums; }
-body, body * { font-variant-numeric: tabular-nums; }
-.card { width: 85.6mm; height: 54mm; background: ${bgColor}; color: ${txtColor}; position: relative; overflow: hidden; page-break-after: always; }
-@media print { body { margin: 0; } }
-</style></head><body>${pages}</body></html>`;
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const fullHtml = buildCardDocument(template, employees, origin, true);
 
   const win = window.open("", "_blank");
-  if (win) {
-    win.document.write(fullHtml);
-    win.document.close();
-    setTimeout(() => { win.print(); }, 500);
+  if (!win) return;
+  win.document.write(fullHtml);
+  win.document.close();
+
+  // Wait for fonts (and images) to be ready before triggering the print dialog.
+  // Falls back to a fixed delay if the Font Loading API isn't available.
+  const triggerPrint = () => {
+    try { win.focus(); } catch {}
+    win.print();
+  };
+  const fontsApi = (win.document as any).fonts;
+  if (fontsApi && typeof fontsApi.ready?.then === "function") {
+    fontsApi.ready.then(() => setTimeout(triggerPrint, 150)).catch(() => setTimeout(triggerPrint, 800));
+  } else {
+    setTimeout(triggerPrint, 800);
   }
 }
