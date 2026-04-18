@@ -3150,6 +3150,43 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/admin-users/:id", requirePermission("admin_users:manage"), async (req: Request, res: Response) => {
+    try {
+      if (!(await requireSuperAdmin(req, res))) return;
+      const target = await storage.getUser(req.params.id);
+      if (!target) return res.status(404).json({ message: "Admin user not found." });
+
+      // Refuse to delete yourself.
+      if (req.authUser && req.authUser.id === target.id) {
+        return res.status(403).json({ message: "You cannot delete your own account." });
+      }
+
+      // Refuse to delete any Super Admin (the role is the system safety net).
+      const targetRole = target.roleId ? await storage.getRole(target.roleId) : null;
+      if (targetRole?.slug === "super_admin") {
+        return res.status(403).json({ message: "Super Admin accounts cannot be deleted." });
+      }
+
+      try {
+        const ok = await storage.deleteUser(target.id);
+        if (!ok) return res.status(404).json({ message: "Admin user not found." });
+      } catch (e: any) {
+        // Foreign-key violations (e.g. user authored audit logs / candidates) → 409.
+        if (e?.code === "23503") {
+          return res.status(409).json({
+            message: "This user is referenced by other records (audit logs, candidates, etc.). Deactivate them instead.",
+          });
+        }
+        throw e;
+      }
+
+      invalidateUserActiveCache(target.id);
+      return res.json({ ok: true });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   // ─── RBAC: Roles & Permissions ─────────────────────────────────────────────
   app.get("/api/permissions", requirePermission("roles:read"), async (req: Request, res: Response) => {
     try {
