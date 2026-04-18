@@ -1,6 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useTranslation } from "react-i18next";
+import { formatNumber } from "@/lib/format";
 
 const SECURITY_KEYWORDS = /emulator detected|mock.*location|fake.*location|spoofing|root|magisk|rooted|tamper|clock tampering/gi;
 
@@ -29,46 +31,14 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Inbox as InboxIcon,
-  Search,
-  CheckCircle2,
-  XCircle,
-  FileText,
-  UserCheck,
-  ClipboardList,
-  Calendar,
-  Package,
-  Flag,
-  Monitor,
-  Loader2,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  ChevronUp,
-  ArrowUpRight,
-  Filter,
-  Clock,
-  ListFilter,
-  ArrowDownUp,
-  RefreshCw,
-  Clipboard,
-  Eye,
-  History,
-  MapPin,
-  Camera,
-  ShieldCheck,
-  ShieldAlert,
-  User,
-  AlertTriangle,
-  ImageIcon,
-  ArrowRight,
+  Inbox as InboxIcon, Search, CheckCircle2, XCircle, FileText, UserCheck,
+  ClipboardList, Calendar, Package, Flag, Monitor, Loader2, ChevronLeft,
+  ChevronRight, ChevronDown, ChevronUp, ArrowUpRight, Filter, Clock,
+  ListFilter, ArrowDownUp, RefreshCw, Clipboard, Eye, History, MapPin,
+  Camera, ShieldCheck, ShieldAlert, User, AlertTriangle, ImageIcon,
   MessageCircle,
 } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -92,64 +62,73 @@ type InboxItem = {
   createdAt: string;
 };
 
-const TYPE_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  document_review: { label: "Document Review", icon: FileText, color: "text-blue-400" },
-  document_reupload: { label: "Document Reupload", icon: RefreshCw, color: "text-blue-300" },
-  application_review: { label: "Application Review", icon: ClipboardList, color: "text-indigo-400" },
-  onboarding_action: { label: "Onboarding", icon: UserCheck, color: "text-emerald-400" },
-  contract_action: { label: "Contract", icon: FileText, color: "text-amber-400" },
-  offboarding_action: { label: "Offboarding", icon: UserCheck, color: "text-rose-400" },
-  schedule_conflict: { label: "Schedule Conflict", icon: Calendar, color: "text-orange-400" },
-  asset_return: { label: "Asset Return", icon: Package, color: "text-cyan-400" },
-  candidate_flag: { label: "Candidate Flag", icon: Flag, color: "text-red-400" },
-  event_alert: { label: "Event Alert", icon: Calendar, color: "text-violet-400" },
-  attendance_verification: { label: "Attendance", icon: Eye, color: "text-teal-400" },
-  photo_change_request: { label: "Photo Change", icon: ImageIcon, color: "text-purple-400" },
-  excuse_request: { label: "Excuse Request", icon: MessageCircle, color: "text-yellow-400" },
-  general_request: { label: "General Request", icon: Clipboard, color: "text-slate-300" },
-  system: { label: "System", icon: Monitor, color: "text-gray-400" },
+const TYPE_ICONS: Record<string, { icon: React.ElementType; color: string }> = {
+  document_review: { icon: FileText, color: "text-blue-400" },
+  document_reupload: { icon: RefreshCw, color: "text-blue-300" },
+  application_review: { icon: ClipboardList, color: "text-indigo-400" },
+  onboarding_action: { icon: UserCheck, color: "text-emerald-400" },
+  contract_action: { icon: FileText, color: "text-amber-400" },
+  offboarding_action: { icon: UserCheck, color: "text-rose-400" },
+  schedule_conflict: { icon: Calendar, color: "text-orange-400" },
+  asset_return: { icon: Package, color: "text-cyan-400" },
+  candidate_flag: { icon: Flag, color: "text-red-400" },
+  event_alert: { icon: Calendar, color: "text-violet-400" },
+  attendance_verification: { icon: Eye, color: "text-teal-400" },
+  photo_change_request: { icon: ImageIcon, color: "text-purple-400" },
+  excuse_request: { icon: MessageCircle, color: "text-yellow-400" },
+  general_request: { icon: Clipboard, color: "text-slate-300" },
+  system: { icon: Monitor, color: "text-gray-400" },
 };
 
-const PRIORITY_META: Record<string, { label: string; color: string; dotColor: string }> = {
-  low: { label: "Low", color: "bg-slate-500/10 text-slate-400 border-slate-500/30", dotColor: "bg-slate-400" },
-  medium: { label: "Medium", color: "bg-blue-500/10 text-blue-400 border-blue-500/30", dotColor: "bg-blue-400" },
-  high: { label: "High", color: "bg-amber-500/10 text-amber-400 border-amber-500/30", dotColor: "bg-amber-400" },
-  urgent: { label: "Urgent", color: "bg-red-500/10 text-red-400 border-red-500/30", dotColor: "bg-red-400" },
+const PRIORITY_META: Record<string, { color: string; dotColor: string }> = {
+  low: { color: "bg-slate-500/10 text-slate-400 border-slate-500/30", dotColor: "bg-slate-400" },
+  medium: { color: "bg-blue-500/10 text-blue-400 border-blue-500/30", dotColor: "bg-blue-400" },
+  high: { color: "bg-amber-500/10 text-amber-400 border-amber-500/30", dotColor: "bg-amber-400" },
+  urgent: { color: "bg-red-500/10 text-red-400 border-red-500/30", dotColor: "bg-red-400" },
 };
 
-const STATUS_META: Record<string, { label: string; color: string }> = {
-  pending: { label: "Pending", color: "bg-primary/10 text-primary border-primary/30" },
-  resolved: { label: "Resolved", color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
-  dismissed: { label: "Dismissed", color: "bg-muted text-muted-foreground border-border" },
+const STATUS_META: Record<string, { color: string }> = {
+  pending: { color: "bg-primary/10 text-primary border-primary/30" },
+  resolved: { color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+  dismissed: { color: "bg-muted text-muted-foreground border-border" },
 };
 
 type TabValue = "all" | "pending" | "resolved" | "dismissed" | "history";
 
-const TABS: { value: TabValue; label: string; icon: React.ElementType }[] = [
-  { value: "all", label: "All", icon: ListFilter },
-  { value: "pending", label: "Pending", icon: Clock },
-  { value: "resolved", label: "Resolved", icon: CheckCircle2 },
-  { value: "dismissed", label: "Dismissed", icon: XCircle },
-  { value: "history", label: "History", icon: History },
-];
+const TAB_ICONS: Record<TabValue, React.ElementType> = {
+  all: ListFilter,
+  pending: Clock,
+  resolved: CheckCircle2,
+  dismissed: XCircle,
+  history: History,
+};
 
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 30) return `${days}d ago`;
-  return `${Math.floor(days / 30)}mo ago`;
+const TAB_VALUES: TabValue[] = ["all", "pending", "resolved", "dismissed", "history"];
+
+function useTimeAgo() {
+  const { t } = useTranslation(["inbox"]);
+  const { i18n } = useTranslation();
+  return (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return t("inbox:time.justNow");
+    if (mins < 60) return t("inbox:time.min", { n: formatNumber(mins, i18n.language) });
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return t("inbox:time.hr", { n: formatNumber(hrs, i18n.language) });
+    const days = Math.floor(hrs / 24);
+    if (days < 30) return t("inbox:time.day", { n: formatNumber(days, i18n.language) });
+    return t("inbox:time.mo", { n: formatNumber(Math.floor(days / 30), i18n.language) });
+  };
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-SA", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+function formatDate(iso: string, locale: string) {
+  const tag = locale.startsWith("ar") ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB";
+  return new Date(iso).toLocaleDateString(tag, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 export default function InboxPage() {
+  const { t, i18n } = useTranslation(["inbox"]);
+  const timeAgo = useTimeAgo();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [, setLocation] = useLocation();
@@ -208,14 +187,14 @@ export default function InboxPage() {
 
   const resolveMut = useMutation({
     mutationFn: (params: { id: string; notes?: string }) => apiRequest("PATCH", `/api/inbox/${params.id}/resolve`, { notes: params.notes }),
-    onSuccess: () => { invalidateInbox(); setExpandedId(null); setActionNotes(""); toast({ title: "Item resolved" }); },
-    onError: () => toast({ title: "Failed to resolve item", variant: "destructive" }),
+    onSuccess: () => { invalidateInbox(); setExpandedId(null); setActionNotes(""); toast({ title: t("inbox:toast.resolved") }); },
+    onError: () => toast({ title: t("inbox:toast.resolveFail"), variant: "destructive" }),
   });
 
   const dismissMut = useMutation({
     mutationFn: (params: { id: string; notes?: string }) => apiRequest("PATCH", `/api/inbox/${params.id}/dismiss`, { notes: params.notes }),
-    onSuccess: () => { invalidateInbox(); setExpandedId(null); setActionNotes(""); toast({ title: "Item dismissed" }); },
-    onError: () => toast({ title: "Failed to dismiss item", variant: "destructive" }),
+    onSuccess: () => { invalidateInbox(); setExpandedId(null); setActionNotes(""); toast({ title: t("inbox:toast.dismissed") }); },
+    onError: () => toast({ title: t("inbox:toast.dismissFail"), variant: "destructive" }),
   });
 
   const approveAttendanceMut = useMutation({
@@ -224,9 +203,9 @@ export default function InboxPage() {
     onSuccess: () => {
       invalidateInbox(); setExpandedId(null); setActionNotes("");
       setConfirmDialog({ open: false, action: null, entityId: null, inboxItemId: null }); setConfirmNotes("");
-      toast({ title: "Attendance approved & verified" });
+      toast({ title: t("inbox:toast.attApproved") });
     },
-    onError: () => toast({ title: "Failed to approve attendance", variant: "destructive" }),
+    onError: () => toast({ title: t("inbox:toast.attApproveFail"), variant: "destructive" }),
   });
 
   const rejectAttendanceMut = useMutation({
@@ -235,9 +214,9 @@ export default function InboxPage() {
     onSuccess: () => {
       invalidateInbox(); setExpandedId(null); setActionNotes("");
       setConfirmDialog({ open: false, action: null, entityId: null, inboxItemId: null }); setConfirmNotes("");
-      toast({ title: "Attendance rejected" });
+      toast({ title: t("inbox:toast.attRejected") });
     },
-    onError: () => toast({ title: "Failed to reject attendance", variant: "destructive" }),
+    onError: () => toast({ title: t("inbox:toast.attRejectFail"), variant: "destructive" }),
   });
 
   const approvePhotoChangeMut = useMutation({
@@ -246,9 +225,9 @@ export default function InboxPage() {
     onSuccess: () => {
       invalidateInbox(); setExpandedId(null); setActionNotes("");
       setConfirmDialog({ open: false, action: null, entityId: null, inboxItemId: null }); setConfirmNotes("");
-      toast({ title: "Photo change approved" });
+      toast({ title: t("inbox:toast.photoApproved") });
     },
-    onError: () => toast({ title: "Failed to approve photo change", variant: "destructive" }),
+    onError: () => toast({ title: t("inbox:toast.photoApproveFail"), variant: "destructive" }),
   });
 
   const rejectPhotoChangeMut = useMutation({
@@ -257,9 +236,9 @@ export default function InboxPage() {
     onSuccess: () => {
       invalidateInbox(); setExpandedId(null); setActionNotes("");
       setConfirmDialog({ open: false, action: null, entityId: null, inboxItemId: null }); setConfirmNotes("");
-      toast({ title: "Photo change rejected" });
+      toast({ title: t("inbox:toast.photoRejected") });
     },
-    onError: () => toast({ title: "Failed to reject photo change", variant: "destructive" }),
+    onError: () => toast({ title: t("inbox:toast.photoRejectFail"), variant: "destructive" }),
   });
 
   const approveExcuseMut = useMutation({
@@ -268,9 +247,9 @@ export default function InboxPage() {
     onSuccess: () => {
       invalidateInbox(); setExpandedId(null); setActionNotes("");
       setConfirmDialog({ open: false, action: null, entityId: null, inboxItemId: null }); setConfirmNotes("");
-      toast({ title: "Excuse request approved" });
+      toast({ title: t("inbox:toast.excuseApproved") });
     },
-    onError: () => toast({ title: "Failed to approve excuse request", variant: "destructive" }),
+    onError: () => toast({ title: t("inbox:toast.excuseApproveFail"), variant: "destructive" }),
   });
 
   const rejectExcuseMut = useMutation({
@@ -279,9 +258,9 @@ export default function InboxPage() {
     onSuccess: () => {
       invalidateInbox(); setExpandedId(null); setActionNotes("");
       setConfirmDialog({ open: false, action: null, entityId: null, inboxItemId: null }); setConfirmNotes("");
-      toast({ title: "Excuse request rejected" });
+      toast({ title: t("inbox:toast.excuseRejected") });
     },
-    onError: () => toast({ title: "Failed to reject excuse request", variant: "destructive" }),
+    onError: () => toast({ title: t("inbox:toast.excuseRejectFail"), variant: "destructive" }),
   });
 
   const openConfirmDialog = (action: "approve" | "reject", entityId: string, inboxItemId: string) => {
@@ -321,14 +300,14 @@ export default function InboxPage() {
 
   const bulkResolveMut = useMutation({
     mutationFn: (ids: string[]) => apiRequest("POST", "/api/inbox/bulk-resolve", { ids }),
-    onSuccess: () => { invalidateInbox(); setSelected(new Set()); toast({ title: "Items resolved" }); },
-    onError: () => toast({ title: "Failed to resolve items", variant: "destructive" }),
+    onSuccess: () => { invalidateInbox(); setSelected(new Set()); toast({ title: t("inbox:toast.bulkResolved") }); },
+    onError: () => toast({ title: t("inbox:toast.bulkResolveFail"), variant: "destructive" }),
   });
 
   const bulkDismissMut = useMutation({
     mutationFn: (ids: string[]) => apiRequest("POST", "/api/inbox/bulk-dismiss", { ids }),
-    onSuccess: () => { invalidateInbox(); setSelected(new Set()); toast({ title: "Items dismissed" }); },
-    onError: () => toast({ title: "Failed to dismiss items", variant: "destructive" }),
+    onSuccess: () => { invalidateInbox(); setSelected(new Set()); toast({ title: t("inbox:toast.bulkDismissed") }); },
+    onError: () => toast({ title: t("inbox:toast.bulkDismissFail"), variant: "destructive" }),
   });
 
   const items = data?.data ?? [];
@@ -368,42 +347,44 @@ export default function InboxPage() {
   const hasPendingInView = pendingItems.length > 0;
   const hasBulkSelectableInView = bulkSelectableItems.length > 0;
 
+  const typeLabel = (k: string) => t(`inbox:type.${k}`, { defaultValue: k });
+  const priorityLabel = (k: string) => t(`inbox:priority.${k}`, { defaultValue: k });
+  const statusLabel = (k: string) => t(`inbox:status.${k}`, { defaultValue: k });
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground" data-testid="text-inbox-title">Inbox</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Centralized action queue for HR tasks requiring attention
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground" data-testid="text-inbox-title">{t("inbox:title")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t("inbox:subtitle")}</p>
           </div>
           {pendingCount > 0 && (
             <Badge variant="destructive" className="text-sm px-3 py-1" data-testid="badge-inbox-open-count">
-              {pendingCount} pending
+              {t("inbox:pendingBadge", { count: pendingCount, replace: { count: formatNumber(pendingCount, i18n.language) } })}
             </Badge>
           )}
         </div>
 
         <div className="flex items-center gap-1 border-b border-border">
-          {TABS.map(t => {
-            const TabIcon = t.icon;
+          {TAB_VALUES.map(v => {
+            const TabIcon = TAB_ICONS[v];
             return (
               <button
-                key={t.value}
-                data-testid={`tab-${t.value}`}
-                onClick={() => switchTab(t.value)}
+                key={v}
+                data-testid={`tab-${v}`}
+                onClick={() => switchTab(v)}
                 className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                  tab === t.value
+                  tab === v
                     ? "border-primary text-primary"
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <TabIcon className="h-4 w-4" />
-                {t.label}
-                {t.value === "pending" && pendingCount > 0 && (
+                {t(`inbox:tabs.${v}`)}
+                {v === "pending" && pendingCount > 0 && (
                   <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-white">
-                    {pendingCount}
+                    {formatNumber(pendingCount, i18n.language)}
                   </span>
                 )}
               </button>
@@ -413,13 +394,13 @@ export default function InboxPage() {
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="relative flex-1 w-full sm:max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               data-testid="input-inbox-search"
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Search inbox items..."
-              className="pl-10 bg-muted/30 border-border h-9 rounded-sm"
+              placeholder={t("inbox:search")}
+              className="ps-10 bg-muted/30 border-border h-9 rounded-sm"
             />
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -431,9 +412,9 @@ export default function InboxPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {Object.entries(TYPE_META).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                <SelectItem value="all">{t("inbox:filters.allTypes")}</SelectItem>
+                {Object.keys(TYPE_ICONS).map(k => (
+                  <SelectItem key={k} value={k}>{typeLabel(k)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -442,11 +423,11 @@ export default function InboxPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Priority</SelectItem>
-                <SelectItem value="urgent">Urgent</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="all">{t("inbox:filters.allPriority")}</SelectItem>
+                <SelectItem value="urgent">{t("inbox:filters.urgent")}</SelectItem>
+                <SelectItem value="high">{t("inbox:filters.high")}</SelectItem>
+                <SelectItem value="medium">{t("inbox:filters.medium")}</SelectItem>
+                <SelectItem value="low">{t("inbox:filters.low")}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={`${sortBy}-${sortOrder}`} onValueChange={v => {
@@ -456,16 +437,16 @@ export default function InboxPage() {
               setPage(1);
             }}>
               <SelectTrigger className="h-9 w-[150px] rounded-sm text-xs" data-testid="select-inbox-sort">
-                <ArrowDownUp className="h-3 w-3 mr-1 text-muted-foreground" />
+                <ArrowDownUp className="h-3 w-3 me-1 text-muted-foreground" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="createdAt-desc">Newest first</SelectItem>
-                <SelectItem value="createdAt-asc">Oldest first</SelectItem>
-                <SelectItem value="priority-desc">Priority (high→low)</SelectItem>
-                <SelectItem value="priority-asc">Priority (low→high)</SelectItem>
-                <SelectItem value="type-asc">Type (A→Z)</SelectItem>
-                <SelectItem value="type-desc">Type (Z→A)</SelectItem>
+                <SelectItem value="createdAt-desc">{t("inbox:filters.newest")}</SelectItem>
+                <SelectItem value="createdAt-asc">{t("inbox:filters.oldest")}</SelectItem>
+                <SelectItem value="priority-desc">{t("inbox:filters.prHighLow")}</SelectItem>
+                <SelectItem value="priority-asc">{t("inbox:filters.prLowHigh")}</SelectItem>
+                <SelectItem value="type-asc">{t("inbox:filters.typeAZ")}</SelectItem>
+                <SelectItem value="type-desc">{t("inbox:filters.typeZA")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -473,7 +454,7 @@ export default function InboxPage() {
 
         {selected.size > 0 && (
           <div className="flex items-center gap-3 px-4 py-2 bg-muted/50 border border-border rounded-sm">
-            <span className="text-sm text-muted-foreground">{selected.size} selected</span>
+            <span className="text-sm text-muted-foreground">{t("inbox:bulk.selected", { count: selected.size, replace: { count: formatNumber(selected.size, i18n.language) } })}</span>
             <Button
               size="sm"
               variant="outline"
@@ -482,7 +463,7 @@ export default function InboxPage() {
               disabled={bulkResolveMut.isPending}
               data-testid="button-bulk-resolve"
             >
-              <CheckCircle2 className="h-3.5 w-3.5" /> Resolve All
+              <CheckCircle2 className="h-3.5 w-3.5" /> {t("inbox:bulk.resolveAll")}
             </Button>
             <Button
               size="sm"
@@ -492,7 +473,7 @@ export default function InboxPage() {
               disabled={bulkDismissMut.isPending}
               data-testid="button-bulk-dismiss"
             >
-              <XCircle className="h-3.5 w-3.5" /> Dismiss All
+              <XCircle className="h-3.5 w-3.5" /> {t("inbox:bulk.dismissAll")}
             </Button>
           </div>
         )}
@@ -505,10 +486,13 @@ export default function InboxPage() {
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <InboxIcon className="h-12 w-12 text-muted-foreground/30 mb-4" />
             <h3 className="text-lg font-semibold text-foreground" data-testid="text-inbox-empty">
-              {tab === "pending" ? "All clear" : tab === "all" ? "No items" : tab === "history" ? "No history" : `No ${tab} items`}
+              {tab === "pending" ? t("inbox:empty.allClear")
+                : tab === "all" ? t("inbox:empty.noItems")
+                : tab === "history" ? t("inbox:empty.noHistory")
+                : t("inbox:empty.noOf", { tab: t(`inbox:tabs.${tab}`) })}
             </h3>
             <p className="text-sm text-muted-foreground mt-1">
-              {tab === "pending" ? "No pending items require your attention." : "No inbox items match your current filters."}
+              {tab === "pending" ? t("inbox:empty.pendingDesc") : t("inbox:empty.filteredDesc")}
             </p>
           </div>
         ) : (
@@ -525,19 +509,22 @@ export default function InboxPage() {
                   <div className="h-4 w-4" />
                 )}
                 <span className="text-xs text-muted-foreground">
-                  {total} item{total !== 1 ? "s" : ""} total
+                  {t("inbox:list.totalItems", { count: total, replace: { count: formatNumber(total, i18n.language) } })}
                   {bulkSelectableItems.length < pendingItems.length && (
-                    <span className="ml-2 text-amber-500">· {pendingItems.length - bulkSelectableItems.length} require individual review</span>
+                    <span className="ms-2 text-amber-500">{t("inbox:list.needIndividual", {
+                      count: pendingItems.length - bulkSelectableItems.length,
+                      replace: { count: formatNumber(pendingItems.length - bulkSelectableItems.length, i18n.language) },
+                    })}</span>
                   )}
                 </span>
               </div>
             )}
 
             {items.map(item => {
-              const typeMeta = TYPE_META[item.type] ?? TYPE_META.system;
+              const meta = TYPE_ICONS[item.type] ?? TYPE_ICONS.system;
               const priorityMeta = PRIORITY_META[item.priority] ?? PRIORITY_META.medium;
               const statusMeta = STATUS_META[item.status] ?? STATUS_META.pending;
-              const Icon = typeMeta.icon;
+              const Icon = meta.icon;
               const isPending = item.status === "pending";
               const isExpanded = expandedId === item.id;
 
@@ -564,7 +551,7 @@ export default function InboxPage() {
                       {isPending && BULK_PROTECTED_TYPES.includes(item.type) && (
                         <div
                           className="h-4 w-4 flex items-center justify-center shrink-0"
-                          title="Requires individual review — cannot be bulk actioned"
+                          title={t("inbox:list.individualTooltip")}
                           onClick={e => e.stopPropagation()}
                         >
                           <ShieldAlert className="h-3.5 w-3.5 text-amber-500/60" />
@@ -572,29 +559,29 @@ export default function InboxPage() {
                       )}
                       {!isPending && <div className="h-4 w-4 shrink-0" />}
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted/50">
-                        <Icon className={`h-4 w-4 ${typeMeta.color}`} />
+                        <Icon className={`h-4 w-4 ${meta.color}`} />
                       </div>
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="text-sm font-medium text-foreground truncate">{item.title}</span>
-                        <Badge variant="outline" className={`shrink-0 text-[10px] px-1.5 py-0 ${typeMeta.color} border-current/30`}>
-                          <Icon className="h-2.5 w-2.5 mr-1" />
-                          {typeMeta.label}
+                        <span className="text-sm font-medium text-foreground truncate"><bdi>{item.title}</bdi></span>
+                        <Badge variant="outline" className={`shrink-0 text-[10px] px-1.5 py-0 ${meta.color} border-current/30`}>
+                          <Icon className="h-2.5 w-2.5 me-1" />
+                          {typeLabel(item.type)}
                         </Badge>
                         <Badge variant="outline" className={`shrink-0 text-[10px] px-1.5 py-0 ${priorityMeta.color}`}>
-                          <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1 ${priorityMeta.dotColor}`} />
-                          {priorityMeta.label}
+                          <span className={`inline-block h-1.5 w-1.5 rounded-full me-1 ${priorityMeta.dotColor}`} />
+                          {priorityLabel(item.priority)}
                         </Badge>
                         <Badge variant="outline" className={`shrink-0 text-[10px] px-1.5 py-0 ${statusMeta.color}`}>
-                          {statusMeta.label}
+                          {statusLabel(item.status)}
                         </Badge>
                       </div>
 
                       {item.body && !isExpanded && (
                         <p className="text-xs text-muted-foreground truncate mt-0.5" data-testid={`text-inbox-summary-${item.id}`}>
-                          {highlightSecurityFlags(item.body.length > 120 ? item.body.slice(0, 120) + "…" : item.body)}
+                          <bdi>{highlightSecurityFlags(item.body.length > 120 ? item.body.slice(0, 120) + "…" : item.body)}</bdi>
                         </p>
                       )}
 
@@ -603,7 +590,11 @@ export default function InboxPage() {
                         {item.resolvedAt && (
                           <>
                             <span>·</span>
-                            <span>{item.status === "resolved" ? "Resolved" : "Dismissed"} {timeAgo(item.resolvedAt)}</span>
+                            <span>
+                              {item.status === "resolved"
+                                ? t("inbox:row.resolvedAgo", { when: timeAgo(item.resolvedAt) })
+                                : t("inbox:row.dismissedAgo", { when: timeAgo(item.resolvedAt) })}
+                            </span>
                           </>
                         )}
                       </div>
@@ -618,26 +609,26 @@ export default function InboxPage() {
                     <div className="border-t border-border px-4 py-4 bg-muted/10 space-y-4" data-testid={`detail-inbox-${item.id}`}>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                         <div>
-                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Type</span>
-                          <p className="mt-1 text-foreground">{typeMeta.label}</p>
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.type")}</span>
+                          <p className="mt-1 text-foreground">{typeLabel(item.type)}</p>
                         </div>
                         <div>
-                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Priority</span>
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.priority")}</span>
                           <div className="mt-1">
                             <Badge variant="outline" className={`text-xs ${priorityMeta.color}`}>
-                              <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1 ${priorityMeta.dotColor}`} />
-                              {priorityMeta.label}
+                              <span className={`inline-block h-1.5 w-1.5 rounded-full me-1 ${priorityMeta.dotColor}`} />
+                              {priorityLabel(item.priority)}
                             </Badge>
                           </div>
                         </div>
                         <div>
-                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Created</span>
-                          <p className="mt-1 text-foreground">{formatDate(item.createdAt)}</p>
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.created")}</span>
+                          <p className="mt-1 text-foreground" dir="ltr">{formatDate(item.createdAt, i18n.language)}</p>
                         </div>
                         {item.entityType && (
                           <div>
-                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Reference</span>
-                            <p className="mt-1 text-foreground">{item.entityType}{item.entityId ? ` #${item.entityId}` : ""}</p>
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.reference")}</span>
+                            <p className="mt-1 text-foreground" dir="ltr"><bdi>{item.entityType}</bdi>{item.entityId ? ` #${item.entityId}` : ""}</p>
                           </div>
                         )}
                       </div>
@@ -647,39 +638,39 @@ export default function InboxPage() {
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                <Camera className="h-3.5 w-3.5" /> Submitted Photo
+                                <Camera className="h-3.5 w-3.5" /> {t("inbox:detail.submittedPhoto")}
                               </span>
                               {item.metadata.submittedPhotoUrl ? (
                                 <div className="relative rounded-md overflow-hidden border border-border bg-muted/20 aspect-[3/4] max-w-[200px]">
                                   <img
                                     src={item.metadata.submittedPhotoUrl}
-                                    alt="Submitted selfie"
+                                    alt={t("inbox:detail.submittedPhoto")}
                                     className="w-full h-full object-cover"
                                     data-testid={`img-submitted-photo-${item.id}`}
                                   />
                                 </div>
                               ) : (
                                 <div className="flex items-center justify-center rounded-md border border-dashed border-border bg-muted/10 aspect-[3/4] max-w-[200px]">
-                                  <span className="text-xs text-muted-foreground">No photo</span>
+                                  <span className="text-xs text-muted-foreground">{t("inbox:detail.noPhoto")}</span>
                                 </div>
                               )}
                             </div>
                             <div className="space-y-2">
                               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                <User className="h-3.5 w-3.5" /> Reference Photo
+                                <User className="h-3.5 w-3.5" /> {t("inbox:detail.referencePhoto")}
                               </span>
                               {item.metadata.referencePhotoUrl ? (
                                 <div className="relative rounded-md overflow-hidden border border-border bg-muted/20 aspect-[3/4] max-w-[200px]">
                                   <img
                                     src={item.metadata.referencePhotoUrl}
-                                    alt="Reference photo"
+                                    alt={t("inbox:detail.referencePhoto")}
                                     className="w-full h-full object-cover"
                                     data-testid={`img-reference-photo-${item.id}`}
                                   />
                                 </div>
                               ) : (
                                 <div className="flex items-center justify-center rounded-md border border-dashed border-border bg-muted/10 aspect-[3/4] max-w-[200px]">
-                                  <span className="text-xs text-muted-foreground">No reference photo</span>
+                                  <span className="text-xs text-muted-foreground">{t("inbox:detail.noReferencePhoto")}</span>
                                 </div>
                               )}
                             </div>
@@ -687,39 +678,39 @@ export default function InboxPage() {
 
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                             <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
-                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Confidence</span>
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.confidence")}</span>
                               <p className={`text-lg font-bold mt-0.5 ${
                                 (item.metadata.confidence ?? 0) >= 95 ? "text-emerald-400" :
                                 (item.metadata.confidence ?? 0) >= 70 ? "text-amber-400" : "text-red-400"
-                              }`} data-testid={`text-confidence-${item.id}`}>
-                                {item.metadata.confidence ?? 0}%
+                              }`} data-testid={`text-confidence-${item.id}`} dir="ltr">
+                                {formatNumber(item.metadata.confidence ?? 0, i18n.language)}%
                               </p>
                             </div>
                             <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
-                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">GPS Check</span>
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.gpsCheck")}</span>
                               <div className="flex items-center gap-1.5 mt-1" data-testid={`text-gps-status-${item.id}`}>
                                 {item.metadata.gpsInside ? (
                                   <>
                                     <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                                    <span className="text-sm font-medium text-emerald-400">Inside</span>
+                                    <span className="text-sm font-medium text-emerald-400">{t("inbox:detail.inside")}</span>
                                   </>
                                 ) : (
                                   <>
                                     <ShieldAlert className="h-4 w-4 text-red-400" />
-                                    <span className="text-sm font-medium text-red-400">Outside</span>
+                                    <span className="text-sm font-medium text-red-400">{t("inbox:detail.outside")}</span>
                                   </>
                                 )}
                               </div>
                             </div>
                             <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
-                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Employee</span>
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.employee")}</span>
                               <p className="text-sm font-medium text-foreground mt-0.5 truncate" data-testid={`text-employee-name-${item.id}`}>
-                                {item.metadata.candidateName ?? "Unknown"}
+                                <bdi>{item.metadata.candidateName ?? t("inbox:detail.unknown")}</bdi>
                               </p>
                             </div>
                             <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
-                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Employee #</span>
-                              <p className="text-sm font-medium text-foreground mt-0.5" data-testid={`text-employee-number-${item.id}`}>
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.employeeNo")}</span>
+                              <p className="text-sm font-medium text-foreground mt-0.5" data-testid={`text-employee-number-${item.id}`} dir="ltr">
                                 {item.metadata.employeeNumber ?? "—"}
                               </p>
                             </div>
@@ -728,9 +719,9 @@ export default function InboxPage() {
                           {(item.metadata.gpsLat || item.metadata.gpsLng) && (
                             <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
                               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                                <MapPin className="h-3 w-3" /> GPS Coordinates
+                                <MapPin className="h-3 w-3" /> {t("inbox:detail.gpsCoords")}
                               </span>
-                              <p className="text-sm text-foreground mt-0.5 font-mono" data-testid={`text-gps-coords-${item.id}`}>
+                              <p className="text-sm text-foreground mt-0.5 font-mono" data-testid={`text-gps-coords-${item.id}`} dir="ltr">
                                 {Number(item.metadata.gpsLat).toFixed(6)}, {Number(item.metadata.gpsLng).toFixed(6)}
                               </p>
                             </div>
@@ -743,53 +734,53 @@ export default function InboxPage() {
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                <User className="h-3.5 w-3.5" /> Current Photo
+                                <User className="h-3.5 w-3.5" /> {t("inbox:detail.currentPhoto")}
                               </span>
                               {item.metadata.previousPhotoUrl ? (
                                 <div className="relative rounded-md overflow-hidden border border-border bg-muted/20 aspect-square max-w-[200px]">
                                   <img
                                     src={item.metadata.previousPhotoUrl}
-                                    alt="Current photo"
+                                    alt={t("inbox:detail.currentPhoto")}
                                     className="w-full h-full object-cover"
                                     data-testid={`img-current-photo-${item.id}`}
                                   />
                                 </div>
                               ) : (
                                 <div className="flex items-center justify-center rounded-md border border-dashed border-border bg-muted/10 aspect-square max-w-[200px]">
-                                  <span className="text-xs text-muted-foreground">No current photo</span>
+                                  <span className="text-xs text-muted-foreground">{t("inbox:detail.noCurrentPhoto")}</span>
                                 </div>
                               )}
                             </div>
                             <div className="space-y-2">
                               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                <ImageIcon className="h-3.5 w-3.5" /> New Photo
+                                <ImageIcon className="h-3.5 w-3.5" /> {t("inbox:detail.newPhoto")}
                               </span>
                               {item.metadata.newPhotoUrl ? (
                                 <div className="relative rounded-md overflow-hidden border-2 border-primary/50 bg-muted/20 aspect-square max-w-[200px]">
                                   <img
                                     src={item.metadata.newPhotoUrl}
-                                    alt="New photo"
+                                    alt={t("inbox:detail.newPhoto")}
                                     className="w-full h-full object-cover"
                                     data-testid={`img-new-photo-${item.id}`}
                                   />
                                 </div>
                               ) : (
                                 <div className="flex items-center justify-center rounded-md border border-dashed border-border bg-muted/10 aspect-square max-w-[200px]">
-                                  <span className="text-xs text-muted-foreground">No new photo</span>
+                                  <span className="text-xs text-muted-foreground">{t("inbox:detail.noNewPhoto")}</span>
                                 </div>
                               )}
                             </div>
                           </div>
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
-                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Employee</span>
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.employee")}</span>
                               <p className="text-sm font-medium text-foreground mt-0.5 truncate" data-testid={`text-photo-employee-${item.id}`}>
-                                {item.metadata.candidateName ?? "Unknown"}
+                                <bdi>{item.metadata.candidateName ?? t("inbox:detail.unknown")}</bdi>
                               </p>
                             </div>
                             <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
-                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Employee #</span>
-                              <p className="text-sm font-medium text-foreground mt-0.5" data-testid={`text-photo-empnum-${item.id}`}>
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.employeeNo")}</span>
+                              <p className="text-sm font-medium text-foreground mt-0.5" data-testid={`text-photo-empnum-${item.id}`} dir="ltr">
                                 {item.metadata.employeeNumber ?? "—"}
                               </p>
                             </div>
@@ -801,44 +792,44 @@ export default function InboxPage() {
                         <div className="space-y-4" data-testid={`excuse-review-${item.id}`}>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                             <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
-                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Employee</span>
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.employee")}</span>
                               <p className="text-sm font-medium text-foreground mt-0.5 truncate" data-testid={`text-excuse-employee-${item.id}`}>
-                                {item.metadata.employeeName ?? "Unknown"}
+                                <bdi>{item.metadata.employeeName ?? t("inbox:detail.unknown")}</bdi>
                               </p>
                             </div>
                             <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
-                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Employee #</span>
-                              <p className="text-sm font-medium text-foreground mt-0.5" data-testid={`text-excuse-empnum-${item.id}`}>
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.employeeNo")}</span>
+                              <p className="text-sm font-medium text-foreground mt-0.5" data-testid={`text-excuse-empnum-${item.id}`} dir="ltr">
                                 {item.metadata.employeeNumber ?? "—"}
                               </p>
                             </div>
                             <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
-                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Date</span>
-                              <p className="text-sm font-medium text-foreground mt-0.5" data-testid={`text-excuse-date-${item.id}`}>
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.date")}</span>
+                              <p className="text-sm font-medium text-foreground mt-0.5" data-testid={`text-excuse-date-${item.id}`} dir="ltr">
                                 {item.metadata.date ?? "—"}
                               </p>
                             </div>
                             <div className="rounded-md border border-border bg-muted/10 px-3 py-2">
-                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Type</span>
+                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.excuseType")}</span>
                               <p className="text-sm font-medium mt-0.5" data-testid={`text-excuse-type-${item.id}`}>
                                 {item.metadata.hadClockIn ? (
-                                  <span className="text-amber-400">Partial (mid-shift)</span>
+                                  <span className="text-amber-400">{t("inbox:detail.partial")}</span>
                                 ) : (
-                                  <span className="text-blue-400">Full day</span>
+                                  <span className="text-blue-400">{t("inbox:detail.fullDay")}</span>
                                 )}
                               </p>
                             </div>
                           </div>
                           {item.metadata.hadClockIn && item.metadata.effectiveClockOut && (
                             <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2">
-                              <span className="text-[10px] font-medium text-amber-400 uppercase tracking-wider">Effective Clock Out</span>
-                              <p className="text-sm font-medium text-amber-300 mt-0.5">{item.metadata.effectiveClockOut}</p>
+                              <span className="text-[10px] font-medium text-amber-400 uppercase tracking-wider">{t("inbox:detail.effectiveClockOut")}</span>
+                              <p className="text-sm font-medium text-amber-300 mt-0.5" dir="ltr">{item.metadata.effectiveClockOut}</p>
                             </div>
                           )}
                           {item.body && (
                             <div>
-                              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Reason</span>
-                              <p className="mt-1 text-sm text-foreground whitespace-pre-wrap bg-muted/20 rounded-sm px-3 py-2">{item.body}</p>
+                              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.reason")}</span>
+                              <p className="mt-1 text-sm text-foreground whitespace-pre-wrap bg-muted/20 rounded-sm px-3 py-2"><bdi>{item.body}</bdi></p>
                             </div>
                           )}
                         </div>
@@ -846,15 +837,15 @@ export default function InboxPage() {
 
                       {item.body && item.type !== "photo_change_request" && item.type !== "excuse_request" && (
                         <div>
-                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Details</span>
-                          <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">{highlightSecurityFlags(item.body)}</p>
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.details")}</span>
+                          <p className="mt-1 text-sm text-foreground whitespace-pre-wrap"><bdi>{highlightSecurityFlags(item.body)}</bdi></p>
                         </div>
                       )}
 
                       {item.resolutionNotes && (
                         <div>
-                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Resolution Notes</span>
-                          <p className="mt-1 text-sm text-foreground whitespace-pre-wrap bg-muted/30 rounded-sm px-3 py-2">{item.resolutionNotes}</p>
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.resolutionNotes")}</span>
+                          <p className="mt-1 text-sm text-foreground whitespace-pre-wrap bg-muted/30 rounded-sm px-3 py-2"><bdi>{item.resolutionNotes}</bdi></p>
                         </div>
                       )}
 
@@ -862,12 +853,12 @@ export default function InboxPage() {
                         <div className="space-y-3 pt-2 border-t border-border/50">
                           {item.type !== "attendance_verification" && item.type !== "photo_change_request" && item.type !== "excuse_request" && (
                             <div>
-                              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Notes (optional)</label>
+                              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("inbox:detail.notesOptional")}</label>
                               <Textarea
                                 data-testid={`textarea-notes-${item.id}`}
                                 value={actionNotes}
                                 onChange={e => setActionNotes(e.target.value)}
-                                placeholder="Add resolution notes..."
+                                placeholder={t("inbox:detail.addNotesPh")}
                                 className="mt-1 bg-muted/30 border-border text-sm min-h-[60px]"
                               />
                             </div>
@@ -882,7 +873,7 @@ export default function InboxPage() {
                                   disabled={approveAttendanceMut.isPending}
                                   data-testid={`button-approve-attendance-${item.id}`}
                                 >
-                                  <CheckCircle2 className="h-4 w-4" /> Approve Attendance
+                                  <CheckCircle2 className="h-4 w-4" /> {t("inbox:detail.approveAttendance")}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -892,7 +883,7 @@ export default function InboxPage() {
                                   disabled={rejectAttendanceMut.isPending}
                                   data-testid={`button-reject-attendance-${item.id}`}
                                 >
-                                  <XCircle className="h-4 w-4" /> Reject Attendance
+                                  <XCircle className="h-4 w-4" /> {t("inbox:detail.rejectAttendance")}
                                 </Button>
                               </>
                             ) : item.type === "photo_change_request" && item.metadata?.changeRequestId ? (
@@ -904,7 +895,7 @@ export default function InboxPage() {
                                   disabled={approvePhotoChangeMut.isPending}
                                   data-testid={`button-approve-photo-${item.id}`}
                                 >
-                                  <CheckCircle2 className="h-4 w-4" /> Approve Photo
+                                  <CheckCircle2 className="h-4 w-4" /> {t("inbox:detail.approvePhoto")}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -914,7 +905,7 @@ export default function InboxPage() {
                                   disabled={rejectPhotoChangeMut.isPending}
                                   data-testid={`button-reject-photo-${item.id}`}
                                 >
-                                  <XCircle className="h-4 w-4" /> Reject Photo
+                                  <XCircle className="h-4 w-4" /> {t("inbox:detail.rejectPhoto")}
                                 </Button>
                               </>
                             ) : item.type === "excuse_request" && item.entityId ? (
@@ -926,7 +917,7 @@ export default function InboxPage() {
                                   disabled={approveExcuseMut.isPending}
                                   data-testid={`button-approve-excuse-${item.id}`}
                                 >
-                                  <CheckCircle2 className="h-4 w-4" /> Approve Excuse
+                                  <CheckCircle2 className="h-4 w-4" /> {t("inbox:detail.approveExcuse")}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -936,7 +927,7 @@ export default function InboxPage() {
                                   disabled={rejectExcuseMut.isPending}
                                   data-testid={`button-reject-excuse-${item.id}`}
                                 >
-                                  <XCircle className="h-4 w-4" /> Reject Excuse
+                                  <XCircle className="h-4 w-4" /> {t("inbox:detail.rejectExcuse")}
                                 </Button>
                               </>
                             ) : (
@@ -948,7 +939,7 @@ export default function InboxPage() {
                                   disabled={resolveMut.isPending}
                                   data-testid={`button-resolve-${item.id}`}
                                 >
-                                  <CheckCircle2 className="h-4 w-4" /> Resolve
+                                  <CheckCircle2 className="h-4 w-4" /> {t("inbox:detail.resolve")}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -958,7 +949,7 @@ export default function InboxPage() {
                                   disabled={dismissMut.isPending}
                                   data-testid={`button-dismiss-${item.id}`}
                                 >
-                                  <XCircle className="h-4 w-4" /> Dismiss
+                                  <XCircle className="h-4 w-4" /> {t("inbox:detail.dismiss")}
                                 </Button>
                               </>
                             )}
@@ -966,11 +957,11 @@ export default function InboxPage() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="gap-1.5 ml-auto"
+                                className="gap-1.5 ms-auto"
                                 onClick={() => setLocation(item.actionUrl!)}
                                 data-testid={`button-inbox-goto-${item.id}`}
                               >
-                                <ArrowUpRight className="h-4 w-4" /> Go to item
+                                <ArrowUpRight className="h-4 w-4" /> {t("inbox:detail.goTo")}
                               </Button>
                             )}
                           </div>
@@ -986,7 +977,7 @@ export default function InboxPage() {
                             onClick={() => setLocation(item.actionUrl!)}
                             data-testid={`button-inbox-goto-${item.id}`}
                           >
-                            <ArrowUpRight className="h-4 w-4" /> View related item
+                            <ArrowUpRight className="h-4 w-4" /> {t("inbox:detail.viewRelated")}
                           </Button>
                         </div>
                       )}
@@ -1001,7 +992,7 @@ export default function InboxPage() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between pt-2">
             <span className="text-xs text-muted-foreground">
-              Page {page} of {totalPages}
+              {t("inbox:pager.label", { page: formatNumber(page, i18n.language), total: formatNumber(totalPages, i18n.language) })}
             </span>
             <div className="flex items-center gap-2">
               <Button
@@ -1012,7 +1003,7 @@ export default function InboxPage() {
                 onClick={() => setPage(p => p - 1)}
                 data-testid="button-inbox-prev"
               >
-                <ChevronLeft className="h-4 w-4" /> Prev
+                <ChevronLeft className="h-4 w-4 rtl:rotate-180" /> {t("inbox:pager.prev")}
               </Button>
               <Button
                 variant="outline"
@@ -1022,7 +1013,7 @@ export default function InboxPage() {
                 onClick={() => setPage(p => p + 1)}
                 data-testid="button-inbox-next"
               >
-                Next <ChevronRight className="h-4 w-4" />
+                {t("inbox:pager.next")} <ChevronRight className="h-4 w-4 rtl:rotate-180" />
               </Button>
             </div>
           </div>
@@ -1047,28 +1038,13 @@ export default function InboxPage() {
                 const confirmItem = rawData?.data?.find((i: InboxItem) => i.id === confirmDialog.inboxItemId);
                 const isPhoto = confirmItem?.type === "photo_change_request";
                 const isExcuse = confirmItem?.type === "excuse_request";
-                const titleMap: Record<string, string> = {
-                  approve_photo: "Approve Photo Change",
-                  reject_photo: "Reject Photo Change",
-                  approve_excuse: "Approve Excuse Request",
-                  reject_excuse: "Reject Excuse Request",
-                  approve_default: "Approve Attendance",
-                  reject_default: "Reject Attendance",
-                };
-                const descMap: Record<string, string> = {
-                  approve_photo: "This will replace the employee's current profile photo with the new one.",
-                  reject_photo: "This will reject the photo change. The employee's current photo will remain unchanged.",
-                  approve_excuse: "This will approve the excuse request. The employee will be treated as fully paid for this date at payroll time.",
-                  reject_excuse: "This will reject the excuse request. Attendance records will be used as-is for payroll calculation.",
-                  approve_default: "This will verify the attendance record and create a clock-in entry.",
-                  reject_default: "This will reject the attendance submission. The employee will need to resubmit.",
-                };
                 const kind = isPhoto ? "photo" : isExcuse ? "excuse" : "default";
-                const titleKey = `${confirmDialog.action}_${kind}`;
+                const titleKey = `${confirmDialog.action}_${kind}_title`;
+                const descKey = `${confirmDialog.action}_${kind}_desc`;
                 return (
                   <div>
-                    <h3 className="text-base font-semibold text-foreground">{titleMap[titleKey]}</h3>
-                    <p className="text-sm text-muted-foreground mt-1">{descMap[titleKey]}</p>
+                    <h3 className="text-base font-semibold text-foreground">{t(`inbox:confirm.${titleKey}`)}</h3>
+                    <p className="text-sm text-muted-foreground mt-1">{t(`inbox:confirm.${descKey}`)}</p>
                   </div>
                 );
               })()}
@@ -1076,7 +1052,7 @@ export default function InboxPage() {
 
             <div>
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Resolution Notes <span className="text-red-400">*</span>
+                {t("inbox:confirm.notesRequiredLabel")} <span className="text-red-400">*</span>
               </label>
               <Textarea
                 data-testid="textarea-confirm-notes"
@@ -1086,24 +1062,14 @@ export default function InboxPage() {
                   const confirmItem = rawData?.data?.find((i: InboxItem) => i.id === confirmDialog.inboxItemId);
                   const isPhoto = confirmItem?.type === "photo_change_request";
                   const isExcuse = confirmItem?.type === "excuse_request";
-                  if (confirmDialog.action === "approve") {
-                    return isPhoto
-                      ? "e.g., New photo meets standards, identity verified..."
-                      : isExcuse
-                      ? "e.g., Valid medical certificate provided, approved..."
-                      : "e.g., Verified identity manually, photo matches...";
-                  }
-                  return isPhoto
-                    ? "e.g., Photo is blurry, face not clearly visible..."
-                    : isExcuse
-                    ? "e.g., No supporting documentation, insufficient reason..."
-                    : "e.g., Photo does not match reference, suspected proxy attendance...";
+                  const kind = isPhoto ? "photo" : isExcuse ? "excuse" : "default";
+                  return t(`inbox:confirm.ph_${confirmDialog.action}_${kind}`);
                 })()}
                 className="mt-1.5 bg-muted/30 border-border text-sm min-h-[80px]"
                 autoFocus
               />
               {confirmNotes.trim().length === 0 && (
-                <p className="text-xs text-red-400 mt-1">Resolution notes are required</p>
+                <p className="text-xs text-red-400 mt-1">{t("inbox:confirm.notesRequiredHint")}</p>
               )}
             </div>
 
@@ -1114,7 +1080,7 @@ export default function InboxPage() {
                 onClick={() => setConfirmDialog({ open: false, action: null, entityId: null, inboxItemId: null })}
                 data-testid="button-confirm-cancel"
               >
-                Cancel
+                {t("inbox:confirm.cancel")}
               </Button>
               <Button
                 size="sm"
@@ -1129,7 +1095,7 @@ export default function InboxPage() {
                 {(approveAttendanceMut.isPending || rejectAttendanceMut.isPending || approvePhotoChangeMut.isPending || rejectPhotoChangeMut.isPending) && (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 )}
-                {confirmDialog.action === "approve" ? "Confirm Approval" : "Confirm Rejection"}
+                {confirmDialog.action === "approve" ? t("inbox:confirm.confirmApproval") : t("inbox:confirm.confirmRejection")}
               </Button>
             </div>
           </div>
