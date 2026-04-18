@@ -587,7 +587,7 @@ export default function AuthPage() {
                 ];
                 const renderLogos = (keyPrefix: string) =>
                   logos.map((logo, i) => (
-                    <div key={`${keyPrefix}-${i}`} className="group flex items-center gap-2 opacity-50 hover:opacity-100 transition-all duration-200 select-none shrink-0">
+                    <div key={`${keyPrefix}-${i}`} className="group flex items-center justify-center opacity-50 hover:opacity-100 transition-all duration-200 select-none shrink-0 w-28 h-12 mx-3">
                       <img
                         src={logo.url}
                         alt={logo.name}
@@ -595,10 +595,12 @@ export default function AuthPage() {
                         loading="lazy"
                         decoding="async"
                         style={{
-                          ...(logo.nudge ? { transform: `translateY(${logo.nudge}px)` } : {}),
-                          ...((logo as any).scale ? { transform: `scale(${(logo as any).scale})` } : {}),
+                          transform: [
+                            (logo as any).scale ? `scale(${(logo as any).scale})` : "",
+                            logo.nudge ? `translateY(${logo.nudge}px)` : "",
+                          ].filter(Boolean).join(" ") || undefined,
                         }}
-                        className="max-w-24 max-h-10 w-full h-auto object-contain grayscale group-hover:grayscale-0 transition-all duration-200"
+                        className="max-w-full max-h-full w-auto h-auto object-contain grayscale group-hover:grayscale-0 transition-all duration-200"
                       />
                     </div>
                   ));
