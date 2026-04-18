@@ -1,0 +1,144 @@
+{
+  "page": {
+    "title": "Events Management",
+    "subtitle": "Plan and track your event workforce requirements.",
+    "createBtn": "Create Event"
+  },
+  "stats": {
+    "total": "Total Events",
+    "totalHelp": "Across all time",
+    "active": "Active Campaigns",
+    "activeHelp": "Currently in progress",
+    "upcoming": "Upcoming",
+    "upcomingHelp": "In planning phase"
+  },
+  "search": {
+    "placeholder": "Search events by name or region...",
+    "status": "Status",
+    "dateRange": "Date Range",
+    "showArchived": "Show Archived",
+    "showingAll": "Showing All"
+  },
+  "table": {
+    "title": "Events",
+    "name": "Event Name",
+    "expiry": "Expiry",
+    "expiryTip": "SMP Contracts expiry dates should be set as the project's contractual expiry date.",
+    "region": "Region",
+    "progress": "Hiring Progress",
+    "status": "Status",
+    "actions": "Actions",
+    "noEvents": "No events found",
+    "noEventsHelp": "Create your first event to get started",
+    "noEndDate": "No end date",
+    "ongoing": "Ongoing",
+    "archived": "Archived"
+  },
+  "row": {
+    "view": "View Details",
+    "edit": "Edit Event",
+    "activate": "Activate",
+    "close": "Close Event",
+    "reopen": "Reopen Event",
+    "archive": "Archive",
+    "restore": "Restore"
+  },
+  "status": {
+    "upcoming": "Upcoming",
+    "active": "Active",
+    "closed": "Closed",
+    "archived": "Archived"
+  },
+  "type": {
+    "duration": "Duration Based",
+    "durationDesc": "Has a fixed end date",
+    "ongoing": "Ongoing",
+    "ongoingDesc": "No fixed end date",
+    "ongoingHelp": "This event has no fixed end date. Workers can be offboarded manually at any time."
+  },
+  "create": {
+    "title": "Create Event",
+    "submit": "Create Event",
+    "successTitle": "Event created",
+    "successDesc": "The event has been added successfully.",
+    "errorTitle": "Error",
+    "errorDesc": "Failed to create event."
+  },
+  "edit": {
+    "title": "Edit Event",
+    "submit": "Save Changes",
+    "successTitle": "Event updated",
+    "successDesc": "Changes saved successfully.",
+    "errorTitle": "Error",
+    "errorDesc": "Failed to update event.",
+    "descPh": "Brief overview..."
+  },
+  "view": {
+    "title": "Event Details",
+    "name": "Event Name",
+    "description": "Description",
+    "startDate": "Event Start Date",
+    "endDate": "End Date",
+    "region": "Region",
+    "status": "Status",
+    "progress": "Hiring Progress",
+    "progressFmt": "{{filled}} / {{target}} ({{pct}}%)",
+    "budget": "Budget",
+    "budgetFmt": "{{value}} SAR",
+    "createdBy": "Created By",
+    "close": "Close"
+  },
+  "form": {
+    "name": "Event Name",
+    "namePh": "e.g. Hajj 2026",
+    "description": "Description",
+    "descPh": "Brief overview of this event's scope and goals...",
+    "createdBy": "Created By",
+    "loading": "Loading...",
+    "type": "Event Type",
+    "timeline": "Timeline",
+    "startDate": "Event Start Date",
+    "endDate": "End Date",
+    "headcount": "Target Headcount",
+    "headcountPh": "e.g. 500",
+    "cancel": "Cancel"
+  },
+  "validation": {
+    "name": "Event name is required",
+    "startDate": "Event start date is required",
+    "endDate": "End date is required",
+    "headcount": "Target headcount must be at least 1"
+  },
+  "close": {
+    "title": "Close Event?",
+    "intro": "You are about to close <strong>\"{{name}}\"</strong>.",
+    "warnTitle": "Impact Warning",
+    "warn1": "All active workers assigned to this event will become eligible for offboarding",
+    "warn2": "Payroll cycles referencing this event will be finalised",
+    "warn3": "New workers cannot be assigned to a closed event",
+    "warn4": "This action is recorded in the audit log",
+    "note": "You can reopen the event later if needed.",
+    "cancel": "Cancel",
+    "confirm": "Close Event",
+    "successTitle": "\"{{name}}\" closed",
+    "successDesc": "Workers with completed service periods will appear in the offboarding queue.",
+    "errorTitle": "Error",
+    "errorDesc": "Failed to close event."
+  },
+  "reopen": {
+    "title": "Reopen Event?",
+    "intro": "You are about to reopen <strong>\"{{name}}\"</strong> and set it back to <strong2>Active</strong2>.",
+    "noteTitle": "Note",
+    "note1": "Employees already in the offboarding queue will remain there",
+    "note2": "Workers can be assigned to this event again",
+    "note3": "This action is recorded in the audit log",
+    "reasonLabel": "Reason for reopening (optional)",
+    "reasonPh": "e.g. Event dates extended, error correction...",
+    "cancel": "Cancel",
+    "confirm": "Reopen Event",
+    "successTitle": "\"{{name}}\" reopened",
+    "successDesc": "Event is now active again.",
+    "errorTitle": "Error",
+    "errorDesc": "Failed to reopen event."
+  }
+}

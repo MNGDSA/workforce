@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -79,6 +79,8 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import type { Event } from "@shared/schema";
+import { useTranslation, Trans } from "react-i18next";
+import { formatNumber } from "@/lib/format";
 
 const statusStyles: Record<string, string> = {
   upcoming: "bg-blue-500/10 text-blue-500",
@@ -87,24 +89,6 @@ const statusStyles: Record<string, string> = {
   archived: "bg-zinc-800 text-zinc-500",
 };
 
-const createEventSchema = z.object({
-  name: z.string().min(3, "Event name is required"),
-  description: z.string().optional(),
-  eventType: z.enum(["duration_based", "ongoing"]),
-  startDate: z.string().min(1, "Event start date is required"),
-  endDate: z.string().optional(),
-  region: z.string().optional(),
-  targetHeadcount: z.coerce.number().int().min(1, "Target headcount must be at least 1"),
-  budget: z.coerce.number().optional(),
-  status: z.enum(["upcoming", "active"]),
-}).superRefine((data, ctx) => {
-  if (data.eventType === "duration_based" && !data.endDate) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "End date is required", path: ["endDate"] });
-  }
-});
-
-type CreateEventForm = z.infer<typeof createEventSchema>;
-
 function CreateEventDialog({
   open,
   onOpenChange,
@@ -112,8 +96,26 @@ function CreateEventDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const { t } = useTranslation(["events"]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const createEventSchema = useMemo(() => z.object({
+    name: z.string().min(3, t("events:validation.name")),
+    description: z.string().optional(),
+    eventType: z.enum(["duration_based", "ongoing"]),
+    startDate: z.string().min(1, t("events:validation.startDate")),
+    endDate: z.string().optional(),
+    region: z.string().optional(),
+    targetHeadcount: z.coerce.number().int().min(1, t("events:validation.headcount")),
+    budget: z.coerce.number().optional(),
+    status: z.enum(["upcoming", "active"]),
+  }).superRefine((data, ctx) => {
+    if (data.eventType === "duration_based" && !data.endDate) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("events:validation.endDate"), path: ["endDate"] });
+    }
+  }), [t]);
+  type CreateEventForm = z.infer<typeof createEventSchema>;
 
   const { data: currentUser } = useQuery<{ fullName: string }>({
     queryKey: ["/api/me"],
@@ -142,12 +144,12 @@ function CreateEventDialog({
       apiRequest("POST", "/api/events", data).then((r) => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      toast({ title: "Event created", description: "The event has been added successfully." });
+      toast({ title: t("events:create.successTitle"), description: t("events:create.successDesc") });
       form.reset();
       onOpenChange(false);
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to create event.", variant: "destructive" });
+      toast({ title: t("events:create.errorTitle"), description: t("events:create.errorDesc"), variant: "destructive" });
     },
   });
 
@@ -159,7 +161,7 @@ function CreateEventDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="text-white font-display text-xl">Create Event</DialogTitle>
+          <DialogTitle className="text-white font-display text-xl">{t("events:create.title")}</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
@@ -171,11 +173,11 @@ function CreateEventDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                    Event Name <span className="text-primary">*</span>
+                    {t("events:form.name")} <span className="text-primary">*</span>
                   </FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="e.g. Hajj 2026"
+                      placeholder={t("events:form.namePh")}
                       className="h-10 bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm"
                       data-testid="input-event-name"
                       {...field}
@@ -192,11 +194,11 @@ function CreateEventDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                    Description
+                    {t("events:form.description")}
                   </FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Brief overview of this event's scope and goals..."
+                      placeholder={t("events:form.descPh")}
                       rows={3}
                       className="bg-muted/30 border-border focus-visible:border-primary/50 rounded-sm resize-none"
                       data-testid="textarea-event-description"
@@ -209,9 +211,9 @@ function CreateEventDialog({
             />
 
             <div className="space-y-2">
-              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Created By</p>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("events:form.createdBy")}</p>
               <Input
-                value={currentUser?.fullName ?? "Loading..."}
+                value={currentUser?.fullName ?? t("events:form.loading")}
                 disabled
                 className="h-10 bg-muted/10 border-border rounded-sm text-muted-foreground cursor-not-allowed"
                 data-testid="input-event-created-by"
@@ -220,14 +222,13 @@ function CreateEventDialog({
 
             <div className="w-full h-px bg-border" />
 
-            {/* ── Event Type ──────────────────────────────────────────── */}
             <FormField
               control={form.control}
               name="eventType"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                    Event Type <span className="text-primary">*</span>
+                    {t("events:form.type")} <span className="text-primary">*</span>
                   </FormLabel>
                   <div className="grid grid-cols-2 gap-2">
                     <button
@@ -241,9 +242,9 @@ function CreateEventDialog({
                       }`}
                     >
                       <CalendarRange className="h-4 w-4 shrink-0" />
-                      <div className="text-left">
-                        <div className="text-xs font-semibold">Duration Based</div>
-                        <div className="text-[10px] opacity-70 font-normal">Has a fixed end date</div>
+                      <div className="text-start">
+                        <div className="text-xs font-semibold">{t("events:type.duration")}</div>
+                        <div className="text-[10px] opacity-70 font-normal">{t("events:type.durationDesc")}</div>
                       </div>
                     </button>
                     <button
@@ -257,9 +258,9 @@ function CreateEventDialog({
                       }`}
                     >
                       <Infinity className="h-4 w-4 shrink-0" />
-                      <div className="text-left">
-                        <div className="text-xs font-semibold">Ongoing</div>
-                        <div className="text-[10px] opacity-70 font-normal">No fixed end date</div>
+                      <div className="text-start">
+                        <div className="text-xs font-semibold">{t("events:type.ongoing")}</div>
+                        <div className="text-[10px] opacity-70 font-normal">{t("events:type.ongoingDesc")}</div>
                       </div>
                     </button>
                   </div>
@@ -268,8 +269,7 @@ function CreateEventDialog({
               )}
             />
 
-            {/* ── Timeline ────────────────────────────────────────────── */}
-            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Timeline</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">{t("events:form.timeline")}</p>
             <div className={`grid gap-4 ${watchedEventType === "duration_based" ? "grid-cols-2" : "grid-cols-1"}`}>
               <FormField
                 control={form.control}
@@ -277,7 +277,7 @@ function CreateEventDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                      Event Start Date <span className="text-primary">*</span>
+                      {t("events:form.startDate")} <span className="text-primary">*</span>
                     </FormLabel>
                     <FormControl>
                       <DatePickerField
@@ -298,7 +298,7 @@ function CreateEventDialog({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                        End Date <span className="text-red-400">*</span>
+                        {t("events:form.endDate")} <span className="text-red-400">*</span>
                       </FormLabel>
                       <FormControl>
                         <DatePickerField
@@ -317,24 +317,24 @@ function CreateEventDialog({
             {watchedEventType === "ongoing" && (
               <p className="text-xs text-muted-foreground flex items-center gap-1.5 -mt-2">
                 <Infinity className="h-3 w-3 text-primary" />
-                This event has no fixed end date. Workers can be offboarded manually at any time.
+                {t("events:type.ongoingHelp")}
               </p>
             )}
 
-            {/* ── Headcount ───────────────────────────────────────────── */}
             <FormField
               control={form.control}
               name="targetHeadcount"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                    Target Headcount <span className="text-primary">*</span>
+                    {t("events:form.headcount")} <span className="text-primary">*</span>
                   </FormLabel>
                   <FormControl>
                     <Input
                       type="number"
                       min={1}
-                      placeholder="e.g. 500"
+                      dir="ltr"
+                      placeholder={t("events:form.headcountPh")}
                       {...field}
                       onChange={e => field.onChange(Number(e.target.value))}
                       className="h-10 bg-muted/30 border-border rounded-sm"
@@ -354,7 +354,7 @@ function CreateEventDialog({
                 className="text-muted-foreground"
                 data-testid="button-cancel-event"
               >
-                Cancel
+                {t("events:form.cancel")}
               </Button>
               <Button
                 type="submit"
@@ -363,11 +363,11 @@ function CreateEventDialog({
                 data-testid="button-submit-event"
               >
                 {createEvent.isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="me-2 h-4 w-4 animate-spin" />
                 ) : (
-                  <Plus className="mr-2 h-4 w-4" />
+                  <Plus className="me-2 h-4 w-4" />
                 )}
-                Create Event
+                {t("events:create.submit")}
               </Button>
             </DialogFooter>
           </form>
@@ -391,7 +391,7 @@ function InfoTooltip({ text }: { text: string }) {
   };
 
   return (
-    <span className="inline-flex items-center ml-1.5 normal-case">
+    <span className="inline-flex items-center ms-1.5 normal-case">
       <button
         ref={btnRef}
         type="button"
@@ -416,84 +416,93 @@ function InfoTooltip({ text }: { text: string }) {
 }
 
 function ViewEventDialog({ event, open, onOpenChange }: { event: Event | null; open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { t, i18n } = useTranslation(["events"]);
   if (!event) return null;
   const pct = event.targetHeadcount > 0 ? Math.round((event.filledPositions / event.targetHeadcount) * 100) : 0;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="text-white font-display text-xl">Event Details</DialogTitle>
+          <DialogTitle className="text-white font-display text-xl">{t("events:view.title")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 pt-1">
           <div>
-            <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1">Event Name</p>
-            <p className="text-white font-medium" data-testid="view-event-name">{event.name}</p>
+            <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1">{t("events:view.name")}</p>
+            <p className="text-white font-medium" data-testid="view-event-name"><bdi>{event.name}</bdi></p>
           </div>
           {event.description && (
             <div>
-              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1">Description</p>
-              <p className="text-white text-sm" data-testid="view-event-description">{event.description}</p>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1">{t("events:view.description")}</p>
+              <p className="text-white text-sm" data-testid="view-event-description"><bdi>{event.description}</bdi></p>
             </div>
           )}
           <div className="flex items-center gap-2">
             {event.eventType === "ongoing" ? (
               <Badge variant="outline" className="border-primary/40 text-primary bg-primary/10 font-medium gap-1">
-                <Infinity className="h-3 w-3" /> Ongoing
+                <Infinity className="h-3 w-3" /> {t("events:type.ongoing")}
               </Badge>
             ) : (
               <Badge variant="outline" className="border-border text-muted-foreground font-medium gap-1">
-                <CalendarRange className="h-3 w-3" /> Duration Based
+                <CalendarRange className="h-3 w-3" /> {t("events:type.duration")}
               </Badge>
             )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> Event Start Date</p>
-              <p className="text-white text-sm">{event.startDate}</p>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> {t("events:view.startDate")}</p>
+              <p className="text-white text-sm" dir="ltr">{event.startDate}</p>
             </div>
             <div>
-              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><Clock className="h-3 w-3" /> End Date</p>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><Clock className="h-3 w-3" /> {t("events:view.endDate")}</p>
               {event.endDate ? (
-                <p className="text-white text-sm">{event.endDate}</p>
+                <p className="text-white text-sm" dir="ltr">{event.endDate}</p>
               ) : (
-                <p className="text-muted-foreground text-sm flex items-center gap-1"><Infinity className="h-3 w-3" /> Ongoing</p>
+                <p className="text-muted-foreground text-sm flex items-center gap-1"><Infinity className="h-3 w-3" /> {t("events:type.ongoing")}</p>
               )}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><MapPin className="h-3 w-3" /> Region</p>
-              <p className="text-white text-sm">{event.region || "—"}</p>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><MapPin className="h-3 w-3" /> {t("events:view.region")}</p>
+              <p className="text-white text-sm"><bdi>{event.region || "—"}</bdi></p>
             </div>
             <div>
-              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1">Status</p>
-              <Badge variant="outline" className={`font-medium border-0 capitalize ${statusStyles[event.status] ?? "bg-muted text-muted-foreground"}`}>
-                {event.status}
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1">{t("events:view.status")}</p>
+              <Badge variant="outline" className={`font-medium border-0 ${statusStyles[event.status] ?? "bg-muted text-muted-foreground"}`}>
+                {t(`events:status.${event.status}`, { defaultValue: event.status })}
               </Badge>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><Target className="h-3 w-3" /> Hiring Progress</p>
-              <p className="text-white text-sm">{event.filledPositions} / {event.targetHeadcount} ({pct}%)</p>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><Target className="h-3 w-3" /> {t("events:view.progress")}</p>
+              <p className="text-white text-sm">
+                {t("events:view.progressFmt", {
+                  filled: formatNumber(event.filledPositions, i18n.language),
+                  target: formatNumber(event.targetHeadcount, i18n.language),
+                  pct: formatNumber(pct, i18n.language),
+                })}
+              </p>
               <Progress value={pct} className="h-1.5 mt-1.5" />
             </div>
             {event.budget != null && (
               <div>
-                <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><DollarSign className="h-3 w-3" /> Budget</p>
-                <p className="text-white text-sm">{Number(event.budget).toLocaleString()} SAR</p>
+                <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><DollarSign className="h-3 w-3" /> {t("events:view.budget")}</p>
+                <p className="text-white text-sm">
+                  {t("events:view.budgetFmt", { value: formatNumber(Number(event.budget), i18n.language) })}
+                </p>
               </div>
             )}
           </div>
           {event.createdBy && (
             <div>
-              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1">Created By</p>
-              <p className="text-white text-sm">{event.createdBy}</p>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1">{t("events:view.createdBy")}</p>
+              <p className="text-white text-sm"><bdi>{event.createdBy}</bdi></p>
             </div>
           )}
         </div>
         <DialogFooter className="pt-2">
-          <Button variant="ghost" className="text-muted-foreground" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button variant="ghost" className="text-muted-foreground" onClick={() => onOpenChange(false)}>{t("events:view.close")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -501,8 +510,26 @@ function ViewEventDialog({ event, open, onOpenChange }: { event: Event | null; o
 }
 
 function EditEventDialog({ event, open, onOpenChange }: { event: Event | null; open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { t } = useTranslation(["events"]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const createEventSchema = useMemo(() => z.object({
+    name: z.string().min(3, t("events:validation.name")),
+    description: z.string().optional(),
+    eventType: z.enum(["duration_based", "ongoing"]),
+    startDate: z.string().min(1, t("events:validation.startDate")),
+    endDate: z.string().optional(),
+    region: z.string().optional(),
+    targetHeadcount: z.coerce.number().int().min(1, t("events:validation.headcount")),
+    budget: z.coerce.number().optional(),
+    status: z.enum(["upcoming", "active"]),
+  }).superRefine((data, ctx) => {
+    if (data.eventType === "duration_based" && !data.endDate) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("events:validation.endDate"), path: ["endDate"] });
+    }
+  }), [t]);
+  type CreateEventForm = z.infer<typeof createEventSchema>;
 
   const form = useForm<CreateEventForm>({
     resolver: zodResolver(createEventSchema),
@@ -526,11 +553,11 @@ function EditEventDialog({ event, open, onOpenChange }: { event: Event | null; o
       apiRequest("PATCH", `/api/events/${event!.id}`, data).then((r) => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      toast({ title: "Event updated", description: "Changes saved successfully." });
+      toast({ title: t("events:edit.successTitle"), description: t("events:edit.successDesc") });
       onOpenChange(false);
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to update event.", variant: "destructive" });
+      toast({ title: t("events:edit.errorTitle"), description: t("events:edit.errorDesc"), variant: "destructive" });
     },
   });
 
@@ -540,39 +567,38 @@ function EditEventDialog({ event, open, onOpenChange }: { event: Event | null; o
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="text-white font-display text-xl">Edit Event</DialogTitle>
+          <DialogTitle className="text-white font-display text-xl">{t("events:edit.title")}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((data) => updateEvent.mutate(data))} className="space-y-5 pt-1">
             <FormField control={form.control} name="name" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Event Name <span className="text-primary">*</span></FormLabel>
-                <FormControl><Input placeholder="e.g. Hajj 2026" className="h-10 bg-muted/30 border-border rounded-sm" data-testid="edit-event-name" {...field} /></FormControl>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("events:form.name")} <span className="text-primary">*</span></FormLabel>
+                <FormControl><Input placeholder={t("events:form.namePh")} className="h-10 bg-muted/30 border-border rounded-sm" data-testid="edit-event-name" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <FormField control={form.control} name="description" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Description</FormLabel>
-                <FormControl><Textarea placeholder="Brief overview..." rows={3} className="bg-muted/30 border-border rounded-sm resize-none" data-testid="edit-event-description" {...field} /></FormControl>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("events:form.description")}</FormLabel>
+                <FormControl><Textarea placeholder={t("events:edit.descPh")} rows={3} className="bg-muted/30 border-border rounded-sm resize-none" data-testid="edit-event-description" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <div className="w-full h-px bg-border" />
 
-            {/* ── Event Type ─────────────────────────────────────── */}
             <FormField control={form.control} name="eventType" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Event Type <span className="text-primary">*</span></FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("events:form.type")} <span className="text-primary">*</span></FormLabel>
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" data-testid="edit-radio-event-type-duration"
                     onClick={() => { field.onChange("duration_based"); form.setValue("endDate", ""); }}
                     className={`flex items-center gap-2.5 h-11 px-3 rounded-sm border text-sm font-medium transition-all ${field.value === "duration_based" ? "border-primary bg-primary/10 text-white" : "border-border bg-muted/20 text-muted-foreground hover:border-border/80"}`}
                   >
                     <CalendarRange className="h-4 w-4 shrink-0" />
-                    <div className="text-left">
-                      <div className="text-xs font-semibold">Duration Based</div>
-                      <div className="text-[10px] opacity-70 font-normal">Has a fixed end date</div>
+                    <div className="text-start">
+                      <div className="text-xs font-semibold">{t("events:type.duration")}</div>
+                      <div className="text-[10px] opacity-70 font-normal">{t("events:type.durationDesc")}</div>
                     </div>
                   </button>
                   <button type="button" data-testid="edit-radio-event-type-ongoing"
@@ -580,9 +606,9 @@ function EditEventDialog({ event, open, onOpenChange }: { event: Event | null; o
                     className={`flex items-center gap-2.5 h-11 px-3 rounded-sm border text-sm font-medium transition-all ${field.value === "ongoing" ? "border-primary bg-primary/10 text-white" : "border-border bg-muted/20 text-muted-foreground hover:border-border/80"}`}
                   >
                     <Infinity className="h-4 w-4 shrink-0" />
-                    <div className="text-left">
-                      <div className="text-xs font-semibold">Ongoing</div>
-                      <div className="text-[10px] opacity-70 font-normal">No fixed end date</div>
+                    <div className="text-start">
+                      <div className="text-xs font-semibold">{t("events:type.ongoing")}</div>
+                      <div className="text-[10px] opacity-70 font-normal">{t("events:type.ongoingDesc")}</div>
                     </div>
                   </button>
                 </div>
@@ -590,12 +616,11 @@ function EditEventDialog({ event, open, onOpenChange }: { event: Event | null; o
               </FormItem>
             )} />
 
-            {/* ── Timeline ────────────────────────────────────────── */}
-            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Timeline</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">{t("events:form.timeline")}</p>
             <div className={`grid gap-4 ${watchedEventType === "duration_based" ? "grid-cols-2" : "grid-cols-1"}`}>
               <FormField control={form.control} name="startDate" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Event Start Date <span className="text-primary">*</span></FormLabel>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("events:form.startDate")} <span className="text-primary">*</span></FormLabel>
                   <FormControl><DatePickerField value={field.value} onChange={field.onChange} className="h-10 bg-muted/30 border-border rounded-sm" data-testid="edit-event-start-date" /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -603,7 +628,7 @@ function EditEventDialog({ event, open, onOpenChange }: { event: Event | null; o
               {watchedEventType === "duration_based" && (
                 <FormField control={form.control} name="endDate" render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">End Date <span className="text-red-400">*</span></FormLabel>
+                    <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("events:form.endDate")} <span className="text-red-400">*</span></FormLabel>
                     <FormControl><DatePickerField value={field.value ?? ""} onChange={field.onChange} className="h-10 bg-muted/30 border-border rounded-sm" data-testid="edit-event-end-date" /></FormControl>
                     <FormMessage />
                   </FormItem>
@@ -613,17 +638,16 @@ function EditEventDialog({ event, open, onOpenChange }: { event: Event | null; o
             {watchedEventType === "ongoing" && (
               <p className="text-xs text-muted-foreground flex items-center gap-1.5 -mt-2">
                 <Infinity className="h-3 w-3 text-primary" />
-                This event has no fixed end date. Workers can be offboarded manually at any time.
+                {t("events:type.ongoingHelp")}
               </p>
             )}
 
-            {/* ── Headcount ─────────────────────────────────────────── */}
             <FormField control={form.control} name="targetHeadcount" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Target Headcount <span className="text-primary">*</span></FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("events:form.headcount")} <span className="text-primary">*</span></FormLabel>
                 <FormControl>
                   <Input
-                    type="number" min={1} placeholder="e.g. 500"
+                    type="number" min={1} dir="ltr" placeholder={t("events:form.headcountPh")}
                     {...field}
                     onChange={e => field.onChange(Number(e.target.value))}
                     className="h-10 bg-muted/30 border-border rounded-sm"
@@ -635,10 +659,10 @@ function EditEventDialog({ event, open, onOpenChange }: { event: Event | null; o
             )} />
 
             <DialogFooter className="pt-1 flex gap-2 sm:justify-between">
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground">Cancel</Button>
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground">{t("events:form.cancel")}</Button>
               <Button type="submit" className="bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs" disabled={updateEvent.isPending} data-testid="button-save-event">
-                {updateEvent.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Pencil className="mr-2 h-4 w-4" />}
-                Save Changes
+                {updateEvent.isPending ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <Pencil className="me-2 h-4 w-4" />}
+                {t("events:edit.submit")}
               </Button>
             </DialogFooter>
           </form>
@@ -649,6 +673,7 @@ function EditEventDialog({ event, open, onOpenChange }: { event: Event | null; o
 }
 
 export default function EventsPage() {
+  const { t, i18n } = useTranslation(["events"]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -673,13 +698,13 @@ export default function EventsPage() {
 
   const closeEvent = useMutation({
     mutationFn: (id: string) => apiRequest("POST", `/api/events/${id}/close`).then(r => r.json()),
-    onSuccess: (_, id) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      const name = closeConfirmEvent?.name ?? "Event";
+      const name = closeConfirmEvent?.name ?? "";
       setCloseConfirmEvent(null);
-      toast({ title: `"${name}" closed`, description: "Workers with completed service periods will appear in the offboarding queue." });
+      toast({ title: t("events:close.successTitle", { name }), description: t("events:close.successDesc") });
     },
-    onError: () => toast({ title: "Error", description: "Failed to close event.", variant: "destructive" }),
+    onError: () => toast({ title: t("events:close.errorTitle"), description: t("events:close.errorDesc"), variant: "destructive" }),
   });
 
   const reopenEvent = useMutation({
@@ -687,12 +712,12 @@ export default function EventsPage() {
       apiRequest("POST", `/api/events/${id}/reopen`, { reason }).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      const name = reopenConfirmEvent?.name ?? "Event";
+      const name = reopenConfirmEvent?.name ?? "";
       setReopenConfirmEvent(null);
       setReopenReason("");
-      toast({ title: `"${name}" reopened`, description: "Event is now active again." });
+      toast({ title: t("events:reopen.successTitle", { name }), description: t("events:reopen.successDesc") });
     },
-    onError: () => toast({ title: "Error", description: "Failed to reopen event.", variant: "destructive" }),
+    onError: () => toast({ title: t("events:reopen.errorTitle"), description: t("events:reopen.errorDesc"), variant: "destructive" }),
   });
 
   const archiveEvent = useMutation({
@@ -717,16 +742,16 @@ export default function EventsPage() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white tracking-tight">Events Management</h1>
-            <p className="text-muted-foreground mt-1">Plan and track your event workforce requirements.</p>
+            <h1 className="text-3xl font-display font-bold text-white tracking-tight">{t("events:page.title")}</h1>
+            <p className="text-muted-foreground mt-1">{t("events:page.subtitle")}</p>
           </div>
           <Button
             className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
             data-testid="button-create-event"
             onClick={() => setCreateOpen(true)}
           >
-            <Plus className="mr-2 h-4 w-4" />
-            Create Event
+            <Plus className="me-2 h-4 w-4" />
+            {t("events:page.createBtn")}
           </Button>
         </div>
 
@@ -735,41 +760,41 @@ export default function EventsPage() {
         <EditEventDialog event={editEvent} open={!!editEvent} onOpenChange={(v) => { if (!v) setEditEvent(null); }} />
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="bg-card border-border shadow-sm border-l-4 border-l-primary">
+          <Card className="bg-card border-border shadow-sm border-s-4 border-s-primary">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Events</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("events:stats.total")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-events">{eventsList.length}</div>
-              <p className="text-xs text-muted-foreground mt-1">Across all time</p>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-events">{formatNumber(eventsList.length, i18n.language)}</div>
+              <p className="text-xs text-muted-foreground mt-1">{t("events:stats.totalHelp")}</p>
             </CardContent>
           </Card>
           <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Active Campaigns</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("events:stats.active")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-active-events">{activeCount}</div>
-              <p className="text-xs text-muted-foreground mt-1">Currently in progress</p>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-active-events">{formatNumber(activeCount, i18n.language)}</div>
+              <p className="text-xs text-muted-foreground mt-1">{t("events:stats.activeHelp")}</p>
             </CardContent>
           </Card>
           <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Upcoming</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("events:stats.upcoming")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-upcoming-events">{upcomingCount}</div>
-              <p className="text-xs text-muted-foreground mt-1">In planning phase</p>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-upcoming-events">{formatNumber(upcomingCount, i18n.language)}</div>
+              <p className="text-xs text-muted-foreground mt-1">{t("events:stats.upcomingHelp")}</p>
             </CardContent>
           </Card>
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 items-center bg-card p-4 rounded-sm border border-border">
           <div className="relative flex-1 w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
-              placeholder="Search events by name or region..."
-              className="pl-10 h-12 bg-muted/30 border-border focus-visible:ring-primary/20 text-base"
+              placeholder={t("events:search.placeholder")}
+              className="ps-10 h-12 bg-muted/30 border-border focus-visible:ring-primary/20 text-base"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               data-testid="input-search-events"
@@ -777,12 +802,12 @@ export default function EventsPage() {
           </div>
           <div className="flex gap-2 w-full md:w-auto">
             <Button variant="outline" className="h-12 border-border bg-background flex-1 md:flex-none">
-              <Filter className="mr-2 h-4 w-4" />
-              Status
+              <Filter className="me-2 h-4 w-4" />
+              {t("events:search.status")}
             </Button>
             <Button variant="outline" className="h-12 border-border bg-background flex-1 md:flex-none">
-              <Calendar className="mr-2 h-4 w-4" />
-              Date Range
+              <Calendar className="me-2 h-4 w-4" />
+              {t("events:search.dateRange")}
             </Button>
             <Button
               variant={showArchived ? "default" : "outline"}
@@ -790,15 +815,15 @@ export default function EventsPage() {
               onClick={() => setShowArchived(!showArchived)}
               data-testid="button-toggle-archived"
             >
-              <Archive className="mr-2 h-4 w-4" />
-              {showArchived ? "Showing All" : "Show Archived"}
+              <Archive className="me-2 h-4 w-4" />
+              {showArchived ? t("events:search.showingAll") : t("events:search.showArchived")}
             </Button>
           </div>
         </div>
 
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-lg font-display text-white">Events</CardTitle>
+            <CardTitle className="text-lg font-display text-white">{t("events:table.title")}</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
@@ -808,24 +833,24 @@ export default function EventsPage() {
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Calendar className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                <p className="text-muted-foreground font-medium">No events found</p>
-                <p className="text-muted-foreground/60 text-sm mt-1">Create your first event to get started</p>
+                <p className="text-muted-foreground font-medium">{t("events:table.noEvents")}</p>
+                <p className="text-muted-foreground/60 text-sm mt-1">{t("events:table.noEventsHelp")}</p>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="text-muted-foreground">Event Name</TableHead>
+                    <TableHead className="text-muted-foreground">{t("events:table.name")}</TableHead>
                     <TableHead className="text-muted-foreground hidden md:table-cell">
                       <span className="flex items-center">
-                        Expiry
-                        <InfoTooltip text="SMP Contracts expiry dates should be set as the project's contractual expiry date." />
+                        {t("events:table.expiry")}
+                        <InfoTooltip text={t("events:table.expiryTip")} />
                       </span>
                     </TableHead>
-                    <TableHead className="text-muted-foreground hidden md:table-cell">Region</TableHead>
-                    <TableHead className="text-muted-foreground hidden lg:table-cell">Hiring Progress</TableHead>
-                    <TableHead className="text-muted-foreground">Status</TableHead>
-                    <TableHead className="text-right text-muted-foreground">Actions</TableHead>
+                    <TableHead className="text-muted-foreground hidden md:table-cell">{t("events:table.region")}</TableHead>
+                    <TableHead className="text-muted-foreground hidden lg:table-cell">{t("events:table.progress")}</TableHead>
+                    <TableHead className="text-muted-foreground">{t("events:table.status")}</TableHead>
+                    <TableHead className="text-end text-muted-foreground">{t("events:table.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -838,16 +863,16 @@ export default function EventsPage() {
                       <TableRow key={evt.id} className="border-border hover:bg-muted/20" data-testid={`row-event-${evt.id}`}>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-white">{evt.name}</span>
+                            <span className="font-medium text-white"><bdi>{evt.name}</bdi></span>
                             {evt.eventType === "ongoing" && (
                               <Badge variant="outline" className="border-primary/30 text-primary bg-primary/10 text-[10px] font-medium gap-0.5 px-1.5 h-4">
-                                <Infinity className="h-2.5 w-2.5" /> Ongoing
+                                <Infinity className="h-2.5 w-2.5" /> {t("events:table.ongoing")}
                               </Badge>
                             )}
                           </div>
                           {evt.description && (
                             <div className="text-xs text-muted-foreground mt-0.5 max-w-[260px] truncate">
-                              {evt.description}
+                              <bdi>{evt.description}</bdi>
                             </div>
                           )}
                         </TableCell>
@@ -855,24 +880,24 @@ export default function EventsPage() {
                           {evt.endDate ? (
                             <div className="flex items-center gap-2">
                               <Calendar className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm font-medium text-white">{evt.endDate}</span>
+                              <span className="text-sm font-medium text-white" dir="ltr">{evt.endDate}</span>
                             </div>
                           ) : (
                             <span className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Infinity className="h-3 w-3 text-primary" /> No end date
+                              <Infinity className="h-3 w-3 text-primary" /> {t("events:table.noEndDate")}
                             </span>
                           )}
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          <span className="text-sm text-muted-foreground">{evt.region ?? "—"}</span>
+                          <span className="text-sm text-muted-foreground"><bdi>{evt.region ?? "—"}</bdi></span>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell w-[200px]">
                           <div className="space-y-1.5">
                             <div className="flex justify-between text-xs">
                               <span className="text-muted-foreground flex items-center gap-1">
-                                <Users className="h-3 w-3" /> {evt.filledPositions} / {evt.targetHeadcount}
+                                <Users className="h-3 w-3" /> {formatNumber(evt.filledPositions, i18n.language)} / {formatNumber(evt.targetHeadcount, i18n.language)}
                               </span>
-                              <span className="text-white font-medium">{pct}%</span>
+                              <span className="text-white font-medium">{formatNumber(pct, i18n.language)}%</span>
                             </div>
                             <Progress value={pct} className="h-1.5" />
                           </div>
@@ -881,19 +906,19 @@ export default function EventsPage() {
                           <div className="flex items-center gap-1.5">
                             <Badge
                               variant="outline"
-                              className={`font-medium border-0 capitalize ${statusStyles[evt.status] ?? "bg-muted text-muted-foreground"}`}
+                              className={`font-medium border-0 ${statusStyles[evt.status] ?? "bg-muted text-muted-foreground"}`}
                               data-testid={`status-event-${evt.id}`}
                             >
-                              {evt.status}
+                              {t(`events:status.${evt.status}`, { defaultValue: evt.status })}
                             </Badge>
                             {evt.archivedAt && (
                               <Badge variant="outline" className="font-medium border-0 bg-zinc-800 text-zinc-500 text-[10px]">
-                                Archived
+                                {t("events:table.archived")}
                               </Badge>
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-end">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white" data-testid={`button-event-actions-${evt.id}`}>
@@ -902,17 +927,17 @@ export default function EventsPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-44">
                               <DropdownMenuItem onClick={() => setViewEvent(evt)} data-testid={`button-view-event-${evt.id}`}>
-                                <Eye className="mr-2 h-4 w-4" /> View Details
+                                <Eye className="me-2 h-4 w-4" /> {t("events:row.view")}
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => setEditEvent(evt)} data-testid={`button-edit-event-${evt.id}`}>
-                                <Pencil className="mr-2 h-4 w-4" /> Edit Event
+                                <Pencil className="me-2 h-4 w-4" /> {t("events:row.edit")}
                               </DropdownMenuItem>
                               {(evt.status === "upcoming" || evt.status === "active" || evt.status === "closed") && !evt.archivedAt && (
                                 <>
                                   <DropdownMenuSeparator />
                                   {evt.status === "upcoming" && (
                                     <DropdownMenuItem onClick={() => updateStatus.mutate({ id: evt.id, status: "active" })} data-testid={`button-activate-event-${evt.id}`}>
-                                      <RefreshCw className="mr-2 h-4 w-4" /> Activate
+                                      <RefreshCw className="me-2 h-4 w-4" /> {t("events:row.activate")}
                                     </DropdownMenuItem>
                                   )}
                                   {evt.status === "active" && (
@@ -921,7 +946,7 @@ export default function EventsPage() {
                                       onClick={() => setCloseConfirmEvent(evt)}
                                       data-testid={`button-close-event-${evt.id}`}
                                     >
-                                      <XCircle className="mr-2 h-4 w-4" /> Close Event
+                                      <XCircle className="me-2 h-4 w-4" /> {t("events:row.close")}
                                     </DropdownMenuItem>
                                   )}
                                   {evt.status === "closed" && (
@@ -930,7 +955,7 @@ export default function EventsPage() {
                                       onClick={() => { setReopenConfirmEvent(evt); setReopenReason(""); }}
                                       data-testid={`button-reopen-event-${evt.id}`}
                                     >
-                                      <RotateCcw className="mr-2 h-4 w-4" /> Reopen Event
+                                      <RotateCcw className="me-2 h-4 w-4" /> {t("events:row.reopen")}
                                     </DropdownMenuItem>
                                   )}
                                 </>
@@ -941,16 +966,16 @@ export default function EventsPage() {
                                   className="text-green-500"
                                   onClick={() => unarchiveEvent.mutate(evt.id)}
                                 >
-                                  <ArchiveRestore className="mr-2 h-4 w-4" />
-                                  Restore
+                                  <ArchiveRestore className="me-2 h-4 w-4" />
+                                  {t("events:row.restore")}
                                 </DropdownMenuItem>
                               ) : (
                                 <DropdownMenuItem
                                   className="text-amber-500"
                                   onClick={() => archiveEvent.mutate(evt.id)}
                                 >
-                                  <Archive className="mr-2 h-4 w-4" />
-                                  Archive
+                                  <Archive className="me-2 h-4 w-4" />
+                                  {t("events:row.archive")}
                                 </DropdownMenuItem>
                               )}
                             </DropdownMenuContent>
@@ -966,29 +991,32 @@ export default function EventsPage() {
         </Card>
       </div>
 
-      {/* ── Close Event confirmation ─────────────────────────────────────────── */}
       <AlertDialog open={!!closeConfirmEvent} onOpenChange={(v) => { if (!v) setCloseConfirmEvent(null); }}>
         <AlertDialogContent className="bg-card border-border max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white font-display flex items-center gap-2">
               <XCircle className="h-5 w-5 text-red-400" />
-              Close Event?
+              {t("events:close.title")}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-muted-foreground">
                 <p>
-                  You are about to close <span className="text-white font-medium">"{closeConfirmEvent?.name}"</span>.
+                  <Trans
+                    i18nKey="events:close.intro"
+                    values={{ name: closeConfirmEvent?.name ?? "" }}
+                    components={{ strong: <span className="text-white font-medium"><bdi /></span> }}
+                  />
                 </p>
                 <div className="bg-red-500/5 border border-red-500/20 rounded-sm p-3 space-y-1.5 text-xs">
-                  <p className="text-red-400 font-semibold uppercase tracking-wider">Impact Warning</p>
+                  <p className="text-red-400 font-semibold uppercase tracking-wider">{t("events:close.warnTitle")}</p>
                   <ul className="space-y-1 list-disc list-inside text-muted-foreground">
-                    <li>All active workers assigned to this event will become eligible for offboarding</li>
-                    <li>Payroll cycles referencing this event will be finalised</li>
-                    <li>New workers cannot be assigned to a closed event</li>
-                    <li>This action is recorded in the audit log</li>
+                    <li>{t("events:close.warn1")}</li>
+                    <li>{t("events:close.warn2")}</li>
+                    <li>{t("events:close.warn3")}</li>
+                    <li>{t("events:close.warn4")}</li>
                   </ul>
                 </div>
-                <p className="text-xs">You can reopen the event later if needed.</p>
+                <p className="text-xs">{t("events:close.note")}</p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -997,7 +1025,7 @@ export default function EventsPage() {
               className="border-border rounded-sm"
               data-testid="button-cancel-close-event"
             >
-              Cancel
+              {t("events:close.cancel")}
             </AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700 text-white rounded-sm"
@@ -1005,42 +1033,48 @@ export default function EventsPage() {
               onClick={() => closeConfirmEvent && closeEvent.mutate(closeConfirmEvent.id)}
               data-testid="button-confirm-close-event"
             >
-              {closeEvent.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
-              Close Event
+              {closeEvent.isPending ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <XCircle className="me-2 h-4 w-4" />}
+              {t("events:close.confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Reopen Event confirmation ────────────────────────────────────────── */}
       <AlertDialog open={!!reopenConfirmEvent} onOpenChange={(v) => { if (!v) { setReopenConfirmEvent(null); setReopenReason(""); } }}>
         <AlertDialogContent className="bg-card border-border max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white font-display flex items-center gap-2">
               <RotateCcw className="h-5 w-5 text-green-400" />
-              Reopen Event?
+              {t("events:reopen.title")}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-muted-foreground">
                 <p>
-                  You are about to reopen <span className="text-white font-medium">"{reopenConfirmEvent?.name}"</span> and set it back to <span className="text-white">Active</span>.
+                  <Trans
+                    i18nKey="events:reopen.intro"
+                    values={{ name: reopenConfirmEvent?.name ?? "" }}
+                    components={{
+                      strong: <span className="text-white font-medium"><bdi /></span>,
+                      strong2: <span className="text-white" />,
+                    }}
+                  />
                 </p>
                 <div className="bg-amber-500/5 border border-amber-500/20 rounded-sm p-3 space-y-1.5 text-xs">
                   <p className="text-amber-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">
-                    <AlertTriangle className="h-3.5 w-3.5" /> Note
+                    <AlertTriangle className="h-3.5 w-3.5" /> {t("events:reopen.noteTitle")}
                   </p>
                   <ul className="space-y-1 list-disc list-inside text-muted-foreground">
-                    <li>Employees already in the offboarding queue will remain there</li>
-                    <li>Workers can be assigned to this event again</li>
-                    <li>This action is recorded in the audit log</li>
+                    <li>{t("events:reopen.note1")}</li>
+                    <li>{t("events:reopen.note2")}</li>
+                    <li>{t("events:reopen.note3")}</li>
                   </ul>
                 </div>
                 <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-white">Reason for reopening (optional)</p>
+                  <p className="text-xs font-medium text-white">{t("events:reopen.reasonLabel")}</p>
                   <Input
                     value={reopenReason}
                     onChange={e => setReopenReason(e.target.value)}
-                    placeholder="e.g. Event dates extended, error correction..."
+                    placeholder={t("events:reopen.reasonPh")}
                     className="h-9 bg-muted/30 border-border rounded-sm text-sm"
                     data-testid="input-reopen-reason"
                   />
@@ -1053,7 +1087,7 @@ export default function EventsPage() {
               className="border-border rounded-sm"
               data-testid="button-cancel-reopen-event"
             >
-              Cancel
+              {t("events:reopen.cancel")}
             </AlertDialogCancel>
             <AlertDialogAction
               className="bg-green-700 hover:bg-green-800 text-white rounded-sm"
@@ -1061,8 +1095,8 @@ export default function EventsPage() {
               onClick={() => reopenConfirmEvent && reopenEvent.mutate({ id: reopenConfirmEvent.id, reason: reopenReason || undefined })}
               data-testid="button-confirm-reopen-event"
             >
-              {reopenEvent.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
-              Reopen Event
+              {reopenEvent.isPending ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <RotateCcw className="me-2 h-4 w-4" />}
+              {t("events:reopen.confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

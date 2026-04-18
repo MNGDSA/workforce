@@ -23,6 +23,7 @@ import enDepartments from "./locales/en/departments.json";
 import enLegal from "./locales/en/legal.json";
 import enBroadcast from "./locales/en/broadcast.json";
 import enScheduleInterview from "./locales/en/scheduleInterview.json";
+import enEvents from "./locales/en/events.json";
 
 import arCommon from "./locales/ar/common.json";
 import arAuth from "./locales/ar/auth.json";
@@ -45,6 +46,7 @@ import arDepartments from "./locales/ar/departments.json";
 import arLegal from "./locales/ar/legal.json";
 import arBroadcast from "./locales/ar/broadcast.json";
 import arScheduleInterview from "./locales/ar/scheduleInterview.json";
+import arEvents from "./locales/ar/events.json";
 
 export const SUPPORTED_LOCALES = ["ar", "en"] as const;
 export type SupportedLocale = typeof SUPPORTED_LOCALES[number];
@@ -57,12 +59,12 @@ i18n
   .use(initReactI18next)
   .init({
     resources: {
-      en: { common: enCommon, auth: enAuth, apply: enApply, portal: enPortal, layout: enLayout, dashboard: enDashboard, profile: enProfile, audit: enAudit, geofences: enGeofences, reports: enReports, automation: enAutomation, payroll: enPayroll, adminUsers: enAdminUsers, settings: enSettings, questionSets: enQuestionSets, orgChart: enOrgChart, notifications: enNotifications, departments: enDepartments, legal: enLegal, broadcast: enBroadcast, scheduleInterview: enScheduleInterview },
-      ar: { common: arCommon, auth: arAuth, apply: arApply, portal: arPortal, layout: arLayout, dashboard: arDashboard, profile: arProfile, audit: arAudit, geofences: arGeofences, reports: arReports, automation: arAutomation, payroll: arPayroll, adminUsers: arAdminUsers, settings: arSettings, questionSets: arQuestionSets, orgChart: arOrgChart, notifications: arNotifications, departments: arDepartments, legal: arLegal, broadcast: arBroadcast, scheduleInterview: arScheduleInterview },
+      en: { common: enCommon, auth: enAuth, apply: enApply, portal: enPortal, layout: enLayout, dashboard: enDashboard, profile: enProfile, audit: enAudit, geofences: enGeofences, reports: enReports, automation: enAutomation, payroll: enPayroll, adminUsers: enAdminUsers, settings: enSettings, questionSets: enQuestionSets, orgChart: enOrgChart, notifications: enNotifications, departments: enDepartments, legal: enLegal, broadcast: enBroadcast, scheduleInterview: enScheduleInterview, events: enEvents },
+      ar: { common: arCommon, auth: arAuth, apply: arApply, portal: arPortal, layout: arLayout, dashboard: arDashboard, profile: arProfile, audit: arAudit, geofences: arGeofences, reports: arReports, automation: arAutomation, payroll: arPayroll, adminUsers: arAdminUsers, settings: arSettings, questionSets: arQuestionSets, orgChart: arOrgChart, notifications: arNotifications, departments: arDepartments, legal: arLegal, broadcast: arBroadcast, scheduleInterview: arScheduleInterview, events: arEvents },
     },
     fallbackLng: DEFAULT_LOCALE,
     supportedLngs: SUPPORTED_LOCALES as unknown as string[],
-    ns: ["common", "auth", "apply", "portal", "layout", "dashboard", "profile", "audit", "geofences", "reports", "automation", "payroll", "adminUsers", "settings", "questionSets", "orgChart", "notifications", "departments", "legal", "broadcast", "scheduleInterview"],
+    ns: ["common", "auth", "apply", "portal", "layout", "dashboard", "profile", "audit", "geofences", "reports", "automation", "payroll", "adminUsers", "settings", "questionSets", "orgChart", "notifications", "departments", "legal", "broadcast", "scheduleInterview", "events"],
     defaultNS: "common",
     interpolation: { escapeValue: false },
     detection: {
