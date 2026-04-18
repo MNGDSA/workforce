@@ -203,9 +203,9 @@ function GlobalSearch() {
 
   return (
     <div ref={wrapRef} className="relative hidden md:block w-96">
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
+      <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
       {isFetching && shouldFetch && (
-        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground animate-spin" />
+        <Loader2 className="absolute end-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground animate-spin" />
       )}
       <Input
         ref={inputRef}
@@ -215,7 +215,7 @@ function GlobalSearch() {
         onKeyDown={onKeyDown}
         onFocus={() => { if (query.length > 0) { setOpen(true); updateRect(); } }}
         placeholder={t("layout:search.placeholder")}
-        className="pl-10 pr-10 bg-muted/30 border-border focus-visible:ring-primary/20 h-9 rounded-sm"
+        className="ps-10 pe-10 bg-muted/30 border-border focus-visible:ring-primary/20 h-9 rounded-sm"
         autoComplete="off"
       />
 
@@ -260,7 +260,7 @@ function GlobalSearch() {
                           onMouseEnter={() => setActive(item.flatIdx)}
                           onMouseDown={e => { e.preventDefault(); navigate(item.href); }}
                           className={cn(
-                            "w-full text-left px-4 py-2 flex flex-col gap-0.5 transition-colors",
+                            "w-full text-start px-4 py-2 flex flex-col gap-0.5 transition-colors",
                             isActive ? "bg-primary/10 text-foreground" : "hover:bg-muted/50 text-foreground"
                           )}
                         >
@@ -274,7 +274,7 @@ function GlobalSearch() {
               })}
               <div className="border-t border-border mt-1 px-3 py-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
                 <span>{totalCount} result{totalCount !== 1 ? "s" : ""}</span>
-                <span className="ml-auto flex items-center gap-2">
+                <span className="ms-auto flex items-center gap-2">
                   <kbd className="border border-border rounded px-1 py-0.5 text-[9px] font-mono">↑↓</kbd> navigate
                   <kbd className="border border-border rounded px-1 py-0.5 text-[9px] font-mono">↵</kbd> open
                   <kbd className="border border-border rounded px-1 py-0.5 text-[9px] font-mono">esc</kbd> close
@@ -420,7 +420,7 @@ function BellNotificationCenter() {
       >
         <Bell className="h-5 w-5" />
         {totalBadge > 0 && (
-          <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-white leading-none">
+          <span className="absolute top-1.5 end-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-white leading-none">
             {totalBadge > 99 ? "99+" : totalBadge}
           </span>
         )}
@@ -675,12 +675,12 @@ export default function DashboardLayout({ children }: LayoutProps) {
               isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
             )} />
             {collapsed && badge != null && badge > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[8px] font-bold text-white leading-none">
+              <span className="absolute -top-1.5 -end-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[8px] font-bold text-white leading-none">
                 {badge > 99 ? "99+" : badge}
               </span>
             )}
           </span>
-          {!collapsed && <span className="flex-1 text-left">{label}</span>}
+          {!collapsed && <span className="flex-1 text-start">{label}</span>}
           {!collapsed && badge != null && badge > 0 && (
             <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-white leading-none">
               {badge > 99 ? "99+" : badge}
@@ -734,7 +734,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
         <Icon className={cn("h-5 w-5 shrink-0", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
         {!collapsed && (
           <>
-            <span className="flex-1 text-left">{label}</span>
+            <span className="flex-1 text-start">{label}</span>
             <ChevronDown className={cn("h-4 w-4 transition-transform duration-200 shrink-0", open ? "rotate-0" : "-rotate-90")} />
           </>
         )}
@@ -753,7 +753,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
   };
 
   const renderNavContent = (mobile = false) => (
-    <div className="flex flex-col h-full bg-sidebar border-r border-border text-sidebar-foreground">
+    <div className="flex flex-col h-full bg-sidebar border-e border-border text-sidebar-foreground">
       {/* Logo */}
       <div className={cn(
         "h-16 flex items-center border-b border-border/50 shrink-0",
@@ -909,7 +909,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
       <div className="min-h-screen bg-background text-foreground flex">
         {/* Desktop Sidebar */}
         <aside className={cn(
-          "hidden lg:block fixed inset-y-0 left-0 z-50 transition-all duration-300 ease-in-out",
+          "hidden lg:block fixed inset-y-0 start-0 z-50 transition-all duration-300 ease-in-out",
           collapsed ? "w-16" : "w-64"
         )}>
           {renderNavContent()}
@@ -929,7 +929,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="p-0 w-64 border-r border-border bg-sidebar">
+                <SheetContent side="left" className="p-0 w-64 border-e border-border bg-sidebar">
                   {renderNavContent(true)}
                 </SheetContent>
               </Sheet>

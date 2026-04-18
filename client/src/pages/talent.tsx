@@ -1128,10 +1128,10 @@ export default function TalentPage() {
   }
 
   function SortIcon({ field }: { field: SortField }) {
-    if (sortBy !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+    if (sortBy !== field) return <ArrowUpDown className="h-3 w-3 ms-1 opacity-40" />;
     return sortOrder === "asc"
-      ? <ArrowUp className="h-3 w-3 ml-1 text-primary" />
-      : <ArrowDown className="h-3 w-3 ml-1 text-primary" />;
+      ? <ArrowUp className="h-3 w-3 ms-1 text-primary" />
+      : <ArrowDown className="h-3 w-3 ms-1 text-primary" />;
   }
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {

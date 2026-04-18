@@ -371,7 +371,7 @@ function QuestionSetEditor({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto space-y-5 py-2 pr-1">
+        <div className="flex-1 overflow-y-auto space-y-5 py-2 pe-1">
           {/* Name & description */}
           <div className="space-y-3">
             <div>

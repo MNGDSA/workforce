@@ -1,4 +1,21 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE } from "@/lib/i18n";
+
+/**
+ * Reads the active locale from localStorage and produces an Accept-Language
+ * header value. Defaults to the project default (Arabic). The server reads
+ * this and resolves localized 4xx/5xx messages.
+ */
+function localeHeader(): Record<string, string> {
+  try {
+    const stored = (typeof window !== "undefined" && window.localStorage)
+      ? window.localStorage.getItem(LOCALE_STORAGE_KEY)
+      : null;
+    return { "Accept-Language": stored || DEFAULT_LOCALE };
+  } catch {
+    return { "Accept-Language": DEFAULT_LOCALE };
+  }
+}
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -14,7 +31,10 @@ export async function apiRequest(
 ): Promise<Response> {
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      ...localeHeader(),
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -31,6 +51,7 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const res = await fetch(queryKey.join("/") as string, {
       credentials: "include",
+      headers: { ...localeHeader() },
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

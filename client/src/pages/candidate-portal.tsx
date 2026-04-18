@@ -816,7 +816,7 @@ function MyShiftSection({ workforceId }: { workforceId: string }) {
                 <p className="text-white font-medium"><bdi>{todayShift.name}</bdi></p>
                 <p className="text-zinc-400 text-sm" dir="ltr">{todayShift.startTime} – {todayShift.endTime}</p>
               </div>
-              <div className="text-right">
+              <div className="text-end">
                 {todayAtt ? (
                   <div className="space-y-1">
                     <span className={`text-sm font-semibold ${statusColor(todayAtt.status)}`} data-testid="text-today-status">{statusLabel(todayAtt.status)}</span>
@@ -1515,7 +1515,7 @@ function ContractSection({
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 pl-[52px]">
+          <div className="flex items-center gap-2 ps-[52px]">
             <Button
               size="sm"
               variant="outline"
@@ -1613,7 +1613,7 @@ function ContractSection({
                           });
                         }
                         return (
-                          <div key={subIdx} className="ml-6 mt-2">
+                          <div key={subIdx} className="ms-6 mt-2">
                             <h4 className="font-bold text-sm mb-0.5">{idx + 1}.{subIdx + 1} {sub.title}</h4>
                             <p className="text-sm whitespace-pre-wrap leading-relaxed">{subBody}</p>
                           </div>
@@ -2406,7 +2406,7 @@ export default function CandidatePortal() {
           <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white relative">
             <Bell className="h-5 w-5" />
           </Button>
-          <div className="pl-4 border-l border-border/50">
+          <div className="ps-4 border-s border-border/50">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button type="button" className="flex items-center gap-2 rounded-lg hover:bg-muted/50 p-1.5 transition-colors" data-testid="button-profile-menu">
@@ -2492,7 +2492,7 @@ export default function CandidatePortal() {
                     )}
                   </span>
                   {hasPendingPhotoChange && (
-                    <span className="absolute -top-1 -right-1 flex items-center justify-center h-5 w-5 rounded-full bg-amber-500 border-2 border-card z-10" title={t("portal:badge.photoPending")} data-testid="badge-photo-pending">
+                    <span className="absolute -top-1 -end-1 flex items-center justify-center h-5 w-5 rounded-full bg-amber-500 border-2 border-card z-10" title={t("portal:badge.photoPending")} data-testid="badge-photo-pending">
                       <Clock className="h-3 w-3 text-white" />
                     </span>
                   )}
@@ -2533,7 +2533,7 @@ export default function CandidatePortal() {
                 </div>
 
                 {(isEmployee && activeWorkforceRecord) && (
-                  <div className="mt-6 border-t border-border pt-5 space-y-3 text-left">
+                  <div className="mt-6 border-t border-border pt-5 space-y-3 text-start">
                     <div className="flex items-center gap-3">
                       <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
                         <Hash className="h-4 w-4 text-primary" />
@@ -2954,10 +2954,10 @@ export default function CandidatePortal() {
                   value={pwCurrent}
                   onChange={e => setPwCurrent(e.target.value)}
                   placeholder={t("portal:password.currentPlaceholder")}
-                  className="bg-background border-border pr-10"
+                  className="bg-background border-border pe-10"
                   data-testid="input-pw-current"
                 />
-                <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white" onClick={() => setShowPwCur(!showPwCur)}>
+                <button type="button" className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white" onClick={() => setShowPwCur(!showPwCur)}>
                   {showPwCur ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
@@ -2970,10 +2970,10 @@ export default function CandidatePortal() {
                   value={pwNew}
                   onChange={e => setPwNew(e.target.value)}
                   placeholder={t("portal:password.newPlaceholder")}
-                  className="bg-background border-border pr-10"
+                  className="bg-background border-border pe-10"
                   data-testid="input-pw-new"
                 />
-                <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white" onClick={() => setShowPwNew(!showPwNew)}>
+                <button type="button" className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white" onClick={() => setShowPwNew(!showPwNew)}>
                   {showPwNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>

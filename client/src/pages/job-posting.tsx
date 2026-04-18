@@ -864,7 +864,7 @@ export default function JobPostingPage() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="bg-card border-border shadow-sm border-s-4 border-l-primary">
+          <Card className="bg-card border-border shadow-sm border-s-4 border-s-primary">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("jobPosting:stats.total")}</CardTitle>
             </CardHeader>

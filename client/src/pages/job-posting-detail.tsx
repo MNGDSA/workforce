@@ -399,12 +399,12 @@ export default function JobPostingDetailPage() {
               <h2 className="text-lg font-display font-bold text-white">{t("jobPosting:detail.applicants")}</h2>
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                   <Input
                     value={appSearch}
                     onChange={e => setAppSearch(e.target.value)}
                     placeholder={t("jobPosting:detail.searchPlaceholder")}
-                    className="pl-8 h-9 w-52 text-sm bg-background border-border"
+                    className="ps-8 h-9 w-52 text-sm bg-background border-border"
                     data-testid="input-applicant-search"
                   />
                 </div>
@@ -481,7 +481,7 @@ export default function JobPostingDetailPage() {
                 ) : (
                   <table className="w-full">
                     <thead>
-                      <tr className="border-b border-border text-left">
+                      <tr className="border-b border-border text-start">
                         <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("jobPosting:detail.colCandidate")}</th>
                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">{t("jobPosting:detail.colContact")}</th>
                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("jobPosting:detail.colStatus")}</th>
@@ -566,7 +566,7 @@ export default function JobPostingDetailPage() {
                                     <div className="space-y-2">
                                       {questions.map((q, idx) => (
                                         <div key={q.id} className="flex items-start gap-3 text-sm">
-                                          <span className="text-xs font-bold text-primary/60 mt-0.5 shrink-0 w-5 text-right">{idx + 1}.</span>
+                                          <span className="text-xs font-bold text-primary/60 mt-0.5 shrink-0 w-5 text-end">{idx + 1}.</span>
                                           <div className="flex-1 min-w-0">
                                             <p className="text-muted-foreground text-xs">{q.text}</p>
                                             <p className={`font-medium mt-0.5 ${answers[q.id] ? "text-white" : "text-muted-foreground/40 italic"}`}>

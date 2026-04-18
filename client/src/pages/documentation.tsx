@@ -215,11 +215,11 @@ export default function DocumentationPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border">
-                        <th className="text-left text-muted-foreground font-medium pb-3 pr-4">Role</th>
-                        <th className="text-left text-muted-foreground font-medium pb-3 pr-4">Jobs</th>
-                        <th className="text-left text-muted-foreground font-medium pb-3 pr-4">Events</th>
-                        <th className="text-left text-muted-foreground font-medium pb-3 pr-4">Candidates</th>
-                        <th className="text-left text-muted-foreground font-medium pb-3">Settings</th>
+                        <th className="text-start text-muted-foreground font-medium pb-3 pe-4">Role</th>
+                        <th className="text-start text-muted-foreground font-medium pb-3 pe-4">Jobs</th>
+                        <th className="text-start text-muted-foreground font-medium pb-3 pe-4">Events</th>
+                        <th className="text-start text-muted-foreground font-medium pb-3 pe-4">Candidates</th>
+                        <th className="text-start text-muted-foreground font-medium pb-3">Settings</th>
                       </tr>
                     </thead>
                     <tbody className="space-y-2">
@@ -232,12 +232,12 @@ export default function DocumentationPage() {
                         { role: "viewer", jobs: "View", events: "View", candidates: "View", settings: "None" },
                       ].map((r) => (
                         <tr key={r.role} className="border-b border-border/30">
-                          <td className="py-2.5 pr-4">
+                          <td className="py-2.5 pe-4">
                             <Badge variant="outline" className="font-mono text-xs border-border">{r.role}</Badge>
                           </td>
-                          <td className="py-2.5 pr-4 text-muted-foreground">{r.jobs}</td>
-                          <td className="py-2.5 pr-4 text-muted-foreground">{r.events}</td>
-                          <td className="py-2.5 pr-4 text-muted-foreground">{r.candidates}</td>
+                          <td className="py-2.5 pe-4 text-muted-foreground">{r.jobs}</td>
+                          <td className="py-2.5 pe-4 text-muted-foreground">{r.events}</td>
+                          <td className="py-2.5 pe-4 text-muted-foreground">{r.candidates}</td>
                           <td className="py-2.5 text-muted-foreground">{r.settings}</td>
                         </tr>
                       ))}

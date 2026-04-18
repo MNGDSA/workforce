@@ -248,7 +248,7 @@ function SortableHeader({ label, field, sortField, sortDir, onSort }: {
   const active = sortField === field;
   return (
     <button
-      className="flex items-center gap-1 hover:text-white transition-colors text-left"
+      className="flex items-center gap-1 hover:text-white transition-colors text-start"
       onClick={() => onSort(field)}
       data-testid={`sort-${field}`}
     >
@@ -1965,7 +1965,7 @@ export default function WorkforcePage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="bg-card border-border shadow-sm border-l-4 border-l-primary">
+          <Card className="bg-card border-border shadow-sm border-s-4 border-s-primary">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{tt("stats.total")}</CardTitle>
             </CardHeader>
@@ -2069,7 +2069,7 @@ export default function WorkforcePage() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="w-[50px] pl-4">
+                    <TableHead className="w-[50px] ps-4">
                       <Checkbox
                         checked={allSelected ? true : someSelected ? "indeterminate" : false}
                         onCheckedChange={toggleAll}
@@ -2089,7 +2089,7 @@ export default function WorkforcePage() {
                       <SortableHeader label={tt("columns.phone")} field="phone" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     </TableHead>
                     <TableHead className="text-muted-foreground hidden xl:table-cell">{tt("columns.jobEvent")}</TableHead>
-                    <TableHead className="text-muted-foreground hidden lg:table-cell text-right">
+                    <TableHead className="text-muted-foreground hidden lg:table-cell text-end">
                       <SortableHeader label={tt("columns.salary")} field="salary" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     </TableHead>
                     <TableHead className="text-muted-foreground hidden xl:table-cell">{tt("columns.lastPrinted")}</TableHead>
@@ -2102,7 +2102,7 @@ export default function WorkforcePage() {
                       </TableHead>
                     )}
                     <TableHead className="text-muted-foreground">{tt("columns.status")}</TableHead>
-                    <TableHead className="text-right text-muted-foreground pr-4">{tt("columns.actions")}</TableHead>
+                    <TableHead className="text-end text-muted-foreground pe-4">{tt("columns.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2116,7 +2116,7 @@ export default function WorkforcePage() {
                         className={`border-border hover:bg-muted/20 cursor-pointer ${checked ? "bg-primary/5" : ""}`}
                         data-testid={`row-employee-${emp.employeeNumber}`}
                       >
-                        <TableCell className="pl-4" onClick={e => e.stopPropagation()}>
+                        <TableCell className="ps-4" onClick={e => e.stopPropagation()}>
                           <Checkbox
                             checked={checked}
                             onCheckedChange={() => toggleOne(emp.id)}
@@ -2157,7 +2157,7 @@ export default function WorkforcePage() {
                             {emp.eventName && <div className="text-xs text-primary/70"><bdi>{emp.eventName}</bdi></div>}
                           </div>
                         </TableCell>
-                        <TableCell className="hidden lg:table-cell text-right text-sm text-white font-medium" onClick={() => setSelectedEmployee(emp)}>
+                        <TableCell className="hidden lg:table-cell text-end text-sm text-white font-medium" onClick={() => setSelectedEmployee(emp)}>
                           {emp.salary ? formatNumber(Number(emp.salary)) : "—"}
                         </TableCell>
                         <TableCell className="hidden xl:table-cell text-xs text-zinc-400" onClick={() => setSelectedEmployee(emp)} data-testid={`text-last-printed-${emp.id}`}>
@@ -2176,7 +2176,7 @@ export default function WorkforcePage() {
                             {st.label}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right pr-4">
+                        <TableCell className="text-end pe-4">
                           <div className="flex items-center justify-end gap-1">
                             <Button
                               variant="ghost"

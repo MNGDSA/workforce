@@ -7,6 +7,7 @@ import fs from "fs";
 import crypto from "crypto";
 import { storage, createInboxItem } from "./storage";
 import { db } from "./db";
+import { tr } from "./i18n";
 import { uploadFile, deleteFile, getMimeType, getFileBuffer } from "./file-storage";
 import { getAuthenticatedUser, listUserRepos, getRepo, listRepoIssues, listRepoPullRequests } from "./github";
 import {
@@ -262,7 +263,7 @@ export async function registerRoutes(
       if (spacesEndpoint && spacesBucket) {
         return res.redirect(301, `https://${spacesBucket}.${spacesEndpoint}/uploads/${req.params.filename}`);
       }
-      return res.status(404).json({ message: "File not found" });
+      return res.status(404).json({ message: tr(req, "file.notFound") });
     });
   }
 
@@ -283,10 +284,10 @@ export async function registerRoutes(
       // Force the client to clear the bad session and log in again.
       try { (req.session as any)?.destroy?.(() => undefined); } catch {}
       res.clearCookie("connect.sid");
-      return res.status(401).json({ message: "Session expired. Please sign in again.", sessionInvalid: true });
+      return res.status(401).json({ message: tr(req, "auth.sessionExpired"), sessionInvalid: true });
     }
     if (status === "disabled") {
-      return res.status(403).json({ message: "Account is disabled. Contact support.", terminated: true });
+      return res.status(403).json({ message: tr(req, "auth.accountDisabled"), terminated: true });
     }
     next();
   });
@@ -342,7 +343,7 @@ export async function registerRoutes(
     try {
       const userId = getAuthUserId(req);
       if (!userId) {
-        return res.status(401).json({ message: "Authentication required." });
+        return res.status(401).json({ message: tr(req, "auth.required") });
       }
       const [ntpUrl, orgTz, configVer] = await Promise.all([
         storage.getSystemSetting("ntp_server_url"),
@@ -355,7 +356,7 @@ export async function registerRoutes(
         config_version: parseInt(configVer ?? "1", 10),
       });
     } catch (err) {
-      return res.status(500).json({ message: "Failed to fetch config" });
+      return res.status(500).json({ message: tr(req, "auth.configFetchFailed") });
     }
   });
 
@@ -366,7 +367,7 @@ export async function registerRoutes(
   app.get(/^\/api\/files\/(uploads\/.+)$/, requireAuth, async (req: Request, res: Response) => {
     try {
       const key = (req.params as any)[0] as string;
-      if (!key || key.includes("..")) return res.status(400).json({ message: "Invalid file path" });
+      if (!key || key.includes("..")) return res.status(400).json({ message: tr(req, "file.invalidPath") });
 
       const spacesBucket = process.env.SPACES_BUCKET || "";
       const spacesEndpoint = process.env.SPACES_ENDPOINT || "";
@@ -380,14 +381,14 @@ export async function registerRoutes(
         owner = await storage.getCandidateByFileUrl(u);
         if (owner) break;
       }
-      if (!owner) return res.status(404).json({ message: "File not found" });
+      if (!owner) return res.status(404).json({ message: tr(req, "file.notFound") });
 
       const isAdmin =
         req.authIsSuperAdmin ||
         req.authPermissions?.has("candidates:read");
       const isOwner = owner.userId === req.authUserId;
       if (!isAdmin && !isOwner) {
-        return res.status(403).json({ message: "You do not have permission to view this file." });
+        return res.status(403).json({ message: tr(req, "file.noPermission") });
       }
 
       const buffer = await getFileBuffer(candidateUrls[0]);
@@ -404,9 +405,9 @@ export async function registerRoutes(
     try {
       const { id } = req.params;
       const docType = req.body.docType as string;
-      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      if (!req.file) return res.status(400).json({ message: tr(req, "file.noUpload") });
       if (!["photo", "nationalId", "iban", "resume"].includes(docType)) {
-        return res.status(400).json({ message: "Invalid docType. Must be photo, nationalId, iban, or resume" });
+        return res.status(400).json({ message: tr(req, "file.invalidDocType") });
       }
       const localPath = req.file.path;
       const fileUrl = await uploadFile(localPath, req.file.filename, getMimeType(req.file.filename), { isPublic: docType === "photo" });
@@ -416,10 +417,10 @@ export async function registerRoutes(
         const allowedPhotoMimes = ["image/jpeg", "image/jpg", "image/png"];
         if (!allowedPhotoMimes.includes(req.file.mimetype.toLowerCase())) {
           try { await deleteFile(fileUrl); } catch {}
-          return res.status(400).json({ message: "Photo must be a JPG or PNG image" });
+          return res.status(400).json({ message: tr(req, "file.photoFormat") });
         }
         const candidate = await storage.getCandidate(id);
-        if (!candidate) return res.status(404).json({ message: "Candidate not found" });
+        if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
         const activeRecord = await storage.getWorkforceByCandidateId(id);
         const isActiveEmployee = activeRecord && activeRecord.isActive;
         const isPhotoChange = isActiveEmployee && candidate.hasPhoto && candidate.photoUrl;
@@ -492,7 +493,7 @@ export async function registerRoutes(
       if (docType === "iban") { updatePayload.hasIban = true; updatePayload.ibanFileUrl = fileUrl; }
       if (docType === "resume") { updatePayload.resumeUrl = fileUrl; updatePayload.hasResume = true; }
       const updated = await storage.updateCandidate(id, updatePayload);
-      if (!updated) return res.status(404).json({ message: "Candidate not found" });
+      if (!updated) return res.status(404).json({ message: tr(req, "candidate.notFound") });
       const onboardingRecords = await storage.getOnboardingRecords({ candidateId: id });
       for (const rec of onboardingRecords) {
         if (rec.status === "converted" || rec.status === "rejected" || rec.status === "terminated") continue;
@@ -520,10 +521,10 @@ export async function registerRoutes(
     try {
       const { id, docType } = req.params;
       if (!["photo", "nationalId", "iban"].includes(docType)) {
-        return res.status(400).json({ message: "Invalid docType. Must be photo, nationalId, or iban" });
+        return res.status(400).json({ message: tr(req, "file.invalidDocTypeShort") });
       }
       const candidate = await storage.getCandidate(id);
-      if (!candidate) return res.status(404).json({ message: "Candidate not found" });
+      if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
       const fileUrlMap: Record<string, string | null | undefined> = {
         photo: candidate.photoUrl,
         nationalId: candidate.nationalIdFileUrl,
@@ -538,7 +539,7 @@ export async function registerRoutes(
       if (docType === "nationalId") { updatePayload.nationalIdFileUrl = null; updatePayload.hasNationalId = false; }
       if (docType === "iban") { updatePayload.ibanFileUrl = null; updatePayload.hasIban = false; }
       const updated = await storage.updateCandidate(id, updatePayload);
-      if (!updated) return res.status(404).json({ message: "Candidate not found" });
+      if (!updated) return res.status(404).json({ message: tr(req, "candidate.notFound") });
       const onboardingRecordsDel = await storage.getOnboardingRecords({ candidateId: id });
       for (const rec of onboardingRecordsDel) {
         if (rec.status === "converted" || rec.status === "rejected" || rec.status === "terminated") continue;
@@ -584,7 +585,7 @@ export async function registerRoutes(
       const user = userId
         ? await storage.getUser(userId)
         : await storage.getUserByUsername("admin");
-      if (!user) return res.status(404).json({ message: "No user found" });
+      if (!user) return res.status(404).json({ message: tr(req, "candidate.profile.userNotFound") });
 
       // Resolve effective role + permissions from the RBAC tables.
       let roleSlug: string | null = null;
@@ -620,7 +621,7 @@ export async function registerRoutes(
     try {
       const locale = String(req.body?.locale || "").toLowerCase();
       if (locale !== "ar" && locale !== "en") {
-        return res.status(400).json({ message: "Invalid locale. Must be 'ar' or 'en'." });
+        return res.status(400).json({ message: tr(req, "candidate.profile.invalidLocale") });
       }
       const userId = (req as any).session?.userId as string | undefined;
       if (!userId) return res.status(204).end();
@@ -628,7 +629,7 @@ export async function registerRoutes(
       res.json({ ok: true, locale });
     } catch (err) {
       console.error("[locale] update failed", err);
-      res.status(500).json({ message: "Failed to update locale" });
+      res.status(500).json({ message: tr(req, "candidate.profile.localeFailed") });
     }
   });
 
@@ -636,7 +637,7 @@ export async function registerRoutes(
     try {
       const { identifier, password } = req.body;
       if (!identifier || !password) {
-        return res.status(400).json({ message: "ID Number / Phone and password are required" });
+        return res.status(400).json({ message: tr(req, "auth.loginCreds") });
       }
 
       const rl = await checkLoginRateLimit(req, identifier);
@@ -660,17 +661,17 @@ export async function registerRoutes(
 
       if (!user) {
         recordLoginFailure(req, identifier);
-        return res.status(401).json({ message: "Invalid credentials" });
+        return res.status(401).json({ message: tr(req, "auth.invalidCreds") });
       }
 
       if (!user.isActive) {
-        return res.status(403).json({ message: "Account is disabled. Contact support." });
+        return res.status(403).json({ message: tr(req, "auth.accountDisabled") });
       }
 
       const valid = await bcrypt.compare(password, user.password);
       if (!valid) {
         recordLoginFailure(req, identifier);
-        return res.status(401).json({ message: "Invalid credentials" });
+        return res.status(401).json({ message: tr(req, "auth.invalidCreds") });
       }
 
       recordLoginSuccess(req, identifier);
@@ -719,13 +720,13 @@ export async function registerRoutes(
       // Rate limit: max 3 OTP requests per phone per 10 minutes
       const recentCount = await storage.countRecentOtpRequests(normalizedPhone, 10 * 60 * 1000);
       if (recentCount >= 3) {
-        return res.status(429).json({ message: "Too many OTP requests. Please wait 10 minutes before trying again." });
+        return res.status(429).json({ message: tr(req, "otp.tooMany") });
       }
 
       // Check if active SMS plugin exists
       const smsPlugin = await storage.getActiveSmsPlugin();
       if (!smsPlugin) {
-        return res.status(503).json({ message: "SMS service is not configured. Contact support." });
+        return res.status(503).json({ message: tr(req, "otp.smsNotConfigured") });
       }
 
       // Generate 6-digit code
@@ -739,7 +740,7 @@ export async function registerRoutes(
 
       if (!result.success) {
         console.error("[OTP] SMS delivery failed:", result.error);
-        return res.status(502).json({ message: "Failed to send OTP. Please try again." });
+        return res.status(502).json({ message: tr(req, "otp.sendFailed") });
       }
 
       console.log(`[OTP] Sent to ${normalizedPhone}, expires ${expiresAt.toISOString()}`);
@@ -758,13 +759,13 @@ export async function registerRoutes(
 
       const otp = await storage.getLatestOtpVerification(normalizedPhone);
       if (!otp) {
-        return res.status(404).json({ message: "No OTP found for this phone number. Request a new code." });
+        return res.status(404).json({ message: tr(req, "otp.notFound") });
       }
       if (otp.verifiedAt) {
-        return res.status(400).json({ message: "This OTP has already been verified." });
+        return res.status(400).json({ message: tr(req, "otp.alreadyVerified") });
       }
       if (new Date() > otp.expiresAt) {
-        return res.status(400).json({ message: "OTP has expired. Please request a new code." });
+        return res.status(400).json({ message: tr(req, "otp.expired") });
       }
       if (otp.attempts >= 5) {
         return res.status(400).json({ message: "Too many incorrect attempts. Please request a new OTP." });
@@ -902,7 +903,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Password must contain: ${failed.join(", ")}` });
       }
       const candidate = await storage.getCandidate(candidateId);
-      if (!candidate) return res.status(404).json({ message: "Candidate not found" });
+      if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
       let user = candidate.userId
         ? await storage.getUser(candidate.userId)
         : undefined;
@@ -936,13 +937,13 @@ export async function registerRoutes(
         return res.status(400).json({ message: "No phone number on file. Contact an administrator." });
       }
       if (!user.isActive) {
-        return res.status(403).json({ message: "Account is disabled. Contact support." });
+        return res.status(403).json({ message: tr(req, "auth.accountDisabled") });
       }
 
       const phone = user.phone;
       const recentCount = await storage.countRecentOtpRequests(phone, 10 * 60 * 1000);
       if (recentCount >= 3) {
-        return res.status(429).json({ message: "Too many OTP requests. Please wait 10 minutes before trying again." });
+        return res.status(429).json({ message: tr(req, "otp.tooMany") });
       }
 
       const code = String(Math.floor(100000 + Math.random() * 900000));
@@ -954,7 +955,7 @@ export async function registerRoutes(
         const result = await sendSmsViaPlugin(activePlugin, phone, `Your password reset code is: ${code}`);
         if (!result.success) {
           console.error("[Reset] SMS delivery failed:", result.error);
-          return res.status(502).json({ message: "Failed to send OTP. Please try again." });
+          return res.status(502).json({ message: tr(req, "otp.sendFailed") });
         }
       }
 
@@ -1196,7 +1197,7 @@ export async function registerRoutes(
         }
       }
       const candidate = await storage.getCandidate(req.params.id);
-      if (!candidate) return res.status(404).json({ message: "Candidate not found" });
+      if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
       return res.json(candidate);
     } catch (err) {
       return handleError(res, err);
@@ -1231,7 +1232,7 @@ export async function registerRoutes(
       const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("candidates:update");
       if (!isAdmin) {
         const existing = await storage.getCandidate(req.params.id);
-        if (!existing) return res.status(404).json({ message: "Candidate not found" });
+        if (!existing) return res.status(404).json({ message: tr(req, "candidate.notFound") });
         // Ownership check — accept any of:
         //  (a) candidate.userId already matches the auth user
         //  (b) candidate.userId is null AND nationalId matches the auth user (claim it)
@@ -1255,7 +1256,7 @@ export async function registerRoutes(
 
       if (data.profileCompleted === true) {
         const existing = await storage.getCandidate(req.params.id);
-        if (!existing) return res.status(404).json({ message: "Candidate not found" });
+        if (!existing) return res.status(404).json({ message: tr(req, "candidate.notFound") });
         const merged = { ...existing, ...data };
         const missing = validateProfileCompleteness(merged);
         if (missing.length > 0) {
@@ -1267,7 +1268,7 @@ export async function registerRoutes(
       }
 
       const candidate = await storage.updateCandidate(req.params.id, data);
-      if (!candidate) return res.status(404).json({ message: "Candidate not found" });
+      if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
       return res.json(candidate);
     } catch (err) {
       return handleError(res, err);
@@ -2494,7 +2495,7 @@ export async function registerRoutes(
       }
 
       const candidate = await storage.updateCandidate(candidateId, data);
-      if (!candidate) return res.status(404).json({ message: "Candidate not found" });
+      if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
 
       await logAudit(req, {
         action: "candidate.profile_updated_via_workforce",
@@ -2516,7 +2517,7 @@ export async function registerRoutes(
   // ─── Bulk Update via Excel upload ────────────────────────────────────────
   app.post("/api/workforce/bulk-update", requirePermission("workforce:bulk"), uploadXlsx.single("file"), async (req: Request, res: Response) => {
     try {
-      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      if (!req.file) return res.status(400).json({ message: tr(req, "file.noUpload") });
 
       const wb = XLSX.readFile(req.file.path);
       const ws = wb.Sheets[wb.SheetNames[0]];
@@ -3108,7 +3109,7 @@ export async function registerRoutes(
   // Helper: Super Admin gate, layered on top of requirePermission middleware.
   async function _requireSuperAdminInline(req: Request, res: Response): Promise<boolean> {
     if (!req.authUserId) {
-      res.status(401).json({ message: "Authentication required." });
+      res.status(401).json({ message: tr(req, "auth.required") });
       return false;
     }
     if (!req.authIsSuperAdmin) {
@@ -3188,7 +3189,7 @@ export async function registerRoutes(
   async function requireSuperAdmin(req: Request, res: Response): Promise<{ id: string } | null> {
     const userId = getAuthUserId(req);
     if (!userId) {
-      res.status(401).json({ message: "Authentication required." });
+      res.status(401).json({ message: tr(req, "auth.required") });
       return null;
     }
     if (!req.authIsSuperAdmin) {
@@ -3760,7 +3761,7 @@ export async function registerRoutes(
 
   app.post("/api/contract-templates/:id/logo", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
     try {
-      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      if (!req.file) return res.status(400).json({ message: tr(req, "file.noUpload") });
       const logoUrl = await uploadFile(req.file.path, req.file.filename, getMimeType(req.file.filename));
       const updated = await storage.updateContractTemplate(req.params.id, { logoUrl });
       if (!updated) return res.status(404).json({ message: "Template not found" });
@@ -3809,7 +3810,7 @@ export async function registerRoutes(
       if (!ob) return res.status(404).json({ message: "Onboarding record not found" });
 
       const candidate = await storage.getCandidate(ob.candidateId);
-      if (!candidate) return res.status(404).json({ message: "Candidate not found" });
+      if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
 
       const { templateId } = req.body;
       if (!templateId) return res.status(400).json({ message: "templateId is required" });
@@ -4177,7 +4178,7 @@ export async function registerRoutes(
 
   app.post("/api/id-card-templates/:id/background", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
     try {
-      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      if (!req.file) return res.status(400).json({ message: tr(req, "file.noUpload") });
       const imageUrl = await uploadFile(req.file.path, req.file.filename, getMimeType(req.file.filename));
       const updateData = { backgroundImageUrl: imageUrl };
       const template = await storage.updateIdCardTemplate(req.params.id, updateData);
@@ -5564,7 +5565,7 @@ export async function registerRoutes(
       if (!workforceId) return res.status(400).json({ message: "workforceId is required" });
 
       const userId = getAuthUserId(req);
-      if (!userId) return res.status(401).json({ message: "Authentication required." });
+      if (!userId) return res.status(401).json({ message: tr(req, "auth.required") });
 
       const wfRecord = await storage.getWorkforceEmployee(workforceId);
       if (!wfRecord) return res.status(404).json({ message: "Workforce record not found" });
@@ -5726,7 +5727,7 @@ export async function registerRoutes(
 
       const userId = getAuthUserId(req);
       if (!userId) {
-        return res.status(401).json({ message: "Authentication required." });
+        return res.status(401).json({ message: tr(req, "auth.required") });
       }
       const authUser = await storage.getUser(userId);
       if (!authUser || !authUser.isActive) {

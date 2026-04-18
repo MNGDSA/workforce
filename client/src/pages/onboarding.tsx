@@ -303,7 +303,7 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
                 onClick={() => setContractPreviewOpen(true)}
                 data-testid="button-view-candidate-contract"
               >
-                <Eye className="h-3 w-3 mr-1" />
+                <Eye className="h-3 w-3 me-1" />
                 {t("contract.view")}
               </Button>
               <Badge className={`text-xs border-0 ${latestContract.status === "signed" ? "bg-emerald-900/40 text-emerald-400" : "bg-yellow-900/40 text-yellow-400"}`}>
@@ -382,7 +382,7 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
                   <h3 className="font-bold text-sm mb-1">{t("contract.articlePrefix", { n: formatNumber(idx + 1), title: article.title })}</h3>
                   <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVars(article.body || "", latestContract.snapshotVariables)}</p>
                   {Array.isArray(article.subArticles) && article.subArticles.map((sub: any, subIdx: number) => (
-                    <div key={subIdx} className="ml-6 mt-2">
+                    <div key={subIdx} className="ms-6 mt-2">
                       <h4 className="font-bold text-sm mb-0.5">{formatNumber(idx + 1)}.{formatNumber(subIdx + 1)} {sub.title}</h4>
                       <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVars(sub.body || "", latestContract.snapshotVariables)}</p>
                     </div>
@@ -1085,7 +1085,7 @@ function ContractTemplatesTab() {
                       data-testid={`input-article-body-${idx}`}
                     />
                     {(article.subArticles || []).map((sub, subIdx) => (
-                      <div key={subIdx} className="ml-8 border-l-2 border-zinc-700 pl-3 space-y-1.5">
+                      <div key={subIdx} className="ms-8 border-s-2 border-zinc-700 ps-3 space-y-1.5">
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-zinc-600 font-mono w-12 shrink-0">{formatNumber(idx + 1)}.{formatNumber(subIdx + 1)}</span>
                           <Input
@@ -1112,11 +1112,11 @@ function ContractTemplatesTab() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-xs text-zinc-500 hover:text-zinc-300 ml-8"
+                      className="text-xs text-zinc-500 hover:text-zinc-300 ms-8"
                       onClick={() => addSubArticle(idx)}
                       data-testid={`button-add-subarticle-${idx}`}
                     >
-                      <Plus className="h-3 w-3 mr-1" />
+                      <Plus className="h-3 w-3 me-1" />
                       {t("templates.addSubArticle", { n: `${formatNumber(idx + 1)}.${formatNumber((article.subArticles || []).length + 1)}` })}
                     </Button>
                   </div>
@@ -1199,7 +1199,7 @@ function ContractTemplatesTab() {
                     <h3 className="font-bold text-sm mb-1">{t("contract.articlePrefix", { n: formatNumber(idx + 1), title: article.title })}</h3>
                     <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVariables(article.body)}</p>
                     {Array.isArray(article.subArticles) && article.subArticles.map((sub: any, subIdx: number) => (
-                      <div key={subIdx} className="ml-6 mt-2">
+                      <div key={subIdx} className="ms-6 mt-2">
                         <h4 className="font-bold text-sm mb-0.5">{formatNumber(idx + 1)}.{formatNumber(subIdx + 1)} {sub.title}</h4>
                         <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVariables(sub.body)}</p>
                       </div>
@@ -1619,13 +1619,13 @@ export default function OnboardingPage() {
         {/* Filters */}
         <div className="flex gap-3 flex-wrap">
           <div className="relative flex-1 min-w-48">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
             <Input
               data-testid="input-search-onboarding"
               placeholder={t("filters.searchPlaceholder")}
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="pl-9 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500"
+              className="ps-9 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500"
             />
           </div>
           <Select value={eventFilter} onValueChange={setEventFilter}>
@@ -1699,7 +1699,7 @@ export default function OnboardingPage() {
                       <span className="font-semibold text-white text-sm"><bdi>{candidate?.fullNameEn ?? t("record.unknown")}</bdi></span>
                       {candidate?.nationalId && <span className="text-zinc-500 text-xs font-mono" dir="ltr">{candidate.nationalId}</span>}
                       <Badge className={`text-xs px-2 py-0.5 ${cfg.color} border-0`}>
-                        <StatusIcon className="h-3 w-3 mr-1" />
+                        <StatusIcon className="h-3 w-3 me-1" />
                         {t(`status.${rec.status}`, { defaultValue: cfg.label })}
                       </Badge>
                       {isOffered && !isConverted && (
@@ -1778,8 +1778,8 @@ export default function OnboardingPage() {
                           {t("actions.convertToEmployee")}
                         </Button>
                         {!canConvert && isReady && !isSmpPipeline && (
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-yellow-400 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                            <FileSignature className="h-3 w-3 inline mr-1" />
+                          <div className="absolute bottom-full start-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-yellow-400 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                            <FileSignature className="h-3 w-3 inline me-1" />
                             {t("actions.contractMustBeSigned")}
                           </div>
                         )}
@@ -1830,13 +1830,13 @@ export default function OnboardingPage() {
           <div className="space-y-3 mt-2">
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
               <Input
                 data-testid="input-admit-search"
                 placeholder={t("admit.searchPlaceholder")}
                 value={admitSearch}
                 onChange={e => { setAdmitSearch(e.target.value); setAdmitPage(1); }}
-                className="pl-9 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500"
+                className="ps-9 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500"
               />
             </div>
 
@@ -1894,7 +1894,7 @@ export default function OnboardingPage() {
                     key={c.id}
                     data-testid={`button-select-candidate-${c.id}`}
                     onClick={() => toggleCandidate(c.id)}
-                    className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors flex items-center gap-3 ${
+                    className={`w-full text-start px-3 py-2.5 rounded-lg border transition-colors flex items-center gap-3 ${
                       isSelected
                         ? "border-[hsl(155,45%,45%)] bg-[hsl(155,45%,45%)]/10"
                         : "border-zinc-800 hover:border-zinc-600 bg-zinc-900"
@@ -2066,7 +2066,7 @@ export default function OnboardingPage() {
                         {checked && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />}
                       </div>
                       {hasProfileData && isFilePrereq && (
-                        <div className="mt-2 ml-8 bg-zinc-800/60 rounded-md p-2.5 border border-zinc-700/50">
+                        <div className="mt-2 ms-8 bg-zinc-800/60 rounded-md p-2.5 border border-zinc-700/50">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 min-w-0">
                               {(() => {
@@ -2112,7 +2112,7 @@ export default function OnboardingPage() {
                         </div>
                       )}
                       {!hasProfileData && isFilePrereq && (
-                        <div className="mt-2 ml-8 bg-zinc-800/40 rounded-md p-2 border border-zinc-700/30">
+                        <div className="mt-2 ms-8 bg-zinc-800/40 rounded-md p-2 border border-zinc-700/30">
                           <p className="text-[11px] text-zinc-500 flex items-center gap-1.5">
                             <TriangleAlert className="h-3 w-3" />
                             {t("checklist.notSubmitted")}

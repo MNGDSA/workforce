@@ -126,8 +126,8 @@ function DepartmentNodeComponent({ data }: NodeProps<DeptNode>) {
           ? "border-[hsl(155,45%,45%)] shadow-[0_0_30px_rgba(52,168,120,0.15)]"
           : "border-[hsl(220,15%,22%)] hover:border-[hsl(155,45%,35%)] hover:shadow-[0_0_20px_rgba(52,168,120,0.1)]",
       )}>
-        <div className="absolute inset-y-0 left-0 w-1 bg-[hsl(155,45%,45%)]" />
-        <div className="px-4 py-3.5 pl-5">
+        <div className="absolute inset-y-0 start-0 w-1 bg-[hsl(155,45%,45%)]" />
+        <div className="px-4 py-3.5 ps-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="flex-shrink-0 w-8 h-8 rounded-sm bg-[hsl(155,45%,45%)]/15 flex items-center justify-center">
@@ -140,7 +140,7 @@ function DepartmentNodeComponent({ data }: NodeProps<DeptNode>) {
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+            <div className="flex items-center gap-2 flex-shrink-0 ms-2">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-xs font-semibold bg-[hsl(155,45%,45%)]/15 text-[hsl(155,45%,55%)] border border-[hsl(155,45%,45%)]/20">
                 <Users className="w-3 h-3" />
                 {data.totalEmployees}
@@ -187,7 +187,7 @@ function PositionNodeComponent({ data }: NodeProps<PosNode>) {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+          <div className="flex items-center gap-1.5 flex-shrink-0 ms-2">
             <span className={cn(
               "inline-flex items-center justify-center min-w-[26px] h-[22px] px-1.5 rounded-sm text-xs font-bold",
               data.employeeCount > 0

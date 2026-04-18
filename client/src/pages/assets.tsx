@@ -476,7 +476,7 @@ export default function AssetsPage() {
       {/* ─── Stat Cards ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map(c => (
-          <Card key={c.testid} className={cn("bg-card border-border shadow-sm border-l-4", c.accentClass)}>
+          <Card key={c.testid} className={cn("bg-card border-border shadow-sm border-s-4", c.accentClass)}>
             <CardHeader className="pb-2 pt-4 px-5">
               <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                 <c.icon className={cn("h-4 w-4 shrink-0", c.iconColor)} />

@@ -247,10 +247,12 @@ export function printIdCardFallback(
 
   printWin.document.write(`<!DOCTYPE html><html><head><title>ID Cards</title>
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
       @page { size: ${pageW} ${pageH}; margin: 0; }
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { background: #fff; font-family: 'Inter', system-ui, sans-serif; }
+      body { background: #fff; font-family: 'Cairo', 'Inter', system-ui, sans-serif; font-feature-settings: "tnum"; }
+      /* Force Western (tabular) digits everywhere on printed cards. */
+      body, body * { font-variant-numeric: tabular-nums; }
       @media print { body { background: #fff; } }
     </style>
   </head><body>${cardsHTML}</body></html>`);

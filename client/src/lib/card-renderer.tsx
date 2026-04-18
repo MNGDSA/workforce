@@ -72,7 +72,8 @@ export function IdCardPreview({ template, employee, scale = 1 }: IdCardPreviewPr
         color: txtColor,
         borderRadius: 8 * scale,
         overflow: "hidden",
-        fontFamily: "'Inter', sans-serif",
+        fontFamily: "'Cairo', 'Inter', sans-serif",
+        fontVariantNumeric: "tabular-nums",
         position: "relative",
         boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
         transform: `scale(1)`,
@@ -255,9 +256,10 @@ export function renderCardToHtml(template: Partial<IdCardTemplate>, employee: Ca
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+<style>@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;700&family=Inter:wght@400;500;700&display=swap');
 @page { size: 85.6mm 54mm; margin: 0; }
-body { margin: 0; font-family: 'Inter', sans-serif; }
+body { margin: 0; font-family: 'Cairo', 'Inter', sans-serif; font-variant-numeric: tabular-nums; }
+body, body * { font-variant-numeric: tabular-nums; }
 .card { width: 85.6mm; height: 54mm; background: ${bgColor}; color: ${txtColor}; position: relative; overflow: hidden; page-break-after: always; }
 </style></head><body>
 ${body}
@@ -272,9 +274,10 @@ export function printCards(template: Partial<IdCardTemplate>, employees: CardEmp
 
   const fullHtml = `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+<style>@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;700&family=Inter:wght@400;500;700&display=swap');
 @page { size: 85.6mm 54mm; margin: 0; }
-body { margin: 0; font-family: 'Inter', sans-serif; }
+body { margin: 0; font-family: 'Cairo', 'Inter', sans-serif; font-variant-numeric: tabular-nums; }
+body, body * { font-variant-numeric: tabular-nums; }
 .card { width: 85.6mm; height: 54mm; background: ${bgColor}; color: ${txtColor}; position: relative; overflow: hidden; page-break-after: always; }
 @media print { body { margin: 0; } }
 </style></head><body>${pages}</body></html>`;

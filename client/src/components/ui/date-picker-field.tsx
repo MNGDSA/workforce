@@ -291,7 +291,7 @@ export function DatePickerField({
         )}
       >
         <CalendarDays className="h-4 w-4 text-muted-foreground shrink-0" />
-        <span className="flex-1 text-left truncate">{displayText || placeholder}</span>
+        <span className="flex-1 text-start truncate">{displayText || placeholder}</span>
       </button>
       {calendarDropdown}
     </div>

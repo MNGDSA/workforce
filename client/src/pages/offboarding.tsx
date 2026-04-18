@@ -247,7 +247,7 @@ function OffboardingSheet({ emp, events, onClose }: {
   return createPortal(
     <div className="fixed inset-0 z-[9998] flex">
       <div className="flex-1 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className={`w-full max-w-2xl bg-background border-border flex flex-col h-full shadow-2xl overflow-hidden ${ar ? "border-r" : "border-l"}`}>
+      <div className={`w-full max-w-2xl bg-background border-border flex flex-col h-full shadow-2xl overflow-hidden ${ar ? "border-e" : "border-s"}`}>
         <div className="flex items-start justify-between p-5 border-b border-border bg-card shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-primary text-sm">
