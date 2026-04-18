@@ -2741,7 +2741,6 @@ export default function CandidatePortal() {
                     className="w-full h-10 bg-background border border-border rounded-md px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
                     data-testid="select-nationality"
                   >
-                    <option value="" className="bg-card text-muted-foreground">{t("portal:profile.nationalityPlaceholder")}</option>
                     {NATIONALITY_OPTIONS_LIST.map((n, i) =>
                       n === "---" ? (
                         <option key={`sep-${i}`} disabled className="bg-card text-muted-foreground">{"─".repeat(20)}</option>
