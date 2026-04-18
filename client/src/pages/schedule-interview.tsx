@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
@@ -42,6 +42,8 @@ import {
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation, Trans } from "react-i18next";
+import { formatNumber } from "@/lib/format";
 
 type Applicant = {
   candidateId: string;
@@ -54,30 +56,29 @@ type Applicant = {
 type SelectedCandidate = { fullNameEn: string; nationalId: string | null };
 type Job = { id: string; title: string; status: string };
 
-const scheduleSchema = z.object({
-  groupName: z.string().min(2, "Group name is required"),
-  date: z.string().min(1, "Date is required"),
-  time: z.string().min(1, "Time is required"),
-  venueName: z.string().min(2, "Venue name is required"),
-  durationMinutes: z.coerce.number().min(15).max(480),
-  googleLocation: z.string().min(1, "Google Maps link is required").url("Must be a valid URL"),
-  notes: z.string().min(1, "SMS content is required"),
-});
-type ScheduleForm = z.infer<typeof scheduleSchema>;
-
 const PAGE_SIZE = 25;
 
 export default function ScheduleInterviewPage() {
+  const { t, i18n } = useTranslation(["scheduleInterview"]);
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // ─── Pre-select candidate from query params ──────────────────────────────────
+  const scheduleSchema = useMemo(() => z.object({
+    groupName: z.string().min(2, t("scheduleInterview:validation.groupName")),
+    date: z.string().min(1, t("scheduleInterview:validation.date")),
+    time: z.string().min(1, t("scheduleInterview:validation.time")),
+    venueName: z.string().min(2, t("scheduleInterview:validation.venueName")),
+    durationMinutes: z.coerce.number().min(15).max(480),
+    googleLocation: z.string().min(1, t("scheduleInterview:validation.googleLocation")).url(t("scheduleInterview:validation.googleLocationUrl")),
+    notes: z.string().min(1, t("scheduleInterview:validation.notes")),
+  }), [t]);
+  type ScheduleForm = z.infer<typeof scheduleSchema>;
+
   const urlParams = new URLSearchParams(window.location.search);
   const preselectedId = urlParams.get("candidateId");
   const preselectedName = urlParams.get("candidateName");
 
-  // ─── Candidate selection ────────────────────────────────────────────────────
   const [selected, setSelected] = useState<Map<string, SelectedCandidate>>(() => {
     if (preselectedId && preselectedName) {
       return new Map([[preselectedId, { fullNameEn: preselectedName, nationalId: null }]]);
@@ -87,7 +88,6 @@ export default function ScheduleInterviewPage() {
   const [selectedJobId, setSelectedJobId] = useState<string>("");
   const [candidateError, setCandidateError] = useState<string | null>(null);
 
-  // ─── Pagination & search ────────────────────────────────────────────────────
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -103,7 +103,6 @@ export default function ScheduleInterviewPage() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [searchInput]);
 
-  // ─── Queries ────────────────────────────────────────────────────────────────
   const { data: activeJobs = [] } = useQuery<Job[]>({
     queryKey: ["/api/jobs", "active"],
     queryFn: () => apiRequest("GET", "/api/jobs?status=active").then((r) => r.json()),
@@ -134,7 +133,6 @@ export default function ScheduleInterviewPage() {
   const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const to = Math.min(page * PAGE_SIZE, total);
 
-  // ─── Selection helpers ──────────────────────────────────────────────────────
   const handleJobSelect = (jobId: string) => {
     setSelectedJobId(jobId);
     setSelected(new Map());
@@ -182,7 +180,6 @@ export default function ScheduleInterviewPage() {
   const allPageSelected =
     applicants.length > 0 && applicants.every((a) => selected.has(a.candidateId));
 
-  // ─── Form ───────────────────────────────────────────────────────────────────
   const form = useForm<ScheduleForm>({
     resolver: zodResolver(scheduleSchema),
     defaultValues: {
@@ -196,7 +193,6 @@ export default function ScheduleInterviewPage() {
     },
   });
 
-  // ─── SMS template helpers (must come after useForm) ──────────────────────
   const watchedGroupName = useWatch({ control: form.control, name: "groupName" });
   const watchedDate      = useWatch({ control: form.control, name: "date" });
   const watchedTime      = useWatch({ control: form.control, name: "time" });
@@ -253,8 +249,8 @@ export default function ScheduleInterviewPage() {
     },
     onSuccess: () => {
       toast({
-        title: "Interview scheduled",
-        description: `Session created with ${selected.size} candidate${selected.size !== 1 ? "s" : ""} invited.`,
+        title: t("scheduleInterview:toast.scheduledTitle"),
+        description: t("scheduleInterview:toast.scheduledDesc", { count: selected.size, replace: { count: formatNumber(selected.size, i18n.language) } }),
       });
       queryClient.invalidateQueries({ queryKey: ["/api/interviews"] });
       queryClient.invalidateQueries({ queryKey: ["/api/interviews/stats"] });
@@ -262,8 +258,8 @@ export default function ScheduleInterviewPage() {
     },
     onError: () => {
       toast({
-        title: "Failed to schedule",
-        description: "Please check the details and try again.",
+        title: t("scheduleInterview:toast.failTitle"),
+        description: t("scheduleInterview:toast.failDesc"),
         variant: "destructive",
       });
     },
@@ -271,16 +267,17 @@ export default function ScheduleInterviewPage() {
 
   const onSubmit = (data: ScheduleForm) => {
     if (selected.size === 0) {
-      setCandidateError("Select at least one candidate from the applicant list.");
+      setCandidateError(t("scheduleInterview:candidates.validationError"));
       return;
     }
     schedule.mutate(data);
   };
 
+  const localizedStatus = (s: string) => t(`scheduleInterview:status.${s}`, { defaultValue: s.replace(/_/g, " ") });
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* ── Page Header ─────────────────────────────────────── */}
         <div className="flex items-center gap-4">
           <button
             type="button"
@@ -288,20 +285,20 @@ export default function ScheduleInterviewPage() {
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-white transition-colors"
             data-testid="button-back-interviews"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Interview & Training
+            <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
+            {t("scheduleInterview:back")}
           </button>
           <span className="text-muted-foreground/40">/</span>
-          <span className="text-sm text-white font-medium">Schedule New Session</span>
+          <span className="text-sm text-white font-medium">{t("scheduleInterview:breadcrumb")}</span>
         </div>
 
         <div>
           <h1 className="text-3xl font-display font-bold text-white tracking-tight flex items-center gap-3">
             <Calendar className="h-7 w-7 text-primary" />
-            Schedule Interview or Training Session
+            {t("scheduleInterview:pageTitle")}
           </h1>
           <p className="text-muted-foreground mt-1">
-            Define the session details and select candidates from an active job's applicant pool.
+            {t("scheduleInterview:pageSubtitle")}
           </p>
         </div>
 
@@ -309,23 +306,21 @@ export default function ScheduleInterviewPage() {
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
 
-              {/* ══ LEFT — Session details (2/5 width) ═════════════════════════ */}
               <div className="lg:col-span-2 space-y-5">
                 <Card className="bg-card border-border">
                   <CardContent className="pt-5 space-y-4">
                     <p className="text-xs uppercase tracking-widest font-bold text-muted-foreground mb-1">
-                      Session Details
+                      {t("scheduleInterview:details.heading")}
                     </p>
 
-                    {/* Group / Batch Name */}
                     <FormField control={form.control} name="groupName" render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                          Batch / Group Name
+                          {t("scheduleInterview:details.groupName")}
                         </FormLabel>
                         <FormControl>
                           <Input
-                            placeholder="e.g. Batch A – Makkah Region"
+                            placeholder={t("scheduleInterview:details.groupNamePh")}
                             className="bg-muted/30 border-border"
                             data-testid="input-group-name"
                             {...field}
@@ -335,12 +330,11 @@ export default function ScheduleInterviewPage() {
                       </FormItem>
                     )} />
 
-                    {/* Date & Time */}
                     <div className="grid grid-cols-2 gap-3">
                       <FormField control={form.control} name="date" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                            Date
+                            {t("scheduleInterview:details.date")}
                           </FormLabel>
                           <FormControl>
                             <DatePickerField value={field.value} onChange={field.onChange} className="bg-muted/30 border-border" data-testid="input-date" />
@@ -351,25 +345,24 @@ export default function ScheduleInterviewPage() {
                       <FormField control={form.control} name="time" render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                            Time
+                            {t("scheduleInterview:details.time")}
                           </FormLabel>
                           <FormControl>
-                            <Input type="time" className="bg-muted/30 border-border" data-testid="input-time" {...field} />
+                            <Input type="time" dir="ltr" className="bg-muted/30 border-border" data-testid="input-time" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )} />
                     </div>
 
-                    {/* Venue & Duration */}
                     <FormField control={form.control} name="venueName" render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-xs text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1.5">
-                          <MapPin className="h-3 w-3" /> Venue Name
+                          <MapPin className="h-3 w-3" /> {t("scheduleInterview:details.venue")}
                         </FormLabel>
                         <FormControl>
                           <Input
-                            placeholder="e.g. Riyadh Main Hall"
+                            placeholder={t("scheduleInterview:details.venuePh")}
                             className="bg-muted/30 border-border"
                             data-testid="input-venue"
                             {...field}
@@ -382,7 +375,7 @@ export default function ScheduleInterviewPage() {
                     <FormField control={form.control} name="durationMinutes" render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-xs text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1.5">
-                          <Clock className="h-3 w-3" /> Duration per Candidate
+                          <Clock className="h-3 w-3" /> {t("scheduleInterview:details.duration")}
                         </FormLabel>
                         <Select onValueChange={(v) => field.onChange(Number(v))} value={String(field.value)}>
                           <FormControl>
@@ -391,31 +384,31 @@ export default function ScheduleInterviewPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="15">15 minutes</SelectItem>
-                            <SelectItem value="20">20 minutes</SelectItem>
-                            <SelectItem value="30">30 minutes</SelectItem>
-                            <SelectItem value="45">45 minutes</SelectItem>
-                            <SelectItem value="60">60 minutes</SelectItem>
-                            <SelectItem value="90">90 minutes</SelectItem>
-                            <SelectItem value="120">2 hours</SelectItem>
-                            <SelectItem value="180">3 hours</SelectItem>
-                            <SelectItem value="240">4 hours</SelectItem>
-                            <SelectItem value="480">Full day (8h)</SelectItem>
+                            <SelectItem value="15">{t("scheduleInterview:details.minutes", { n: formatNumber(15, i18n.language) })}</SelectItem>
+                            <SelectItem value="20">{t("scheduleInterview:details.minutes", { n: formatNumber(20, i18n.language) })}</SelectItem>
+                            <SelectItem value="30">{t("scheduleInterview:details.minutes", { n: formatNumber(30, i18n.language) })}</SelectItem>
+                            <SelectItem value="45">{t("scheduleInterview:details.minutes", { n: formatNumber(45, i18n.language) })}</SelectItem>
+                            <SelectItem value="60">{t("scheduleInterview:details.minutes", { n: formatNumber(60, i18n.language) })}</SelectItem>
+                            <SelectItem value="90">{t("scheduleInterview:details.minutes", { n: formatNumber(90, i18n.language) })}</SelectItem>
+                            <SelectItem value="120">{t("scheduleInterview:details.hours", { n: formatNumber(2, i18n.language) })}</SelectItem>
+                            <SelectItem value="180">{t("scheduleInterview:details.hours", { n: formatNumber(3, i18n.language) })}</SelectItem>
+                            <SelectItem value="240">{t("scheduleInterview:details.hours", { n: formatNumber(4, i18n.language) })}</SelectItem>
+                            <SelectItem value="480">{t("scheduleInterview:details.fullDay")}</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
                       </FormItem>
                     )} />
 
-                    {/* Google Maps Link */}
                     <FormField control={form.control} name="googleLocation" render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                          Google Maps Link
+                          {t("scheduleInterview:details.googleMaps")}
                         </FormLabel>
                         <FormControl>
                           <Input
-                            placeholder="https://maps.google.com/…"
+                            placeholder={t("scheduleInterview:details.googleMapsPh")}
+                            dir="ltr"
                             className="bg-muted/30 border-border"
                             data-testid="input-google-location"
                             {...field}
@@ -425,27 +418,26 @@ export default function ScheduleInterviewPage() {
                       </FormItem>
                     )} />
 
-                    {/* SMS Content */}
                     <FormField control={form.control} name="notes" render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                          SMS Content
+                          {t("scheduleInterview:details.smsContent")}
                         </FormLabel>
 
-                        {/* Variable chips */}
                         <div className="flex flex-wrap gap-1.5 mb-1">
                           {[
-                            { label: "{{batch}}", title: "Batch / Group Name" },
-                            { label: "{{date}}",  title: "Interview Date" },
-                            { label: "{{time}}",  title: "Interview Time" },
-                            { label: "{{venue}}", title: "Venue Name" },
-                            { label: "{{location}}", title: "Google Maps Link" },
-                          ].map(({ label, title }) => (
+                            { label: "{{batch}}", titleKey: "batch" },
+                            { label: "{{date}}",  titleKey: "date" },
+                            { label: "{{time}}",  titleKey: "time" },
+                            { label: "{{venue}}", titleKey: "venue" },
+                            { label: "{{location}}", titleKey: "location" },
+                          ].map(({ label, titleKey }) => (
                             <button
                               key={label}
                               type="button"
-                              title={title}
+                              title={t(`scheduleInterview:vars.${titleKey}`)}
                               onClick={() => insertVariable(label)}
+                              dir="ltr"
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-colors"
                               data-testid={`chip-var-${label.replace(/\{|\}/g, "")}`}
                             >
@@ -457,7 +449,7 @@ export default function ScheduleInterviewPage() {
 
                         <FormControl>
                           <Textarea
-                            placeholder={`e.g. Dear candidate, you are invited to interview for {{batch}}.\nVenue: {{venue}}\nDate: {{date}} at {{time}}\nLocation: {{location}}\nPlease bring your National ID.`}
+                            placeholder={t("scheduleInterview:details.smsPh")}
                             className="bg-muted/30 border-border resize-none font-mono text-sm"
                             rows={5}
                             data-testid="input-sms-content"
@@ -469,11 +461,10 @@ export default function ScheduleInterviewPage() {
                           />
                         </FormControl>
 
-                        {/* Live preview */}
                         {watchedNotes && (
                           <div className="mt-2 rounded-md border border-border bg-muted/20 p-3 space-y-1">
                             <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground/60">
-                              Preview — resolved message
+                              {t("scheduleInterview:details.previewLabel")}
                             </p>
                             <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-relaxed">
                               {resolveTemplate(watchedNotes)}
@@ -482,7 +473,7 @@ export default function ScheduleInterviewPage() {
                         )}
 
                         <p className="text-xs text-muted-foreground/70 mt-1">
-                          Click a variable chip to insert it at the cursor. The message is sent via SMS to all invited candidates.
+                          {t("scheduleInterview:details.smsHelp")}
                         </p>
                         <FormMessage />
                       </FormItem>
@@ -490,7 +481,6 @@ export default function ScheduleInterviewPage() {
                   </CardContent>
                 </Card>
 
-                {/* ── Action Bar ─ */}
                 <div className="flex gap-3">
                   <Button
                     type="button"
@@ -499,7 +489,7 @@ export default function ScheduleInterviewPage() {
                     onClick={() => navigate("/interviews")}
                     data-testid="button-cancel"
                   >
-                    Cancel
+                    {t("scheduleInterview:buttons.cancel")}
                   </Button>
                   <Button
                     type="submit"
@@ -511,27 +501,25 @@ export default function ScheduleInterviewPage() {
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Schedule Session
+                        <Plus className="me-2 h-4 w-4" />
+                        {t("scheduleInterview:buttons.schedule")}
                       </>
                     )}
                   </Button>
                 </div>
               </div>
 
-              {/* ══ RIGHT — Candidate Picker (3/5 width) ═══════════════════════ */}
               <div className="lg:col-span-3 space-y-4">
                 <Card className="bg-card border-border">
                   <CardContent className="pt-5 space-y-4">
-                    {/* Header */}
                     <div className="flex items-center justify-between">
                       <p className={`text-xs uppercase tracking-widest font-bold flex items-center gap-2 ${candidateError ? "text-destructive" : "text-muted-foreground"}`}>
                         <Users className="h-3.5 w-3.5" />
-                        Invited Candidates
+                        {t("scheduleInterview:candidates.title")}
                         <span className="text-destructive">*</span>
                         {selected.size > 0 && (
-                          <span className="text-primary font-extrabold normal-case ml-1">
-                            {selected.size.toLocaleString()} selected
+                          <span className="text-primary font-extrabold normal-case ms-1">
+                            {t("scheduleInterview:candidates.selectedCount", { count: formatNumber(selected.size, i18n.language) })}
                           </span>
                         )}
                       </p>
@@ -542,19 +530,18 @@ export default function ScheduleInterviewPage() {
                           className="text-xs text-muted-foreground hover:text-destructive transition-colors"
                           data-testid="button-clear-all"
                         >
-                          Clear all
+                          {t("scheduleInterview:candidates.clearAll")}
                         </button>
                       )}
                     </div>
 
-                    {/* Selected chips */}
                     {selected.size > 0 && (
                       <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-2 rounded-md bg-muted/10 border border-border">
                         {Array.from(selected.entries()).map(([id, c]) => (
                           <Badge
                             key={id}
                             variant="outline"
-                            className="bg-primary/10 text-primary border-primary/30 text-xs gap-1 pr-1 cursor-pointer hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
+                            className="bg-primary/10 text-primary border-primary/30 text-xs gap-1 pe-1 cursor-pointer hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
                             onClick={() =>
                               setSelected((prev) => {
                                 const n = new Map(prev);
@@ -564,17 +551,16 @@ export default function ScheduleInterviewPage() {
                             }
                             data-testid={`chip-invited-${id}`}
                           >
-                            {c.fullNameEn}
+                            <bdi>{c.fullNameEn}</bdi>
                             <X className="h-2.5 w-2.5 opacity-60" />
                           </Badge>
                         ))}
                       </div>
                     )}
 
-                    {/* Job selector */}
                     <div className="space-y-1.5">
                       <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                        Filter by Job
+                        {t("scheduleInterview:candidates.filterByJob")}
                       </p>
                       <Select
                         value={selectedJobId || "none"}
@@ -584,27 +570,26 @@ export default function ScheduleInterviewPage() {
                           className={`bg-muted/30 ${candidateError && !selectedJobId ? "border-destructive" : "border-border"}`}
                           data-testid="select-job-applications"
                         >
-                          <SelectValue placeholder="Select an active job to browse applicants…" />
+                          <SelectValue placeholder={t("scheduleInterview:candidates.selectJobPh")} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">Select an active job to browse applicants…</SelectItem>
+                          <SelectItem value="none">{t("scheduleInterview:candidates.selectJobPh")}</SelectItem>
                           {activeJobs.map((job) => (
                             <SelectItem key={job.id} value={job.id}>
-                              {job.title}
+                              <bdi>{job.title}</bdi>
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
 
-                    {/* Search + bulk actions */}
                     {selectedJobId && (
                       <div className="flex items-center gap-3">
                         <div className="relative flex-1">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                           <Input
-                            placeholder="Search by name or National ID…"
-                            className="pl-10 bg-muted/30 border-border"
+                            placeholder={t("scheduleInterview:candidates.search")}
+                            className="ps-10 bg-muted/30 border-border"
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
                             data-testid="input-invite-search"
@@ -619,13 +604,12 @@ export default function ScheduleInterviewPage() {
                             onClick={allPageSelected ? deselectAllOnPage : selectAllOnPage}
                             data-testid="button-select-page"
                           >
-                            {allPageSelected ? "Deselect page" : "Select page"}
+                            {allPageSelected ? t("scheduleInterview:candidates.deselectPage") : t("scheduleInterview:candidates.selectPage")}
                           </Button>
                         )}
                       </div>
                     )}
 
-                    {/* Applicant list */}
                     <div
                       className={`rounded-md border divide-y divide-border overflow-hidden ${
                         candidateError && selected.size === 0 ? "border-destructive" : "border-border"
@@ -635,7 +619,7 @@ export default function ScheduleInterviewPage() {
                         <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
                           <Users className="h-10 w-10 text-muted-foreground/30" />
                           <p className="text-sm text-muted-foreground">
-                            Select an active job above to browse its applicants
+                            {t("scheduleInterview:candidates.noJobYet")}
                           </p>
                         </div>
                       ) : loadingApps ? (
@@ -647,8 +631,8 @@ export default function ScheduleInterviewPage() {
                           <Users className="h-8 w-8 text-muted-foreground/30" />
                           <p className="text-sm text-muted-foreground">
                             {total === 0 && !debouncedSearch
-                              ? "No applicants for this job yet"
-                              : "No matches — try a different search term"}
+                              ? t("scheduleInterview:candidates.noApplicantsYet")
+                              : t("scheduleInterview:candidates.noMatches")}
                           </p>
                         </div>
                       ) : (
@@ -669,7 +653,6 @@ export default function ScheduleInterviewPage() {
                               onClick={() => toggleCandidate(a)}
                               data-testid={`row-invite-${a.candidateId}`}
                             >
-                              {/* Checkbox */}
                               <div
                                 className={`h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
                                   isSelected
@@ -681,21 +664,19 @@ export default function ScheduleInterviewPage() {
                                   <CheckCircle2 className="h-3.5 w-3.5 text-primary-foreground" />
                                 )}
                               </div>
-                              {/* Name */}
                               <div className="flex-1 min-w-0">
                                 <span
                                   className={`text-sm font-semibold truncate block ${
                                     isSelected ? "text-primary" : "text-white"
                                   }`}
                                 >
-                                  {a.fullNameEn}
+                                  <bdi>{a.fullNameEn}</bdi>
                                 </span>
                                 <span className={`text-xs ${statusColor} capitalize`}>
-                                  {a.applicationStatus.replace(/_/g, " ")}
+                                  {localizedStatus(a.applicationStatus)}
                                 </span>
                               </div>
-                              {/* National ID */}
-                              <code className="text-xs text-muted-foreground font-mono shrink-0">
+                              <code className="text-xs text-muted-foreground font-mono shrink-0" dir="ltr">
                                 {a.nationalId ?? "—"}
                               </code>
                             </div>
@@ -703,19 +684,18 @@ export default function ScheduleInterviewPage() {
                         })
                       )}
 
-                      {/* Pagination footer */}
                       {selectedJobId && total > 0 && (
                         <div className="flex items-center justify-between px-4 py-2.5 border-t border-border bg-muted/5">
                           <span className="text-xs text-muted-foreground">
-                            Showing{" "}
-                            <span className="font-semibold text-white">
-                              {from.toLocaleString()}–{to.toLocaleString()}
-                            </span>{" "}
-                            of{" "}
-                            <span className="font-semibold text-white">
-                              {total.toLocaleString()}
-                            </span>{" "}
-                            applicants
+                            <Trans
+                              i18nKey="scheduleInterview:pager.showing"
+                              values={{
+                                from: formatNumber(from, i18n.language),
+                                to: formatNumber(to, i18n.language),
+                                total: formatNumber(total, i18n.language),
+                              }}
+                              components={{ strong: <strong className="text-white" /> }}
+                            />
                           </span>
                           <div className="flex items-center gap-2">
                             <button
@@ -725,10 +705,10 @@ export default function ScheduleInterviewPage() {
                               className="h-7 w-7 flex items-center justify-center rounded border border-border disabled:opacity-30 hover:bg-muted transition-colors"
                               data-testid="button-prev-page"
                             >
-                              <ChevronLeft className="h-4 w-4" />
+                              <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
                             </button>
                             <span className="text-xs text-muted-foreground min-w-16 text-center">
-                              Page {page} of {totalPages}
+                              {t("scheduleInterview:pager.page", { page: formatNumber(page, i18n.language), total: formatNumber(totalPages, i18n.language) })}
                             </span>
                             <button
                               type="button"
@@ -737,14 +717,13 @@ export default function ScheduleInterviewPage() {
                               className="h-7 w-7 flex items-center justify-center rounded border border-border disabled:opacity-30 hover:bg-muted transition-colors"
                               data-testid="button-next-page"
                             >
-                              <ChevronRight className="h-4 w-4" />
+                              <ChevronRight className="h-4 w-4 rtl:rotate-180" />
                             </button>
                           </div>
                         </div>
                       )}
                     </div>
 
-                    {/* Validation error */}
                     {candidateError && selected.size === 0 && (
                       <p className="text-sm text-destructive flex items-center gap-2">
                         <span>⚠</span> {candidateError}

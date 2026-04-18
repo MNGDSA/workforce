@@ -1,0 +1,80 @@
+{
+  "back": "Interview & Training",
+  "breadcrumb": "Schedule New Session",
+  "pageTitle": "Schedule Interview or Training Session",
+  "pageSubtitle": "Define the session details and select candidates from an active job's applicant pool.",
+  "details": {
+    "heading": "Session Details",
+    "groupName": "Batch / Group Name",
+    "groupNamePh": "e.g. Batch A – Makkah Region",
+    "date": "Date",
+    "time": "Time",
+    "venue": "Venue Name",
+    "venuePh": "e.g. Riyadh Main Hall",
+    "duration": "Duration per Candidate",
+    "minutes": "{{n}} minutes",
+    "hours": "{{n}} hours",
+    "fullDay": "Full day (8h)",
+    "googleMaps": "Google Maps Link",
+    "googleMapsPh": "https://maps.google.com/…",
+    "smsContent": "SMS Content",
+    "smsPh": "e.g. Dear candidate, you are invited to interview for {{batch}}.\nVenue: {{venue}}\nDate: {{date}} at {{time}}\nLocation: {{location}}\nPlease bring your National ID.",
+    "previewLabel": "Preview — resolved message",
+    "smsHelp": "Click a variable chip to insert it at the cursor. The message is sent via SMS to all invited candidates."
+  },
+  "vars": {
+    "batch": "Batch / Group Name",
+    "date": "Interview Date",
+    "time": "Interview Time",
+    "venue": "Venue Name",
+    "location": "Google Maps Link"
+  },
+  "buttons": {
+    "cancel": "Cancel",
+    "schedule": "Schedule Session"
+  },
+  "candidates": {
+    "title": "Invited Candidates",
+    "selectedCount": "{{count}} selected",
+    "clearAll": "Clear all",
+    "filterByJob": "Filter by Job",
+    "selectJobPh": "Select an active job to browse applicants…",
+    "search": "Search by name or National ID…",
+    "selectPage": "Select page",
+    "deselectPage": "Deselect page",
+    "noJobYet": "Select an active job above to browse its applicants",
+    "noApplicantsYet": "No applicants for this job yet",
+    "noMatches": "No matches — try a different search term",
+    "validationError": "Select at least one candidate from the applicant list."
+  },
+  "pager": {
+    "showing": "Showing <strong>{{from}}–{{to}}</strong> of <strong>{{total}}</strong> applicants",
+    "page": "Page {{page}} of {{total}}"
+  },
+  "status": {
+    "shortlisted": "shortlisted",
+    "rejected": "rejected",
+    "applied": "applied",
+    "screened": "screened",
+    "selected": "selected",
+    "interviewed": "interviewed",
+    "offered": "offered",
+    "withdrawn": "withdrawn"
+  },
+  "toast": {
+    "scheduledTitle": "Interview scheduled",
+    "scheduledDesc_one": "Session created with {{count}} candidate invited.",
+    "scheduledDesc_other": "Session created with {{count}} candidates invited.",
+    "failTitle": "Failed to schedule",
+    "failDesc": "Please check the details and try again."
+  },
+  "validation": {
+    "groupName": "Group name is required",
+    "date": "Date is required",
+    "time": "Time is required",
+    "venueName": "Venue name is required",
+    "googleLocation": "Google Maps link is required",
+    "googleLocationUrl": "Must be a valid URL",
+    "notes": "SMS content is required"
+  }
+}
