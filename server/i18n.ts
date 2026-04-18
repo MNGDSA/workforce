@@ -148,6 +148,128 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "candidate.notFoundOrArchived":     "Candidate not found or already archived",
     "candidate.archived":               "Candidate archived",
     "candidate.notFoundOrActive":       "Candidate not found or not archived",
+    "candidate.restored":               "Candidate restored",
+    "candidate.bulkActionLimit":        "Maximum 500 candidates per bulk action",
+    "candidate.bulkActionInvalid":      "Invalid action. Must be: block, unblock, or archive",
+    "candidate.bulkUploadLimit":        "Maximum 1,000 candidates per bulk upload",
+    "candidate.noLinkedRecord":         "No linked candidate record",
+
+    // Generic field validation
+    "common.idsRequired":               "ids array is required",
+    "common.candidatesRequired":        "candidates array is required",
+    "common.startDateRequired":         "startDate is required",
+    "common.endDateRequired":           "endDate is required",
+    "common.dateRangeRequired":         "dateFrom and dateTo are required",
+    "common.workforceIdRequired":       "Workforce ID is required",
+    "common.resultsRequired":           "results array is required",
+    "common.noFieldsToUpdate":          "No valid fields to update",
+    "common.nationalIdAndStartRequired":"nationalId and startDate are required",
+    "common.templateIdRequired":        "templateId is required",
+    "common.logsRequired":              "logs array is required",
+    "common.employeeIdsRequired":       "employeeIds array is required",
+    "common.statusesRequired":          "statuses array is required",
+    "common.recordsRequired":           "records array is required",
+    "common.forbidden":                 "Forbidden",
+    "common.endpointDeprecated":        "This endpoint has been replaced. Please update your app to the latest version.",
+
+    // SMP / bulk import
+    "smp.companyIdRequired":            "smpCompanyId is required for SMP workers",
+    "smp.bulkNotAllowed":               "SMP workers cannot be added via the bulk endpoint. Use the SMP validation and commit flow instead.",
+    "import.excelEmpty":                "Excel file is empty",
+    "import.rowLimit":                  "Maximum 5,000 rows per upload",
+
+    // Photo / verification
+    "photo.verifyUnavailable":          "Photo verification is temporarily unavailable. Please try again in a few minutes.",
+    "photo.qualityFailed":              "Photo quality check failed",
+    "photo.submittedForReview":         "Photo submitted for HR review. Your current photo remains active.",
+
+    // Application / job
+    "job.notFoundOrArchived":           "Job not found or already archived",
+    "application.ownOnly":              "You can only apply on your own behalf.",
+    "application.notFound":             "Application not found",
+    "onboarding.alreadyExists":         "Candidate is already in onboarding",
+
+    // Notifications / rules
+    "rule.notFound":                    "Rule not found",
+    "notification.notFound":            "Notification not found",
+    "alert.notFound":                   "Alert not found",
+
+    // Org structure
+    "businessUnit.notFound":            "Business unit not found",
+    "department.notFound":              "Department not found",
+    "position.selfParent":              "A position cannot be its own parent",
+    "position.circularHierarchy":       "Circular parent hierarchy detected",
+    "position.notFound":                "Position not found",
+
+    // Users / Super-admin
+    "auth.cannotCreateSuperAdmin":      "Cannot create another Super Admin.",
+    "auth.cannotPromoteSuperAdmin":     "Cannot promote a user to Super Admin.",
+    "auth.requiredRelogin":             "Authentication required. Please log in again.",
+    "user.notFoundShort":               "User not found",
+    "user.useCandidateFlow":            "Use the candidate registration flow for candidate users.",
+    "user.nationalIdExists":            "A user with this National ID already exists.",
+    "user.emailExists":                 "A user with this email already exists.",
+    "user.usernameExists":              "A user with this username already exists.",
+    "user.phoneExists":                 "A user with this phone already exists.",
+    "user.nationalIdTaken":             "Another user already has this National ID.",
+    "user.emailTaken":                  "Another user already has this email.",
+    "user.usernameTaken":               "Another user already has this username.",
+    "user.phoneTaken":                  "Another user already has this phone.",
+    "user.cannotDeleteSelf":            "You cannot delete your own account.",
+    "user.cannotDeleteSuperAdmin":      "Super Admin accounts cannot be deleted.",
+    "user.hasReferences":               "This user is referenced by other records (audit logs, candidates, etc.). Deactivate them instead.",
+
+    // Roles — system locks
+    "role.systemReadOnly":              "System roles cannot be modified",
+    "role.systemNoDelete":              "System roles cannot be deleted",
+    "role.systemPermsReadOnly":         "System role permissions cannot be modified",
+
+    // Documents / templates / contracts
+    "document.fileFieldsRequired":      "fileUrl and fileName are required",
+    "document.notFound":                "Document not found",
+    "template.hasContracts":            "Cannot delete template that has generated contracts. Archive it instead.",
+    "template.deleted":                 "Template deleted",
+    "template.noneActive":              "No active template found",
+    "contract.bulkFieldsRequired":      "templateId and onboardingIds[] are required",
+    "contract.alreadySigned":           "Contract already signed",
+    "contract.signOwnOnly":             "You can only sign your own contract.",
+
+    // Plugins / scheduling
+    "plugin.configRequired":            "pluginConfig is required",
+    "plugin.noActivePrinter":           "No active printer plugin",
+    "schedule.bulkFieldsRequired":      "workforceIds, templateId, startDate are required",
+    "scheduleAssignment.overlap":       "Assignment date range overlaps with an existing assignment for this employee",
+
+    // Assets
+    "asset.statusInvalid":              "status must be 'returned' or 'not_returned'",
+
+    // Data erasure
+    "erasure.notAuthorized":            "You are not authorized to submit a request for this employee record.",
+    "erasure.alreadyPending":           "A data erasure request is already pending review for this employee.",
+    "erasure.submitted":                "Your data erasure request has been submitted and will be reviewed by HR. You will be notified once it has been processed.",
+
+    // Final batch
+    "excuse.alreadyExists":             "An excuse request already exists for this date",
+    "assetAssignment.notFound":         "Asset assignment not found",
+    "asset.priceImmutable":             "Asset price cannot be changed after creation",
+    "broadcast.recipientRequired":      "At least one recipient is required",
+    "broadcast.notFound":               "Broadcast not found",
+    "broadcast.templateRequired":       "Message template is required",
+    "broadcast.noValidPhones":          "None of the selected employees have a valid phone number.",
+    "inbox.notFound":                   "Inbox item not found",
+    "sms.notConfigured":                "No active SMS plugin configured. Go to Notifications > SMS Gateway to set one up.",
+    "common.notAuthorized":             "Not authorized",
+    "photo.required":                   "Photo is required",
+    "submission.notFound":              "Submission not found",
+    "user.deactivated":                 "User account is deactivated.",
+    "workforce.inactive":               "Workforce record is inactive. Submission rejected.",
+    "workforce.terminated":             "Workforce record terminated. Submission after termination date rejected.",
+    "attendance.alreadyComplete":       "You have already completed check-in and check-out for today.",
+    "assetAssignment.fieldsRequired":   "assetId, workforceIds (non-empty array), and assignedAt are required",
+    "common.candidateIdRequired":       "candidateId is required",
+    "common.eventIdRequired":           "eventId is required",
+    "common.idsNonEmpty":               "ids must be a non-empty array",
+    "common.workforceIdAndStatusRequired": "workforceId and valid status are required",
   },
   ar: {
     // Auth middleware
@@ -276,6 +398,128 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "candidate.notFoundOrArchived":     "المرشح غير موجود أو مؤرشف بالفعل",
     "candidate.archived":               "تمت أرشفة المرشح",
     "candidate.notFoundOrActive":       "المرشح غير موجود أو ليس مؤرشفاً",
+    "candidate.restored":               "تم استعادة المرشح",
+    "candidate.bulkActionLimit":        "الحد الأقصى 500 مرشح لكل عملية جماعية",
+    "candidate.bulkActionInvalid":      "إجراء غير صحيح. يجب أن يكون: حظر أو إلغاء حظر أو أرشفة",
+    "candidate.bulkUploadLimit":        "الحد الأقصى 1,000 مرشح لكل رفع جماعي",
+    "candidate.noLinkedRecord":         "لا يوجد سجل مرشح مرتبط",
+
+    // Generic field validation
+    "common.idsRequired":               "حقل ids المصفوفة مطلوب",
+    "common.candidatesRequired":        "حقل candidates المصفوفة مطلوب",
+    "common.startDateRequired":         "تاريخ البداية مطلوب",
+    "common.endDateRequired":           "تاريخ النهاية مطلوب",
+    "common.dateRangeRequired":         "تاريخ البداية والنهاية مطلوبان",
+    "common.workforceIdRequired":       "معرّف القوى العاملة مطلوب",
+    "common.resultsRequired":           "حقل results المصفوفة مطلوب",
+    "common.noFieldsToUpdate":          "لا توجد حقول صالحة للتحديث",
+    "common.nationalIdAndStartRequired":"رقم الهوية وتاريخ البداية مطلوبان",
+    "common.templateIdRequired":        "معرّف القالب مطلوب",
+    "common.logsRequired":              "حقل logs المصفوفة مطلوب",
+    "common.employeeIdsRequired":       "حقل employeeIds المصفوفة مطلوب",
+    "common.statusesRequired":          "حقل statuses المصفوفة مطلوب",
+    "common.recordsRequired":           "حقل records المصفوفة مطلوب",
+    "common.forbidden":                 "ممنوع",
+    "common.endpointDeprecated":        "تم استبدال هذه الواجهة. يرجى تحديث التطبيق إلى أحدث إصدار.",
+
+    // SMP / bulk import
+    "smp.companyIdRequired":            "معرّف شركة SMP مطلوب لعمال SMP",
+    "smp.bulkNotAllowed":               "لا يمكن إضافة عمال SMP عبر هذه الواجهة. استخدم تدفق التحقق والتثبيت لـ SMP.",
+    "import.excelEmpty":                "ملف Excel فارغ",
+    "import.rowLimit":                  "الحد الأقصى 5,000 صف لكل عملية رفع",
+
+    // Photo / verification
+    "photo.verifyUnavailable":          "خدمة التحقق من الصور غير متوفرة مؤقتاً. يرجى المحاولة بعد دقائق.",
+    "photo.qualityFailed":              "فشل التحقق من جودة الصورة",
+    "photo.submittedForReview":         "تم إرسال الصورة لمراجعة الموارد البشرية. صورتك الحالية لا تزال نشطة.",
+
+    // Application / job
+    "job.notFoundOrArchived":           "الوظيفة غير موجودة أو مؤرشفة بالفعل",
+    "application.ownOnly":              "يمكنك التقديم باسمك الشخصي فقط.",
+    "application.notFound":             "الطلب غير موجود",
+    "onboarding.alreadyExists":         "المرشح موجود في عملية التأهيل بالفعل",
+
+    // Notifications / rules
+    "rule.notFound":                    "القاعدة غير موجودة",
+    "notification.notFound":            "الإشعار غير موجود",
+    "alert.notFound":                   "التنبيه غير موجود",
+
+    // Org structure
+    "businessUnit.notFound":            "وحدة الأعمال غير موجودة",
+    "department.notFound":              "الإدارة غير موجودة",
+    "position.selfParent":              "لا يمكن للوظيفة أن تكون والداً لنفسها",
+    "position.circularHierarchy":       "تم اكتشاف تسلسل دائري للوظائف",
+    "position.notFound":                "الوظيفة غير موجودة",
+
+    // Users / Super-admin
+    "auth.cannotCreateSuperAdmin":      "لا يمكن إنشاء مشرف عام آخر.",
+    "auth.cannotPromoteSuperAdmin":     "لا يمكن ترقية مستخدم إلى مشرف عام.",
+    "auth.requiredRelogin":             "يلزم تسجيل الدخول. يرجى تسجيل الدخول مرة أخرى.",
+    "user.notFoundShort":               "المستخدم غير موجود",
+    "user.useCandidateFlow":            "استخدم تدفق تسجيل المرشحين لمستخدمي المرشحين.",
+    "user.nationalIdExists":            "يوجد مستخدم مسجل برقم الهوية هذا بالفعل.",
+    "user.emailExists":                 "يوجد مستخدم مسجل بهذا البريد الإلكتروني بالفعل.",
+    "user.usernameExists":              "يوجد مستخدم بهذا اسم المستخدم بالفعل.",
+    "user.phoneExists":                 "يوجد مستخدم مسجل بهذا الرقم بالفعل.",
+    "user.nationalIdTaken":             "مستخدم آخر يحمل رقم الهوية نفسه.",
+    "user.emailTaken":                  "مستخدم آخر يحمل البريد الإلكتروني نفسه.",
+    "user.usernameTaken":               "مستخدم آخر يحمل اسم المستخدم نفسه.",
+    "user.phoneTaken":                  "مستخدم آخر يحمل رقم الجوال نفسه.",
+    "user.cannotDeleteSelf":            "لا يمكنك حذف حسابك الخاص.",
+    "user.cannotDeleteSuperAdmin":      "لا يمكن حذف حسابات المشرفين العامين.",
+    "user.hasReferences":               "هذا المستخدم مرتبط بسجلات أخرى (سجلات التدقيق، المرشحين، إلخ). قم بتعطيله بدلاً من الحذف.",
+
+    // Roles — system locks
+    "role.systemReadOnly":              "لا يمكن تعديل أدوار النظام",
+    "role.systemNoDelete":              "لا يمكن حذف أدوار النظام",
+    "role.systemPermsReadOnly":         "لا يمكن تعديل صلاحيات أدوار النظام",
+
+    // Documents / templates / contracts
+    "document.fileFieldsRequired":      "fileUrl و fileName مطلوبان",
+    "document.notFound":                "المستند غير موجود",
+    "template.hasContracts":            "لا يمكن حذف القالب الذي يحتوي على عقود مولدة. قم بأرشفته بدلاً من الحذف.",
+    "template.deleted":                 "تم حذف القالب",
+    "template.noneActive":              "لا يوجد قالب نشط",
+    "contract.bulkFieldsRequired":      "templateId و onboardingIds[] مطلوبان",
+    "contract.alreadySigned":           "العقد موقع بالفعل",
+    "contract.signOwnOnly":             "يمكنك توقيع عقدك الشخصي فقط.",
+
+    // Plugins / scheduling
+    "plugin.configRequired":            "إعدادات الإضافة مطلوبة",
+    "plugin.noActivePrinter":           "لا توجد إضافة طباعة نشطة",
+    "schedule.bulkFieldsRequired":      "workforceIds و templateId و startDate مطلوبة",
+    "scheduleAssignment.overlap":       "نطاق تاريخ التكليف يتداخل مع تكليف موجود لهذا الموظف",
+
+    // Assets
+    "asset.statusInvalid":              "يجب أن تكون الحالة 'returned' أو 'not_returned'",
+
+    // Data erasure
+    "erasure.notAuthorized":            "غير مصرح لك بتقديم طلب لسجل هذا الموظف.",
+    "erasure.alreadyPending":           "يوجد طلب محو بيانات قيد المراجعة لهذا الموظف بالفعل.",
+    "erasure.submitted":                "تم تقديم طلب محو البيانات وسيتم مراجعته من قِبل الموارد البشرية. سيتم إشعارك عند معالجته.",
+
+    // Final batch
+    "excuse.alreadyExists":             "يوجد طلب عذر مسجل لهذا التاريخ بالفعل",
+    "assetAssignment.notFound":         "تكليف العهدة غير موجود",
+    "asset.priceImmutable":             "لا يمكن تغيير سعر العهدة بعد إنشائها",
+    "broadcast.recipientRequired":      "يلزم وجود مستلم واحد على الأقل",
+    "broadcast.notFound":               "الرسالة الجماعية غير موجودة",
+    "broadcast.templateRequired":       "قالب الرسالة مطلوب",
+    "broadcast.noValidPhones":          "لا يوجد لدى الموظفين المختارين أرقام جوال صالحة.",
+    "inbox.notFound":                   "العنصر غير موجود في الوارد",
+    "sms.notConfigured":                "لا توجد إضافة رسائل قصيرة نشطة. اذهب إلى الإشعارات > بوابة الرسائل لإعدادها.",
+    "common.notAuthorized":             "غير مصرح",
+    "photo.required":                   "الصورة مطلوبة",
+    "submission.notFound":              "السجل غير موجود",
+    "user.deactivated":                 "حساب المستخدم معطل.",
+    "workforce.inactive":               "سجل القوى العاملة غير نشط. تم رفض التسجيل.",
+    "workforce.terminated":             "تم إنهاء سجل القوى العاملة. تم رفض التسجيل بعد تاريخ الإنهاء.",
+    "attendance.alreadyComplete":       "لقد أكملت الحضور والانصراف لهذا اليوم بالفعل.",
+    "assetAssignment.fieldsRequired":   "assetId و workforceIds (مصفوفة غير فارغة) و assignedAt مطلوبة",
+    "common.candidateIdRequired":       "معرّف المرشح مطلوب",
+    "common.eventIdRequired":           "معرّف الحدث مطلوب",
+    "common.idsNonEmpty":               "يجب أن تكون ids مصفوفة غير فارغة",
+    "common.workforceIdAndStatusRequired": "معرّف القوى العاملة وحالة صحيحة مطلوبان",
   },
 };
 

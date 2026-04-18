@@ -182,7 +182,7 @@ const uploadXlsx = multer({
 function handleError(res: Response, err: unknown) {
   console.error(err);
   if (err instanceof z.ZodError) {
-    return res.status(400).json({ message: "Validation error", errors: err.errors });
+    return res.status(400).json({ message: tr(req, "common.validation"), errors: err.errors });
   }
   const message = err instanceof Error ? err.message : "Internal server error";
   return res.status(500).json({ message });
@@ -431,7 +431,7 @@ export async function registerRoutes(
         if (isPhotoChange && qualityResult.qualityCheckSkipped) {
           try { await deleteFile(fileUrl); } catch {}
           return res.status(503).json({
-            message: "Photo verification is temporarily unavailable. Please try again in a few minutes.",
+            message: tr(req, "photo.verifyUnavailable"),
             qualityResult: { passed: false, checks: [{ name: "Face verification service", passed: false, tip: "The verification service is currently unreachable. Your photo cannot be processed until the service is available." }], qualityCheckSkipped: true },
           });
         }
@@ -439,7 +439,7 @@ export async function registerRoutes(
         if (!qualityResult.passed && !qualityResult.qualityCheckSkipped) {
           try { await deleteFile(fileUrl); } catch {}
           return res.status(422).json({
-            message: "Photo quality check failed",
+            message: tr(req, "photo.qualityFailed"),
             qualityResult,
           });
         }
@@ -483,7 +483,7 @@ export async function registerRoutes(
             "high",
             { entityType: "photo_change_request", entityId: changeRequest.id }
           );
-          return res.json({ url: fileUrl, docType, pendingReview: true, changeRequestId: changeRequest.id, qualityResult, message: "Photo submitted for HR review. Your current photo remains active." });
+          return res.json({ url: fileUrl, docType, pendingReview: true, changeRequestId: changeRequest.id, qualityResult, message: tr(req, "photo.submittedForReview") });
         }
       }
 
@@ -1289,7 +1289,7 @@ export async function registerRoutes(
     try {
       const restored = await storage.unarchiveCandidate(req.params.id);
       if (!restored) return res.status(404).json({ message: tr(req, "candidate.notFoundOrActive") });
-      return res.json({ message: "Candidate restored" });
+      return res.json({ message: tr(req, "candidate.restored") });
     } catch (err) {
       return handleError(res, err);
     }
@@ -1299,10 +1299,10 @@ export async function registerRoutes(
     try {
       const { ids, action } = req.body;
       if (!Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({ message: "ids array is required" });
+        return res.status(400).json({ message: tr(req, "common.idsRequired") });
       }
       if (ids.length > 500) {
-        return res.status(400).json({ message: "Maximum 500 candidates per bulk action" });
+        return res.status(400).json({ message: tr(req, "candidate.bulkActionLimit") });
       }
       if (action === "block") {
         const affected = await storage.bulkUpdateCandidateStatus(ids, "blocked");
@@ -1314,7 +1314,7 @@ export async function registerRoutes(
         const affected = await storage.bulkArchiveCandidates(ids);
         return res.json({ affected, action });
       } else {
-        return res.status(400).json({ message: "Invalid action. Must be: block, unblock, or archive" });
+        return res.status(400).json({ message: tr(req, "candidate.bulkActionInvalid") });
       }
     } catch (err) {
       return handleError(res, err);
@@ -1326,15 +1326,15 @@ export async function registerRoutes(
     try {
       const { candidates: rawCandidates } = req.body;
       if (!Array.isArray(rawCandidates) || rawCandidates.length === 0) {
-        return res.status(400).json({ message: "candidates array is required" });
+        return res.status(400).json({ message: tr(req, "common.candidatesRequired") });
       }
       if (rawCandidates.length > 1000) {
-        return res.status(400).json({ message: "Maximum 1,000 candidates per bulk upload" });
+        return res.status(400).json({ message: tr(req, "candidate.bulkUploadLimit") });
       }
       // SMP workers must use /api/candidates/smp-validate + /api/candidates/smp-commit
       const smpRows = rawCandidates.filter((c: Record<string, unknown>) => c.source === "smp");
       if (smpRows.length > 0) {
-        return res.status(400).json({ message: "SMP workers cannot be added via the bulk endpoint. Use the SMP validation and commit flow instead." });
+        return res.status(400).json({ message: tr(req, "smp.bulkNotAllowed") });
       }
       const errors: { row: number; message: string }[] = [];
       const validated: any[] = [];
@@ -1375,7 +1375,7 @@ export async function registerRoutes(
     try {
       const { candidates: rows } = req.body;
       if (!Array.isArray(rows) || rows.length === 0) {
-        return res.status(400).json({ message: "candidates array is required" });
+        return res.status(400).json({ message: tr(req, "common.candidatesRequired") });
       }
 
       const results: {
@@ -1469,7 +1469,7 @@ export async function registerRoutes(
       };
 
       if (!Array.isArray(validationResults) || validationResults.length === 0) {
-        return res.status(400).json({ message: "results array is required" });
+        return res.status(400).json({ message: tr(req, "common.resultsRequired") });
       }
 
       // Strict CLEAN confirmation gate: any CLEAN row without confirmed=true is rejected
@@ -1809,7 +1809,7 @@ export async function registerRoutes(
   app.post("/api/jobs/:id/archive", requirePermission("jobs:archive"), async (req: Request, res: Response) => {
     try {
       const archived = await storage.archiveJobPosting(req.params.id);
-      if (!archived) return res.status(404).json({ message: "Job not found or already archived" });
+      if (!archived) return res.status(404).json({ message: tr(req, "job.notFoundOrArchived") });
       return res.json({ success: true });
     } catch (err) {
       return handleError(res, err);
@@ -1880,7 +1880,7 @@ export async function registerRoutes(
       if (!isAdmin) {
         const myCand = await storage.getCandidateByUserId(req.authUserId!);
         if (!myCand || !data.candidateId || myCand.id !== data.candidateId) {
-          return res.status(403).json({ message: "You can only apply on your own behalf." });
+          return res.status(403).json({ message: tr(req, "application.ownOnly") });
         }
       }
 
@@ -1949,7 +1949,7 @@ export async function registerRoutes(
     try {
       const data = insertApplicationSchema.partial().parse(req.body);
       const app_ = await storage.updateApplication(req.params.id, data);
-      if (!app_) return res.status(404).json({ message: "Application not found" });
+      if (!app_) return res.status(404).json({ message: tr(req, "application.notFound") });
       return res.json(app_);
     } catch (err) {
       return handleError(res, err);
@@ -2117,8 +2117,8 @@ export async function registerRoutes(
       //   applicationId === null → SMP onboarding → employmentType = "smp"
       //   applicationId !== null → individual job application → employmentType = "individual"
       const { ids, startDate, eventId, salary, smpCompanyId, employmentType: batchEmploymentType } = req.body;
-      if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "ids array is required" });
-      if (!startDate) return res.status(400).json({ message: "startDate is required" });
+      if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: tr(req, "common.idsRequired") });
+      if (!startDate) return res.status(400).json({ message: tr(req, "common.startDateRequired") });
       const uniqueIds = [...new Set(ids as string[])];
       const results: any[] = [];
       const errors: { id: string; message: string }[] = [];
@@ -2137,7 +2137,7 @@ export async function registerRoutes(
           }
           // SMP workers must be linked to a company
           if (resolvedEmploymentType === "smp" && !smpCompanyId) {
-            errors.push({ id, message: "smpCompanyId is required for SMP workers" });
+            errors.push({ id, message: tr(req, "smp.companyIdRequired") });
             continue;
           }
           // Only pass smpCompanyId for SMP workers — individual workers must have it null
@@ -2183,7 +2183,7 @@ export async function registerRoutes(
       // Prevent duplicate onboarding for same candidate
       const existing = await storage.getOnboardingRecords({});
       const dup = existing.find(r => r.candidateId === data.candidateId && r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated");
-      if (dup) return res.status(409).json({ message: "Candidate is already in onboarding" });
+      if (dup) return res.status(409).json({ message: tr(req, "onboarding.alreadyExists") });
       // Server-side: always read the candidate's actual upload status from DB
       // so stale client caches don't create onboarding records with false flags
       if (data.candidateId) {
@@ -2260,7 +2260,7 @@ export async function registerRoutes(
   app.post("/api/onboarding/:id/convert", requirePermission("onboarding:convert"), async (req: Request, res: Response) => {
     try {
       const { startDate, eventId, salary, smpCompanyId, employmentType: clientEmploymentType } = req.body as Record<string, string>;
-      if (!startDate) return res.status(400).json({ message: "startDate is required" });
+      if (!startDate) return res.status(400).json({ message: tr(req, "common.startDateRequired") });
 
       // Derive employmentType from onboarding context when not explicitly provided.
       // This matches bulk-convert behavior: applicationId === null → SMP pipeline.
@@ -2278,7 +2278,7 @@ export async function registerRoutes(
 
       // SMP workers must be linked to a company
       if (resolvedEmploymentType === "smp" && !smpCompanyId) {
-        return res.status(400).json({ message: "smpCompanyId is required for SMP workers" });
+        return res.status(400).json({ message: tr(req, "smp.companyIdRequired") });
       }
 
       // Enforce: individual workers must have null smpCompanyId regardless of what client sends
@@ -2464,7 +2464,7 @@ export async function registerRoutes(
       const emp = await storage.getWorkforceEmployee(req.params.id);
       if (!emp) return res.status(404).json({ message: tr(req, "employee.notFound") });
       const candidateId = emp.candidateId;
-      if (!candidateId) return res.status(400).json({ message: "No linked candidate record" });
+      if (!candidateId) return res.status(400).json({ message: tr(req, "candidate.noLinkedRecord") });
 
       const allowed = [
         "fullNameAr", "email", "phone", "dateOfBirth", "gender",
@@ -2478,7 +2478,7 @@ export async function registerRoutes(
       for (const key of allowed) {
         if (key in req.body) filtered[key] = req.body[key] ?? null;
       }
-      if (Object.keys(filtered).length === 0) return res.status(400).json({ message: "No valid fields to update" });
+      if (Object.keys(filtered).length === 0) return res.status(400).json({ message: tr(req, "common.noFieldsToUpdate") });
 
       const nullableFields = ["email", "fullNameAr", "phone", "dateOfBirth", "gender", "nationalityText",
         "maritalStatus", "iqamaNumber", "city", "region", "educationLevel", "university", "major",
@@ -2524,8 +2524,8 @@ export async function registerRoutes(
       const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: "" });
       fs.unlinkSync(req.file.path);
 
-      if (rows.length === 0) return res.status(400).json({ message: "Excel file is empty" });
-      if (rows.length > 5000) return res.status(400).json({ message: "Maximum 5,000 rows per upload" });
+      if (rows.length === 0) return res.status(400).json({ message: tr(req, "import.excelEmpty") });
+      if (rows.length > 5000) return res.status(400).json({ message: tr(req, "import.rowLimit") });
 
       // Fetch all workforce records, events, and SMP companies for lookups
       const allWorkers = await storage.getWorkforce({});
@@ -2648,7 +2648,7 @@ export async function registerRoutes(
   app.post("/api/workforce/:id/terminate", requirePermission("workforce:terminate"), async (req: Request, res: Response) => {
     try {
       const { endDate, terminationReason, terminationCategory } = req.body as { endDate: string; terminationReason?: string; terminationCategory?: string };
-      if (!endDate) return res.status(400).json({ message: "endDate is required" });
+      if (!endDate) return res.status(400).json({ message: tr(req, "common.endDateRequired") });
       const validCategories = ["end_of_season", "resignation", "performance", "disciplinary", "contract_expiry", "other"];
       if (terminationCategory && !validCategories.includes(terminationCategory)) {
         return res.status(400).json({ message: `Invalid terminationCategory. Must be one of: ${validCategories.join(", ")}` });
@@ -2676,7 +2676,7 @@ export async function registerRoutes(
   app.post("/api/workforce/reinstate", requirePermission("workforce:reinstate"), async (req: Request, res: Response) => {
     try {
       const { nationalId, startDate, eventId, salary, jobId, smpCompanyId } = req.body as Record<string, string>;
-      if (!nationalId || !startDate) return res.status(400).json({ message: "nationalId and startDate are required" });
+      if (!nationalId || !startDate) return res.status(400).json({ message: tr(req, "common.nationalIdAndStartRequired") });
 
       // Derive employment type from the most recent persisted workforce record for this national ID.
       // This prevents clients from forging type to bypass smpCompanyId requirement.
@@ -2691,7 +2691,7 @@ export async function registerRoutes(
 
       // SMP workers must be linked to a company
       if (resolvedEmploymentType === "smp" && !smpCompanyId) {
-        return res.status(400).json({ message: "smpCompanyId is required for SMP workers" });
+        return res.status(400).json({ message: tr(req, "smp.companyIdRequired") });
       }
       // Enforce: individual workers must have null smpCompanyId regardless of what client sends
       const resolvedSmpCompanyId = resolvedEmploymentType === "smp" ? (smpCompanyId || undefined) : undefined;
@@ -2737,7 +2737,7 @@ export async function registerRoutes(
     try {
       const data = insertAutomationRuleSchema.partial().parse(req.body);
       const rule = await storage.updateAutomationRule(req.params.id, data);
-      if (!rule) return res.status(404).json({ message: "Rule not found" });
+      if (!rule) return res.status(404).json({ message: tr(req, "rule.notFound") });
       return res.json(rule);
     } catch (err) {
       return handleError(res, err);
@@ -2772,7 +2772,7 @@ export async function registerRoutes(
   app.patch("/api/notifications/:id/read", requireAuth, async (req: Request, res: Response) => {
     try {
       const marked = await storage.markNotificationRead(req.params.id);
-      if (!marked) return res.status(404).json({ message: "Notification not found" });
+      if (!marked) return res.status(404).json({ message: tr(req, "notification.notFound") });
       return res.json({ success: true });
     } catch (err) {
       return handleError(res, err);
@@ -2805,7 +2805,7 @@ export async function registerRoutes(
   app.patch("/api/admin/alerts/:id/read", requirePermission("admin_alerts:manage"), async (req: Request, res: Response) => {
     try {
       const ok = await storage.markAdminAlertRead(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Alert not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "alert.notFound") });
       return res.json({ success: true });
     } catch (err) {
       return handleError(res, err);
@@ -2890,7 +2890,7 @@ export async function registerRoutes(
     try {
       const data = insertBusinessUnitSchema.partial().parse(req.body);
       const bu = await storage.updateBusinessUnit(req.params.id, data);
-      if (!bu) return res.status(404).json({ message: "Business unit not found" });
+      if (!bu) return res.status(404).json({ message: tr(req, "businessUnit.notFound") });
       return res.json(bu);
     } catch (err) {
       return handleError(res, err);
@@ -3027,7 +3027,7 @@ export async function registerRoutes(
     try {
       const data = insertDepartmentSchema.partial().parse(req.body);
       const dept = await storage.updateDepartment(req.params.id, data);
-      if (!dept) return res.status(404).json({ message: "Department not found" });
+      if (!dept) return res.status(404).json({ message: tr(req, "department.notFound") });
       return res.json(dept);
     } catch (err) { return handleError(res, err); }
   });
@@ -3078,13 +3078,13 @@ export async function registerRoutes(
           return res.status(400).json({ message: tr(req, "position.parentDeptMismatch") });
         }
         if (data.parentPositionId === req.params.id) {
-          return res.status(400).json({ message: "A position cannot be its own parent" });
+          return res.status(400).json({ message: tr(req, "position.selfParent") });
         }
         let ancestorId: string | null = parent.parentPositionId;
         const visited = new Set<string>([req.params.id, data.parentPositionId]);
         while (ancestorId) {
           if (visited.has(ancestorId)) {
-            return res.status(400).json({ message: "Circular parent hierarchy detected" });
+            return res.status(400).json({ message: tr(req, "position.circularHierarchy") });
           }
           visited.add(ancestorId);
           const anc = await storage.getPosition(ancestorId);
@@ -3092,7 +3092,7 @@ export async function registerRoutes(
         }
       }
       const pos = await storage.updatePosition(req.params.id, data);
-      if (!pos) return res.status(404).json({ message: "Position not found" });
+      if (!pos) return res.status(404).json({ message: tr(req, "position.notFound") });
       return res.json(pos);
     } catch (err) { return handleError(res, err); }
   });
@@ -3137,7 +3137,7 @@ export async function registerRoutes(
       if (data.roleId) {
         const r = await storage.getRole(data.roleId);
         if (r?.slug === "super_admin") {
-          return res.status(403).json({ message: "Cannot create another Super Admin." });
+          return res.status(403).json({ message: tr(req, "auth.cannotCreateSuperAdmin") });
         }
       }
       const pwRules = [
@@ -3166,7 +3166,7 @@ export async function registerRoutes(
       if (data.roleId) {
         const r = await storage.getRole(data.roleId);
         if (r?.slug === "super_admin") {
-          return res.status(403).json({ message: "Cannot promote a user to Super Admin." });
+          return res.status(403).json({ message: tr(req, "auth.cannotPromoteSuperAdmin") });
         }
       }
       // Block any modification of the existing Super Admin.
@@ -3176,7 +3176,7 @@ export async function registerRoutes(
         return res.status(403).json({ message: tr(req, "auth.superAdminReadOnly") });
       }
       const user = await storage.updateUser(req.params.id, data);
-      if (!user) return res.status(404).json({ message: "User not found" });
+      if (!user) return res.status(404).json({ message: tr(req, "user.notFoundShort") });
       invalidateUserActiveCache(req.params.id);
       return res.json({ ...user, password: undefined });
     } catch (err) {
@@ -3253,23 +3253,23 @@ export async function registerRoutes(
         return res.status(403).json({ message: tr(req, "role.cannotAssignSuperAdmin") });
       }
       if (role.slug === "candidate") {
-        return res.status(400).json({ message: "Use the candidate registration flow for candidate users." });
+        return res.status(400).json({ message: tr(req, "user.useCandidateFlow") });
       }
       const pwError = validatePassword(data.password);
       if (pwError) return res.status(400).json({ message: pwError });
 
       // Uniqueness checks with friendly messages.
       if (await storage.getUserByNationalId(data.nationalId!)) {
-        return res.status(409).json({ message: "A user with this National ID already exists." });
+        return res.status(409).json({ message: tr(req, "user.nationalIdExists") });
       }
       if (await storage.getUserByEmail(data.email)) {
-        return res.status(409).json({ message: "A user with this email already exists." });
+        return res.status(409).json({ message: tr(req, "user.emailExists") });
       }
       if (await storage.getUserByUsername(data.username)) {
-        return res.status(409).json({ message: "A user with this username already exists." });
+        return res.status(409).json({ message: tr(req, "user.usernameExists") });
       }
       if (data.phone && (await storage.getUserByPhone(data.phone))) {
-        return res.status(409).json({ message: "A user with this phone already exists." });
+        return res.status(409).json({ message: tr(req, "user.phoneExists") });
       }
 
       const hashed = await bcrypt.hash(data.password, 10);
@@ -3323,25 +3323,25 @@ export async function registerRoutes(
       if (data.nationalId && data.nationalId !== target.nationalId) {
         const existing = await storage.getUserByNationalId(data.nationalId);
         if (existing && existing.id !== target.id) {
-          return res.status(409).json({ message: "Another user already has this National ID." });
+          return res.status(409).json({ message: tr(req, "user.nationalIdTaken") });
         }
       }
       if (data.email && data.email !== target.email) {
         const existing = await storage.getUserByEmail(data.email);
         if (existing && existing.id !== target.id) {
-          return res.status(409).json({ message: "Another user already has this email." });
+          return res.status(409).json({ message: tr(req, "user.emailTaken") });
         }
       }
       if (data.username && data.username !== target.username) {
         const existing = await storage.getUserByUsername(data.username);
         if (existing && existing.id !== target.id) {
-          return res.status(409).json({ message: "Another user already has this username." });
+          return res.status(409).json({ message: tr(req, "user.usernameTaken") });
         }
       }
       if (data.phone && data.phone !== target.phone) {
         const existing = await storage.getUserByPhone(data.phone);
         if (existing && existing.id !== target.id) {
-          return res.status(409).json({ message: "Another user already has this phone." });
+          return res.status(409).json({ message: tr(req, "user.phoneTaken") });
         }
       }
 
@@ -3362,13 +3362,13 @@ export async function registerRoutes(
 
       // Refuse to delete yourself.
       if (req.authUser && req.authUser.id === target.id) {
-        return res.status(403).json({ message: "You cannot delete your own account." });
+        return res.status(403).json({ message: tr(req, "user.cannotDeleteSelf") });
       }
 
       // Refuse to delete any Super Admin (the role is the system safety net).
       const targetRole = target.roleId ? await storage.getRole(target.roleId) : null;
       if (targetRole?.slug === "super_admin") {
-        return res.status(403).json({ message: "Super Admin accounts cannot be deleted." });
+        return res.status(403).json({ message: tr(req, "user.cannotDeleteSuperAdmin") });
       }
 
       try {
@@ -3378,7 +3378,7 @@ export async function registerRoutes(
         // Foreign-key violations (e.g. user authored audit logs / candidates) → 409.
         if (e?.code === "23503") {
           return res.status(409).json({
-            message: "This user is referenced by other records (audit logs, candidates, etc.). Deactivate them instead.",
+            message: tr(req, "user.hasReferences"),
           });
         }
         throw e;
@@ -3471,7 +3471,7 @@ export async function registerRoutes(
       const role = await storage.getRole(req.params.id);
       if (!role) return res.status(404).json({ message: tr(req, "role.notFound") });
       if (role.isSystem) {
-        return res.status(403).json({ message: "System roles cannot be modified" });
+        return res.status(403).json({ message: tr(req, "role.systemReadOnly") });
       }
       const bodySchema = z.object({
         name: z.string().min(2).max(100).optional(),
@@ -3504,7 +3504,7 @@ export async function registerRoutes(
       const result = await storage.deleteRole(req.params.id);
       if (!result.ok) {
         if (result.reason === "system_role") {
-          return res.status(403).json({ message: "System roles cannot be deleted" });
+          return res.status(403).json({ message: tr(req, "role.systemNoDelete") });
         }
         if (result.reason === "in_use") {
           return res.status(409).json({
@@ -3563,7 +3563,7 @@ export async function registerRoutes(
       const role = await storage.getRole(req.params.id);
       if (!role) return res.status(404).json({ message: tr(req, "role.notFound") });
       if (role.isSystem) {
-        return res.status(403).json({ message: "System role permissions cannot be modified" });
+        return res.status(403).json({ message: tr(req, "role.systemPermsReadOnly") });
       }
       const bodySchema = z.object({
         permissions: z.array(z.string()).max(500),
@@ -3673,7 +3673,7 @@ export async function registerRoutes(
   app.post("/api/smp-companies/:id/documents", requirePermission("smp:documents_write"), async (req: Request, res: Response) => {
     try {
       const { fileUrl, fileName, description, eventId } = req.body;
-      if (!fileUrl || !fileName) return res.status(400).json({ message: "fileUrl and fileName are required" });
+      if (!fileUrl || !fileName) return res.status(400).json({ message: tr(req, "document.fileFieldsRequired") });
       const doc = await storage.createSMPDocument({
         smpCompanyId: req.params.id,
         fileUrl,
@@ -3691,7 +3691,7 @@ export async function registerRoutes(
   app.delete("/api/smp-companies/:companyId/documents/:docId", requirePermission("smp:documents_write"), async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteSMPDocument(req.params.docId, req.params.companyId);
-      if (!ok) return res.status(404).json({ message: "Document not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "document.notFound") });
       return res.status(204).send();
     } catch (err) {
       return handleError(res, err);
@@ -3739,11 +3739,11 @@ export async function registerRoutes(
     try {
       const contracts = await storage.getCandidateContracts({ templateId: req.params.id });
       if (contracts.length > 0) {
-        return res.status(409).json({ message: "Cannot delete template that has generated contracts. Archive it instead." });
+        return res.status(409).json({ message: tr(req, "template.hasContracts") });
       }
       const ok = await storage.deleteContractTemplate(req.params.id);
       if (!ok) return res.status(404).json({ message: tr(req, "template.notFound") });
-      return res.json({ message: "Template deleted" });
+      return res.json({ message: tr(req, "template.deleted") });
     } catch (err) { return handleError(res, err); }
   });
 
@@ -3778,7 +3778,7 @@ export async function registerRoutes(
         // Candidate can only read their own contracts. Force-scope to their candidate row
         // and reject queries that target someone else (or omit the scope entirely).
         const own = await storage.getCandidateByUserId(req.authUserId!);
-        if (!own) return res.status(403).json({ message: "Forbidden" });
+        if (!own) return res.status(403).json({ message: tr(req, "common.forbidden") });
         if (candidateId && candidateId !== own.id) {
           return res.status(403).json({ message: tr(req, "contract.ownOnly") });
         }
@@ -3813,7 +3813,7 @@ export async function registerRoutes(
       if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
 
       const { templateId } = req.body;
-      if (!templateId) return res.status(400).json({ message: "templateId is required" });
+      if (!templateId) return res.status(400).json({ message: tr(req, "common.templateIdRequired") });
 
       const template = await storage.getContractTemplate(templateId);
       if (!template) return res.status(404).json({ message: tr(req, "template.notFound") });
@@ -3868,7 +3868,7 @@ export async function registerRoutes(
     try {
       const { onboardingIds, templateId } = req.body;
       if (!templateId || !Array.isArray(onboardingIds) || onboardingIds.length === 0) {
-        return res.status(400).json({ message: "templateId and onboardingIds[] are required" });
+        return res.status(400).json({ message: tr(req, "contract.bulkFieldsRequired") });
       }
       const template = await storage.getContractTemplate(templateId);
       if (!template) return res.status(404).json({ message: tr(req, "template.notFound") });
@@ -3926,14 +3926,14 @@ export async function registerRoutes(
     try {
       const contract = await storage.getCandidateContract(req.params.id);
       if (!contract) return res.status(404).json({ message: tr(req, "contract.notFound") });
-      if (contract.status === "signed") return res.status(409).json({ message: "Contract already signed" });
+      if (contract.status === "signed") return res.status(409).json({ message: tr(req, "contract.alreadySigned") });
 
       // Authorization: admin with candidate_contracts:manage OR the contract's own candidate.
       const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("candidate_contracts:manage");
       if (!isAdmin) {
         const myCand = await storage.getCandidateByUserId(req.authUserId!);
         if (!myCand || !contract.candidateId || myCand.id !== contract.candidateId) {
-          return res.status(403).json({ message: "You can only sign your own contract." });
+          return res.status(403).json({ message: tr(req, "contract.signOwnOnly") });
         }
       }
 
@@ -4049,7 +4049,7 @@ export async function registerRoutes(
   app.post("/api/sms-plugins", requirePermission("settings:write"), async (req: Request, res: Response) => {
     try {
       const { pluginConfig, credentials } = req.body as { pluginConfig: unknown; credentials?: Record<string, string> };
-      if (!pluginConfig) return res.status(400).json({ message: "pluginConfig is required" });
+      if (!pluginConfig) return res.status(400).json({ message: tr(req, "plugin.configRequired") });
 
       const validation = validatePluginConfig(pluginConfig);
       if (!validation.valid) return res.status(400).json({ message: validation.error });
@@ -4130,7 +4130,7 @@ export async function registerRoutes(
     try {
       const eventId = req.query.eventId as string | undefined;
       const template = await storage.getActiveIdCardTemplate(eventId);
-      if (!template) return res.status(404).json({ message: "No active template found" });
+      if (!template) return res.status(404).json({ message: tr(req, "template.noneActive") });
       return res.json(template);
     } catch (err) { return handleError(res, err); }
   });
@@ -4198,7 +4198,7 @@ export async function registerRoutes(
   app.get("/api/printer-plugins/active", requireAuth, async (_req: Request, res: Response) => {
     try {
       const plugin = await storage.getActivePrinterPlugin();
-      if (!plugin) return res.status(404).json({ message: "No active printer plugin" });
+      if (!plugin) return res.status(404).json({ message: tr(req, "plugin.noActivePrinter") });
       return res.json(plugin);
     } catch (err) { return handleError(res, err); }
   });
@@ -4262,7 +4262,7 @@ export async function registerRoutes(
     try {
       const body = req.body as { logs?: unknown[] };
       if (!Array.isArray(body.logs) || body.logs.length === 0) {
-        return res.status(400).json({ message: "logs array is required" });
+        return res.status(400).json({ message: tr(req, "common.logsRequired") });
       }
       const validated = body.logs.map((l) => insertIdCardPrintLogSchema.parse(l));
       const created = await storage.bulkCreateIdCardPrintLogs(validated);
@@ -4279,10 +4279,10 @@ export async function registerRoutes(
         statuses: { employeeId: string; status: string; error?: string }[];
       };
       if (!Array.isArray(employeeIds) || employeeIds.length === 0) {
-        return res.status(400).json({ message: "employeeIds array is required" });
+        return res.status(400).json({ message: tr(req, "common.employeeIdsRequired") });
       }
       if (!Array.isArray(statuses)) {
-        return res.status(400).json({ message: "statuses array is required" });
+        return res.status(400).json({ message: tr(req, "common.statusesRequired") });
       }
       const logEntries = statuses.map((s) =>
         insertIdCardPrintLogSchema.parse({
@@ -4310,7 +4310,7 @@ export async function registerRoutes(
     try {
       const { employeeIds } = req.body as { employeeIds?: string[] };
       if (!Array.isArray(employeeIds)) {
-        return res.status(400).json({ message: "employeeIds array required" });
+        return res.status(400).json({ message: tr(req, "common.employeeIdsRequired") });
       }
       const results: Record<string, string | null> = {};
       for (const id of employeeIds) {
@@ -4472,7 +4472,7 @@ export async function registerRoutes(
         endDate?: string | null;
       };
       if (!Array.isArray(workforceIds) || !templateId || !startDate) {
-        return res.status(400).json({ message: "workforceIds, templateId, startDate are required" });
+        return res.status(400).json({ message: tr(req, "schedule.bulkFieldsRequired") });
       }
       const result = await storage.bulkAssignSchedule(workforceIds, templateId, startDate, assignedBy, endDate);
       return res.status(201).json(result);
@@ -4487,7 +4487,7 @@ export async function registerRoutes(
       const startDate = data.startDate ?? existing.startDate;
       const endDate = data.endDate !== undefined ? data.endDate : existing.endDate;
       const hasOverlap = await storage.checkScheduleOverlap(existing.workforceId, startDate, endDate, req.params.id);
-      if (hasOverlap) return res.status(409).json({ message: "Assignment date range overlaps with an existing assignment for this employee" });
+      if (hasOverlap) return res.status(409).json({ message: tr(req, "scheduleAssignment.overlap") });
       const row = await storage.updateScheduleAssignment(req.params.id, data);
       if (!row) return res.status(404).json({ message: tr(req, "scheduleAssignment.notFound") });
       return res.json(row);
@@ -4497,7 +4497,7 @@ export async function registerRoutes(
   app.post("/api/schedule-assignments/:id/end", requireAuth, async (req: Request, res: Response) => {
     try {
       const { endDate } = req.body as { endDate: string };
-      if (!endDate) return res.status(400).json({ message: "endDate is required" });
+      if (!endDate) return res.status(400).json({ message: tr(req, "common.endDateRequired") });
       const row = await storage.endScheduleAssignment(req.params.id, endDate);
       if (!row) return res.status(404).json({ message: tr(req, "assignment.notFound") });
       return res.json(row);
@@ -4549,7 +4549,7 @@ export async function registerRoutes(
   app.post("/api/attendance/bulk", requirePermission("attendance:create"), async (req: Request, res: Response) => {
     try {
       const { records } = req.body as { records: unknown[] };
-      if (!Array.isArray(records)) return res.status(400).json({ message: "records array required" });
+      if (!Array.isArray(records)) return res.status(400).json({ message: tr(req, "common.recordsRequired") });
       const parsed = records.map(r => insertAttendanceRecordSchema.parse(r));
       await Promise.all(parsed.map(r => enrichAttendanceMinutes(r)));
       const results = await Promise.all(parsed.map(r => storage.upsertAttendanceRecord(r)));
@@ -4592,7 +4592,7 @@ export async function registerRoutes(
   app.get("/api/attendance/summary", requirePermission("attendance:dashboard"), async (req: Request, res: Response) => {
     try {
       const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
-      if (!dateFrom || !dateTo) return res.status(400).json({ message: "dateFrom and dateTo are required" });
+      if (!dateFrom || !dateTo) return res.status(400).json({ message: tr(req, "common.dateRangeRequired") });
       const allEmployees = await storage.getWorkforce({ isActive: true });
       const workforceIds = allEmployees.map((e: { id: string }) => e.id);
       const summary = await storage.getWorkedDaySummary(workforceIds, dateFrom, dateTo);
@@ -4607,7 +4607,7 @@ export async function registerRoutes(
   app.get("/api/attendance/dashboard-stats", requirePermission("attendance:dashboard"), async (req: Request, res: Response) => {
     try {
       const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
-      if (!dateFrom || !dateTo) return res.status(400).json({ message: "dateFrom and dateTo required" });
+      if (!dateFrom || !dateTo) return res.status(400).json({ message: tr(req, "common.dateRangeRequired") });
       const allEmployees = await storage.getWorkforce({ isActive: true });
       const workforceIds = allEmployees.map((e: { id: string }) => e.id);
       if (workforceIds.length === 0) return res.json({ totals: { present: 0, absent: 0, late: 0, excused: 0, totalRecords: 0, totalMinutesWorked: 0, totalMinutesScheduled: 0, totalMinutesLate: 0 }, topLate: [], topAbsent: [] });
@@ -4639,7 +4639,7 @@ export async function registerRoutes(
   app.get("/api/attendance/export-lateness", requirePermission("attendance:export"), async (req: Request, res: Response) => {
     try {
       const { dateFrom, dateTo, format } = req.query as { dateFrom?: string; dateTo?: string; format?: string };
-      if (!dateFrom || !dateTo) return res.status(400).json({ message: "dateFrom and dateTo required" });
+      if (!dateFrom || !dateTo) return res.status(400).json({ message: tr(req, "common.dateRangeRequired") });
       const allEmployees = await storage.getWorkforce({ isActive: true });
       const workforceIds = allEmployees.map((e: { id: string }) => e.id);
       const summary = await storage.getWorkedDaySummary(workforceIds, dateFrom, dateTo);
@@ -4721,12 +4721,12 @@ export async function registerRoutes(
     try {
       const authUserId = getAuthUserId(req);
       if (!authUserId) {
-        return res.status(401).json({ message: "Authentication required. Please log in again." });
+        return res.status(401).json({ message: tr(req, "auth.requiredRelogin") });
       }
 
       const { workforceId, reason } = req.body;
       if (!workforceId) {
-        return res.status(400).json({ message: "Workforce ID is required" });
+        return res.status(400).json({ message: tr(req, "common.workforceIdRequired") });
       }
 
       const wf = await storage.getWorkforceEmployee(workforceId);
@@ -4736,7 +4736,7 @@ export async function registerRoutes(
 
       const candidate = await storage.getCandidate(wf.candidateId);
       if (!candidate || candidate.userId !== authUserId) {
-        return res.status(403).json({ message: "You are not authorized to submit a request for this employee record." });
+        return res.status(403).json({ message: tr(req, "erasure.notAuthorized") });
       }
 
       const employeeName = candidate.fullNameEn || wf.employeeNumber || workforceId;
@@ -4747,7 +4747,7 @@ export async function registerRoutes(
         item.title.includes("Data Erasure Request")
       );
       if (hasPending) {
-        return res.status(409).json({ message: "A data erasure request is already pending review for this employee." });
+        return res.status(409).json({ message: tr(req, "erasure.alreadyPending") });
       }
 
       await createInboxItem(
@@ -4769,12 +4769,12 @@ export async function registerRoutes(
         metadata: { requestedAt: new Date().toISOString(), source: "mobile_app", reason: reason || null },
       });
 
-      return res.json({ message: "Your data erasure request has been submitted and will be reviewed by HR. You will be notified once it has been processed." });
+      return res.json({ message: tr(req, "erasure.submitted") });
     } catch (err) { return handleError(res, err); }
   });
 
   app.post("/api/portal/data-deletion-request", requireAuth, async (req: Request, res: Response) => {
-    return res.status(410).json({ message: "This endpoint has been replaced. Please update your app to the latest version." });
+    return res.status(410).json({ message: tr(req, "common.endpointDeprecated") });
   });
 
   app.get("/api/portal/data-erasure-status", requireAuth, async (req: Request, res: Response) => {
@@ -4786,7 +4786,7 @@ export async function registerRoutes(
 
       const workforceId = req.query.workforceId as string;
       if (!workforceId) {
-        return res.status(400).json({ message: "workforceId query parameter is required" });
+        return res.status(400).json({ message: tr(req, "common.workforceIdRequired") });
       }
 
       const wf = await storage.getWorkforceEmployee(workforceId);
@@ -4795,7 +4795,7 @@ export async function registerRoutes(
       }
       const candidate = await storage.getCandidate(wf.candidateId);
       if (!candidate || candidate.userId !== authUserId) {
-        return res.status(403).json({ message: "Not authorized" });
+        return res.status(403).json({ message: tr(req, "common.notAuthorized") });
       }
 
       const existing = await storage.getInboxItems({ status: "pending", type: "general_request", limit: 500 });
@@ -4835,7 +4835,7 @@ export async function registerRoutes(
   app.patch("/api/assets/:id", requirePermission("assets:update"), async (req: Request, res: Response) => {
     try {
       if ("price" in req.body)
-        return res.status(400).json({ message: "Asset price cannot be changed after creation" });
+        return res.status(400).json({ message: tr(req, "asset.priceImmutable") });
       const { price: _price, ...rest } = req.body;
       const data = insertAssetSchema.partial().omit({ price: true }).parse(rest);
       const row = await storage.updateAsset(req.params.id, data);
@@ -4993,7 +4993,7 @@ export async function registerRoutes(
   app.post("/api/offboarding/bulk-start", requirePermission("offboarding:bulk_start"), async (req: Request, res: Response) => {
     try {
       const { ids } = req.body as { ids: string[] };
-      if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "ids array is required" });
+      if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: tr(req, "common.idsRequired") });
       const actorId = (req as any).userId ?? undefined;
       let started = 0;
       const errors: { id: string; message: string }[] = [];
@@ -5020,7 +5020,7 @@ export async function registerRoutes(
   app.post("/api/offboarding/bulk-complete", requirePermission("offboarding:bulk_complete"), async (req: Request, res: Response) => {
     try {
       const { ids } = req.body as { ids: string[] };
-      if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "ids array is required" });
+      if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: tr(req, "common.idsRequired") });
       const actorId = (req as any).userId ?? undefined;
       let completed = 0;
       const errors: { id: string; message: string }[] = [];
@@ -5047,7 +5047,7 @@ export async function registerRoutes(
   app.post("/api/offboarding/:id/reassign-event", requirePermission("offboarding:reassign_event"), async (req: Request, res: Response) => {
     try {
       const { eventId } = req.body as { eventId: string };
-      if (!eventId) return res.status(400).json({ message: "eventId is required" });
+      if (!eventId) return res.status(400).json({ message: tr(req, "common.eventIdRequired") });
       const emp = await storage.getWorkforceEmployee(req.params.id);
       const record = await storage.reassignEmployeeEvent(req.params.id, eventId);
       const newEvent = await storage.getEvents({});
@@ -5069,7 +5069,7 @@ export async function registerRoutes(
     try {
       const { status } = req.body as { status: "returned" | "not_returned" };
       if (!status || !["returned", "not_returned"].includes(status))
-        return res.status(400).json({ message: "status must be 'returned' or 'not_returned'" });
+        return res.status(400).json({ message: tr(req, "asset.statusInvalid") });
       const actorId = (req as any).userId ?? undefined;
       const row = await storage.confirmAssetReturn(req.params.id, status, actorId);
       return res.json(row);
@@ -5081,7 +5081,7 @@ export async function registerRoutes(
       const actorId = (req as any).userId;
       if (!actorId) return res.status(401).json({ message: tr(req, "auth.requiredShort") });
       const existing = await storage.getEmployeeAsset(req.params.id);
-      if (!existing) return res.status(404).json({ message: "Asset assignment not found" });
+      if (!existing) return res.status(404).json({ message: tr(req, "assetAssignment.notFound") });
       const row = await storage.waiveAssetDeduction(req.params.id, actorId);
       const emp = existing.workforceId ? await storage.getWorkforceEmployee(existing.workforceId) : null;
       const asset = existing.assetId ? await storage.getAsset(existing.assetId) : null;
@@ -5102,9 +5102,9 @@ export async function registerRoutes(
     try {
       const { ids, status } = req.body as { ids: string[]; status: "returned" | "not_returned" };
       if (!Array.isArray(ids) || ids.length === 0)
-        return res.status(400).json({ message: "ids must be a non-empty array" });
+        return res.status(400).json({ message: tr(req, "common.idsNonEmpty") });
       if (!status || !["returned", "not_returned"].includes(status))
-        return res.status(400).json({ message: "status must be 'returned' or 'not_returned'" });
+        return res.status(400).json({ message: tr(req, "asset.statusInvalid") });
       const count = await storage.bulkUpdateAssetStatus(ids, status);
       await logAudit(req, {
         action: "assets.bulk_updated",
@@ -5121,7 +5121,7 @@ export async function registerRoutes(
     try {
       const { workforceId, status } = req.body as { workforceId: string; status: "returned" | "not_returned" };
       if (!workforceId || !status || !["returned", "not_returned"].includes(status))
-        return res.status(400).json({ message: "workforceId and valid status are required" });
+        return res.status(400).json({ message: tr(req, "common.workforceIdAndStatusRequired") });
       const actorId = (req as any).userId ?? undefined;
       const count = await storage.bulkConfirmAssets(workforceId, status, actorId);
       const emp = await storage.getWorkforceEmployee(workforceId);
@@ -5147,7 +5147,7 @@ export async function registerRoutes(
         notes?: string;
       };
       if (!assetId || !Array.isArray(workforceIds) || workforceIds.length === 0 || !assignedAt) {
-        return res.status(400).json({ message: "assetId, workforceIds (non-empty array), and assignedAt are required" });
+        return res.status(400).json({ message: tr(req, "assetAssignment.fieldsRequired") });
       }
       const asset = await storage.getAsset(assetId);
       if (!asset) return res.status(404).json({ message: tr(req, "asset.notFound") });
@@ -5220,7 +5220,7 @@ export async function registerRoutes(
   app.get("/api/inbox/:id", requirePermission("inbox:read"), async (req: Request, res: Response) => {
     try {
       const item = await storage.getInboxItem(req.params.id);
-      if (!item) return res.status(404).json({ message: "Inbox item not found" });
+      if (!item) return res.status(404).json({ message: tr(req, "inbox.notFound") });
       return res.json(item);
     } catch (err) { return handleError(res, err); }
   });
@@ -5322,7 +5322,7 @@ export async function registerRoutes(
 
       const existing = await storage.getExcuseRequests({ workforceId: data.workforceId });
       const duplicate = existing.find(e => e.date === data.date && e.status !== "rejected");
-      if (duplicate) return res.status(409).json({ message: "An excuse request already exists for this date" });
+      if (duplicate) return res.status(409).json({ message: tr(req, "excuse.alreadyExists") });
 
       const attendance = await storage.getAttendanceRecords({ workforceId: data.workforceId, date: data.date });
       const todayRecord = attendance[0];
@@ -5381,7 +5381,7 @@ export async function registerRoutes(
       const isAdmin = req.authIsSuperAdmin || req.authRoleSlug !== "candidate";
 
       if (!isAdmin && !workforceId) {
-        return res.status(400).json({ message: "workforceId is required" });
+        return res.status(400).json({ message: tr(req, "common.workforceIdRequired") });
       }
 
       if (workforceId && !isAdmin) {
@@ -5562,7 +5562,7 @@ export async function registerRoutes(
   app.get("/api/attendance-mobile/status", requireAuth, async (req: Request, res: Response) => {
     try {
       const workforceId = req.query.workforceId as string;
-      if (!workforceId) return res.status(400).json({ message: "workforceId is required" });
+      if (!workforceId) return res.status(400).json({ message: tr(req, "common.workforceIdRequired") });
 
       const userId = getAuthUserId(req);
       if (!userId) return res.status(401).json({ message: tr(req, "auth.required") });
@@ -5702,7 +5702,7 @@ export async function registerRoutes(
 
   app.post("/api/attendance-mobile/submit", requireAuth, upload.single("photo"), async (req: Request, res: Response) => {
     try {
-      if (!req.file) return res.status(400).json({ message: "Photo is required" });
+      if (!req.file) return res.status(400).json({ message: tr(req, "photo.required") });
 
       const schema = z.object({
         workforceId: z.string().min(1),
@@ -5731,7 +5731,7 @@ export async function registerRoutes(
       }
       const authUser = await storage.getUser(userId);
       if (!authUser || !authUser.isActive) {
-        return res.status(403).json({ message: "User account is deactivated.", terminated: true });
+        return res.status(403).json({ message: tr(req, "user.deactivated"), terminated: true });
       }
 
       const wfRecord = await storage.getWorkforceEmployee(parsed.workforceId);
@@ -5757,10 +5757,10 @@ export async function registerRoutes(
           }
           const endTime = new Date(wfRecord.endDate).getTime();
           if (!Number.isFinite(endTime) || captureTime === null || captureTime > endTime) {
-            return res.status(403).json({ message: "Workforce record terminated. Submission after termination date rejected.", terminated: true });
+            return res.status(403).json({ message: tr(req, "workforce.terminated"), terminated: true });
           }
         } else {
-          return res.status(403).json({ message: "Workforce record is inactive. Submission rejected.", terminated: true });
+          return res.status(403).json({ message: tr(req, "workforce.inactive"), terminated: true });
         }
       }
 
@@ -5810,7 +5810,7 @@ export async function registerRoutes(
       const todayRecord = todayRecords[0] ?? null;
       if (todayRecord?.clockIn && todayRecord?.clockOut) {
         return res.status(409).json({
-          message: "You have already completed check-in and check-out for today.",
+          message: tr(req, "attendance.alreadyComplete"),
           code: "ATTENDANCE_COMPLETED",
           clockIn: todayRecord.clockIn,
           clockOut: todayRecord.clockOut,
@@ -6046,7 +6046,7 @@ export async function registerRoutes(
     try {
       const { ids } = req.body ?? {};
       if (!Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({ message: "ids array required" });
+        return res.status(400).json({ message: tr(req, "common.idsRequired") });
       }
       const limitedIds = ids.slice(0, 100);
       const results = await Promise.all(
@@ -6063,7 +6063,7 @@ export async function registerRoutes(
   app.get("/api/attendance-mobile/submissions/:id", requirePermission("attendance_mobile:review_read"), async (req: Request, res: Response) => {
     try {
       const sub = await storage.getAttendanceSubmission(req.params.id);
-      if (!sub) return res.status(404).json({ message: "Submission not found" });
+      if (!sub) return res.status(404).json({ message: tr(req, "submission.notFound") });
       return res.json(sub);
     } catch (err) { return handleError(res, err); }
   });
@@ -6128,7 +6128,7 @@ export async function registerRoutes(
         const myCand = await storage.getCandidateByUserId(req.authUserId!);
         if (!myCand) return res.status(403).json({ message: tr(req, "common.accessDenied") });
         if (!candidateId) {
-          return res.status(400).json({ message: "candidateId is required" });
+          return res.status(400).json({ message: tr(req, "common.candidateIdRequired") });
         }
         if (candidateId !== myCand.id) {
           return res.status(403).json({ message: tr(req, "common.accessDenied") });
@@ -6235,7 +6235,7 @@ export async function registerRoutes(
   app.get("/api/broadcasts/:id", requirePermission("broadcasts:read"), async (req: Request, res: Response) => {
     try {
       const broadcast = await storage.getSmsBroadcast(req.params.id);
-      if (!broadcast) return res.status(404).json({ message: "Broadcast not found" });
+      if (!broadcast) return res.status(404).json({ message: tr(req, "broadcast.notFound") });
       const recipients = await storage.getSmsBroadcastRecipients(req.params.id);
       return res.json({ ...broadcast, recipients });
     } catch (err) { return handleError(res, err); }
@@ -6245,15 +6245,15 @@ export async function registerRoutes(
     try {
       const { messageTemplate, workforceIds } = req.body;
       if (!messageTemplate || typeof messageTemplate !== "string" || !messageTemplate.trim()) {
-        return res.status(400).json({ message: "Message template is required" });
+        return res.status(400).json({ message: tr(req, "broadcast.templateRequired") });
       }
       if (!Array.isArray(workforceIds) || workforceIds.length === 0) {
-        return res.status(400).json({ message: "At least one recipient is required" });
+        return res.status(400).json({ message: tr(req, "broadcast.recipientRequired") });
       }
 
       const smsPlugin = await storage.getActiveSmsPlugin();
       if (!smsPlugin) {
-        return res.status(400).json({ message: "No active SMS plugin configured. Go to Notifications > SMS Gateway to set one up." });
+        return res.status(400).json({ message: tr(req, "sms.notConfigured") });
       }
 
       interface WorkforceRow {
@@ -6285,7 +6285,7 @@ export async function registerRoutes(
       }
 
       if (validRecipients.length === 0) {
-        return res.status(400).json({ message: "None of the selected employees have a valid phone number." });
+        return res.status(400).json({ message: tr(req, "broadcast.noValidPhones") });
       }
 
       const userId: string | null = (req as Request & { userId?: string }).userId ?? null;
