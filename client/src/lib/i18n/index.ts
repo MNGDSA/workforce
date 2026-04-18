@@ -18,6 +18,7 @@ import enAdminUsers from "./locales/en/adminUsers.json";
 import enSettings from "./locales/en/settings.json";
 import enQuestionSets from "./locales/en/questionSets.json";
 import enOrgChart from "./locales/en/orgChart.json";
+import enNotifications from "./locales/en/notifications.json";
 
 import arCommon from "./locales/ar/common.json";
 import arAuth from "./locales/ar/auth.json";
@@ -35,6 +36,7 @@ import arAdminUsers from "./locales/ar/adminUsers.json";
 import arSettings from "./locales/ar/settings.json";
 import arQuestionSets from "./locales/ar/questionSets.json";
 import arOrgChart from "./locales/ar/orgChart.json";
+import arNotifications from "./locales/ar/notifications.json";
 
 export const SUPPORTED_LOCALES = ["ar", "en"] as const;
 export type SupportedLocale = typeof SUPPORTED_LOCALES[number];
@@ -47,12 +49,12 @@ i18n
   .use(initReactI18next)
   .init({
     resources: {
-      en: { common: enCommon, auth: enAuth, apply: enApply, portal: enPortal, layout: enLayout, dashboard: enDashboard, profile: enProfile, audit: enAudit, geofences: enGeofences, reports: enReports, automation: enAutomation, payroll: enPayroll, adminUsers: enAdminUsers, settings: enSettings, questionSets: enQuestionSets, orgChart: enOrgChart },
-      ar: { common: arCommon, auth: arAuth, apply: arApply, portal: arPortal, layout: arLayout, dashboard: arDashboard, profile: arProfile, audit: arAudit, geofences: arGeofences, reports: arReports, automation: arAutomation, payroll: arPayroll, adminUsers: arAdminUsers, settings: arSettings, questionSets: arQuestionSets, orgChart: arOrgChart },
+      en: { common: enCommon, auth: enAuth, apply: enApply, portal: enPortal, layout: enLayout, dashboard: enDashboard, profile: enProfile, audit: enAudit, geofences: enGeofences, reports: enReports, automation: enAutomation, payroll: enPayroll, adminUsers: enAdminUsers, settings: enSettings, questionSets: enQuestionSets, orgChart: enOrgChart, notifications: enNotifications },
+      ar: { common: arCommon, auth: arAuth, apply: arApply, portal: arPortal, layout: arLayout, dashboard: arDashboard, profile: arProfile, audit: arAudit, geofences: arGeofences, reports: arReports, automation: arAutomation, payroll: arPayroll, adminUsers: arAdminUsers, settings: arSettings, questionSets: arQuestionSets, orgChart: arOrgChart, notifications: arNotifications },
     },
     fallbackLng: DEFAULT_LOCALE,
     supportedLngs: SUPPORTED_LOCALES as unknown as string[],
-    ns: ["common", "auth", "apply", "portal", "layout", "dashboard", "profile", "audit", "geofences", "reports", "automation", "payroll", "adminUsers", "settings", "questionSets", "orgChart"],
+    ns: ["common", "auth", "apply", "portal", "layout", "dashboard", "profile", "audit", "geofences", "reports", "automation", "payroll", "adminUsers", "settings", "questionSets", "orgChart", "notifications"],
     defaultNS: "common",
     interpolation: { escapeValue: false },
     detection: {

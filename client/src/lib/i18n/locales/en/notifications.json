@@ -1,0 +1,127 @@
+{
+  "page": {
+    "title": "Notification Settings",
+    "subtitle": "Manage system alerts and communication integrations."
+  },
+  "tabs": {
+    "alerts": "Alerts & History",
+    "integrations": "Integrations"
+  },
+  "alerts": {
+    "title": "Recent Alerts",
+    "markAll": "Mark all as read",
+    "sample": {
+      "title": "Shift Coverage Alert",
+      "ago": "2 hours ago",
+      "body": "Warehouse Zone B is below minimum coverage for the upcoming night shift."
+    }
+  },
+  "smtp": {
+    "title": "SMTP Email",
+    "subtitle": "Outgoing email for candidate notifications and interview invites",
+    "server": "Server",
+    "host": "SMTP Host",
+    "port": "Port",
+    "ports": {
+      "25": "25 (SMTP)",
+      "465": "465 (SSL)",
+      "587": "587 (TLS)",
+      "2525": "2525 (Alt)"
+    },
+    "encryption": {
+      "none": "None",
+      "tls": "STARTTLS (recommended)",
+      "ssl": "SSL / TLS"
+    },
+    "auth": "Authentication",
+    "usernamePh": "Username / Email",
+    "passwordPh": "Password / App Password",
+    "sender": "Sender Identity",
+    "fromName": "From Name",
+    "fromNamePh": "Workforce SA",
+    "fromEmail": "From Email",
+    "save": "Save SMTP Configuration",
+    "toasts": {
+      "missingTitle": "Missing Fields",
+      "missingDesc": "Host, Username, and From Email are required.",
+      "savedTitle": "SMTP Settings Saved",
+      "savedDesc": "Email integration updated."
+    }
+  },
+  "sms": {
+    "title": "SMS Gateway Plugins",
+    "subtitle": "Install a plugin to connect any SMS provider without changing your app.",
+    "examples": "Example Plugins",
+    "install": "Install Plugin",
+    "examplesMenu": {
+      "goinfinito": "GoInfinito SMS (Saudi Arabia)",
+      "unifonic": "Unifonic SMS (KSA / Middle East)",
+      "twilio": "Twilio SMS (Global backup)"
+    },
+    "empty": "No plugins installed yet.",
+    "installFirst": "Install your first plugin",
+    "active": "Active",
+    "inactive": "Inactive",
+    "selectPrompt": "Select a plugin to configure it.",
+    "installPanel": {
+      "title": "Install New Plugin",
+      "subtitle": "Upload or paste a plugin JSON file. Download an example above to get started.",
+      "json": "Plugin JSON",
+      "upload": "Upload file",
+      "varsTitle": "Built-in variables available in any plugin config",
+      "varsCredHint": "Credential keys (e.g. <0>{{senderId}}</0>) are also available after configuration.",
+      "configureCreds": "Configure Credentials",
+      "installBtn": "Install Plugin",
+      "installing": "Installing…",
+      "cancel": "Cancel",
+      "missingFields": "Missing required fields: {{fields}}",
+      "invalidJson": "Invalid JSON — {{msg}}"
+    },
+    "configurePanel": {
+      "credentials": "Credentials",
+      "save": "Save Credentials",
+      "saving": "Saving…",
+      "activate": "Activate",
+      "compliance": "Compliance",
+      "testSms": "Test SMS",
+      "recipient": "Recipient Phone",
+      "message": "Message",
+      "send": "Send Test",
+      "sending": "Sending…",
+      "successTitle": "Accepted by gateway — message is queued for delivery.",
+      "messageId": "Message ID: {{id}}",
+      "warnDelivery": "If you did not receive the SMS, verify your Sender ID is approved in GoInfinito and the recipient number is correct.",
+      "failed": "Failed: {{error}}",
+      "httpStatus": "HTTP {{code}}",
+      "rawResponse": "Raw gateway response"
+    },
+    "delete": {
+      "title": "Remove Plugin?",
+      "body": "This will permanently remove the plugin and its saved credentials. You can re-install it at any time.",
+      "cancel": "Cancel",
+      "confirm": "Remove"
+    },
+    "toasts": {
+      "installed": "Plugin Installed",
+      "installedDesc": "{{name}} is ready to configure.",
+      "installFailed": "Install Failed",
+      "credsSaved": "Credentials Saved",
+      "saveFailed": "Save Failed",
+      "activated": "Plugin Activated",
+      "activatedDesc": "{{name}} is now the active SMS gateway.",
+      "activationFailed": "Activation Failed",
+      "removed": "Plugin Removed",
+      "deleteFailed": "Delete Failed"
+    },
+    "vars": {
+      "to": "Recipient phone number",
+      "message": "SMS message text",
+      "timestamp": "Unix timestamp (ms)",
+      "uuid": "Random UUID per request",
+      "coding": "Always 8 (UCS-2) — GoInfinito v2 only accepts this value; UCS-2 handles both Arabic and Latin",
+      "unicode": "\"1\" for Arabic/non-Latin content, \"0\" for plain Latin",
+      "encoding": "\"unicode\" or \"gsm7\"",
+      "charset": "\"UCS2\" or \"GSM7\""
+    }
+  }
+}

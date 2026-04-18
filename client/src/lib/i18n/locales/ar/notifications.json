@@ -1,0 +1,127 @@
+{
+  "page": {
+    "title": "إعدادات الإشعارات",
+    "subtitle": "إدارة تنبيهات النظام وتكاملات الاتصال."
+  },
+  "tabs": {
+    "alerts": "التنبيهات والسجل",
+    "integrations": "التكاملات"
+  },
+  "alerts": {
+    "title": "أحدث التنبيهات",
+    "markAll": "تعليم الكل كمقروء",
+    "sample": {
+      "title": "تنبيه تغطية المناوبة",
+      "ago": "قبل ساعتين",
+      "body": "تغطية المنطقة B في المستودع أقل من الحد الأدنى للمناوبة الليلية القادمة."
+    }
+  },
+  "smtp": {
+    "title": "بريد SMTP",
+    "subtitle": "البريد الصادر لإشعارات المرشحين ودعوات المقابلات",
+    "server": "الخادم",
+    "host": "خادم SMTP",
+    "port": "المنفذ",
+    "ports": {
+      "25": "25 (SMTP)",
+      "465": "465 (SSL)",
+      "587": "587 (TLS)",
+      "2525": "2525 (بديل)"
+    },
+    "encryption": {
+      "none": "بدون",
+      "tls": "STARTTLS (موصى به)",
+      "ssl": "SSL / TLS"
+    },
+    "auth": "المصادقة",
+    "usernamePh": "اسم المستخدم / البريد",
+    "passwordPh": "كلمة المرور / كلمة مرور التطبيق",
+    "sender": "هوية المرسِل",
+    "fromName": "اسم المرسِل",
+    "fromNamePh": "Workforce SA",
+    "fromEmail": "بريد المرسِل",
+    "save": "حفظ إعدادات SMTP",
+    "toasts": {
+      "missingTitle": "حقول ناقصة",
+      "missingDesc": "الخادم واسم المستخدم وبريد المرسِل حقول إلزامية.",
+      "savedTitle": "تم حفظ إعدادات SMTP",
+      "savedDesc": "تم تحديث تكامل البريد."
+    }
+  },
+  "sms": {
+    "title": "ملحقات بوابات SMS",
+    "subtitle": "ثبّت ملحقًا لربط أي مزود رسائل دون تعديل التطبيق.",
+    "examples": "ملحقات نموذجية",
+    "install": "تثبيت ملحق",
+    "examplesMenu": {
+      "goinfinito": "GoInfinito SMS (السعودية)",
+      "unifonic": "Unifonic SMS (السعودية / الشرق الأوسط)",
+      "twilio": "Twilio SMS (احتياطي عالمي)"
+    },
+    "empty": "لا توجد ملحقات مثبّتة بعد.",
+    "installFirst": "ثبّت أول ملحق",
+    "active": "مفعّل",
+    "inactive": "معطّل",
+    "selectPrompt": "اختر ملحقًا لتهيئته.",
+    "installPanel": {
+      "title": "تثبيت ملحق جديد",
+      "subtitle": "ارفع ملف JSON أو الصقه. يمكنك تنزيل مثال للبدء.",
+      "json": "JSON الملحق",
+      "upload": "رفع ملف",
+      "varsTitle": "المتغيرات المضمّنة المتاحة في أي إعداد ملحق",
+      "varsCredHint": "مفاتيح الاعتماد (مثل <0>{{senderId}}</0>) متاحة أيضًا بعد التهيئة.",
+      "configureCreds": "تهيئة الاعتمادات",
+      "installBtn": "تثبيت الملحق",
+      "installing": "جارٍ التثبيت…",
+      "cancel": "إلغاء",
+      "missingFields": "حقول إلزامية ناقصة: {{fields}}",
+      "invalidJson": "JSON غير صالح — {{msg}}"
+    },
+    "configurePanel": {
+      "credentials": "الاعتمادات",
+      "save": "حفظ الاعتمادات",
+      "saving": "جارٍ الحفظ…",
+      "activate": "تفعيل",
+      "compliance": "الامتثال",
+      "testSms": "اختبار رسالة",
+      "recipient": "رقم المستلم",
+      "message": "الرسالة",
+      "send": "إرسال اختبار",
+      "sending": "جارٍ الإرسال…",
+      "successTitle": "قُبلت من البوابة — الرسالة في طابور التسليم.",
+      "messageId": "معرّف الرسالة: {{id}}",
+      "warnDelivery": "إذا لم تصلك الرسالة، تحقق من اعتماد Sender ID في GoInfinito وصحة رقم المستلم.",
+      "failed": "فشل: {{error}}",
+      "httpStatus": "HTTP {{code}}",
+      "rawResponse": "استجابة البوابة الخام"
+    },
+    "delete": {
+      "title": "إزالة الملحق؟",
+      "body": "ستتم إزالة الملحق واعتماداته المحفوظة نهائيًا. يمكنك إعادة تثبيته في أي وقت.",
+      "cancel": "إلغاء",
+      "confirm": "إزالة"
+    },
+    "toasts": {
+      "installed": "تم تثبيت الملحق",
+      "installedDesc": "{{name}} جاهز للتهيئة.",
+      "installFailed": "فشل التثبيت",
+      "credsSaved": "تم حفظ الاعتمادات",
+      "saveFailed": "فشل الحفظ",
+      "activated": "تم تفعيل الملحق",
+      "activatedDesc": "{{name}} هو بوابة SMS الفعّالة الآن.",
+      "activationFailed": "فشل التفعيل",
+      "removed": "تمت إزالة الملحق",
+      "deleteFailed": "فشل الحذف"
+    },
+    "vars": {
+      "to": "رقم هاتف المستلم",
+      "message": "نص رسالة SMS",
+      "timestamp": "توقيت Unix (مللي ثانية)",
+      "uuid": "UUID عشوائي لكل طلب",
+      "coding": "دائمًا 8 (UCS-2) — GoInfinito v2 يقبل هذه القيمة فقط؛ UCS-2 يدعم العربية واللاتينية",
+      "unicode": "\"1\" للمحتوى العربي/غير اللاتيني، و\"0\" للاتيني فقط",
+      "encoding": "\"unicode\" أو \"gsm7\"",
+      "charset": "\"UCS2\" أو \"GSM7\""
+    }
+  }
+}
