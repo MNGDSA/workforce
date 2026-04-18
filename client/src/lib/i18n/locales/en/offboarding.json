@@ -1,0 +1,177 @@
+{
+  "page": {
+    "title": "Offboarding",
+    "subtitle": "Manage employee exits, asset returns & final settlements"
+  },
+  "tabs": {
+    "queue": "Queue",
+    "completed": "Completed"
+  },
+  "stats": {
+    "pending": "Pending Start",
+    "pendingDesc": "Event ended, awaiting start",
+    "inProgress": "In Progress",
+    "inProgressDesc": "Processing assets & settlement",
+    "ready": "Ready to Complete",
+    "readyDesc": "All assets confirmed",
+    "completedToday": "Completed Today",
+    "completedTodayDesc": "Offboarded today"
+  },
+  "table": {
+    "searchPh": "Search by name, employee #, event…",
+    "selected": "{{count}} selected",
+    "start": "Start ({{count}})",
+    "complete": "Complete ({{count}})",
+    "clear": "Clear",
+    "h": {
+      "employee": "Employee",
+      "event": "Event",
+      "reason": "Reason",
+      "endDate": "End Date",
+      "salary": "Salary",
+      "status": "Status"
+    },
+    "loading": "Loading offboarding queue…",
+    "noMatches": "No matches found",
+    "noEmployees": "No employees in offboarding",
+    "noEmployeesHint": "Employees whose event has ended or who are terminated will appear here",
+    "eventEnded": "Event ended",
+    "dash": "—",
+    "statusInProgress": "In Progress",
+    "statusPending": "Pending Start"
+  },
+  "completed": {
+    "searchPh": "Search completed…",
+    "loading": "Loading…",
+    "none": "No completed offboardings found",
+    "h": {
+      "employee": "Employee",
+      "event": "Event",
+      "completed": "Completed",
+      "gross": "Gross",
+      "deductions": "Deductions",
+      "net": "Net Settlement",
+      "payment": "Payment"
+    },
+    "paid": "Paid {{date}}",
+    "unpaid": "Unpaid"
+  },
+  "categories": {
+    "end_of_season": "End of Season",
+    "resignation": "Resignation",
+    "performance": "Performance",
+    "disciplinary": "Disciplinary",
+    "contract_expiry": "Contract Expiry",
+    "other": "Other",
+    "manual": "Manual"
+  },
+  "sheet": {
+    "smp": "SMP",
+    "individual": "Individual",
+    "smpWorker": "SMP Worker",
+    "ready": "Ready to complete offboarding",
+    "pendingAssets_one": "{{count}} asset awaiting confirmation",
+    "pendingAssets_other": "{{count}} assets awaiting confirmation",
+    "calculating": "Calculating checklist…",
+    "endDateLabel": "End date: {{date}}",
+    "eventEndedAgo_one": "Event ended {{count}} day ago",
+    "eventEndedAgo_other": "Event ended {{count}} days ago",
+    "tabOverview": "Overview",
+    "tabAssets": "Assets",
+    "tabSettlement": "Settlement",
+    "fields": {
+      "employeeNo": "Employee #",
+      "event": "Event",
+      "endDate": "End Date",
+      "started": "Started Work",
+      "monthlySalary": "Monthly Salary",
+      "type": "Type"
+    },
+    "termination": "Termination: {{label}}",
+    "smpNote": "This is an SMP worker. Financial settlement is managed at the SMP contract level. Asset deductions are still recorded individually and will be reflected in the SMP settlement report.",
+    "reassign": {
+      "title": "Reassign to Active Event",
+      "desc": "If you want to retain this employee, assign them to an ongoing or upcoming event. This will remove them from offboarding and clear the end date.",
+      "selectPh": "Select event…",
+      "ongoing": "ongoing",
+      "endsOn": "ends {{date}}",
+      "confirm": "Reassign",
+      "cancel": "Cancel",
+      "choose": "Choose Event"
+    },
+    "begin": {
+      "title": "Begin Offboarding Process",
+      "desc": "Start the asset confirmation and settlement workflow",
+      "btn": "Begin"
+    },
+    "complete": {
+      "title": "Complete Offboarding",
+      "ready": "All prerequisites met — employee will be returned to talent pool",
+      "pending_one": "{{count}} asset must be confirmed first",
+      "pending_other": "{{count}} assets must be confirmed first",
+      "btn": "Complete"
+    }
+  },
+  "assets": {
+    "loading": "Loading asset checklist…",
+    "none": "No assets assigned to this employee",
+    "pendingNote_one": "{{count}} asset awaiting confirmation",
+    "pendingNote_other": "{{count}} assets awaiting confirmation",
+    "allReturned": "All Returned",
+    "noneReturned": "None Returned",
+    "assigned": "Assigned: {{date}}",
+    "pending": "Pending Confirmation",
+    "returned": "Returned",
+    "notReturned": "Not Returned",
+    "deductionWaived": "Deduction Waived",
+    "btnReturned": "Returned",
+    "btnNotReturned": "Not Returned",
+    "btnWaive": "Waive"
+  },
+  "settlement": {
+    "calculating": "Calculating settlement…",
+    "unable": "Unable to calculate settlement",
+    "period": "Employment Period",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "calendarDays": "Calendar Days",
+    "salary": "Salary Breakdown",
+    "monthly": "Monthly Salary",
+    "daily": "Daily Rate (÷ 30)",
+    "calendarMul": "× {{count}} calendar days",
+    "attendance": "Attendance (Logged)",
+    "worked": "Worked Days",
+    "absent": "Absent Days",
+    "logged": "Logged Entries",
+    "noAttendance": "No attendance records logged. Settlement uses calendar days.",
+    "deductions": "Asset Deductions",
+    "totalDeductions": "Total Deductions",
+    "net": "Net Settlement",
+    "smpReported": "Reported to SMP contract settlement"
+  },
+  "waive": {
+    "title": "Waive Asset Deduction",
+    "irreversible": "This action is IRREVERSIBLE",
+    "body": "You are about to waive the deduction of <amt/> for asset <name/>. This means the employee will NOT be charged for this item. Once confirmed, this cannot be undone.",
+    "typePrompt": "Type <code/> to confirm:",
+    "typePh": "Type WAIVE to confirm",
+    "cancel": "Cancel",
+    "confirm": "Waive Deduction (Irreversible)"
+  },
+  "toasts": {
+    "started": "Offboarding started",
+    "completed": "Offboarding completed — employee returned to talent pool",
+    "completeError": "Cannot complete",
+    "reassigned": "Employee reassigned — removed from offboarding",
+    "assetConfirmed": "Asset confirmation recorded",
+    "bulkReturned": "All assets marked as returned",
+    "bulkNotReturned": "All assets marked as not returned",
+    "deductionWaived": "Deduction waived — this cannot be undone",
+    "bulkStarted_one": "Started offboarding for {{count}} employee",
+    "bulkStarted_other": "Started offboarding for {{count}} employees",
+    "bulkCompleted_one": "Completed offboarding for {{count}} employee",
+    "bulkCompleted_other": "Completed offboarding for {{count}} employees",
+    "bulkPartial": "Completed {{completed}} of {{total}}. {{failed}} failed (likely pending assets).",
+    "error": "Error"
+  }
+}
