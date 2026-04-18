@@ -1,0 +1,79 @@
+{
+  "brand": "وركفورس",
+  "groups": {
+    "workforce": "القوى العاملة",
+    "recruitment": "الاستقطاب",
+    "settings": "النظام والإعدادات"
+  },
+  "nav": {
+    "dashboard": "الرئيسية",
+    "inbox": "الوارد",
+    "payroll": "الرواتب",
+    "employees": "الموظفون",
+    "orgChart": "الهيكل التنظيمي",
+    "attendance": "الحضور",
+    "geofences": "النطاقات الجغرافية",
+    "assets": "العهد",
+    "offboarding": "إنهاء الخدمة",
+    "events": "المواسم",
+    "smpCompanies": "شركات التعاقد الموسمي",
+    "questionSets": "بنوك الأسئلة",
+    "jobApplications": "الإعلانات الوظيفية",
+    "interviews": "المقابلات والتدريب",
+    "onboarding": "التهيئة",
+    "talent": "قاعدة المرشحين",
+    "settings": "الإعدادات",
+    "departments": "الإدارات والوظائف",
+    "idCards": "البطاقات الوظيفية",
+    "automation": "القواعد والأتمتة",
+    "reports": "التقارير",
+    "auditLog": "سجل التدقيق",
+    "documentation": "الدليل"
+  },
+  "search": {
+    "placeholder": "ابحث عن مرشحين، موظفين، مواسم، وظائف…",
+    "searching": "جارٍ البحث…",
+    "categories": {
+      "candidates": "المرشحون",
+      "employees": "الموظفون",
+      "events": "المواسم",
+      "jobs": "الوظائف"
+    }
+  },
+  "notifications": {
+    "title": "الإشعارات",
+    "markAllRead": "تعليم الكل كمقروء",
+    "eventAlerts": "تنبيهات المواسم",
+    "recentActivity": "النشاط الأخير",
+    "allClear": "لا توجد تنبيهات",
+    "noEventsSoon": "لا توجد مواسم تبدأ أو تنتهي قريباً",
+    "viewAllInInbox": "عرض الكل في الوارد",
+    "startingToday": "تبدأ اليوم",
+    "startingTomorrow": "تبدأ غداً",
+    "startingInDays": "تبدأ خلال {{count}} يوم",
+    "endingToday": "تنتهي اليوم",
+    "endingTomorrow": "تنتهي غداً",
+    "endingInDays": "تنتهي خلال {{count}} يوم"
+  },
+  "time": {
+    "justNow": "الآن",
+    "minAgo": "قبل {{count}} د",
+    "hrAgo": "قبل {{count}} س",
+    "dayAgo": "قبل {{count}} ي"
+  },
+  "sidebar": {
+    "collapse": "طيّ القائمة",
+    "expand": "فتح القائمة"
+  },
+  "profile": {
+    "menuProfile": "الملف الشخصي",
+    "menuLogout": "تسجيل الخروج",
+    "roles": {
+      "administrator": "مدير النظام",
+      "recruiter": "مسؤول استقطاب",
+      "manager": "مدير",
+      "staff": "موظف"
+    },
+    "defaultName": "مدير النظام"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "brand": "WORKFORCE",
+  "groups": {
+    "workforce": "Workforce",
+    "recruitment": "Recruitment",
+    "settings": "System & Settings"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "inbox": "Inbox",
+    "payroll": "Payroll",
+    "employees": "Employees",
+    "orgChart": "Org Chart",
+    "attendance": "Attendance",
+    "geofences": "Geofence Zones",
+    "assets": "Assets",
+    "offboarding": "Offboarding",
+    "events": "Events",
+    "smpCompanies": "SMP Companies",
+    "questionSets": "Question Sets",
+    "jobApplications": "Job Applications",
+    "interviews": "Interview & Training",
+    "onboarding": "Onboarding",
+    "talent": "Talent",
+    "settings": "Settings",
+    "departments": "Departments & Positions",
+    "idCards": "ID Cards",
+    "automation": "Rules & Automation",
+    "reports": "Reports",
+    "auditLog": "Audit Log",
+    "documentation": "Documentation"
+  },
+  "search": {
+    "placeholder": "Search candidates, employees, events, jobs…",
+    "searching": "Searching…",
+    "categories": {
+      "candidates": "Candidates",
+      "employees": "Employees",
+      "events": "Events",
+      "jobs": "Jobs"
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark all read",
+    "eventAlerts": "Event Alerts",
+    "recentActivity": "Recent Activity",
+    "allClear": "All clear",
+    "noEventsSoon": "No events starting or ending soon",
+    "viewAllInInbox": "View all in Inbox",
+    "startingToday": "Starting today",
+    "startingTomorrow": "Starting tomorrow",
+    "startingInDays": "Starting in {{count}} days",
+    "endingToday": "Ending today",
+    "endingTomorrow": "Ending tomorrow",
+    "endingInDays": "Ending in {{count}} days"
+  },
+  "time": {
+    "justNow": "just now",
+    "minAgo": "{{count}}m ago",
+    "hrAgo": "{{count}}h ago",
+    "dayAgo": "{{count}}d ago"
+  },
+  "sidebar": {
+    "collapse": "Collapse",
+    "expand": "Expand sidebar"
+  },
+  "profile": {
+    "menuProfile": "Profile",
+    "menuLogout": "Log out",
+    "roles": {
+      "administrator": "Administrator",
+      "recruiter": "Recruiter",
+      "manager": "Manager",
+      "staff": "Staff"
+    },
+    "defaultName": "Admin User"
+  }
+}

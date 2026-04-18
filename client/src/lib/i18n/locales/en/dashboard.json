@@ -1,0 +1,43 @@
+{
+  "title": "Dashboard",
+  "subtitle": "Overview of your event hiring pipeline and workforce status.",
+  "actions": {
+    "postJob": "Post Job",
+    "addCandidate": "Add Candidate",
+    "postApplication": "Post Application",
+    "logHours": "Log Hours",
+    "reportIssue": "Report Issue",
+    "viewAll": "View All",
+    "viewFullSchedule": "View Full Schedule"
+  },
+  "metrics": {
+    "totalCandidates": "Total Candidates",
+    "totalCandidatesSub": "In talent database",
+    "openPositions": "Open Positions",
+    "openPositionsSub": "Active postings",
+    "activeEvents": "Active Events",
+    "activeEventsSub": "Running right now",
+    "scheduledInterviews": "Scheduled Interviews",
+    "scheduledInterviewsSub": "Upcoming interviews"
+  },
+  "sections": {
+    "recentApplications": "Recent Applications",
+    "recentApplicationsSub": "Latest candidates applying for open positions",
+    "noApplications": "No applications yet. Post a job to get started.",
+    "recruitmentFunnel": "Recruitment Funnel",
+    "funnelEmpty": "Interactive Funnel Chart — Upload candidates to visualize pipeline",
+    "shiftCoverage": "Shift Coverage",
+    "shiftCoverageSub": "Today's staffing status",
+    "quickActions": "Quick Actions"
+  },
+  "applicationStatus": {
+    "new": "New",
+    "reviewing": "Reviewing",
+    "shortlisted": "Shortlisted",
+    "interviewed": "Interviewed",
+    "offered": "Offered",
+    "hired": "Hired",
+    "rejected": "Rejected",
+    "withdrawn": "Withdrawn"
+  }
+}

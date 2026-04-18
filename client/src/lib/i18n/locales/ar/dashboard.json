@@ -1,0 +1,43 @@
+{
+  "title": "الرئيسية",
+  "subtitle": "نظرة شاملة على خط استقطاب المواسم وحالة القوى العاملة.",
+  "actions": {
+    "postJob": "نشر وظيفة",
+    "addCandidate": "إضافة مرشح",
+    "postApplication": "نشر إعلان",
+    "logHours": "تسجيل ساعات",
+    "reportIssue": "الإبلاغ عن مشكلة",
+    "viewAll": "عرض الكل",
+    "viewFullSchedule": "عرض الجدول الكامل"
+  },
+  "metrics": {
+    "totalCandidates": "إجمالي المرشحين",
+    "totalCandidatesSub": "في قاعدة المرشحين",
+    "openPositions": "الوظائف المتاحة",
+    "openPositionsSub": "إعلانات نشطة",
+    "activeEvents": "المواسم النشطة",
+    "activeEventsSub": "تعمل حالياً",
+    "scheduledInterviews": "المقابلات المجدولة",
+    "scheduledInterviewsSub": "مقابلات قادمة"
+  },
+  "sections": {
+    "recentApplications": "الطلبات الأخيرة",
+    "recentApplicationsSub": "آخر المتقدمين للوظائف المتاحة",
+    "noApplications": "لا توجد طلبات بعد. انشر وظيفة للبدء.",
+    "recruitmentFunnel": "قمع الاستقطاب",
+    "funnelEmpty": "رسم بياني تفاعلي — أضف مرشحين لعرض خط الاستقطاب",
+    "shiftCoverage": "تغطية الورديات",
+    "shiftCoverageSub": "حالة التوظيف اليوم",
+    "quickActions": "إجراءات سريعة"
+  },
+  "applicationStatus": {
+    "new": "جديد",
+    "reviewing": "قيد المراجعة",
+    "shortlisted": "مرشح مبدئي",
+    "interviewed": "تمت المقابلة",
+    "offered": "تم العرض",
+    "hired": "تم التوظيف",
+    "rejected": "مرفوض",
+    "withdrawn": "منسحب"
+  }
+}

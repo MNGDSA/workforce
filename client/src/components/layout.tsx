@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -74,6 +75,7 @@ const CATEGORY_META = {
 } as const;
 
 function GlobalSearch() {
+  const { t } = useTranslation(["layout", "common"]);
   const [, setLocation] = useLocation();
   const [query, setQuery]       = useState("");
   const [open, setOpen]         = useState(false);
@@ -212,7 +214,7 @@ function GlobalSearch() {
         onChange={e => setQuery(e.target.value)}
         onKeyDown={onKeyDown}
         onFocus={() => { if (query.length > 0) { setOpen(true); updateRect(); } }}
-        placeholder="Search candidates, employees, events, jobs…"
+        placeholder={t("layout:search.placeholder")}
         className="pl-10 pr-10 bg-muted/30 border-border focus-visible:ring-primary/20 h-9 rounded-sm"
         autoComplete="off"
       />
@@ -230,11 +232,11 @@ function GlobalSearch() {
         >
           {isFetching && !hasResults ? (
             <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Searching…
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("layout:search.searching")}
             </div>
           ) : !hasResults ? (
             <div className="px-4 py-3 text-sm text-muted-foreground">
-              No results for <span className="font-medium text-foreground">"{debouncedQ}"</span>
+              {t("common:noResultsFor", "No results for")} <span className="font-medium text-foreground">"<bdi>{debouncedQ}</bdi>"</span>
             </div>
           ) : (
             <div className="max-h-[420px] overflow-y-auto py-1">
@@ -246,7 +248,7 @@ function GlobalSearch() {
                     <div className="px-3 pt-2 pb-0.5 flex items-center gap-1.5">
                       <Icon className={cn("h-3 w-3", meta.color)} />
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {meta.label}
+                        {t(`layout:search.categories.${key}`, meta.label)}
                       </span>
                     </div>
                     {items.map(item => {
@@ -292,44 +294,44 @@ interface LayoutProps {
 }
 
 const recruitmentPaths = ["/events", "/smp-contracts", "/question-sets", "/job-posting", "/interviews", "/onboarding", "/talent"];
-const recruitmentItems: { href: string; icon: React.ElementType; label: string }[] = [
-  { href: "/events",        icon: CalendarRange, label: "Events" },
-  { href: "/smp-contracts", icon: FileText,      label: "SMP Companies" },
-  { href: "/question-sets", icon: ClipboardList, label: "Question Sets" },
-  { href: "/job-posting",   icon: Briefcase,     label: "Job Applications" },
-  { href: "/interviews",    icon: Minimize,      label: "Interview & Training" },
-  { href: "/onboarding",    icon: UserCheck,     label: "Onboarding" },
-  { href: "/talent",        icon: Search,        label: "Talent" },
+const recruitmentItems: { href: string; icon: React.ElementType; labelKey: string }[] = [
+  { href: "/events",        icon: CalendarRange, labelKey: "events" },
+  { href: "/smp-contracts", icon: FileText,      labelKey: "smpCompanies" },
+  { href: "/question-sets", icon: ClipboardList, labelKey: "questionSets" },
+  { href: "/job-posting",   icon: Briefcase,     labelKey: "jobApplications" },
+  { href: "/interviews",    icon: Minimize,      labelKey: "interviews" },
+  { href: "/onboarding",    icon: UserCheck,     labelKey: "onboarding" },
+  { href: "/talent",        icon: Search,        labelKey: "talent" },
 ];
 
 const topNavItems = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/inbox",     icon: Inbox,           label: "Inbox" },
-  { href: "/payroll",   icon: Wallet,          label: "Payroll" },
+  { href: "/dashboard", icon: LayoutDashboard, labelKey: "dashboard" },
+  { href: "/inbox",     icon: Inbox,           labelKey: "inbox" },
+  { href: "/payroll",   icon: Wallet,          labelKey: "payroll" },
 ];
 
 const workforcePaths = ["/workforce", "/org-chart", "/geofences", "/assets", "/offboarding", "/attendance"];
 const workforceSubItems = [
-  { href: "/workforce",   icon: Users,   label: "Employees" },
-  { href: "/org-chart",   icon: Network, label: "Org Chart" },
-  { href: "/attendance",  icon: Clock,   label: "Attendance" },
-  { href: "/geofences",   icon: MapPin,  label: "Geofence Zones" },
-  { href: "/assets",      icon: Package, label: "Assets" },
-  { href: "/offboarding", icon: LogOut,  label: "Offboarding" },
+  { href: "/workforce",   icon: Users,   labelKey: "employees" },
+  { href: "/org-chart",   icon: Network, labelKey: "orgChart" },
+  { href: "/attendance",  icon: Clock,   labelKey: "attendance" },
+  { href: "/geofences",   icon: MapPin,  labelKey: "geofences" },
+  { href: "/assets",      icon: Package, labelKey: "assets" },
+  { href: "/offboarding", icon: LogOut,  labelKey: "offboarding" },
 ];
 
 const settingsPaths = ["/settings", "/automation", "/id-cards", "/departments"];
 const settingsSubItems = [
-  { href: "/settings",     icon: Settings,  label: "Settings" },
-  { href: "/departments",  icon: Building2, label: "Departments & Positions" },
-  { href: "/id-cards",     icon: CreditCard, label: "ID Cards" },
-  { href: "/automation",   icon: Workflow,   label: "Rules & Automation" },
+  { href: "/settings",     icon: Settings,  labelKey: "settings" },
+  { href: "/departments",  icon: Building2, labelKey: "departments" },
+  { href: "/id-cards",     icon: CreditCard, labelKey: "idCards" },
+  { href: "/automation",   icon: Workflow,   labelKey: "automation" },
 ];
 
 const bottomNavItems = [
-  { href: "/reports",       icon: BarChart3,   label: "Reports" },
-  { href: "/audit-log",     icon: ScrollText,  label: "Audit Log" },
-  { href: "/documentation", icon: BookOpen,    label: "Documentation" },
+  { href: "/reports",       icon: BarChart3,   labelKey: "reports" },
+  { href: "/audit-log",     icon: ScrollText,  labelKey: "auditLog" },
+  { href: "/documentation", icon: BookOpen,    labelKey: "documentation" },
 ];
 
 // ─── Bell Notification Center ─────────────────────────────────────────────────
@@ -352,6 +354,7 @@ function timeAgo(iso: string) {
 }
 
 function BellNotificationCenter() {
+  const { t } = useTranslation(["layout", "common"]);
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -433,7 +436,7 @@ function BellNotificationCenter() {
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div className="flex items-center gap-2">
               <Bell className="h-4 w-4 text-primary" />
-              <span className="text-sm font-semibold text-foreground">Notifications</span>
+              <span className="text-sm font-semibold text-foreground">{t("layout:notifications.title")}</span>
               {totalBadge > 0 && (
                 <Badge variant="destructive" className="h-5 px-1.5 text-[10px]">{totalBadge}</Badge>
               )}
@@ -445,7 +448,7 @@ function BellNotificationCenter() {
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted/50 transition-colors"
                 >
                   <CheckCheck className="h-3.5 w-3.5" />
-                  Mark all read
+                  {t("layout:notifications.markAllRead")}
                 </button>
               )}
               <button
@@ -463,7 +466,7 @@ function BellNotificationCenter() {
               <div>
                 <div className="px-4 py-2 bg-muted/30 border-b border-border">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Event Alerts
+                    {t("layout:notifications.eventAlerts")}
                   </span>
                 </div>
                 {data?.dateAlerts.starting.map((ev) => (
@@ -473,7 +476,7 @@ function BellNotificationCenter() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-medium text-foreground leading-snug">
-                        {ev.daysAway === 0 ? "Starting today" : ev.daysAway === 1 ? "Starting tomorrow" : `Starting in ${ev.daysAway} days`}
+                        {ev.daysAway === 0 ? t("layout:notifications.startingToday") : ev.daysAway === 1 ? t("layout:notifications.startingTomorrow") : t("layout:notifications.startingInDays", { count: ev.daysAway })}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5 truncate">"{ev.name}"</p>
                       {ev.startDate && <p className="text-[10px] text-muted-foreground/70 mt-0.5">{ev.startDate}</p>}
@@ -490,7 +493,7 @@ function BellNotificationCenter() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-medium text-foreground leading-snug">
-                        {ev.daysAway === 0 ? "Ending today" : ev.daysAway === 1 ? "Ending tomorrow" : `Ending in ${ev.daysAway} days`}
+                        {ev.daysAway === 0 ? t("layout:notifications.endingToday") : ev.daysAway === 1 ? t("layout:notifications.endingTomorrow") : t("layout:notifications.endingInDays", { count: ev.daysAway })}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5 truncate">"{ev.name}"</p>
                       {ev.endDate && <p className="text-[10px] text-muted-foreground/70 mt-0.5">{ev.endDate}</p>}
@@ -508,7 +511,7 @@ function BellNotificationCenter() {
               <div>
                 <div className="px-4 py-2 bg-muted/30 border-b border-border">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Recent Activity
+                    {t("layout:notifications.recentActivity")}
                   </span>
                 </div>
                 {data?.activityLog.map((n) => (
@@ -547,8 +550,8 @@ function BellNotificationCenter() {
             {dateAlertCount === 0 && (data?.activityLog.length ?? 0) === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-center px-4">
                 <Bell className="h-8 w-8 text-muted-foreground/30 mb-3" />
-                <p className="text-sm text-muted-foreground font-medium">All clear</p>
-                <p className="text-xs text-muted-foreground/70 mt-1">No events starting or ending soon</p>
+                <p className="text-sm text-muted-foreground font-medium">{t("layout:notifications.allClear")}</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">{t("layout:notifications.noEventsSoon")}</p>
               </div>
             )}
           </ScrollArea>
@@ -560,7 +563,7 @@ function BellNotificationCenter() {
                 onClick={() => setOpen(false)}
                 className="w-full text-center text-xs font-medium text-primary hover:text-primary/80 transition-colors"
               >
-                View all in Inbox →
+                {t("layout:notifications.viewAllInInbox")} →
               </button>
             </Link>
           </div>
@@ -572,6 +575,7 @@ function BellNotificationCenter() {
 }
 
 export default function DashboardLayout({ children }: LayoutProps) {
+  const { t } = useTranslation(["layout", "common"]);
   const [location, setLocation] = useLocation();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(
@@ -616,14 +620,14 @@ export default function DashboardLayout({ children }: LayoutProps) {
 
   const displayName: string =
     sessionUser?.fullNameEn || sessionUser?.fullName || sessionUser?.name ||
-    meUser?.fullName || meUser?.name || "Admin User";
+    meUser?.fullName || meUser?.name || t("layout:profile.defaultName");
 
   const rawRole = sessionUser?.role || meUser?.role || "";
   const displayRole: string =
-    rawRole === "admin" || rawRole === "super_admin" ? "Administrator" :
-    rawRole === "recruiter" ? "Recruiter" :
-    rawRole === "manager" ? "Manager" :
-    rawRole || "Staff";
+    rawRole === "admin" || rawRole === "super_admin" ? t("layout:profile.roles.administrator") :
+    rawRole === "recruiter" ? t("layout:profile.roles.recruiter") :
+    rawRole === "manager" ? t("layout:profile.roles.manager") :
+    rawRole || t("layout:profile.roles.staff");
 
   const initials = displayName
     .split(" ").filter(Boolean).slice(0, 2)
@@ -761,7 +765,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
             "font-display font-bold text-xl tracking-tight text-white whitespace-nowrap transition-all duration-300",
             collapsed && !mobile ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
           )}>
-            WORKFORCE
+            {t("layout:brand")}
           </span>
         </div>
       </div>
@@ -776,7 +780,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
             key={item.href}
             href={item.href}
             icon={item.icon}
-            label={item.label}
+            label={t(`layout:nav.${item.labelKey}`)}
             isActive={location === item.href}
             badge={item.href === "/inbox" ? inboxCount?.count : undefined}
           />
@@ -786,19 +790,19 @@ export default function DashboardLayout({ children }: LayoutProps) {
         <div>
           <GroupHeader
             icon={Users}
-            label="Workforce"
+            label={t("layout:groups.workforce")}
             isActive={isWorkforceActive}
             open={workforceOpen}
             onClick={() => setWorkforceOpen((v) => !v)}
           />
           {workforceOpen && !collapsed && (
-            <div className="ml-4 mt-0.5 space-y-0.5 border-l border-border/50 pl-3">
+            <div className="ms-4 mt-0.5 space-y-0.5 border-s border-border/50 ps-3">
               {workforceSubItems.map((item) => (
                 <NavItem
                   key={item.href}
                   href={item.href}
                   icon={item.icon}
-                  label={item.label}
+                  label={t(`layout:nav.${item.labelKey}`)}
                   isActive={location === item.href || location.startsWith(item.href + "/")}
                   sub
                 />
@@ -811,19 +815,19 @@ export default function DashboardLayout({ children }: LayoutProps) {
         <div>
           <GroupHeader
             icon={UserSearch}
-            label="Recruitment"
+            label={t("layout:groups.recruitment")}
             isActive={isRecruitmentActive}
             open={recruitmentOpen}
             onClick={() => setRecruitmentOpen((v) => !v)}
           />
           {recruitmentOpen && !collapsed && (
-            <div className="ml-4 mt-0.5 space-y-0.5 border-l border-border/50 pl-3">
+            <div className="ms-4 mt-0.5 space-y-0.5 border-s border-border/50 ps-3">
               {recruitmentItems.map((item) => (
                 <NavItem
                   key={item.href}
                   href={item.href}
                   icon={item.icon}
-                  label={item.label}
+                  label={t(`layout:nav.${item.labelKey}`)}
                   isActive={location === item.href}
                   sub
                 />
@@ -837,7 +841,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
             key={item.href}
             href={item.href}
             icon={item.icon}
-            label={item.label}
+            label={t(`layout:nav.${item.labelKey}`)}
             isActive={location === item.href}
           />
         ))}
@@ -846,19 +850,19 @@ export default function DashboardLayout({ children }: LayoutProps) {
         <div>
           <GroupHeader
             icon={Settings}
-            label="System & Settings"
+            label={t("layout:groups.settings")}
             isActive={isSettingsActive}
             open={settingsOpen}
             onClick={() => setSettingsOpen((v) => !v)}
           />
           {settingsOpen && !collapsed && (
-            <div className="ml-4 mt-0.5 space-y-0.5 border-l border-border/50 pl-3">
+            <div className="ms-4 mt-0.5 space-y-0.5 border-s border-border/50 ps-3">
               {settingsSubItems.map((item) => (
                 <NavItem
                   key={item.href}
                   href={item.href}
                   icon={item.icon}
-                  label={item.label}
+                  label={t(`layout:nav.${item.labelKey}`)}
                   isActive={location === item.href}
                   sub
                 />
@@ -887,13 +891,13 @@ export default function DashboardLayout({ children }: LayoutProps) {
                 {collapsed
                   ? <ChevronsRight className="h-4 w-4" />
                   : <>
-                      <ChevronsLeft className="h-4 w-4" />
-                      <span>Collapse</span>
+                      <ChevronsLeft className="h-4 w-4 rtl:rotate-180" />
+                      <span>{t("layout:sidebar.collapse")}</span>
                     </>
                 }
               </button>
             </TooltipTrigger>
-            {collapsed && <TooltipContent side="right">Expand sidebar</TooltipContent>}
+            {collapsed && <TooltipContent side="right">{t("layout:sidebar.expand")}</TooltipContent>}
           </Tooltip>
         </div>
       )}
@@ -955,16 +959,16 @@ export default function DashboardLayout({ children }: LayoutProps) {
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => setLocation("/profile")}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>Profile</span>
+                    <Settings className="me-2 h-4 w-4" />
+                    <span>{t("layout:profile.menuProfile")}</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     className="text-destructive focus:text-destructive focus:bg-destructive/10"
                     onClick={handleLogout}
                   >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Log out</span>
+                    <LogOut className="me-2 h-4 w-4" />
+                    <span>{t("layout:profile.menuLogout")}</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
