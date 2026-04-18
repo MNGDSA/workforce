@@ -56,6 +56,7 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, desc, inArray, count } from "drizzle-orm";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
+import { trL, type ServerLocale } from "./i18n";
 import { validateFaceQuality } from "./rekognition";
 import XLSX from "xlsx";
 
@@ -186,6 +187,27 @@ function handleError(res: Response, err: unknown) {
   }
   const message = err instanceof Error ? err.message : "Internal server error";
   return res.status(500).json({ message });
+}
+
+/**
+ * Resolve the preferred locale for a candidate's outbound notifications.
+ * Reads the linked user's `locale` column; falls back to project default.
+ */
+async function getCandidateLocale(
+  candidateOrUserId: { userId?: string | null } | string | null | undefined,
+  fallback: ServerLocale = "ar",
+): Promise<ServerLocale> {
+  try {
+    const userId = typeof candidateOrUserId === "string"
+      ? candidateOrUserId
+      : candidateOrUserId?.userId ?? null;
+    if (!userId) return fallback;
+    const u = await storage.getUser(userId);
+    const loc = (u as any)?.locale;
+    return loc === "en" ? "en" : loc === "ar" ? "ar" : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function buildVariableSnapshot(candidate: any, template: any, ob: any): Record<string, string> {
@@ -555,12 +577,16 @@ export async function registerRoutes(
           await storage.updateOnboardingRecord(rec.id, syncPayload);
         }
       }
-      const docLabelMap: Record<string, string> = { photo: "Personal Photo", nationalId: "National ID / Iqama", iban: "IBAN Certificate" };
-      const docLabel = docLabelMap[docType] ?? "document";
       if (updated.phone) {
         const smsPlugin = await storage.getActiveSmsPlugin();
         if (smsPlugin) {
-          const smsMsg = `Your ${docLabel} has been rejected by HR Team, please reupload the correct one as soon as possible.`;
+          const recipientLocale = await getCandidateLocale(updated);
+          const docLabelKey = docType === "photo" ? "doc.label.photo"
+            : docType === "nationalId" ? "doc.label.nationalId"
+            : docType === "iban" ? "doc.label.iban"
+            : "doc.label.document";
+          const docLabel = trL(recipientLocale, docLabelKey);
+          const smsMsg = trL(recipientLocale, "sms.docRejected", { docLabel });
           sendSmsViaPlugin(smsPlugin, updated.phone, smsMsg)
             .then(r => {
               if (r.success) console.log(`[SMS] Doc rejection notification sent to ${updated.phone}`);
@@ -735,7 +761,8 @@ export async function registerRoutes(
 
       await storage.createOtpVerification(normalizedPhone, code, expiresAt);
 
-      const message = `Workforce SA: Your verification code is ${code}. Valid for 5 minutes. Do not share this code.`;
+      // Phone-only flow (no user record yet) — honour request locale.
+      const message = tr(req, "sms.otpVerification", { code });
       const result = await sendSmsViaPlugin(smsPlugin, normalizedPhone, message);
 
       if (!result.success) {
@@ -952,7 +979,9 @@ export async function registerRoutes(
 
       const activePlugin = await storage.getActiveSmsPlugin();
       if (activePlugin) {
-        const result = await sendSmsViaPlugin(activePlugin, phone, `Your password reset code is: ${code}`);
+        const recipientLocale = (user as any)?.locale === "en" ? "en" : "ar";
+        const resetMsg = trL(recipientLocale, "sms.passwordResetCode", { code });
+        const result = await sendSmsViaPlugin(activePlugin, phone, resetMsg);
         if (!result.success) {
           console.error("[Reset] SMS delivery failed:", result.error);
           return res.status(502).json({ message: tr(req, "otp.sendFailed") });
@@ -3848,7 +3877,7 @@ export async function registerRoutes(
         if (candidate.phone) {
           const smsPlugin = await storage.getActiveSmsPlugin();
           if (smsPlugin) {
-            sendSmsViaPlugin(smsPlugin, candidate.phone, "Your employment contract has been generated and is ready for your review and signature. Please log in to the candidate portal to view and sign it.")
+            sendSmsViaPlugin(smsPlugin, candidate.phone, trL(await getCandidateLocale(candidate), "sms.contractReady"))
               .then(r => { if (r.success) console.log(`[SMS] Contract notification sent to ${candidate.phone}`); else console.error(`[SMS] Contract notification failed: ${r.error}`); })
               .catch(e => console.error("[SMS] Contract notification error:", e));
           }
@@ -3871,7 +3900,7 @@ export async function registerRoutes(
       if (candidate.phone) {
         const smsPlugin = await storage.getActiveSmsPlugin();
         if (smsPlugin) {
-          sendSmsViaPlugin(smsPlugin, candidate.phone, "Your employment contract has been generated and is ready for your review and signature. Please log in to the candidate portal to view and sign it.")
+          sendSmsViaPlugin(smsPlugin, candidate.phone, trL(await getCandidateLocale(candidate), "sms.contractReady"))
             .then(r => { if (r.success) console.log(`[SMS] Contract notification sent to ${candidate.phone}`); else console.error(`[SMS] Contract notification failed: ${r.error}`); })
             .catch(e => console.error("[SMS] Contract notification error:", e));
         }
@@ -3925,7 +3954,7 @@ export async function registerRoutes(
           }
 
           if (candidate.phone && smsPlugin) {
-            sendSmsViaPlugin(smsPlugin, candidate.phone, "Your employment contract has been generated and is ready for your review and signature. Please log in to the candidate portal to view and sign it.")
+            sendSmsViaPlugin(smsPlugin, candidate.phone, trL(await getCandidateLocale(candidate), "sms.contractReady"))
               .catch(e => console.error("[SMS] Bulk contract notification error:", e));
           }
 
@@ -6645,7 +6674,8 @@ export async function registerRoutes(
         const plugins = await storage.getSmsPlugins();
         const activePlugin = plugins.find((p: any) => p.isActive);
         if (activePlugin) {
-          await sendSmsViaPlugin(activePlugin, cand.phone, `Your cash payment verification code is ${code}. Amount: ${amount} SAR. Provide this code to the cashier to confirm receipt. WORKFORCE`);
+          const recipientLocale = await getCandidateLocale(cand);
+          await sendSmsViaPlugin(activePlugin, cand.phone, trL(recipientLocale, "sms.cashPaymentOtp", { code, amount: String(amount) }));
         }
 
         return res.json({ otpSent: true, phone: cand.phone.slice(0, 4) + "****" + cand.phone.slice(-2) });

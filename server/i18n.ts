@@ -318,6 +318,17 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "error.updateFailed"                  : "Update failed",
     "smp.cannotApplyActiveSmp"            : "Cannot submit individual job application: this candidate is currently registered as an active SMP worker. Remove them from the SMP contract first.",
     "smp.cannotApplyOnboarding"           : "Cannot submit individual job application: this candidate is in an active SMP onboarding pipeline. Complete or reject the SMP onboarding first.",
+
+    // ─── SMS / Email recipient-facing templates ─────────────────────────────
+    "sms.docRejected"                     : "Your {{docLabel}} has been rejected by the HR team. Please re-upload the correct one as soon as possible.",
+    "sms.otpVerification"                 : "Workforce SA: Your verification code is {{code}}. Valid for 5 minutes. Do not share this code.",
+    "sms.passwordResetCode"               : "Your password reset code is: {{code}}",
+    "sms.contractReady"                   : "Your employment contract has been generated and is ready for your review and signature. Please log in to the candidate portal to view and sign it.",
+    "sms.cashPaymentOtp"                  : "Your cash payment verification code is {{code}}. Amount: {{amount}} SAR. Provide this code to the cashier to confirm receipt. WORKFORCE",
+    "doc.label.photo"                     : "Personal Photo",
+    "doc.label.nationalId"                : "National ID / Iqama",
+    "doc.label.iban"                      : "IBAN Certificate",
+    "doc.label.document"                  : "document",
   },
   ar: {
     // Auth middleware
@@ -616,6 +627,17 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "error.updateFailed"                  : "فشل التحديث",
     "smp.cannotApplyActiveSmp"            : "لا يمكن تقديم طلب وظيفة فردي: هذا المرشح مسجّل حالياً كعامل SMP نشط. قم بإزالته من عقد SMP أولاً.",
     "smp.cannotApplyOnboarding"           : "لا يمكن تقديم طلب وظيفة فردي: هذا المرشح ضمن مسار تأهيل SMP نشط. أكمل أو ارفض تأهيل SMP أولاً.",
+
+    // ─── SMS / Email recipient-facing templates ─────────────────────────────
+    "sms.docRejected"                     : "تم رفض {{docLabel}} الخاص بك من قِبل فريق الموارد البشرية. يرجى رفع المستند الصحيح في أقرب وقت ممكن.",
+    "sms.otpVerification"                 : "وورك فورس: رمز التحقق الخاص بك هو {{code}}. صالح لمدة 5 دقائق. لا تشاركه مع أي شخص.",
+    "sms.passwordResetCode"               : "رمز إعادة تعيين كلمة المرور: {{code}}",
+    "sms.contractReady"                   : "تم إصدار عقد العمل الخاص بك وهو جاهز للمراجعة والتوقيع. يرجى تسجيل الدخول إلى بوابة المرشح لعرضه وتوقيعه.",
+    "sms.cashPaymentOtp"                  : "رمز التحقق للدفع النقدي: {{code}}. المبلغ: {{amount}} ريال سعودي. قدّم هذا الرمز للمحاسب لتأكيد الاستلام. وورك فورس",
+    "doc.label.photo"                     : "الصورة الشخصية",
+    "doc.label.nationalId"                : "بطاقة الهوية / الإقامة",
+    "doc.label.iban"                      : "شهادة الآيبان",
+    "doc.label.document"                  : "المستند",
   },
 };
 
@@ -651,8 +673,17 @@ export function getLocale(req: Request): ServerLocale {
  * — this honours the project's absolute Western-numerals rule.
  */
 export function tr(req: Request, key: string, params?: Record<string, string | number>): string {
-  const locale = getLocale(req);
-  const template = MESSAGES[locale][key] ?? MESSAGES.en[key] ?? key;
+  return trL(getLocale(req), key, params);
+}
+
+/**
+ * Locale-explicit translator — used by background SMS / email senders that
+ * have no Express request context but know the recipient's preferred locale
+ * (e.g. from a candidate or user record).
+ */
+export function trL(locale: ServerLocale | string | null | undefined, key: string, params?: Record<string, string | number>): string {
+  const loc: ServerLocale = locale === "en" ? "en" : locale === "ar" ? "ar" : DEFAULT_LOCALE;
+  const template = MESSAGES[loc][key] ?? MESSAGES.en[key] ?? key;
   if (!params) return template;
   return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, name) => {
     const v = params[name];
