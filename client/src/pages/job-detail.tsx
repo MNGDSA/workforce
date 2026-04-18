@@ -381,18 +381,6 @@ export default function JobDetailPage() {
           </div>
         </div>
 
-        <Card className="bg-card border-border">
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="h-12 w-12 bg-sidebar rounded-sm flex items-center justify-center shrink-0 border border-border p-1.5">
-              <img src="/workforce-logo.svg" alt="Workforce" className="h-full w-full" />
-            </div>
-            <div>
-              <p className="font-bold text-white">WORKFORCE</p>
-              <p className="text-sm text-muted-foreground">Event-based employment · Kingdom of Saudi Arabia</p>
-            </div>
-          </CardContent>
-        </Card>
-
         {!applied && (
           <div className="pb-8 pt-2 border-t border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
@@ -411,6 +399,11 @@ export default function JobDetailPage() {
           </div>
         )}
       </main>
+
+      <footer className="border-t border-border py-6 flex items-center justify-center gap-2">
+        <img src="/workforce-logo.svg" alt="Workforce" className="h-5 w-5" />
+        <span className="font-display font-bold text-sm tracking-tight text-muted-foreground">WORKFORCE</span>
+      </footer>
 
       {isLoggedIn && (
         <ApplyJobDialog
