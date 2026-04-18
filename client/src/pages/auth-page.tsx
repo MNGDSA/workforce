@@ -604,7 +604,7 @@ export default function AuthPage() {
                   ));
                 return (
                   <div className="mt-6 space-y-2">
-                    <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest font-semibold text-center">
+                    <p className={`text-muted-foreground/70 uppercase tracking-widest font-semibold text-center ${isRtl ? "text-sm" : "text-xs"}`}>
                       {isRtl ? "يستخدم نظام وورك فورس تقنيات يستعملها كل من" : "Workforce Utilizes Technologies used by"}
                     </p>
                     <div
