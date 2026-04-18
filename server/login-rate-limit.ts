@@ -6,6 +6,7 @@ const WINDOW_MS = 15 * 60 * 1000;
 const LOCKOUT_MS = 30 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+const MAX_BUCKETS = 50_000;
 
 interface Bucket {
   attempts: number[];
@@ -16,11 +17,25 @@ const ipBuckets = new Map<string, Bucket>();
 const idBuckets = new Map<string, Bucket>();
 
 function getClientIp(req: Request): string {
+  // DO App Platform / typical reverse proxy: the load balancer APPENDS the
+  // real client IP to any client-supplied X-Forwarded-For. So the rightmost
+  // entry is the only one we trust. Taking the leftmost would let an attacker
+  // pre-poison the header to rotate fake IPs and bypass the limiter.
   const xff = req.headers["x-forwarded-for"];
   if (typeof xff === "string" && xff.length > 0) {
-    return xff.split(",")[0]!.trim();
+    const parts = xff.split(",");
+    return parts[parts.length - 1]!.trim();
   }
   return req.ip ?? "unknown";
+}
+
+function sanitizeIdentifierForLog(id: string): string {
+  // Audit metadata is human-readable. Users sometimes mistype passwords into
+  // the username field; we don't want that ending up in audit_logs in plain
+  // text. Keep first 3 chars + length, drop the rest.
+  if (!id) return "(empty)";
+  const head = id.slice(0, 3);
+  return `${head}***[len=${id.length}]`;
 }
 
 function normalizeIdentifier(raw: unknown): string {
@@ -47,6 +62,12 @@ function checkBucket(map: Map<string, Bucket>, key: string, now: number): { lock
 function recordFailure(map: Map<string, Bucket>, key: string, now: number): { lockedNow: boolean } {
   let b = map.get(key);
   if (!b) {
+    if (map.size >= MAX_BUCKETS) {
+      // Hard cap to bound memory under flood of unique IPs/identifiers.
+      // Drop one arbitrary entry (insertion order via Map iteration) to make room.
+      const firstKey = map.keys().next().value;
+      if (firstKey !== undefined) map.delete(firstKey);
+    }
     b = { attempts: [], lockedUntil: 0 };
     map.set(key, b);
   }
@@ -71,8 +92,8 @@ function auditLockout(req: Request, scope: "ip" | "identifier", value: string, i
         description: `Login lockout (${scope}) for ${LOCKOUT_MS / 60000} min after ${MAX_ATTEMPTS} failed attempts`,
         metadata: {
           scope,
-          value,
-          identifier,
+          value: scope === "identifier" ? sanitizeIdentifierForLog(value) : value,
+          identifier: sanitizeIdentifierForLog(identifier),
           ip: getClientIp(req),
           windowMin: WINDOW_MS / 60000,
           lockoutMin: LOCKOUT_MS / 60000,
