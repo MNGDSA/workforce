@@ -343,6 +343,19 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "ntp.resolvesToInternal"              : "Resolves to internal address",
     "import.profileMissingFields"         : "Profile marked complete but missing: {{fields}}",
     "import.invalidRow"                   : "invalid",
+
+    // Attendance status — windowMessage variants (mobile shows verbatim)
+    "attendance.window.beforeShift"       : "Your shift starts at {{start}}. You can check in from {{earliest}} (in {{wait}}).",
+    "attendance.window.afterShift"        : "Your shift ended at {{end}}. The check-out window has closed.",
+    "attendance.window.minDuration"       : "Minimum shift duration is {{required}} minutes. You can check out in {{remaining}} more minute(s).",
+
+    // Attendance flag/audit reasons (admin-visible)
+    "attendance.flag.noShift"             : "No shift assigned to this employee",
+    "attendance.flag.clockTamperDrift"    : "Clock tampering suspected — NTP and system clock diverge by {{minutes}} minute(s)",
+    "attendance.flag.serverClockDrift"    : "NTP timestamp and server time diverge by {{minutes}} minute(s)",
+    "attendance.flag.staleNtp"            : "Stale NTP offset — last sync {{days}} day(s) ago",
+    "attendance.flag.pipelineError"       : "Pipeline error: {{detail}}",
+    "attendance.flag.pipelineErrorShort"  : "Pipeline error",
   },
   ar: {
     // Auth middleware
@@ -666,6 +679,19 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "ntp.resolvesToInternal"              : "يشير اسم المضيف إلى عنوان داخلي",
     "import.profileMissingFields"         : "تم وضع علامة اكتمال الملف ولكن تنقص الحقول التالية: {{fields}}",
     "import.invalidRow"                   : "غير صالح",
+
+    // Attendance status — windowMessage variants (mobile shows verbatim)
+    "attendance.window.beforeShift"       : "يبدأ شيفتك في {{start}}. يمكنك تسجيل الحضور من {{earliest}} (خلال {{wait}}).",
+    "attendance.window.afterShift"        : "انتهى شيفتك في {{end}}. أُغلقت نافذة الانصراف.",
+    "attendance.window.minDuration"       : "الحد الأدنى لمدة الشيفت {{required}} دقيقة. يمكنك الانصراف بعد {{remaining}} دقيقة.",
+
+    // Attendance flag/audit reasons (admin-visible)
+    "attendance.flag.noShift"             : "لا يوجد شيفت مُعيَّن لهذا الموظف",
+    "attendance.flag.clockTamperDrift"    : "اشتباه في تلاعب بالساعة — اختلاف بين NTP وساعة النظام بمقدار {{minutes}} دقيقة",
+    "attendance.flag.serverClockDrift"    : "اختلاف بين توقيت NTP وتوقيت الخادم بمقدار {{minutes}} دقيقة",
+    "attendance.flag.staleNtp"            : "إزاحة NTP قديمة — آخر مزامنة قبل {{days}} يوم",
+    "attendance.flag.pipelineError"       : "خطأ في خط التحقق: {{detail}}",
+    "attendance.flag.pipelineErrorShort"  : "خطأ في خط التحقق",
   },
 };
 

@@ -5649,6 +5649,7 @@ export async function registerRoutes(
 
       let shiftWindowOpen = true;
       let windowMessage: string | null = null;
+      let windowReason: { code: string; params: Record<string, string | number> } | null = null;
       const currentMin = timeToMinutes(currentTime);
 
       if (shiftInfo && nextAllowedAction !== "none") {
@@ -5671,10 +5672,19 @@ export async function registerRoutes(
           const waitMin = earliestCheckIn - adjustedCurrent;
           const h = Math.floor(waitMin / 60);
           const m = waitMin % 60;
-          windowMessage = `Your shift starts at ${shiftInfo.shiftStartTime}. You can check in starting at ${formatMinutesToTime(earliestCheckIn)}` + (h > 0 ? ` (in ${h}h ${m}m)` : ` (in ${m}m)`);
+          const wait = h > 0 ? `${h}h ${m}m` : `${m}m`;
+          windowReason = {
+            code: "BEFORE_SHIFT_WINDOW",
+            params: { start: shiftInfo.shiftStartTime, earliest: formatMinutesToTime(earliestCheckIn), wait },
+          };
+          windowMessage = tr(req, "attendance.window.beforeShift", windowReason.params);
         } else if (adjustedCurrent > latestCheckOut) {
           shiftWindowOpen = false;
-          windowMessage = `Your shift ended at ${shiftInfo.shiftEndTime}. The check-out window has closed.`;
+          windowReason = {
+            code: "AFTER_SHIFT_WINDOW",
+            params: { end: shiftInfo.shiftEndTime },
+          };
+          windowMessage = tr(req, "attendance.window.afterShift", windowReason.params);
           nextAllowedAction = "none";
         }
       }
@@ -5686,7 +5696,11 @@ export async function registerRoutes(
         if (elapsed < config.minShiftDurationMinutes) {
           shiftWindowOpen = false;
           const remaining = config.minShiftDurationMinutes - elapsed;
-          windowMessage = `Minimum shift duration is ${config.minShiftDurationMinutes} minutes. You can check out in ${remaining} minutes.`;
+          windowReason = {
+            code: "MIN_DURATION_NOT_MET",
+            params: { required: config.minShiftDurationMinutes, remaining },
+          };
+          windowMessage = tr(req, "attendance.window.minDuration", windowReason.params);
         }
       }
 
@@ -5720,6 +5734,7 @@ export async function registerRoutes(
         minutesWorked: record?.minutesWorked ?? null,
         shiftWindowOpen,
         windowMessage,
+        windowReason,
         cooldownUntil,
         config: {
           earlyBufferMinutes: config.earlyBufferMinutes,
@@ -5937,7 +5952,7 @@ export async function registerRoutes(
       if (ntpTs && sysClockTs) {
         const drift = Math.abs(ntpTs.getTime() - sysClockTs.getTime());
         if (drift > 5 * 60 * 1000) {
-          clockTamperFlags.push("Clock tampering suspected — NTP and system clock diverge by " + Math.round(drift / 60000) + " minutes");
+          clockTamperFlags.push(tr(req, "attendance.flag.clockTamperDrift", { minutes: Math.round(drift / 60000) }));
         }
       }
 
@@ -5947,20 +5962,20 @@ export async function registerRoutes(
         if (!isOfflineSync) {
           const serverDrift = Math.abs(ntpTs.getTime() - serverReceivedAt.getTime());
           if (serverDrift > 5 * 60 * 1000) {
-            clockTamperFlags.push("NTP timestamp and server time diverge by " + Math.round(serverDrift / 60000) + " minutes");
+            clockTamperFlags.push(tr(req, "attendance.flag.serverClockDrift", { minutes: Math.round(serverDrift / 60000) }));
           }
         }
       } else if (ntpTs) {
         const serverDrift = Math.abs(ntpTs.getTime() - serverReceivedAt.getTime());
         if (serverDrift > 5 * 60 * 1000) {
-          clockTamperFlags.push("NTP timestamp and server time diverge by " + Math.round(serverDrift / 60000) + " minutes");
+          clockTamperFlags.push(tr(req, "attendance.flag.serverClockDrift", { minutes: Math.round(serverDrift / 60000) }));
         }
       }
 
       if (lastNtpSync) {
         const ntpAge = serverReceivedAt.getTime() - lastNtpSync.getTime();
         if (ntpAge > 7 * 24 * 60 * 60 * 1000) {
-          clockTamperFlags.push("Stale NTP offset — last sync " + Math.round(ntpAge / 86400000) + " days ago");
+          clockTamperFlags.push(tr(req, "attendance.flag.staleNtp", { days: Math.round(ntpAge / 86400000) }));
         }
       }
 
@@ -6028,10 +6043,10 @@ export async function registerRoutes(
         pipelineResult = await runVerificationPipeline(submission.id);
       } catch (pipeErr) {
         console.error("[Verification Pipeline] Error:", pipeErr);
-        pipelineResult = { status: "flagged" as const, confidence: 0, gpsInside: false, flagReason: "Pipeline error" };
+        pipelineResult = { status: "flagged" as const, confidence: 0, gpsInside: false, flagReason: tr(req, "attendance.flag.pipelineErrorShort") };
         await storage.updateAttendanceSubmission(submission.id, {
           status: "flagged",
-          flagReason: "Pipeline error: " + (pipeErr instanceof Error ? pipeErr.message : "Unknown"),
+          flagReason: tr(req, "attendance.flag.pipelineError", { detail: pipeErr instanceof Error ? pipeErr.message : "Unknown" }),
           rekognitionConfidence: "0",
         });
       }
@@ -6040,7 +6055,7 @@ export async function registerRoutes(
         try {
           const candidate = wfRecord.candidateId ? await storage.getCandidate(wfRecord.candidateId) : null;
           const existingFlagReason = (await storage.getAttendanceSubmission(submission.id))?.flagReason;
-          const noShiftMsg = "No shift assigned to this employee";
+          const noShiftMsg = tr(req, "attendance.flag.noShift");
           const mergedReason = existingFlagReason ? `${existingFlagReason}; ${noShiftMsg}` : noShiftMsg;
           await storage.updateAttendanceSubmission(submission.id, {
             status: "flagged",
