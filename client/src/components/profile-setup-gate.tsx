@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { nationalityLabel } from "@/lib/i18n/nationalities";
 import {
   Building2,
   ChevronRight,
@@ -288,6 +289,9 @@ function Step1Form({
   const maritalLabels = useMemo(() => Object.fromEntries(
     MARITAL_OPTIONS.map(m => [m, t(`profileSetup:marital.${m}`)])
   ), [t]);
+  const nationalityLabels = useMemo(() => Object.fromEntries(
+    NATIONALITIES_RAW.filter(n => n !== "---").map(n => [n, nationalityLabel(n, i18n.language)])
+  ), [i18n.language]);
 
   const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm<Step1>({
     resolver: zodResolver(step1Schema),
@@ -338,7 +342,7 @@ function Step1Form({
 
       <FieldWrapper label={t("profileSetup:step1.nationality")} required error={errors.nationalityText?.message}>
         <Controller control={control} name="nationalityText" render={({ field }) => (
-          <SelectField value={field.value} onChange={field.onChange} options={NATIONALITIES_RAW} placeholder={t("profileSetup:common.selectNationality")} />
+          <SelectField value={field.value} onChange={field.onChange} options={NATIONALITIES_RAW} labels={nationalityLabels} placeholder={t("profileSetup:common.selectNationality")} />
         )} />
       </FieldWrapper>
 

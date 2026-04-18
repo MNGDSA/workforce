@@ -51,6 +51,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { NATIONALITY_OPTIONS_LIST } from "@/components/profile-setup-gate";
+import { nationalityLabel } from "@/lib/i18n/nationalities";
 import { useTranslation, Trans } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -2746,7 +2747,7 @@ export default function CandidatePortal() {
                         n === "---" ? (
                           <option key={`sep-${i}`} disabled className="bg-card text-muted-foreground">{"─".repeat(20)}</option>
                         ) : (
-                          <option key={n} value={n} className="bg-card text-white">{n}</option>
+                          <option key={n} value={n} className="bg-card text-white">{nationalityLabel(n, i18n.language)}</option>
                         )
                       )}
                     </select>
