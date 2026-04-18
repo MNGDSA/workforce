@@ -2089,14 +2089,15 @@ export default function CandidatePortal() {
           </div>
         );
 
-      case "jobs":
+      case "jobs": {
+        const isRtl = i18n.language?.startsWith("ar");
         return (
           <Tabs defaultValue="open">
-            <div className="flex items-center justify-between mb-4">
+            <div className={`flex items-center justify-between mb-4 ${isRtl ? "flex-row-reverse" : ""}`}>
               <h3 className="text-xl font-display font-bold text-white">
                 {t("portal:jobs.title")}
               </h3>
-              <TabsList className="bg-muted/20">
+              <TabsList className="bg-muted/20" style={isRtl ? { direction: "rtl" } : undefined}>
                 <TabsTrigger value="open">{t("portal:jobs.openTab")}</TabsTrigger>
                 <TabsTrigger value="applied">{appliedIds.size > 0 ? t("portal:jobs.appliedCount", { n: formatNumber(appliedIds.size) }) : t("portal:jobs.appliedTab")}</TabsTrigger>
               </TabsList>
@@ -2130,26 +2131,26 @@ export default function CandidatePortal() {
                       data-testid={`card-job-${job.id}`}
                     >
                       <CardContent className="p-5">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 ${isRtl ? "md:flex-row-reverse" : ""}`}>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                            <div className={`flex items-center gap-2 mb-1.5 flex-wrap ${isRtl ? "flex-row-reverse justify-end" : ""}`}>
                               <h4 className="font-bold text-white text-base group-hover:text-primary transition-colors"><bdi>{job.title}</bdi></h4>
                               <Badge variant="outline" className="border-border text-muted-foreground text-xs font-normal">{typeLabel(job.type, t)}</Badge>
                               {applied && (
-                                <Badge className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 text-xs font-medium gap-1">
+                                <Badge className={`bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 text-xs font-medium gap-1 ${isRtl ? "flex-row-reverse" : ""}`}>
                                   <CheckCircle2 className="h-3 w-3" /> {t("portal:badge.applied")}
                                 </Badge>
                               )}
                             </div>
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
+                            <div className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground ${isRtl ? "flex-row-reverse justify-end" : ""}`}>
                               {(job.region ?? job.location) && (
-                                <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{job.region ?? job.location}</span>
+                                <span className={`flex items-center gap-1 ${isRtl ? "flex-row-reverse" : ""}`}><MapPin className="h-3.5 w-3.5" />{job.region ?? job.location}</span>
                               )}
                               {salary && (
-                                <span className="flex items-center gap-1 text-white font-medium"><Banknote className="h-3.5 w-3.5 text-muted-foreground" />{salary}</span>
+                                <span className={`flex items-center gap-1 text-white font-medium ${isRtl ? "flex-row-reverse" : ""}`}><Banknote className="h-3.5 w-3.5 text-muted-foreground" />{salary}</span>
                               )}
                               {job.deadline && (
-                                <span className="flex items-center gap-1 text-xs"><CalendarDays className="h-3.5 w-3.5" />{t("portal:jobs.deadline", { date: formatDate(job.deadline) })}</span>
+                                <span className={`flex items-center gap-1 text-xs ${isRtl ? "flex-row-reverse" : ""}`}><CalendarDays className="h-3.5 w-3.5" />{t("portal:jobs.deadline", { date: formatDate(job.deadline) })}</span>
                               )}
                             </div>
                           </div>
@@ -2206,6 +2207,7 @@ export default function CandidatePortal() {
             </TabsContent>
           </Tabs>
         );
+      }
 
       case "dashboard":
       default: {
