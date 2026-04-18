@@ -2734,21 +2734,24 @@ export default function CandidatePortal() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-white">{t("portal:profile.nationality")}</label>
-                  <select
-                    name="nationalityText"
-                    defaultValue={String(candidateProfile?.nationalityText ?? candidateProfile?.nationality ?? "")}
-                    dir={i18n.language?.startsWith("ar") ? "rtl" : "ltr"}
-                    className="w-full h-10 bg-background border border-border rounded-md px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
-                    data-testid="select-nationality"
-                  >
-                    {NATIONALITY_OPTIONS_LIST.map((n, i) =>
-                      n === "---" ? (
-                        <option key={`sep-${i}`} disabled className="bg-card text-muted-foreground">{"─".repeat(20)}</option>
-                      ) : (
-                        <option key={n} value={n} className="bg-card text-white">{n}</option>
-                      )
-                    )}
-                  </select>
+                  <div className="relative">
+                    <select
+                      name="nationalityText"
+                      defaultValue={String(candidateProfile?.nationalityText ?? candidateProfile?.nationality ?? "")}
+                      dir={i18n.language?.startsWith("ar") ? "rtl" : "ltr"}
+                      className={`w-full h-10 bg-background border border-border rounded-md text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none ${i18n.language?.startsWith("ar") ? "pr-3 pl-9" : "pl-3 pr-9"}`}
+                      data-testid="select-nationality"
+                    >
+                      {NATIONALITY_OPTIONS_LIST.map((n, i) =>
+                        n === "---" ? (
+                          <option key={`sep-${i}`} disabled className="bg-card text-muted-foreground">{"─".repeat(20)}</option>
+                        ) : (
+                          <option key={n} value={n} className="bg-card text-white">{n}</option>
+                        )
+                      )}
+                    </select>
+                    <ChevronDown className={`pointer-events-none absolute top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground ${i18n.language?.startsWith("ar") ? "left-3" : "right-3"}`} />
+                  </div>
                 </div>
               </div>
             </div>
