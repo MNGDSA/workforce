@@ -94,6 +94,16 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Boot-time idempotent schema patches. Production deploys do not run
+  // drizzle-kit push, so schema additions must self-heal here. Keep these
+  // small and ADD COLUMN IF NOT EXISTS / CREATE INDEX IF NOT EXISTS only.
+  try {
+    const { ensureLocaleColumn } = await import("./migrations/ensure-locale-column");
+    await ensureLocaleColumn(log);
+  } catch (err) {
+    log(`boot migration failed: ${err}`, "boot-migrate");
+  }
+
   // Seed RBAC system roles & permission catalog before routes mount,
   // so requirePermission cache loads against a populated DB.
   try {

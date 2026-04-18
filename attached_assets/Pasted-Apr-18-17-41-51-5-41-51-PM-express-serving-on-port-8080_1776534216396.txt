@@ -1,0 +1,44 @@
+Apr 18 17:41:51  5:41:51 PM [express] serving on port 8080
+Apr 18 17:41:51  5:41:51 PM [scheduler] Date alerts: 1 starting, 0 ending within 3 days
+Apr 18 17:42:21  5:42:21 PM [express] GET /api/health 200 in 34ms :: {"status":"ok","db":"ok","dbLatencyMs":30,"uptimeSec":30,"env":"production","timestamp":"2026-04-18T17:42:21.967Z"}
+Apr 18 17:42:31  5:42:31 PM [express] GET /api/health 200 in 3ms :: {"status":"ok","db":"ok","dbLatencyMs":2,"uptimeSec":40,"env":"production","timestamp":"2026-04-18T17:42:31.935Z"}
+Apr 18 17:42:41  5:42:41 PM [express] GET /api/health 200 in 3ms :: {"status":"ok","db":"ok","dbLatencyMs":2,"uptimeSec":50,"env":"production","timestamp":"2026-04-18T17:42:41.935Z"}
+Apr 18 17:42:51  5:42:51 PM [express] GET /api/health 200 in 3ms :: {"status":"ok","db":"ok","dbLatencyMs":2,"uptimeSec":60,"env":"production","timestamp":"2026-04-18T17:42:51.934Z"}
+Apr 18 17:43:01  5:43:01 PM [express] GET /api/health 200 in 4ms :: {"status":"ok","db":"ok","dbLatencyMs":3,"uptimeSec":70,"env":"production","timestamp":"2026-04-18T17:43:01.935Z"}
+Apr 18 17:43:11  5:43:11 PM [express] GET /api/health 200 in 2ms :: {"status":"ok","db":"ok","dbLatencyMs":2,"uptimeSec":80,"env":"production","timestamp":"2026-04-18T17:43:11.936Z"}
+Apr 18 17:41:52  5:41:52 PM [express] GET /api/health 200 in 4ms :: {"status":"ok","db":"ok","dbLatencyMs":2,"uptimeSec":60,"env":"production","timestamp":"2026-04-18T17:41:52.630Z"}
+Apr 18 17:42:02  5:42:02 PM [express] GET /api/health 200 in 3ms :: {"status":"ok","db":"ok","dbLatencyMs":1,"uptimeSec":70,"env":"production","timestamp":"2026-04-18T17:42:02.628Z"}
+Apr 18 17:42:09  error: column "locale" does not exist
+Apr 18 17:42:09      at /workspace/dist/index.cjs:61:14266
+Apr 18 17:42:09      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Apr 18 17:42:09      at async /workspace/dist/index.cjs:67:38315
+Apr 18 17:42:09      at async x_.getUserByPhone (/workspace/dist/index.cjs:67:153411)
+Apr 18 17:42:09      at async /workspace/dist/index.cjs:259:13539 {
+Apr 18 17:42:09    length: 107,
+Apr 18 17:42:09    severity: 'ERROR',
+Apr 18 17:42:09    code: '42703',
+Apr 18 17:42:09    detail: undefined,
+Apr 18 17:42:09    hint: undefined,
+Apr 18 17:42:09    position: '129',
+Apr 18 17:42:09    internalPosition: undefined,
+Apr 18 17:42:09    internalQuery: undefined,
+Apr 18 17:42:09    where: undefined,
+Apr 18 17:42:09    schema: undefined,
+Apr 18 17:42:09    table: undefined,
+Apr 18 17:42:09    column: undefined,
+Apr 18 17:42:09    dataType: undefined,
+Apr 18 17:42:09    constraint: undefined,
+Apr 18 17:42:09    file: 'parse_relation.c',
+Apr 18 17:42:09    line: '3722',
+Apr 18 17:42:09    routine: 'errorMissingColumn'
+Apr 18 17:42:09  }
+Apr 18 17:42:09  5:42:09 PM [express] POST /api/auth/login 500 in 11ms :: {"message":"column \"locale\" does not exist"}
+Apr 18 17:42:12  5:42:12 PM [express] GET /api/health 200 in 50ms :: {"status":"ok","db":"ok","dbLatencyMs":49,"uptimeSec":80,"env":"production","timestamp":"2026-04-18T17:42:12.675Z"}
+Apr 18 17:42:22  5:42:22 PM [express] GET /api/health 200 in 4ms :: {"status":"ok","db":"ok","dbLatencyMs":2,"uptimeSec":90,"env":"production","timestamp":"2026-04-18T17:42:22.628Z"}
+Apr 18 17:42:32  5:42:32 PM [express] GET /api/health 200 in 3ms :: {"status":"ok","db":"ok","dbLatencyMs":2,"uptimeSec":100,"env":"production","timestamp":"2026-04-18T17:42:32.628Z"}
+Apr 18 17:42:42  5:42:42 PM [express] GET /api/health 200 in 2ms :: {"status":"ok","db":"ok","dbLatencyMs":1,"uptimeSec":110,"env":"production","timestamp":"2026-04-18T17:42:42.628Z"}
+Apr 18 17:42:52  5:42:52 PM [express] GET /api/health 200 in 3ms :: {"status":"ok","db":"ok","dbLatencyMs":2,"uptimeSec":120,"env":"production","timestamp":"2026-04-18T17:42:52.629Z"}
+Apr 18 17:43:02  5:43:02 PM [express] GET /api/health 200 in 3ms :: {"status":"ok","db":"ok","dbLatencyMs":2,"uptimeSec":130,"env":"production","timestamp":"2026-04-18T17:43:02.628Z"}
+Apr 18 17:43:12  5:43:12 PM [express] GET /api/health 200 in 2ms :: {"status":"ok","db":"ok","dbLatencyMs":2,"uptimeSec":140,"env":"production","timestamp":"2026-04-18T17:43:12.628Z"}
+Apr 18 17:43:21  5:43:21 PM [express] GET /api/health 200 in 3ms :: {"status":"ok","db":"ok","dbLatencyMs":2,"uptimeSec":90,"env":"production","timestamp":"2026-04-18T17:43:21.935Z"}
+Apr 18 17:43:22  5:43:22 PM [express] GET /api/health 200 in 3ms :: {"status":"ok","db":"ok","dbLatencyMs":1,"uptimeSec":150,"env":"production","timestamp":"2026-04-18T17:43:22.628Z"}
