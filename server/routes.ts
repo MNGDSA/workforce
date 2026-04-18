@@ -1924,9 +1924,17 @@ export async function registerRoutes(
   });
 
   // ─── Interviews ───────────────────────────────────────────────────────────
-  app.get("/api/interviews", requirePermission("interviews:read"), async (req: Request, res: Response) => {
+  app.get("/api/interviews", requireAuth, async (req: Request, res: Response) => {
     try {
       const { status, candidateId, eventId } = req.query as Record<string, string>;
+      const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("interviews:read");
+      if (!isAdmin) {
+        // Self-service: candidate may only query their own interviews.
+        const own = await storage.getCandidateByUserId(req.authUserId!);
+        if (!own || !candidateId || candidateId !== own.id) {
+          return res.status(403).json({ message: "You do not have permission to perform this action.", required: "interviews:read" });
+        }
+      }
       const data = await storage.getInterviews({ status, candidateId, eventId });
       return res.json(data);
     } catch (err) {
@@ -2051,9 +2059,17 @@ export async function registerRoutes(
   });
 
   // ─── Onboarding ───────────────────────────────────────────────────────────
-  app.get("/api/onboarding", requirePermission("onboarding:read"), async (req: Request, res: Response) => {
+  app.get("/api/onboarding", requireAuth, async (req: Request, res: Response) => {
     try {
       const { status, eventId, candidateId } = req.query as Record<string, string>;
+      const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("onboarding:read");
+      if (!isAdmin) {
+        // Self-service: candidate may only query their own onboarding records.
+        const own = await storage.getCandidateByUserId(req.authUserId!);
+        if (!own || !candidateId || candidateId !== own.id) {
+          return res.status(403).json({ message: "You do not have permission to perform this action.", required: "onboarding:read" });
+        }
+      }
       const records = await storage.getOnboardingRecords({ status, eventId, candidateId });
       return res.json(records);
     } catch (err) {
