@@ -1202,6 +1202,45 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ─── Workforce ──────────────────────────────────────────────────────────────
+  /**
+   * Wrap a transaction that inserts into `workforce` with retry-on-collision.
+   *
+   * The advisory lock in `generateEmployeeNumber` is held for the duration of the
+   * generating transaction, but pool eviction, connection drops, or a transaction
+   * being rolled back mid-flight can still produce a window where two transactions
+   * read the same MAX(employee_number) and one of them loses the unique-constraint
+   * race (Postgres SQLSTATE 23505 on `workforce_employee_number_unique`). Once
+   * 23505 fires, Postgres aborts the surrounding transaction — there is no in-place
+   * retry — so the only correct fix is to re-run the entire txn body with a fresh
+   * number. Up to 3 attempts; surfaces a clear error if all fail.
+   */
+  private async withEmployeeNumberRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+    let lastErr: any;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (e: any) {
+        const code = e?.code ?? e?.cause?.code;
+        const constraint = e?.constraint ?? e?.cause?.constraint ?? "";
+        const msg = String(e?.message ?? "");
+        const isEmpNumCollision =
+          code === "23505" &&
+          (constraint.includes("employee_number") || msg.includes("employee_number"));
+        if (!isEmpNumCollision) throw e;
+        lastErr = e;
+        console.warn(
+          `[workforce] employee_number collision (attempt ${attempt}/${maxAttempts}); regenerating…`,
+        );
+      }
+    }
+    const err: any = new Error(
+      `Failed to allocate a unique employee number after ${maxAttempts} attempts. Please retry.`,
+    );
+    err.cause = lastErr;
+    err.code = "EMPLOYEE_NUMBER_EXHAUSTED";
+    throw err;
+  }
+
   async generateEmployeeNumber(tx?: any): Promise<string> {
     const client = tx ?? db;
     await client.execute(sql`SELECT pg_advisory_xact_lock(1001)`);
@@ -1516,7 +1555,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async reinstateEmployee(nationalId: string, data: { startDate: string; eventId?: string; salary?: string; jobId?: string; employmentType?: "individual" | "smp"; smpCompanyId?: string }): Promise<WorkforceRecord> {
-    return await db.transaction(async (tx) => {
+    return await this.withEmployeeNumberRetry(() => db.transaction(async (tx) => {
       const prevRecords = await tx
         .select({ employeeNumber: workforce.employeeNumber })
         .from(workforce)
@@ -1545,7 +1584,7 @@ export class DatabaseStorage implements IStorage {
       await tx.update(candidates).set({ status: "hired", updatedAt: new Date() }).where(eq(candidates.id, cand.id));
 
       return created;
-    });
+    }));
   }
 
   async getWorkforceStats(): Promise<{ total: number; active: number; terminated: number; smpWorkers: number }> {
@@ -1998,7 +2037,7 @@ export class DatabaseStorage implements IStorage {
     employmentData: { startDate: string; eventId?: string; salary?: string; employmentType?: "individual" | "smp"; smpCompanyId?: string },
     convertedBy?: string,
   ): Promise<WorkforceRecord> {
-    return await db.transaction(async (tx) => {
+    return await this.withEmployeeNumberRetry(() => db.transaction(async (tx) => {
       const [rec] = await tx.select().from(onboarding).where(eq(onboarding.id, id));
       if (!rec) throw new Error("Onboarding record not found");
       if (rec.status === "converted") throw new Error("Already converted to employee");
@@ -2059,7 +2098,7 @@ export class DatabaseStorage implements IStorage {
       }
 
       return workforceRec;
-    });
+    }));
   }
 
   // ─── SMS Plugins ────────────────────────────────────────────────────────────
