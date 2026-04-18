@@ -23,7 +23,7 @@
     "title": "Events",
     "name": "Event Name",
     "expiry": "Expiry",
-    "expiryTip": "SMP Contracts expiry dates should be set as the project's contractual expiry date.",
+    "expiryTip": "SMP Companies expiry dates should be set as the project's contractual expiry date.",
     "region": "Region",
     "progress": "Hiring Progress",
     "status": "Status",
