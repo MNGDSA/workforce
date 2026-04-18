@@ -1,0 +1,22 @@
+{
+  "title": "Organization Chart",
+  "pageTitle": "Org Chart",
+  "loading": "Loading organization chart...",
+  "loadFailed": "Failed to load org chart",
+  "stats": {
+    "departments": "Departments",
+    "positions": "Positions",
+    "employees": "Employees"
+  },
+  "empty": {
+    "title": "No departments yet",
+    "subtitle": "Create departments and positions in Settings to see your org chart here."
+  },
+  "unassigned": "Unassigned",
+  "unassignedTitle": "Unassigned Workers",
+  "drawer": {
+    "employeesCount": "{{n}} employees",
+    "searchPh": "Search employees...",
+    "noMatch": "No matching employees"
+  }
+}

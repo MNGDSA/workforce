@@ -36,6 +36,8 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
+import { formatNumber } from "@/lib/format";
 
 interface OrgEmployee {
   id: string;
@@ -235,6 +237,8 @@ function EmployeeDrawer({
   employees: OrgEmployee[];
   onClose: () => void;
 }) {
+  const { t, i18n } = useTranslation(["orgChart"]);
+  const lng = i18n.language;
   const [search, setSearch] = useState("");
   const filtered = search
     ? employees.filter(e =>
@@ -249,18 +253,18 @@ function EmployeeDrawer({
 
   return (
     <div
-      className="absolute top-0 right-0 h-full w-[340px] bg-[hsl(220,15%,9%)] border-l border-[hsl(220,15%,18%)] z-50 flex flex-col shadow-2xl"
+      className="absolute top-0 end-0 h-full w-[340px] bg-[hsl(220,15%,9%)] border-s border-[hsl(220,15%,18%)] z-50 flex flex-col shadow-2xl"
       data-testid="employee-drawer"
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-[hsl(220,15%,18%)]">
         <div className="min-w-0 flex-1">
-          <h3 className="font-display font-bold text-sm text-white truncate">{position.title}</h3>
+          <h3 className="font-display font-bold text-sm text-white truncate"><bdi>{position.title}</bdi></h3>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-[10px] text-[hsl(215,15%,45%)] font-mono">{position.code}</span>
+            <span className="text-[10px] text-[hsl(215,15%,45%)] font-mono" dir="ltr">{position.code}</span>
             {position.gradeLevel !== null && position.gradeLevel !== undefined && (
-              <span className="text-[10px] px-1.5 py-px rounded-sm bg-[hsl(190,80%,50%)]/10 text-[hsl(190,80%,60%)] font-bold border border-[hsl(190,80%,50%)]/15">G{position.gradeLevel}</span>
+              <span className="text-[10px] px-1.5 py-px rounded-sm bg-[hsl(190,80%,50%)]/10 text-[hsl(190,80%,60%)] font-bold border border-[hsl(190,80%,50%)]/15" dir="ltr">G{formatNumber(position.gradeLevel, lng)}</span>
             )}
-            <span className="text-[10px] text-[hsl(155,45%,55%)] font-semibold">{employees.length} employees</span>
+            <span className="text-[10px] text-[hsl(155,45%,55%)] font-semibold">{t("orgChart:drawer.employeesCount", { n: formatNumber(employees.length, lng) })}</span>
           </div>
         </div>
         <button onClick={onClose} className="p-1.5 rounded-sm hover:bg-[hsl(220,15%,15%)] text-[hsl(215,15%,50%)] hover:text-white transition-colors" data-testid="btn-close-drawer">
@@ -271,12 +275,12 @@ function EmployeeDrawer({
       {employees.length > 20 && (
         <div className="px-4 pt-3">
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[hsl(215,15%,45%)]" />
+            <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[hsl(215,15%,45%)]" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search employees..."
-              className="h-8 text-xs pl-8 bg-[hsl(220,15%,12%)] border-[hsl(220,15%,20%)] focus-visible:ring-[hsl(155,45%,45%)]"
+              placeholder={t("orgChart:drawer.searchPh")}
+              className="h-8 text-xs ps-8 bg-[hsl(220,15%,12%)] border-[hsl(220,15%,20%)] focus-visible:ring-[hsl(155,45%,45%)]"
               data-testid="input-search-employees"
             />
           </div>
@@ -298,19 +302,19 @@ function EmployeeDrawer({
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-white truncate leading-tight">{emp.fullName}</p>
+              <p className="text-sm font-medium text-white truncate leading-tight"><bdi>{emp.fullName}</bdi></p>
               {emp.fullNameAr && (
                 <p className="text-[10px] text-[hsl(215,15%,55%)] truncate mt-0.5" dir="rtl">{emp.fullNameAr}</p>
               )}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
-                <span className="text-[10px] text-[hsl(215,15%,50%)] font-mono">#{emp.employeeNumber}</span>
+                <span className="text-[10px] text-[hsl(215,15%,50%)] font-mono" dir="ltr">#{emp.employeeNumber}</span>
                 {emp.nationalId && (
-                  <span className="text-[10px] text-[hsl(215,15%,40%)] flex items-center gap-0.5">
+                  <span className="text-[10px] text-[hsl(215,15%,40%)] flex items-center gap-0.5" dir="ltr">
                     <CreditCard className="w-2.5 h-2.5" />{emp.nationalId}
                   </span>
                 )}
                 {emp.phone && (
-                  <span className="text-[10px] text-[hsl(215,15%,40%)] flex items-center gap-0.5">
+                  <span className="text-[10px] text-[hsl(215,15%,40%)] flex items-center gap-0.5" dir="ltr">
                     <Phone className="w-2.5 h-2.5" />{emp.phone}
                   </span>
                 )}
@@ -319,7 +323,7 @@ function EmployeeDrawer({
           </div>
         ))}
         {filtered.length === 0 && search && (
-          <p className="text-xs text-[hsl(215,15%,45%)] text-center py-6">No matching employees</p>
+          <p className="text-xs text-[hsl(215,15%,45%)] text-center py-6">{t("orgChart:drawer.noMatch")}</p>
         )}
       </div>
     </div>
@@ -337,6 +341,7 @@ function buildLayout(
   expandedDepts: Set<string>,
   expandedPositions: Set<string>,
   selectedPosId: string | null,
+  unassignedLabel: string,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -421,7 +426,7 @@ function buildLayout(
     const unId = "unassigned";
     g.setNode(unId, { width: NODE_WIDTH, height: POS_NODE_HEIGHT });
 
-    const unData: UnassignedNodeData = { label: "Unassigned", count: data.unassigned.length };
+    const unData: UnassignedNodeData = { label: unassignedLabel, count: data.unassigned.length };
     nodes.push({
       id: unId,
       type: "unassigned",
@@ -443,6 +448,8 @@ function buildLayout(
 }
 
 function OrgChartCanvas() {
+  const { t, i18n } = useTranslation(["orgChart"]);
+  const lng = i18n.language;
   const { data, isLoading, isError } = useQuery<OrgChartData>({
     queryKey: ["/api/org-chart"],
     queryFn: () => apiRequest("GET", "/api/org-chart").then(r => r.json()),
@@ -493,7 +500,7 @@ function OrgChartCanvas() {
   const selectedPosition = useMemo(() => {
     if (!data || !selectedPosId) return null;
     if (selectedPosId === "__unassigned__") {
-      return { position: { title: "Unassigned Workers", code: "N/A", gradeLevel: null }, employees: data.unassigned };
+      return { position: { title: t("orgChart:unassignedTitle"), code: "N/A", gradeLevel: null }, employees: data.unassigned };
     }
     for (const dept of data.departments) {
       const pos = dept.positions.find(p => p.id === selectedPosId);
@@ -502,10 +509,11 @@ function OrgChartCanvas() {
     return null;
   }, [data, selectedPosId]);
 
+  const unassignedLabel = t("orgChart:unassigned");
   const { nodes: layoutNodes, edges: layoutEdges } = useMemo(() => {
     if (!data) return { nodes: [], edges: [] };
-    return buildLayout(data, expandedDepts, expandedPositions, selectedPosId);
-  }, [data, expandedDepts, expandedPositions, selectedPosId]);
+    return buildLayout(data, expandedDepts, expandedPositions, selectedPosId, unassignedLabel);
+  }, [data, expandedDepts, expandedPositions, selectedPosId, unassignedLabel]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutEdges);
@@ -524,7 +532,7 @@ function OrgChartCanvas() {
       <div className="h-full w-full flex items-center justify-center bg-[hsl(220,15%,8%)]">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-[hsl(155,45%,45%)]" />
-          <p className="text-sm text-[hsl(215,15%,55%)] font-medium">Loading organization chart...</p>
+          <p className="text-sm text-[hsl(215,15%,55%)] font-medium">{t("orgChart:loading")}</p>
         </div>
       </div>
     );
@@ -535,7 +543,7 @@ function OrgChartCanvas() {
       <div className="h-full w-full flex items-center justify-center bg-[hsl(220,15%,8%)]">
         <div className="flex flex-col items-center gap-3">
           <AlertCircle className="w-8 h-8 text-red-400" />
-          <p className="text-sm text-[hsl(215,15%,55%)]">Failed to load org chart</p>
+          <p className="text-sm text-[hsl(215,15%,55%)]">{t("orgChart:loadFailed")}</p>
         </div>
       </div>
     );
@@ -589,20 +597,20 @@ function OrgChartCanvas() {
               <div className="w-7 h-7 rounded-sm bg-[hsl(155,45%,45%)]/15 flex items-center justify-center">
                 <Network className="w-4 h-4 text-[hsl(155,45%,55%)]" />
               </div>
-              <h2 className="font-display font-bold text-sm text-white tracking-tight">Organization Chart</h2>
+              <h2 className="font-display font-bold text-sm text-white tracking-tight">{t("orgChart:title")}</h2>
             </div>
             <div className="flex items-center gap-4 text-[11px]">
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-[hsl(155,45%,45%)]" />
-                <span className="text-[hsl(215,15%,60%)]"><span className="font-bold text-white">{totalDepts}</span> Departments</span>
+                <span className="text-[hsl(215,15%,60%)]"><span className="font-bold text-white">{formatNumber(totalDepts, lng)}</span> {t("orgChart:stats.departments")}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-[hsl(190,80%,50%)]" />
-                <span className="text-[hsl(215,15%,60%)]"><span className="font-bold text-white">{totalPositions}</span> Positions</span>
+                <span className="text-[hsl(215,15%,60%)]"><span className="font-bold text-white">{formatNumber(totalPositions, lng)}</span> {t("orgChart:stats.positions")}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-white" />
-                <span className="text-[hsl(215,15%,60%)]"><span className="font-bold text-white">{totalEmployees}</span> Employees</span>
+                <span className="text-[hsl(215,15%,60%)]"><span className="font-bold text-white">{formatNumber(totalEmployees, lng)}</span> {t("orgChart:stats.employees")}</span>
               </div>
             </div>
           </div>
@@ -612,8 +620,8 @@ function OrgChartCanvas() {
           <Panel position="top-center" className="!mt-24">
             <div className="bg-[hsl(220,15%,12%)] border border-[hsl(220,15%,20%)] rounded-sm p-8 text-center max-w-sm">
               <Building2 className="w-12 h-12 text-[hsl(215,15%,30%)] mx-auto mb-3" />
-              <h3 className="font-display font-bold text-white text-lg mb-1">No departments yet</h3>
-              <p className="text-sm text-[hsl(215,15%,55%)]">Create departments and positions in Settings to see your org chart here.</p>
+              <h3 className="font-display font-bold text-white text-lg mb-1">{t("orgChart:empty.title")}</h3>
+              <p className="text-sm text-[hsl(215,15%,55%)]">{t("orgChart:empty.subtitle")}</p>
             </div>
           </Panel>
         )}
@@ -631,8 +639,9 @@ function OrgChartCanvas() {
 }
 
 export default function OrgChartPage() {
+  const { t } = useTranslation(["orgChart"]);
   return (
-    <Layout title="Org Chart">
+    <Layout title={t("orgChart:pageTitle")}>
       <div className="h-[calc(100vh-3.5rem)] w-full overflow-hidden" data-testid="page-org-chart">
         <OrgChartCanvas />
       </div>
