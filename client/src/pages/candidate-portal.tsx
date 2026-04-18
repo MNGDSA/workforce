@@ -1848,7 +1848,11 @@ export default function CandidatePortal() {
       toast({ title: "Profile updated", description: "Your information has been saved." });
       setProfileOpen(false);
     },
-    onError: () => toast({ title: "Save failed", description: "Please try again.", variant: "destructive" }),
+    onError: (err: any) => toast({
+      title: "Save failed",
+      description: err?.message || "Please try again.",
+      variant: "destructive",
+    }),
   });
 
   const changePassword = useMutation({

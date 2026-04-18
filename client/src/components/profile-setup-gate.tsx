@@ -719,8 +719,12 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
       setCompleted(true);
       toast({ title: "Profile completed!", description: "Your information has been saved." });
     },
-    onError: () => {
-      toast({ title: "Save failed", description: "Please try again.", variant: "destructive" });
+    onError: (err: any) => {
+      toast({
+        title: "Save failed",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
