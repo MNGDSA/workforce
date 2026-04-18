@@ -3721,9 +3721,30 @@ export async function registerRoutes(
   });
 
   // ─── Candidate Contracts (generate / sign) ──────────────────────────────
-  app.get("/api/candidate-contracts", requirePermission("candidate_contracts:read"), async (req: Request, res: Response) => {
+  app.get("/api/candidate-contracts", requireAuth, async (req: Request, res: Response) => {
     try {
       const { candidateId, onboardingId, templateId, status } = req.query;
+      const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("candidate_contracts:read");
+      if (!isAdmin) {
+        // Candidate can only read their own contracts. Force-scope to their candidate row
+        // and reject queries that target someone else (or omit the scope entirely).
+        const own = await storage.getCandidateByUserId(req.authUserId!);
+        if (!own) return res.status(403).json({ message: "Forbidden" });
+        if (candidateId && candidateId !== own.id) {
+          return res.status(403).json({ message: "You can only view your own contracts." });
+        }
+        if (onboardingId) {
+          const ob = await storage.getOnboardingRecord(onboardingId as string);
+          if (!ob || ob.candidateId !== own.id) {
+            return res.status(403).json({ message: "You can only view your own contracts." });
+          }
+        }
+        if (!candidateId && !onboardingId) {
+          // Don't let candidates list everyone's contracts; force scope to self.
+          const data = await storage.getCandidateContracts({ candidateId: own.id });
+          return res.json(data);
+        }
+      }
       const data = await storage.getCandidateContracts({
         candidateId: candidateId as string | undefined,
         onboardingId: onboardingId as string | undefined,
