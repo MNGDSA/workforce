@@ -1,0 +1,15 @@
+tree 37e9b6cb041b7a2e5a4ba7be0e6202e5f7b0de07
+parent 0af2b9ece305ba01c9af4d9dda34af206b60e294
+author gxs283656 <52532187-gxs283656@users.noreply.replit.com> 1775851414 +0000
+committer gxs283656 <52532187-gxs283656@users.noreply.replit.com> 1775851414 +0000
+
+Display interactive maps by loading HTML content directly
+
+Use `loadDataWithBaseURL` with an HTTPS base URL to properly load HTML content and external resources in the WebView, resolving access denied errors.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: ed6acbf8-1c92-4e81-9eca-095b540f8248
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: b602f476-fff2-47d8-a711-105e97b830e0
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/cc5d55ed-daab-4664-aeed-b138b47daea8/ed6acbf8-1c92-4e81-9eca-095b540f8248/aUdeXwo
+Replit-Helium-Checkpoint-Created: true
