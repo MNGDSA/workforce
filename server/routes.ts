@@ -1180,8 +1180,18 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/candidates/:id", requirePermission("candidates:update"), async (req: Request, res: Response) => {
+  app.patch("/api/candidates/:id", requireAuth, async (req: Request, res: Response) => {
     try {
+      // Authorization: admin with candidates:update OR candidate updating own row.
+      const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("candidates:update");
+      if (!isAdmin) {
+        const existing = await storage.getCandidate(req.params.id);
+        if (!existing) return res.status(404).json({ message: "Candidate not found" });
+        if (existing.userId !== req.authUserId) {
+          return res.status(403).json({ message: "You can only update your own profile." });
+        }
+      }
+
       const data = insertCandidateSchema.partial().parse(req.body);
 
       if (data.profileCompleted === true) {
