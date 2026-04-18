@@ -52,6 +52,8 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
+import { formatNumber } from "@/lib/format";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,12 +78,12 @@ type QuestionSet = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const TYPE_META: Record<QuestionType, { label: string; Icon: React.FC<{ className?: string }> }> = {
-  yes_no:          { label: "Yes / No",          Icon: ToggleLeft },
-  multiple_choice: { label: "Multiple Choice",    Icon: ListChecks },
-  text:            { label: "Short Text",         Icon: AlignLeft },
-  number:          { label: "Number",             Icon: Hash },
-  job_ranking:     { label: "Job Ranking",        Icon: ListOrdered },
+const TYPE_META: Record<QuestionType, { Icon: React.FC<{ className?: string }> }> = {
+  yes_no:          { Icon: ToggleLeft },
+  multiple_choice: { Icon: ListChecks },
+  text:            { Icon: AlignLeft },
+  number:          { Icon: Hash },
+  job_ranking:     { Icon: ListOrdered },
 };
 
 function newQuestion(): Question {
@@ -106,6 +108,7 @@ function QuestionRow({
   onMoveUp: () => void;
   onMoveDown: () => void;
 }) {
+  const { t } = useTranslation(["questionSets"]);
   const [optionText, setOptionText] = useState("");
 
   function addOption() {
@@ -140,7 +143,7 @@ function QuestionRow({
           <Input
             value={q.text}
             onChange={(e) => onChange({ ...q, text: e.target.value })}
-            placeholder="Question text..."
+            placeholder={t("questionSets:row.questionPh")}
             className="bg-muted/20 border-border font-medium"
             data-testid={`input-question-text-${idx}`}
           />
@@ -162,7 +165,7 @@ function QuestionRow({
                   <SelectItem key={val} value={val} className="text-xs">
                     <div className="flex items-center gap-2">
                       <meta.Icon className="h-3.5 w-3.5 text-primary" />
-                      {meta.label}
+                      {t(`questionSets:types.${val}`)}
                     </div>
                   </SelectItem>
                 ))}
@@ -181,7 +184,7 @@ function QuestionRow({
               data-testid={`button-question-required-${idx}`}
             >
               <CheckSquare className="h-3.5 w-3.5" />
-              {q.required ? "Required" : "Optional"}
+              {q.required ? t("questionSets:row.required") : t("questionSets:row.optional")}
             </button>
           </div>
 
@@ -193,7 +196,7 @@ function QuestionRow({
                   <span key={oi} className="flex items-center gap-1 bg-muted/30 border border-border rounded-sm px-2 py-0.5 text-xs text-white">
                     {opt}
                     <button type="button" onClick={() => onChange({ ...q, options: q.options!.filter((_, i) => i !== oi) })}
-                      className="text-muted-foreground hover:text-red-400 ml-0.5">
+                      className="text-muted-foreground hover:text-red-400 ms-0.5">
                       <X className="h-3 w-3" />
                     </button>
                   </span>
@@ -204,12 +207,12 @@ function QuestionRow({
                   value={optionText}
                   onChange={(e) => setOptionText(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addOption())}
-                  placeholder="Add option, press Enter..."
+                  placeholder={t("questionSets:row.addOptionPh")}
                   className="h-8 bg-muted/20 border-border text-xs flex-1"
                   data-testid={`input-option-${idx}`}
                 />
                 <Button type="button" size="sm" variant="outline" className="border-border h-8 text-xs" onClick={addOption}>
-                  Add
+                  {t("questionSets:row.addOption")}
                 </Button>
               </div>
             </div>
@@ -220,7 +223,7 @@ function QuestionRow({
             <div className="space-y-2">
               <div className="flex items-center gap-1.5 text-xs text-amber-400/80 bg-amber-400/5 border border-amber-400/20 rounded-sm px-2.5 py-1.5">
                 <ArrowUpDown className="h-3.5 w-3.5 shrink-0" />
-                Candidates will drag these jobs into their preferred order (1 = top choice).
+                {t("questionSets:row.rankingHint")}
               </div>
               {/* Ranked job list */}
               {(q.options ?? []).length > 0 && (
@@ -276,16 +279,16 @@ function QuestionRow({
                   value={optionText}
                   onChange={(e) => setOptionText(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addOption())}
-                  placeholder="Add job title, press Enter..."
+                  placeholder={t("questionSets:row.addJobPh")}
                   className="h-8 bg-muted/20 border-border text-xs flex-1"
                   data-testid={`input-ranking-job-${idx}`}
                 />
                 <Button type="button" size="sm" variant="outline" className="border-border h-8 text-xs" onClick={addOption}>
-                  Add Job
+                  {t("questionSets:row.addJob")}
                 </Button>
               </div>
               {(q.options ?? []).length < 2 && (
-                <p className="text-xs text-muted-foreground">Add at least 2 jobs for ranking to be meaningful.</p>
+                <p className="text-xs text-muted-foreground">{t("questionSets:row.rankingTooFew")}</p>
               )}
             </div>
           )}
@@ -311,6 +314,8 @@ function QuestionSetEditor({
   initial?: QuestionSet | null;
   onOpenChange: (v: boolean) => void;
 }) {
+  const { t, i18n } = useTranslation(["questionSets"]);
+  const lng = i18n.language;
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -332,10 +337,10 @@ function QuestionSetEditor({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/question-sets"] });
-      toast({ title: isEdit ? "Question set updated" : "Question set created" });
+      toast({ title: isEdit ? t("questionSets:toasts.updated") : t("questionSets:toasts.created") });
       onOpenChange(false);
     },
-    onError: () => toast({ title: "Save failed", variant: "destructive" }),
+    onError: () => toast({ title: t("questionSets:toasts.saveFailed"), variant: "destructive" }),
   });
 
   function moveQuestion(idx: number, dir: -1 | 1) {
@@ -359,10 +364,10 @@ function QuestionSetEditor({
         <DialogHeader className="shrink-0">
           <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
             <ClipboardList className="h-5 w-5 text-primary" />
-            {isEdit ? "Edit Question Set" : "New Question Set"}
+            {isEdit ? t("questionSets:editor.editTitle") : t("questionSets:editor.newTitle")}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Build a reusable set of screening questions to attach to job postings.
+            {t("questionSets:editor.desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -371,22 +376,22 @@ function QuestionSetEditor({
           <div className="space-y-3">
             <div>
               <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                Set Name<span className="text-red-500 ml-0.5">*</span>
+                {t("questionSets:editor.name")}<span className="text-red-500 ms-0.5">*</span>
               </Label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Makkah Event Screening"
+                placeholder={t("questionSets:editor.namePh")}
                 className="bg-muted/20 border-border mt-1.5"
                 data-testid="input-qs-name"
               />
             </div>
             <div>
-              <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Description</Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("questionSets:editor.description")}</Label>
               <Textarea
                 value={desc}
                 onChange={(e) => setDesc(e.target.value)}
-                placeholder="Optional — describe when to use this set"
+                placeholder={t("questionSets:editor.descriptionPh")}
                 className="bg-muted/20 border-border mt-1.5 resize-none"
                 rows={2}
                 data-testid="input-qs-desc"
@@ -398,7 +403,7 @@ function QuestionSetEditor({
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-                Questions ({questions.length})
+                {t("questionSets:editor.questions", { n: formatNumber(questions.length, lng) })}
               </Label>
               <Button
                 type="button" size="sm" variant="outline"
@@ -406,7 +411,7 @@ function QuestionSetEditor({
                 onClick={() => setQuestions([...questions, newQuestion()])}
                 data-testid="button-add-question"
               >
-                <Plus className="h-3.5 w-3.5" /> Add Question
+                <Plus className="h-3.5 w-3.5" /> {t("questionSets:editor.addQuestion")}
               </Button>
             </div>
 
@@ -423,7 +428,7 @@ function QuestionSetEditor({
 
             {questions.length === 0 && (
               <div className="text-center py-6 text-sm text-muted-foreground border border-dashed border-border rounded-md">
-                No questions yet — click "Add Question" to start building.
+                {t("questionSets:editor.noneYet")}
               </div>
             )}
           </div>
@@ -431,7 +436,7 @@ function QuestionSetEditor({
 
         <div className="flex justify-end gap-3 pt-4 border-t border-border shrink-0">
           <Button variant="outline" className="border-border" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("questionSets:editor.cancel")}
           </Button>
           <Button
             className="bg-primary text-primary-foreground font-bold gap-2 min-w-[140px]"
@@ -439,7 +444,7 @@ function QuestionSetEditor({
             onClick={() => save.mutate()}
             data-testid="button-save-qs"
           >
-            {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4" /> Save Set</>}
+            {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4" /> {t("questionSets:editor.save")}</>}
           </Button>
         </div>
       </DialogContent>
@@ -450,6 +455,8 @@ function QuestionSetEditor({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function QuestionSetsPage() {
+  const { t, i18n } = useTranslation(["questionSets"]);
+  const lng = i18n.language;
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -466,10 +473,10 @@ export default function QuestionSetsPage() {
     mutationFn: (id: string) => apiRequest("DELETE", `/api/question-sets/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/question-sets"] });
-      toast({ title: "Question set deleted" });
+      toast({ title: t("questionSets:toasts.deleted") });
       setDeleteTarget(null);
     },
-    onError: () => toast({ title: "Delete failed", variant: "destructive" }),
+    onError: () => toast({ title: t("questionSets:toasts.deleteFailed"), variant: "destructive" }),
   });
 
   function openCreate() { setEditTarget(null); setEditorOpen(true); }
@@ -484,10 +491,10 @@ export default function QuestionSetsPage() {
           <div>
             <h1 className="font-display text-2xl font-bold text-white flex items-center gap-3">
               <ClipboardList className="h-6 w-6 text-primary" />
-              Question Sets
+              {t("questionSets:title")}
             </h1>
             <p className="text-muted-foreground text-sm mt-0.5">
-              Build reusable screening question templates and attach them to job postings.
+              {t("questionSets:subtitle")}
             </p>
           </div>
           <Button
@@ -495,7 +502,7 @@ export default function QuestionSetsPage() {
             onClick={openCreate}
             data-testid="button-new-qs"
           >
-            <Plus className="h-4 w-4" /> New Question Set
+            <Plus className="h-4 w-4" /> {t("questionSets:newSet")}
           </Button>
         </div>
 
@@ -509,11 +516,11 @@ export default function QuestionSetsPage() {
             <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
               <ClipboardList className="h-14 w-14 text-muted-foreground/20" />
               <div className="text-center">
-                <p className="font-bold text-white">No question sets yet</p>
-                <p className="text-sm text-muted-foreground mt-1">Create your first set to attach to job postings.</p>
+                <p className="font-bold text-white">{t("questionSets:emptyTitle")}</p>
+                <p className="text-sm text-muted-foreground mt-1">{t("questionSets:emptySubtitle")}</p>
               </div>
               <Button className="bg-primary text-primary-foreground font-bold gap-2" onClick={openCreate}>
-                <Plus className="h-4 w-4" /> Create Question Set
+                <Plus className="h-4 w-4" /> {t("questionSets:createFirst")}
               </Button>
             </CardContent>
           </Card>
@@ -527,14 +534,14 @@ export default function QuestionSetsPage() {
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 flex-wrap">
-                          <h3 className="font-display font-bold text-white text-lg">{qs.name}</h3>
+                          <h3 className="font-display font-bold text-white text-lg"><bdi>{qs.name}</bdi></h3>
                           <Badge variant="outline" className="border-primary/30 text-primary bg-primary/10 text-xs">
-                            {questions.length} question{questions.length !== 1 ? "s" : ""}
+                            {t("questionSets:questionCount", { count: questions.length, n: formatNumber(questions.length, lng) })}
                           </Badge>
                           {qs.isActive ? (
-                            <Badge variant="outline" className="border-emerald-500/30 text-emerald-500 bg-emerald-500/10 text-xs">Active</Badge>
+                            <Badge variant="outline" className="border-emerald-500/30 text-emerald-500 bg-emerald-500/10 text-xs">{t("questionSets:active")}</Badge>
                           ) : (
-                            <Badge variant="outline" className="border-border text-muted-foreground text-xs">Inactive</Badge>
+                            <Badge variant="outline" className="border-border text-muted-foreground text-xs">{t("questionSets:inactive")}</Badge>
                           )}
                         </div>
                         {qs.description && (
@@ -545,20 +552,20 @@ export default function QuestionSetsPage() {
                         {questions.length > 0 && (
                           <div className="mt-3 space-y-1.5">
                             {questions.slice(0, 4).map((q, i) => {
-                              const meta = TYPE_META[q.type] ?? { label: q.type, Icon: AlignLeft };
+                              const meta = TYPE_META[q.type] ?? { Icon: AlignLeft };
                               return (
                                 <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
                                   <meta.Icon className="h-3.5 w-3.5 text-primary/60 mt-0.5 shrink-0" />
                                   <span className="truncate flex-1">{q.text}</span>
                                   {q.type === "job_ranking" && (q.options ?? []).length > 0 && (
-                                    <span className="text-primary/60 shrink-0">{q.options!.length} jobs</span>
+                                    <span className="text-primary/60 shrink-0">{t("questionSets:jobsCount", { n: formatNumber(q.options!.length, lng) })}</span>
                                   )}
                                   {q.required && <span className="text-red-400 shrink-0">*</span>}
                                 </div>
                               );
                             })}
                             {questions.length > 4 && (
-                              <p className="text-xs text-muted-foreground pl-5">+{questions.length - 4} more questions</p>
+                              <p className="text-xs text-muted-foreground ps-5">{t("questionSets:moreQuestions", { n: formatNumber(questions.length - 4, lng) })}</p>
                             )}
                           </div>
                         )}
@@ -571,7 +578,7 @@ export default function QuestionSetsPage() {
                           onClick={() => openEdit(qs)}
                           data-testid={`button-edit-qs-${qs.id}`}
                         >
-                          <Pencil className="h-3.5 w-3.5" /> Edit
+                          <Pencil className="h-3.5 w-3.5" /> {t("questionSets:edit")}
                         </Button>
                         <Button
                           variant="outline" size="sm"
@@ -604,18 +611,18 @@ export default function QuestionSetsPage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
         <AlertDialogContent className="bg-card border-border">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Delete Question Set?</AlertDialogTitle>
+            <AlertDialogTitle className="text-white">{t("questionSets:delete.title")}</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              "{deleteTarget?.name}" will be permanently deleted. Jobs using this set will no longer have questions attached.
+              {t("questionSets:delete.body", { name: deleteTarget?.name ?? "" })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-border">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="border-border">{t("questionSets:delete.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 text-white hover:bg-red-700"
               onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
             >
-              Delete
+              {t("questionSets:delete.confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

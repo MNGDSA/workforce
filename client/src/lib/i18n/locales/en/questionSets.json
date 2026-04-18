@@ -1,0 +1,60 @@
+{
+  "title": "Question Sets",
+  "subtitle": "Build reusable screening question templates and attach them to job postings.",
+  "newSet": "New Question Set",
+  "createFirst": "Create Question Set",
+  "emptyTitle": "No question sets yet",
+  "emptySubtitle": "Create your first set to attach to job postings.",
+  "active": "Active",
+  "inactive": "Inactive",
+  "questionCount_one": "{{n}} question",
+  "questionCount_other": "{{n}} questions",
+  "moreQuestions": "+{{n}} more questions",
+  "jobsCount": "{{n}} jobs",
+  "edit": "Edit",
+  "types": {
+    "yes_no": "Yes / No",
+    "multiple_choice": "Multiple Choice",
+    "text": "Short Text",
+    "number": "Number",
+    "job_ranking": "Job Ranking"
+  },
+  "row": {
+    "questionPh": "Question text...",
+    "required": "Required",
+    "optional": "Optional",
+    "addOptionPh": "Add option, press Enter...",
+    "addOption": "Add",
+    "rankingHint": "Candidates will drag these jobs into their preferred order (1 = top choice).",
+    "addJobPh": "Add job title, press Enter...",
+    "addJob": "Add Job",
+    "rankingTooFew": "Add at least 2 jobs for ranking to be meaningful."
+  },
+  "editor": {
+    "editTitle": "Edit Question Set",
+    "newTitle": "New Question Set",
+    "desc": "Build a reusable set of screening questions to attach to job postings.",
+    "name": "Set Name",
+    "namePh": "e.g. Makkah Event Screening",
+    "description": "Description",
+    "descriptionPh": "Optional — describe when to use this set",
+    "questions": "Questions ({{n}})",
+    "addQuestion": "Add Question",
+    "noneYet": "No questions yet — click \"Add Question\" to start building.",
+    "cancel": "Cancel",
+    "save": "Save Set"
+  },
+  "delete": {
+    "title": "Delete Question Set?",
+    "body": "\"{{name}}\" will be permanently deleted. Jobs using this set will no longer have questions attached.",
+    "cancel": "Cancel",
+    "confirm": "Delete"
+  },
+  "toasts": {
+    "created": "Question set created",
+    "updated": "Question set updated",
+    "deleted": "Question set deleted",
+    "saveFailed": "Save failed",
+    "deleteFailed": "Delete failed"
+  }
+}
