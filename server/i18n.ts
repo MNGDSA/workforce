@@ -65,6 +65,16 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "otp.alreadyVerified":        "This OTP has already been verified.",
     "otp.expired":                "OTP has expired. Please request a new code.",
     "otp.invalid":                "Invalid OTP code.",
+    "otp.tooManyAttempts":        "Too many incorrect attempts. Please request a new OTP.",
+    "otp.invalidSession":         "Invalid OTP session. Please verify your phone again.",
+    "otp.phoneNotVerified":       "Phone number has not been verified. Please complete OTP verification.",
+    "otp.alreadyUsed":            "This OTP has already been used. Please request a new code.",
+    "otp.sessionExpired":         "OTP session expired. Please verify your phone again.",
+
+    // Registration
+    "register.allFieldsOtp":      "All fields including OTP verification are required",
+    "register.nationalIdExists":  "An account with this National ID already exists",
+    "common.allFieldsRequired":   "All fields are required",
   },
   ar: {
     // Auth middleware
@@ -110,6 +120,16 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "otp.alreadyVerified":        "تم التحقق من هذا الرمز بالفعل.",
     "otp.expired":                "انتهت صلاحية الرمز. يرجى طلب رمز جديد.",
     "otp.invalid":                "رمز التحقق غير صحيح.",
+    "otp.tooManyAttempts":        "محاولات خاطئة كثيرة جداً. يرجى طلب رمز تحقق جديد.",
+    "otp.invalidSession":         "جلسة رمز التحقق غير صحيحة. يرجى التحقق من رقم جوالك مرة أخرى.",
+    "otp.phoneNotVerified":       "لم يتم التحقق من رقم الجوال. يرجى إكمال عملية التحقق.",
+    "otp.alreadyUsed":            "تم استخدام هذا الرمز بالفعل. يرجى طلب رمز جديد.",
+    "otp.sessionExpired":         "انتهت صلاحية جلسة رمز التحقق. يرجى التحقق من رقم جوالك مرة أخرى.",
+
+    // Registration
+    "register.allFieldsOtp":      "جميع الحقول مطلوبة بما في ذلك التحقق برمز OTP",
+    "register.nationalIdExists":  "يوجد حساب مسجل برقم الهوية هذا بالفعل",
+    "common.allFieldsRequired":   "جميع الحقول مطلوبة",
   },
 };
 

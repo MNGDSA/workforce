@@ -768,7 +768,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: tr(req, "otp.expired") });
       }
       if (otp.attempts >= 5) {
-        return res.status(400).json({ message: "Too many incorrect attempts. Please request a new OTP." });
+        return res.status(400).json({ message: tr(req, "otp.tooManyAttempts") });
       }
       if (otp.code !== code.trim()) {
         await storage.incrementOtpAttempts(otp.id);
@@ -793,7 +793,7 @@ export async function registerRoutes(
       };
 
       if (!fullName || !phone || !nationalId || !password || !otpId) {
-        return res.status(400).json({ message: "All fields including OTP verification are required" });
+        return res.status(400).json({ message: tr(req, "register.allFieldsOtp") });
       }
       const pwRules = [
         { ok: password.length >= 8,              msg: "at least 8 characters" },
@@ -813,22 +813,22 @@ export async function registerRoutes(
       const normalizedPhone = phone.trim().replace(/\s+/g, "");
       const otp = await storage.getOtpVerificationById(otpId);
       if (!otp || otp.phone !== normalizedPhone) {
-        return res.status(400).json({ message: "Invalid OTP session. Please verify your phone again." });
+        return res.status(400).json({ message: tr(req, "otp.invalidSession") });
       }
       if (!otp.verifiedAt) {
-        return res.status(400).json({ message: "Phone number has not been verified. Please complete OTP verification." });
+        return res.status(400).json({ message: tr(req, "otp.phoneNotVerified") });
       }
       if (otp.usedForRegistration) {
-        return res.status(400).json({ message: "This OTP has already been used. Please request a new code." });
+        return res.status(400).json({ message: tr(req, "otp.alreadyUsed") });
       }
       if (new Date() > new Date(otp.expiresAt.getTime() + 30 * 60 * 1000)) {
-        return res.status(400).json({ message: "OTP session expired. Please verify your phone again." });
+        return res.status(400).json({ message: tr(req, "otp.sessionExpired") });
       }
 
       // Duplicate checks
       const existingByNationalId = await storage.getUserByNationalId(nationalId.trim());
       if (existingByNationalId) {
-        return res.status(409).json({ message: "An account with this National ID already exists" });
+        return res.status(409).json({ message: tr(req, "register.nationalIdExists") });
       }
 
       // Phone transfer check: if phone was previously assigned, flag old record
@@ -889,7 +889,7 @@ export async function registerRoutes(
         candidateId?: string; currentPassword?: string; newPassword?: string;
       };
       if (!candidateId || !currentPassword || !newPassword) {
-        return res.status(400).json({ message: "All fields are required" });
+        return res.status(400).json({ message: tr(req, "common.allFieldsRequired") });
       }
       const pwRules = [
         { ok: newPassword.length >= 8,              msg: "at least 8 characters" },
