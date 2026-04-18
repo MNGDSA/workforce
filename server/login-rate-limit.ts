@@ -202,3 +202,31 @@ async function sweep(): Promise<void> {
   }
 }
 setInterval(sweep, SWEEP_INTERVAL_MS).unref();
+
+// Self-bootstrap: idempotent table create so the first deploy after this
+// commit lands works without an out-of-band migration step. Matches the
+// schema in shared/schema.ts; if drizzle ever migrates this table, the
+// IF NOT EXISTS makes this a no-op.
+async function ensureTable(): Promise<void> {
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS login_rate_limit_buckets (
+        scope varchar(16) NOT NULL,
+        key text NOT NULL,
+        attempt_count integer NOT NULL DEFAULT 0,
+        window_start timestamp NOT NULL DEFAULT NOW(),
+        locked_until timestamp,
+        updated_at timestamp NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (scope, key)
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS lrlb_locked_until_idx ON login_rate_limit_buckets (locked_until)
+    `);
+  } catch (err) {
+    // Don't crash the server if the bootstrap fails — the limiter itself
+    // is fail-open, so login will still work, just unthrottled.
+    console.warn("[login-rate-limit] table bootstrap failed:", err);
+  }
+}
+void ensureTable();
