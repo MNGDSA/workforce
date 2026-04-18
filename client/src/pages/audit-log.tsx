@@ -1,5 +1,7 @@
 import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import { formatNumber, formatDate as fmtDateLocale } from "@/lib/format";
 import DashboardLayout from "@/components/layout";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -40,14 +42,7 @@ interface AuditLogsResponse {
   total: number;
 }
 
-const ENTITY_FILTERS = [
-  { value: "all",        label: "All Activities" },
-  { value: "onboarding", label: "Recruitment" },
-  { value: "workforce",  label: "Workforce" },
-  { value: "attendance", label: "Attendance" },
-  { value: "assets",     label: "Assets" },
-  { value: "schedule",   label: "Schedules" },
-];
+const ENTITY_FILTER_VALUES = ["all", "onboarding", "workforce", "attendance", "assets", "schedule"] as const;
 
 const ENTITY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   onboarding: ClipboardCheck,
@@ -55,21 +50,6 @@ const ENTITY_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
   attendance: CalendarClock,
   assets:     Package,
   schedule:   CalendarDays,
-};
-
-const ACTION_LABELS: Record<string, string> = {
-  "onboarding.admit":         "Admitted to Onboarding",
-  "workforce.converted":      "Converted to Employee",
-  "workforce.bulk_converted": "Bulk Conversion",
-  "workforce.updated":        "Employee Updated",
-  "workforce.bulk_updated":   "Bulk Excel Update",
-  "workforce.terminated":     "Employee Terminated",
-  "workforce.reinstated":     "Employee Reinstated",
-  "attendance.corrected":     "Attendance Corrected",
-  "assets.assigned":          "Asset Assigned",
-  "assets.returned":          "Asset Returned",
-  "assets.updated":           "Asset Updated",
-  "schedule.assigned":        "Schedule Assigned",
 };
 
 const ACTION_COLORS: Record<string, string> = {
@@ -92,29 +72,33 @@ function getInitials(name: string | null): string {
   return name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
 }
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString("en-SA", {
+function formatTimestamp(iso: string, locale: string): string {
+  return fmtDateLocale(new Date(iso), locale, {
     year: "numeric", month: "short", day: "numeric",
     hour: "2-digit", minute: "2-digit", hour12: true,
   });
 }
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const secs = Math.floor(diff / 1000);
-  if (secs < 60) return "just now";
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+function useTimeAgo() {
+  const { t } = useTranslation("audit");
+  return (iso: string): string => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const secs = Math.floor(diff / 1000);
+    if (secs < 60) return t("justNow");
+    const mins = Math.floor(secs / 60);
+    if (mins < 60) return t("minutesAgo", { count: mins });
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return t("hoursAgo", { count: hrs });
+    const days = Math.floor(hrs / 24);
+    return t("daysAgo", { count: days });
+  };
 }
 
 const PAGE_LIMIT = 50;
 
 export default function AuditLogPage() {
+  const { t, i18n } = useTranslation(["audit", "common"]);
+  const timeAgo = useTimeAgo();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [entityFilter, setEntityFilter] = useState("all");
@@ -185,13 +169,13 @@ export default function AuditLogPage() {
               <ScrollText className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-foreground tracking-tight">Audit Log</h1>
-              <p className="text-sm text-muted-foreground">Complete trail of all backoffice actions</p>
+              <h1 className="text-xl font-semibold text-foreground tracking-tight">{t("audit:title")}</h1>
+              <p className="text-sm text-muted-foreground">{t("audit:subtitle")}</p>
             </div>
           </div>
           {total > 0 && (
             <span className="text-sm text-muted-foreground" data-testid="audit-total-count">
-              {total.toLocaleString()} event{total !== 1 ? "s" : ""}
+              <bdi>{t("audit:events", { count: total })}</bdi>
             </span>
           )}
         </div>
@@ -199,26 +183,26 @@ export default function AuditLogPage() {
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               data-testid="input-audit-search"
-              placeholder="Search by name, employee #, or description…"
-              className="pl-9 bg-card border-border"
+              placeholder={t("audit:searchPlaceholder")}
+              className="ps-9 bg-card border-border"
               value={search}
               onChange={e => handleSearch(e.target.value)}
             />
           </div>
           <div className="flex gap-2 flex-wrap">
-            {ENTITY_FILTERS.map(f => (
+            {ENTITY_FILTER_VALUES.map(value => (
               <Button
-                key={f.value}
-                variant={entityFilter === f.value ? "default" : "outline"}
+                key={value}
+                variant={entityFilter === value ? "default" : "outline"}
                 size="sm"
-                data-testid={`filter-audit-${f.value}`}
-                onClick={() => handleFilter(f.value)}
-                className={entityFilter === f.value ? "" : "border-border text-muted-foreground hover:text-foreground"}
+                data-testid={`filter-audit-${value}`}
+                onClick={() => handleFilter(value)}
+                className={entityFilter === value ? "" : "border-border text-muted-foreground hover:text-foreground"}
               >
-                {f.label}
+                {t(`audit:filters.${value}`)}
               </Button>
             ))}
           </div>
@@ -229,15 +213,15 @@ export default function AuditLogPage() {
           {isLoading ? (
             <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
-              <span>Loading audit log…</span>
+              <span>{t("audit:loading")}</span>
             </div>
           ) : logs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
               <ScrollText className="h-10 w-10 opacity-30" />
-              <p className="text-sm">No audit events found</p>
+              <p className="text-sm">{t("audit:noEvents")}</p>
               {(debouncedSearch || entityFilter !== "all") && (
                 <Button variant="ghost" size="sm" onClick={() => { handleSearch(""); handleFilter("all"); }}>
-                  Clear filters
+                  {t("audit:clearFilters")}
                 </Button>
               )}
             </div>
@@ -245,7 +229,7 @@ export default function AuditLogPage() {
             <div className="divide-y divide-border/40">
               {logs.map((log: AuditLog, i: number) => {
                 const EntityIcon = ENTITY_ICONS[log.entityType ?? ""] ?? UserCircle2;
-                const actionLabel = ACTION_LABELS[log.action] ?? log.action;
+                const actionLabel = t(`audit:actions.${log.action}`, log.action);
                 const actionColor = ACTION_COLORS[log.action] ?? "bg-muted/30 text-muted-foreground border-border";
                 const expandable = hasMetadata(log.metadata);
                 const isExpanded = expandedIds.has(log.id);
@@ -268,7 +252,7 @@ export default function AuditLogPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-0.5">
                           <span className="font-medium text-sm text-foreground" data-testid={`audit-actor-${i}`}>
-                            {log.actorName ?? "System"}
+                            <bdi>{log.actorName ?? t("audit:system")}</bdi>
                           </span>
                           <Badge
                             variant="outline"
@@ -290,7 +274,7 @@ export default function AuditLogPage() {
                         {(log.employeeNumber || log.subjectName) && (
                           <div className="flex gap-2 mt-1 flex-wrap">
                             {log.employeeNumber && (
-                              <span className="text-[11px] bg-muted/40 border border-border/50 rounded px-1.5 py-0.5 font-mono text-muted-foreground">
+                              <span className="text-[11px] bg-muted/40 border border-border/50 rounded px-1.5 py-0.5 font-mono text-muted-foreground" dir="ltr">
                                 #{log.employeeNumber}
                               </span>
                             )}
@@ -299,10 +283,10 @@ export default function AuditLogPage() {
                       </div>
 
                       {/* Timestamp + chevron */}
-                      <div className="shrink-0 text-right flex items-start gap-2" data-testid={`audit-time-${i}`}>
+                      <div className="shrink-0 text-end flex items-start gap-2" data-testid={`audit-time-${i}`}>
                         <div>
                           <span className="text-[11px] text-muted-foreground">{timeAgo(log.createdAt)}</span>
-                          <p className="text-[10px] text-muted-foreground/60 mt-0.5">{formatDate(log.createdAt)}</p>
+                          <p className="text-[10px] text-muted-foreground/60 mt-0.5"><bdi>{formatTimestamp(log.createdAt, i18n.language)}</bdi></p>
                         </div>
                         {expandable && (
                           <ChevronDown
@@ -318,12 +302,12 @@ export default function AuditLogPage() {
                     {/* Expanded metadata */}
                     {expandable && isExpanded && (
                       <div
-                        className="px-4 pb-4 pl-16 -mt-1"
+                        className="px-4 pb-4 ps-16 -mt-1"
                         data-testid={`audit-metadata-${i}`}
                       >
                         <div className="rounded-md border border-border/60 bg-muted/30 p-3">
                           <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-1.5">
-                            Details
+                            {t("audit:details")}
                           </div>
                           <pre className="text-[12px] font-mono text-foreground/90 whitespace-pre-wrap break-words leading-relaxed">
 {JSON.stringify(log.metadata, null, 2)}
@@ -342,7 +326,7 @@ export default function AuditLogPage() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">
-              Page {page} of {totalPages} ({total.toLocaleString()} events)
+              <bdi>{t("audit:page", { page: formatNumber(page, i18n.language), total: formatNumber(totalPages, i18n.language), count: formatNumber(total, i18n.language) })}</bdi>
             </span>
             <div className="flex items-center gap-2">
               <Button
@@ -353,8 +337,8 @@ export default function AuditLogPage() {
                 data-testid="button-audit-prev"
                 className="border-border"
               >
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Previous
+                <ChevronLeft className="h-4 w-4 me-1 rtl:rotate-180" />
+                {t("audit:previous")}
               </Button>
               <Button
                 variant="outline"
@@ -364,8 +348,8 @@ export default function AuditLogPage() {
                 data-testid="button-audit-next"
                 className="border-border"
               >
-                Next
-                <ChevronRight className="h-4 w-4 ml-1" />
+                {t("audit:next")}
+                <ChevronRight className="h-4 w-4 ms-1 rtl:rotate-180" />
               </Button>
             </div>
           </div>

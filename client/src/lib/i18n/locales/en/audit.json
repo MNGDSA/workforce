@@ -1,0 +1,41 @@
+{
+  "title": "Audit Log",
+  "subtitle": "Complete trail of all backoffice actions",
+  "events_one": "{{count}} event",
+  "events_other": "{{count}} events",
+  "searchPlaceholder": "Search by name, employee #, or description…",
+  "loading": "Loading audit log…",
+  "noEvents": "No audit events found",
+  "clearFilters": "Clear filters",
+  "system": "System",
+  "details": "Details",
+  "page": "Page {{page}} of {{total}} ({{count}} events)",
+  "previous": "Previous",
+  "next": "Next",
+  "justNow": "just now",
+  "minutesAgo": "{{count}}m ago",
+  "hoursAgo": "{{count}}h ago",
+  "daysAgo": "{{count}}d ago",
+  "filters": {
+    "all": "All Activities",
+    "onboarding": "Recruitment",
+    "workforce": "Workforce",
+    "attendance": "Attendance",
+    "assets": "Assets",
+    "schedule": "Schedules"
+  },
+  "actions": {
+    "onboarding.admit": "Admitted to Onboarding",
+    "workforce.converted": "Converted to Employee",
+    "workforce.bulk_converted": "Bulk Conversion",
+    "workforce.updated": "Employee Updated",
+    "workforce.bulk_updated": "Bulk Excel Update",
+    "workforce.terminated": "Employee Terminated",
+    "workforce.reinstated": "Employee Reinstated",
+    "attendance.corrected": "Attendance Corrected",
+    "assets.assigned": "Asset Assigned",
+    "assets.returned": "Asset Returned",
+    "assets.updated": "Asset Updated",
+    "schedule.assigned": "Schedule Assigned"
+  }
+}

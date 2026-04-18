@@ -1,0 +1,41 @@
+{
+  "title": "سجل التدقيق",
+  "subtitle": "سجل كامل لجميع الإجراءات في النظام الإداري",
+  "events_one": "{{count}} حدث",
+  "events_other": "{{count}} حدث",
+  "searchPlaceholder": "ابحث بالاسم أو رقم الموظف أو الوصف…",
+  "loading": "جارٍ تحميل سجل التدقيق…",
+  "noEvents": "لا توجد أحداث في السجل",
+  "clearFilters": "إزالة عوامل التصفية",
+  "system": "النظام",
+  "details": "التفاصيل",
+  "page": "الصفحة {{page}} من {{total}} ({{count}} حدث)",
+  "previous": "السابق",
+  "next": "التالي",
+  "justNow": "الآن",
+  "minutesAgo": "قبل {{count}} د",
+  "hoursAgo": "قبل {{count}} س",
+  "daysAgo": "قبل {{count}} ي",
+  "filters": {
+    "all": "جميع النشاطات",
+    "onboarding": "التوظيف",
+    "workforce": "الموظفون",
+    "attendance": "الحضور",
+    "assets": "العهد",
+    "schedule": "الجداول"
+  },
+  "actions": {
+    "onboarding.admit": "إدخال إلى التهيئة",
+    "workforce.converted": "تحويل إلى موظف",
+    "workforce.bulk_converted": "تحويل جماعي",
+    "workforce.updated": "تحديث موظف",
+    "workforce.bulk_updated": "تحديث جماعي بإكسل",
+    "workforce.terminated": "إنهاء خدمة موظف",
+    "workforce.reinstated": "إعادة موظف للخدمة",
+    "attendance.corrected": "تصحيح حضور",
+    "assets.assigned": "تسليم عهدة",
+    "assets.returned": "استلام عهدة",
+    "assets.updated": "تحديث عهدة",
+    "schedule.assigned": "إسناد جدول"
+  }
+}
