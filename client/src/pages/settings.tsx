@@ -32,6 +32,8 @@ import {
   XCircle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation, Trans } from "react-i18next";
+import { formatNumber } from "@/lib/format";
 
 const NTP_SERVERS = [
   { group: "Global (Anycast)", servers: [
@@ -97,6 +99,7 @@ function getUtcOffset(tz: string): string {
 }
 
 function NtpHealthIndicator({ serverUrl }: { serverUrl: string }) {
+  const { t } = useTranslation(["settings"]);
   const [status, setStatus] = useState<"checking" | "reachable" | "unreachable" | "unknown">("unknown");
 
   const checkHealth = useCallback(async () => {
@@ -127,12 +130,12 @@ function NtpHealthIndicator({ serverUrl }: { serverUrl: string }) {
 
   return (
     <div className="flex items-center gap-2 mt-2" data-testid="ntp-health-indicator">
-      {status === "checking" && <><Loader2 className="h-4 w-4 animate-spin text-yellow-500" /><span className="text-sm text-yellow-500">Checking NTP server...</span></>}
-      {status === "reachable" && <><CheckCircle2 className="h-4 w-4 text-green-500" /><span className="text-sm text-green-500">NTP server reachable</span></>}
-      {status === "unreachable" && <><XCircle className="h-4 w-4 text-red-500" /><span className="text-sm text-red-500">NTP server unreachable</span></>}
-      {status === "unknown" && <><AlertCircle className="h-4 w-4 text-muted-foreground" /><span className="text-sm text-muted-foreground">NTP status unknown</span></>}
+      {status === "checking" && <><Loader2 className="h-4 w-4 animate-spin text-yellow-500" /><span className="text-sm text-yellow-500">{t("settings:ntp.health.checking")}</span></>}
+      {status === "reachable" && <><CheckCircle2 className="h-4 w-4 text-green-500" /><span className="text-sm text-green-500">{t("settings:ntp.health.reachable")}</span></>}
+      {status === "unreachable" && <><XCircle className="h-4 w-4 text-red-500" /><span className="text-sm text-red-500">{t("settings:ntp.health.unreachable")}</span></>}
+      {status === "unknown" && <><AlertCircle className="h-4 w-4 text-muted-foreground" /><span className="text-sm text-muted-foreground">{t("settings:ntp.health.unknown")}</span></>}
       <Button variant="ghost" size="sm" onClick={checkHealth} className="h-6 px-2 text-xs" data-testid="button-refresh-ntp">
-        Refresh
+        {t("settings:ntp.health.refresh")}
       </Button>
     </div>
   );
@@ -152,6 +155,8 @@ interface SystemSettings {
 }
 
 export default function SettingsPage() {
+  const { t, i18n } = useTranslation(["settings", "common"]);
+  const lng = i18n.language;
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [supportEmail, setSupportEmail] = useState("");
@@ -199,9 +204,9 @@ export default function SettingsPage() {
       apiRequest("PATCH", "/api/settings/system", data).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/settings/system"] });
-      toast({ title: "Settings Saved", description: "Your settings have been updated successfully." });
+      toast({ title: t("settings:toasts.saved"), description: t("settings:toasts.savedDesc") });
     },
-    onError: () => toast({ title: "Save failed", variant: "destructive" }),
+    onError: () => toast({ title: t("settings:toasts.saveFailed"), variant: "destructive" }),
   });
 
   const handleSave = () => {
@@ -230,12 +235,12 @@ export default function SettingsPage() {
       <div className="space-y-6 max-w-6xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white tracking-tight">System & Settings</h1>
-            <p className="text-muted-foreground mt-1">Manage your organization profile, roles, and global preferences.</p>
+            <h1 className="text-3xl font-display font-bold text-white tracking-tight">{t("settings:title")}</h1>
+            <p className="text-muted-foreground mt-1">{t("settings:subtitle")}</p>
           </div>
           <Button onClick={handleSave} disabled={saveSettings.isPending} className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs">
-            {saveSettings.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            Save Changes
+            {saveSettings.isPending ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <Save className="me-2 h-4 w-4" />}
+            {t("settings:save")}
           </Button>
         </div>
 
@@ -245,50 +250,50 @@ export default function SettingsPage() {
               value="general" 
               className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
             >
-              General
+              {t("settings:tabs.general")}
             </TabsTrigger>
             <TabsTrigger 
               value="attendance" 
               className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
             >
-              Attendance Rules
+              {t("settings:tabs.attendance")}
             </TabsTrigger>
             <TabsTrigger 
               value="security" 
               className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
             >
-              Security
+              {t("settings:tabs.security")}
             </TabsTrigger>
             <TabsTrigger 
               value="admin-users" 
               className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
               data-testid="tab-admin-users"
             >
-              Admin Users
+              {t("settings:tabs.adminUsers")}
             </TabsTrigger>
             <TabsTrigger 
               value="roles" 
               className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
             >
-              Roles & Access
+              {t("settings:tabs.roles")}
             </TabsTrigger>
             <TabsTrigger 
               value="notifications" 
               className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
             >
-              Notifications
+              {t("settings:tabs.notifications")}
             </TabsTrigger>
             <TabsTrigger 
               value="integrations" 
               className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
             >
-              APIs & Webhooks
+              {t("settings:tabs.integrations")}
             </TabsTrigger>
             <TabsTrigger 
               value="advanced" 
               className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
             >
-              Advanced
+              {t("settings:tabs.advanced")}
             </TabsTrigger>
           </TabsList>
 
@@ -297,51 +302,52 @@ export default function SettingsPage() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <Building2 className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-xl text-white">Organization Profile</CardTitle>
+                  <CardTitle className="text-xl text-white">{t("settings:org.title")}</CardTitle>
                 </div>
-                <CardDescription>Update your company details and branding.</CardDescription>
+                <CardDescription>{t("settings:org.desc")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label htmlFor="orgName" className="text-white">Organization Name</Label>
-                    <Input id="orgName" defaultValue="Luxury Carts Company Ltd." className="bg-muted/30 border-border" />
+                    <Label htmlFor="orgName" className="text-white">{t("settings:org.name")}</Label>
+                    <Input id="orgName" defaultValue={t("settings:org.nameDefault")} className="bg-muted/30 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="industry" className="text-white">Industry</Label>
-                    <Input id="industry" defaultValue="Logistics & Warehousing" className="bg-muted/30 border-border" />
+                    <Label htmlFor="industry" className="text-white">{t("settings:org.industry")}</Label>
+                    <Input id="industry" defaultValue={t("settings:org.industryDefault")} className="bg-muted/30 border-border" />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="supportEmail" className="text-white">Support Email</Label>
+                    <Label htmlFor="supportEmail" className="text-white">{t("settings:org.supportEmail")}</Label>
                     <Input
                       id="supportEmail"
                       type="email"
-                      placeholder="support@company.com"
+                      dir="ltr"
+                      placeholder={t("settings:org.supportEmailPh")}
                       value={supportEmail}
                       onChange={(e) => setSupportEmail(e.target.value)}
                       className="bg-muted/30 border-border"
                       data-testid="input-support-email"
                     />
-                    <p className="text-xs text-muted-foreground">Shown on the login page as "Contact Support" link</p>
+                    <p className="text-xs text-muted-foreground">{t("settings:org.supportEmailHint")}</p>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="phone" className="text-white">Phone Number</Label>
-                    <Input id="phone" defaultValue="+1 (555) 000-0000" className="bg-muted/30 border-border" />
+                    <Label htmlFor="phone" className="text-white">{t("settings:org.phone")}</Label>
+                    <Input id="phone" dir="ltr" defaultValue={t("settings:org.phoneDefault")} className="bg-muted/30 border-border" />
                   </div>
                 </div>
 
                 <Separator className="bg-border" />
 
                 <div>
-                  <h3 className="text-base font-medium text-white mb-4">Localization</h3>
+                  <h3 className="text-base font-medium text-white mb-4">{t("settings:localization.title")}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <Label className="text-white">Default Timezone</Label>
-                      <Input defaultValue="Asia/Riyadh (AST)" className="bg-muted/30 border-border" />
+                      <Label className="text-white">{t("settings:localization.timezone")}</Label>
+                      <Input dir="ltr" defaultValue={t("settings:localization.timezoneDefault")} className="bg-muted/30 border-border" />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-white">Date Format</Label>
-                      <Input defaultValue="DD/MM/YYYY" className="bg-muted/30 border-border" />
+                      <Label className="text-white">{t("settings:localization.dateFormat")}</Label>
+                      <Input dir="ltr" defaultValue={t("settings:localization.dateFormatDefault")} className="bg-muted/30 border-border" />
                     </div>
                   </div>
                 </div>
@@ -349,15 +355,15 @@ export default function SettingsPage() {
                 <Separator className="bg-border" />
 
                 <div>
-                  <h3 className="text-base font-medium text-white mb-4">Legal Pages</h3>
-                  <p className="text-sm text-muted-foreground mb-4">Content entered here is published on the login page links.</p>
+                  <h3 className="text-base font-medium text-white mb-4">{t("settings:legal.title")}</h3>
+                  <p className="text-sm text-muted-foreground mb-4">{t("settings:legal.intro")}</p>
                   <div className="space-y-6">
                     <div className="space-y-2">
-                      <Label htmlFor="privacyPolicy" className="text-white">Privacy Policy</Label>
+                      <Label htmlFor="privacyPolicy" className="text-white">{t("settings:legal.privacy")}</Label>
                       <textarea
                         id="privacyPolicy"
                         rows={8}
-                        placeholder="Enter your privacy policy text here..."
+                        placeholder={t("settings:legal.privacyPh")}
                         value={privacyPolicy}
                         onChange={(e) => setPrivacyPolicy(e.target.value)}
                         className="flex w-full rounded-sm border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary resize-y"
@@ -365,11 +371,11 @@ export default function SettingsPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="termsConditions" className="text-white">Terms & Conditions</Label>
+                      <Label htmlFor="termsConditions" className="text-white">{t("settings:legal.terms")}</Label>
                       <textarea
                         id="termsConditions"
                         rows={8}
-                        placeholder="Enter your terms and conditions text here..."
+                        placeholder={t("settings:legal.termsPh")}
                         value={termsConditions}
                         onChange={(e) => setTermsConditions(e.target.value)}
                         className="flex w-full rounded-sm border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary resize-y"
@@ -387,18 +393,19 @@ export default function SettingsPage() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <Clock className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-white">Attendance Rules</CardTitle>
+                  <CardTitle className="text-white">{t("settings:attendance.title")}</CardTitle>
                 </div>
-                <CardDescription>Configure check-in/check-out boundaries, shift windows, and daily submission limits for the mobile workforce app.</CardDescription>
+                <CardDescription>{t("settings:attendance.desc")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label htmlFor="att-early-buffer" className="text-white">Early Check-In Buffer (minutes)</Label>
-                    <p className="text-xs text-muted-foreground">How many minutes before shift start can workers check in.</p>
+                    <Label htmlFor="att-early-buffer" className="text-white">{t("settings:attendance.early")}</Label>
+                    <p className="text-xs text-muted-foreground">{t("settings:attendance.earlyHint")}</p>
                     <Input
                       id="att-early-buffer"
                       data-testid="input-att-early-buffer"
+                      dir="ltr"
                       type="number"
                       min={0}
                       max={120}
@@ -408,11 +415,12 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="att-late-buffer" className="text-white">Late Check-Out Buffer (minutes)</Label>
-                    <p className="text-xs text-muted-foreground">How many minutes after shift end can workers check out.</p>
+                    <Label htmlFor="att-late-buffer" className="text-white">{t("settings:attendance.late")}</Label>
+                    <p className="text-xs text-muted-foreground">{t("settings:attendance.lateHint")}</p>
                     <Input
                       id="att-late-buffer"
                       data-testid="input-att-late-buffer"
+                      dir="ltr"
                       type="number"
                       min={0}
                       max={240}
@@ -422,11 +430,12 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="att-min-duration" className="text-white">Minimum Shift Duration (minutes)</Label>
-                    <p className="text-xs text-muted-foreground">Workers must be checked in for at least this long before they can check out.</p>
+                    <Label htmlFor="att-min-duration" className="text-white">{t("settings:attendance.min")}</Label>
+                    <p className="text-xs text-muted-foreground">{t("settings:attendance.minHint")}</p>
                     <Input
                       id="att-min-duration"
                       data-testid="input-att-min-duration"
+                      dir="ltr"
                       type="number"
                       min={0}
                       max={480}
@@ -436,11 +445,12 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="att-max-subs" className="text-white">Max Daily Submissions</Label>
-                    <p className="text-xs text-muted-foreground">Maximum number of attendance submissions per worker per day (1 check-in + 1 check-out = 2).</p>
+                    <Label htmlFor="att-max-subs" className="text-white">{t("settings:attendance.max")}</Label>
+                    <p className="text-xs text-muted-foreground">{t("settings:attendance.maxHint")}</p>
                     <Input
                       id="att-max-subs"
                       data-testid="input-att-max-submissions"
+                      dir="ltr"
                       type="number"
                       min={1}
                       max={10}
@@ -452,13 +462,13 @@ export default function SettingsPage() {
                 </div>
                 <Separator className="bg-border" />
                 <div className="bg-muted/30 rounded-md p-4 border border-border">
-                  <h4 className="text-sm font-semibold text-white mb-2">How It Works</h4>
+                  <h4 className="text-sm font-semibold text-white mb-2">{t("settings:attendance.howTitle")}</h4>
                   <ul className="text-xs text-muted-foreground space-y-1.5 list-disc list-inside">
-                    <li>Workers can check in up to <strong className="text-white">{attEarlyBuffer} minutes</strong> before their shift starts.</li>
-                    <li>Workers can check out up to <strong className="text-white">{attLateBuffer} minutes</strong> after their shift ends.</li>
-                    <li>Check-out is blocked until <strong className="text-white">{attMinDuration} minutes</strong> have passed since check-in.</li>
-                    <li>Each worker is limited to <strong className="text-white">{attMaxSubmissions} submissions</strong> per day.</li>
-                    <li>Workers without an assigned shift can still submit attendance — their submissions will be flagged for admin review.</li>
+                    <li><Trans i18nKey="settings:attendance.how.early" values={{ n: formatNumber(attEarlyBuffer, lng) }} components={[<strong className="text-white" />]} /></li>
+                    <li><Trans i18nKey="settings:attendance.how.late" values={{ n: formatNumber(attLateBuffer, lng) }} components={[<strong className="text-white" />]} /></li>
+                    <li><Trans i18nKey="settings:attendance.how.min" values={{ n: formatNumber(attMinDuration, lng) }} components={[<strong className="text-white" />]} /></li>
+                    <li><Trans i18nKey="settings:attendance.how.max" values={{ n: formatNumber(attMaxSubmissions, lng) }} components={[<strong className="text-white" />]} /></li>
+                    <li>{t("settings:attendance.how.noShift")}</li>
                   </ul>
                 </div>
               </CardContent>
@@ -470,32 +480,32 @@ export default function SettingsPage() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <Shield className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-xl text-white">Security Policies</CardTitle>
+                  <CardTitle className="text-xl text-white">{t("settings:security.policiesTitle")}</CardTitle>
                 </div>
-                <CardDescription>Manage password requirements and authentication methods.</CardDescription>
+                <CardDescription>{t("settings:security.policiesDesc")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-4 bg-muted/20 border border-border rounded-md">
                     <div className="space-y-0.5">
-                      <Label className="text-base text-white">Two-Factor Authentication (2FA)</Label>
-                      <p className="text-sm text-muted-foreground">Require all admin users to use 2FA to log in.</p>
+                      <Label className="text-base text-white">{t("settings:security.twoFa")}</Label>
+                      <p className="text-sm text-muted-foreground">{t("settings:security.twoFaHint")}</p>
                     </div>
                     <Switch defaultChecked />
                   </div>
 
                   <div className="flex items-center justify-between p-4 bg-muted/20 border border-border rounded-md">
                     <div className="space-y-0.5">
-                      <Label className="text-base text-white">Strict Password Policy</Label>
-                      <p className="text-sm text-muted-foreground">Require uppercase, numbers, and special characters.</p>
+                      <Label className="text-base text-white">{t("settings:security.strict")}</Label>
+                      <p className="text-sm text-muted-foreground">{t("settings:security.strictHint")}</p>
                     </div>
                     <Switch defaultChecked />
                   </div>
 
                   <div className="flex items-center justify-between p-4 bg-muted/20 border border-border rounded-md">
                     <div className="space-y-0.5">
-                      <Label className="text-base text-white">Session Timeout</Label>
-                      <p className="text-sm text-muted-foreground">Automatically log users out after 30 minutes of inactivity.</p>
+                      <Label className="text-base text-white">{t("settings:security.session")}</Label>
+                      <p className="text-sm text-muted-foreground">{t("settings:security.sessionHint")}</p>
                     </div>
                     <Switch />
                   </div>
@@ -507,14 +517,14 @@ export default function SettingsPage() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <Clock className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-xl text-white">Time & Clock Security</CardTitle>
+                  <CardTitle className="text-xl text-white">{t("settings:ntp.title")}</CardTitle>
                 </div>
-                <CardDescription>Configure NTP server and organization timezone for clock tampering detection on mobile devices.</CardDescription>
+                <CardDescription>{t("settings:ntp.desc")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="text-white">NTP Server</Label>
+                    <Label className="text-white">{t("settings:ntp.server")}</Label>
                     <Select
                       value={useCustomNtp ? "custom" : ntpServerUrl}
                       onValueChange={(val) => {
@@ -528,26 +538,27 @@ export default function SettingsPage() {
                       }}
                     >
                       <SelectTrigger className="bg-muted/30 border-border" data-testid="select-ntp-server">
-                        <SelectValue placeholder="Select NTP server" />
+                        <SelectValue placeholder={t("settings:ntp.serverPh")} />
                       </SelectTrigger>
                       <SelectContent>
                         {NTP_SERVERS.map(group => (
                           <SelectGroup key={group.group}>
-                            <SelectLabel>{group.group}</SelectLabel>
+                            <SelectLabel>{t(`settings:ntp.groups.${group.group}`, group.group)}</SelectLabel>
                             {group.servers.map(s => (
-                              <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                              <SelectItem key={s.value} value={s.value} dir="ltr">{s.label}</SelectItem>
                             ))}
                           </SelectGroup>
                         ))}
                         <SelectGroup>
-                          <SelectLabel>Other</SelectLabel>
-                          <SelectItem value="custom">Custom URL...</SelectItem>
+                          <SelectLabel>{t("settings:ntp.groups.Other")}</SelectLabel>
+                          <SelectItem value="custom">{t("settings:ntp.custom")}</SelectItem>
                         </SelectGroup>
                       </SelectContent>
                     </Select>
                     {useCustomNtp && (
                       <Input
-                        placeholder="e.g., ntp.mycompany.com"
+                        dir="ltr"
+                        placeholder={t("settings:ntp.customPh")}
                         value={customNtpServer}
                         onChange={(e) => setCustomNtpServer(e.target.value)}
                         className="bg-muted/30 border-border mt-2"
@@ -555,19 +566,19 @@ export default function SettingsPage() {
                       />
                     )}
                     <NtpHealthIndicator serverUrl={effectiveNtpUrl} />
-                    <p className="text-xs text-muted-foreground">Used by mobile devices to get trusted time independent of the device clock.</p>
+                    <p className="text-xs text-muted-foreground">{t("settings:ntp.serverHint")}</p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-white">Organization Timezone</Label>
+                    <Label className="text-white">{t("settings:ntp.tz")}</Label>
                     <Select value={organizationTimezone} onValueChange={setOrganizationTimezone}>
                       <SelectTrigger className="bg-muted/30 border-border" data-testid="select-timezone">
-                        <SelectValue placeholder="Select timezone" />
+                        <SelectValue placeholder={t("settings:ntp.tzPh")} />
                       </SelectTrigger>
                       <SelectContent>
                         <div className="p-2">
                           <Input
-                            placeholder="Search timezones..."
+                            placeholder={t("settings:ntp.tzSearch")}
                             value={timezoneSearch}
                             onChange={(e) => setTimezoneSearch(e.target.value)}
                             className="h-8 bg-muted/30 border-border"
@@ -575,20 +586,20 @@ export default function SettingsPage() {
                           />
                         </div>
                         {filteredTimezones.map(tz => (
-                          <SelectItem key={tz} value={tz}>
+                          <SelectItem key={tz} value={tz} dir="ltr">
                             {tz} ({getUtcOffset(tz)})
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      All attendance times are displayed in this timezone. Uses IANA timezone names (handles DST automatically).
+                      {t("settings:ntp.tzHint")}
                     </p>
                   </div>
                 </div>
                 {systemSettings?.config_version && (
                   <p className="text-xs text-muted-foreground">
-                    Config version: {systemSettings.config_version} — Mobile devices automatically pick up changes on next sync.
+                    {t("settings:ntp.configVer", { v: formatNumber(systemSettings.config_version, lng) })}
                   </p>
                 )}
               </CardContent>
@@ -610,18 +621,18 @@ export default function SettingsPage() {
           <TabsContent value="integrations" className="m-0 animate-in fade-in-50 duration-500">
             <div className="p-8 text-center text-muted-foreground bg-card border border-border border-dashed rounded-md">
                <Database className="h-10 w-10 mx-auto text-muted-foreground mb-4 opacity-50" />
-               <h3 className="text-lg font-medium text-white mb-2">API Keys & Webhooks</h3>
-               <p>Generate API tokens and configure webhooks to integrate with external systems.</p>
-               <Button variant="outline" className="mt-4 border-border text-white">Manage Keys</Button>
+               <h3 className="text-lg font-medium text-white mb-2">{t("settings:integrations.title")}</h3>
+               <p>{t("settings:integrations.desc")}</p>
+               <Button variant="outline" className="mt-4 border-border text-white">{t("settings:integrations.manage")}</Button>
             </div>
           </TabsContent>
           
           <TabsContent value="advanced" className="m-0 animate-in fade-in-50 duration-500">
             <div className="p-8 text-center text-muted-foreground bg-card border border-destructive/20 border-dashed rounded-md bg-destructive/5">
                <Shield className="h-10 w-10 mx-auto text-destructive mb-4 opacity-70" />
-               <h3 className="text-lg font-medium text-white mb-2">Danger Zone</h3>
-               <p className="mb-4">Irreversible actions that affect your entire organization workspace.</p>
-               <Button variant="destructive" className="font-bold">Delete Organization</Button>
+               <h3 className="text-lg font-medium text-white mb-2">{t("settings:danger.title")}</h3>
+               <p className="mb-4">{t("settings:danger.desc")}</p>
+               <Button variant="destructive" className="font-bold">{t("settings:danger.delete")}</Button>
             </div>
           </TabsContent>
         </Tabs>

@@ -1,0 +1,119 @@
+{
+  "title": "System & Settings",
+  "subtitle": "Manage your organization profile, roles, and global preferences.",
+  "save": "Save Changes",
+  "tabs": {
+    "general": "General",
+    "attendance": "Attendance Rules",
+    "security": "Security",
+    "adminUsers": "Admin Users",
+    "roles": "Roles & Access",
+    "notifications": "Notifications",
+    "integrations": "APIs & Webhooks",
+    "advanced": "Advanced"
+  },
+  "org": {
+    "title": "Organization Profile",
+    "desc": "Update your company details and branding.",
+    "name": "Organization Name",
+    "nameDefault": "Luxury Carts Company Ltd.",
+    "industry": "Industry",
+    "industryDefault": "Logistics & Warehousing",
+    "supportEmail": "Support Email",
+    "supportEmailPh": "support@company.com",
+    "supportEmailHint": "Shown on the login page as \"Contact Support\" link",
+    "phone": "Phone Number",
+    "phoneDefault": "+1 (555) 000-0000"
+  },
+  "localization": {
+    "title": "Localization",
+    "timezone": "Default Timezone",
+    "timezoneDefault": "Asia/Riyadh (AST)",
+    "dateFormat": "Date Format",
+    "dateFormatDefault": "DD/MM/YYYY"
+  },
+  "legal": {
+    "title": "Legal Pages",
+    "intro": "Content entered here is published on the login page links.",
+    "privacy": "Privacy Policy",
+    "privacyPh": "Enter your privacy policy text here...",
+    "terms": "Terms & Conditions",
+    "termsPh": "Enter your terms and conditions text here..."
+  },
+  "attendance": {
+    "title": "Attendance Rules",
+    "desc": "Configure check-in/check-out boundaries, shift windows, and daily submission limits for the mobile workforce app.",
+    "early": "Early Check-In Buffer (minutes)",
+    "earlyHint": "How many minutes before shift start can workers check in.",
+    "late": "Late Check-Out Buffer (minutes)",
+    "lateHint": "How many minutes after shift end can workers check out.",
+    "min": "Minimum Shift Duration (minutes)",
+    "minHint": "Workers must be checked in for at least this long before they can check out.",
+    "max": "Max Daily Submissions",
+    "maxHint": "Maximum number of attendance submissions per worker per day (1 check-in + 1 check-out = 2).",
+    "howTitle": "How It Works",
+    "how": {
+      "early": "Workers can check in up to <0>{{n}} minutes</0> before their shift starts.",
+      "late": "Workers can check out up to <0>{{n}} minutes</0> after their shift ends.",
+      "min": "Check-out is blocked until <0>{{n}} minutes</0> have passed since check-in.",
+      "max": "Each worker is limited to <0>{{n}} submissions</0> per day.",
+      "noShift": "Workers without an assigned shift can still submit attendance — their submissions will be flagged for admin review."
+    }
+  },
+  "security": {
+    "policiesTitle": "Security Policies",
+    "policiesDesc": "Manage password requirements and authentication methods.",
+    "twoFa": "Two-Factor Authentication (2FA)",
+    "twoFaHint": "Require all admin users to use 2FA to log in.",
+    "strict": "Strict Password Policy",
+    "strictHint": "Require uppercase, numbers, and special characters.",
+    "session": "Session Timeout",
+    "sessionHint": "Automatically log users out after 30 minutes of inactivity."
+  },
+  "ntp": {
+    "title": "Time & Clock Security",
+    "desc": "Configure NTP server and organization timezone for clock tampering detection on mobile devices.",
+    "server": "NTP Server",
+    "serverPh": "Select NTP server",
+    "customPh": "e.g., ntp.mycompany.com",
+    "serverHint": "Used by mobile devices to get trusted time independent of the device clock.",
+    "tz": "Organization Timezone",
+    "tzPh": "Select timezone",
+    "tzSearch": "Search timezones...",
+    "tzHint": "All attendance times are displayed in this timezone. Uses IANA timezone names (handles DST automatically).",
+    "configVer": "Config version: {{v}} — Mobile devices automatically pick up changes on next sync.",
+    "groups": {
+      "Global (Anycast)": "Global (Anycast)",
+      "Middle East": "Middle East",
+      "Europe": "Europe",
+      "Asia": "Asia",
+      "North America": "North America",
+      "South America": "South America",
+      "Oceania": "Oceania",
+      "Other": "Other"
+    },
+    "custom": "Custom URL...",
+    "health": {
+      "checking": "Checking NTP server...",
+      "reachable": "NTP server reachable",
+      "unreachable": "NTP server unreachable",
+      "unknown": "NTP status unknown",
+      "refresh": "Refresh"
+    }
+  },
+  "integrations": {
+    "title": "API Keys & Webhooks",
+    "desc": "Generate API tokens and configure webhooks to integrate with external systems.",
+    "manage": "Manage Keys"
+  },
+  "danger": {
+    "title": "Danger Zone",
+    "desc": "Irreversible actions that affect your entire organization workspace.",
+    "delete": "Delete Organization"
+  },
+  "toasts": {
+    "saved": "Settings Saved",
+    "savedDesc": "Your settings have been updated successfully.",
+    "saveFailed": "Save failed"
+  }
+}
