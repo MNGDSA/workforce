@@ -30,3 +30,9 @@ id = "j5c4YALGrF3g83HaYap4Y"
 uri = "file://env.production.txt"
 type = "text"
 title = "Production Environment Variables"
+
+[[outputs]]
+id = "e5jSS7UXuSKfgrI7TN3eu"
+uri = "file://.local/exports/workforce_prod_20260418_034807.sql.gz"
+type = "unspecified"
+title = "Prod DB dump (plain SQL, gzipped)"
