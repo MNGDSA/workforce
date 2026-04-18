@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import DashboardLayout from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -60,6 +61,7 @@ import {
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { formatDateTime } from "@/lib/format";
 import {
   AVAILABLE_FIELDS,
   CARD_LAYOUTS,
@@ -118,12 +120,6 @@ type EventType = {
   name: string;
 };
 
-function formatDate(iso: string | null | undefined) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-SA", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}
-
 function DraggableField({
   fp,
   label,
@@ -135,6 +131,7 @@ function DraggableField({
   onSelect,
   onDragEnd,
   onResize,
+  photoLabel,
 }: {
   fp: FieldPlacement;
   label: string;
@@ -146,6 +143,7 @@ function DraggableField({
   onSelect: () => void;
   onDragEnd: (x: number, y: number) => void;
   onResize: (w: number, h: number) => void;
+  photoLabel: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -272,7 +270,7 @@ function DraggableField({
             border: selected ? "2px dashed #16a34a" : "1px dashed rgba(255,255,255,0.3)",
           }}
         >
-          {sampleValue || "PHOTO"}
+          {sampleValue || photoLabel}
         </div>
       ) : (
         <div
@@ -322,6 +320,7 @@ function DraggableField({
 function TemplateDesigner() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { t } = useTranslation(["idCards"]);
   const [editId, setEditId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -349,6 +348,8 @@ function TemplateDesigner() {
     queryFn: () => apiRequest("GET", "/api/events").then((r) => r.json()),
   });
 
+  const errToast = (e: Error) => toast({ title: t("idCards:common.errGeneric"), description: e.message, variant: "destructive" });
+
   const saveMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
       editId
@@ -359,30 +360,30 @@ function TemplateDesigner() {
         await uploadBackgroundFile(created.id, pendingBgFile);
         setPendingBgFile(null);
       }
-      toast({ title: editId ? "Template Updated" : "Template Created" });
+      toast({ title: editId ? t("idCards:designer.toast.updated") : t("idCards:designer.toast.created") });
       qc.invalidateQueries({ queryKey: ["/api/id-card-templates"] });
       resetForm();
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: errToast,
   });
 
   const activateMutation = useMutation({
     mutationFn: (id: string) => apiRequest("POST", `/api/id-card-templates/${id}/activate`).then((r) => r.json()),
     onSuccess: () => {
-      toast({ title: "Template Activated" });
+      toast({ title: t("idCards:designer.toast.activated") });
       qc.invalidateQueries({ queryKey: ["/api/id-card-templates"] });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: errToast,
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/id-card-templates/${id}`),
     onSuccess: () => {
-      toast({ title: "Template Deleted" });
+      toast({ title: t("idCards:designer.toast.deleted") });
       qc.invalidateQueries({ queryKey: ["/api/id-card-templates"] });
       setDeleteId(null);
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: errToast,
   });
 
   function resetForm() {
@@ -400,11 +401,11 @@ function TemplateDesigner() {
     setSelectedFieldKey(null);
   }
 
-  function openEdit(t: IdCardTemplate) {
-    const lc = (t.layoutConfig ?? {}) as Record<string, unknown>;
+  function openEdit(tpl: IdCardTemplate) {
+    const lc = (tpl.layoutConfig ?? {}) as Record<string, unknown>;
     const layout = (lc.layout as CardLayout) ?? "horizontal";
     const savedPlacements = (lc.fieldPlacements as FieldPlacement[] | undefined);
-    const activeFields = t.fields ?? ["fullName", "photo", "employeeNumber"];
+    const activeFields = tpl.fields ?? ["fullName", "photo", "employeeNumber"];
 
     const placements = (savedPlacements && savedPlacements.length > 0
       ? savedPlacements
@@ -412,21 +413,21 @@ function TemplateDesigner() {
     ).map((fp) => ({ ...fp, visible: activeFields.includes(fp.key) }));
 
     setForm({
-      name: t.name,
-      eventId: t.eventId ?? "",
-      logoUrl: t.logoUrl ?? "",
-      backgroundImageUrl: t.backgroundImageUrl ?? "",
+      name: tpl.name,
+      eventId: tpl.eventId ?? "",
+      logoUrl: tpl.logoUrl ?? "",
+      backgroundImageUrl: tpl.backgroundImageUrl ?? "",
       fields: activeFields,
       layout,
       fieldPlacements: placements,
     });
-    setEditId(t.id);
+    setEditId(tpl.id);
     setFormOpen(true);
   }
 
   function handleSave() {
     if (!form.name.trim()) {
-      toast({ title: "Template name is required", variant: "destructive" });
+      toast({ title: t("idCards:designer.toast.nameRequired"), variant: "destructive" });
       return;
     }
     const bgUrl = form.backgroundImageUrl && !form.backgroundImageUrl.startsWith("blob:")
@@ -509,9 +510,9 @@ function TemplateDesigner() {
       const updated = await res.json();
       setForm((f) => ({ ...f, backgroundImageUrl: updated.backgroundImageUrl ?? "" }));
       qc.invalidateQueries({ queryKey: ["/api/id-card-templates"] });
-      toast({ title: "Background uploaded" });
+      toast({ title: t("idCards:designer.toast.bgUploaded") });
     } catch {
-      toast({ title: "Upload failed", variant: "destructive" });
+      toast({ title: t("idCards:designer.toast.uploadFail"), variant: "destructive" });
     } finally {
       setUploading(false);
     }
@@ -523,7 +524,7 @@ function TemplateDesigner() {
   const previewScale = 2.1;
 
   const previewConfig: IdCardTemplateConfig = {
-    name: form.name || "Untitled",
+    name: form.name || t("idCards:designer.untitled"),
     logoUrl: form.logoUrl || null,
     backgroundImageUrl: form.backgroundImageUrl || null,
     fields: form.fields,
@@ -543,16 +544,23 @@ function TemplateDesigner() {
     ? currentPlacements.find((fp) => fp.key === selectedFieldKey)
     : null;
 
+  const fieldLabel = (key: string) =>
+    t(`idCards:field.${key}` as any, AVAILABLE_FIELDS.find((f) => f.key === key)?.label ?? key);
+  const layoutLabel = (key: string) =>
+    t(`idCards:layout.${key}` as any, CARD_LAYOUTS.find((l) => l.key === key)?.label ?? key);
+  const layoutDesc = (key: string) =>
+    t(`idCards:layout.${key}Desc` as any, CARD_LAYOUTS.find((l) => l.key === key)?.description ?? "");
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-base font-semibold text-white flex items-center gap-2">
             <Palette className="h-4 w-4 text-primary" />
-            Card Templates
+            {t("idCards:designer.heading")}
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Upload predesigned templates and position fields on the card.
+            {t("idCards:designer.sub")}
           </p>
         </div>
         <Button
@@ -562,43 +570,45 @@ function TemplateDesigner() {
           data-testid="button-create-template"
         >
           <Plus className="h-3.5 w-3.5" />
-          New Template
+          {t("idCards:designer.btnNew")}
         </Button>
       </div>
 
       {templates.length === 0 ? (
         <div className="p-8 text-center border border-dashed border-border rounded-md bg-muted/10 space-y-3">
           <CreditCard className="h-10 w-10 mx-auto text-muted-foreground opacity-40" />
-          <p className="text-sm text-muted-foreground">No templates yet. Create your first ID card template.</p>
+          <p className="text-sm text-muted-foreground">{t("idCards:designer.empty")}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {templates.map((t) => {
-            const lc = (t.layoutConfig ?? {}) as Record<string, unknown>;
+          {templates.map((tpl) => {
+            const lc = (tpl.layoutConfig ?? {}) as Record<string, unknown>;
             const layout = (lc.layout as CardLayout) ?? "horizontal";
             const config: IdCardTemplateConfig = {
-              name: t.name,
-              logoUrl: t.logoUrl,
-              backgroundImageUrl: t.backgroundImageUrl,
-              fields: t.fields,
+              name: tpl.name,
+              logoUrl: tpl.logoUrl,
+              backgroundImageUrl: tpl.backgroundImageUrl,
+              fields: tpl.fields,
               fieldPlacements: (lc.fieldPlacements as FieldPlacement[]) ?? undefined,
-              backgroundColor: t.backgroundColor,
-              textColor: t.textColor,
-              accentColor: t.accentColor,
+              backgroundColor: tpl.backgroundColor,
+              textColor: tpl.textColor,
+              accentColor: tpl.accentColor,
               layout,
             };
             return (
               <Card
-                key={t.id}
-                className={`bg-card border-border ${t.isActive ? "ring-1 ring-primary" : ""}`}
-                data-testid={`card-template-${t.id}`}
+                key={tpl.id}
+                className={`bg-card border-border ${tpl.isActive ? "ring-1 ring-primary" : ""}`}
+                data-testid={`card-template-${tpl.id}`}
               >
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-white">{t.name}</span>
-                      {t.isActive && (
-                        <Badge className="bg-primary/15 text-primary border-primary/20 text-xs">Active</Badge>
+                      <span className="text-sm font-medium text-white"><bdi>{tpl.name}</bdi></span>
+                      {tpl.isActive && (
+                        <Badge className="bg-primary/15 text-primary border-primary/20 text-xs">
+                          {t("idCards:designer.active")}
+                        </Badge>
                       )}
                     </div>
                   </div>
@@ -607,26 +617,26 @@ function TemplateDesigner() {
                     dangerouslySetInnerHTML={{ __html: renderIdCardHTML(config, SAMPLE_EMPLOYEE, 0.65) }}
                   />
                   <div className="flex items-center gap-1.5 pt-1">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs flex-1" onClick={() => openEdit(t)}>
-                      <Eye className="h-3 w-3 mr-1" /> Edit
+                    <Button variant="ghost" size="sm" className="h-7 text-xs flex-1" onClick={() => openEdit(tpl)}>
+                      <Eye className="h-3 w-3 me-1" /> {t("idCards:designer.btnEdit")}
                     </Button>
-                    {!t.isActive && (
+                    {!tpl.isActive && (
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-7 text-xs text-primary flex-1"
-                        onClick={() => activateMutation.mutate(t.id)}
+                        onClick={() => activateMutation.mutate(tpl.id)}
                         disabled={activateMutation.isPending}
-                        data-testid={`button-activate-template-${t.id}`}
+                        data-testid={`button-activate-template-${tpl.id}`}
                       >
-                        <CheckCircle2 className="h-3 w-3 mr-1" /> Activate
+                        <CheckCircle2 className="h-3 w-3 me-1" /> {t("idCards:designer.btnActivate")}
                       </Button>
                     )}
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-7 text-xs text-red-400"
-                      onClick={() => setDeleteId(t.id)}
+                      onClick={() => setDeleteId(tpl.id)}
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
@@ -643,48 +653,48 @@ function TemplateDesigner() {
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
               <CreditCard className="h-5 w-5 text-primary" />
-              {editId ? "Edit Template" : "New ID Card Template"}
+              {editId ? t("idCards:designer.dialogTitleEdit") : t("idCards:designer.dialogTitleNew")}
             </DialogTitle>
-            <DialogDescription className="sr-only">Design your ID card template</DialogDescription>
+            <DialogDescription className="sr-only">{t("idCards:designer.dialogDesc")}</DialogDescription>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto min-h-0">
             <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6 mt-4">
-              <div className="space-y-4 pr-1">
+              <div className="space-y-4 pe-1">
                 <div className="space-y-2">
-                  <Label className="text-white">Template Name *</Label>
+                  <Label className="text-white">{t("idCards:designer.lblName")} *</Label>
                   <Input
                     data-testid="input-template-name"
                     value={form.name}
                     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                    placeholder="e.g. Ramadan 1447 Card"
+                    placeholder={t("idCards:designer.phName")}
                     className="bg-zinc-900 border-zinc-700 text-white"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-white">Event (optional)</Label>
+                  <Label className="text-white">{t("idCards:designer.lblEvent")}</Label>
                   <Select value={form.eventId} onValueChange={(v) => setForm((f) => ({ ...f, eventId: v === "none" ? "" : v }))}>
                     <SelectTrigger className="bg-zinc-900 border-zinc-700 text-white" data-testid="select-template-event">
-                      <SelectValue placeholder="All events (global)" />
+                      <SelectValue placeholder={t("idCards:designer.phEvent")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">All events (global)</SelectItem>
+                      <SelectItem value="none">{t("idCards:designer.optAllEvents")}</SelectItem>
                       {events.map((e) => (
-                        <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                        <SelectItem key={e.id} value={e.id}><bdi>{e.name}</bdi></SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-white text-xs uppercase tracking-wider">Card Layout</Label>
+                  <Label className="text-white text-xs uppercase tracking-wider">{t("idCards:designer.lblLayout")}</Label>
                   <div className="grid grid-cols-2 gap-2">
                     {CARD_LAYOUTS.map((l) => (
                       <button
                         key={l.key}
                         type="button"
-                        className={`p-2 rounded-md border text-left transition-colors ${
+                        className={`p-2 rounded-md border text-start transition-colors ${
                           form.layout === l.key
                             ? "border-primary bg-primary/10 text-white"
                             : "border-zinc-800 hover:border-zinc-600 text-zinc-400"
@@ -692,8 +702,8 @@ function TemplateDesigner() {
                         onClick={() => handleLayoutChange(l.key)}
                         data-testid={`button-layout-${l.key}`}
                       >
-                        <div className="text-xs font-medium">{l.label}</div>
-                        <div className="text-[10px] opacity-70 mt-0.5">{l.description}</div>
+                        <div className="text-xs font-medium">{layoutLabel(l.key)}</div>
+                        <div className="text-[10px] opacity-70 mt-0.5">{layoutDesc(l.key)}</div>
                       </button>
                     ))}
                   </div>
@@ -703,11 +713,9 @@ function TemplateDesigner() {
 
                 <div className="space-y-2">
                   <Label className="text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
-                    <ImageIcon className="h-3.5 w-3.5" /> Background
+                    <ImageIcon className="h-3.5 w-3.5" /> {t("idCards:designer.lblBackground")}
                   </Label>
-                  <p className="text-[11px] text-zinc-500">
-                    Upload a predesigned card image (PNG/JPG). Fields will overlay on top.
-                  </p>
+                  <p className="text-[11px] text-zinc-500">{t("idCards:designer.bgHint")}</p>
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
@@ -718,7 +726,7 @@ function TemplateDesigner() {
                       data-testid="button-upload-background"
                     >
                       {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                      {currentBgUrl ? "Change Image" : "Upload Image"}
+                      {currentBgUrl ? t("idCards:designer.btnChange") : t("idCards:designer.btnUpload")}
                     </Button>
                     {currentBgUrl && (
                       <Button
@@ -746,7 +754,7 @@ function TemplateDesigner() {
                   />
                   {currentBgUrl && (
                     <div className="text-xs text-emerald-400 flex items-center gap-1">
-                      <CheckCircle2 className="h-3 w-3" /> Background image loaded
+                      <CheckCircle2 className="h-3 w-3" /> {t("idCards:designer.bgLoaded")}
                     </div>
                   )}
                 </div>
@@ -755,7 +763,7 @@ function TemplateDesigner() {
 
                 <div className="space-y-2">
                   <Label className="text-white text-xs uppercase tracking-wider">
-                    Fields
+                    {t("idCards:designer.lblFields")}
                   </Label>
                   <div className="space-y-1">
                     {currentAvailableFields.map((f) => (
@@ -776,7 +784,7 @@ function TemplateDesigner() {
                           onCheckedChange={() => toggleField(f.key)}
                           data-testid={`checkbox-field-${f.key}`}
                         />
-                        <span className="text-sm text-zinc-300 flex-1">{f.label}</span>
+                        <span className="text-sm text-zinc-300 flex-1">{fieldLabel(f.key)}</span>
                         {currentFields.includes(f.key) && (
                           <Move className="h-3 w-3 text-zinc-600" />
                         )}
@@ -790,11 +798,11 @@ function TemplateDesigner() {
                     <Separator className="bg-zinc-800" />
                     <div className="space-y-3">
                       <Label className="text-white text-xs uppercase tracking-wider">
-                        Field: {AVAILABLE_FIELDS.find((f) => f.key === selectedPlacement.key)?.label}
+                        {t("idCards:designer.fieldHeading", { replace: { name: fieldLabel(selectedPlacement.key) } })}
                       </Label>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
-                          <Label className="text-zinc-400 text-xs">Font Size</Label>
+                          <Label className="text-zinc-400 text-xs">{t("idCards:designer.lblFontSize")}</Label>
                           <Input
                             type="number"
                             min={6}
@@ -804,11 +812,12 @@ function TemplateDesigner() {
                               updatePlacement(selectedPlacement.key, { fontSize: Number(e.target.value) || 10 })
                             }
                             className="bg-zinc-900 border-zinc-700 text-white h-8 text-xs"
+                            dir="ltr"
                             data-testid="input-field-font-size"
                           />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-zinc-400 text-xs">Font Weight</Label>
+                          <Label className="text-zinc-400 text-xs">{t("idCards:designer.lblFontWeight")}</Label>
                           <Select
                             value={String(selectedPlacement.fontWeight)}
                             onValueChange={(v) => updatePlacement(selectedPlacement.key, { fontWeight: Number(v) })}
@@ -817,16 +826,16 @@ function TemplateDesigner() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="400">Normal</SelectItem>
-                              <SelectItem value="500">Medium</SelectItem>
-                              <SelectItem value="600">Semibold</SelectItem>
-                              <SelectItem value="700">Bold</SelectItem>
+                              <SelectItem value="400">{t("idCards:designer.weight.normal")}</SelectItem>
+                              <SelectItem value="500">{t("idCards:designer.weight.medium")}</SelectItem>
+                              <SelectItem value="600">{t("idCards:designer.weight.semibold")}</SelectItem>
+                              <SelectItem value="700">{t("idCards:designer.weight.bold")}</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-zinc-400 text-xs">Font Color</Label>
+                        <Label className="text-zinc-400 text-xs">{t("idCards:designer.lblFontColor")}</Label>
                         <div className="flex items-center gap-2">
                           <input
                             type="color"
@@ -839,11 +848,12 @@ function TemplateDesigner() {
                             value={selectedPlacement.fontColor}
                             onChange={(e) => updatePlacement(selectedPlacement.key, { fontColor: e.target.value })}
                             className="bg-zinc-900 border-zinc-700 text-white text-xs font-mono h-8 flex-1"
+                            dir="ltr"
                           />
                         </div>
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-zinc-400 text-xs">Text Alignment</Label>
+                        <Label className="text-zinc-400 text-xs">{t("idCards:designer.lblTextAlign")}</Label>
                         <div className="flex gap-1">
                           {(["left", "center", "right"] as const).map((align) => (
                             <button
@@ -857,14 +867,14 @@ function TemplateDesigner() {
                               onClick={() => updatePlacement(selectedPlacement.key, { textAlign: align })}
                               data-testid={`button-align-${align}`}
                             >
-                              {align.charAt(0).toUpperCase() + align.slice(1)}
+                              {t(`idCards:designer.align.${align}`)}
                             </button>
                           ))}
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
-                          <Label className="text-zinc-400 text-xs">X</Label>
+                          <Label className="text-zinc-400 text-xs">{t("idCards:designer.lblX")}</Label>
                           <Input
                             type="number"
                             min={0}
@@ -872,10 +882,11 @@ function TemplateDesigner() {
                             value={selectedPlacement.x}
                             onChange={(e) => updatePlacement(selectedPlacement.key, { x: Math.max(0, Math.min(canvasW - selectedPlacement.w, Number(e.target.value) || 0)) })}
                             className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs"
+                            dir="ltr"
                           />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-zinc-400 text-xs">Y</Label>
+                          <Label className="text-zinc-400 text-xs">{t("idCards:designer.lblY")}</Label>
                           <Input
                             type="number"
                             min={0}
@@ -883,26 +894,29 @@ function TemplateDesigner() {
                             value={selectedPlacement.y}
                             onChange={(e) => updatePlacement(selectedPlacement.key, { y: Math.max(0, Math.min(canvasH - selectedPlacement.h, Number(e.target.value) || 0)) })}
                             className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs"
+                            dir="ltr"
                           />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
-                          <Label className="text-zinc-400 text-xs">Width</Label>
+                          <Label className="text-zinc-400 text-xs">{t("idCards:designer.lblWidth")}</Label>
                           <Input
                             type="number"
                             value={selectedPlacement.w}
                             onChange={(e) => updatePlacement(selectedPlacement.key, { w: Math.max(30, Math.min(canvasW - selectedPlacement.x, Number(e.target.value) || 30)) })}
                             className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs"
+                            dir="ltr"
                           />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-zinc-400 text-xs">Height</Label>
+                          <Label className="text-zinc-400 text-xs">{t("idCards:designer.lblHeight")}</Label>
                           <Input
                             type="number"
                             value={selectedPlacement.h}
                             onChange={(e) => updatePlacement(selectedPlacement.key, { h: Math.max(14, Math.min(canvasH - selectedPlacement.y, Number(e.target.value) || 14)) })}
                             className="bg-zinc-900 border-zinc-700 text-white h-7 text-xs"
+                            dir="ltr"
                           />
                         </div>
                       </div>
@@ -913,11 +927,9 @@ function TemplateDesigner() {
 
               <div className="space-y-3">
                 <Label className="text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
-                  <Eye className="h-3.5 w-3.5" /> Interactive Preview
+                  <Eye className="h-3.5 w-3.5" /> {t("idCards:designer.previewLabel")}
                 </Label>
-                <p className="text-[11px] text-zinc-500">
-                  Drag fields to reposition them. Click a field to select it and adjust its properties.
-                </p>
+                <p className="text-[11px] text-zinc-500">{t("idCards:designer.previewHint")}</p>
 
                 <div
                   className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 flex items-center justify-center"
@@ -945,7 +957,6 @@ function TemplateDesigner() {
                     data-testid="template-canvas"
                   >
                     {currentPlacements.map((fp) => {
-                      const fieldDef = AVAILABLE_FIELDS.find((f) => f.key === fp.key);
                       const sampleVal = fp.key === "photo"
                         ? (SAMPLE_EMPLOYEE.fullName?.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase() ?? "")
                         : (SAMPLE_EMPLOYEE as Record<string, unknown>)[fp.key] as string || "";
@@ -953,7 +964,7 @@ function TemplateDesigner() {
                         <DraggableField
                           key={fp.key}
                           fp={fp}
-                          label={fieldDef?.label ?? fp.key}
+                          label={fieldLabel(fp.key)}
                           sampleValue={sampleVal}
                           scale={previewScale}
                           selected={selectedFieldKey === fp.key}
@@ -962,21 +973,22 @@ function TemplateDesigner() {
                           onSelect={() => setSelectedFieldKey(fp.key)}
                           onDragEnd={(x, y) => updatePlacement(fp.key, { x, y })}
                           onResize={(w, h) => updatePlacement(fp.key, { w, h })}
+                          photoLabel={t("idCards:designer.phPhoto")}
                         />
                       );
                     })}
                   </div>
                 </div>
 
-                <p className="text-xs text-zinc-500 text-center">
-                  CR-80 size: 85.6mm x 54mm
+                <p className="text-xs text-zinc-500 text-center" dir="ltr">
+                  {t("idCards:designer.cardSize")}
                 </p>
 
                 <Separator className="bg-zinc-800" />
 
                 <div className="space-y-2">
                   <Label className="text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
-                    <Eye className="h-3.5 w-3.5" /> Print Preview
+                    <Eye className="h-3.5 w-3.5" /> {t("idCards:designer.printPreview")}
                   </Label>
                   <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 flex items-center justify-center">
                     <div dangerouslySetInnerHTML={{ __html: renderIdCardHTML(previewConfig, SAMPLE_EMPLOYEE, 1.0) }} />
@@ -988,7 +1000,7 @@ function TemplateDesigner() {
 
           <div className="flex-shrink-0 flex justify-end gap-2 pt-4 border-t border-zinc-800 mt-4">
             <Button variant="outline" className="border-zinc-700" onClick={resetForm}>
-              Cancel
+              {t("idCards:common.cancel")}
             </Button>
             <Button
               className="bg-primary text-primary-foreground"
@@ -996,8 +1008,8 @@ function TemplateDesigner() {
               disabled={saveMutation.isPending}
               data-testid="button-save-template"
             >
-              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              {editId ? "Update Template" : "Create Template"}
+              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin me-1" /> : null}
+              {editId ? t("idCards:designer.btnUpdate") : t("idCards:designer.btnCreate")}
             </Button>
           </div>
         </DialogContent>
@@ -1006,18 +1018,18 @@ function TemplateDesigner() {
       <AlertDialog open={!!deleteId} onOpenChange={(v) => { if (!v) setDeleteId(null); }}>
         <AlertDialogContent className="bg-zinc-950 border-zinc-800">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Delete Template?</AlertDialogTitle>
+            <AlertDialogTitle className="text-white">{t("idCards:designer.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription className="text-zinc-400">
-              This will permanently delete this ID card template. This action cannot be undone.
+              {t("idCards:designer.deleteDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-zinc-700 text-zinc-300">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="border-zinc-700 text-zinc-300">{t("idCards:common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700 text-white"
               onClick={() => deleteId && deleteMutation.mutate(deleteId)}
             >
-              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("idCards:designer.btnDelete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1029,6 +1041,8 @@ function TemplateDesigner() {
 function PrinterPluginManager() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { t, i18n } = useTranslation(["idCards"]);
+  const lang = i18n.language;
   const [formOpen, setFormOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", type: "zebra_browser_print", config: {} as Record<string, string> });
@@ -1038,42 +1052,44 @@ function PrinterPluginManager() {
     queryFn: () => apiRequest("GET", "/api/printer-plugins").then((r) => r.json()),
   });
 
+  const errToast = (e: Error) => toast({ title: t("idCards:common.errGeneric"), description: e.message, variant: "destructive" });
+
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
       apiRequest("POST", "/api/printer-plugins", data).then((r) => r.json()),
     onSuccess: () => {
-      toast({ title: "Printer Plugin Added" });
+      toast({ title: t("idCards:printer.toast.added") });
       qc.invalidateQueries({ queryKey: ["/api/printer-plugins"] });
       setFormOpen(false);
       setForm({ name: "", type: "zebra_browser_print", config: {} });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: errToast,
   });
 
   const activateMutation = useMutation({
     mutationFn: (id: string) => apiRequest("POST", `/api/printer-plugins/${id}/activate`).then((r) => r.json()),
     onSuccess: () => {
-      toast({ title: "Plugin Activated" });
+      toast({ title: t("idCards:printer.toast.activated") });
       qc.invalidateQueries({ queryKey: ["/api/printer-plugins"] });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: errToast,
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/printer-plugins/${id}`),
     onSuccess: () => {
-      toast({ title: "Plugin Removed" });
+      toast({ title: t("idCards:printer.toast.removed") });
       qc.invalidateQueries({ queryKey: ["/api/printer-plugins"] });
       setDeleteId(null);
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: errToast,
   });
 
   const selectedPluginType = PLUGIN_TYPES.find((pt) => pt.value === form.type);
 
   function handleCreate() {
     if (!form.name.trim()) {
-      toast({ title: "Plugin name is required", variant: "destructive" });
+      toast({ title: t("idCards:printer.toast.nameRequired"), variant: "destructive" });
       return;
     }
     const finalConfig: Record<string, string> = {};
@@ -1097,16 +1113,27 @@ function PrinterPluginManager() {
     setForm((f) => ({ ...f, type: newType, config: defaultCfg }));
   }
 
+  const pluginTypeLabel = (val: string) =>
+    t(`idCards:pluginType.${val}` as any, PLUGIN_TYPES.find((pt) => pt.value === val)?.label ?? val);
+  const pluginDesc = (val: string) =>
+    t(`idCards:pluginDesc.${val}` as any, PLUGIN_TYPES.find((pt) => pt.value === val)?.description ?? "");
+  const pluginFieldLabel = (key: string, fallback: string, isZebraEndpoint: boolean) => {
+    if (key === "endpoint" && isZebraEndpoint) return t("idCards:pluginField.endpointZebra", fallback);
+    return t(`idCards:pluginField.${key}` as any, fallback);
+  };
+  const pluginFieldPh = (key: string, fallback: string) =>
+    t(`idCards:pluginPh.${key}` as any, fallback);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-base font-semibold text-white flex items-center gap-2">
             <PlugZap className="h-4 w-4 text-primary" />
-            Printer Plugins
+            {t("idCards:printer.heading")}
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Configure printer plugins for direct card printing. Zebra and Evolis printers are supported.
+            {t("idCards:printer.sub")}
           </p>
         </div>
         <Button
@@ -1116,22 +1143,19 @@ function PrinterPluginManager() {
           data-testid="button-add-printer-plugin"
         >
           <Plus className="h-3.5 w-3.5" />
-          Add Plugin
+          {t("idCards:printer.btnAdd")}
         </Button>
       </div>
 
       <div className="bg-blue-950/20 border border-blue-800/30 rounded-lg p-4 text-sm text-blue-300 space-y-1">
-        <p className="font-medium">How Printer Plugins Work</p>
-        <p className="text-xs text-blue-400">
-          When a printer plugin is active, ID cards are sent directly to the printer via its SDK.
-          If no plugin is active, cards are rendered as a printable PDF using the browser's print dialog (fallback mode).
-        </p>
+        <p className="font-medium">{t("idCards:printer.howTitle")}</p>
+        <p className="text-xs text-blue-400">{t("idCards:printer.howBody")}</p>
       </div>
 
       {plugins.length === 0 ? (
         <div className="p-8 text-center border border-dashed border-border rounded-md bg-muted/10 space-y-3">
           <Printer className="h-10 w-10 mx-auto text-muted-foreground opacity-40" />
-          <p className="text-sm text-muted-foreground">No printer plugins installed. Using browser print fallback.</p>
+          <p className="text-sm text-muted-foreground">{t("idCards:printer.empty")}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -1144,16 +1168,18 @@ function PrinterPluginManager() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-white">{p.name}</span>
+                      <span className="text-sm font-medium text-white"><bdi>{p.name}</bdi></span>
                       <Badge variant="outline" className="text-xs text-zinc-400">
-                        {PLUGIN_TYPES.find((pt) => pt.value === p.type)?.label || p.type}
+                        {pluginTypeLabel(p.type)}
                       </Badge>
                       {p.isActive && (
-                        <Badge className="bg-primary/15 text-primary border-primary/20 text-xs">Active</Badge>
+                        <Badge className="bg-primary/15 text-primary border-primary/20 text-xs">
+                          {t("idCards:printer.active")}
+                        </Badge>
                       )}
                     </div>
                     <p className="text-xs text-zinc-500 mt-0.5">
-                      Added {formatDate(p.createdAt)}
+                      {t("idCards:printer.added", { replace: { date: formatDateTime(p.createdAt, lang) } })}
                     </p>
                   </div>
                 </div>
@@ -1167,7 +1193,7 @@ function PrinterPluginManager() {
                       disabled={activateMutation.isPending}
                       data-testid={`button-activate-printer-${p.id}`}
                     >
-                      Activate
+                      {t("idCards:printer.btnActivate")}
                     </Button>
                   )}
                   <Button
@@ -1190,35 +1216,35 @@ function PrinterPluginManager() {
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
               <Printer className="h-5 w-5 text-primary" />
-              Add Printer Plugin
+              {t("idCards:printer.dialogTitle")}
             </DialogTitle>
-            <DialogDescription className="sr-only">Add a new printer plugin</DialogDescription>
+            <DialogDescription className="sr-only">{t("idCards:printer.dialogDesc")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="space-y-2">
-              <Label className="text-white">Plugin Name</Label>
+              <Label className="text-white">{t("idCards:printer.lblName")}</Label>
               <Input
                 data-testid="input-printer-name"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. Evolis Primacy 2"
+                placeholder={t("idCards:printer.phName")}
                 className="bg-zinc-900 border-zinc-700 text-white"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-white">Printer Type</Label>
+              <Label className="text-white">{t("idCards:printer.lblType")}</Label>
               <Select value={form.type} onValueChange={handleTypeChange}>
                 <SelectTrigger className="bg-zinc-900 border-zinc-700 text-white" data-testid="select-printer-type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {PLUGIN_TYPES.map((pt) => (
-                    <SelectItem key={pt.value} value={pt.value}>{pt.label}</SelectItem>
+                    <SelectItem key={pt.value} value={pt.value}>{pluginTypeLabel(pt.value)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               {selectedPluginType && (
-                <p className="text-[11px] text-zinc-500">{selectedPluginType.description}</p>
+                <p className="text-[11px] text-zinc-500">{pluginDesc(selectedPluginType.value)}</p>
               )}
             </div>
 
@@ -1226,41 +1252,47 @@ function PrinterPluginManager() {
               <>
                 <Separator className="bg-zinc-800" />
                 <div className="space-y-3">
-                  <Label className="text-white text-xs uppercase tracking-wider">Connection Settings</Label>
-                  {selectedPluginType.configFields.map((field) => (
-                    <div key={field.key} className="space-y-1">
-                      <Label className="text-zinc-400 text-xs">{field.label}</Label>
-                      {field.type === "select" && "options" in field ? (
-                        <Select
-                          value={form.config[field.key] || ""}
-                          onValueChange={(v) => setForm((f) => ({ ...f, config: { ...f.config, [field.key]: v } }))}
-                        >
-                          <SelectTrigger className="bg-zinc-900 border-zinc-700 text-white h-8 text-xs">
-                            <SelectValue placeholder={field.placeholder} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(field as { options: { value: string; label: string }[] }).options.map((opt) => (
-                              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          value={form.config[field.key] || ""}
-                          onChange={(e) => setForm((f) => ({ ...f, config: { ...f.config, [field.key]: e.target.value } }))}
-                          placeholder={field.placeholder}
-                          className="bg-zinc-900 border-zinc-700 text-white h-8 text-xs"
-                        />
-                      )}
-                    </div>
-                  ))}
+                  <Label className="text-white text-xs uppercase tracking-wider">{t("idCards:printer.lblConn")}</Label>
+                  {selectedPluginType.configFields.map((field) => {
+                    const isZebraEndpoint = selectedPluginType.value === "zebra_browser_print";
+                    const fLabel = pluginFieldLabel(field.key, field.label, isZebraEndpoint);
+                    const fPh = pluginFieldPh(field.key, field.placeholder);
+                    return (
+                      <div key={field.key} className="space-y-1">
+                        <Label className="text-zinc-400 text-xs">{fLabel}</Label>
+                        {field.type === "select" && "options" in field ? (
+                          <Select
+                            value={form.config[field.key] || ""}
+                            onValueChange={(v) => setForm((f) => ({ ...f, config: { ...f.config, [field.key]: v } }))}
+                          >
+                            <SelectTrigger className="bg-zinc-900 border-zinc-700 text-white h-8 text-xs">
+                              <SelectValue placeholder={fPh} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(field as { options: { value: string; label: string }[] }).options.map((opt) => (
+                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            value={form.config[field.key] || ""}
+                            onChange={(e) => setForm((f) => ({ ...f, config: { ...f.config, [field.key]: e.target.value } }))}
+                            placeholder={fPh}
+                            className="bg-zinc-900 border-zinc-700 text-white h-8 text-xs"
+                            dir={field.key === "endpoint" ? "ltr" : undefined}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             )}
 
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" className="border-zinc-700" onClick={() => setFormOpen(false)}>
-                Cancel
+                {t("idCards:common.cancel")}
               </Button>
               <Button
                 className="bg-primary text-primary-foreground"
@@ -1268,8 +1300,8 @@ function PrinterPluginManager() {
                 disabled={createMutation.isPending}
                 data-testid="button-create-printer"
               >
-                {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                Add Plugin
+                {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin me-1" /> : null}
+                {t("idCards:printer.btnCreate")}
               </Button>
             </div>
           </div>
@@ -1279,18 +1311,18 @@ function PrinterPluginManager() {
       <AlertDialog open={!!deleteId} onOpenChange={(v) => { if (!v) setDeleteId(null); }}>
         <AlertDialogContent className="bg-zinc-950 border-zinc-800">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Delete Plugin?</AlertDialogTitle>
+            <AlertDialogTitle className="text-white">{t("idCards:printer.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription className="text-zinc-400">
-              This will remove this printer plugin. You can always add it back later.
+              {t("idCards:printer.deleteDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-zinc-700 text-zinc-300">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="border-zinc-700 text-zinc-300">{t("idCards:common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700 text-white"
               onClick={() => deleteId && deleteMutation.mutate(deleteId)}
             >
-              Delete
+              {t("idCards:printer.btnDelete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1300,6 +1332,8 @@ function PrinterPluginManager() {
 }
 
 function PrintAuditLog() {
+  const { t, i18n } = useTranslation(["idCards"]);
+  const lang = i18n.language;
   const [search, setSearch] = useState("");
 
   const { data: logs = [], isLoading } = useQuery<PrintLog[]>({
@@ -1316,26 +1350,28 @@ function PrintAuditLog() {
       )
     : logs;
 
+  const statusLabel = (s: string) => t(`idCards:printStatus.${s}` as any, s);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-base font-semibold text-white flex items-center gap-2">
             <History className="h-4 w-4 text-primary" />
-            Print History
+            {t("idCards:log.heading")}
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Track every ID card print job — who printed, which employee, and when.
+            {t("idCards:log.sub")}
           </p>
         </div>
         <div className="relative w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             data-testid="input-search-print-logs"
-            placeholder="Search by employee or user..."
+            placeholder={t("idCards:log.searchPh")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 bg-muted/30 border-border h-8 text-sm"
+            className="ps-9 bg-muted/30 border-border h-8 text-sm"
           />
         </div>
       </div>
@@ -1348,7 +1384,7 @@ function PrintAuditLog() {
         <div className="p-8 text-center border border-dashed border-border rounded-md bg-muted/10 space-y-3">
           <History className="h-10 w-10 mx-auto text-muted-foreground opacity-40" />
           <p className="text-sm text-muted-foreground">
-            {search ? "No matching print records." : "No print records yet."}
+            {search ? t("idCards:log.emptyMatch") : t("idCards:log.empty")}
           </p>
         </div>
       ) : (
@@ -1357,21 +1393,21 @@ function PrintAuditLog() {
             <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
-                  <TableHead className="text-muted-foreground">Employee</TableHead>
-                  <TableHead className="text-muted-foreground">Emp #</TableHead>
-                  <TableHead className="text-muted-foreground">Template</TableHead>
-                  <TableHead className="text-muted-foreground">Printed By</TableHead>
-                  <TableHead className="text-muted-foreground">Status</TableHead>
-                  <TableHead className="text-muted-foreground">Date</TableHead>
+                  <TableHead className="text-muted-foreground">{t("idCards:log.th.employee")}</TableHead>
+                  <TableHead className="text-muted-foreground">{t("idCards:log.th.empNo")}</TableHead>
+                  <TableHead className="text-muted-foreground">{t("idCards:log.th.template")}</TableHead>
+                  <TableHead className="text-muted-foreground">{t("idCards:log.th.printedBy")}</TableHead>
+                  <TableHead className="text-muted-foreground">{t("idCards:log.th.status")}</TableHead>
+                  <TableHead className="text-muted-foreground">{t("idCards:log.th.date")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((log) => (
                   <TableRow key={log.id} className="border-border" data-testid={`print-log-${log.id}`}>
-                    <TableCell className="text-white text-sm">{log.employeeName ?? "—"}</TableCell>
-                    <TableCell className="text-zinc-400 text-xs font-mono">{log.employeeNumber ?? "—"}</TableCell>
-                    <TableCell className="text-zinc-400 text-sm">{log.templateName ?? "—"}</TableCell>
-                    <TableCell className="text-zinc-400 text-sm">{log.printedByName ?? "System"}</TableCell>
+                    <TableCell className="text-white text-sm"><bdi>{log.employeeName ?? "—"}</bdi></TableCell>
+                    <TableCell className="text-zinc-400 text-xs font-mono" dir="ltr">{log.employeeNumber ?? "—"}</TableCell>
+                    <TableCell className="text-zinc-400 text-sm"><bdi>{log.templateName ?? "—"}</bdi></TableCell>
+                    <TableCell className="text-zinc-400 text-sm"><bdi>{log.printedByName ?? t("idCards:log.system")}</bdi></TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
@@ -1383,10 +1419,10 @@ function PrintAuditLog() {
                             : "bg-yellow-500/10 text-yellow-400 border-yellow-500/30 text-xs"
                         }
                       >
-                        {log.status}
+                        {statusLabel(log.status)}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-zinc-400 text-xs">{formatDate(log.printedAt)}</TableCell>
+                    <TableCell className="text-zinc-400 text-xs" dir="ltr">{formatDateTime(log.printedAt, lang)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1399,16 +1435,17 @@ function PrintAuditLog() {
 }
 
 export default function IdCardsPage() {
+  const { t } = useTranslation(["idCards"]);
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-display font-bold text-white flex items-center gap-3" data-testid="text-page-title">
             <CreditCard className="h-7 w-7 text-primary" />
-            ID Cards
+            {t("idCards:title")}
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Design, print, and manage employee identification cards
+            {t("idCards:subtitle")}
           </p>
         </div>
 
@@ -1416,15 +1453,15 @@ export default function IdCardsPage() {
           <TabsList className="bg-muted/30 border border-border">
             <TabsTrigger value="templates" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground gap-1.5" data-testid="tab-templates">
               <Palette className="h-3.5 w-3.5" />
-              Templates
+              {t("idCards:tab.templates")}
             </TabsTrigger>
             <TabsTrigger value="printers" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground gap-1.5" data-testid="tab-printers">
               <Printer className="h-3.5 w-3.5" />
-              Printers
+              {t("idCards:tab.printers")}
             </TabsTrigger>
             <TabsTrigger value="history" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground gap-1.5" data-testid="tab-history">
               <History className="h-3.5 w-3.5" />
-              Print History
+              {t("idCards:tab.history")}
             </TabsTrigger>
           </TabsList>
 

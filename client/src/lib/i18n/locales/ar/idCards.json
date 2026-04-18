@@ -1,0 +1,160 @@
+{
+  "title": "بطاقات التعريف",
+  "subtitle": "صمِّم بطاقات تعريف الموظفين واطبعها وأدِرها",
+  "tab": {
+    "templates": "القوالب",
+    "printers": "الطابعات",
+    "history": "سجل الطباعة"
+  },
+  "designer": {
+    "heading": "قوالب البطاقات",
+    "sub": "ارفع قوالب جاهزة وحدِّد مواقع الحقول على البطاقة.",
+    "btnNew": "قالب جديد",
+    "empty": "لا توجد قوالب بعد. أنشئ أول قالب بطاقة تعريف.",
+    "active": "نشِط",
+    "btnEdit": "تعديل",
+    "btnActivate": "تفعيل",
+    "dialogTitleEdit": "تعديل القالب",
+    "dialogTitleNew": "قالب بطاقة تعريف جديد",
+    "dialogDesc": "صمِّم قالب بطاقة التعريف",
+    "lblName": "اسم القالب",
+    "phName": "مثال: بطاقة رمضان 1447",
+    "lblEvent": "الفعالية (اختياري)",
+    "phEvent": "كل الفعاليات (عامة)",
+    "optAllEvents": "كل الفعاليات (عامة)",
+    "lblLayout": "تخطيط البطاقة",
+    "lblBackground": "الخلفية",
+    "bgHint": "ارفع صورة بطاقة جاهزة (PNG/JPG)، وستُعرض الحقول فوقها.",
+    "btnUpload": "رفع صورة",
+    "btnChange": "تغيير الصورة",
+    "bgLoaded": "تم تحميل صورة الخلفية",
+    "lblFields": "الحقول",
+    "fieldHeading": "الحقل: {{name}}",
+    "lblFontSize": "حجم الخط",
+    "lblFontWeight": "سُمك الخط",
+    "weight": {
+      "normal": "عادي",
+      "medium": "متوسط",
+      "semibold": "شبه عريض",
+      "bold": "عريض"
+    },
+    "lblFontColor": "لون الخط",
+    "lblTextAlign": "محاذاة النص",
+    "align": {
+      "left": "يسار",
+      "center": "وسط",
+      "right": "يمين"
+    },
+    "lblX": "س",
+    "lblY": "ص",
+    "lblWidth": "العرض",
+    "lblHeight": "الارتفاع",
+    "previewLabel": "معاينة تفاعلية",
+    "previewHint": "اسحب الحقول لتغيير مواقعها. انقر على حقل لتحديده وضبط خصائصه.",
+    "cardSize": "مقاس CR-80: 85.6مم × 54مم",
+    "printPreview": "معاينة الطباعة",
+    "btnUpdate": "تحديث القالب",
+    "btnCreate": "إنشاء القالب",
+    "deleteTitle": "حذف القالب؟",
+    "deleteDesc": "سيتم حذف قالب البطاقة نهائيًا، ولا يمكن التراجع عن هذا الإجراء.",
+    "btnDelete": "حذف",
+    "untitled": "بدون عنوان",
+    "phPhoto": "الصورة",
+    "toast": {
+      "created": "تم إنشاء القالب",
+      "updated": "تم تحديث القالب",
+      "activated": "تم تفعيل القالب",
+      "deleted": "تم حذف القالب",
+      "bgUploaded": "تم رفع الخلفية",
+      "uploadFail": "فشل الرفع",
+      "nameRequired": "اسم القالب مطلوب"
+    }
+  },
+  "field": {
+    "fullName": "الاسم الكامل",
+    "photo": "الصورة",
+    "employeeNumber": "رقم الموظف",
+    "nationalId": "رقم الهوية",
+    "position": "الوظيفة / المسمى",
+    "eventName": "اسم الفعالية",
+    "phone": "الجوال"
+  },
+  "layout": {
+    "horizontal": "أفقي",
+    "vertical": "رأسي",
+    "horizontalDesc": "CR-80 أفقي",
+    "verticalDesc": "CR-80 رأسي"
+  },
+  "printer": {
+    "heading": "إضافات الطابعات",
+    "sub": "اضبط إضافات الطابعات للطباعة المباشرة للبطاقات. الإضافات مدعومة لطابعات Zebra وEvolis.",
+    "btnAdd": "إضافة طابعة",
+    "howTitle": "كيف تعمل إضافات الطابعات",
+    "howBody": "عند تفعيل إضافة طابعة، تُرسل البطاقات مباشرةً إلى الطابعة عبر حُزَم تطويرها. إذا لم تكن أي إضافة مُفعَّلة، تُعرض البطاقات كملف PDF قابل للطباعة عبر مربع حوار طباعة المتصفح (الوضع البديل).",
+    "empty": "لا توجد إضافات طابعات مُثبَّتة. يُستخدم الوضع البديل عبر المتصفح.",
+    "added": "أُضيفت {{date}}",
+    "btnActivate": "تفعيل",
+    "dialogTitle": "إضافة طابعة",
+    "dialogDesc": "إضافة طابعة جديدة",
+    "lblName": "اسم الإضافة",
+    "phName": "مثال: Evolis Primacy 2",
+    "lblType": "نوع الطابعة",
+    "lblConn": "إعدادات الاتصال",
+    "btnCreate": "إضافة",
+    "deleteTitle": "حذف الإضافة؟",
+    "deleteDesc": "ستتم إزالة هذه الإضافة. يمكنك إضافتها مرة أخرى لاحقًا.",
+    "btnDelete": "حذف",
+    "active": "نشِطة",
+    "toast": {
+      "added": "تمت إضافة الطابعة",
+      "activated": "تم تفعيل الإضافة",
+      "removed": "تم حذف الإضافة",
+      "nameRequired": "اسم الإضافة مطلوب"
+    }
+  },
+  "pluginType": {
+    "zebra_browser_print": "Zebra Browser Print SDK",
+    "evolis_premium_suite": "Evolis Premium Suite",
+    "browser_fallback": "طباعة المتصفح (الوضع البديل)"
+  },
+  "pluginDesc": {
+    "zebra_browser_print": "طباعة مباشرة عبر خدمة Zebra Browser Print المحلية (ZC100 وZC300 وسلسلة ZXP).",
+    "evolis_premium_suite": "طباعة مباشرة عبر واجهة Evolis Premium Suite (Primacy 2 وAvansia وZenius).",
+    "browser_fallback": "يستخدم مربع حوار الطباعة في المتصفح — يعمل مع أي طابعة."
+  },
+  "pluginField": {
+    "endpoint": "عنوان الواجهة",
+    "endpointZebra": "عنوان حُزمة التطوير",
+    "deviceName": "اسم الجهاز (اختياري)",
+    "printerName": "اسم الطابعة (اختياري)"
+  },
+  "pluginPh": {
+    "deviceName": "اكتشاف تلقائي",
+    "printerName": "اكتشاف أول طابعة تلقائيًا"
+  },
+  "log": {
+    "heading": "سجل الطباعة",
+    "sub": "تتبَّع كل عملية طباعة لبطاقة تعريف — مَن قام بالطباعة وأي موظف ومتى.",
+    "searchPh": "ابحث بالموظف أو المستخدم…",
+    "emptyMatch": "لا توجد سجلات طباعة مطابقة.",
+    "empty": "لا توجد سجلات طباعة بعد.",
+    "th": {
+      "employee": "الموظف",
+      "empNo": "رقم الموظف",
+      "template": "القالب",
+      "printedBy": "بواسطة",
+      "status": "الحالة",
+      "date": "التاريخ"
+    },
+    "system": "النظام"
+  },
+  "printStatus": {
+    "success": "ناجحة",
+    "failed": "فاشلة",
+    "pending": "قيد الانتظار"
+  },
+  "common": {
+    "cancel": "إلغاء",
+    "errGeneric": "خطأ"
+  }
+}

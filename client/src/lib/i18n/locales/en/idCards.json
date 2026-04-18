@@ -1,0 +1,160 @@
+{
+  "title": "ID Cards",
+  "subtitle": "Design, print, and manage employee identification cards",
+  "tab": {
+    "templates": "Templates",
+    "printers": "Printers",
+    "history": "Print History"
+  },
+  "designer": {
+    "heading": "Card Templates",
+    "sub": "Upload predesigned templates and position fields on the card.",
+    "btnNew": "New Template",
+    "empty": "No templates yet. Create your first ID card template.",
+    "active": "Active",
+    "btnEdit": "Edit",
+    "btnActivate": "Activate",
+    "dialogTitleEdit": "Edit Template",
+    "dialogTitleNew": "New ID Card Template",
+    "dialogDesc": "Design your ID card template",
+    "lblName": "Template Name",
+    "phName": "e.g. Ramadan 1447 Card",
+    "lblEvent": "Event (optional)",
+    "phEvent": "All events (global)",
+    "optAllEvents": "All events (global)",
+    "lblLayout": "Card Layout",
+    "lblBackground": "Background",
+    "bgHint": "Upload a predesigned card image (PNG/JPG). Fields will overlay on top.",
+    "btnUpload": "Upload Image",
+    "btnChange": "Change Image",
+    "bgLoaded": "Background image loaded",
+    "lblFields": "Fields",
+    "fieldHeading": "Field: {{name}}",
+    "lblFontSize": "Font Size",
+    "lblFontWeight": "Font Weight",
+    "weight": {
+      "normal": "Normal",
+      "medium": "Medium",
+      "semibold": "Semibold",
+      "bold": "Bold"
+    },
+    "lblFontColor": "Font Color",
+    "lblTextAlign": "Text Alignment",
+    "align": {
+      "left": "Left",
+      "center": "Center",
+      "right": "Right"
+    },
+    "lblX": "X",
+    "lblY": "Y",
+    "lblWidth": "Width",
+    "lblHeight": "Height",
+    "previewLabel": "Interactive Preview",
+    "previewHint": "Drag fields to reposition them. Click a field to select it and adjust its properties.",
+    "cardSize": "CR-80 size: 85.6mm x 54mm",
+    "printPreview": "Print Preview",
+    "btnUpdate": "Update Template",
+    "btnCreate": "Create Template",
+    "deleteTitle": "Delete Template?",
+    "deleteDesc": "This will permanently delete this ID card template. This action cannot be undone.",
+    "btnDelete": "Delete",
+    "untitled": "Untitled",
+    "phPhoto": "PHOTO",
+    "toast": {
+      "created": "Template Created",
+      "updated": "Template Updated",
+      "activated": "Template Activated",
+      "deleted": "Template Deleted",
+      "bgUploaded": "Background uploaded",
+      "uploadFail": "Upload failed",
+      "nameRequired": "Template name is required"
+    }
+  },
+  "field": {
+    "fullName": "Full Name",
+    "photo": "Photo",
+    "employeeNumber": "Employee Number",
+    "nationalId": "National ID",
+    "position": "Position / Job Title",
+    "eventName": "Event Name",
+    "phone": "Phone"
+  },
+  "layout": {
+    "horizontal": "Horizontal",
+    "vertical": "Vertical",
+    "horizontalDesc": "Landscape CR-80",
+    "verticalDesc": "Portrait CR-80"
+  },
+  "printer": {
+    "heading": "Printer Plugins",
+    "sub": "Configure printer plugins for direct card printing. Zebra and Evolis printers are supported.",
+    "btnAdd": "Add Plugin",
+    "howTitle": "How Printer Plugins Work",
+    "howBody": "When a printer plugin is active, ID cards are sent directly to the printer via its SDK. If no plugin is active, cards are rendered as a printable PDF using the browser's print dialog (fallback mode).",
+    "empty": "No printer plugins installed. Using browser print fallback.",
+    "added": "Added {{date}}",
+    "btnActivate": "Activate",
+    "dialogTitle": "Add Printer Plugin",
+    "dialogDesc": "Add a new printer plugin",
+    "lblName": "Plugin Name",
+    "phName": "e.g. Evolis Primacy 2",
+    "lblType": "Printer Type",
+    "lblConn": "Connection Settings",
+    "btnCreate": "Add Plugin",
+    "deleteTitle": "Delete Plugin?",
+    "deleteDesc": "This will remove this printer plugin. You can always add it back later.",
+    "btnDelete": "Delete",
+    "active": "Active",
+    "toast": {
+      "added": "Printer Plugin Added",
+      "activated": "Plugin Activated",
+      "removed": "Plugin Removed",
+      "nameRequired": "Plugin name is required"
+    }
+  },
+  "pluginType": {
+    "zebra_browser_print": "Zebra Browser Print SDK",
+    "evolis_premium_suite": "Evolis Premium Suite",
+    "browser_fallback": "Browser Print (Fallback)"
+  },
+  "pluginDesc": {
+    "zebra_browser_print": "Direct printing via Zebra Browser Print local service (ZC100, ZC300, ZXP Series)",
+    "evolis_premium_suite": "Direct printing via Evolis Premium Suite REST API (Primacy 2, Avansia, Zenius)",
+    "browser_fallback": "Uses the browser's native print dialog — works with any printer"
+  },
+  "pluginField": {
+    "endpoint": "API Endpoint",
+    "endpointZebra": "SDK Endpoint",
+    "deviceName": "Device Name (optional)",
+    "printerName": "Printer Name (optional)"
+  },
+  "pluginPh": {
+    "deviceName": "Auto-detect",
+    "printerName": "Auto-detect first printer"
+  },
+  "log": {
+    "heading": "Print History",
+    "sub": "Track every ID card print job — who printed, which employee, and when.",
+    "searchPh": "Search by employee or user…",
+    "emptyMatch": "No matching print records.",
+    "empty": "No print records yet.",
+    "th": {
+      "employee": "Employee",
+      "empNo": "Emp #",
+      "template": "Template",
+      "printedBy": "Printed By",
+      "status": "Status",
+      "date": "Date"
+    },
+    "system": "System"
+  },
+  "printStatus": {
+    "success": "Success",
+    "failed": "Failed",
+    "pending": "Pending"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "errGeneric": "Error"
+  }
+}
