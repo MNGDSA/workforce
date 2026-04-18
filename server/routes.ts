@@ -539,7 +539,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "ID Number / Phone and password are required" });
       }
 
-      const rl = checkLoginRateLimit(req, identifier);
+      const rl = await checkLoginRateLimit(req, identifier);
       if (!rl.allowed) {
         res.setHeader("Retry-After", String(rl.retryAfterSec));
         const minutes = Math.ceil(rl.retryAfterSec / 60);

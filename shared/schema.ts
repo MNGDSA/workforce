@@ -11,6 +11,7 @@ import {
   index,
   uniqueIndex,
   jsonb,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -1679,3 +1680,18 @@ export const payrollTransactions = pgTable("payroll_transactions", {
 }));
 
 export type PayrollTransaction = typeof payrollTransactions.$inferSelect;
+
+// ─── Login rate-limit buckets (Postgres-backed for multi-instance) ─────────
+export const loginRateLimitBuckets = pgTable("login_rate_limit_buckets", {
+  scope: varchar("scope", { length: 16 }).notNull(),
+  key: text("key").notNull(),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  windowStart: timestamp("window_start").notNull().default(sql`now()`),
+  lockedUntil: timestamp("locked_until"),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.scope, t.key] }),
+  lockedUntilIdx: index("lrlb_locked_until_idx").on(t.lockedUntil),
+}));
+
+export type LoginRateLimitBucket = typeof loginRateLimitBuckets.$inferSelect;
