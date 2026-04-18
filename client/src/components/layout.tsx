@@ -293,10 +293,10 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
-const recruitmentPaths = ["/events", "/smp-contracts", "/question-sets", "/job-posting", "/interviews", "/onboarding", "/talent"];
+const recruitmentPaths = ["/events", "/smp-companies", "/question-sets", "/job-posting", "/interviews", "/onboarding", "/talent"];
 const recruitmentItems: { href: string; icon: React.ElementType; labelKey: string }[] = [
   { href: "/events",        icon: CalendarRange, labelKey: "events" },
-  { href: "/smp-contracts", icon: FileText,      labelKey: "smpCompanies" },
+  { href: "/smp-companies", icon: FileText,      labelKey: "smpCompanies" },
   { href: "/question-sets", icon: ClipboardList, labelKey: "questionSets" },
   { href: "/job-posting",   icon: Briefcase,     labelKey: "jobApplications" },
   { href: "/interviews",    icon: Minimize,      labelKey: "interviews" },
