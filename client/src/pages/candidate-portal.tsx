@@ -2123,6 +2123,10 @@ export default function CandidatePortal() {
                 jobs.map(job => {
                   const applied = appliedIds.has(job.id);
                   const salary = salaryLabel(job, t);
+                  const regionRaw = job.region ?? job.location;
+                  const regionLabel = regionRaw
+                    ? (i18n.exists(`portal:regions.${regionRaw}`) ? t(`portal:regions.${regionRaw}`) : regionRaw)
+                    : null;
                   return (
                     <Card
                       key={job.id}
@@ -2143,14 +2147,14 @@ export default function CandidatePortal() {
                               )}
                             </div>
                             <div className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground ${isRtl ? "flex-row-reverse justify-end" : ""}`}>
-                              {(job.region ?? job.location) && (
-                                <span className={`flex items-center gap-1 ${isRtl ? "flex-row-reverse" : ""}`}><MapPin className="h-3.5 w-3.5" />{job.region ?? job.location}</span>
+                              {regionLabel && (
+                                <span className={`flex items-center gap-1 ${isRtl ? "flex-row-reverse" : ""}`}><MapPin className="h-3.5 w-3.5" />{regionLabel}</span>
                               )}
                               {salary && (
                                 <span className={`flex items-center gap-1 text-white font-medium ${isRtl ? "flex-row-reverse" : ""}`}><Banknote className="h-3.5 w-3.5 text-muted-foreground" />{salary}</span>
                               )}
                               {job.deadline && (
-                                <span className={`flex items-center gap-1 text-xs ${isRtl ? "flex-row-reverse" : ""}`}><CalendarDays className="h-3.5 w-3.5" />{t("portal:jobs.deadline", { date: formatDate(job.deadline) })}</span>
+                                <span className={`flex items-center gap-1 text-xs ${isRtl ? "flex-row-reverse" : ""}`}><CalendarDays className="h-3.5 w-3.5" />{t("portal:jobs.deadline", { date: formatDate(job.deadline, i18n.language) })}</span>
                               )}
                             </div>
                           </div>
