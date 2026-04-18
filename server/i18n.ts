@@ -75,6 +75,79 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "register.allFieldsOtp":      "All fields including OTP verification are required",
     "register.nationalIdExists":  "An account with this National ID already exists",
     "common.allFieldsRequired":   "All fields are required",
+
+    // Generic resource lookups
+    "common.accessDenied":              "Access denied",
+    "auth.requiredShort":               "Authentication required",
+    "common.reviewerRequired":          "Reviewer identity required",
+    "common.alreadyReviewed":           "Request already reviewed",
+    "common.nationalIdRequired":        "National ID is required",
+    "common.invalidEmail":              "Invalid email format",
+
+    // Domain entities — not found
+    "template.notFound":                "Template not found",
+    "plugin.notFound":                  "Plugin not found",
+    "event.notFound":                   "Event not found",
+    "employee.notFound":                "Employee not found",
+    "role.notFound":                    "Role not found",
+    "assignment.notFound":              "Assignment not found",
+    "job.notFound":                     "Job not found",
+    "onboarding.notFound":              "Onboarding record not found",
+    "adminUser.notFound":               "Admin user not found.",
+    "asset.notFound":                   "Asset not found",
+    "company.notFound":                 "Company not found",
+    "questionSet.notFound":             "Question set not found",
+    "shift.notFound":                   "Shift not found",
+    "scheduleTemplate.notFound":        "Schedule template not found",
+    "zone.notFound":                    "Zone not found",
+    "interview.notFound":               "Interview not found",
+    "contract.notFound":                "Contract not found",
+    "scheduleAssignment.notFound":      "Schedule assignment not found",
+    "attendance.notFound":              "Attendance record not found",
+    "employeeRecord.notFound":          "Employee record not found",
+    "inbox.notFoundOrResolved":         "Inbox item not found or already resolved",
+    "excuse.notFound":                  "Excuse request not found",
+    "workforce.notFound":               "Workforce record not found",
+    "photoChange.notFound":             "Photo change request not found",
+    "user.notFound":                    "User account not found",
+
+    // Positions / org
+    "position.parentNotFound":          "Parent position not found",
+    "position.parentDeptMismatch":      "Parent position must be in the same department",
+
+    // Auth / RBAC
+    "auth.superAdminRequired":          "Super Admin access required.",
+    "auth.superAdminReadOnly":          "The Super Admin record is read-only.",
+    "auth.adminRequired":               "Admin access required",
+    "auth.noAccount":                   "No account found.",
+    "auth.noAccountForId":              "No account found with this ID number.",
+    "auth.noPhoneOnFile":               "No phone number on file. Contact an administrator.",
+
+    // Roles
+    "role.invalidId":                   "Invalid roleId",
+    "role.cannotAssignSuperAdmin":      "Cannot assign Super Admin via this endpoint.",
+    "role.slugExists":                  "A role with this slug already exists",
+
+    // Contracts / workforce ownership
+    "contract.ownOnly":                 "You can only view your own contracts.",
+    "workforce.ownershipMismatch":      "Workforce record does not belong to authenticated user.",
+    "profile.ownOnly":                  "You can only update your own profile.",
+
+    // Password
+    "password.currentIncorrect":        "Current password is incorrect",
+    "password.updated":                 "Password updated successfully",
+    "passwordReset.allFieldsRequired":  "National ID, OTP verification, and new password are required",
+    "passwordReset.success":            "Password has been reset successfully. You can now log in.",
+
+    // OTP — short variants used by reset flow
+    "otp.invalidSessionShort":          "Invalid OTP session. Please verify again.",
+    "otp.phoneNotVerifiedShort":        "Phone number has not been verified.",
+    "otp.sessionExpiredShort":          "OTP session expired. Please verify again.",
+
+    // Candidate archive
+    "candidate.notFoundOrArchived":     "Candidate not found or already archived",
+    "candidate.archived":               "Candidate archived",
+    "candidate.notFoundOrActive":       "Candidate not found or not archived",
   },
   ar: {
     // Auth middleware
@@ -130,6 +203,79 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "register.allFieldsOtp":      "جميع الحقول مطلوبة بما في ذلك التحقق برمز OTP",
     "register.nationalIdExists":  "يوجد حساب مسجل برقم الهوية هذا بالفعل",
     "common.allFieldsRequired":   "جميع الحقول مطلوبة",
+
+    // Generic resource lookups
+    "common.accessDenied":              "تم رفض الوصول",
+    "auth.requiredShort":               "يلزم تسجيل الدخول",
+    "common.reviewerRequired":          "هوية المراجع مطلوبة",
+    "common.alreadyReviewed":           "تمت مراجعة الطلب مسبقاً",
+    "common.nationalIdRequired":        "رقم الهوية مطلوب",
+    "common.invalidEmail":              "صيغة البريد الإلكتروني غير صحيحة",
+
+    // Domain entities — not found
+    "template.notFound":                "القالب غير موجود",
+    "plugin.notFound":                  "الإضافة غير موجودة",
+    "event.notFound":                   "الحدث غير موجود",
+    "employee.notFound":                "الموظف غير موجود",
+    "role.notFound":                    "الدور غير موجود",
+    "assignment.notFound":              "التكليف غير موجود",
+    "job.notFound":                     "الوظيفة غير موجودة",
+    "onboarding.notFound":              "سجل التأهيل غير موجود",
+    "adminUser.notFound":               "المستخدم الإداري غير موجود.",
+    "asset.notFound":                   "العهدة غير موجودة",
+    "company.notFound":                 "الشركة غير موجودة",
+    "questionSet.notFound":             "مجموعة الأسئلة غير موجودة",
+    "shift.notFound":                   "الوردية غير موجودة",
+    "scheduleTemplate.notFound":        "قالب الجدول غير موجود",
+    "zone.notFound":                    "النطاق غير موجود",
+    "interview.notFound":               "المقابلة غير موجودة",
+    "contract.notFound":                "العقد غير موجود",
+    "scheduleAssignment.notFound":      "تكليف الجدول غير موجود",
+    "attendance.notFound":              "سجل الحضور غير موجود",
+    "employeeRecord.notFound":          "سجل الموظف غير موجود",
+    "inbox.notFoundOrResolved":         "العنصر غير موجود في الوارد أو تمت معالجته بالفعل",
+    "excuse.notFound":                  "طلب العذر غير موجود",
+    "workforce.notFound":               "سجل القوى العاملة غير موجود",
+    "photoChange.notFound":             "طلب تغيير الصورة غير موجود",
+    "user.notFound":                    "حساب المستخدم غير موجود",
+
+    // Positions / org
+    "position.parentNotFound":          "الوظيفة الأم غير موجودة",
+    "position.parentDeptMismatch":      "يجب أن تكون الوظيفة الأم في نفس الإدارة",
+
+    // Auth / RBAC
+    "auth.superAdminRequired":          "يتطلب صلاحية مشرف عام.",
+    "auth.superAdminReadOnly":          "سجل المشرف العام للقراءة فقط.",
+    "auth.adminRequired":               "تتطلب صلاحية إدارية",
+    "auth.noAccount":                   "لم يتم العثور على حساب.",
+    "auth.noAccountForId":              "لم يتم العثور على حساب بهذا الرقم.",
+    "auth.noPhoneOnFile":               "لا يوجد رقم جوال مسجل. يرجى التواصل مع المسؤول.",
+
+    // Roles
+    "role.invalidId":                   "معرّف الدور غير صحيح",
+    "role.cannotAssignSuperAdmin":      "لا يمكن تعيين مشرف عام عبر هذه الواجهة.",
+    "role.slugExists":                  "يوجد دور بنفس المعرّف بالفعل",
+
+    // Contracts / workforce ownership
+    "contract.ownOnly":                 "يمكنك عرض عقودك الشخصية فقط.",
+    "workforce.ownershipMismatch":      "سجل القوى العاملة لا يخص المستخدم المسجل.",
+    "profile.ownOnly":                  "يمكنك تحديث ملفك الشخصي فقط.",
+
+    // Password
+    "password.currentIncorrect":        "كلمة المرور الحالية غير صحيحة",
+    "password.updated":                 "تم تحديث كلمة المرور بنجاح",
+    "passwordReset.allFieldsRequired":  "رقم الهوية والتحقق برمز OTP وكلمة المرور الجديدة مطلوبة",
+    "passwordReset.success":            "تمت إعادة تعيين كلمة المرور بنجاح. يمكنك الآن تسجيل الدخول.",
+
+    // OTP — short variants used by reset flow
+    "otp.invalidSessionShort":          "جلسة رمز التحقق غير صحيحة. يرجى التحقق مرة أخرى.",
+    "otp.phoneNotVerifiedShort":        "لم يتم التحقق من رقم الجوال.",
+    "otp.sessionExpiredShort":          "انتهت صلاحية جلسة رمز التحقق. يرجى التحقق مرة أخرى.",
+
+    // Candidate archive
+    "candidate.notFoundOrArchived":     "المرشح غير موجود أو مؤرشف بالفعل",
+    "candidate.archived":               "تمت أرشفة المرشح",
+    "candidate.notFoundOrActive":       "المرشح غير موجود أو ليس مؤرشفاً",
   },
 };
 

@@ -910,12 +910,12 @@ export async function registerRoutes(
       if (!user && candidate.nationalId) {
         user = await storage.getUserByNationalId(candidate.nationalId);
       }
-      if (!user) return res.status(404).json({ message: "User account not found" });
+      if (!user) return res.status(404).json({ message: tr(req, "user.notFound") });
       const valid = await bcrypt.compare(currentPassword, user.password ?? "");
-      if (!valid) return res.status(401).json({ message: "Current password is incorrect" });
+      if (!valid) return res.status(401).json({ message: tr(req, "password.currentIncorrect") });
       const hashed = await bcrypt.hash(newPassword, 12);
       await storage.updateUser(user.id, { password: hashed });
-      return res.json({ message: "Password updated successfully" });
+      return res.json({ message: tr(req, "password.updated") });
     } catch (err) {
       return handleError(res, err);
     }
@@ -926,15 +926,15 @@ export async function registerRoutes(
     try {
       const { nationalId } = req.body as { nationalId?: string };
       if (!nationalId) {
-        return res.status(400).json({ message: "National ID is required" });
+        return res.status(400).json({ message: tr(req, "common.nationalIdRequired") });
       }
       const clean = nationalId.trim();
       const user = await storage.getUserByNationalId(clean);
       if (!user) {
-        return res.status(404).json({ message: "No account found with this ID number." });
+        return res.status(404).json({ message: tr(req, "auth.noAccountForId") });
       }
       if (!user.phone) {
-        return res.status(400).json({ message: "No phone number on file. Contact an administrator." });
+        return res.status(400).json({ message: tr(req, "auth.noPhoneOnFile") });
       }
       if (!user.isActive) {
         return res.status(403).json({ message: tr(req, "auth.accountDisabled") });
@@ -974,7 +974,7 @@ export async function registerRoutes(
         nationalId?: string; otpId?: string; newPassword?: string;
       };
       if (!nationalId || !otpId || !newPassword) {
-        return res.status(400).json({ message: "National ID, OTP verification, and new password are required" });
+        return res.status(400).json({ message: tr(req, "passwordReset.allFieldsRequired") });
       }
       const pwRules = [
         { ok: newPassword.length >= 8,              msg: "at least 8 characters" },
@@ -992,25 +992,25 @@ export async function registerRoutes(
 
       const user = await storage.getUserByNationalId(nationalId.trim());
       if (!user || !user.phone) {
-        return res.status(404).json({ message: "No account found." });
+        return res.status(404).json({ message: tr(req, "auth.noAccount") });
       }
 
       const otp = await storage.getOtpVerificationById(otpId);
       if (!otp || otp.phone !== user.phone) {
-        return res.status(400).json({ message: "Invalid OTP session. Please verify again." });
+        return res.status(400).json({ message: tr(req, "otp.invalidSessionShort") });
       }
       if (!otp.verifiedAt) {
-        return res.status(400).json({ message: "Phone number has not been verified." });
+        return res.status(400).json({ message: tr(req, "otp.phoneNotVerifiedShort") });
       }
       if (new Date() > new Date(otp.expiresAt.getTime() + 30 * 60 * 1000)) {
-        return res.status(400).json({ message: "OTP session expired. Please verify again." });
+        return res.status(400).json({ message: tr(req, "otp.sessionExpiredShort") });
       }
 
       const hashed = await bcrypt.hash(newPassword, 12);
       await storage.updateUser(user.id, { password: hashed });
       await storage.markOtpUsedForRegistration(otpId);
 
-      return res.json({ message: "Password has been reset successfully. You can now log in." });
+      return res.json({ message: tr(req, "passwordReset.success") });
     } catch (err) {
       return handleError(res, err);
     }
@@ -1073,7 +1073,7 @@ export async function registerRoutes(
       if (typeof support_email === "string") {
         const trimmed = support_email.trim();
         if (trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-          return res.status(400).json({ message: "Invalid email format" });
+          return res.status(400).json({ message: tr(req, "common.invalidEmail") });
         }
         await storage.setSystemSetting("support_email", trimmed);
         anyChanged = true;
@@ -1177,7 +1177,7 @@ export async function registerRoutes(
       if (!isAdmin) {
         const myCand = await storage.getCandidateByUserId(req.authUserId!);
         if (!myCand || myCand.id !== req.params.id) {
-          return res.status(403).json({ message: "Access denied" });
+          return res.status(403).json({ message: tr(req, "common.accessDenied") });
         }
       }
       const contracts = await storage.getContractHistory(req.params.id);
@@ -1193,7 +1193,7 @@ export async function registerRoutes(
       if (!isAdmin) {
         const myCand = await storage.getCandidateByUserId(req.authUserId!);
         if (!myCand || myCand.id !== req.params.id) {
-          return res.status(403).json({ message: "Access denied" });
+          return res.status(403).json({ message: tr(req, "common.accessDenied") });
         }
       }
       const candidate = await storage.getCandidate(req.params.id);
@@ -1248,7 +1248,7 @@ export async function registerRoutes(
           }
         }
         if (!isOwner) {
-          return res.status(403).json({ message: "You can only update your own profile." });
+          return res.status(403).json({ message: tr(req, "profile.ownOnly") });
         }
       }
 
@@ -1278,8 +1278,8 @@ export async function registerRoutes(
   app.post("/api/candidates/:id/archive", requirePermission("candidates:archive"), async (req: Request, res: Response) => {
     try {
       const archived = await storage.archiveCandidate(req.params.id);
-      if (!archived) return res.status(404).json({ message: "Candidate not found or already archived" });
-      return res.json({ message: "Candidate archived" });
+      if (!archived) return res.status(404).json({ message: tr(req, "candidate.notFoundOrArchived") });
+      return res.json({ message: tr(req, "candidate.archived") });
     } catch (err) {
       return handleError(res, err);
     }
@@ -1288,7 +1288,7 @@ export async function registerRoutes(
   app.post("/api/candidates/:id/unarchive", requirePermission("candidates:archive"), async (req: Request, res: Response) => {
     try {
       const restored = await storage.unarchiveCandidate(req.params.id);
-      if (!restored) return res.status(404).json({ message: "Candidate not found or not archived" });
+      if (!restored) return res.status(404).json({ message: tr(req, "candidate.notFoundOrActive") });
       return res.json({ message: "Candidate restored" });
     } catch (err) {
       return handleError(res, err);
@@ -1630,7 +1630,7 @@ export async function registerRoutes(
   app.get("/api/events/:id", requirePermission("events:read"), async (req: Request, res: Response) => {
     try {
       const evt = await storage.getEvent(req.params.id);
-      if (!evt) return res.status(404).json({ message: "Event not found" });
+      if (!evt) return res.status(404).json({ message: tr(req, "event.notFound") });
       return res.json(evt);
     } catch (err) {
       return handleError(res, err);
@@ -1656,7 +1656,7 @@ export async function registerRoutes(
     try {
       const data = insertEventSchema.partial().parse(req.body);
       const evt = await storage.updateEvent(req.params.id, data);
-      if (!evt) return res.status(404).json({ message: "Event not found" });
+      if (!evt) return res.status(404).json({ message: tr(req, "event.notFound") });
       return res.json(evt);
     } catch (err) {
       return handleError(res, err);
@@ -1667,7 +1667,7 @@ export async function registerRoutes(
     try {
       const actorId = (req as any).userId ?? undefined;
       const evt = await storage.closeEvent(req.params.id);
-      if (!evt) return res.status(404).json({ message: "Event not found" });
+      if (!evt) return res.status(404).json({ message: tr(req, "event.notFound") });
       await storage.createAuditLog({
         actorId,
         action: "event.closed",
@@ -1692,7 +1692,7 @@ export async function registerRoutes(
       const actorId = (req as any).userId ?? undefined;
       const { reason } = req.body as { reason?: string };
       const evt = await storage.reopenEvent(req.params.id);
-      if (!evt) return res.status(404).json({ message: "Event not found" });
+      if (!evt) return res.status(404).json({ message: tr(req, "event.notFound") });
       await storage.createAuditLog({
         actorId,
         action: "event.reopened",
@@ -1715,7 +1715,7 @@ export async function registerRoutes(
   app.post("/api/events/:id/archive", requirePermission("events:archive"), async (req: Request, res: Response) => {
     try {
       const evt = await storage.archiveEvent(req.params.id);
-      if (!evt) return res.status(404).json({ message: "Event not found" });
+      if (!evt) return res.status(404).json({ message: tr(req, "event.notFound") });
       storage.createAdminAlert(
         "Event archived",
         `"${evt.name}" has been archived.`,
@@ -1730,7 +1730,7 @@ export async function registerRoutes(
   app.post("/api/events/:id/unarchive", requirePermission("events:archive"), async (req: Request, res: Response) => {
     try {
       const evt = await storage.unarchiveEvent(req.params.id);
-      if (!evt) return res.status(404).json({ message: "Event not found" });
+      if (!evt) return res.status(404).json({ message: tr(req, "event.notFound") });
       storage.createAdminAlert(
         "Event unarchived",
         `"${evt.name}" has been unarchived and restored to active.`,
@@ -1768,10 +1768,10 @@ export async function registerRoutes(
   app.get("/api/jobs/:id", markPublic, async (req: Request, res: Response) => {
     try {
       const job = await storage.getJobPosting(req.params.id);
-      if (!job) return res.status(404).json({ message: "Job not found" });
+      if (!job) return res.status(404).json({ message: tr(req, "job.notFound") });
       const userId = getAuthUserId(req);
       if (!userId && job.status !== "active") {
-        return res.status(404).json({ message: "Job not found" });
+        return res.status(404).json({ message: tr(req, "job.notFound") });
       }
       return res.json(job);
     } catch (err) {
@@ -1799,7 +1799,7 @@ export async function registerRoutes(
       if (typeof body.salaryMax === "number") body.salaryMax = String(body.salaryMax);
       const data = insertJobPostingSchema.partial().parse(body);
       const job = await storage.updateJobPosting(req.params.id, data);
-      if (!job) return res.status(404).json({ message: "Job not found" });
+      if (!job) return res.status(404).json({ message: tr(req, "job.notFound") });
       return res.json(job);
     } catch (err) {
       return handleError(res, err);
@@ -1819,7 +1819,7 @@ export async function registerRoutes(
   app.post("/api/jobs/:id/unarchive", requirePermission("jobs:archive"), async (req: Request, res: Response) => {
     try {
       const restored = await storage.unarchiveJobPosting(req.params.id);
-      if (!restored) return res.status(404).json({ message: "Job not found" });
+      if (!restored) return res.status(404).json({ message: tr(req, "job.notFound") });
       return res.json({ success: true });
     } catch (err) {
       return handleError(res, err);
@@ -1835,7 +1835,7 @@ export async function registerRoutes(
         // Self-service: candidate may only query their own applications.
         const myCandidate = await storage.getCandidateByUserId(req.authUserId!);
         if (!myCandidate || !candidateId || candidateId !== myCandidate.id) {
-          return res.status(403).json({ message: "You do not have permission to perform this action.", required: "applications:read" });
+          return res.status(403).json({ message: tr(req, "auth.noPermission"), required: "applications:read" });
         }
       }
       const data = await storage.getApplications({ jobId, candidateId, status });
@@ -1965,7 +1965,7 @@ export async function registerRoutes(
         // Self-service: candidate may only query their own interviews.
         const own = await storage.getCandidateByUserId(req.authUserId!);
         if (!own || !candidateId || candidateId !== own.id) {
-          return res.status(403).json({ message: "You do not have permission to perform this action.", required: "interviews:read" });
+          return res.status(403).json({ message: tr(req, "auth.noPermission"), required: "interviews:read" });
         }
       }
       const data = await storage.getInterviews({ status, candidateId, eventId });
@@ -1988,7 +1988,7 @@ export async function registerRoutes(
   app.get("/api/interviews/:id", requirePermission("interviews:read"), async (req: Request, res: Response) => {
     try {
       const detail = await storage.getInterviewDetail(req.params.id);
-      if (!detail) return res.status(404).json({ message: "Interview not found" });
+      if (!detail) return res.status(404).json({ message: tr(req, "interview.notFound") });
       return res.json(detail);
     } catch (err) {
       return handleError(res, err);
@@ -2045,7 +2045,7 @@ export async function registerRoutes(
     try {
       const data = insertInterviewSchema.partial().parse(req.body);
       const interview = await storage.updateInterview(req.params.id, data);
-      if (!interview) return res.status(404).json({ message: "Interview not found" });
+      if (!interview) return res.status(404).json({ message: tr(req, "interview.notFound") });
 
       // Auto-cascade: completed interview → advance application to "interviewed"
       if (data.status === "completed" && interview.applicationId) {
@@ -2100,7 +2100,7 @@ export async function registerRoutes(
         // Self-service: candidate may only query their own onboarding records.
         const own = await storage.getCandidateByUserId(req.authUserId!);
         if (!own || !candidateId || candidateId !== own.id) {
-          return res.status(403).json({ message: "You do not have permission to perform this action.", required: "onboarding:read" });
+          return res.status(403).json({ message: tr(req, "auth.noPermission"), required: "onboarding:read" });
         }
       }
       const records = await storage.getOnboardingRecords({ status, eventId, candidateId });
@@ -2170,7 +2170,7 @@ export async function registerRoutes(
   app.get("/api/onboarding/:id", requirePermission("onboarding:read"), async (req: Request, res: Response) => {
     try {
       const record = await storage.getOnboardingRecord(req.params.id);
-      if (!record) return res.status(404).json({ message: "Onboarding record not found" });
+      if (!record) return res.status(404).json({ message: tr(req, "onboarding.notFound") });
       return res.json(record);
     } catch (err) {
       return handleError(res, err);
@@ -2237,7 +2237,7 @@ export async function registerRoutes(
         data.rejectedAt = new Date();
       }
       const record = await storage.updateOnboardingRecord(req.params.id, data);
-      if (!record) return res.status(404).json({ message: "Onboarding record not found" });
+      if (!record) return res.status(404).json({ message: tr(req, "onboarding.notFound") });
       if (data.status === "rejected" && record.applicationId) {
         await storage.updateApplication(record.applicationId, { status: "interviewed" });
       }
@@ -2250,7 +2250,7 @@ export async function registerRoutes(
   app.delete("/api/onboarding/:id", requirePermission("onboarding:delete"), async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteOnboardingRecord(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Onboarding record not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "onboarding.notFound") });
       return res.status(204).end();
     } catch (err) {
       return handleError(res, err);
@@ -2358,7 +2358,7 @@ export async function registerRoutes(
       if (!isAdmin) {
         const myCand = await storage.getCandidateByUserId(req.authUserId!);
         if (!myCand || myCand.id !== req.params.candidateId) {
-          return res.status(403).json({ message: "Access denied" });
+          return res.status(403).json({ message: tr(req, "common.accessDenied") });
         }
       }
       const record = await storage.getWorkforceByCandidateId(req.params.candidateId);
@@ -2374,7 +2374,7 @@ export async function registerRoutes(
       if (!isAdmin) {
         const myCand = await storage.getCandidateByUserId(req.authUserId!);
         if (!myCand || myCand.id !== req.params.candidateId) {
-          return res.status(403).json({ message: "Access denied" });
+          return res.status(403).json({ message: tr(req, "common.accessDenied") });
         }
       }
       const records = await storage.getAllWorkforceByCandidateId(req.params.candidateId);
@@ -2387,7 +2387,7 @@ export async function registerRoutes(
   app.get("/api/workforce/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const employee = await storage.getWorkforceEmployee(req.params.id);
-      if (!employee) return res.status(404).json({ message: "Employee not found" });
+      if (!employee) return res.status(404).json({ message: tr(req, "employee.notFound") });
       return res.json(employee);
     } catch (err) {
       return handleError(res, err);
@@ -2416,7 +2416,7 @@ export async function registerRoutes(
       }
       const before = await storage.getWorkforceEmployee(req.params.id);
       const record = await storage.updateWorkforceRecord(req.params.id, data);
-      if (!record) return res.status(404).json({ message: "Employee not found" });
+      if (!record) return res.status(404).json({ message: tr(req, "employee.notFound") });
       // Build a human-readable diff description
       const changes: string[] = [];
       if (before) {
@@ -2462,7 +2462,7 @@ export async function registerRoutes(
   app.patch("/api/workforce/:id/candidate-profile", requirePermission("workforce:update"), async (req: Request, res: Response) => {
     try {
       const emp = await storage.getWorkforceEmployee(req.params.id);
-      if (!emp) return res.status(404).json({ message: "Employee not found" });
+      if (!emp) return res.status(404).json({ message: tr(req, "employee.notFound") });
       const candidateId = emp.candidateId;
       if (!candidateId) return res.status(400).json({ message: "No linked candidate record" });
 
@@ -2654,7 +2654,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Invalid terminationCategory. Must be one of: ${validCategories.join(", ")}` });
       }
       const record = await storage.terminateEmployee(req.params.id, { endDate, terminationReason, terminationCategory });
-      if (!record) return res.status(404).json({ message: "Employee not found" });
+      if (!record) return res.status(404).json({ message: tr(req, "employee.notFound") });
       const empNum = (record as any).employeeNumber ?? undefined;
       const subjectName = (record as any).fullNameEn ?? undefined;
 
@@ -3056,9 +3056,9 @@ export async function registerRoutes(
       const data = insertPositionSchema.parse(req.body);
       if (data.parentPositionId) {
         const parent = await storage.getPosition(data.parentPositionId);
-        if (!parent) return res.status(400).json({ message: "Parent position not found" });
+        if (!parent) return res.status(400).json({ message: tr(req, "position.parentNotFound") });
         if (parent.departmentId !== data.departmentId) {
-          return res.status(400).json({ message: "Parent position must be in the same department" });
+          return res.status(400).json({ message: tr(req, "position.parentDeptMismatch") });
         }
       }
       const pos = await storage.createPosition(data);
@@ -3072,10 +3072,10 @@ export async function registerRoutes(
       if (data.parentPositionId) {
         const existing = await storage.getPosition(req.params.id);
         const parent = await storage.getPosition(data.parentPositionId);
-        if (!parent) return res.status(400).json({ message: "Parent position not found" });
+        if (!parent) return res.status(400).json({ message: tr(req, "position.parentNotFound") });
         const deptId = data.departmentId ?? existing?.departmentId;
         if (parent.departmentId !== deptId) {
-          return res.status(400).json({ message: "Parent position must be in the same department" });
+          return res.status(400).json({ message: tr(req, "position.parentDeptMismatch") });
         }
         if (data.parentPositionId === req.params.id) {
           return res.status(400).json({ message: "A position cannot be its own parent" });
@@ -3113,7 +3113,7 @@ export async function registerRoutes(
       return false;
     }
     if (!req.authIsSuperAdmin) {
-      res.status(403).json({ message: "Super Admin access required." });
+      res.status(403).json({ message: tr(req, "auth.superAdminRequired") });
       return false;
     }
     return true;
@@ -3173,7 +3173,7 @@ export async function registerRoutes(
       const target = await storage.getUser(req.params.id);
       const targetRole = target?.roleId ? await storage.getRole(target.roleId) : null;
       if (targetRole?.slug === "super_admin") {
-        return res.status(403).json({ message: "The Super Admin record is read-only." });
+        return res.status(403).json({ message: tr(req, "auth.superAdminReadOnly") });
       }
       const user = await storage.updateUser(req.params.id, data);
       if (!user) return res.status(404).json({ message: "User not found" });
@@ -3193,7 +3193,7 @@ export async function registerRoutes(
       return null;
     }
     if (!req.authIsSuperAdmin) {
-      res.status(403).json({ message: "Super Admin access required." });
+      res.status(403).json({ message: tr(req, "auth.superAdminRequired") });
       return null;
     }
     return { id: userId };
@@ -3248,9 +3248,9 @@ export async function registerRoutes(
       const data = bodySchema.parse(req.body);
 
       const role = await storage.getRole(data.roleId);
-      if (!role) return res.status(400).json({ message: "Invalid roleId" });
+      if (!role) return res.status(400).json({ message: tr(req, "role.invalidId") });
       if (role.slug === "super_admin") {
-        return res.status(403).json({ message: "Cannot assign Super Admin via this endpoint." });
+        return res.status(403).json({ message: tr(req, "role.cannotAssignSuperAdmin") });
       }
       if (role.slug === "candidate") {
         return res.status(400).json({ message: "Use the candidate registration flow for candidate users." });
@@ -3286,10 +3286,10 @@ export async function registerRoutes(
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const target = await storage.getUser(req.params.id);
-      if (!target) return res.status(404).json({ message: "Admin user not found." });
+      if (!target) return res.status(404).json({ message: tr(req, "adminUser.notFound") });
       const targetRole = target.roleId ? await storage.getRole(target.roleId) : null;
       if (targetRole?.slug === "super_admin") {
-        return res.status(403).json({ message: "The Super Admin record is read-only." });
+        return res.status(403).json({ message: tr(req, "auth.superAdminReadOnly") });
       }
       const bodySchema = z.object({
         fullName: z.string().min(2).optional(),
@@ -3304,9 +3304,9 @@ export async function registerRoutes(
       const data = bodySchema.parse(req.body);
       if (data.roleId) {
         const role = await storage.getRole(data.roleId);
-        if (!role) return res.status(400).json({ message: "Invalid roleId" });
+        if (!role) return res.status(400).json({ message: tr(req, "role.invalidId") });
         if (role.slug === "super_admin") {
-          return res.status(403).json({ message: "Cannot assign Super Admin via this endpoint." });
+          return res.status(403).json({ message: tr(req, "role.cannotAssignSuperAdmin") });
         }
       }
 
@@ -3346,7 +3346,7 @@ export async function registerRoutes(
       }
 
       const user = await storage.updateUser(req.params.id, update as any);
-      if (!user) return res.status(404).json({ message: "Admin user not found." });
+      if (!user) return res.status(404).json({ message: tr(req, "adminUser.notFound") });
       invalidateUserActiveCache(req.params.id);
       return res.json({ ...user, password: undefined });
     } catch (err) {
@@ -3358,7 +3358,7 @@ export async function registerRoutes(
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const target = await storage.getUser(req.params.id);
-      if (!target) return res.status(404).json({ message: "Admin user not found." });
+      if (!target) return res.status(404).json({ message: tr(req, "adminUser.notFound") });
 
       // Refuse to delete yourself.
       if (req.authUser && req.authUser.id === target.id) {
@@ -3373,7 +3373,7 @@ export async function registerRoutes(
 
       try {
         const ok = await storage.deleteUser(target.id);
-        if (!ok) return res.status(404).json({ message: "Admin user not found." });
+        if (!ok) return res.status(404).json({ message: tr(req, "adminUser.notFound") });
       } catch (e: any) {
         // Foreign-key violations (e.g. user authored audit logs / candidates) → 409.
         if (e?.code === "23503") {
@@ -3416,7 +3416,7 @@ export async function registerRoutes(
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const role = await storage.getRole(req.params.id);
-      if (!role) return res.status(404).json({ message: "Role not found" });
+      if (!role) return res.status(404).json({ message: tr(req, "role.notFound") });
       return res.json(role);
     } catch (err) {
       return handleError(res, err);
@@ -3427,7 +3427,7 @@ export async function registerRoutes(
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const role = await storage.getRole(req.params.id);
-      if (!role) return res.status(404).json({ message: "Role not found" });
+      if (!role) return res.status(404).json({ message: tr(req, "role.notFound") });
       const eff = await storage.getEffectivePermissionsForRole(req.params.id);
       return res.json({ roleId: role.id, isSuperAdmin: eff.isSuperAdmin, permissions: eff.keys });
     } catch (err) {
@@ -3446,7 +3446,7 @@ export async function registerRoutes(
       });
       const data = bodySchema.parse(req.body);
       if (await storage.getRoleBySlug(data.slug)) {
-        return res.status(409).json({ message: "A role with this slug already exists" });
+        return res.status(409).json({ message: tr(req, "role.slugExists") });
       }
       const created = await storage.createRole(data as any);
       const actorId = getAuthUserId(req); const actor = actorId ? await storage.getUser(actorId) : null;
@@ -3469,7 +3469,7 @@ export async function registerRoutes(
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const role = await storage.getRole(req.params.id);
-      if (!role) return res.status(404).json({ message: "Role not found" });
+      if (!role) return res.status(404).json({ message: tr(req, "role.notFound") });
       if (role.isSystem) {
         return res.status(403).json({ message: "System roles cannot be modified" });
       }
@@ -3500,7 +3500,7 @@ export async function registerRoutes(
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const role = await storage.getRole(req.params.id);
-      if (!role) return res.status(404).json({ message: "Role not found" });
+      if (!role) return res.status(404).json({ message: tr(req, "role.notFound") });
       const result = await storage.deleteRole(req.params.id);
       if (!result.ok) {
         if (result.reason === "system_role") {
@@ -3512,7 +3512,7 @@ export async function registerRoutes(
             userCount: result.userCount,
           });
         }
-        return res.status(404).json({ message: "Role not found" });
+        return res.status(404).json({ message: tr(req, "role.notFound") });
       }
       const actorId = getAuthUserId(req); const actor = actorId ? await storage.getUser(actorId) : null;
       await storage.createAuditLog({
@@ -3538,7 +3538,7 @@ export async function registerRoutes(
       });
       const data = bodySchema.parse(req.body);
       if (await storage.getRoleBySlug(data.slug)) {
-        return res.status(409).json({ message: "A role with this slug already exists" });
+        return res.status(409).json({ message: tr(req, "role.slugExists") });
       }
       const cloned = await storage.cloneRole(req.params.id, data.name, data.slug);
       const actorId = getAuthUserId(req); const actor = actorId ? await storage.getUser(actorId) : null;
@@ -3561,7 +3561,7 @@ export async function registerRoutes(
     try {
       if (!(await requireSuperAdmin(req, res))) return;
       const role = await storage.getRole(req.params.id);
-      if (!role) return res.status(404).json({ message: "Role not found" });
+      if (!role) return res.status(404).json({ message: tr(req, "role.notFound") });
       if (role.isSystem) {
         return res.status(403).json({ message: "System role permissions cannot be modified" });
       }
@@ -3600,7 +3600,7 @@ export async function registerRoutes(
   app.get("/api/smp-companies/:id", requirePermission("smp:read"), async (req: Request, res: Response) => {
     try {
       const company = await storage.getSMPCompany(req.params.id);
-      if (!company) return res.status(404).json({ message: "Company not found" });
+      if (!company) return res.status(404).json({ message: tr(req, "company.notFound") });
       return res.json(company);
     } catch (err) {
       return handleError(res, err);
@@ -3636,7 +3636,7 @@ export async function registerRoutes(
     try {
       const data = insertSMPCompanySchema.partial().parse(req.body);
       const company = await storage.updateSMPCompany(req.params.id, data);
-      if (!company) return res.status(404).json({ message: "Company not found" });
+      if (!company) return res.status(404).json({ message: tr(req, "company.notFound") });
       return res.json(company);
     } catch (err) {
       return handleError(res, err);
@@ -3653,7 +3653,7 @@ export async function registerRoutes(
         });
       }
       const ok = await storage.deleteSMPCompany(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Company not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "company.notFound") });
       return res.status(204).send();
     } catch (err) {
       return handleError(res, err);
@@ -3713,7 +3713,7 @@ export async function registerRoutes(
   app.get("/api/contract-templates/:id", requirePermission("contract_templates:read"), async (req: Request, res: Response) => {
     try {
       const t = await storage.getContractTemplate(req.params.id);
-      if (!t) return res.status(404).json({ message: "Template not found" });
+      if (!t) return res.status(404).json({ message: tr(req, "template.notFound") });
       return res.json(t);
     } catch (err) { return handleError(res, err); }
   });
@@ -3729,7 +3729,7 @@ export async function registerRoutes(
   app.patch("/api/contract-templates/:id", requirePermission("contract_templates:write"), async (req: Request, res: Response) => {
     try {
       const existing = await storage.getContractTemplate(req.params.id);
-      if (!existing) return res.status(404).json({ message: "Template not found" });
+      if (!existing) return res.status(404).json({ message: tr(req, "template.notFound") });
       const updated = await storage.updateContractTemplate(req.params.id, req.body);
       return res.json(updated);
     } catch (err) { return handleError(res, err); }
@@ -3742,7 +3742,7 @@ export async function registerRoutes(
         return res.status(409).json({ message: "Cannot delete template that has generated contracts. Archive it instead." });
       }
       const ok = await storage.deleteContractTemplate(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Template not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "template.notFound") });
       return res.json({ message: "Template deleted" });
     } catch (err) { return handleError(res, err); }
   });
@@ -3750,7 +3750,7 @@ export async function registerRoutes(
   app.post("/api/contract-templates/:id/new-version", requireAuth, async (req: Request, res: Response) => {
     try {
       const parent = await storage.getContractTemplate(req.params.id);
-      if (!parent) return res.status(404).json({ message: "Template not found" });
+      if (!parent) return res.status(404).json({ message: tr(req, "template.notFound") });
       const newVersion = await storage.createContractTemplateVersion(parent, {
         articles: req.body.articles ?? parent.articles,
         createdBy: req.body.createdBy ?? parent.createdBy,
@@ -3764,7 +3764,7 @@ export async function registerRoutes(
       if (!req.file) return res.status(400).json({ message: tr(req, "file.noUpload") });
       const logoUrl = await uploadFile(req.file.path, req.file.filename, getMimeType(req.file.filename));
       const updated = await storage.updateContractTemplate(req.params.id, { logoUrl });
-      if (!updated) return res.status(404).json({ message: "Template not found" });
+      if (!updated) return res.status(404).json({ message: tr(req, "template.notFound") });
       return res.json(updated);
     } catch (err) { return handleError(res, err); }
   });
@@ -3780,12 +3780,12 @@ export async function registerRoutes(
         const own = await storage.getCandidateByUserId(req.authUserId!);
         if (!own) return res.status(403).json({ message: "Forbidden" });
         if (candidateId && candidateId !== own.id) {
-          return res.status(403).json({ message: "You can only view your own contracts." });
+          return res.status(403).json({ message: tr(req, "contract.ownOnly") });
         }
         if (onboardingId) {
           const ob = await storage.getOnboardingRecord(onboardingId as string);
           if (!ob || ob.candidateId !== own.id) {
-            return res.status(403).json({ message: "You can only view your own contracts." });
+            return res.status(403).json({ message: tr(req, "contract.ownOnly") });
           }
         }
         if (!candidateId && !onboardingId) {
@@ -3807,7 +3807,7 @@ export async function registerRoutes(
   app.post("/api/onboarding/:id/generate-contract", requireAuth, async (req: Request, res: Response) => {
     try {
       const ob = await storage.getOnboardingRecord(req.params.id);
-      if (!ob) return res.status(404).json({ message: "Onboarding record not found" });
+      if (!ob) return res.status(404).json({ message: tr(req, "onboarding.notFound") });
 
       const candidate = await storage.getCandidate(ob.candidateId);
       if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
@@ -3816,7 +3816,7 @@ export async function registerRoutes(
       if (!templateId) return res.status(400).json({ message: "templateId is required" });
 
       const template = await storage.getContractTemplate(templateId);
-      if (!template) return res.status(404).json({ message: "Template not found" });
+      if (!template) return res.status(404).json({ message: tr(req, "template.notFound") });
 
       const existing = await storage.getCandidateContracts({ onboardingId: ob.id });
       const pending = existing.find(c => c.status !== "signed");
@@ -3871,7 +3871,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "templateId and onboardingIds[] are required" });
       }
       const template = await storage.getContractTemplate(templateId);
-      if (!template) return res.status(404).json({ message: "Template not found" });
+      if (!template) return res.status(404).json({ message: tr(req, "template.notFound") });
 
       const results: { onboardingId: string; success: boolean; error?: string }[] = [];
       const smsPlugin = await storage.getActiveSmsPlugin();
@@ -3925,7 +3925,7 @@ export async function registerRoutes(
   app.post("/api/candidate-contracts/:id/sign", requireAuth, async (req: Request, res: Response) => {
     try {
       const contract = await storage.getCandidateContract(req.params.id);
-      if (!contract) return res.status(404).json({ message: "Contract not found" });
+      if (!contract) return res.status(404).json({ message: tr(req, "contract.notFound") });
       if (contract.status === "signed") return res.status(409).json({ message: "Contract already signed" });
 
       // Authorization: admin with candidate_contracts:manage OR the contract's own candidate.
@@ -3977,13 +3977,13 @@ export async function registerRoutes(
   app.get("/api/candidate-contracts/:id/preview", requireAuth, async (req: Request, res: Response) => {
     try {
       const contract = await storage.getCandidateContract(req.params.id);
-      if (!contract) return res.status(404).json({ message: "Contract not found" });
+      if (!contract) return res.status(404).json({ message: tr(req, "contract.notFound") });
 
       const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("candidate_contracts:read");
       if (!isAdmin) {
         const myCand = await storage.getCandidateByUserId(req.authUserId!);
         if (!myCand || !contract.candidateId || myCand.id !== contract.candidateId) {
-          return res.status(403).json({ message: "Access denied" });
+          return res.status(403).json({ message: tr(req, "common.accessDenied") });
         }
       }
 
@@ -4008,7 +4008,7 @@ export async function registerRoutes(
   app.get("/api/question-sets/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const qs = await storage.getQuestionSet(req.params.id);
-      if (!qs) return res.status(404).json({ message: "Question set not found" });
+      if (!qs) return res.status(404).json({ message: tr(req, "questionSet.notFound") });
       return res.json(qs);
     } catch (err) { return handleError(res, err); }
   });
@@ -4025,7 +4025,7 @@ export async function registerRoutes(
     try {
       const data = insertQuestionSetSchema.partial().parse(req.body);
       const qs = await storage.updateQuestionSet(req.params.id, data);
-      if (!qs) return res.status(404).json({ message: "Question set not found" });
+      if (!qs) return res.status(404).json({ message: tr(req, "questionSet.notFound") });
       return res.json(qs);
     } catch (err) { return handleError(res, err); }
   });
@@ -4033,7 +4033,7 @@ export async function registerRoutes(
   app.delete("/api/question-sets/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteQuestionSet(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Question set not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "questionSet.notFound") });
       return res.status(204).send();
     } catch (err) { return handleError(res, err); }
   });
@@ -4079,7 +4079,7 @@ export async function registerRoutes(
     try {
       const credentials = z.record(z.string()).parse(req.body);
       const plugin = await storage.updateSmsPluginCredentials(req.params.id, credentials);
-      if (!plugin) return res.status(404).json({ message: "Plugin not found" });
+      if (!plugin) return res.status(404).json({ message: tr(req, "plugin.notFound") });
       return res.json(plugin);
     } catch (err) { return handleError(res, err); }
   });
@@ -4087,7 +4087,7 @@ export async function registerRoutes(
   app.post("/api/sms-plugins/:id/activate", requirePermission("settings:write"), async (req: Request, res: Response) => {
     try {
       const ok = await storage.activateSmsPlugin(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Plugin not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "plugin.notFound") });
       return res.json({ success: true });
     } catch (err) { return handleError(res, err); }
   });
@@ -4100,7 +4100,7 @@ export async function registerRoutes(
       }).parse(req.body);
 
       const plugin = await storage.getSmsPlugin(req.params.id);
-      if (!plugin) return res.status(404).json({ message: "Plugin not found" });
+      if (!plugin) return res.status(404).json({ message: tr(req, "plugin.notFound") });
 
       console.log(`[SMS Test] Sending to="${to}" message="${message}" via plugin="${plugin.name}"`);
       const result = await sendSmsViaPlugin(plugin, to, message);
@@ -4112,7 +4112,7 @@ export async function registerRoutes(
   app.delete("/api/sms-plugins/:id", requirePermission("settings:write"), async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteSmsPlugin(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Plugin not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "plugin.notFound") });
       return res.status(204).send();
     } catch (err) { return handleError(res, err); }
   });
@@ -4138,7 +4138,7 @@ export async function registerRoutes(
   app.get("/api/id-card-templates/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const template = await storage.getIdCardTemplate(req.params.id);
-      if (!template) return res.status(404).json({ message: "Template not found" });
+      if (!template) return res.status(404).json({ message: tr(req, "template.notFound") });
       return res.json(template);
     } catch (err) { return handleError(res, err); }
   });
@@ -4155,7 +4155,7 @@ export async function registerRoutes(
     try {
       const data = insertIdCardTemplateSchema.partial().parse(req.body);
       const template = await storage.updateIdCardTemplate(req.params.id, data);
-      if (!template) return res.status(404).json({ message: "Template not found" });
+      if (!template) return res.status(404).json({ message: tr(req, "template.notFound") });
       return res.json(template);
     } catch (err) { return handleError(res, err); }
   });
@@ -4163,7 +4163,7 @@ export async function registerRoutes(
   app.delete("/api/id-card-templates/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteIdCardTemplate(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Template not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "template.notFound") });
       return res.status(204).send();
     } catch (err) { return handleError(res, err); }
   });
@@ -4171,7 +4171,7 @@ export async function registerRoutes(
   app.post("/api/id-card-templates/:id/activate", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.activateIdCardTemplate(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Template not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "template.notFound") });
       return res.json({ success: true });
     } catch (err) { return handleError(res, err); }
   });
@@ -4182,7 +4182,7 @@ export async function registerRoutes(
       const imageUrl = await uploadFile(req.file.path, req.file.filename, getMimeType(req.file.filename));
       const updateData = { backgroundImageUrl: imageUrl };
       const template = await storage.updateIdCardTemplate(req.params.id, updateData);
-      if (!template) return res.status(404).json({ message: "Template not found" });
+      if (!template) return res.status(404).json({ message: tr(req, "template.notFound") });
       return res.json(template);
     } catch (err) { return handleError(res, err); }
   });
@@ -4215,7 +4215,7 @@ export async function registerRoutes(
     try {
       const data = insertPrinterPluginSchema.partial().parse(req.body);
       const plugin = await storage.updatePrinterPlugin(req.params.id, data);
-      if (!plugin) return res.status(404).json({ message: "Plugin not found" });
+      if (!plugin) return res.status(404).json({ message: tr(req, "plugin.notFound") });
       return res.json(plugin);
     } catch (err) { return handleError(res, err); }
   });
@@ -4223,7 +4223,7 @@ export async function registerRoutes(
   app.post("/api/printer-plugins/:id/activate", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.activatePrinterPlugin(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Plugin not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "plugin.notFound") });
       return res.json({ success: true });
     } catch (err) { return handleError(res, err); }
   });
@@ -4231,7 +4231,7 @@ export async function registerRoutes(
   app.delete("/api/printer-plugins/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.deletePrinterPlugin(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Plugin not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "plugin.notFound") });
       return res.status(204).send();
     } catch (err) { return handleError(res, err); }
   });
@@ -4330,7 +4330,7 @@ export async function registerRoutes(
   app.get("/api/shifts/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const row = await storage.getShift(req.params.id);
-      if (!row) return res.status(404).json({ message: "Shift not found" });
+      if (!row) return res.status(404).json({ message: tr(req, "shift.notFound") });
       return res.json(row);
     } catch (err) { return handleError(res, err); }
   });
@@ -4347,7 +4347,7 @@ export async function registerRoutes(
     try {
       const data = insertShiftSchema.partial().parse(req.body);
       const row = await storage.updateShift(req.params.id, data);
-      if (!row) return res.status(404).json({ message: "Shift not found" });
+      if (!row) return res.status(404).json({ message: tr(req, "shift.notFound") });
       return res.json(row);
     } catch (err) { return handleError(res, err); }
   });
@@ -4355,7 +4355,7 @@ export async function registerRoutes(
   app.delete("/api/shifts/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteShift(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Shift not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "shift.notFound") });
       return res.status(204).end();
     } catch (err) { return handleError(res, err); }
   });
@@ -4371,7 +4371,7 @@ export async function registerRoutes(
   app.get("/api/schedule-templates/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const row = await storage.getScheduleTemplate(req.params.id);
-      if (!row) return res.status(404).json({ message: "Schedule template not found" });
+      if (!row) return res.status(404).json({ message: tr(req, "scheduleTemplate.notFound") });
       return res.json(row);
     } catch (err) { return handleError(res, err); }
   });
@@ -4388,7 +4388,7 @@ export async function registerRoutes(
     try {
       const data = insertScheduleTemplateSchema.partial().parse(req.body);
       const row = await storage.updateScheduleTemplate(req.params.id, data);
-      if (!row) return res.status(404).json({ message: "Schedule template not found" });
+      if (!row) return res.status(404).json({ message: tr(req, "scheduleTemplate.notFound") });
       return res.json(row);
     } catch (err) { return handleError(res, err); }
   });
@@ -4396,7 +4396,7 @@ export async function registerRoutes(
   app.delete("/api/schedule-templates/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteScheduleTemplate(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Schedule template not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "scheduleTemplate.notFound") });
       return res.status(204).end();
     } catch (err) { return handleError(res, err); }
   });
@@ -4483,13 +4483,13 @@ export async function registerRoutes(
     try {
       const data = insertScheduleAssignmentSchema.partial().parse(req.body);
       const existing = await storage.getScheduleAssignment(req.params.id);
-      if (!existing) return res.status(404).json({ message: "Schedule assignment not found" });
+      if (!existing) return res.status(404).json({ message: tr(req, "scheduleAssignment.notFound") });
       const startDate = data.startDate ?? existing.startDate;
       const endDate = data.endDate !== undefined ? data.endDate : existing.endDate;
       const hasOverlap = await storage.checkScheduleOverlap(existing.workforceId, startDate, endDate, req.params.id);
       if (hasOverlap) return res.status(409).json({ message: "Assignment date range overlaps with an existing assignment for this employee" });
       const row = await storage.updateScheduleAssignment(req.params.id, data);
-      if (!row) return res.status(404).json({ message: "Schedule assignment not found" });
+      if (!row) return res.status(404).json({ message: tr(req, "scheduleAssignment.notFound") });
       return res.json(row);
     } catch (err) { return handleError(res, err); }
   });
@@ -4499,7 +4499,7 @@ export async function registerRoutes(
       const { endDate } = req.body as { endDate: string };
       if (!endDate) return res.status(400).json({ message: "endDate is required" });
       const row = await storage.endScheduleAssignment(req.params.id, endDate);
-      if (!row) return res.status(404).json({ message: "Assignment not found" });
+      if (!row) return res.status(404).json({ message: tr(req, "assignment.notFound") });
       return res.json(row);
     } catch (err) { return handleError(res, err); }
   });
@@ -4507,7 +4507,7 @@ export async function registerRoutes(
   app.delete("/api/schedule-assignments/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteScheduleAssignment(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Assignment not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "assignment.notFound") });
       return res.status(204).end();
     } catch (err) { return handleError(res, err); }
   });
@@ -4560,7 +4560,7 @@ export async function registerRoutes(
   app.patch("/api/attendance/:id", requirePermission("attendance:update"), async (req: Request, res: Response) => {
     try {
       const existing = await storage.getAttendanceRecord(req.params.id);
-      if (!existing) return res.status(404).json({ message: "Attendance record not found" });
+      if (!existing) return res.status(404).json({ message: tr(req, "attendance.notFound") });
       const data = insertAttendanceRecordSchema.partial().parse(req.body);
       const merged = { ...existing, ...data };
       await enrichAttendanceMinutes(merged);
@@ -4584,7 +4584,7 @@ export async function registerRoutes(
   app.delete("/api/attendance/:id", requirePermission("attendance:delete"), async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteAttendanceRecord(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Attendance record not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "attendance.notFound") });
       return res.status(204).end();
     } catch (err) { return handleError(res, err); }
   });
@@ -4672,7 +4672,7 @@ export async function registerRoutes(
   app.get("/api/portal/my-shift/:workforceId", requireAuth, async (req: Request, res: Response) => {
     try {
       const authUserId = getAuthUserId(req);
-      if (!authUserId) return res.status(401).json({ message: "Authentication required" });
+      if (!authUserId) return res.status(401).json({ message: tr(req, "auth.requiredShort") });
       const { workforceId } = req.params;
       const wfRecord = await storage.getWorkforceEmployee(workforceId);
       if (wfRecord) {
@@ -4681,7 +4681,7 @@ export async function registerRoutes(
         if (!isAdmin) {
           const candidate = user ? await storage.getCandidateByNationalId(user.nationalId) : null;
           if (!candidate || wfRecord.candidateId !== candidate.id) {
-            return res.status(403).json({ message: "Access denied" });
+            return res.status(403).json({ message: tr(req, "common.accessDenied") });
           }
         }
       }
@@ -4731,7 +4731,7 @@ export async function registerRoutes(
 
       const wf = await storage.getWorkforceEmployee(workforceId);
       if (!wf) {
-        return res.status(404).json({ message: "Employee record not found" });
+        return res.status(404).json({ message: tr(req, "employeeRecord.notFound") });
       }
 
       const candidate = await storage.getCandidate(wf.candidateId);
@@ -4781,7 +4781,7 @@ export async function registerRoutes(
     try {
       const authUserId = getAuthUserId(req);
       if (!authUserId) {
-        return res.status(401).json({ message: "Authentication required" });
+        return res.status(401).json({ message: tr(req, "auth.requiredShort") });
       }
 
       const workforceId = req.query.workforceId as string;
@@ -4791,7 +4791,7 @@ export async function registerRoutes(
 
       const wf = await storage.getWorkforceEmployee(workforceId);
       if (!wf) {
-        return res.status(404).json({ message: "Employee record not found" });
+        return res.status(404).json({ message: tr(req, "employeeRecord.notFound") });
       }
       const candidate = await storage.getCandidate(wf.candidateId);
       if (!candidate || candidate.userId !== authUserId) {
@@ -4827,7 +4827,7 @@ export async function registerRoutes(
   app.get("/api/assets/:id", requirePermission("assets:read"), async (req: Request, res: Response) => {
     try {
       const row = await storage.getAsset(req.params.id);
-      if (!row) return res.status(404).json({ message: "Asset not found" });
+      if (!row) return res.status(404).json({ message: tr(req, "asset.notFound") });
       return res.json(row);
     } catch (err) { return handleError(res, err); }
   });
@@ -4839,7 +4839,7 @@ export async function registerRoutes(
       const { price: _price, ...rest } = req.body;
       const data = insertAssetSchema.partial().omit({ price: true }).parse(rest);
       const row = await storage.updateAsset(req.params.id, data);
-      if (!row) return res.status(404).json({ message: "Asset not found" });
+      if (!row) return res.status(404).json({ message: tr(req, "asset.notFound") });
       return res.json(row);
     } catch (err) { return handleError(res, err); }
   });
@@ -4847,7 +4847,7 @@ export async function registerRoutes(
   app.delete("/api/assets/:id", requirePermission("assets:delete"), async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteAsset(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Asset not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "asset.notFound") });
       return res.status(204).end();
     } catch (err) { return handleError(res, err); }
   });
@@ -4885,7 +4885,7 @@ export async function registerRoutes(
   app.get("/api/employee-assets/:id", requirePermission("employee_assets:read"), async (req: Request, res: Response) => {
     try {
       const row = await storage.getEmployeeAsset(req.params.id);
-      if (!row) return res.status(404).json({ message: "Assignment not found" });
+      if (!row) return res.status(404).json({ message: tr(req, "assignment.notFound") });
       return res.json(row);
     } catch (err) { return handleError(res, err); }
   });
@@ -4893,7 +4893,7 @@ export async function registerRoutes(
   app.patch("/api/employee-assets/:id", requirePermission("employee_assets:update"), async (req: Request, res: Response) => {
     try {
       const existing = await storage.getEmployeeAsset(req.params.id);
-      if (!existing) return res.status(404).json({ message: "Assignment not found" });
+      if (!existing) return res.status(404).json({ message: tr(req, "assignment.notFound") });
       const data = insertEmployeeAssetSchema.partial().parse(req.body);
       const row = await storage.updateEmployeeAsset(req.params.id, data);
       const emp = existing.workforceId ? await storage.getWorkforceEmployee(existing.workforceId) : null;
@@ -4919,7 +4919,7 @@ export async function registerRoutes(
   app.delete("/api/employee-assets/:id", requirePermission("employee_assets:delete"), async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteEmployeeAsset(req.params.id);
-      if (!ok) return res.status(404).json({ message: "Assignment not found" });
+      if (!ok) return res.status(404).json({ message: tr(req, "assignment.notFound") });
       return res.status(204).end();
     } catch (err) { return handleError(res, err); }
   });
@@ -4958,7 +4958,7 @@ export async function registerRoutes(
     try {
       const actorId = (req as any).userId ?? undefined;
       const record = await storage.startOffboarding(req.params.id, actorId);
-      if (!record) return res.status(404).json({ message: "Employee not found" });
+      if (!record) return res.status(404).json({ message: tr(req, "employee.notFound") });
       await logAudit(req, {
         action: "offboarding.started",
         entityType: "offboarding",
@@ -5079,7 +5079,7 @@ export async function registerRoutes(
   app.post("/api/employee-assets/:id/waive-deduction", requirePermission("employee_assets:waive_deduction"), async (req: Request, res: Response) => {
     try {
       const actorId = (req as any).userId;
-      if (!actorId) return res.status(401).json({ message: "Authentication required" });
+      if (!actorId) return res.status(401).json({ message: tr(req, "auth.requiredShort") });
       const existing = await storage.getEmployeeAsset(req.params.id);
       if (!existing) return res.status(404).json({ message: "Asset assignment not found" });
       const row = await storage.waiveAssetDeduction(req.params.id, actorId);
@@ -5150,7 +5150,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "assetId, workforceIds (non-empty array), and assignedAt are required" });
       }
       const asset = await storage.getAsset(assetId);
-      if (!asset) return res.status(404).json({ message: "Asset not found" });
+      if (!asset) return res.status(404).json({ message: tr(req, "asset.notFound") });
       const result = await storage.bulkAssignAsset(assetId, workforceIds, assignedAt, notes);
       await logAudit(req, {
         action: "assets.bulk_assigned",
@@ -5239,7 +5239,7 @@ export async function registerRoutes(
       const resolvedBy = (req as any).userId ?? "system";
       const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() || undefined : undefined;
       const item = await storage.resolveInboxItem(req.params.id, resolvedBy, notes);
-      if (!item) return res.status(404).json({ message: "Inbox item not found or already resolved" });
+      if (!item) return res.status(404).json({ message: tr(req, "inbox.notFoundOrResolved") });
       await logAudit(req, { action: "inbox_resolve", entityType: "inbox_item", entityId: item.id, description: `Resolved inbox item: ${item.title}` });
       return res.json(item);
     } catch (err) { return handleError(res, err); }
@@ -5250,7 +5250,7 @@ export async function registerRoutes(
       const resolvedBy = (req as any).userId ?? "system";
       const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() || undefined : undefined;
       const item = await storage.dismissInboxItem(req.params.id, resolvedBy, notes);
-      if (!item) return res.status(404).json({ message: "Inbox item not found or already resolved" });
+      if (!item) return res.status(404).json({ message: tr(req, "inbox.notFoundOrResolved") });
       await logAudit(req, { action: "inbox_dismiss", entityType: "inbox_item", entityId: item.id, description: `Dismissed inbox item: ${item.title}` });
       return res.json(item);
     } catch (err) { return handleError(res, err); }
@@ -5304,19 +5304,19 @@ export async function registerRoutes(
   app.post("/api/excuse-requests", requireAuth, async (req: Request, res: Response) => {
     try {
       const authUserId = getAuthUserId(req);
-      if (!authUserId) return res.status(401).json({ message: "Authentication required" });
+      if (!authUserId) return res.status(401).json({ message: tr(req, "auth.requiredShort") });
 
       const data = excuseRequestSchema.parse(req.body);
 
       const wf = await storage.getWorkforceEmployee(data.workforceId);
-      if (!wf) return res.status(404).json({ message: "Employee not found" });
+      if (!wf) return res.status(404).json({ message: tr(req, "employee.notFound") });
 
       const user = await storage.getUser(authUserId);
       const isAdmin = req.authIsSuperAdmin || req.authRoleSlug !== "candidate";
       if (!isAdmin) {
         const candidate = user ? await storage.getCandidateByNationalId(user.nationalId) : null;
         if (!candidate || wf.candidateId !== candidate.id) {
-          return res.status(403).json({ message: "Access denied" });
+          return res.status(403).json({ message: tr(req, "common.accessDenied") });
         }
       }
 
@@ -5372,7 +5372,7 @@ export async function registerRoutes(
   app.get("/api/excuse-requests", requireAuth, async (req: Request, res: Response) => {
     try {
       const authUserId = getAuthUserId(req);
-      if (!authUserId) return res.status(401).json({ message: "Authentication required" });
+      if (!authUserId) return res.status(401).json({ message: tr(req, "auth.requiredShort") });
 
       const workforceId = req.query.workforceId as string | undefined;
       const status = req.query.status as string | undefined;
@@ -5389,7 +5389,7 @@ export async function registerRoutes(
         if (wf) {
           const candidate = user ? await storage.getCandidateByNationalId(user.nationalId) : null;
           if (!candidate || wf.candidateId !== candidate.id) {
-            return res.status(403).json({ message: "Access denied" });
+            return res.status(403).json({ message: tr(req, "common.accessDenied") });
           }
         }
       }
@@ -5402,7 +5402,7 @@ export async function registerRoutes(
   app.get("/api/excuse-requests/pending-count", requirePermission("excuse_requests:read"), async (req: Request, res: Response) => {
     try {
       const authUserId = getAuthUserId(req);
-      if (!authUserId) return res.status(401).json({ message: "Authentication required" });
+      if (!authUserId) return res.status(401).json({ message: tr(req, "auth.requiredShort") });
       const count = await storage.countPendingExcuseRequests();
       return res.json({ count });
     } catch (err) { return handleError(res, err); }
@@ -5411,14 +5411,14 @@ export async function registerRoutes(
   app.patch("/api/excuse-requests/:id/approve", requirePermission("excuse_requests:approve"), async (req: Request, res: Response) => {
     try {
       const reviewedBy = getAuthUserId(req);
-      if (!reviewedBy) return res.status(401).json({ message: "Authentication required" });
+      if (!reviewedBy) return res.status(401).json({ message: tr(req, "auth.requiredShort") });
       const reviewer = await storage.getUser(reviewedBy);
       if (reviewer?.role !== "admin" && reviewer?.role !== "super_admin") {
-        return res.status(403).json({ message: "Admin access required" });
+        return res.status(403).json({ message: tr(req, "auth.adminRequired") });
       }
       const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() || null : null;
       const excuse = await storage.getExcuseRequest(req.params.id);
-      if (!excuse) return res.status(404).json({ message: "Excuse request not found" });
+      if (!excuse) return res.status(404).json({ message: tr(req, "excuse.notFound") });
       if (excuse.status !== "pending") return res.status(422).json({ message: `Cannot approve a ${excuse.status} request` });
 
       const updated = await storage.updateExcuseRequest(req.params.id, {
@@ -5451,14 +5451,14 @@ export async function registerRoutes(
   app.patch("/api/excuse-requests/:id/reject", requirePermission("excuse_requests:reject"), async (req: Request, res: Response) => {
     try {
       const reviewedBy = getAuthUserId(req);
-      if (!reviewedBy) return res.status(401).json({ message: "Authentication required" });
+      if (!reviewedBy) return res.status(401).json({ message: tr(req, "auth.requiredShort") });
       const reviewer = await storage.getUser(reviewedBy);
       if (reviewer?.role !== "admin" && reviewer?.role !== "super_admin") {
-        return res.status(403).json({ message: "Admin access required" });
+        return res.status(403).json({ message: tr(req, "auth.adminRequired") });
       }
       const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() || null : null;
       const excuse = await storage.getExcuseRequest(req.params.id);
-      if (!excuse) return res.status(404).json({ message: "Excuse request not found" });
+      if (!excuse) return res.status(404).json({ message: tr(req, "excuse.notFound") });
       if (excuse.status !== "pending") return res.status(422).json({ message: `Cannot reject a ${excuse.status} request` });
 
       const updated = await storage.updateExcuseRequest(req.params.id, {
@@ -5500,7 +5500,7 @@ export async function registerRoutes(
   app.get("/api/geofence-zones/:id", requirePermission("geofence:read"), async (req: Request, res: Response) => {
     try {
       const zone = await storage.getGeofenceZone(req.params.id);
-      if (!zone) return res.status(404).json({ message: "Zone not found" });
+      if (!zone) return res.status(404).json({ message: tr(req, "zone.notFound") });
       return res.json(zone);
     } catch (err) { return handleError(res, err); }
   });
@@ -5526,7 +5526,7 @@ export async function registerRoutes(
       });
       const data = updateSchema.parse(req.body);
       const zone = await storage.updateGeofenceZone(req.params.id, data);
-      if (!zone) return res.status(404).json({ message: "Zone not found" });
+      if (!zone) return res.status(404).json({ message: tr(req, "zone.notFound") });
       await logAudit(req, { action: "update_geofence_zone", entityType: "geofence_zone", entityId: zone.id, description: `Updated geofence zone "${zone.name}"` });
       return res.json(zone);
     } catch (err) { return handleError(res, err); }
@@ -5535,7 +5535,7 @@ export async function registerRoutes(
   app.delete("/api/geofence-zones/:id", requirePermission("geofence:write"), async (req: Request, res: Response) => {
     try {
       const deleted = await storage.deleteGeofenceZone(req.params.id);
-      if (!deleted) return res.status(404).json({ message: "Zone not found" });
+      if (!deleted) return res.status(404).json({ message: tr(req, "zone.notFound") });
       await logAudit(req, { action: "delete_geofence_zone", entityType: "geofence_zone", entityId: req.params.id, description: "Deleted geofence zone" });
       return res.json({ success: true });
     } catch (err) { return handleError(res, err); }
@@ -5568,11 +5568,11 @@ export async function registerRoutes(
       if (!userId) return res.status(401).json({ message: tr(req, "auth.required") });
 
       const wfRecord = await storage.getWorkforceEmployee(workforceId);
-      if (!wfRecord) return res.status(404).json({ message: "Workforce record not found" });
+      if (!wfRecord) return res.status(404).json({ message: tr(req, "workforce.notFound") });
       if (wfRecord.candidateId) {
         const candidate = await storage.getCandidate(wfRecord.candidateId);
         if (!candidate || candidate.userId !== userId) {
-          return res.status(403).json({ message: "Workforce record does not belong to authenticated user." });
+          return res.status(403).json({ message: tr(req, "workforce.ownershipMismatch") });
         }
       }
 
@@ -5736,12 +5736,12 @@ export async function registerRoutes(
 
       const wfRecord = await storage.getWorkforceEmployee(parsed.workforceId);
       if (!wfRecord) {
-        return res.status(404).json({ message: "Workforce record not found" });
+        return res.status(404).json({ message: tr(req, "workforce.notFound") });
       }
       if (wfRecord.candidateId) {
         const candidate = await storage.getCandidate(wfRecord.candidateId);
         if (!candidate || candidate.userId !== userId) {
-          return res.status(403).json({ message: "Workforce record does not belong to authenticated user." });
+          return res.status(403).json({ message: tr(req, "workforce.ownershipMismatch") });
         }
       }
       if (!wfRecord.isActive) {
@@ -6076,7 +6076,7 @@ export async function registerRoutes(
         const adminUser = await storage.getUserByUsername("admin");
         reviewedBy = adminUser?.id ?? null;
       }
-      if (!reviewedBy) return res.status(400).json({ message: "Reviewer identity required" });
+      if (!reviewedBy) return res.status(400).json({ message: tr(req, "common.reviewerRequired") });
       await approveSubmission(req.params.id, reviewedBy, notes);
       await logAudit(req, { action: "approve_attendance_submission", entityType: "attendance_submission", entityId: req.params.id, description: `Approved flagged attendance submission${notes ? `: ${notes}` : ""}` });
       const updated = await storage.getAttendanceSubmission(req.params.id);
@@ -6100,7 +6100,7 @@ export async function registerRoutes(
         const adminUser = await storage.getUserByUsername("admin");
         reviewedBy = adminUser?.id ?? null;
       }
-      if (!reviewedBy) return res.status(400).json({ message: "Reviewer identity required" });
+      if (!reviewedBy) return res.status(400).json({ message: tr(req, "common.reviewerRequired") });
       await rejectSubmission(req.params.id, reviewedBy, notes);
       await logAudit(req, { action: "reject_attendance_submission", entityType: "attendance_submission", entityId: req.params.id, description: `Rejected attendance submission${notes ? `: ${notes}` : ""}` });
       const updated = await storage.getAttendanceSubmission(req.params.id);
@@ -6126,12 +6126,12 @@ export async function registerRoutes(
       const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("photo_requests:read");
       if (!isAdmin) {
         const myCand = await storage.getCandidateByUserId(req.authUserId!);
-        if (!myCand) return res.status(403).json({ message: "Access denied" });
+        if (!myCand) return res.status(403).json({ message: tr(req, "common.accessDenied") });
         if (!candidateId) {
           return res.status(400).json({ message: "candidateId is required" });
         }
         if (candidateId !== myCand.id) {
-          return res.status(403).json({ message: "Access denied" });
+          return res.status(403).json({ message: tr(req, "common.accessDenied") });
         }
       }
 
@@ -6148,11 +6148,11 @@ export async function registerRoutes(
         const adminUser = await storage.getUserByUsername("admin");
         reviewedBy = adminUser?.id ?? null;
       }
-      if (!reviewedBy) return res.status(400).json({ message: "Reviewer identity required" });
+      if (!reviewedBy) return res.status(400).json({ message: tr(req, "common.reviewerRequired") });
 
       const changeReq = await storage.getPhotoChangeRequest(req.params.id);
-      if (!changeReq) return res.status(404).json({ message: "Photo change request not found" });
-      if (changeReq.status !== "pending") return res.status(409).json({ message: "Request already reviewed" });
+      if (!changeReq) return res.status(404).json({ message: tr(req, "photoChange.notFound") });
+      if (changeReq.status !== "pending") return res.status(409).json({ message: tr(req, "common.alreadyReviewed") });
 
       await storage.updateCandidate(changeReq.candidateId, { photoUrl: changeReq.newPhotoUrl, hasPhoto: true });
 
@@ -6199,11 +6199,11 @@ export async function registerRoutes(
         const adminUser = await storage.getUserByUsername("admin");
         reviewedBy = adminUser?.id ?? null;
       }
-      if (!reviewedBy) return res.status(400).json({ message: "Reviewer identity required" });
+      if (!reviewedBy) return res.status(400).json({ message: tr(req, "common.reviewerRequired") });
 
       const changeReq = await storage.getPhotoChangeRequest(req.params.id);
-      if (!changeReq) return res.status(404).json({ message: "Photo change request not found" });
-      if (changeReq.status !== "pending") return res.status(409).json({ message: "Request already reviewed" });
+      if (!changeReq) return res.status(404).json({ message: tr(req, "photoChange.notFound") });
+      if (changeReq.status !== "pending") return res.status(409).json({ message: tr(req, "common.alreadyReviewed") });
 
       const updated = await storage.updatePhotoChangeRequest(req.params.id, {
         status: "rejected",
@@ -6793,7 +6793,7 @@ export async function registerRoutes(
       if (!isAdmin) {
         const myCand = await storage.getCandidateByUserId(userId);
         if (!myCand || myCand.id !== req.params.candidateId) {
-          return res.status(403).json({ message: "Access denied" });
+          return res.status(403).json({ message: tr(req, "common.accessDenied") });
         }
       }
 
