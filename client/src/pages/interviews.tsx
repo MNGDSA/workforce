@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useTranslation } from "react-i18next";
 import DashboardLayout from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,69 +10,30 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Search,
-  Filter,
-  MoreHorizontal,
-  Calendar,
-  Clock,
-  Video,
-  Phone,
-  MapPin,
-  CheckCircle2,
-  Loader2,
-  Plus,
-  Users,
-  User,
-  StickyNote,
-  ExternalLink,
-  ThumbsUp,
-  RotateCcw,
-  Maximize2,
-  ArrowLeft,
-  X,
+  Search, Filter, MoreHorizontal, Calendar, Clock, Video, Phone, MapPin,
+  CheckCircle2, Loader2, Plus, Users, User, StickyNote, ExternalLink,
+  ThumbsUp, RotateCcw, Maximize2, ArrowLeft, X,
 } from "lucide-react";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { formatNumber } from "@/lib/format";
 
 type Candidate = { id: string; fullNameEn: string; nationalId?: string; photoUrl?: string | null };
 type Interview = {
@@ -99,18 +61,10 @@ type InterviewDetail = {
   invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[];
 };
 
-// ─── Utility helpers ───────────────────────────────────────────────────────────
 function typeIcon(type: string) {
   if (type === "video") return <Video className="h-4 w-4" />;
   if (type === "phone") return <Phone className="h-4 w-4" />;
   return <MapPin className="h-4 w-4" />;
-}
-
-function typeLabel(type: string) {
-  if (type === "video") return "Video Call";
-  if (type === "phone") return "Phone Call";
-  if (type === "in_person") return "In Person";
-  return type;
 }
 
 function statusStyle(status: string) {
@@ -122,28 +76,29 @@ function statusStyle(status: string) {
   return "bg-muted text-muted-foreground";
 }
 
-function statusLabel(status: string) {
-  return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatScheduled(iso: string) {
-  const d = new Date(iso);
+function useFormatters() {
+  const { i18n } = useTranslation();
+  const isAr = i18n.language.startsWith("ar");
+  const dateLocale = isAr ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB";
   return {
-    date: d.toLocaleDateString("en-SA", { weekday: "short", month: "short", day: "numeric" }),
-    time: d.toLocaleTimeString("en-SA", { hour: "2-digit", minute: "2-digit" }),
+    isAr,
+    formatScheduled(iso: string) {
+      const d = new Date(iso);
+      return {
+        date: d.toLocaleDateString(dateLocale, { weekday: "short", month: "short", day: "numeric" }),
+        time: d.toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit", hour12: false }),
+      };
+    },
+    formatCreatedAt(iso: string) {
+      return new Date(iso).toLocaleDateString(dateLocale, { day: "numeric", month: "short", year: "numeric" });
+    },
   };
-}
-
-function formatCreatedAt(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-SA", { day: "numeric", month: "short", year: "numeric" });
 }
 
 function initials(name: string) {
   return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
 
-// ─── Interview Detail Sheet ────────────────────────────────────────────────────
 function InterviewDetailSheet({
   interviewId,
   groupName,
@@ -158,6 +113,8 @@ function InterviewDetailSheet({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
+  const { t, i18n } = useTranslation(["interviews"]);
+  const { isAr, formatScheduled, formatCreatedAt } = useFormatters();
   const [localStatuses, setLocalStatuses] = useState<Record<string, string>>({});
   const [candidateSearch, setCandidateSearch] = useState("");
 
@@ -175,9 +132,9 @@ function InterviewDetailSheet({
       setLocalStatuses(prev => ({ ...prev, [vars.candidateId]: vars.status }));
       queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/interviews", interviewId] });
-      toast({ title: vars.status === "shortlisted" ? "Candidate shortlisted" : vars.status === "rejected" ? "Candidate rejected" : "Status updated" });
+      toast({ title: vars.status === "shortlisted" ? t("interviews:toast.shortlisted") : vars.status === "rejected" ? t("interviews:toast.rejected") : t("interviews:toast.updated") });
     },
-    onError: () => toast({ title: "Failed to update status", variant: "destructive" }),
+    onError: () => toast({ title: t("interviews:toast.updateFail"), variant: "destructive" }),
   });
 
   const iv = data?.interview;
@@ -186,14 +143,14 @@ function InterviewDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-xl bg-card border-border p-0 flex flex-col">
+      <SheetContent side={isAr ? "left" : "right"} className="w-full sm:max-w-xl bg-card border-border p-0 flex flex-col">
         <SheetHeader className="px-6 py-5 border-b border-border shrink-0">
           <SheetTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
             <Calendar className="h-5 w-5 text-primary" />
-            {groupName}
+            <bdi>{groupName}</bdi>
           </SheetTitle>
           <SheetDescription className="text-muted-foreground text-sm">
-            Interview and Training session details and invited candidate list
+            {t("interviews:detail.desc")}
           </SheetDescription>
         </SheetHeader>
 
@@ -203,69 +160,66 @@ function InterviewDetailSheet({
           </div>
         ) : !iv ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-            Interview not found
+            {t("interviews:detail.notFound")}
           </div>
         ) : (
           <ScrollArea className="flex-1">
             <div className="px-6 py-5 space-y-6">
 
-              {/* ── Status badge ── */}
               <div>
                 <Badge variant="outline" className={`text-sm px-3 py-1 border-0 font-semibold ${statusStyle(iv.status)}`}>
-                  {iv.status === "completed" && <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />}
-                  {statusLabel(iv.status)}
+                  {iv.status === "completed" && <CheckCircle2 className="me-1.5 h-3.5 w-3.5" />}
+                  {t(`interviews:status.${iv.status}`, { defaultValue: iv.status })}
                 </Badge>
               </div>
 
-              {/* ── Session metadata ── */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Date</p>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">{t("interviews:detail.date")}</p>
                   <p className="text-sm text-white flex items-center gap-1.5">
                     <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                    {scheduled?.date}
+                    <bdi>{scheduled?.date}</bdi>
                   </p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Time</p>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">{t("interviews:detail.time")}</p>
                   <p className="text-sm text-white flex items-center gap-1.5">
                     <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                    {scheduled?.time}
+                    <span dir="ltr">{scheduled?.time}</span>
                   </p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Venue</p>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">{t("interviews:detail.venue")}</p>
                   <p className="text-sm text-white flex items-center gap-1.5">
                     <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                    {iv.type || "—"}
+                    <bdi>{iv.type ? t(`interviews:type.${iv.type}`, { defaultValue: iv.type }) : "—"}</bdi>
                   </p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Duration</p>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">{t("interviews:detail.duration")}</p>
                   <p className="text-sm text-white flex items-center gap-1.5">
                     <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                    {iv.durationMinutes} min
+                    {t("interviews:table.minSuffix", { n: formatNumber(iv.durationMinutes, i18n.language) })}
                   </p>
                 </div>
                 {iv.createdByName && (
                   <div className="space-y-1">
-                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Created by</p>
+                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">{t("interviews:detail.createdBy")}</p>
                     <p className="text-sm text-white flex items-center gap-1.5">
                       <User className="h-3.5 w-3.5 text-muted-foreground" />
-                      {iv.createdByName}
+                      <bdi>{iv.createdByName}</bdi>
                     </p>
                   </div>
                 )}
                 <div className="space-y-1">
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Created on</p>
-                  <p className="text-sm text-white">{formatCreatedAt(iv.createdAt)}</p>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">{t("interviews:detail.createdOn")}</p>
+                  <p className="text-sm text-white"><bdi>{formatCreatedAt(iv.createdAt)}</bdi></p>
                 </div>
               </div>
 
-              {/* ── Google Maps link ── */}
               {iv.meetingUrl && (
                 <div className="space-y-1.5">
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Location Link</p>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">{t("interviews:detail.locationLink")}</p>
                   <a
                     href={iv.meetingUrl}
                     target="_blank"
@@ -273,34 +227,32 @@ function InterviewDetailSheet({
                     className="flex items-center gap-2 text-sm text-primary hover:text-primary/70 transition-colors"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
-                    Open in Google Maps
+                    {t("interviews:detail.openMaps")}
                   </a>
                 </div>
               )}
 
-              {/* ── Notes ── */}
               {iv.notes && (
                 <div className="space-y-1.5">
                   <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold flex items-center gap-1.5">
                     <StickyNote className="h-3 w-3" />
-                    Session Notes
+                    {t("interviews:detail.notes")}
                   </p>
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted/10 rounded-md px-3 py-2 border border-border">
-                    {iv.notes}
+                    <bdi>{iv.notes}</bdi>
                   </p>
                 </div>
               )}
 
-              {/* ── Invited Candidates ── */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold flex items-center gap-1.5">
                     <Users className="h-3 w-3" />
-                    Invited Candidates
+                    {t("interviews:detail.invited")}
                   </p>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs font-bold">
-                      {invitedCandidates.length.toLocaleString()}
+                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs font-bold" dir="ltr">
+                      {formatNumber(invitedCandidates.length, i18n.language)}
                     </Badge>
                     {invitedCandidates.length > 0 && (
                       <Button
@@ -314,7 +266,7 @@ function InterviewDetailSheet({
                         }}
                       >
                         <Maximize2 className="h-3 w-3" />
-                        Full Page
+                        {t("interviews:detail.fullPage")}
                       </Button>
                     )}
                   </div>
@@ -322,18 +274,18 @@ function InterviewDetailSheet({
 
                 {invitedCandidates.length > 5 && (
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                     <Input
-                      placeholder="Search by ID number…"
+                      placeholder={t("interviews:detail.searchIdPh")}
                       value={candidateSearch}
                       onChange={(e) => setCandidateSearch(e.target.value)}
-                      className="pl-9 h-8 text-xs bg-background border-border"
+                      className="ps-9 h-8 text-xs bg-background border-border"
                       data-testid="input-search-invited-candidates"
                     />
                     {candidateSearch && (
                       <button
                         onClick={() => setCandidateSearch("")}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+                        className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
                       >
                         <X className="h-3 w-3" />
                       </button>
@@ -344,7 +296,7 @@ function InterviewDetailSheet({
                 {invitedCandidates.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center rounded-md border border-dashed border-border">
                     <Users className="h-8 w-8 text-muted-foreground/30 mb-2" />
-                    <p className="text-sm text-muted-foreground">No candidates recorded for this session</p>
+                    <p className="text-sm text-muted-foreground">{t("interviews:detail.noCandidates")}</p>
                   </div>
                 ) : (() => {
                   const filtered = candidateSearch.trim()
@@ -353,7 +305,7 @@ function InterviewDetailSheet({
                   return filtered.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-6 text-center rounded-md border border-dashed border-border">
                       <Search className="h-6 w-6 text-muted-foreground/30 mb-2" />
-                      <p className="text-sm text-muted-foreground">No candidates matching "{candidateSearch}"</p>
+                      <p className="text-sm text-muted-foreground">{t("interviews:detail.noMatches", { q: candidateSearch })}</p>
                     </div>
                   ) : (
                   <div className="rounded-md border border-border divide-y divide-border overflow-hidden">
@@ -361,10 +313,10 @@ function InterviewDetailSheet({
                       const effectiveStatus = localStatuses[c.id] ?? c.applicationStatus;
                       const isShortlisted = effectiveStatus === "shortlisted";
                       const isRejected    = effectiveStatus === "rejected";
-                      const isPending     = statusMutation.isPending && (statusMutation.variables as any)?.candidateId === c.id;
+                      const isPending     = statusMutation.isPending && (statusMutation.variables as { candidateId?: string } | undefined)?.candidateId === c.id;
                       return (
                         <div key={c.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/10 transition-colors" data-testid={`detail-candidate-${c.id}`}>
-                          <span className="text-[10px] text-muted-foreground/50 font-mono w-5 text-right shrink-0">{idx + 1}</span>
+                          <span className="text-[10px] text-muted-foreground/50 font-mono w-5 text-end shrink-0" dir="ltr">{formatNumber(idx + 1, i18n.language)}</span>
                           <Avatar className="h-7 w-7 border border-border shrink-0">
                             {c.photoUrl && <AvatarImage src={c.photoUrl} alt={c.fullNameEn} className="object-cover" />}
                             <AvatarFallback className="bg-primary/15 text-primary text-[10px]">
@@ -372,19 +324,17 @@ function InterviewDetailSheet({
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-white font-medium truncate">{c.fullNameEn}</p>
-                            <p className="text-[10px] text-muted-foreground font-mono">{c.nationalId ?? "—"}</p>
+                            <p className="text-sm text-white font-medium truncate"><bdi>{c.fullNameEn}</bdi></p>
+                            <p className="text-[10px] text-muted-foreground font-mono" dir="ltr">{c.nationalId ?? "—"}</p>
                           </div>
 
-                          {/* Status badge */}
                           {isShortlisted && (
-                            <Badge className="bg-emerald-900/50 text-emerald-400 border-0 text-[10px] px-2 shrink-0">Shortlisted</Badge>
+                            <Badge className="bg-emerald-900/50 text-emerald-400 border-0 text-[10px] px-2 shrink-0">{t("interviews:labels.shortlisted")}</Badge>
                           )}
                           {isRejected && (
-                            <Badge className="bg-red-900/50 text-red-400 border-0 text-[10px] px-2 shrink-0">Rejected</Badge>
+                            <Badge className="bg-red-900/50 text-red-400 border-0 text-[10px] px-2 shrink-0">{t("interviews:labels.rejected")}</Badge>
                           )}
 
-                          {/* Action buttons */}
                           <div className="flex gap-1 shrink-0">
                             {isPending ? (
                               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -394,7 +344,7 @@ function InterviewDetailSheet({
                                   data-testid={`button-shortlist-${c.id}`}
                                   size="icon"
                                   variant="ghost"
-                                  title="Shortlist"
+                                  title={t("interviews:detail.tipShortlist")}
                                   disabled={isShortlisted}
                                   onClick={() => statusMutation.mutate({ appId: c.applicationId!, candidateId: c.id, status: "shortlisted" })}
                                   className={`h-7 w-7 ${isShortlisted ? "text-emerald-500" : "text-muted-foreground hover:text-emerald-400 hover:bg-emerald-950/40"}`}
@@ -406,7 +356,7 @@ function InterviewDetailSheet({
                                     data-testid={`button-reset-status-${c.id}`}
                                     size="icon"
                                     variant="ghost"
-                                    title="Reset to interviewed"
+                                    title={t("interviews:detail.tipReset")}
                                     onClick={() => statusMutation.mutate({ appId: c.applicationId!, candidateId: c.id, status: "interviewed" })}
                                     className="h-7 w-7 text-muted-foreground hover:text-white hover:bg-muted/20"
                                   >
@@ -415,7 +365,7 @@ function InterviewDetailSheet({
                                 )}
                               </>
                             ) : (
-                              <span className="text-[10px] text-muted-foreground/40 italic">No application</span>
+                              <span className="text-[10px] text-muted-foreground/40 italic">{t("interviews:detail.noApplication")}</span>
                             )}
                           </div>
                         </div>
@@ -433,12 +383,13 @@ function InterviewDetailSheet({
   );
 }
 
-// ─── Full Page Candidate List ─────────────────────────────────────────────────
 export function InterviewCandidatesPage({ params }: { params: { id: string } }) {
   const interviewId = params.id;
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { t, i18n } = useTranslation(["interviews"]);
+  const { formatScheduled } = useFormatters();
   const [search, setSearch] = useState("");
   const [localStatuses, setLocalStatuses] = useState<Record<string, string>>({});
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -472,9 +423,9 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
       setLocalStatuses(prev => ({ ...prev, [vars.candidateId]: vars.status }));
       queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/interviews", interviewId] });
-      toast({ title: vars.status === "shortlisted" ? "Candidate shortlisted" : vars.status === "rejected" ? "Candidate rejected" : "Status updated" });
+      toast({ title: vars.status === "shortlisted" ? t("interviews:toast.shortlisted") : vars.status === "rejected" ? t("interviews:toast.rejected") : t("interviews:toast.updated") });
     },
-    onError: () => toast({ title: "Failed to update status", variant: "destructive" }),
+    onError: () => toast({ title: t("interviews:toast.updateFail"), variant: "destructive" }),
   });
 
   const bulkShortlistMutation = useMutation({
@@ -488,9 +439,9 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
       setLocalStatuses(prev => ({ ...prev, ...updates }));
       clearSelection();
       queryClient.invalidateQueries({ queryKey: ["/api/interviews", interviewId] });
-      toast({ title: `${result.succeeded} candidate${result.succeeded !== 1 ? "s" : ""} shortlisted` });
+      toast({ title: t("interviews:toast.bulkShortlisted", { count: result.succeeded, replace: { n: formatNumber(result.succeeded, i18n.language) } }) });
     },
-    onError: () => toast({ title: "Bulk shortlist failed", variant: "destructive" }),
+    onError: () => toast({ title: t("interviews:toast.bulkFail"), variant: "destructive" }),
   });
 
   const iv = data?.interview;
@@ -514,7 +465,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
           <Button
             variant="ghost"
             size="icon"
-            className="h-9 w-9 shrink-0"
+            className="h-9 w-9 shrink-0 rtl:rotate-180"
             onClick={() => navigate("/interviews")}
             data-testid="button-back-to-interviews"
           >
@@ -522,11 +473,11 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
           </Button>
           <div className="flex-1 min-w-0">
             <h1 className="font-display text-2xl font-bold text-white truncate" data-testid="text-session-name">
-              {iv?.groupName || "Session"}
+              <bdi>{iv?.groupName || t("interviews:fullpage.session")}</bdi>
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {scheduled ? `${scheduled.date} at ${scheduled.time}` : "Loading…"}
-              {iv && ` · ${typeLabel(iv.type)}`}
+              <bdi>{scheduled ? `${scheduled.date} · ${scheduled.time}` : t("interviews:fullpage.loading")}</bdi>
+              {iv && <> · {t(`interviews:type.${iv.type}`, { defaultValue: iv.type })}</>}
             </p>
           </div>
         </div>
@@ -537,50 +488,49 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
           </div>
         ) : !iv ? (
           <div className="flex items-center justify-center py-20 text-muted-foreground">
-            Interview not found
+            {t("interviews:detail.notFound")}
           </div>
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-3">
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-sm font-bold px-3 py-1">
-                {invitedCandidates.length.toLocaleString()} Candidates
+                {t("interviews:fullpage.candidates", { n: formatNumber(invitedCandidates.length, i18n.language) })}
               </Badge>
               {shortlistedCount > 0 && (
                 <Badge className="bg-emerald-900/50 text-emerald-400 border-0 text-sm px-3 py-1">
-                  {shortlistedCount} Shortlisted
+                  {t("interviews:fullpage.shortlistedN", { n: formatNumber(shortlistedCount, i18n.language) })}
                 </Badge>
               )}
               {rejectedCount > 0 && (
                 <Badge className="bg-red-900/50 text-red-400 border-0 text-sm px-3 py-1">
-                  {rejectedCount} Rejected
+                  {t("interviews:fullpage.rejectedN", { n: formatNumber(rejectedCount, i18n.language) })}
                 </Badge>
               )}
             </div>
 
             <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by ID number or name…"
+                placeholder={t("interviews:fullpage.searchPh")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 bg-background border-border"
+                className="ps-10 bg-background border-border"
                 data-testid="input-fullpage-search-candidates"
               />
               {search && (
                 <button
                   onClick={() => setSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+                  className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
                 >
                   <X className="h-4 w-4" />
                 </button>
               )}
             </div>
 
-            {/* Bulk action bar */}
             {selectedIds.size > 0 && (
               <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-sm bg-primary/10 border border-primary/30">
                 <span className="text-sm text-primary font-medium">
-                  {selectedIds.size} candidate{selectedIds.size !== 1 ? "s" : ""} selected
+                  {t("interviews:fullpage.selected", { count: selectedIds.size, replace: { n: formatNumber(selectedIds.size, i18n.language) } })}
                 </span>
                 <div className="flex items-center gap-2">
                   <Button
@@ -590,7 +540,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                     onClick={clearSelection}
                     data-testid="button-bulk-clear-selection"
                   >
-                    Clear
+                    {t("interviews:fullpage.clear")}
                   </Button>
                   <Button
                     size="sm"
@@ -609,7 +559,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                     ) : (
                       <ThumbsUp className="h-3.5 w-3.5" />
                     )}
-                    Shortlist {selectedIds.size}
+                    {t("interviews:fullpage.shortlistN", { n: formatNumber(selectedIds.size, i18n.language) })}
                   </Button>
                 </div>
               </div>
@@ -619,7 +569,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
               <div className="flex flex-col items-center justify-center py-12 text-center rounded-md border border-dashed border-border">
                 <Search className="h-8 w-8 text-muted-foreground/30 mb-2" />
                 <p className="text-sm text-muted-foreground">
-                  {search ? `No candidates matching "${search}"` : "No candidates in this session"}
+                  {search ? t("interviews:fullpage.noMatches", { q: search }) : t("interviews:fullpage.noCandidates")}
                 </p>
               </div>
             ) : (
@@ -628,7 +578,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                   <Table>
                     <TableHeader>
                       <TableRow className="border-border hover:bg-transparent">
-                        <TableHead className="w-10 pl-4">
+                        <TableHead className="w-10 ps-4">
                           {(() => {
                             const eligible = filtered.filter(c => c.applicationId && (localStatuses[c.id] ?? c.applicationStatus) !== "shortlisted");
                             const allSelected = eligible.length > 0 && eligible.every(c => selectedIds.has(c.id));
@@ -644,11 +594,11 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                             );
                           })()}
                         </TableHead>
-                        <TableHead className="w-10 text-center text-xs">#</TableHead>
-                        <TableHead>Candidate</TableHead>
-                        <TableHead>ID Number</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead className="w-10 text-center text-xs">{t("interviews:fullpage.h.num")}</TableHead>
+                        <TableHead>{t("interviews:fullpage.h.candidate")}</TableHead>
+                        <TableHead>{t("interviews:fullpage.h.id")}</TableHead>
+                        <TableHead>{t("interviews:fullpage.h.status")}</TableHead>
+                        <TableHead className="text-end">{t("interviews:fullpage.h.actions")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -656,7 +606,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                         const effectiveStatus = localStatuses[c.id] ?? c.applicationStatus;
                         const isShortlisted = effectiveStatus === "shortlisted";
                         const isRejected = effectiveStatus === "rejected";
-                        const isPending = statusMutation.isPending && (statusMutation.variables as any)?.candidateId === c.id;
+                        const isPending = statusMutation.isPending && (statusMutation.variables as { candidateId?: string } | undefined)?.candidateId === c.id;
                         const isSelected = selectedIds.has(c.id);
                         const isEligible = !!c.applicationId && !isShortlisted;
                         return (
@@ -665,7 +615,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                             className={`border-border ${isSelected ? "bg-primary/5" : ""}`}
                             data-testid={`fullpage-candidate-${c.id}`}
                           >
-                            <TableCell className="pl-4">
+                            <TableCell className="ps-4">
                               {isEligible ? (
                                 <Checkbox
                                   checked={isSelected}
@@ -677,8 +627,8 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                                 <span className="block w-4" />
                               )}
                             </TableCell>
-                            <TableCell className="text-center text-muted-foreground/50 font-mono text-xs">
-                              {idx + 1}
+                            <TableCell className="text-center text-muted-foreground/50 font-mono text-xs" dir="ltr">
+                              {formatNumber(idx + 1, i18n.language)}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-3">
@@ -688,24 +638,24 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                                     {initials(c.fullNameEn)}
                                   </AvatarFallback>
                                 </Avatar>
-                                <span className="text-sm font-medium text-white truncate">{c.fullNameEn}</span>
+                                <span className="text-sm font-medium text-white truncate"><bdi>{c.fullNameEn}</bdi></span>
                               </div>
                             </TableCell>
-                            <TableCell className="font-mono text-xs text-muted-foreground">
+                            <TableCell className="font-mono text-xs text-muted-foreground" dir="ltr">
                               {c.nationalId ?? "—"}
                             </TableCell>
                             <TableCell>
                               {isShortlisted && (
-                                <Badge className="bg-emerald-900/50 text-emerald-400 border-0 text-[10px] px-2">Shortlisted</Badge>
+                                <Badge className="bg-emerald-900/50 text-emerald-400 border-0 text-[10px] px-2">{t("interviews:labels.shortlisted")}</Badge>
                               )}
                               {isRejected && (
-                                <Badge className="bg-red-900/50 text-red-400 border-0 text-[10px] px-2">Rejected</Badge>
+                                <Badge className="bg-red-900/50 text-red-400 border-0 text-[10px] px-2">{t("interviews:labels.rejected")}</Badge>
                               )}
                               {!isShortlisted && !isRejected && effectiveStatus && (
-                                <Badge variant="outline" className="text-[10px] px-2">{statusLabel(effectiveStatus)}</Badge>
+                                <Badge variant="outline" className="text-[10px] px-2">{effectiveStatus}</Badge>
                               )}
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-end">
                               <div className="flex justify-end gap-1">
                                 {isPending ? (
                                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -715,7 +665,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                                       data-testid={`fullpage-shortlist-${c.id}`}
                                       size="icon"
                                       variant="ghost"
-                                      title="Shortlist"
+                                      title={t("interviews:detail.tipShortlist")}
                                       disabled={isShortlisted}
                                       onClick={() => statusMutation.mutate({ appId: c.applicationId!, candidateId: c.id, status: "shortlisted" })}
                                       className={`h-8 w-8 ${isShortlisted ? "text-emerald-500" : "text-muted-foreground hover:text-emerald-400 hover:bg-emerald-950/40"}`}
@@ -727,7 +677,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                                         data-testid={`fullpage-reset-${c.id}`}
                                         size="icon"
                                         variant="ghost"
-                                        title="Reset to interviewed"
+                                        title={t("interviews:detail.tipReset")}
                                         onClick={() => statusMutation.mutate({ appId: c.applicationId!, candidateId: c.id, status: "interviewed" })}
                                         className="h-8 w-8 text-muted-foreground hover:text-white hover:bg-muted/20"
                                       >
@@ -736,7 +686,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                                     )}
                                   </>
                                 ) : (
-                                  <span className="text-[10px] text-muted-foreground/40 italic">No application</span>
+                                  <span className="text-[10px] text-muted-foreground/40 italic">{t("interviews:detail.noApplication")}</span>
                                 )}
                               </div>
                             </TableCell>
@@ -750,7 +700,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
             )}
             {search && filtered.length > 0 && filtered.length < invitedCandidates.length && (
               <p className="text-xs text-muted-foreground text-center">
-                Showing {filtered.length} of {invitedCandidates.length.toLocaleString()} candidates
+                {t("interviews:fullpage.showing", { n: formatNumber(filtered.length, i18n.language), total: formatNumber(invitedCandidates.length, i18n.language) })}
               </p>
             )}
           </>
@@ -760,9 +710,10 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
   );
 }
 
-// ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function InterviewsPage() {
   const [, navigate] = useLocation();
+  const { t, i18n } = useTranslation(["interviews"]);
+  const { formatScheduled, formatCreatedAt } = useFormatters();
   const [search, setSearch] = useState("");
   const [eventFilter, setEventFilter] = useState("all");
   const [cancelPendingId, setCancelPendingId] = useState<string | null>(null);
@@ -808,7 +759,7 @@ export default function InterviewsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/interviews"] });
       queryClient.invalidateQueries({ queryKey: ["/api/interviews/stats"] });
     },
-    onError: () => toast({ title: "Update failed", variant: "destructive" }),
+    onError: () => toast({ title: t("interviews:toast.updateInterviewFail"), variant: "destructive" }),
   });
 
   const filtered = interviewList.filter((iv) => {
@@ -817,83 +768,83 @@ export default function InterviewsPage() {
     const q = search.toLowerCase();
     return (
       candidate?.fullNameEn.toLowerCase().includes(q) ||
-      typeLabel(iv.type).toLowerCase().includes(q) ||
+      iv.type.toLowerCase().includes(q) ||
       iv.status.toLowerCase().includes(q) ||
-      (iv.createdByName ?? "").toLowerCase().includes(q)
+      (iv.createdByName ?? "").toLowerCase().includes(q) ||
+      (iv.groupName ?? "").toLowerCase().includes(q)
     );
   });
 
   const scheduledCount = stats?.scheduled ?? interviewList.filter((i) => i.status === "scheduled").length;
   const completedCount = stats?.completed ?? interviewList.filter((i) => i.status === "completed").length;
   const totalCount = stats?.total ?? interviewList.length;
+  const completionRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white tracking-tight">Interview & Training</h1>
-            <p className="text-muted-foreground mt-1">Manage and track candidate interview & training schedules.</p>
+            <h1 className="text-3xl font-display font-bold text-white tracking-tight">{t("interviews:page.title")}</h1>
+            <p className="text-muted-foreground mt-1">{t("interviews:page.subtitle")}</p>
           </div>
           <Button
             className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
             onClick={() => navigate("/interviews/schedule")}
             data-testid="button-schedule-interview"
           >
-            <Plus className="mr-2 h-4 w-4" />
-            Schedule Session
+            <Plus className="me-2 h-4 w-4" />
+            {t("interviews:page.btnSchedule")}
           </Button>
         </div>
 
-        {/* Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="bg-card border-border shadow-sm border-l-4 border-l-primary">
+          <Card className="bg-card border-border shadow-sm border-s-4 border-l-primary">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("interviews:stats.total")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-interviews-total">{totalCount}</div>
-              <p className="text-xs text-muted-foreground mt-1">All interviews</p>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-interviews-total" dir="ltr">{formatNumber(totalCount, i18n.language)}</div>
+              <p className="text-xs text-muted-foreground mt-1">{t("interviews:stats.totalHint")}</p>
             </CardContent>
           </Card>
           <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Scheduled</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("interviews:stats.scheduled")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-interviews-scheduled">{scheduledCount}</div>
-              <p className="text-xs text-muted-foreground mt-1">Upcoming calls</p>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-interviews-scheduled" dir="ltr">{formatNumber(scheduledCount, i18n.language)}</div>
+              <p className="text-xs text-muted-foreground mt-1">{t("interviews:stats.scheduledHint")}</p>
             </CardContent>
           </Card>
           <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Completed</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("interviews:stats.completed")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-interviews-completed">{completedCount}</div>
-              <p className="text-xs text-muted-foreground mt-1">Successfully done</p>
+              <div className="text-4xl font-bold font-display text-white" data-testid="stat-interviews-completed" dir="ltr">{formatNumber(completedCount, i18n.language)}</div>
+              <p className="text-xs text-muted-foreground mt-1">{t("interviews:stats.completedHint")}</p>
             </CardContent>
           </Card>
           <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Completion Rate</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("interviews:stats.rate")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white">
-                {totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0}%
+              <div className="text-4xl font-bold font-display text-white" dir="ltr">
+                {formatNumber(completionRate, i18n.language)}%
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Of all interviews</p>
+              <p className="text-xs text-muted-foreground mt-1">{t("interviews:stats.rateHint")}</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Search */}
         <div className="flex flex-col md:flex-row gap-4 items-center bg-card p-4 rounded-sm border border-border">
           <div className="relative flex-1 w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
-              placeholder="Search by group name, type, status, or creator…"
-              className="pl-10 h-12 bg-muted/30 border-border focus-visible:ring-primary/20 text-base"
+              placeholder={t("interviews:filters.searchPh")}
+              className="ps-10 h-12 bg-muted/30 border-border focus-visible:ring-primary/20 text-base"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               data-testid="input-search-interviews"
@@ -901,31 +852,30 @@ export default function InterviewsPage() {
           </div>
           <Select value={eventFilter} onValueChange={setEventFilter}>
             <SelectTrigger className="w-[180px] h-12 bg-muted/30 border-border" data-testid="select-event-filter-interviews">
-              <SelectValue placeholder="All Events" />
+              <SelectValue placeholder={t("interviews:filters.allEvents")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Events</SelectItem>
+              <SelectItem value="all">{t("interviews:filters.allEvents")}</SelectItem>
               {eventsList.map((evt) => (
-                <SelectItem key={evt.id} value={evt.id}>{evt.name}</SelectItem>
+                <SelectItem key={evt.id} value={evt.id}><bdi>{evt.name}</bdi></SelectItem>
               ))}
             </SelectContent>
           </Select>
           <div className="flex gap-2 w-full md:w-auto">
             <Button variant="outline" className="h-12 border-border bg-background flex-1 md:flex-none">
-              <Filter className="mr-2 h-4 w-4" />
-              Status
+              <Filter className="me-2 h-4 w-4" />
+              {t("interviews:filters.status")}
             </Button>
             <Button variant="outline" className="h-12 border-border bg-background flex-1 md:flex-none">
-              <Calendar className="mr-2 h-4 w-4" />
-              Date
+              <Calendar className="me-2 h-4 w-4" />
+              {t("interviews:filters.date")}
             </Button>
           </div>
         </div>
 
-        {/* Table */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-lg font-display text-white">Interview & Training Schedule</CardTitle>
+            <CardTitle className="text-lg font-display text-white">{t("interviews:table.title")}</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
@@ -935,20 +885,20 @@ export default function InterviewsPage() {
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Users className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                <p className="text-muted-foreground font-medium">No interviews scheduled</p>
-                <p className="text-muted-foreground/60 text-sm mt-1">Click "Schedule Session" to add one</p>
+                <p className="text-muted-foreground font-medium">{t("interviews:table.empty")}</p>
+                <p className="text-muted-foreground/60 text-sm mt-1">{t("interviews:table.emptyHint")}</p>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="text-muted-foreground">Group / Batch</TableHead>
-                    <TableHead className="text-muted-foreground">Scheduled</TableHead>
-                    <TableHead className="text-muted-foreground hidden md:table-cell">Venue</TableHead>
-                    <TableHead className="text-muted-foreground hidden md:table-cell">Invited</TableHead>
-                    <TableHead className="text-muted-foreground hidden lg:table-cell">Created</TableHead>
-                    <TableHead className="text-muted-foreground">Status</TableHead>
-                    <TableHead className="text-right text-muted-foreground">Actions</TableHead>
+                    <TableHead className="text-muted-foreground">{t("interviews:table.h.group")}</TableHead>
+                    <TableHead className="text-muted-foreground">{t("interviews:table.h.scheduled")}</TableHead>
+                    <TableHead className="text-muted-foreground hidden md:table-cell">{t("interviews:table.h.venue")}</TableHead>
+                    <TableHead className="text-muted-foreground hidden md:table-cell">{t("interviews:table.h.invited")}</TableHead>
+                    <TableHead className="text-muted-foreground hidden lg:table-cell">{t("interviews:table.h.created")}</TableHead>
+                    <TableHead className="text-muted-foreground">{t("interviews:table.h.status")}</TableHead>
+                    <TableHead className="text-end text-muted-foreground">{t("interviews:table.h.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -963,75 +913,68 @@ export default function InterviewsPage() {
                         onClick={() => setDetailInterview(iv)}
                         data-testid={`row-interview-${iv.id}`}
                       >
-                        {/* Group name */}
                         <TableCell>
                           <div>
                             <p className="font-medium text-white text-sm">
-                              {iv.groupName || candidate?.fullNameEn || "Unnamed Session"}
+                              <bdi>{iv.groupName || candidate?.fullNameEn || t("interviews:table.unnamed")}</bdi>
                             </p>
-                            <p className="text-[10px] text-muted-foreground font-mono">
+                            <p className="text-[10px] text-muted-foreground font-mono" dir="ltr">
                               {iv.id.slice(0, 8)}…
                             </p>
                           </div>
                         </TableCell>
 
-                        {/* Scheduled date/time */}
                         <TableCell>
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-1.5 text-sm text-white">
                               <Calendar className="h-3 w-3 text-muted-foreground" />
-                              {date}
+                              <bdi>{date}</bdi>
                             </div>
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground" dir="ltr">
                               <Clock className="h-3 w-3" />
-                              {time} · {iv.durationMinutes} min
+                              {time} · {t("interviews:table.minSuffix", { n: formatNumber(iv.durationMinutes, i18n.language) })}
                             </div>
                           </div>
                         </TableCell>
 
-                        {/* Venue */}
                         <TableCell className="hidden md:table-cell">
                           <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                             {typeIcon(iv.type)}
-                            <span className="truncate max-w-32">{iv.type || "—"}</span>
+                            <span className="truncate max-w-32"><bdi>{iv.type ? t(`interviews:type.${iv.type}`, { defaultValue: iv.type }) : "—"}</bdi></span>
                           </div>
                         </TableCell>
 
-                        {/* Invited count */}
                         <TableCell className="hidden md:table-cell">
                           <Badge
                             variant="outline"
                             className="bg-primary/10 text-primary border-primary/20 font-semibold"
                             data-testid={`badge-invited-${iv.id}`}
                           >
-                            <Users className="mr-1 h-3 w-3" />
-                            {invitedCount.toLocaleString()}
+                            <Users className="me-1 h-3 w-3" />
+                            <span dir="ltr">{formatNumber(invitedCount, i18n.language)}</span>
                           </Badge>
                         </TableCell>
 
-                        {/* Created column */}
                         <TableCell className="hidden lg:table-cell">
                           <div className="space-y-0.5">
-                            <p className="text-sm text-white">{formatCreatedAt(iv.createdAt)}</p>
+                            <p className="text-sm text-white"><bdi>{formatCreatedAt(iv.createdAt)}</bdi></p>
                             {iv.createdByName && (
                               <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                                 <User className="h-2.5 w-2.5" />
-                                {iv.createdByName}
+                                <bdi>{iv.createdByName}</bdi>
                               </p>
                             )}
                           </div>
                         </TableCell>
 
-                        {/* Status */}
                         <TableCell>
-                          <Badge variant="outline" className={`font-medium border-0 capitalize ${statusStyle(iv.status)}`}>
-                            {iv.status === "completed" && <CheckCircle2 className="mr-1 h-3 w-3" />}
-                            {statusLabel(iv.status)}
+                          <Badge variant="outline" className={`font-medium border-0 ${statusStyle(iv.status)}`}>
+                            {iv.status === "completed" && <CheckCircle2 className="me-1 h-3 w-3" />}
+                            {t(`interviews:status.${iv.status}`, { defaultValue: iv.status })}
                           </Badge>
                         </TableCell>
 
-                        {/* Actions */}
-                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <TableCell className="text-end" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white" data-testid={`button-interview-actions-${iv.id}`}>
@@ -1040,22 +983,22 @@ export default function InterviewsPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-48">
                               <DropdownMenuItem onClick={() => setDetailInterview(iv)}>
-                                View Details
+                                {t("interviews:actions.view")}
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               {iv.status === "scheduled" && (
                                 <DropdownMenuItem onClick={() => updateStatus.mutate({ id: iv.id, status: "in_progress" })}>
-                                  Mark In Progress
+                                  {t("interviews:actions.markInProgress")}
                                 </DropdownMenuItem>
                               )}
                               {(iv.status === "scheduled" || iv.status === "in_progress") && (
                                 <DropdownMenuItem onClick={() => updateStatus.mutate({ id: iv.id, status: "completed" })}>
-                                  Mark Completed
+                                  {t("interviews:actions.markCompleted")}
                                 </DropdownMenuItem>
                               )}
                               {iv.status === "scheduled" && (
                                 <DropdownMenuItem onClick={() => updateStatus.mutate({ id: iv.id, status: "no_show" })}>
-                                  Mark No-Show
+                                  {t("interviews:actions.markNoShow")}
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuSeparator />
@@ -1064,7 +1007,7 @@ export default function InterviewsPage() {
                                 onClick={() => setCancelPendingId(iv.id)}
                                 data-testid={`button-cancel-interview-${iv.id}`}
                               >
-                                Cancel Interview
+                                {t("interviews:actions.cancel")}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -1079,21 +1022,19 @@ export default function InterviewsPage() {
         </Card>
       </div>
 
-      {/* ── Detail Sheet ── */}
       <InterviewDetailSheet
         interviewId={detailInterview?.id ?? ""}
-        groupName={detailInterview?.groupName || "Interview & Training Session"}
+        groupName={detailInterview?.groupName || t("interviews:detail.title")}
         open={!!detailInterview}
         onOpenChange={(v) => { if (!v) setDetailInterview(null); }}
       />
 
-      {/* ── Cancel Confirmation ── */}
       <AlertDialog open={!!cancelPendingId} onOpenChange={(v) => { if (!v) setCancelPendingId(null); }}>
         <AlertDialogContent className="bg-card border-border">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white font-display">Cancel this interview?</AlertDialogTitle>
+            <AlertDialogTitle className="text-white font-display">{t("interviews:cancelDialog.title")}</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              This will mark the interview as cancelled. Candidates will receive a cancellation SMS and will no longer be expected to attend. This action cannot be undone.
+              {t("interviews:cancelDialog.desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1101,7 +1042,7 @@ export default function InterviewsPage() {
               className="border-border text-muted-foreground hover:text-white"
               data-testid="button-cancel-confirm-dismiss"
             >
-              Keep Interview
+              {t("interviews:cancelDialog.keep")}
             </AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -1113,7 +1054,7 @@ export default function InterviewsPage() {
                 }
               }}
             >
-              Yes, Cancel Interview
+              {t("interviews:cancelDialog.confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

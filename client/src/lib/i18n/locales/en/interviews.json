@@ -1,0 +1,122 @@
+{
+  "page": {
+    "title": "Interview & Training",
+    "subtitle": "Manage and track candidate interview & training schedules.",
+    "btnSchedule": "Schedule Session"
+  },
+  "stats": {
+    "total": "Total",
+    "totalHint": "All interviews",
+    "scheduled": "Scheduled",
+    "scheduledHint": "Upcoming calls",
+    "completed": "Completed",
+    "completedHint": "Successfully done",
+    "rate": "Completion Rate",
+    "rateHint": "Of all interviews"
+  },
+  "filters": {
+    "searchPh": "Search by group name, type, status, or creator…",
+    "allEvents": "All Events",
+    "status": "Status",
+    "date": "Date"
+  },
+  "table": {
+    "title": "Interview & Training Schedule",
+    "h": {
+      "group": "Group / Batch",
+      "scheduled": "Scheduled",
+      "venue": "Venue",
+      "invited": "Invited",
+      "created": "Created",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "unnamed": "Unnamed Session",
+    "minSuffix": "{{n}} min",
+    "empty": "No interviews scheduled",
+    "emptyHint": "Click \"Schedule Session\" to add one"
+  },
+  "type": {
+    "video": "Video Call",
+    "phone": "Phone Call",
+    "in_person": "In Person"
+  },
+  "status": {
+    "scheduled": "Scheduled",
+    "in_progress": "In Progress",
+    "completed": "Completed",
+    "cancelled": "Cancelled",
+    "no_show": "No Show"
+  },
+  "actions": {
+    "view": "View Details",
+    "markInProgress": "Mark In Progress",
+    "markCompleted": "Mark Completed",
+    "markNoShow": "Mark No-Show",
+    "cancel": "Cancel Interview"
+  },
+  "cancelDialog": {
+    "title": "Cancel this interview?",
+    "desc": "This will mark the interview as cancelled. Candidates will receive a cancellation SMS and will no longer be expected to attend. This action cannot be undone.",
+    "keep": "Keep Interview",
+    "confirm": "Yes, Cancel Interview"
+  },
+  "detail": {
+    "title": "Interview & Training Session",
+    "desc": "Interview and Training session details and invited candidate list",
+    "notFound": "Interview not found",
+    "date": "Date",
+    "time": "Time",
+    "venue": "Venue",
+    "duration": "Duration",
+    "createdBy": "Created by",
+    "createdOn": "Created on",
+    "locationLink": "Location Link",
+    "openMaps": "Open in Google Maps",
+    "notes": "Session Notes",
+    "invited": "Invited Candidates",
+    "fullPage": "Full Page",
+    "searchIdPh": "Search by ID number…",
+    "noCandidates": "No candidates recorded for this session",
+    "noMatches": "No candidates matching \"{{q}}\"",
+    "noApplication": "No application",
+    "tipShortlist": "Shortlist",
+    "tipReset": "Reset to interviewed"
+  },
+  "fullpage": {
+    "session": "Session",
+    "loading": "Loading…",
+    "candidates": "{{n}} Candidates",
+    "shortlistedN": "{{n}} Shortlisted",
+    "rejectedN": "{{n}} Rejected",
+    "searchPh": "Search by ID number or name…",
+    "selected": "{{n}} candidate selected",
+    "selected_other": "{{n}} candidates selected",
+    "clear": "Clear",
+    "shortlistN": "Shortlist {{n}}",
+    "noMatches": "No candidates matching \"{{q}}\"",
+    "noCandidates": "No candidates in this session",
+    "showing": "Showing {{n}} of {{total}} candidates",
+    "h": {
+      "num": "#",
+      "candidate": "Candidate",
+      "id": "ID Number",
+      "status": "Status",
+      "actions": "Actions"
+    }
+  },
+  "labels": {
+    "shortlisted": "Shortlisted",
+    "rejected": "Rejected"
+  },
+  "toast": {
+    "shortlisted": "Candidate shortlisted",
+    "rejected": "Candidate rejected",
+    "updated": "Status updated",
+    "updateFail": "Failed to update status",
+    "bulkShortlisted": "{{n}} candidate shortlisted",
+    "bulkShortlisted_other": "{{n}} candidates shortlisted",
+    "bulkFail": "Bulk shortlist failed",
+    "updateInterviewFail": "Update failed"
+  }
+}
