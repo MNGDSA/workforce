@@ -212,7 +212,7 @@ async function getCandidateLocale(
 
 function buildVariableSnapshot(candidate: any, template: any, ob: any): Record<string, string> {
   return {
-    fullName: candidate.fullNameEn || candidate.fullNameAr || "",
+    fullName: candidate.fullNameEn || "",
     nationalId: candidate.nationalId || "",
     phone: candidate.phone || "",
     iban: candidate.ibanNumber || "",
@@ -492,12 +492,12 @@ export async function registerRoutes(
           });
           await createInboxItem(
             "photo_change_request",
-            `Photo change request — ${candidate.fullNameEn ?? candidate.fullNameAr ?? "Unknown"}`,
+            `Photo change request — ${candidate.fullNameEn ?? "Unknown"}`,
             `Employee has submitted a new profile photo for review. The previous photo remains active until this request is approved.`,
             {
               candidateId: id,
               changeRequestId: changeRequest.id,
-              candidateName: candidate.fullNameEn ?? candidate.fullNameAr,
+              candidateName: candidate.fullNameEn,
               employeeNumber: activeRecord!.employeeNumber ?? null,
               newPhotoUrl: fileUrl,
               previousPhotoUrl: candidate.photoUrl,
@@ -2513,7 +2513,7 @@ export async function registerRoutes(
       if (!candidateId) return res.status(400).json({ message: tr(req, "candidate.noLinkedRecord") });
 
       const allowed = [
-        "fullNameAr", "email", "phone", "dateOfBirth", "gender",
+        "email", "phone", "dateOfBirth", "gender",
         "nationalityText", "maritalStatus", "iqamaNumber", "city", "region",
         "educationLevel", "university", "major",
         "ibanNumber", "ibanBankName", "ibanBankCode",
@@ -2526,7 +2526,7 @@ export async function registerRoutes(
       }
       if (Object.keys(filtered).length === 0) return res.status(400).json({ message: tr(req, "common.noFieldsToUpdate") });
 
-      const nullableFields = ["email", "fullNameAr", "phone", "dateOfBirth", "gender", "nationalityText",
+      const nullableFields = ["email", "phone", "dateOfBirth", "gender", "nationalityText",
         "maritalStatus", "iqamaNumber", "city", "region", "educationLevel", "university", "major",
         "ibanNumber", "ibanBankName", "ibanBankCode", "ibanAccountFirstName", "ibanAccountLastName",
         "emergencyContactName", "emergencyContactPhone"];
@@ -2960,7 +2960,6 @@ export async function registerRoutes(
         employeeNumber: workforce.employeeNumber,
         candidateId: workforce.candidateId,
         fullNameEn: candidates.fullNameEn,
-        fullNameAr: candidates.fullNameAr,
         nationalId: candidates.nationalId,
         phone: candidates.phone,
         photoUrl: candidates.photoUrl,
@@ -2984,7 +2983,6 @@ export async function registerRoutes(
         employeeNumber: workforce.employeeNumber,
         candidateId: workforce.candidateId,
         fullNameEn: candidates.fullNameEn,
-        fullNameAr: candidates.fullNameAr,
         nationalId: candidates.nationalId,
         phone: candidates.phone,
         photoUrl: candidates.photoUrl,
@@ -3005,7 +3003,6 @@ export async function registerRoutes(
             return {
               id: p.id,
               title: p.title,
-              titleAr: p.titleAr,
               code: p.code,
               gradeLevel: p.gradeLevel,
               parentPositionId: p.parentPositionId,
@@ -3016,7 +3013,6 @@ export async function registerRoutes(
                 candidateId: e.candidateId,
                 employeeNumber: e.employeeNumber,
                 fullNameEn: e.fullNameEn,
-                fullNameAr: e.fullNameAr,
                 nationalId: e.nationalId,
                 phone: e.phone,
                 photoUrl: e.photoUrl,
@@ -3027,7 +3023,6 @@ export async function registerRoutes(
         return {
           id: dept.id,
           name: dept.name,
-          nameAr: dept.nameAr,
           code: dept.code,
           totalEmployees,
           positions: deptPositions,
@@ -3043,7 +3038,6 @@ export async function registerRoutes(
           candidateId: e.candidateId,
           employeeNumber: e.employeeNumber,
           fullNameEn: e.fullNameEn,
-          fullNameAr: e.fullNameAr,
           nationalId: e.nationalId,
           phone: e.phone,
           photoUrl: e.photoUrl,
@@ -6307,7 +6301,6 @@ export async function registerRoutes(
         employeeNumber: string;
         phone: string | null;
         fullNameEn: string | null;
-        fullNameAr: string | null;
         positionTitle: string | null;
         jobTitle: string | null;
         departmentName: string | null;
@@ -6320,7 +6313,7 @@ export async function registerRoutes(
       for (const wid of workforceIds) {
         const emp = employeeMap.get(wid);
         if (!emp || !emp.phone) continue;
-        const name = emp.fullNameEn || emp.fullNameAr || "Employee";
+        const name = emp.fullNameEn || "Employee";
         const resolved = messageTemplate
           .replace(/\{name\}/g, name)
           .replace(/\{employee_number\}/g, emp.employeeNumber || "")
@@ -6451,7 +6444,7 @@ export async function registerRoutes(
         eventName = ev?.name ?? null;
       }
       const enrichedLines = await Promise.all(lines.map(async (line) => {
-        const [cand] = await db.select({ fullNameEn: candidates.fullNameEn, fullNameAr: candidates.fullNameAr, phone: candidates.phone, ibanNumber: candidates.ibanNumber, ibanBankCode: candidates.ibanBankCode, ibanBankName: candidates.ibanBankName, ibanAccountFirstName: candidates.ibanAccountFirstName, ibanAccountLastName: candidates.ibanAccountLastName }).from(candidates).where(eq(candidates.id, line.candidateId));
+        const [cand] = await db.select({ fullNameEn: candidates.fullNameEn, phone: candidates.phone, ibanNumber: candidates.ibanNumber, ibanBankCode: candidates.ibanBankCode, ibanBankName: candidates.ibanBankName, ibanAccountFirstName: candidates.ibanAccountFirstName, ibanAccountLastName: candidates.ibanAccountLastName }).from(candidates).where(eq(candidates.id, line.candidateId));
         const txns = await storage.getPayrollTransactions({ payRunLineId: line.id });
         return { ...line, candidate: cand ?? null, transactions: txns };
       }));
@@ -6948,7 +6941,6 @@ export async function registerRoutes(
           paymentMethod: workforce.paymentMethod,
           employmentType: workforce.employmentType,
           fullNameEn: candidates.fullNameEn,
-          fullNameAr: candidates.fullNameAr,
         })
         .from(workforce)
         .innerJoin(candidates, eq(workforce.candidateId, candidates.id))

@@ -38,7 +38,6 @@ import {
 type JobPosting = {
   id: string;
   title: string;
-  titleAr?: string;
   description?: string;
   requirements?: string;
   location?: string;

@@ -131,7 +131,6 @@ type Employee = {
   employmentType?: string | null;
   smpCompanyId?: string | null;
   smpCompanyName?: string | null;
-  fullNameAr?: string | null;
   email?: string | null;
   dateOfBirth?: string | null;
   gender?: string | null;
@@ -843,7 +842,6 @@ function EmployeeDetailDialog({
                     <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500 hover:text-zinc-300" data-testid="button-edit-personal"
                       onClick={() => {
                         setPersonalForm({
-                          fullNameAr: employee.fullNameAr || "",
                           email: employee.email || "",
                           phone: employee.phone || "",
                           dateOfBirth: employee.dateOfBirth || "",
@@ -869,7 +867,6 @@ function EmployeeDetailDialog({
                 </div>
                 {editPersonal ? (
                   <div className="grid grid-cols-2 gap-3">
-                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.arabicName")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.fullNameAr} onChange={e => setPersonalForm(f => ({ ...f, fullNameAr: e.target.value }))} data-testid="input-personal-fullNameAr" /></div>
                     <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.email")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.email} onChange={e => setPersonalForm(f => ({ ...f, email: e.target.value }))} data-testid="input-personal-email" dir="ltr" /></div>
                     <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.phone")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.phone} onChange={e => setPersonalForm(f => ({ ...f, phone: e.target.value }))} data-testid="input-personal-phone" dir="ltr" /></div>
                     <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.dateOfBirth")}</label><Input type="date" className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.dateOfBirth} onChange={e => setPersonalForm(f => ({ ...f, dateOfBirth: e.target.value }))} data-testid="input-personal-dob" /></div>
@@ -894,7 +891,6 @@ function EmployeeDetailDialog({
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-4">
-                    {employee.fullNameAr && <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.arabicName")} value={<bdi>{employee.fullNameAr}</bdi> as any} />}
                     {employee.email && <InfoRow icon={<Mail className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.email")} value={employee.email} />}
                     {employee.phone && <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.phone")} value={employee.phone} />}
                     {employee.dateOfBirth && <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.dateOfBirth")} value={formatDate(employee.dateOfBirth)} />}

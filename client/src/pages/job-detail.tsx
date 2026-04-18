@@ -29,7 +29,6 @@ import { formatNumber } from "@/lib/format";
 type JobPosting = {
   id: string;
   title: string;
-  titleAr?: string;
   description?: string;
   requirements?: string;
   location?: string;
@@ -153,8 +152,8 @@ export default function JobDetailPage() {
   }
 
   const salary = salaryLabel(job);
-  const displayTitle = isRtl && job.titleAr ? job.titleAr : job.title;
-  const subtitle = isRtl ? job.title : job.titleAr;
+  const displayTitle = job.title;
+  const subtitle: string | undefined = undefined;
 
   return (
     <div className="min-h-screen bg-background font-sans text-foreground">

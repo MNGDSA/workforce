@@ -148,7 +148,6 @@ export const candidates = pgTable(
     userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
     // Identity
     candidateCode: varchar("candidate_code", { length: 20 }),
-    fullNameAr: text("full_name_ar"),
     fullNameEn: text("full_name_en").notNull(),
     gender: genderEnum("gender"),
     dateOfBirth: text("date_of_birth"),
@@ -324,7 +323,6 @@ export const jobPostings = pgTable(
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
     title: text("title").notNull(),
-    titleAr: text("title_ar"),
     description: text("description"),
     requirements: text("requirements"),
     location: text("location"),
@@ -1466,7 +1464,6 @@ export type SmsBroadcastRecipient = typeof smsBroadcastRecipients.$inferSelect;
 export const departments = pgTable("departments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  nameAr: text("name_ar"),
   code: varchar("code", { length: 20 }).notNull().unique(),
   description: text("description"),
   isActive: boolean("is_active").notNull().default(true),
@@ -1490,7 +1487,6 @@ export const positions = pgTable("positions", {
   departmentId: varchar("department_id").notNull().references(() => departments.id, { onDelete: "restrict" }),
   parentPositionId: varchar("parent_position_id").references((): any => positions.id, { onDelete: "set null" }),
   title: text("title").notNull(),
-  titleAr: text("title_ar"),
   code: varchar("code", { length: 20 }).notNull().unique(),
   description: text("description"),
   gradeLevel: integer("grade_level"),

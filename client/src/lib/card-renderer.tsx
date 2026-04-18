@@ -3,7 +3,6 @@ import type { IdCardTemplate } from "@shared/schema";
 export interface CardEmployeeData {
   employeeNumber: string;
   fullNameEn: string;
-  fullNameAr?: string;
   nationalId?: string;
   photoUrl?: string;
   jobTitle?: string;
@@ -14,8 +13,7 @@ export interface CardEmployeeData {
 
 export const DEFAULT_FIELDS = [
   { key: "photo", label: "Employee Photo", enabled: true },
-  { key: "fullNameEn", label: "Full Name (English)", enabled: true },
-  { key: "fullNameAr", label: "Full Name (Arabic)", enabled: false },
+  { key: "fullNameEn", label: "Full Name", enabled: true },
   { key: "employeeNumber", label: "Employee Number", enabled: true },
   { key: "nationalId", label: "National ID", enabled: true },
   { key: "jobTitle", label: "Job Title / Position", enabled: true },
@@ -27,7 +25,6 @@ export const DEFAULT_FIELDS = [
 export const SAMPLE_EMPLOYEE: CardEmployeeData = {
   employeeNumber: "EMP-1001",
   fullNameEn: "Mohammed Al-Farsi",
-  fullNameAr: "محمد الفارسي",
   nationalId: "1098765432",
   photoUrl: "",
   jobTitle: "Golf Cart Operator",
@@ -158,7 +155,7 @@ export function IdCardPreview({ template, employee, scale = 1 }: IdCardPreviewPr
         }}>
           {dataFields.map((f: any) => {
             const val = (employee as any)[f.key] || "—";
-            const isName = f.key === "fullNameEn" || f.key === "fullNameAr";
+            const isName = f.key === "fullNameEn";
             return (
               <div key={f.key} style={{ lineHeight: 1.3 }}>
                 <div style={{
@@ -175,7 +172,7 @@ export function IdCardPreview({ template, employee, scale = 1 }: IdCardPreviewPr
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
-                  direction: f.key === "fullNameAr" ? "rtl" : "ltr",
+                  direction: "ltr",
                 }}>
                   {val}
                 </div>
@@ -227,10 +224,10 @@ function renderCardBodyHtml(template: Partial<IdCardTemplate>, employee: CardEmp
   const fieldsHtml = dataFields.map((f: any) => {
     const val = esc((employee as any)[f.key] || "—");
     const label = esc(f.label);
-    const isName = f.key === "fullNameEn" || f.key === "fullNameAr";
+    const isName = f.key === "fullNameEn";
     return `<div style="line-height:1.3;">
       <div style="font-size:7px;opacity:0.6;text-transform:uppercase;letter-spacing:0.5px;">${label}</div>
-      <div style="font-size:${isName ? 11 : 9.5}px;font-weight:${isName ? 700 : 500};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:${f.key === 'fullNameAr' ? 'rtl' : 'ltr'};">${val}</div>
+      <div style="font-size:${isName ? 11 : 9.5}px;font-weight:${isName ? 700 : 500};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:ltr;">${val}</div>
     </div>`;
   }).join("");
 

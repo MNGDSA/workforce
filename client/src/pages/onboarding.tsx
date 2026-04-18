@@ -109,7 +109,6 @@ interface OnboardingRecord {
 interface Candidate {
   id: string;
   fullNameEn: string;
-  fullNameAr?: string | null;
   phone?: string | null;
   nationalId?: string | null;
   hasPhoto: boolean;

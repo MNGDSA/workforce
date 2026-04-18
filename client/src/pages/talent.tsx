@@ -136,12 +136,12 @@ const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
 const DEFAULT_VISIBLE: ColumnKey[] = ["id", "candidate", "classification", "status", "phone", "email", "city"];
 
 const BULK_TEMPLATE_HEADERS = [
-  "fullNameEn", "fullNameAr", "phone", "email", "nationalId",
+  "fullNameEn", "phone", "email", "nationalId",
   "city", "nationality", "gender", "dateOfBirth", "source"
 ];
 
 const TEMPLATE_SAMPLE_ROWS = [
-  ["John Doe", "جون دو", "0501234567", "john@example.com", "1234567890", "Makkah", "saudi", "male", "1990-01-15", "individual"],
+  ["John Doe", "0501234567", "john@example.com", "1234567890", "Makkah", "saudi", "male", "1990-01-15", "individual"],
   ["Jane Smith", "جين سميث", "0559876543", "jane@example.com", "0987654321", "Jeddah", "non_saudi", "female", "1992-06-20", "smp"],
 ];
 
@@ -1015,7 +1015,6 @@ export default function TalentPage() {
         if (nonSmpRows.length > 0) {
           const mapped = nonSmpRows.map(c => ({
             fullNameEn: c.fullNameEn || "Unknown",
-            fullNameAr: c.fullNameAr || undefined,
             phone: c.phone || undefined,
             email: c.email || undefined,
             nationalId: c.nationalId || undefined,
@@ -1039,7 +1038,6 @@ export default function TalentPage() {
       // ── Non-SMP only: use generic bulk endpoint ────────────────────────────
       const mapped = candidates.map(c => ({
         fullNameEn: c.fullNameEn || "Unknown",
-        fullNameAr: c.fullNameAr || undefined,
         phone: c.phone || undefined,
         email: c.email || undefined,
         nationalId: c.nationalId || undefined,
@@ -1503,9 +1501,6 @@ export default function TalentPage() {
                                 </Avatar>
                                 <div>
                                   <p className="font-medium text-white text-sm"><bdi>{candidate.fullNameEn}</bdi></p>
-                                  {candidate.fullNameAr && (
-                                    <p className="text-xs text-muted-foreground" dir="rtl"><bdi>{candidate.fullNameAr}</bdi></p>
-                                  )}
                                 </div>
                               </div>
                             </TableCell>

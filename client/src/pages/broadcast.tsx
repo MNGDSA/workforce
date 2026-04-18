@@ -53,7 +53,6 @@ interface WorkforceEmployee {
   id: string;
   employeeNumber: string;
   fullNameEn: string | null;
-  fullNameAr: string | null;
   phone: string | null;
   positionTitle: string | null;
   departmentName: string | null;
@@ -184,7 +183,6 @@ export default function BroadcastPage() {
       if (search) {
         const q = search.toLowerCase();
         const match = (e.fullNameEn?.toLowerCase().includes(q)) ||
-          (e.fullNameAr?.toLowerCase().includes(q)) ||
           (e.employeeNumber?.toLowerCase().includes(q)) ||
           (e.phone?.includes(q));
         if (!match) return false;
@@ -548,7 +546,7 @@ export default function BroadcastPage() {
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-sm text-white font-medium truncate">
-                                    <bdi>{emp.fullNameEn || emp.fullNameAr || t("broadcast:recipients.unknown")}</bdi>
+                                    <bdi>{emp.fullNameEn || t("broadcast:recipients.unknown")}</bdi>
                                   </span>
                                   <span className="text-xs text-muted-foreground font-mono" dir="ltr">{emp.employeeNumber}</span>
                                 </div>

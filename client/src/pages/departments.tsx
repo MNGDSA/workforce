@@ -42,7 +42,6 @@ import { formatNumber } from "@/lib/format";
 type Department = {
   id: string;
   name: string;
-  nameAr: string | null;
   code: string;
   description: string | null;
   isActive: boolean;
@@ -55,7 +54,6 @@ type Position = {
   departmentId: string;
   parentPositionId: string | null;
   title: string;
-  titleAr: string | null;
   code: string;
   description: string | null;
   gradeLevel: number | null;
@@ -129,9 +127,6 @@ function PositionTreeNode({
               </Badge>
             )}
           </div>
-          {node.titleAr && (
-            <span className="text-xs text-muted-foreground" dir="rtl"><bdi>{node.titleAr}</bdi></span>
-          )}
         </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <Button
@@ -197,7 +192,6 @@ function DepartmentForm({
   const isEdit = !!department;
 
   const [name, setName] = useState(department?.name ?? "");
-  const [nameAr, setNameAr] = useState(department?.nameAr ?? "");
   const [code, setCode] = useState(department?.code ?? "");
   const [description, setDescription] = useState(department?.description ?? "");
   const [sortOrder, setSortOrder] = useState(department?.sortOrder?.toString() ?? "0");
@@ -205,7 +199,6 @@ function DepartmentForm({
   useEffect(() => {
     if (open) {
       setName(department?.name ?? "");
-      setNameAr(department?.nameAr ?? "");
       setCode(department?.code ?? "");
       setDescription(department?.description ?? "");
       setSortOrder(department?.sortOrder?.toString() ?? "0");
@@ -232,7 +225,6 @@ function DepartmentForm({
     }
     mutation.mutate({
       name: name.trim(),
-      nameAr: nameAr.trim() || null,
       code: code.trim().toUpperCase(),
       description: description.trim() || null,
       sortOrder: parseInt(sortOrder) || 0,
@@ -255,17 +247,6 @@ function DepartmentForm({
               placeholder={t("departments:deptForm.namePh")}
               className="bg-muted/30 border-border"
               data-testid="input-dept-name"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-white">{t("departments:deptForm.nameAr")}</Label>
-            <Input
-              value={nameAr}
-              onChange={(e) => setNameAr(e.target.value)}
-              placeholder={t("departments:deptForm.nameArPh")}
-              className="bg-muted/30 border-border"
-              dir="rtl"
-              data-testid="input-dept-name-ar"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -340,7 +321,6 @@ function PositionForm({
   const isEdit = !!position;
 
   const [title, setTitle] = useState(position?.title ?? "");
-  const [titleAr, setTitleAr] = useState(position?.titleAr ?? "");
   const [code, setCode] = useState(position?.code ?? "");
   const [description, setDescription] = useState(position?.description ?? "");
   const [gradeLevel, setGradeLevel] = useState(position?.gradeLevel?.toString() ?? "");
@@ -350,7 +330,6 @@ function PositionForm({
   useEffect(() => {
     if (open) {
       setTitle(position?.title ?? "");
-      setTitleAr(position?.titleAr ?? "");
       setCode(position?.code ?? "");
       setDescription(position?.description ?? "");
       setGradeLevel(position?.gradeLevel?.toString() ?? "");
@@ -384,7 +363,6 @@ function PositionForm({
     mutation.mutate({
       departmentId,
       title: title.trim(),
-      titleAr: titleAr.trim() || null,
       code: code.trim().toUpperCase(),
       description: description.trim() || null,
       gradeLevel: gradeLevel ? parseInt(gradeLevel) : null,
@@ -409,17 +387,6 @@ function PositionForm({
               placeholder={t("departments:posForm.titlePh")}
               className="bg-muted/30 border-border"
               data-testid="input-pos-title"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-white">{t("departments:posForm.titleAr")}</Label>
-            <Input
-              value={titleAr}
-              onChange={(e) => setTitleAr(e.target.value)}
-              placeholder={t("departments:posForm.titleArPh")}
-              className="bg-muted/30 border-border"
-              dir="rtl"
-              data-testid="input-pos-title-ar"
             />
           </div>
           <div className="grid grid-cols-3 gap-3">
@@ -576,8 +543,7 @@ export default function DepartmentsPage() {
       list = list.filter(
         (d) =>
           d.name.toLowerCase().includes(q) ||
-          d.code.toLowerCase().includes(q) ||
-          (d.nameAr && d.nameAr.includes(searchQuery))
+          d.code.toLowerCase().includes(q)
       );
     }
     return [...list].sort((a, b) => {
@@ -663,9 +629,6 @@ export default function DepartmentsPage() {
                             <span className="text-sm font-medium text-white truncate"><bdi>{dept.name}</bdi></span>
                             <span className="text-[10px] font-mono text-muted-foreground" dir="ltr">{dept.code}</span>
                           </div>
-                          {dept.nameAr && (
-                            <span className="text-xs text-muted-foreground block truncate" dir="rtl"><bdi>{dept.nameAr}</bdi></span>
-                          )}
                           {!dept.isActive && (
                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-0 bg-red-500/10 text-red-400 mt-0.5">
                               {t("departments:common.inactive")}

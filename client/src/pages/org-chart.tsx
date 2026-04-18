@@ -45,7 +45,6 @@ interface OrgEmployee {
   candidateId: string;
   employeeNumber: string;
   fullNameEn: string;
-  fullNameAr: string | null;
   nationalId: string | null;
   phone: string | null;
   photoUrl: string | null;
@@ -54,7 +53,6 @@ interface OrgEmployee {
 interface OrgPosition {
   id: string;
   title: string;
-  titleAr: string | null;
   code: string;
   gradeLevel: number | null;
   parentPositionId: string | null;
@@ -65,7 +63,6 @@ interface OrgPosition {
 interface OrgDepartment {
   id: string;
   name: string;
-  nameAr: string | null;
   code: string;
   totalEmployees: number;
   positions: OrgPosition[];
@@ -79,7 +76,6 @@ interface OrgChartData {
 
 interface DeptNodeData extends Record<string, unknown> {
   label: string;
-  nameAr: string | null;
   deptId: string;
   totalEmployees: number;
   expanded: boolean;
@@ -87,7 +83,6 @@ interface DeptNodeData extends Record<string, unknown> {
 
 interface PosNodeData extends Record<string, unknown> {
   label: string;
-  titleAr: string | null;
   posId: string;
   code: string;
   gradeLevel: number | null;
@@ -135,9 +130,6 @@ function DepartmentNodeComponent({ data }: NodeProps<DeptNode>) {
               </div>
               <div className="min-w-0">
                 <h3 className="font-display font-bold text-sm text-white truncate leading-tight">{data.label}</h3>
-                {data.nameAr && (
-                  <p className="text-[10px] text-[hsl(215,15%,55%)] truncate mt-0.5 font-medium" dir="rtl">{data.nameAr}</p>
-                )}
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 ms-2">
@@ -303,9 +295,6 @@ function EmployeeDrawer({
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-white truncate leading-tight"><bdi>{emp.fullName}</bdi></p>
-              {emp.fullNameAr && (
-                <p className="text-[10px] text-[hsl(215,15%,55%)] truncate mt-0.5" dir="rtl">{emp.fullNameAr}</p>
-              )}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
                 <span className="text-[10px] text-[hsl(215,15%,50%)] font-mono" dir="ltr">#{emp.employeeNumber}</span>
                 {emp.nationalId && (
@@ -359,7 +348,6 @@ function buildLayout(
 
     const deptData: DeptNodeData = {
       label: dept.name,
-      nameAr: dept.nameAr,
       deptId: dept.id,
       totalEmployees: dept.totalEmployees,
       expanded: isDeptExpanded,
@@ -387,7 +375,6 @@ function buildLayout(
 
         const posData: PosNodeData = {
           label: pos.title,
-          titleAr: pos.titleAr,
           posId: pos.id,
           code: pos.code,
           gradeLevel: pos.gradeLevel,

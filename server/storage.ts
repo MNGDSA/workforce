@@ -294,7 +294,6 @@ export interface IStorage {
     isActive: boolean;
     salary: string | null;
     fullNameEn: string | null;
-    fullNameAr: string | null;
     nationalId: string | null;
     phone: string | null;
     photoUrl: string | null;
@@ -830,7 +829,6 @@ export class DatabaseStorage implements IStorage {
     const data = await db.select({
       id: candidates.id,
       fullNameEn: candidates.fullNameEn,
-      fullNameAr: candidates.fullNameAr,
       source: candidates.source,
       status: candidates.status,
       phone: candidates.phone,
@@ -854,9 +852,9 @@ export class DatabaseStorage implements IStorage {
       .where(isNull(candidates.archivedAt))
       .orderBy(desc(candidates.createdAt));
 
-    const headers = ["ID", "Full Name (EN)", "Full Name (AR)", "Classification", "Status", "Phone", "Email", "City", "Region", "Nationality", "National ID", "IBAN", "Bank Name", "Bank Code", "IBAN Account First Name", "IBAN Account Last Name", "Gender", "Date of Birth", "Education", "Major", "Created At"];
+    const headers = ["ID", "Full Name", "Classification", "Status", "Phone", "Email", "City", "Region", "Nationality", "National ID", "IBAN", "Bank Name", "Bank Code", "IBAN Account First Name", "IBAN Account Last Name", "Gender", "Date of Birth", "Education", "Major", "Created At"];
     const rows = data.map(r => [
-      r.id, r.fullNameEn || "", r.fullNameAr || "",
+      r.id, r.fullNameEn || "",
       r.source || "individual", r.status, r.phone || "", r.email || "",
       r.city || "", r.region || "", r.nationality || "", r.nationalId || "",
       r.ibanNumber || "", r.ibanBankName || "", r.ibanBankCode || "",
@@ -1313,7 +1311,6 @@ export class DatabaseStorage implements IStorage {
         employmentType: workforce.employmentType,
         smpCompanyId: workforce.smpCompanyId,
         smpCompanyName: smpCompanies.name,
-        fullNameAr: candidates.fullNameAr,
         email: candidates.email,
         dateOfBirth: candidates.dateOfBirth,
         gender: candidates.gender,
@@ -1380,7 +1377,6 @@ export class DatabaseStorage implements IStorage {
         employmentType: workforce.employmentType,
         smpCompanyId: workforce.smpCompanyId,
         smpCompanyName: smpCompanies.name,
-        fullNameAr: candidates.fullNameAr,
         email: candidates.email,
         dateOfBirth: candidates.dateOfBirth,
         gender: candidates.gender,
@@ -1953,7 +1949,6 @@ export class DatabaseStorage implements IStorage {
     isActive: boolean;
     salary: string | null;
     fullNameEn: string | null;
-    fullNameAr: string | null;
     nationalId: string | null;
     phone: string | null;
     photoUrl: string | null;
@@ -1968,7 +1963,6 @@ export class DatabaseStorage implements IStorage {
         isActive: workforce.isActive,
         salary: workforce.salary,
         fullNameEn: candidates.fullNameEn,
-        fullNameAr: candidates.fullNameAr,
         nationalId: candidates.nationalId,
         phone: candidates.phone,
         photoUrl: candidates.photoUrl,
@@ -3445,7 +3439,6 @@ export class DatabaseStorage implements IStorage {
       departmentId: positions.departmentId,
       parentPositionId: positions.parentPositionId,
       title: positions.title,
-      titleAr: positions.titleAr,
       code: positions.code,
       description: positions.description,
       gradeLevel: positions.gradeLevel,

@@ -52,7 +52,6 @@ type WorkerRow = {
   id: string;
   employeeNumber: string;
   fullNameEn: string | null;
-  fullNameAr: string | null;
   nationalId: string | null;
   phone: string | null;
   photoUrl: string | null;
