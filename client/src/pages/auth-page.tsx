@@ -794,9 +794,9 @@ export default function AuthPage() {
                 </div>
               )}
 
-              <div className="text-center mt-2">
-                <p className="text-sm text-muted-foreground">
-                  {t("auth:legal.agree", { terms: t("auth:legal.terms"), privacy: t("auth:legal.privacy") })}
+              <div className="mt-2">
+                <p className="text-sm text-muted-foreground text-center" dir={isRtl ? "rtl" : "ltr"}>
+                  <bdi>{t("auth:legal.agree", { terms: t("auth:legal.terms"), privacy: t("auth:legal.privacy") })}</bdi>
                 </p>
               </div>
             </TabsContent>
