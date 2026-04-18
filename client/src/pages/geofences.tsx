@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import { formatNumber } from "@/lib/format";
 import DashboardLayout from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -145,6 +147,7 @@ function ZoneFormDialog({
   initial?: GeofenceZone | null;
   onSaved: () => void;
 }) {
+  const { t } = useTranslation(["geofences", "common"]);
   const { toast } = useToast();
   const qc = useQueryClient();
   const [form, setForm] = useState({
@@ -172,34 +175,34 @@ function ZoneFormDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/geofence-zones"] });
-      toast({ title: initial ? "Zone updated" : "Zone created" });
+      toast({ title: initial ? t("geofences:toasts.updated") : t("geofences:toasts.created") });
       onSaved();
       onOpenChange(false);
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("geofences:toasts.errorTitle"), description: e.message, variant: "destructive" }),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-card border-border text-foreground max-w-md">
         <DialogHeader>
-          <DialogTitle>{initial ? "Edit Geofence Zone" : "New Geofence Zone"}</DialogTitle>
-          <DialogDescription className="sr-only">Define a geofence zone with center coordinates and radius</DialogDescription>
+          <DialogTitle>{initial ? t("geofences:form.editTitle") : t("geofences:form.newTitle")}</DialogTitle>
+          <DialogDescription className="sr-only">{t("geofences:form.description")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-zinc-400 text-xs uppercase tracking-wider">Zone Name</Label>
+            <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("geofences:form.zoneName")}</Label>
             <Input
               data-testid="input-zone-name"
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              placeholder="e.g. Masjid Al-Haram Complex"
+              placeholder={t("geofences:form.namePlaceholder")}
               className="bg-background border-input text-foreground"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Center Latitude</Label>
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("geofences:form.centerLat")}</Label>
               <Input
                 data-testid="input-zone-lat"
                 type="number"
@@ -207,10 +210,11 @@ function ZoneFormDialog({
                 value={form.centerLat}
                 onChange={e => setForm(f => ({ ...f, centerLat: e.target.value }))}
                 className="bg-background border-input text-foreground font-mono"
+                dir="ltr"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Center Longitude</Label>
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("geofences:form.centerLng")}</Label>
               <Input
                 data-testid="input-zone-lng"
                 type="number"
@@ -218,11 +222,12 @@ function ZoneFormDialog({
                 value={form.centerLng}
                 onChange={e => setForm(f => ({ ...f, centerLng: e.target.value }))}
                 className="bg-background border-input text-foreground font-mono"
+                dir="ltr"
               />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-zinc-400 text-xs uppercase tracking-wider">Radius (meters)</Label>
+            <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("geofences:form.radius")}</Label>
             <Input
               data-testid="input-zone-radius"
               type="number"
@@ -231,10 +236,11 @@ function ZoneFormDialog({
               value={form.radiusMeters}
               onChange={e => setForm(f => ({ ...f, radiusMeters: Number(e.target.value) }))}
               className="bg-background border-input text-foreground"
+              dir="ltr"
             />
           </div>
           <div className="flex items-center justify-between">
-            <Label className="text-zinc-400 text-xs uppercase tracking-wider">Active</Label>
+            <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("geofences:form.active")}</Label>
             <Switch
               data-testid="switch-zone-active"
               checked={form.isActive}
@@ -242,15 +248,15 @@ function ZoneFormDialog({
             />
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <Button variant="outline" className="border-zinc-700" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button variant="outline" className="border-zinc-700" onClick={() => onOpenChange(false)}>{t("geofences:form.cancel")}</Button>
             <Button
               data-testid="button-save-zone"
               className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
               disabled={mutation.isPending || !form.name}
               onClick={() => mutation.mutate(form)}
             >
-              {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              {initial ? "Save Changes" : "Create Zone"}
+              {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin me-1" /> : null}
+              {initial ? t("geofences:form.save") : t("geofences:form.create")}
             </Button>
           </div>
         </div>
@@ -260,6 +266,7 @@ function ZoneFormDialog({
 }
 
 export default function GeofencesPage() {
+  const { t, i18n } = useTranslation(["geofences", "common"]);
   const { toast } = useToast();
   const qc = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
@@ -275,9 +282,9 @@ export default function GeofencesPage() {
     mutationFn: (id: string) => apiRequest("DELETE", `/api/geofence-zones/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/geofence-zones"] });
-      toast({ title: "Zone deleted" });
+      toast({ title: t("geofences:toasts.deleted") });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("geofences:toasts.errorTitle"), description: e.message, variant: "destructive" }),
   });
 
   const toggleMut = useMutation({
@@ -285,9 +292,9 @@ export default function GeofencesPage() {
       apiRequest("PATCH", `/api/geofence-zones/${id}`, { isActive }).then(r => r.json()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/geofence-zones"] });
-      toast({ title: "Zone status updated" });
+      toast({ title: t("geofences:toasts.statusUpdated") });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("geofences:toasts.errorTitle"), description: e.message, variant: "destructive" }),
   });
 
   const selectedZone = zones.find(z => z.id === selectedId) ?? null;
@@ -298,10 +305,10 @@ export default function GeofencesPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-display font-bold text-foreground" data-testid="text-geofences-title">
-              Geofence Zones
+              {t("geofences:title")}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Manage GPS geofence zones for mobile attendance verification
+              {t("geofences:subtitle")}
             </p>
           </div>
           <Button
@@ -309,7 +316,7 @@ export default function GeofencesPage() {
             className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
             onClick={() => { setEditZone(null); setFormOpen(true); }}
           >
-            <Plus className="h-4 w-4 mr-1" /> Add Zone
+            <Plus className="h-4 w-4 me-1" /> {t("geofences:addZone")}
           </Button>
         </div>
 
@@ -323,7 +330,7 @@ export default function GeofencesPage() {
               <Card className="bg-card border-border">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <Navigation className="h-4 w-4 text-primary" /> Map View
+                    <Navigation className="h-4 w-4 text-primary" /> {t("geofences:mapView")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -335,14 +342,14 @@ export default function GeofencesPage() {
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-primary" />
-                Zones ({zones.length})
+                <bdi>{t("geofences:zones", { count: zones.length })}</bdi>
               </h3>
 
               {zones.length === 0 ? (
                 <Card className="bg-card border-border">
                   <CardContent className="py-8 text-center">
                     <MapPin className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-                    <p className="text-sm text-muted-foreground">No geofence zones defined yet</p>
+                    <p className="text-sm text-muted-foreground">{t("geofences:noZones")}</p>
                   </CardContent>
                 </Card>
               ) : (
@@ -357,23 +364,23 @@ export default function GeofencesPage() {
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-semibold text-foreground truncate">{zone.name}</span>
+                            <span className="text-sm font-semibold text-foreground truncate"><bdi>{zone.name}</bdi></span>
                             <Badge
                               variant="outline"
                               className={`text-[10px] shrink-0 ${zone.isActive ? "text-emerald-400 border-emerald-500/30" : "text-zinc-500 border-zinc-600"}`}
                             >
-                              {zone.isActive ? "Active" : "Inactive"}
+                              {zone.isActive ? t("geofences:active") : t("geofences:inactive")}
                             </Badge>
                           </div>
                           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                            <span className="font-mono">{Number(zone.centerLat).toFixed(4)}°, {Number(zone.centerLng).toFixed(4)}°</span>
+                            <span className="font-mono" dir="ltr">{Number(zone.centerLat).toFixed(4)}°, {Number(zone.centerLng).toFixed(4)}°</span>
                             <span>·</span>
                             <span className="flex items-center gap-0.5">
-                              <Circle className="h-2.5 w-2.5" /> {zone.radiusMeters}m
+                              <Circle className="h-2.5 w-2.5" /> <bdi>{t("geofences:metersShort", { count: zone.radiusMeters })}</bdi>
                             </span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                        <div className="flex items-center gap-1 shrink-0 ms-2">
                           <Button
                             size="icon"
                             variant="ghost"
@@ -411,24 +418,24 @@ export default function GeofencesPage() {
               {selectedZone && (
                 <Card className="bg-card border-primary/20 mt-4">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-semibold text-primary">Zone Details</CardTitle>
+                    <CardTitle className="text-sm font-semibold text-primary">{t("geofences:zoneDetails")}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2 text-xs">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Name</span>
-                      <span className="text-foreground font-medium">{selectedZone.name}</span>
+                      <span className="text-muted-foreground">{t("geofences:fields.name")}</span>
+                      <span className="text-foreground font-medium"><bdi>{selectedZone.name}</bdi></span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Center</span>
-                      <span className="text-foreground font-mono">{Number(selectedZone.centerLat).toFixed(7)}, {Number(selectedZone.centerLng).toFixed(7)}</span>
+                      <span className="text-muted-foreground">{t("geofences:fields.center")}</span>
+                      <span className="text-foreground font-mono" dir="ltr">{Number(selectedZone.centerLat).toFixed(7)}, {Number(selectedZone.centerLng).toFixed(7)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Radius</span>
-                      <span className="text-foreground">{selectedZone.radiusMeters} meters</span>
+                      <span className="text-muted-foreground">{t("geofences:fields.radius")}</span>
+                      <span className="text-foreground"><bdi>{t("geofences:metersUnit", { count: selectedZone.radiusMeters })}</bdi></span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Status</span>
-                      <span className={selectedZone.isActive ? "text-emerald-400" : "text-zinc-500"}>{selectedZone.isActive ? "Active" : "Inactive"}</span>
+                      <span className="text-muted-foreground">{t("geofences:fields.status")}</span>
+                      <span className={selectedZone.isActive ? "text-emerald-400" : "text-zinc-500"}>{selectedZone.isActive ? t("geofences:active") : t("geofences:inactive")}</span>
                     </div>
                   </CardContent>
                 </Card>

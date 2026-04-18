@@ -1,0 +1,40 @@
+{
+  "title": "Geofence Zones",
+  "subtitle": "Manage GPS geofence zones for mobile attendance verification",
+  "addZone": "Add Zone",
+  "mapView": "Map View",
+  "zones": "Zones ({{count}})",
+  "noZones": "No geofence zones defined yet",
+  "active": "Active",
+  "inactive": "Inactive",
+  "zoneDetails": "Zone Details",
+  "fields": {
+    "name": "Name",
+    "center": "Center",
+    "radius": "Radius",
+    "status": "Status"
+  },
+  "metersUnit": "{{count}} meters",
+  "metersShort": "{{count}}m",
+  "form": {
+    "newTitle": "New Geofence Zone",
+    "editTitle": "Edit Geofence Zone",
+    "description": "Define a geofence zone with center coordinates and radius",
+    "zoneName": "Zone Name",
+    "centerLat": "Center Latitude",
+    "centerLng": "Center Longitude",
+    "radius": "Radius (meters)",
+    "active": "Active",
+    "namePlaceholder": "e.g. Masjid Al-Haram Complex",
+    "cancel": "Cancel",
+    "save": "Save Changes",
+    "create": "Create Zone"
+  },
+  "toasts": {
+    "created": "Zone created",
+    "updated": "Zone updated",
+    "deleted": "Zone deleted",
+    "statusUpdated": "Zone status updated",
+    "errorTitle": "Error"
+  }
+}
