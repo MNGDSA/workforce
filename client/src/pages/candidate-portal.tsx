@@ -2391,7 +2391,6 @@ export default function CandidatePortal() {
           <span className="font-display font-bold text-xl tracking-tight text-white hidden sm:inline-block">
             {t("common:app.name")}
           </span>
-          <div className="ms-3"><LanguageSwitcher /></div>
         </div>
 
         <nav className="hidden md:flex items-center gap-5 text-sm font-medium">
@@ -2412,6 +2411,7 @@ export default function CandidatePortal() {
         </nav>
 
         <div className="flex items-center gap-4">
+          <LanguageSwitcher />
           <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white relative">
             <Bell className="h-5 w-5" />
           </Button>
