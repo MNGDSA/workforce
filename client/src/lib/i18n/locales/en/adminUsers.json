@@ -1,0 +1,84 @@
+{
+  "title": "Admin Users",
+  "subtitle": "Internal back-office staff. Define roles in <0>Settings → Roles & Access</0>, then assign them here.",
+  "addAdmin": "Add Admin User",
+  "noRolesWarn": "No assignable roles exist yet. Create one from <0>Settings → Roles & Access → Roles</0> before adding admin users.",
+  "filters": {
+    "search": "Search by name, ID, phone, email…",
+    "role": "Filter by role",
+    "status": "Filter by status",
+    "allRoles": "All roles",
+    "allStatuses": "All statuses",
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "table": {
+    "name": "Name",
+    "nationalId": "National ID",
+    "phone": "Phone",
+    "role": "Role",
+    "status": "Status",
+    "lastLogin": "Last Login",
+    "actions": "Actions",
+    "loading": "Loading admin users…",
+    "empty": "No admin users found."
+  },
+  "founder": "Founding Super Admin",
+  "noRoleBlocked": "No role — login blocked",
+  "readOnly": "Read-only",
+  "founderTooltip": "The Founding Super Admin cannot be modified from the UI.",
+  "setRole": "Set role",
+  "never": "Never",
+  "accessRequired": "Super Admin access required",
+  "accessRequiredHint": "Only the Super Admin can manage admin users.",
+  "create": {
+    "title": "Add Admin User",
+    "desc": "Create a new internal back-office user. They'll log in with their National ID or phone, plus the password you set here.",
+    "submit": "Create Admin User",
+    "cancel": "Cancel"
+  },
+  "edit": {
+    "title": "Edit Admin User",
+    "desc": "Update profile, role, or set a new password. Leave the password field empty to keep it unchanged.",
+    "submit": "Save Changes",
+    "cancel": "Cancel"
+  },
+  "confirm": {
+    "deactivateTitle": "Deactivate this admin user?",
+    "reactivateTitle": "Reactivate this admin user?",
+    "deactivateBody": "{{name}} will be unable to sign in until reactivated.",
+    "reactivateBody": "{{name}} will regain access immediately.",
+    "deactivate": "Deactivate",
+    "reactivate": "Reactivate",
+    "cancel": "Cancel"
+  },
+  "form": {
+    "fullName": "Full Name",
+    "fullNamePh": "Faisal Alamri",
+    "nationalId": "National ID",
+    "nationalIdPh": "1071793531",
+    "phone": "Phone",
+    "phonePh": "0581766080",
+    "email": "Email",
+    "emailPh": "user@workforce.sa",
+    "username": "Username",
+    "usernamePh": "firstname.lastname",
+    "role": "Role",
+    "rolePh": "Select role",
+    "passwordCreate": "Password",
+    "passwordEdit": "New Password (leave empty to keep current)",
+    "passwordPhCreate": "Min 8 chars, with upper, lower, number, special",
+    "passwordPhEdit": "Leave empty to keep current",
+    "passwordHint": "Must contain at least 8 characters, one uppercase, one lowercase, one number, one special character."
+  },
+  "toasts": {
+    "created": "Admin user created",
+    "createFailed": "Failed to create",
+    "updated": "Admin user updated",
+    "updateFailed": "Failed to update",
+    "reactivated": "User reactivated",
+    "deactivated": "User deactivated",
+    "toggleFailed": "Failed",
+    "unknownError": "Unknown error"
+  }
+}

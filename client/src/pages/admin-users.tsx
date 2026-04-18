@@ -58,6 +58,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation, Trans } from "react-i18next";
 
 interface AdminUser {
   id: string;
@@ -119,6 +120,8 @@ const EMPTY_FORM: FormState = {
 };
 
 export function AdminUsersContent() {
+  const { t, i18n } = useTranslation(["adminUsers", "common"]);
+  const dateLocale = i18n.language === "ar" ? "ar-SA" : "en-GB";
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -182,12 +185,12 @@ export function AdminUsersContent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin-users"] });
-      toast({ title: "Admin user created" });
+      toast({ title: t("adminUsers:toasts.created") });
       setCreateOpen(false);
       setForm(EMPTY_FORM);
     },
     onError: (err: any) => {
-      toast({ title: "Failed to create", description: err?.message || "Unknown error", variant: "destructive" });
+      toast({ title: t("adminUsers:toasts.createFailed"), description: err?.message || t("adminUsers:toasts.unknownError"), variant: "destructive" });
     },
   });
 
@@ -200,11 +203,11 @@ export function AdminUsersContent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin-users"] });
-      toast({ title: "Admin user updated" });
+      toast({ title: t("adminUsers:toasts.updated") });
       setEditTarget(null);
     },
     onError: (err: any) => {
-      toast({ title: "Failed to update", description: err?.message || "Unknown error", variant: "destructive" });
+      toast({ title: t("adminUsers:toasts.updateFailed"), description: err?.message || t("adminUsers:toasts.unknownError"), variant: "destructive" });
     },
   });
 
@@ -215,11 +218,11 @@ export function AdminUsersContent() {
     },
     onSuccess: (_d, vars) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin-users"] });
-      toast({ title: vars.isActive ? "User reactivated" : "User deactivated" });
+      toast({ title: vars.isActive ? t("adminUsers:toasts.reactivated") : t("adminUsers:toasts.deactivated") });
       setConfirmTarget(null);
     },
     onError: (err: any) => {
-      toast({ title: "Failed", description: err?.message || "Unknown error", variant: "destructive" });
+      toast({ title: t("adminUsers:toasts.toggleFailed"), description: err?.message || t("adminUsers:toasts.unknownError"), variant: "destructive" });
     },
   });
 
@@ -238,9 +241,9 @@ export function AdminUsersContent() {
   };
 
   const formatDate = (d: string | null) => {
-    if (!d) return "Never";
+    if (!d) return t("adminUsers:never");
     try {
-      return new Date(d).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+      return new Date(d).toLocaleString(dateLocale, { dateStyle: "medium", timeStyle: "short", numberingSystem: "latn" } as any);
     } catch {
       return "—";
     }
@@ -251,9 +254,9 @@ export function AdminUsersContent() {
       <Card className="bg-card border-border">
         <CardContent className="py-12 text-center">
           <ShieldCheck className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-          <p className="text-white font-semibold mb-1">Super Admin access required</p>
+          <p className="text-white font-semibold mb-1">{t("adminUsers:accessRequired")}</p>
           <p className="text-sm text-muted-foreground">
-            Only the Super Admin can manage admin users.
+            {t("adminUsers:accessRequiredHint")}
           </p>
         </CardContent>
       </Card>
@@ -268,10 +271,10 @@ export function AdminUsersContent() {
             <div>
               <div className="flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5 text-primary" />
-                <CardTitle className="text-xl text-white">Admin Users</CardTitle>
+                <CardTitle className="text-xl text-white">{t("adminUsers:title")}</CardTitle>
               </div>
               <CardDescription>
-                Internal back-office staff. Define roles in <strong className="text-white">Settings → Roles &amp; Access</strong>, then assign them here.
+                <Trans i18nKey="adminUsers:subtitle" components={[<strong className="text-white" />]} />
               </CardDescription>
             </div>
             <Button
@@ -280,8 +283,8 @@ export function AdminUsersContent() {
               data-testid="button-add-admin-user"
               disabled={assignableRoles.length === 0}
             >
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add Admin User
+              <UserPlus className="me-2 h-4 w-4" />
+              {t("adminUsers:addAdmin")}
             </Button>
           </div>
         </CardHeader>
@@ -290,7 +293,7 @@ export function AdminUsersContent() {
             <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-sm px-3 py-2">
               <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
               <p className="text-xs text-amber-400">
-                No assignable roles exist yet. Create one from <strong>Settings → Roles &amp; Access → Roles</strong> before adding admin users.
+                <Trans i18nKey="adminUsers:noRolesWarn" components={[<strong />]} />
               </p>
             </div>
           )}
@@ -298,21 +301,21 @@ export function AdminUsersContent() {
           {/* Filters */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div className="relative sm:col-span-2">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name, ID, phone, email…"
-                className="pl-9 bg-muted/30 border-border"
+                placeholder={t("adminUsers:filters.search")}
+                className="ps-9 bg-muted/30 border-border"
                 data-testid="input-search-admins"
               />
             </div>
             <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v)}>
               <SelectTrigger className="bg-muted/30 border-border" data-testid="select-role-filter">
-                <SelectValue placeholder="Filter by role" />
+                <SelectValue placeholder={t("adminUsers:filters.role")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All roles</SelectItem>
+                <SelectItem value="all">{t("adminUsers:filters.allRoles")}</SelectItem>
                 {roles.map((r) => (
                   <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                 ))}
@@ -320,12 +323,12 @@ export function AdminUsersContent() {
             </Select>
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
               <SelectTrigger className="bg-muted/30 border-border" data-testid="select-status-filter">
-                <SelectValue placeholder="Filter by status" />
+                <SelectValue placeholder={t("adminUsers:filters.status")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="all">{t("adminUsers:filters.allStatuses")}</SelectItem>
+                <SelectItem value="active">{t("adminUsers:filters.active")}</SelectItem>
+                <SelectItem value="inactive">{t("adminUsers:filters.inactive")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -335,26 +338,26 @@ export function AdminUsersContent() {
             <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
-                  <TableHead className="text-muted-foreground">Name</TableHead>
-                  <TableHead className="text-muted-foreground">National ID</TableHead>
-                  <TableHead className="text-muted-foreground">Phone</TableHead>
-                  <TableHead className="text-muted-foreground">Role</TableHead>
-                  <TableHead className="text-muted-foreground">Status</TableHead>
-                  <TableHead className="text-muted-foreground">Last Login</TableHead>
-                  <TableHead className="text-muted-foreground text-right">Actions</TableHead>
+                  <TableHead className="text-muted-foreground">{t("adminUsers:table.name")}</TableHead>
+                  <TableHead className="text-muted-foreground">{t("adminUsers:table.nationalId")}</TableHead>
+                  <TableHead className="text-muted-foreground">{t("adminUsers:table.phone")}</TableHead>
+                  <TableHead className="text-muted-foreground">{t("adminUsers:table.role")}</TableHead>
+                  <TableHead className="text-muted-foreground">{t("adminUsers:table.status")}</TableHead>
+                  <TableHead className="text-muted-foreground">{t("adminUsers:table.lastLogin")}</TableHead>
+                  <TableHead className="text-muted-foreground text-end">{t("adminUsers:table.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                      <Loader2 className="h-5 w-5 animate-spin inline mr-2" />Loading admin users…
+                      <Loader2 className="h-5 w-5 animate-spin inline me-2" />{t("adminUsers:table.loading")}
                     </TableCell>
                   </TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                      No admin users found.
+                      {t("adminUsers:table.empty")}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -368,19 +371,19 @@ export function AdminUsersContent() {
                             {isFounder && <Crown className="h-4 w-4 text-amber-400" />}
                             <div>
                               <div className="font-medium text-white" data-testid={`text-admin-name-${u.id}`}>
-                                {u.fullName ?? u.username}
+                                <bdi>{u.fullName ?? u.username}</bdi>
                               </div>
-                              <div className="text-xs text-muted-foreground">{u.email}</div>
+                              <div className="text-xs text-muted-foreground" dir="ltr">{u.email}</div>
                               {isFounder && (
                                 <div className="text-[10px] text-amber-400/80 uppercase tracking-wider mt-0.5">
-                                  Founding Super Admin
+                                  {t("adminUsers:founder")}
                                 </div>
                               )}
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="font-mono text-sm text-white/90">{u.nationalId ?? "—"}</TableCell>
-                        <TableCell className="font-mono text-sm text-white/90">{u.phone ?? "—"}</TableCell>
+                        <TableCell className="font-mono text-sm text-white/90" dir="ltr">{u.nationalId ?? "—"}</TableCell>
+                        <TableCell className="font-mono text-sm text-white/90" dir="ltr">{u.phone ?? "—"}</TableCell>
                         <TableCell>
                           {r ? (
                             <TooltipProvider>
@@ -397,36 +400,36 @@ export function AdminUsersContent() {
                             </TooltipProvider>
                           ) : (
                             <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/30 gap-1">
-                              <Lock className="h-3 w-3" /> No role — login blocked
+                              <Lock className="h-3 w-3" /> {t("adminUsers:noRoleBlocked")}
                             </Badge>
                           )}
                         </TableCell>
                         <TableCell>
                           {u.isActive ? (
                             <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                              Active
+                              {t("adminUsers:filters.active")}
                             </Badge>
                           ) : (
                             <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
-                              Inactive
+                              {t("adminUsers:filters.inactive")}
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{formatDate(u.lastLogin)}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-sm text-muted-foreground"><bdi dir="ltr">{formatDate(u.lastLogin)}</bdi></TableCell>
+                        <TableCell className="text-end">
                           {isFounder ? (
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <span className="inline-flex items-center justify-end gap-1.5 text-xs text-amber-400/70 select-none">
-                                    <Lock className="h-3.5 w-3.5" /> Read-only
+                                    <Lock className="h-3.5 w-3.5" /> {t("adminUsers:readOnly")}
                                   </span>
                                 </TooltipTrigger>
-                                <TooltipContent><p>The Founding Super Admin cannot be modified from the UI.</p></TooltipContent>
+                                <TooltipContent><p>{t("adminUsers:founderTooltip")}</p></TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                           ) : (
-                            <div className="flex items-center justify-end gap-1">
+                            <div className="flex items-center justify-end gap-1 ltr:flex-row rtl:flex-row-reverse">
                               <Button
                                 variant={r ? "ghost" : "outline"}
                                 size="sm"
@@ -434,7 +437,7 @@ export function AdminUsersContent() {
                                 className={r ? "" : "h-8 px-2 text-xs border-red-500/30 text-red-400 hover:bg-red-500/10"}
                                 data-testid={`button-edit-${u.id}`}
                               >
-                                {r ? <Pencil className="h-3.5 w-3.5" /> : "Set role"}
+                                {r ? <Pencil className="h-3.5 w-3.5" /> : t("adminUsers:setRole")}
                               </Button>
                               <Button
                                 variant="ghost"
@@ -462,21 +465,21 @@ export function AdminUsersContent() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Add Admin User</DialogTitle>
+            <DialogTitle>{t("adminUsers:create.title")}</DialogTitle>
             <DialogDescription>
-              Create a new internal back-office user. They'll log in with their National ID or phone, plus the password you set here.
+              {t("adminUsers:create.desc")}
             </DialogDescription>
           </DialogHeader>
           <AdminUserForm value={form} onChange={setForm} mode="create" assignableRoles={assignableRoles} />
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setCreateOpen(false)}>{t("adminUsers:create.cancel")}</Button>
             <Button
               onClick={() => createMutation.mutate(form)}
               disabled={createMutation.isPending || !form.roleId}
               data-testid="button-submit-create-admin"
             >
-              {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create Admin User
+              {createMutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+              {t("adminUsers:create.submit")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -486,21 +489,21 @@ export function AdminUsersContent() {
       <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Edit Admin User</DialogTitle>
+            <DialogTitle>{t("adminUsers:edit.title")}</DialogTitle>
             <DialogDescription>
-              Update profile, role, or set a new password. Leave the password field empty to keep it unchanged.
+              {t("adminUsers:edit.desc")}
             </DialogDescription>
           </DialogHeader>
           <AdminUserForm value={editForm} onChange={setEditForm} mode="edit" assignableRoles={assignableRoles} />
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setEditTarget(null)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setEditTarget(null)}>{t("adminUsers:edit.cancel")}</Button>
             <Button
               onClick={() => editTarget && updateMutation.mutate({ id: editTarget.id, data: editForm })}
               disabled={updateMutation.isPending || !editForm.roleId}
               data-testid="button-submit-edit-admin"
             >
-              {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Changes
+              {updateMutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+              {t("adminUsers:edit.submit")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -511,21 +514,21 @@ export function AdminUsersContent() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirmTarget?.isActive ? "Deactivate this admin user?" : "Reactivate this admin user?"}
+              {confirmTarget?.isActive ? t("adminUsers:confirm.deactivateTitle") : t("adminUsers:confirm.reactivateTitle")}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmTarget?.isActive
-                ? `${confirmTarget?.fullName ?? confirmTarget?.username} will be unable to sign in until reactivated.`
-                : `${confirmTarget?.fullName ?? confirmTarget?.username} will regain access immediately.`}
+                ? t("adminUsers:confirm.deactivateBody", { name: confirmTarget?.fullName ?? confirmTarget?.username })
+                : t("adminUsers:confirm.reactivateBody", { name: confirmTarget?.fullName ?? confirmTarget?.username })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("adminUsers:confirm.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => confirmTarget && toggleActiveMutation.mutate({ id: confirmTarget.id, isActive: !confirmTarget.isActive })}
               data-testid="button-confirm-toggle"
             >
-              {confirmTarget?.isActive ? "Deactivate" : "Reactivate"}
+              {confirmTarget?.isActive ? t("adminUsers:confirm.deactivate") : t("adminUsers:confirm.reactivate")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -545,33 +548,34 @@ function AdminUserForm({
   mode: "create" | "edit";
   assignableRoles: Role[];
 }) {
+  const { t } = useTranslation(["adminUsers"]);
   const set = (k: keyof FormState, v: string) => onChange({ ...value, [k]: v });
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div className="space-y-1.5 sm:col-span-2">
-        <Label className="text-white">Full Name</Label>
-        <Input value={value.fullName} onChange={(e) => set("fullName", e.target.value)} placeholder="Faisal Alamri" data-testid="input-fullname" />
+        <Label className="text-white">{t("adminUsers:form.fullName")}</Label>
+        <Input value={value.fullName} onChange={(e) => set("fullName", e.target.value)} placeholder={t("adminUsers:form.fullNamePh")} data-testid="input-fullname" />
       </div>
       <div className="space-y-1.5">
-        <Label className="text-white">National ID</Label>
-        <Input value={value.nationalId} onChange={(e) => set("nationalId", e.target.value)} placeholder="1071793531" data-testid="input-nationalid" />
+        <Label className="text-white">{t("adminUsers:form.nationalId")}</Label>
+        <Input dir="ltr" value={value.nationalId} onChange={(e) => set("nationalId", e.target.value)} placeholder={t("adminUsers:form.nationalIdPh")} data-testid="input-nationalid" />
       </div>
       <div className="space-y-1.5">
-        <Label className="text-white">Phone</Label>
-        <Input value={value.phone} onChange={(e) => set("phone", e.target.value)} placeholder="0581766080" data-testid="input-phone" />
+        <Label className="text-white">{t("adminUsers:form.phone")}</Label>
+        <Input dir="ltr" value={value.phone} onChange={(e) => set("phone", e.target.value)} placeholder={t("adminUsers:form.phonePh")} data-testid="input-phone" />
       </div>
       <div className="space-y-1.5">
-        <Label className="text-white">Email</Label>
-        <Input type="email" value={value.email} onChange={(e) => set("email", e.target.value)} placeholder="user@workforce.sa" data-testid="input-email" />
+        <Label className="text-white">{t("adminUsers:form.email")}</Label>
+        <Input dir="ltr" type="email" value={value.email} onChange={(e) => set("email", e.target.value)} placeholder={t("adminUsers:form.emailPh")} data-testid="input-email" />
       </div>
       <div className="space-y-1.5">
-        <Label className="text-white">Username</Label>
-        <Input value={value.username} onChange={(e) => set("username", e.target.value)} placeholder="firstname.lastname" data-testid="input-username" />
+        <Label className="text-white">{t("adminUsers:form.username")}</Label>
+        <Input dir="ltr" value={value.username} onChange={(e) => set("username", e.target.value)} placeholder={t("adminUsers:form.usernamePh")} data-testid="input-username" />
       </div>
       <div className="space-y-1.5 sm:col-span-2">
-        <Label className="text-white">Role</Label>
+        <Label className="text-white">{t("adminUsers:form.role")}</Label>
         <Select value={value.roleId} onValueChange={(v) => set("roleId", v)}>
-          <SelectTrigger data-testid="select-role"><SelectValue placeholder="Select role" /></SelectTrigger>
+          <SelectTrigger data-testid="select-role"><SelectValue placeholder={t("adminUsers:form.rolePh")} /></SelectTrigger>
           <SelectContent>
             {assignableRoles.map((r) => (
               <SelectItem key={r.id} value={r.id}>
@@ -586,17 +590,17 @@ function AdminUserForm({
       </div>
       <div className="space-y-1.5 sm:col-span-2">
         <Label className="text-white">
-          {mode === "create" ? "Password" : "New Password (leave empty to keep current)"}
+          {mode === "create" ? t("adminUsers:form.passwordCreate") : t("adminUsers:form.passwordEdit")}
         </Label>
         <Input
           type="password"
           value={value.password}
           onChange={(e) => set("password", e.target.value)}
-          placeholder={mode === "create" ? "Min 8 chars, with upper, lower, number, special" : "Leave empty to keep current"}
+          placeholder={mode === "create" ? t("adminUsers:form.passwordPhCreate") : t("adminUsers:form.passwordPhEdit")}
           data-testid="input-password"
         />
         <p className="text-xs text-muted-foreground">
-          Must contain at least 8 characters, one uppercase, one lowercase, one number, one special character.
+          {t("adminUsers:form.passwordHint")}
         </p>
       </div>
     </div>
