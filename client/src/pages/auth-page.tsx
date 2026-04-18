@@ -587,7 +587,7 @@ export default function AuthPage() {
                 ];
                 const renderLogos = (keyPrefix: string) =>
                   logos.map((logo, i) => (
-                    <div key={`${keyPrefix}-${i}`} className="group flex items-center justify-center opacity-50 hover:opacity-100 transition-all duration-200 select-none shrink-0 w-28 h-12 mx-5">
+                    <div key={`${keyPrefix}-${i}`} className="group flex items-center justify-center opacity-50 hover:opacity-100 transition-all duration-200 select-none shrink-0 w-28 h-12 mx-2">
                       <img
                         src={logo.url}
                         alt={logo.name}
