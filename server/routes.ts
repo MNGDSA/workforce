@@ -633,7 +633,7 @@ export async function registerRoutes(
       const securFlag = process.env.NODE_ENV === "production" ? "; Secure" : "";
       res.setHeader("Set-Cookie", `wf_auth=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}${securFlag}`);
 
-      return res.json({ user: safeUser, candidate });
+      return res.json({ user: { ...safeUser, role: loginRole?.slug ?? null }, candidate });
     } catch (err) {
       return handleError(res, err);
     }
