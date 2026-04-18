@@ -4,7 +4,7 @@ import { auditLogs } from "@shared/schema";
 
 const WINDOW_MS = 15 * 60 * 1000;
 const LOCKOUT_MS = 30 * 60 * 1000;
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 3;
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 const MAX_BUCKETS = 50_000;
 
