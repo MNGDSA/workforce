@@ -517,7 +517,7 @@ export default function AuthPage() {
                     name="password"
                     render={({ field }) => (
                       <FormItem>
-                        <div className="flex items-center justify-between gap-2">
+                        <div className={`flex items-center justify-between gap-2 ${isRtl ? "flex-row-reverse" : ""}`}>
                           <Label className={labelStartClass}>{t("auth:login.passwordLabel")}</Label>
                           <button type="button" onClick={() => setResetStep("id")} className={`text-xs text-muted-foreground hover:text-primary transition-colors ${isRtl ? "text-left" : "text-right"}`} data-testid="link-forgot-password">{t("auth:login.forgotPassword")}</button>
                         </div>
