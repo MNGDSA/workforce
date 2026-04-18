@@ -1,10 +1,11 @@
-import { useState, useEffect, ReactNode } from "react";
+import { useState, useEffect, ReactNode, useMemo } from "react";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useLocation } from "wouter";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import {
   Building2,
   ChevronRight,
@@ -24,6 +25,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { resolveSaudiBank } from "@/lib/saudi-banks";
+import { formatNumber } from "@/lib/format";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -37,7 +39,7 @@ type StoredCandidate = {
   source?: string;
 };
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// ─── Constants (canonical English values; UI labels resolved via i18n) ───────
 
 const PINNED_NATIONALITIES = [
   "Saudi Arabian", "Yemeni", "Burmese", "Syrian", "Jordanian", "Egyptian",
@@ -85,15 +87,10 @@ const ALL_NATIONALITIES = [
   "Yemeni", "Zambian", "Zimbabwean", "Other",
 ];
 
-const NATIONALITIES = [
+const NATIONALITIES_RAW = [
   ...PINNED_NATIONALITIES,
   "---",
   ...ALL_NATIONALITIES.filter((n) => !PINNED_NATIONALITIES.includes(n)),
-];
-
-const GENDER_OPTIONS = [
-  { label: "Male",   value: "male" },
-  { label: "Female", value: "female" },
 ];
 
 const KSA_CITIES = [
@@ -116,69 +113,86 @@ const LANGUAGE_OPTIONS = [
   "Burmese", "Yoruba / Nigerian", "Tagalog / Filipino", "Bengali", "French",
 ];
 
-// ─── Zod Schema ──────────────────────────────────────────────────────────────
+// ─── Zod Schema (validation messages resolved at submit via t()) ─────────────
 
-const step1Schema = z.object({
-  firstName:       z.string().min(2, "First name is required"),
-  lastName:        z.string().min(2, "Last name is required"),
-  gender:          z.string().min(1, "Gender is required"),
-  nationalityText: z.string().min(1, "Nationality is required"),
-  dateOfBirth:     z.string().min(8, "Date of birth is required").refine(val => {
-    const dob = new Date(val);
-    const today = new Date();
-    let age = today.getFullYear() - dob.getFullYear();
-    const m = today.getMonth() - dob.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
-    return age >= 15;
-  }, "Candidate must be at least 15 years old"),
-  city:            z.string().min(1, "City is required"),
-  region:          z.string().min(1, "Region is required"),
-  email:           z.string().email("Enter a valid email").optional().or(z.literal("")),
-  maritalStatus:   z.string().min(1, "Marital status is required"),
-});
+function buildSchemas(t: (key: string) => string) {
+  const step1 = z.object({
+    firstName:       z.string().min(2, t("profileSetup:validation.firstNameRequired")),
+    lastName:        z.string().min(2, t("profileSetup:validation.lastNameRequired")),
+    gender:          z.string().min(1, t("profileSetup:validation.genderRequired")),
+    nationalityText: z.string().min(1, t("profileSetup:validation.nationalityRequired")),
+    dateOfBirth:     z.string().min(8, t("profileSetup:validation.dobRequired")).refine(val => {
+      const dob = new Date(val);
+      const today = new Date();
+      let age = today.getFullYear() - dob.getFullYear();
+      const m = today.getMonth() - dob.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+      return age >= 15;
+    }, t("profileSetup:validation.ageMin")),
+    city:            z.string().min(1, t("profileSetup:validation.cityRequired")),
+    region:          z.string().min(1, t("profileSetup:validation.regionRequired")),
+    email:           z.string().email(t("profileSetup:validation.emailInvalid")).optional().or(z.literal("")),
+    maritalStatus:   z.string().min(1, t("profileSetup:validation.maritalRequired")),
+  });
 
-const step2Schema = z.object({
-  hasChronicDiseases:  z.boolean(),
-  chronicDiseases:     z.string().optional(),
-  isEmployedElsewhere: z.boolean(),
-  currentEmployer:     z.string().optional(),
-  currentRole:         z.string().optional(),
-  emergencyContactName:  z.string().min(2, "Emergency contact name is required"),
-  emergencyContactPhone: z.string().min(7, "Emergency contact phone is required"),
-  ibanAccountFirstName: z.string().min(1, "First name as on debit card is required"),
-  ibanAccountLastName:  z.string().min(1, "Last name as on debit card is required"),
-  ibanNumber:          z.string().min(1, "IBAN number is required"),
-  ibanBankName:        z.string().optional(),
-  ibanBankCode:        z.string().optional(),
-}).superRefine((d, ctx) => {
-  if (d.hasChronicDiseases && !d.chronicDiseases?.trim()) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please describe your condition(s)", path: ["chronicDiseases"] });
-  }
-  if (d.isEmployedElsewhere && !d.currentEmployer?.trim()) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please enter your employer", path: ["currentEmployer"] });
-  }
-  if (d.isEmployedElsewhere && !d.currentRole?.trim()) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please enter your position", path: ["currentRole"] });
-  }
-  if (!/^SA\d{22}$/.test(d.ibanNumber.trim())) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "IBAN must be SA followed by 22 digits (24 characters total)", path: ["ibanNumber"] });
-  }
-});
+  const step2 = z.object({
+    hasChronicDiseases:  z.boolean(),
+    chronicDiseases:     z.string().optional(),
+    isEmployedElsewhere: z.boolean(),
+    currentEmployer:     z.string().optional(),
+    currentRole:         z.string().optional(),
+    emergencyContactName:  z.string().min(2, t("profileSetup:validation.emergencyNameRequired")),
+    emergencyContactPhone: z.string().min(7, t("profileSetup:validation.emergencyPhoneRequired")),
+    ibanAccountFirstName: z.string().min(1, t("profileSetup:validation.ibanFirstNameRequired")),
+    ibanAccountLastName:  z.string().min(1, t("profileSetup:validation.ibanLastNameRequired")),
+    ibanNumber:          z.string().min(1, t("profileSetup:validation.ibanRequired")),
+    ibanBankName:        z.string().optional(),
+    ibanBankCode:        z.string().optional(),
+  }).superRefine((d, ctx) => {
+    if (d.hasChronicDiseases && !d.chronicDiseases?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("profileSetup:validation.describeCondition"), path: ["chronicDiseases"] });
+    }
+    if (d.isEmployedElsewhere && !d.currentEmployer?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("profileSetup:validation.employerRequired"), path: ["currentEmployer"] });
+    }
+    if (d.isEmployedElsewhere && !d.currentRole?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("profileSetup:validation.positionRequired"), path: ["currentRole"] });
+    }
+    if (!/^SA\d{22}$/.test(d.ibanNumber.trim())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("profileSetup:validation.ibanInvalid"), path: ["ibanNumber"] });
+    }
+  });
 
-const step3Schema = z.object({
-  educationLevel:  z.string().min(1, "Education level is required"),
-  major:           z.string().optional(),
-  languages:       z.array(z.string()).min(1, "Select at least one language"),
-  otherLanguage:   z.string().optional(),
-}).superRefine((d, ctx) => {
-  if (d.educationLevel === "University and higher" && !d.major?.trim()) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please enter your major / field of study", path: ["major"] });
-  }
-});
+  const step3 = z.object({
+    educationLevel:  z.string().min(1, t("profileSetup:validation.educationRequired")),
+    major:           z.string().optional(),
+    languages:       z.array(z.string()).min(1, t("profileSetup:validation.languagesRequired")),
+    otherLanguage:   z.string().optional(),
+  }).superRefine((d, ctx) => {
+    if (d.educationLevel === "University and higher" && !d.major?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("profileSetup:validation.majorRequired"), path: ["major"] });
+    }
+  });
 
-type Step1 = z.infer<typeof step1Schema>;
-type Step2 = z.infer<typeof step2Schema>;
-type Step3 = z.infer<typeof step3Schema>;
+  return { step1, step2, step3 };
+}
+
+type Step1 = {
+  firstName: string; lastName: string; gender: string;
+  nationalityText: string; dateOfBirth: string; city: string;
+  region: string; email?: string; maritalStatus: string;
+};
+type Step2 = {
+  hasChronicDiseases: boolean; chronicDiseases?: string;
+  isEmployedElsewhere: boolean; currentEmployer?: string; currentRole?: string;
+  emergencyContactName: string; emergencyContactPhone: string;
+  ibanAccountFirstName: string; ibanAccountLastName: string;
+  ibanNumber: string; ibanBankName?: string; ibanBankCode?: string;
+};
+type Step3 = {
+  educationLevel: string; major?: string;
+  languages: string[]; otherLanguage?: string;
+};
 
 // ─── Step Components ──────────────────────────────────────────────────────────
 
@@ -188,7 +202,7 @@ function FieldWrapper({ label, required, children, error }: {
   return (
     <div className="space-y-1.5">
       <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+        {label}{required && <span className="text-red-500 ms-0.5">*</span>}
       </Label>
       {children}
       {error && <p className="text-red-400 text-xs">{error}</p>}
@@ -196,24 +210,26 @@ function FieldWrapper({ label, required, children, error }: {
   );
 }
 
-function SelectField({ value, onChange, options, placeholder, error, "data-testid": dataTestId }: {
+function SelectField({ value, onChange, options, labels, placeholder, error, "data-testid": dataTestId, dir }: {
   value: string; onChange: (v: string) => void; options: string[];
-  placeholder?: string; error?: string; "data-testid"?: string;
+  labels?: Record<string, string>;
+  placeholder?: string; error?: string; "data-testid"?: string; dir?: "ltr" | "rtl";
 }) {
   return (
     <div className="space-y-1.5">
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        dir={dir}
         className="w-full h-10 bg-muted/30 border border-border rounded-sm px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
         data-testid={dataTestId}
       >
-        <option value="" className="bg-card text-muted-foreground">{placeholder ?? "Select..."}</option>
+        <option value="" className="bg-card text-muted-foreground">{placeholder ?? "..."}</option>
         {options.map((o, i) =>
           o === "---" ? (
             <option key={`sep-${i}`} disabled className="bg-card text-muted-foreground">{"─".repeat(20)}</option>
           ) : (
-            <option key={o} value={o} className="bg-card text-white">{o}</option>
+            <option key={o} value={o} className="bg-card text-white">{labels?.[o] ?? o}</option>
           )
         )}
       </select>
@@ -225,10 +241,11 @@ function SelectField({ value, onChange, options, placeholder, error, "data-testi
 function ToggleGroup({ value, onChange, label, required }: {
   value: boolean; onChange: (v: boolean) => void; label: string; required?: boolean;
 }) {
+  const { t } = useTranslation(["profileSetup"]);
   return (
     <div className="space-y-2">
       <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+        {label}{required && <span className="text-red-500 ms-0.5">*</span>}
       </Label>
       <div className="flex gap-2">
         {[true, false].map((opt) => (
@@ -242,7 +259,7 @@ function ToggleGroup({ value, onChange, label, required }: {
                 : "bg-muted/20 border-border text-muted-foreground hover:border-primary/50"
             }`}
           >
-            {opt ? "Yes" : "No"}
+            {opt ? t("profileSetup:common.yes") : t("profileSetup:common.no")}
           </button>
         ))}
       </div>
@@ -257,6 +274,20 @@ function Step1Form({
 }: {
   defaults: Partial<Step1>; onNext: (d: Step1) => void; candidate: StoredCandidate;
 }) {
+  const { t } = useTranslation(["profileSetup"]);
+  const { step1: step1Schema } = useMemo(() => buildSchemas(t), [t]);
+
+  // Translated lookup tables
+  const cityLabels = useMemo(() => Object.fromEntries(
+    KSA_CITIES.map(c => [c, t(`profileSetup:cities.${c}`)])
+  ), [t]);
+  const regionLabels = useMemo(() => Object.fromEntries(
+    KSA_REGIONS.map(r => [r, t(`profileSetup:regions.${r}`)])
+  ), [t]);
+  const maritalLabels = useMemo(() => Object.fromEntries(
+    MARITAL_OPTIONS.map(m => [m, t(`profileSetup:marital.${m}`)])
+  ), [t]);
+
   const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm<Step1>({
     resolver: zodResolver(step1Schema),
     defaultValues: {
@@ -275,24 +306,24 @@ function Step1Form({
   return (
     <form onSubmit={handleSubmit(onNext)} className="space-y-5">
       <div className="grid grid-cols-2 gap-4">
-        <FieldWrapper label="First Name" required error={errors.firstName?.message}>
-          <Input {...register("firstName")} placeholder="Mohammed" className="bg-muted/30 border-border" data-testid="input-firstName" />
+        <FieldWrapper label={t("profileSetup:step1.firstName")} required error={errors.firstName?.message}>
+          <Input {...register("firstName")} placeholder={t("profileSetup:step1.firstNamePh")} className="bg-muted/30 border-border" data-testid="input-firstName" />
         </FieldWrapper>
-        <FieldWrapper label="Last Name" required error={errors.lastName?.message}>
-          <Input {...register("lastName")} placeholder="Al-Harbi" className="bg-muted/30 border-border" data-testid="input-lastName" />
+        <FieldWrapper label={t("profileSetup:step1.lastName")} required error={errors.lastName?.message}>
+          <Input {...register("lastName")} placeholder={t("profileSetup:step1.lastNamePh")} className="bg-muted/30 border-border" data-testid="input-lastName" />
         </FieldWrapper>
       </div>
 
-      <FieldWrapper label="Gender" required error={errors.gender?.message}>
+      <FieldWrapper label={t("profileSetup:step1.gender")} required error={errors.gender?.message}>
         <Controller control={control} name="gender" render={({ field }) => (
           <div className="grid grid-cols-2 gap-2">
-            {GENDER_OPTIONS.map((opt) => (
+            {[{ key: "male", label: t("profileSetup:step1.male") }, { key: "female", label: t("profileSetup:step1.female") }].map((opt) => (
               <button
-                key={opt.value} type="button"
-                onClick={() => field.onChange(opt.value)}
-                data-testid={`button-gender-${opt.value}`}
+                key={opt.key} type="button"
+                onClick={() => field.onChange(opt.key)}
+                data-testid={`button-gender-${opt.key}`}
                 className={`h-10 rounded-sm border text-sm font-medium transition-colors ${
-                  field.value === opt.value
+                  field.value === opt.key
                     ? "bg-primary border-primary text-primary-foreground"
                     : "bg-muted/20 border-border text-muted-foreground hover:border-primary/50"
                 }`}
@@ -304,43 +335,43 @@ function Step1Form({
         )} />
       </FieldWrapper>
 
-      <FieldWrapper label="Nationality" required error={errors.nationalityText?.message}>
+      <FieldWrapper label={t("profileSetup:step1.nationality")} required error={errors.nationalityText?.message}>
         <Controller control={control} name="nationalityText" render={({ field }) => (
-          <SelectField value={field.value} onChange={field.onChange} options={NATIONALITIES} placeholder="Select nationality" />
+          <SelectField value={field.value} onChange={field.onChange} options={NATIONALITIES_RAW} placeholder={t("profileSetup:common.selectNationality")} />
         )} />
       </FieldWrapper>
 
       <div className="grid grid-cols-2 gap-4">
-        <FieldWrapper label="National ID / Iqama">
-          <Input value={candidate.nationalId ?? ""} disabled className="bg-muted/10 border-border text-muted-foreground font-mono opacity-60" />
+        <FieldWrapper label={t("profileSetup:step1.nationalId")}>
+          <Input value={candidate.nationalId ?? ""} disabled dir="ltr" className="bg-muted/10 border-border text-muted-foreground font-mono opacity-60" />
         </FieldWrapper>
-        <FieldWrapper label="Phone Number">
-          <Input value={candidate.phone ?? ""} disabled className="bg-muted/10 border-border text-muted-foreground font-mono opacity-60" />
+        <FieldWrapper label={t("profileSetup:step1.phone")}>
+          <Input value={candidate.phone ?? ""} disabled dir="ltr" className="bg-muted/10 border-border text-muted-foreground font-mono opacity-60" />
         </FieldWrapper>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <FieldWrapper label="Date of Birth" required error={errors.dateOfBirth?.message}>
+        <FieldWrapper label={t("profileSetup:step1.dob")} required error={errors.dateOfBirth?.message}>
           <DatePickerField value={watch("dateOfBirth")} onChange={(v) => setValue("dateOfBirth", v)} className="bg-muted/30 border-border" data-testid="input-dob" />
         </FieldWrapper>
-        <FieldWrapper label="City of Residence" required error={errors.city?.message}>
+        <FieldWrapper label={t("profileSetup:step1.city")} required error={errors.city?.message}>
           <Controller control={control} name="city" render={({ field }) => (
-            <SelectField value={field.value} onChange={field.onChange} options={KSA_CITIES} placeholder="Select city" data-testid="select-city" />
+            <SelectField value={field.value} onChange={field.onChange} options={KSA_CITIES} labels={cityLabels} placeholder={t("profileSetup:common.selectCity")} data-testid="select-city" />
           )} />
         </FieldWrapper>
       </div>
 
-      <FieldWrapper label="Region of Residence" required error={errors.region?.message}>
+      <FieldWrapper label={t("profileSetup:step1.region")} required error={errors.region?.message}>
         <Controller control={control} name="region" render={({ field }) => (
-          <SelectField value={field.value} onChange={field.onChange} options={KSA_REGIONS} placeholder="Select region" data-testid="select-region" />
+          <SelectField value={field.value} onChange={field.onChange} options={KSA_REGIONS} labels={regionLabels} placeholder={t("profileSetup:common.selectRegion")} data-testid="select-region" />
         )} />
       </FieldWrapper>
 
-      <FieldWrapper label="Email Address" error={errors.email?.message}>
-        <Input {...register("email")} type="email" placeholder="optional" className="bg-muted/30 border-border" data-testid="input-email" />
+      <FieldWrapper label={t("profileSetup:step1.email")} error={errors.email?.message}>
+        <Input {...register("email")} type="email" dir="ltr" placeholder={t("profileSetup:step1.emailPh")} className="bg-muted/30 border-border" data-testid="input-email" />
       </FieldWrapper>
 
-      <FieldWrapper label="Marital Status" required error={errors.maritalStatus?.message}>
+      <FieldWrapper label={t("profileSetup:step1.marital")} required error={errors.maritalStatus?.message}>
         <Controller control={control} name="maritalStatus" render={({ field }) => (
           <div className="grid grid-cols-4 gap-2">
             {MARITAL_OPTIONS.map((opt) => (
@@ -353,7 +384,7 @@ function Step1Form({
                     : "bg-muted/20 border-border text-muted-foreground hover:border-primary/50"
                 }`}
               >
-                {opt}
+                {maritalLabels[opt]}
               </button>
             ))}
           </div>
@@ -362,7 +393,7 @@ function Step1Form({
 
       <div className="flex justify-end pt-2">
         <Button type="submit" className="bg-primary text-primary-foreground font-bold px-8 gap-2" data-testid="button-step1-next">
-          Next <ChevronRight className="h-4 w-4" />
+          {t("profileSetup:common.next")} <ChevronRight className="h-4 w-4 rtl:rotate-180" />
         </Button>
       </div>
     </form>
@@ -376,6 +407,9 @@ function Step2Form({
 }: {
   defaults: Partial<Step2>; onNext: (d: Step2) => void; onBack: () => void; isSmp: boolean;
 }) {
+  const { t } = useTranslation(["profileSetup"]);
+  const { step2: step2Schema } = useMemo(() => buildSchemas(t), [t]);
+
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<Step2>({
     resolver: zodResolver(step2Schema),
     defaultValues: {
@@ -411,14 +445,14 @@ function Step2Form({
         <ToggleGroup
           value={hasChronic}
           onChange={(v) => setValue("hasChronicDiseases", v)}
-          label="Do you suffer from any chronic diseases?"
+          label={t("profileSetup:step2.chronicQ")}
           required
         />
         {hasChronic && (
-          <FieldWrapper label="Please describe your condition(s)" required error={errors.chronicDiseases?.message}>
+          <FieldWrapper label={t("profileSetup:step2.chronicDesc")} required error={errors.chronicDiseases?.message}>
             <Input
               {...register("chronicDiseases")}
-              placeholder="e.g. Diabetes, hypertension..."
+              placeholder={t("profileSetup:step2.chronicPh")}
               className="bg-muted/30 border-border"
               data-testid="input-chronic-diseases"
             />
@@ -431,23 +465,23 @@ function Step2Form({
         <ToggleGroup
           value={isEmployed}
           onChange={(v) => setValue("isEmployedElsewhere", v)}
-          label="Are you currently a full-time employee somewhere else?"
+          label={t("profileSetup:step2.employedQ")}
           required
         />
         {isEmployed && (
           <div className="space-y-4">
-            <FieldWrapper label="Employer / Company Name" required error={errors.currentEmployer?.message}>
+            <FieldWrapper label={t("profileSetup:step2.employer")} required error={errors.currentEmployer?.message}>
               <Input
                 {...register("currentEmployer")}
-                placeholder="e.g. Saudi Aramco"
+                placeholder={t("profileSetup:step2.employerPh")}
                 className="bg-muted/30 border-border"
                 data-testid="input-employer"
               />
             </FieldWrapper>
-            <FieldWrapper label="Your Position / Job Title" required error={errors.currentRole?.message}>
+            <FieldWrapper label={t("profileSetup:step2.position")} required error={errors.currentRole?.message}>
               <Input
                 {...register("currentRole")}
-                placeholder="e.g. Operations Manager"
+                placeholder={t("profileSetup:step2.positionPh")}
                 className="bg-muted/30 border-border"
                 data-testid="input-current-role"
               />
@@ -459,39 +493,39 @@ function Step2Form({
       {!isSmp && (
         <div className="space-y-4 p-4 rounded-md bg-muted/10 border border-border">
           <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-            Bank Details
+            {t("profileSetup:step2.bankDetails")}
           </Label>
-          <p className="text-xs text-muted-foreground mt-0.5">Your Saudi IBAN number for salary transfers.</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{t("profileSetup:step2.bankDesc")}</p>
 
           {/* Account holder name warning */}
           <div className="flex items-start gap-2 rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2.5">
             <span className="mt-0.5 text-red-400 shrink-0">⚠</span>
             <p className="text-xs text-red-400 leading-relaxed font-medium">
-              Enter your first name and last name as shown on your debit card or funds transfer to your account will be blocked by the bank.
+              {t("profileSetup:step2.ibanWarning")}
             </p>
           </div>
 
           {/* First / Last name as on debit card */}
           <div className="grid grid-cols-2 gap-4">
-            <FieldWrapper label="First Name (as on debit card)" required error={errors.ibanAccountFirstName?.message}>
+            <FieldWrapper label={t("profileSetup:step2.ibanFirstName")} required error={errors.ibanAccountFirstName?.message}>
               <Input
                 {...register("ibanAccountFirstName")}
-                placeholder="e.g. Mohammed"
+                placeholder={t("profileSetup:step2.ibanFirstNamePh")}
                 className="bg-muted/30 border-border"
                 data-testid="input-iban-first-name"
               />
             </FieldWrapper>
-            <FieldWrapper label="Last Name (as on debit card)" required error={errors.ibanAccountLastName?.message}>
+            <FieldWrapper label={t("profileSetup:step2.ibanLastName")} required error={errors.ibanAccountLastName?.message}>
               <Input
                 {...register("ibanAccountLastName")}
-                placeholder="e.g. Al-Harbi"
+                placeholder={t("profileSetup:step2.ibanLastNamePh")}
                 className="bg-muted/30 border-border"
                 data-testid="input-iban-last-name"
               />
             </FieldWrapper>
           </div>
 
-          <FieldWrapper label="IBAN Number" required error={errors.ibanNumber?.message}>
+          <FieldWrapper label={t("profileSetup:step2.ibanNumber")} required error={errors.ibanNumber?.message}>
             <Input
               {...register("ibanNumber", {
                 onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -501,28 +535,30 @@ function Step2Form({
               })}
               placeholder="SA0000000000000000000000"
               maxLength={24}
+              dir="ltr"
               className="bg-muted/30 border-border font-mono uppercase"
               data-testid="input-iban"
             />
-            <p className="text-[11px] text-muted-foreground mt-1">SA followed by 22 digits (24 characters total)</p>
+            <p className="text-[11px] text-muted-foreground mt-1">{t("profileSetup:step2.ibanFormat")}</p>
           </FieldWrapper>
 
           {/* Auto-detected bank info */}
           <div className="grid grid-cols-2 gap-4">
-            <FieldWrapper label="Bank Name" error={undefined}>
+            <FieldWrapper label={t("profileSetup:step2.bankName")} error={undefined}>
               <Input
                 value={watch("ibanBankName") || ""}
                 readOnly
-                placeholder="Auto-detected from IBAN"
+                placeholder={t("profileSetup:step2.bankNamePh")}
                 className="bg-muted/10 border-border text-muted-foreground cursor-not-allowed select-none"
                 data-testid="input-bank-name"
               />
             </FieldWrapper>
-            <FieldWrapper label="Bank Code" error={undefined}>
+            <FieldWrapper label={t("profileSetup:step2.bankCode")} error={undefined}>
               <Input
                 value={watch("ibanBankCode") || ""}
                 readOnly
-                placeholder="Auto-detected"
+                dir="ltr"
+                placeholder={t("profileSetup:step2.bankCodePh")}
                 className="bg-muted/10 border-border text-muted-foreground cursor-not-allowed select-none font-mono"
                 data-testid="input-bank-code"
               />
@@ -534,22 +570,23 @@ function Step2Form({
       {/* Emergency Contact */}
       <div className="space-y-4 p-4 rounded-md bg-muted/10 border border-border">
         <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-          Emergency Contact<span className="text-red-500 ml-0.5">*</span>
+          {t("profileSetup:step2.emergencyTitle")}<span className="text-red-500 ms-0.5">*</span>
         </Label>
-        <p className="text-xs text-muted-foreground mt-0.5">Someone we can reach in case of an emergency during work.</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{t("profileSetup:step2.emergencyDesc")}</p>
         <div className="grid grid-cols-2 gap-4">
-          <FieldWrapper label="Full Name" required error={errors.emergencyContactName?.message}>
+          <FieldWrapper label={t("profileSetup:step2.emergencyName")} required error={errors.emergencyContactName?.message}>
             <Input
               {...register("emergencyContactName")}
-              placeholder="e.g. Ahmed Al-Harbi"
+              placeholder={t("profileSetup:step2.emergencyNamePh")}
               className="bg-muted/30 border-border"
               data-testid="input-emergency-name"
             />
           </FieldWrapper>
-          <FieldWrapper label="Phone Number" required error={errors.emergencyContactPhone?.message}>
+          <FieldWrapper label={t("profileSetup:step2.emergencyPhone")} required error={errors.emergencyContactPhone?.message}>
             <Input
               {...register("emergencyContactPhone")}
-              placeholder="e.g. 05XXXXXXXX"
+              placeholder={t("profileSetup:step2.emergencyPhonePh")}
+              dir="ltr"
               className="bg-muted/30 border-border"
               data-testid="input-emergency-phone"
             />
@@ -559,10 +596,10 @@ function Step2Form({
 
       <div className="flex justify-between pt-2">
         <Button type="button" variant="outline" className="border-border gap-2" onClick={onBack} data-testid="button-step2-back">
-          <ChevronLeft className="h-4 w-4" /> Back
+          <ChevronLeft className="h-4 w-4 rtl:rotate-180" /> {t("profileSetup:common.back")}
         </Button>
         <Button type="submit" className="bg-primary text-primary-foreground font-bold px-8 gap-2" data-testid="button-step2-next">
-          Next <ChevronRight className="h-4 w-4" />
+          {t("profileSetup:common.next")} <ChevronRight className="h-4 w-4 rtl:rotate-180" />
         </Button>
       </div>
     </form>
@@ -576,6 +613,17 @@ function Step3Form({
 }: {
   defaults: Partial<Step3>; onSubmit: (d: Step3) => void; onBack: () => void; isLoading: boolean;
 }) {
+  const { t } = useTranslation(["profileSetup"]);
+  const { step3: step3Schema } = useMemo(() => buildSchemas(t), [t]);
+
+  const eduLabels = useMemo(() => ({
+    "High School and below": t("profileSetup:step3.highSchool"),
+    "University and higher": t("profileSetup:step3.university"),
+  } as Record<string, string>), [t]);
+  const langLabels = useMemo(() => Object.fromEntries(
+    LANGUAGE_OPTIONS.map(l => [l, t(`profileSetup:languages.${l}`)])
+  ), [t]);
+
   const { handleSubmit, watch, setValue, register, formState: { errors } } = useForm<Step3>({
     resolver: zodResolver(step3Schema),
     defaultValues: {
@@ -604,31 +652,31 @@ function Step3Form({
       {/* Education */}
       <div className="space-y-3 p-4 rounded-md bg-muted/10 border border-border">
         <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-          Education Level<span className="text-red-500 ml-0.5">*</span>
+          {t("profileSetup:step3.educationLevel")}<span className="text-red-500 ms-0.5">*</span>
         </Label>
         <div className="grid grid-cols-2 gap-2">
           {EDU_OPTIONS.map((opt) => (
             <button
               key={opt} type="button"
               onClick={() => setValue("educationLevel", opt, { shouldValidate: true })}
-              className={`h-12 px-3 rounded-sm border text-sm font-medium transition-colors text-left leading-tight ${
+              className={`h-12 px-3 rounded-sm border text-sm font-medium transition-colors text-start leading-tight ${
                 educationLevel === opt
                   ? "bg-primary border-primary text-primary-foreground"
                   : "bg-muted/20 border-border text-muted-foreground hover:border-primary/50"
               }`}
               data-testid={`button-edu-${opt.replace(/\s+/g, "-").toLowerCase()}`}
             >
-              {opt}
+              {eduLabels[opt]}
             </button>
           ))}
         </div>
         {errors.educationLevel && <p className="text-red-400 text-xs">{errors.educationLevel.message}</p>}
 
         {educationLevel === "University and higher" && (
-          <FieldWrapper label="Field of Study / Major" required error={errors.major?.message}>
+          <FieldWrapper label={t("profileSetup:step3.major")} required error={errors.major?.message}>
             <Input
               {...register("major")}
-              placeholder="e.g. Business Administration, Engineering..."
+              placeholder={t("profileSetup:step3.majorPh")}
               className="bg-muted/30 border-border mt-1"
               data-testid="input-major"
             />
@@ -639,7 +687,7 @@ function Step3Form({
       {/* Languages */}
       <div className="space-y-3 p-4 rounded-md bg-muted/10 border border-border">
         <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
-          Languages You Speak<span className="text-red-500 ml-0.5">*</span>
+          {t("profileSetup:step3.languages")}<span className="text-red-500 ms-0.5">*</span>
         </Label>
         <div className="grid grid-cols-2 gap-2">
           {LANGUAGE_OPTIONS.map((lang) => (
@@ -650,17 +698,17 @@ function Step3Form({
                 className="border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                 data-testid={`checkbox-lang-${lang}`}
               />
-              <span className="text-sm text-muted-foreground group-hover:text-white transition-colors">{lang}</span>
+              <span className="text-sm text-muted-foreground group-hover:text-white transition-colors">{langLabels[lang]}</span>
             </label>
           ))}
         </div>
         {errors.languages && <p className="text-red-400 text-xs">{errors.languages.message}</p>}
 
         <div className="pt-1">
-          <FieldWrapper label="Other languages (specify)">
+          <FieldWrapper label={t("profileSetup:step3.otherLanguages")}>
             <Input
               {...register("otherLanguage")}
-              placeholder="e.g. Swahili, Hausa..."
+              placeholder={t("profileSetup:step3.otherLanguagesPh")}
               className="bg-muted/30 border-border"
               data-testid="input-other-language"
             />
@@ -670,7 +718,7 @@ function Step3Form({
 
       <div className="flex justify-between pt-2">
         <Button type="button" variant="outline" className="border-border gap-2" onClick={onBack} data-testid="button-step3-back">
-          <ChevronLeft className="h-4 w-4" /> Back
+          <ChevronLeft className="h-4 w-4 rtl:rotate-180" /> {t("profileSetup:common.back")}
         </Button>
         <Button
           type="submit"
@@ -679,7 +727,7 @@ function Step3Form({
           data-testid="button-step3-submit"
         >
           {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : (
-            <><CheckCircle2 className="h-4 w-4" /> Complete Profile</>
+            <><CheckCircle2 className="h-4 w-4" /> {t("profileSetup:common.submit")}</>
           )}
         </Button>
       </div>
@@ -689,15 +737,16 @@ function Step3Form({
 
 // ─── Main Gate Component ──────────────────────────────────────────────────────
 
-const STEPS = [
-  { id: 1, label: "Personal Info",       icon: User },
-  { id: 2, label: "Health & Work",       icon: Heart },
-  { id: 3, label: "Education & Languages", icon: BookOpen },
-];
-
 export default function ProfileSetupGate({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { t, i18n } = useTranslation(["profileSetup"]);
+
+  const STEPS = [
+    { id: 1, label: t("profileSetup:steps.personal"),  icon: User },
+    { id: 2, label: t("profileSetup:steps.health"),    icon: Heart },
+    { id: 3, label: t("profileSetup:steps.education"), icon: BookOpen },
+  ];
 
   // Read candidate from localStorage
   const stored = localStorage.getItem("workforce_candidate");
@@ -717,12 +766,15 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
       const merged = { ...candidate!, ...updated };
       localStorage.setItem("workforce_candidate", JSON.stringify(merged));
       setCompleted(true);
-      toast({ title: "Profile completed!", description: "Your information has been saved." });
+      toast({
+        title: t("profileSetup:common.profileCompleted"),
+        description: t("profileSetup:common.profileCompletedDesc"),
+      });
     },
     onError: (err: any) => {
       toast({
-        title: "Save failed",
-        description: err?.message || "Please try again.",
+        title: t("profileSetup:common.saveFailed"),
+        description: err?.message || t("profileSetup:common.tryAgain"),
         variant: "destructive",
       });
     },
@@ -759,13 +811,13 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
       isEmployedElsewhere: s2data.isEmployedElsewhere,
       currentEmployer:     s2data.currentEmployer || null,
       currentRole:         s2data.currentRole || null,
-      emergencyContactName:  s2data.emergencyContactName || null,
-      emergencyContactPhone: s2data.emergencyContactPhone || null,
-      ibanAccountFirstName: s2data.ibanAccountFirstName?.trim() || null,
-      ibanAccountLastName:  s2data.ibanAccountLastName?.trim()  || null,
-      ibanNumber:          s2data.ibanNumber?.trim() || null,
-      ibanBankName:        s2data.ibanBankName?.trim() || null,
-      ibanBankCode:        s2data.ibanBankCode?.trim() || null,
+      emergencyContactName:  s2data.emergencyContactName,
+      emergencyContactPhone: s2data.emergencyContactPhone,
+      ibanAccountFirstName: s2data.ibanAccountFirstName || null,
+      ibanAccountLastName:  s2data.ibanAccountLastName  || null,
+      ibanNumber:          s2data.ibanNumber || null,
+      ibanBankName:        s2data.ibanBankName || null,
+      ibanBankCode:        s2data.ibanBankCode || null,
       educationLevel:      d.educationLevel,
       major:               d.major || null,
       languages:           langs,
@@ -805,7 +857,7 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
           data-testid="button-logout"
         >
           <LogOut className="h-3.5 w-3.5" />
-          Sign out
+          {t("profileSetup:header.signOut")}
         </button>
       </header>
 
@@ -814,9 +866,9 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
 
           {/* Header */}
           <div className="space-y-1">
-            <h1 className="font-display text-2xl font-bold text-white">Complete Your Profile</h1>
+            <h1 className="font-display text-2xl font-bold text-white">{t("profileSetup:header.title")}</h1>
             <p className="text-muted-foreground text-sm">
-              Please fill in the required information before accessing the portal. This will not take more than 2 minutes.
+              {t("profileSetup:header.subtitle")}
             </p>
           </div>
 
@@ -852,7 +904,10 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
           <div className="bg-card border border-border rounded-md p-6 shadow-lg">
             <div className="mb-6 pb-4 border-b border-border">
               <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
-                Step {step} of {STEPS.length}
+                {t("profileSetup:header.stepOf", {
+                  step: formatNumber(step),
+                  total: formatNumber(STEPS.length),
+                })}
               </p>
               <h2 className="font-display font-bold text-lg text-white mt-0.5">
                 {STEPS[step - 1].label}
@@ -877,7 +932,7 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
 
           {/* PDPL Notice */}
           <p className="text-[11px] text-muted-foreground text-center leading-relaxed max-w-md mx-auto">
-            All personal data collected through the portal is subject to the Personal Data Protection Law issued by Royal Decree No. (M/19) dated 9/2/1443 AH and Cabinet Resolution No. (98) dated 7/2/1443 AH.
+            {t("profileSetup:header.pdpl")}
           </p>
         </div>
       </div>

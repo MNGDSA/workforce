@@ -36,6 +36,7 @@ import enTalent from "./locales/en/talent.json";
 import enWorkforce from "./locales/en/workforce.json";
 import enOnboarding from "./locales/en/onboarding.json";
 import enSchedules from "./locales/en/schedules.json";
+import enProfileSetup from "./locales/en/profileSetup.json";
 
 import arCommon from "./locales/ar/common.json";
 import arAuth from "./locales/ar/auth.json";
@@ -71,6 +72,7 @@ import arTalent from "./locales/ar/talent.json";
 import arWorkforce from "./locales/ar/workforce.json";
 import arOnboarding from "./locales/ar/onboarding.json";
 import arSchedules from "./locales/ar/schedules.json";
+import arProfileSetup from "./locales/ar/profileSetup.json";
 
 export const SUPPORTED_LOCALES = ["ar", "en"] as const;
 export type SupportedLocale = typeof SUPPORTED_LOCALES[number];
@@ -83,12 +85,12 @@ i18n
   .use(initReactI18next)
   .init({
     resources: {
-      en: { common: enCommon, auth: enAuth, apply: enApply, portal: enPortal, layout: enLayout, dashboard: enDashboard, profile: enProfile, audit: enAudit, geofences: enGeofences, reports: enReports, automation: enAutomation, payroll: enPayroll, adminUsers: enAdminUsers, settings: enSettings, questionSets: enQuestionSets, orgChart: enOrgChart, notifications: enNotifications, departments: enDepartments, legal: enLegal, broadcast: enBroadcast, scheduleInterview: enScheduleInterview, events: enEvents, smpContracts: enSmpContracts, offboarding: enOffboarding, inbox: enInbox, jobPosting: enJobPosting, interviews: enInterviews, rolesAccess: enRolesAccess, assets: enAssets, idCards: enIdCards, talent: enTalent, workforce: enWorkforce, onboarding: enOnboarding, schedules: enSchedules },
-      ar: { common: arCommon, auth: arAuth, apply: arApply, portal: arPortal, layout: arLayout, dashboard: arDashboard, profile: arProfile, audit: arAudit, geofences: arGeofences, reports: arReports, automation: arAutomation, payroll: arPayroll, adminUsers: arAdminUsers, settings: arSettings, questionSets: arQuestionSets, orgChart: arOrgChart, notifications: arNotifications, departments: arDepartments, legal: arLegal, broadcast: arBroadcast, scheduleInterview: arScheduleInterview, events: arEvents, smpContracts: arSmpContracts, offboarding: arOffboarding, inbox: arInbox, jobPosting: arJobPosting, interviews: arInterviews, rolesAccess: arRolesAccess, assets: arAssets, idCards: arIdCards, talent: arTalent, workforce: arWorkforce, onboarding: arOnboarding, schedules: arSchedules },
+      en: { common: enCommon, auth: enAuth, apply: enApply, portal: enPortal, layout: enLayout, dashboard: enDashboard, profile: enProfile, audit: enAudit, geofences: enGeofences, reports: enReports, automation: enAutomation, payroll: enPayroll, adminUsers: enAdminUsers, settings: enSettings, questionSets: enQuestionSets, orgChart: enOrgChart, notifications: enNotifications, departments: enDepartments, legal: enLegal, broadcast: enBroadcast, scheduleInterview: enScheduleInterview, events: enEvents, smpContracts: enSmpContracts, offboarding: enOffboarding, inbox: enInbox, jobPosting: enJobPosting, interviews: enInterviews, rolesAccess: enRolesAccess, assets: enAssets, idCards: enIdCards, talent: enTalent, workforce: enWorkforce, onboarding: enOnboarding, schedules: enSchedules, profileSetup: enProfileSetup },
+      ar: { common: arCommon, auth: arAuth, apply: arApply, portal: arPortal, layout: arLayout, dashboard: arDashboard, profile: arProfile, audit: arAudit, geofences: arGeofences, reports: arReports, automation: arAutomation, payroll: arPayroll, adminUsers: arAdminUsers, settings: arSettings, questionSets: arQuestionSets, orgChart: arOrgChart, notifications: arNotifications, departments: arDepartments, legal: arLegal, broadcast: arBroadcast, scheduleInterview: arScheduleInterview, events: arEvents, smpContracts: arSmpContracts, offboarding: arOffboarding, inbox: arInbox, jobPosting: arJobPosting, interviews: arInterviews, rolesAccess: arRolesAccess, assets: arAssets, idCards: arIdCards, talent: arTalent, workforce: arWorkforce, onboarding: arOnboarding, schedules: arSchedules, profileSetup: arProfileSetup },
     },
     fallbackLng: DEFAULT_LOCALE,
     supportedLngs: SUPPORTED_LOCALES as unknown as string[],
-    ns: ["common", "auth", "apply", "portal", "layout", "dashboard", "profile", "audit", "geofences", "reports", "automation", "payroll", "adminUsers", "settings", "questionSets", "orgChart", "notifications", "departments", "legal", "broadcast", "scheduleInterview", "events", "smpContracts", "offboarding", "inbox", "jobPosting", "interviews", "rolesAccess", "assets", "idCards", "talent", "workforce", "onboarding", "schedules"],
+    ns: ["common", "auth", "apply", "portal", "layout", "dashboard", "profile", "audit", "geofences", "reports", "automation", "payroll", "adminUsers", "settings", "questionSets", "orgChart", "notifications", "departments", "legal", "broadcast", "scheduleInterview", "events", "smpContracts", "offboarding", "inbox", "jobPosting", "interviews", "rolesAccess", "assets", "idCards", "talent", "workforce", "onboarding", "schedules", "profileSetup"],
     defaultNS: "common",
     interpolation: { escapeValue: false },
     detection: {
