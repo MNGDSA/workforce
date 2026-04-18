@@ -12,6 +12,7 @@ import meccaBg from "@assets/Destination_Mecca_14_1776015335379.jpg";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useTranslation } from "react-i18next";
+import { formatNumber } from "@/lib/format";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 
 type RegStep = "phone" | "otp" | "details";
@@ -299,9 +300,9 @@ export default function AuthPage() {
   const inputPaddedStartClass = "ps-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm";
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-[40%_60%] bg-background font-sans text-foreground overflow-hidden">
+    <div className="min-h-screen grid lg:grid-cols-[40%_60%] bg-background font-sans text-foreground overflow-x-hidden">
       {/* ── Left Column: Form ─────────────────────────────────── */}
-      <div className="flex flex-col justify-center items-center p-8 lg:p-12 relative z-10">
+      <div className="flex flex-col justify-center items-center px-4 py-6 sm:p-8 lg:p-12 relative z-10">
         <div className="w-full max-w-md space-y-8 animate-in slide-in-from-start-8 duration-700 fade-in">
 
           {/* Header row: logo + language switcher */}
@@ -315,7 +316,7 @@ export default function AuthPage() {
               </div>
               <LanguageSwitcher />
             </div>
-            <h1 className="font-display text-4xl font-bold tracking-tight text-white">
+            <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-white">
               {resetStep ? t("auth:reset.title") : t("auth:login.title")}
             </h1>
           </div>
@@ -465,7 +466,7 @@ export default function AuthPage() {
           ) : (
 
           <Tabs defaultValue={showSignUpFromReset || initialTab === "register" ? "register" : "login"} key={`${showSignUpFromReset}-${initialTab}`} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-8 bg-muted/50 p-1 rounded-sm">
+            <TabsList className="grid w-full grid-cols-2 mb-8 bg-muted/50 p-1 rounded-sm rtl:[direction:ltr]">
               <TabsTrigger value="login" className="rounded-sm data-[state=active]:bg-background data-[state=active]:text-foreground font-medium">
                 {t("auth:tabs.login")}
               </TabsTrigger>
@@ -483,7 +484,7 @@ export default function AuthPage() {
                     name="identifier"
                     render={({ field }) => (
                       <FormItem>
-                        <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">
+                        <Label className="block text-start text-muted-foreground uppercase text-xs tracking-wider font-semibold">
                           {t("auth:login.identifierLabel")}
                         </Label>
                         <FormControl>
@@ -491,7 +492,7 @@ export default function AuthPage() {
                             <CreditCard className={iconStartClass} />
                             <Input
                               placeholder={t("auth:login.identifierPlaceholder")}
-                              className={`${inputPaddedStartClass} font-mono tracking-wide`}
+                              className={`${inputPaddedStartClass} font-mono tracking-wide text-start`}
                               inputMode="numeric"
                               data-testid="input-identifier"
                               {...field}
@@ -508,9 +509,9 @@ export default function AuthPage() {
                     name="password"
                     render={({ field }) => (
                       <FormItem>
-                        <div className="flex items-center justify-between">
-                          <Label className="text-muted-foreground uppercase text-xs tracking-wider font-semibold">{t("auth:login.passwordLabel")}</Label>
-                          <button type="button" onClick={() => setResetStep("id")} className="text-xs text-muted-foreground hover:text-primary transition-colors" data-testid="link-forgot-password">{t("auth:login.forgotPassword")}</button>
+                        <div className="flex items-center justify-between gap-2">
+                          <Label className="text-start text-muted-foreground uppercase text-xs tracking-wider font-semibold">{t("auth:login.passwordLabel")}</Label>
+                          <button type="button" onClick={() => setResetStep("id")} className="text-xs text-muted-foreground hover:text-primary transition-colors text-end" data-testid="link-forgot-password">{t("auth:login.forgotPassword")}</button>
                         </div>
                         <FormControl>
                           <div className="relative group">
@@ -518,7 +519,7 @@ export default function AuthPage() {
                             <Input
                               type="password"
                               placeholder="••••••••"
-                              className={inputPaddedStartClass}
+                              className={`${inputPaddedStartClass} text-start`}
                               data-testid="input-password"
                               {...field}
                             />
@@ -545,10 +546,15 @@ export default function AuthPage() {
                   >
                     {isLoading ? (
                       <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                    ) : isRtl ? (
+                      <>
+                        <ArrowRight className="me-2 h-4 w-4 rotate-180 group-hover:-translate-x-1 transition-transform" />
+                        {t("auth:login.submit")}
+                      </>
                     ) : (
                       <>
                         {t("auth:login.submit")}
-                        <ArrowRight className={`ms-2 h-4 w-4 group-hover:translate-x-1 transition-transform ${isRtl ? "rotate-180" : ""}`} />
+                        <ArrowRight className="ms-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
                       </>
                     )}
                   </Button>
@@ -590,7 +596,7 @@ export default function AuthPage() {
                 return (
                   <div className="mt-6 space-y-2">
                     <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest font-semibold text-center">
-                      {isRtl ? "تستفيد ووركفورس من تقنيات تستخدمها" : "Workforce Utilizes Technologies used by"}
+                      {isRtl ? "يستخدم نظام وورك فورس تقنيات يستعملها كل من" : "Workforce Utilizes Technologies used by"}
                     </p>
                     <div
                       className="overflow-hidden"
@@ -799,7 +805,13 @@ export default function AuthPage() {
                 {...(supportEmail ? {} : { onClick: (e: React.MouseEvent) => e.preventDefault() })}
               >{t("auth:support.needHelp")}</a>
             </div>
-            <p className="text-center"><bdi>© {new Date().getFullYear()} Luxury Carts Company Ltd.</bdi></p>
+            <p className="text-center">
+              {isRtl ? (
+                <bdi>© {formatNumber(new Date().getFullYear(), { useGrouping: false })} شركة العربة الفاخرة</bdi>
+              ) : (
+                <bdi>© {new Date().getFullYear()} Luxury Carts Company Ltd.</bdi>
+              )}
+            </p>
           </div>
         </div>
       </div>
