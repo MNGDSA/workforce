@@ -472,7 +472,7 @@ export default function AuthPage() {
           <Tabs defaultValue={showSignUpFromReset || initialTab === "register" ? "register" : "login"} key={`${showSignUpFromReset}-${initialTab}`} className="w-full">
             <TabsList
               className="grid w-full min-w-0 grid-cols-2 mb-8 bg-muted/50 p-1 rounded-sm"
-              style={isRtl ? { direction: "ltr" } : undefined}
+              style={isRtl ? { direction: "rtl" } : undefined}
             >
               <TabsTrigger value="login" className="rounded-sm data-[state=active]:bg-background data-[state=active]:text-foreground font-medium text-xs sm:text-sm truncate">
                 {t("auth:tabs.login")}
