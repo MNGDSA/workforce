@@ -333,7 +333,7 @@ export default function AuthPage() {
                       placeholder="1012345678"
                       value={resetNationalId}
                       onChange={(e) => setResetNationalId(e.target.value.replace(/\D/g, ""))}
-                      className={`${inputPaddedStartClass} font-mono tracking-wide`}
+                      className={`${inputPaddedStartClass} tabular-nums tracking-wide`}
                       inputMode="numeric"
                       dir={isRtl ? "rtl" : "ltr"}
                       data-testid="input-reset-national-id"
@@ -371,7 +371,7 @@ export default function AuthPage() {
                       placeholder="••••••"
                       value={resetOtpCode}
                       onChange={(e) => setResetOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                      className={`${inputPaddedStartClass} font-mono tracking-[0.5em] text-center text-lg`}
+                      className={`${inputPaddedStartClass} tabular-nums tracking-[0.5em] text-center text-lg`}
                       inputMode="numeric"
                       maxLength={6}
                       dir={isRtl ? "rtl" : "ltr"}
@@ -380,7 +380,7 @@ export default function AuthPage() {
                   </div>
                   {resetCountdown > 0 && (
                     <p className="text-xs text-muted-foreground text-center">
-                      <bdi className="text-white font-mono">{Math.floor(resetCountdown / 60)}:{String(resetCountdown % 60).padStart(2, "0")}</bdi>
+                      <bdi className="text-white tabular-nums">{Math.floor(resetCountdown / 60)}:{String(resetCountdown % 60).padStart(2, "0")}</bdi>
                     </p>
                   )}
                   {resetCountdown === 0 && (
@@ -499,7 +499,7 @@ export default function AuthPage() {
                             <CreditCard className={iconStartClass} />
                             <Input
                               placeholder={t("auth:login.identifierPlaceholder")}
-                              className={`${inputPaddedStartClass} font-mono tracking-wide`}
+                              className={`${inputPaddedStartClass} tabular-nums tracking-wide`}
                               inputMode="numeric"
                               dir={isRtl ? "rtl" : "ltr"}
                               data-testid="input-identifier"
@@ -654,7 +654,7 @@ export default function AuthPage() {
                         placeholder="05xxxxxxxx"
                         value={regPhone}
                         onChange={(e) => { setRegPhone(e.target.value.replace(/\D/g, "").slice(0, 10)); setRegisterError(""); }}
-                        className={`${inputPaddedStartClass} font-mono tracking-wide`}
+                        className={`${inputPaddedStartClass} tabular-nums tracking-wide`}
                         inputMode="tel"
                         maxLength={10}
                         dir={isRtl ? "rtl" : "ltr"}
@@ -699,7 +699,7 @@ export default function AuthPage() {
                       placeholder="• • • • • •"
                       value={otpCode}
                       onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setRegisterError(""); }}
-                      className="h-14 text-center text-2xl font-mono tracking-[0.5em] bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm"
+                      className="h-14 text-center text-2xl tabular-nums tracking-[0.5em] bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 rounded-sm"
                       inputMode="numeric"
                       maxLength={6}
                       dir={isRtl ? "rtl" : "ltr"}
@@ -758,7 +758,7 @@ export default function AuthPage() {
                           <FormControl>
                             <div className="relative group">
                               <CreditCard className={iconStartClass} />
-                              <Input placeholder={t("auth:register.nationalIdPlaceholder")} className={`${inputPaddedStartClass} font-mono tracking-wide`} inputMode="numeric" dir={isRtl ? "rtl" : "ltr"} data-testid="input-national-id" {...field} />
+                              <Input placeholder={t("auth:register.nationalIdPlaceholder")} className={`${inputPaddedStartClass} tabular-nums tracking-wide`} inputMode="numeric" dir={isRtl ? "rtl" : "ltr"} data-testid="input-national-id" {...field} />
                             </div>
                           </FormControl>
                           <FormMessage />
