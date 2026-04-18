@@ -49,6 +49,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -2356,6 +2357,7 @@ export default function CandidatePortal() {
           <span className="font-display font-bold text-xl tracking-tight text-white hidden sm:inline-block">
             WORKFORCE
           </span>
+          <div className="ms-3"><LanguageSwitcher /></div>
         </div>
 
         <nav className="hidden md:flex items-center gap-5 text-sm font-medium">
