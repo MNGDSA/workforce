@@ -1895,7 +1895,7 @@ export async function registerRoutes(
         const activeWf = await storage.getWorkforceByCandidateId(data.candidateId);
         if (activeWf && activeWf.isActive && activeWf.employmentType === "smp") {
           return res.status(409).json({
-            message: "Cannot submit individual job application: this candidate is currently registered as an active SMP worker. Remove them from the SMP contract first.",
+            message: tr(req, "smp.cannotApplyActiveSmp"),
           });
         }
 
@@ -1914,7 +1914,7 @@ export async function registerRoutes(
           );
           if (pendingOnboarding) {
             return res.status(409).json({
-              message: "Cannot submit individual job application: this candidate is in an active SMP onboarding pipeline. Complete or reject the SMP onboarding first.",
+              message: tr(req, "smp.cannotApplyOnboarding"),
             });
           }
         }
@@ -1932,7 +1932,7 @@ export async function registerRoutes(
           );
           if (pendingSmpOnboarding) {
             return res.status(409).json({
-              message: "Cannot submit individual job application: this candidate is in an active SMP onboarding pipeline. Complete or reject the SMP onboarding first.",
+              message: tr(req, "smp.cannotApplyOnboarding"),
             });
           }
         }
@@ -2079,7 +2079,7 @@ export async function registerRoutes(
           const updated = await storage.updateApplication(u.id, { status: u.status });
           results.push({ id: u.id, success: !!updated });
         } catch {
-          results.push({ id: u.id, success: false, error: "Update failed" });
+          results.push({ id: u.id, success: false, error: tr(req, "error.updateFailed") });
         }
       }
 
@@ -3879,12 +3879,12 @@ export async function registerRoutes(
       for (const obId of onboardingIds) {
         try {
           const ob = await storage.getOnboardingRecord(obId);
-          if (!ob) { results.push({ onboardingId: obId, success: false, error: "Record not found" }); continue; }
-          if (ob.status === "converted" || ob.status === "rejected" || ob.status === "terminated") { results.push({ onboardingId: obId, success: false, error: "Already converted, rejected, or terminated" }); continue; }
+          if (!ob) { results.push({ onboardingId: obId, success: false, error: tr(req, "error.recordNotFound") }); continue; }
+          if (ob.status === "converted" || ob.status === "rejected" || ob.status === "terminated") { results.push({ onboardingId: obId, success: false, error: tr(req, "error.alreadyConverted") }); continue; }
           const candidate = await storage.getCandidate(ob.candidateId);
-          if (!candidate) { results.push({ onboardingId: obId, success: false, error: "Candidate not found" }); continue; }
+          if (!candidate) { results.push({ onboardingId: obId, success: false, error: tr(req, "error.candidateNotFound") }); continue; }
           // SMP onboardings have no applicationId — they do not get individual contracts
-          if (!ob.applicationId) { results.push({ onboardingId: obId, success: false, error: "SMP workers do not get contracts" }); continue; }
+          if (!ob.applicationId) { results.push({ onboardingId: obId, success: false, error: tr(req, "error.smpNoContracts") }); continue; }
 
           const existing = await storage.getCandidateContracts({ onboardingId: ob.id });
           const pending = existing.find(c => c.status !== "signed");
@@ -6376,9 +6376,9 @@ export async function registerRoutes(
     try {
       const userId = getAuthUserId(req);
       const { name, eventId, dateFrom, dateTo, mode, splitPercentage, tranche1DepositDate, tranche2DepositDate } = req.body;
-      if (!name || !dateFrom || !dateTo) return res.status(400).json({ error: "Name, dateFrom, dateTo required" });
+      if (!name || !dateFrom || !dateTo) return res.status(400).json({ error: tr(req, "error.payRunFieldsRequired") });
       if (mode === "split" && (!splitPercentage || splitPercentage < 1 || splitPercentage > 99)) {
-        return res.status(400).json({ error: "Split percentage must be between 1 and 99" });
+        return res.status(400).json({ error: tr(req, "error.splitPercent") });
       }
       const run = await storage.createPayRun({
         name, eventId: eventId || null, dateFrom, dateTo,
@@ -6397,7 +6397,7 @@ export async function registerRoutes(
   app.get("/api/pay-runs/:id", requirePermission("payroll:pay_runs_read"), async (req: Request, res: Response) => {
     try {
       const run = await storage.getPayRun(req.params.id);
-      if (!run) return res.status(404).json({ error: "Pay run not found" });
+      if (!run) return res.status(404).json({ error: tr(req, "error.payRunNotFound") });
       const lines = await storage.getPayRunLines(run.id);
       let eventName: string | null = null;
       if (run.eventId) {
@@ -6447,9 +6447,9 @@ export async function registerRoutes(
     try {
       const userId = getAuthUserId(req);
       const line = await storage.getPayRunLine(req.params.lineId);
-      if (!line) return res.status(404).json({ error: "Line not found" });
+      if (!line) return res.status(404).json({ error: tr(req, "error.lineNotFound") });
       const { label, amount } = req.body;
-      if (!label || !amount) return res.status(400).json({ error: "Label and amount required" });
+      if (!label || !amount) return res.status(400).json({ error: tr(req, "error.labelAndAmountRequired") });
       const additions = (line.manualAdditions as any[]) || [];
       additions.push({ label, amount: parseFloat(amount), addedBy: userId, addedAt: new Date().toISOString() });
       const totalManualAdditions = additions.reduce((s: number, a: any) => s + a.amount, 0);
@@ -6462,9 +6462,9 @@ export async function registerRoutes(
     try {
       const userId = getAuthUserId(req);
       const line = await storage.getPayRunLine(req.params.lineId);
-      if (!line) return res.status(404).json({ error: "Line not found" });
+      if (!line) return res.status(404).json({ error: tr(req, "error.lineNotFound") });
       const { label, amount } = req.body;
-      if (!label || !amount) return res.status(400).json({ error: "Label and amount required" });
+      if (!label || !amount) return res.status(400).json({ error: tr(req, "error.labelAndAmountRequired") });
       const deductions = (line.manualDeductions as any[]) || [];
       deductions.push({ label, amount: parseFloat(amount), addedBy: userId, addedAt: new Date().toISOString() });
       const totalManualDeductions = deductions.reduce((s: number, a: any) => s + a.amount, 0);
@@ -6478,14 +6478,14 @@ export async function registerRoutes(
     try {
       const userId = getAuthUserId(req);
       const line = await storage.getPayRunLine(req.params.lineId);
-      if (!line) return res.status(404).json({ error: "Line not found" });
+      if (!line) return res.status(404).json({ error: tr(req, "error.lineNotFound") });
 
       const { bankTransactionId, trancheNumber, depositDate, notes } = req.body;
       if (!bankTransactionId || !depositDate) return res.status(400).json({ error: "bankTransactionId and depositDate required" });
 
       const tranche = trancheNumber ?? 1;
       if (tranche === 2 && line.tranche2Status === "blocked") {
-        return res.status(400).json({ error: "Tranche 2 is blocked — offboarding must be completed first" });
+        return res.status(400).json({ error: tr(req, "error.tranche2Blocked") });
       }
 
       const [cand] = await db.select().from(candidates).where(eq(candidates.id, line.candidateId));
@@ -6519,19 +6519,19 @@ export async function registerRoutes(
   app.post("/api/pay-runs/:id/import-bank-response", requirePermission("payroll:pay_runs_import_bank"), upload.single("file"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
-      if (!req.file) return res.status(400).json({ error: "File required" });
+      if (!req.file) return res.status(400).json({ error: tr(req, "error.fileRequired") });
 
       const { ibanColumn, txnIdColumn, depositDate } = req.body;
       if (!ibanColumn || !txnIdColumn) return res.status(400).json({ error: "ibanColumn and txnIdColumn mappings required" });
 
       const fileContent = fs.readFileSync(req.file.path, "utf-8");
       const lines = fileContent.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-      if (lines.length < 2) return res.status(400).json({ error: "File must have a header row and at least one data row" });
+      if (lines.length < 2) return res.status(400).json({ error: tr(req, "error.fileNeedsHeader") });
 
       const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ""));
       const ibanIdx = headers.indexOf(ibanColumn);
       const txnIdx = headers.indexOf(txnIdColumn);
-      if (ibanIdx === -1 || txnIdx === -1) return res.status(400).json({ error: "Column names not found in file headers" });
+      if (ibanIdx === -1 || txnIdx === -1) return res.status(400).json({ error: tr(req, "error.columnNamesNotFound") });
 
       const payRunLines_list = await storage.getPayRunLines(req.params.id);
       const candidateIds = [...new Set(payRunLines_list.map(l => l.candidateId))];
@@ -6600,17 +6600,17 @@ export async function registerRoutes(
     try {
       const userId = getAuthUserId(req);
       const line = await storage.getPayRunLine(req.params.lineId);
-      if (!line) return res.status(404).json({ error: "Line not found" });
+      if (!line) return res.status(404).json({ error: tr(req, "error.lineNotFound") });
 
       const { otp, trancheNumber, depositDate, notes } = req.body;
       const tranche = trancheNumber ?? 1;
 
       if (tranche === 2 && line.tranche2Status === "blocked") {
-        return res.status(400).json({ error: "Tranche 2 blocked — offboarding must be completed first" });
+        return res.status(400).json({ error: tr(req, "error.tranche2Blocked") });
       }
 
       const [cand] = await db.select().from(candidates).where(eq(candidates.id, line.candidateId));
-      if (!cand?.phone) return res.status(400).json({ error: "Employee has no phone number on file — required for cash payment OTP" });
+      if (!cand?.phone) return res.status(400).json({ error: tr(req, "error.cashOtpNoPhone") });
 
       if (!otp) {
         const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -6643,9 +6643,9 @@ export async function registerRoutes(
         .orderBy(desc(otpVerifications.createdAt))
         .limit(1);
 
-      if (!verification) return res.status(400).json({ error: "Invalid OTP code" });
-      if (verification.expiresAt && verification.expiresAt < new Date()) return res.status(400).json({ error: "OTP expired — request a new code" });
-      if ((verification.attempts ?? 0) >= 3) return res.status(429).json({ error: "Too many attempts — request a new code" });
+      if (!verification) return res.status(400).json({ error: tr(req, "error.invalidOtp") });
+      if (verification.expiresAt && verification.expiresAt < new Date()) return res.status(400).json({ error: tr(req, "error.otpExpired") });
+      if ((verification.attempts ?? 0) >= 3) return res.status(429).json({ error: tr(req, "error.tooManyOtpAttempts") });
 
       await db.update(otpVerifications).set({ isVerified: true }).where(eq(otpVerifications.id, verification.id));
 
@@ -6681,16 +6681,16 @@ export async function registerRoutes(
   app.post("/api/pay-runs/:id/lines/:lineId/cash-otp-override", requirePermission("payroll:pay_runs_cash_otp_override"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
-      if (!req.authIsSuperAdmin) return res.status(403).json({ error: "Super admin only" });
+      if (!req.authIsSuperAdmin) return res.status(403).json({ error: tr(req, "error.superAdminOnly") });
 
       const line = await storage.getPayRunLine(req.params.lineId);
-      if (!line) return res.status(404).json({ error: "Line not found" });
+      if (!line) return res.status(404).json({ error: tr(req, "error.lineNotFound") });
       const { overrideReason, trancheNumber, depositDate, notes } = req.body;
-      if (!overrideReason) return res.status(400).json({ error: "Override reason required" });
+      if (!overrideReason) return res.status(400).json({ error: tr(req, "error.overrideReasonRequired") });
 
       const tranche = trancheNumber ?? 1;
       if (tranche === 2 && line.tranche2Status === "blocked") {
-        return res.status(400).json({ error: "Tranche 2 blocked — offboarding must be completed first" });
+        return res.status(400).json({ error: tr(req, "error.tranche2Blocked") });
       }
 
       const [cand] = await db.select().from(candidates).where(eq(candidates.id, line.candidateId));
@@ -6786,7 +6786,7 @@ export async function registerRoutes(
   app.get("/api/payslips/:candidateId", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
-      if (!userId) return res.status(401).json({ error: "Unauthorized" });
+      if (!userId) return res.status(401).json({ error: tr(req, "error.unauthorized") });
 
       // Authorization: admin with payroll:read OR candidate viewing own payslips.
       const isAdmin = req.authIsSuperAdmin || (req.authPermissions?.has("payroll:read") ?? false);
@@ -6850,7 +6850,7 @@ export async function registerRoutes(
         settlementPaidBy: userId,
         settlementReference: reference ?? null,
       } as any);
-      if (!updated) return res.status(404).json({ error: "Employee not found" });
+      if (!updated) return res.status(404).json({ error: tr(req, "error.employeeNotFound") });
       await logAudit(req, { action: "mark_settlement_paid", entityType: "workforce", entityId: req.params.id, description: `Settlement marked as paid${reference ? ` (ref: ${reference})` : ""}` });
       return res.json(updated);
     } catch (err) { return handleError(res, err); }
@@ -6865,7 +6865,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "paymentMethod must be 'bank_transfer' or 'cash'" });
       }
       if (paymentMethod === "cash" && !reason) {
-        return res.status(400).json({ error: "Reason required when setting payment method to cash" });
+        return res.status(400).json({ error: tr(req, "error.cashReasonRequired") });
       }
       const updated = await storage.updateWorkforceRecord(req.params.id, {
         paymentMethod,
@@ -6873,7 +6873,7 @@ export async function registerRoutes(
         paymentMethodSetBy: userId,
         paymentMethodSetAt: new Date() as any,
       } as any);
-      if (!updated) return res.status(404).json({ error: "Employee not found" });
+      if (!updated) return res.status(404).json({ error: tr(req, "error.employeeNotFound") });
       await logAudit(req, { action: "update_payment_method", entityType: "workforce", entityId: req.params.id, description: `Payment method changed to ${paymentMethod}${reason ? `: ${reason}` : ""}` });
       return res.json(updated);
     } catch (err) { return handleError(res, err); }
@@ -6921,7 +6921,7 @@ export async function registerRoutes(
   app.get("/api/pay-runs/:id/export", requirePermission("payroll:pay_runs_export"), async (req: Request, res: Response) => {
     try {
       const run = await storage.getPayRun(req.params.id);
-      if (!run) return res.status(404).json({ error: "Pay run not found" });
+      if (!run) return res.status(404).json({ error: tr(req, "error.payRunNotFound") });
       const lines = await storage.getPayRunLines(run.id);
       const { format, lineIds } = req.query as any;
 
@@ -6957,7 +6957,7 @@ export async function registerRoutes(
   app.get("/api/pay-runs/:id/export-for-bank", requirePermission("payroll:pay_runs_export"), async (req: Request, res: Response) => {
     try {
       const run = await storage.getPayRun(req.params.id);
-      if (!run) return res.status(404).json({ error: "Pay run not found" });
+      if (!run) return res.status(404).json({ error: tr(req, "error.payRunNotFound") });
       const lines = await storage.getPayRunLines(run.id);
       const bankLines = lines.filter(l => l.paymentMethod === "bank_transfer");
 

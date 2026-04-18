@@ -225,7 +225,7 @@ export function renderIdCardHTML(
     ? `background-image:url('${escapeHTML(bgImage)}');background-size:cover;background-position:center;`
     : `background:${bgColor};`;
 
-  return `<div style="width:${w}px;height:${h}px;${bgStyle}border-radius:${6 * scale}px;overflow:hidden;position:relative;font-family:'Inter',system-ui,sans-serif;box-sizing:border-box;">
+  return `<div style="width:${w}px;height:${h}px;${bgStyle}border-radius:${6 * scale}px;overflow:hidden;position:relative;font-family:'Cairo','Inter',system-ui,sans-serif;font-variant-numeric:tabular-nums;box-sizing:border-box;">
     ${fieldElements}
   </div>`;
 }
