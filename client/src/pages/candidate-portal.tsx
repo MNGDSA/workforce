@@ -2137,7 +2137,7 @@ export default function CandidatePortal() {
                       <CardContent className="p-5">
                         <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 ${isRtl ? "md:flex-row-reverse" : ""}`}>
                           <div className="flex-1 min-w-0">
-                            <div className={`flex items-center gap-2 mb-1.5 flex-wrap ${isRtl ? "flex-row-reverse justify-end" : ""}`}>
+                            <div className={`flex items-center gap-2 mb-1.5 flex-wrap ${isRtl ? "flex-row-reverse" : ""}`}>
                               <h4 className="font-bold text-white text-base group-hover:text-primary transition-colors"><bdi>{job.title}</bdi></h4>
                               <Badge variant="outline" className="border-border text-muted-foreground text-xs font-normal">{typeLabel(job.type, t)}</Badge>
                               {applied && (
@@ -2146,7 +2146,7 @@ export default function CandidatePortal() {
                                 </Badge>
                               )}
                             </div>
-                            <div className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground ${isRtl ? "flex-row-reverse justify-end" : ""}`}>
+                            <div className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground ${isRtl ? "flex-row-reverse" : ""}`}>
                               {regionLabel && (
                                 <span className={`flex items-center gap-1 ${isRtl ? "flex-row-reverse" : ""}`}><MapPin className="h-3.5 w-3.5" />{regionLabel}</span>
                               )}
