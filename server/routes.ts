@@ -133,6 +133,7 @@ function validateProfileCompleteness(candidate: Record<string, any>): string[] {
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { requireAuth, requirePermission, requireOwnership, markPublic, invalidateRoleCache } from "./auth-middleware";
+import { checkLoginRateLimit, recordLoginFailure, recordLoginSuccess } from "./login-rate-limit";
 
 const UPLOADS_DIR = path.resolve("uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -538,6 +539,16 @@ export async function registerRoutes(
         return res.status(400).json({ message: "ID Number / Phone and password are required" });
       }
 
+      const rl = checkLoginRateLimit(req, identifier);
+      if (!rl.allowed) {
+        res.setHeader("Retry-After", String(rl.retryAfterSec));
+        const minutes = Math.ceil(rl.retryAfterSec / 60);
+        return res.status(429).json({
+          message: `Too many failed login attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`,
+          retryAfterSec: rl.retryAfterSec,
+        });
+      }
+
       const clean = String(identifier).trim();
 
       // Lookup priority: phone → national ID → email → username (fallback)
@@ -548,6 +559,7 @@ export async function registerRoutes(
         await storage.getUserByUsername(clean);
 
       if (!user) {
+        recordLoginFailure(req, identifier);
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
@@ -557,9 +569,11 @@ export async function registerRoutes(
 
       const valid = await bcrypt.compare(password, user.password);
       if (!valid) {
+        recordLoginFailure(req, identifier);
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
+      recordLoginSuccess(req, identifier);
       await storage.updateUser(user.id, { lastLogin: new Date() } as any);
 
       const { password: _, ...safeUser } = user;
