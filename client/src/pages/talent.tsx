@@ -104,8 +104,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { Candidate } from "@shared/schema";
+import { useTranslation } from "react-i18next";
+import { formatNumber, formatDate, formatCurrency } from "@/lib/format";
 
-type CandidateWithWorkforce = Candidate & { workforceRecordCount: number; workforceSeasonCount: number; completedStints: number };
+type CandidateWithWorkforce = Candidate & { workforceRecordCount: number; workforceSeasonCount: number; completedStints: number; unpaidSettlements: number };
 import { KSA_REGIONS } from "@shared/schema";
 
 const statusStyles: Record<string, string> = {
@@ -222,14 +224,18 @@ const NATIONALITY_OPTIONS = [
 ];
 const EDU_OPTIONS = ["High School and below", "University and higher"];
 
-function idLabel(val: string | null | undefined): string {
-  if (!val) return "National / Iqama ID";
-  if (val.startsWith("1")) return "National ID";
-  if (val.startsWith("2")) return "Iqama ID";
-  return "National / Iqama ID";
+function useIdLabel() {
+  const { t } = useTranslation("talent");
+  return (val: string | null | undefined): string => {
+    if (!val) return t("profile.idLabelDefault");
+    if (val.startsWith("1")) return t("profile.idLabelNational");
+    if (val.startsWith("2")) return t("profile.idLabelIqama");
+    return t("profile.idLabelDefault");
+  };
 }
 
 function StatusInfoHeader() {
+  const { t } = useTranslation("talent");
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -243,7 +249,7 @@ function StatusInfoHeader() {
 
   return (
     <span className="inline-flex items-center gap-1">
-      Status
+      {t("statusDefs.title")}
       <span className="relative inline-flex items-center">
         <button
           type="button"
@@ -251,22 +257,22 @@ function StatusInfoHeader() {
           onMouseEnter={show}
           onMouseLeave={hide}
           onClick={() => setVisible((v) => !v)}
-          aria-label="Status definitions"
+          aria-label={t("statusDefs.ariaLabel")}
         >
           <Info className="h-2.5 w-2.5" />
         </button>
         {visible && (
           <span
-            className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-50 w-72 rounded-sm bg-popover border border-border px-3.5 py-3 text-[11px] text-muted-foreground shadow-lg leading-relaxed space-y-1.5"
+            className="absolute start-1/2 -translate-x-1/2 top-full mt-1 z-50 w-72 rounded-sm bg-popover border border-border px-3.5 py-3 text-[11px] text-muted-foreground shadow-lg leading-relaxed space-y-1.5"
             onMouseEnter={show}
             onMouseLeave={hide}
           >
-            <span className="block"><span className="font-semibold text-green-400">Active</span> — Profile completed, account is live and ready.</span>
-            <span className="block"><span className="font-semibold text-gray-400">Inactive</span> — Account created but profile not yet completed (e.g. bulk-uploaded SMP staff who haven't activated via OTP).</span>
-            <span className="block"><span className="font-semibold text-blue-400">Hired</span> — Candidate converted to an active employee.</span>
-            <span className="block"><span className="font-semibold text-red-400">Blocked</span> — Manually blocked by an admin. Cannot apply or be processed.</span>
-            <span className="block"><span className="font-semibold text-amber-400">Dormant</span> — Was active but hasn't logged in for over 1 year.</span>
-            <span className="absolute left-1/2 -translate-x-1/2 bottom-full h-0 w-0 border-x-4 border-x-transparent border-b-4 border-b-border" />
+            <span className="block"><span className="font-semibold text-green-400">{t("statusDefs.active")}</span> — {t("statusDefs.activeDesc")}</span>
+            <span className="block"><span className="font-semibold text-gray-400">{t("statusDefs.inactive")}</span> — {t("statusDefs.inactiveDesc")}</span>
+            <span className="block"><span className="font-semibold text-blue-400">{t("statusDefs.hired")}</span> — {t("statusDefs.hiredDesc")}</span>
+            <span className="block"><span className="font-semibold text-red-400">{t("statusDefs.blocked")}</span> — {t("statusDefs.blockedDesc")}</span>
+            <span className="block"><span className="font-semibold text-amber-400">{t("statusDefs.dormant")}</span> — {t("statusDefs.dormantDesc")}</span>
+            <span className="absolute start-1/2 -translate-x-1/2 bottom-full h-0 w-0 border-x-4 border-x-transparent border-b-4 border-b-border" />
           </span>
         )}
       </span>
@@ -291,6 +297,8 @@ interface WorkforceRecord {
 }
 
 function FormerEmployeeSummary({ candidateId }: { candidateId: string }) {
+  const { t, i18n } = useTranslation("talent");
+  const lang = i18n.language;
   const { data: records = [], isLoading } = useQuery<WorkforceRecord[]>({
     queryKey: ["/api/workforce/all-by-candidate", candidateId],
     queryFn: () => apiRequest("GET", `/api/workforce/all-by-candidate/${candidateId}`).then(r => r.json()),
@@ -321,37 +329,37 @@ function FormerEmployeeSummary({ candidateId }: { candidateId: string }) {
     <div className="rounded-sm border border-emerald-500/25 bg-emerald-500/5 px-4 py-3" data-testid="former-employee-summary">
       <div className="flex items-center gap-2 mb-2.5">
         <UserCheck className="h-4 w-4 text-emerald-400" />
-        <span className="text-sm font-semibold text-emerald-300">Former Employee</span>
-        <span className="text-[10px] text-emerald-400/70 ml-auto">{seasonCount} season{seasonCount !== 1 ? "s" : ""} · {totalDays} days total</span>
+        <span className="text-sm font-semibold text-emerald-300">{t("former.title")}</span>
+        <span className="text-[10px] text-emerald-400/70 ms-auto">{t("former.summary", { count: seasonCount, seasons: formatNumber(seasonCount), days: formatNumber(totalDays) })}</span>
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-2">
         {lastRecord.jobTitle && (
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Last Position</p>
-            <p className="text-sm text-white font-medium">{lastRecord.jobTitle}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("former.lastPosition")}</p>
+            <p className="text-sm text-white font-medium"><bdi>{lastRecord.jobTitle}</bdi></p>
           </div>
         )}
         {lastRecord.eventName && (
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Last Event</p>
-            <p className="text-sm text-white">{lastRecord.eventName}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("former.lastEvent")}</p>
+            <p className="text-sm text-white"><bdi>{lastRecord.eventName}</bdi></p>
           </div>
         )}
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Last Employed</p>
-          <p className="text-sm text-white">
-            {new Date(lastRecord.startDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-            {lastRecord.endDate && ` — ${new Date(lastRecord.endDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`}
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("former.lastEmployed")}</p>
+          <p className="text-sm text-white" dir="ltr">
+            {formatDate(lastRecord.startDate, lang)}
+            {lastRecord.endDate && ` — ${formatDate(lastRecord.endDate, lang)}`}
           </p>
         </div>
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Experience</p>
-          <p className="text-sm text-white">{totalDays} calendar days</p>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("former.totalExperience")}</p>
+          <p className="text-sm text-white">{t("former.calendarDays", { n: formatNumber(totalDays) })}</p>
         </div>
         {lastPerfScore && (
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Last Performance</p>
-            <p className="text-sm text-white font-medium">{Number(lastPerfScore).toFixed(1)} / 5.0</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("former.lastPerformance")}</p>
+            <p className="text-sm text-white font-medium" dir="ltr">{t("former.performanceFmt", { score: formatNumber(Number(lastPerfScore), { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })}</p>
           </div>
         )}
       </div>
@@ -360,6 +368,8 @@ function FormerEmployeeSummary({ candidateId }: { candidateId: string }) {
 }
 
 function WorkforceHistorySection({ candidateId }: { candidateId: string }) {
+  const { t, i18n } = useTranslation("talent");
+  const lang = i18n.language;
   const { data: records = [], isLoading } = useQuery<WorkforceRecord[]>({
     queryKey: ["/api/workforce/all-by-candidate", candidateId],
     queryFn: () => apiRequest("GET", `/api/workforce/all-by-candidate/${candidateId}`).then(r => r.json()),
@@ -370,10 +380,10 @@ function WorkforceHistorySection({ candidateId }: { candidateId: string }) {
     return (
       <div>
         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-          <Briefcase className="h-3.5 w-3.5" /> Workforce History
+          <Briefcase className="h-3.5 w-3.5" /> {t("history.title")}
         </h4>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading...
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("history.loading")}
         </div>
       </div>
     );
@@ -384,8 +394,8 @@ function WorkforceHistorySection({ candidateId }: { candidateId: string }) {
   return (
     <div data-testid="section-workforce-history">
       <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-        <Briefcase className="h-3.5 w-3.5" /> Workforce History
-        <span className="text-[10px] font-normal text-muted-foreground ml-auto">{records.length} record{records.length !== 1 ? "s" : ""}</span>
+        <Briefcase className="h-3.5 w-3.5" /> {t("history.title")}
+        <span className="text-[10px] font-normal text-muted-foreground ms-auto">{t("history.count", { count: records.length, n: formatNumber(records.length) })}</span>
       </h4>
       <div className="space-y-2.5">
         {records.map((rec) => (
@@ -399,7 +409,7 @@ function WorkforceHistorySection({ candidateId }: { candidateId: string }) {
             data-testid={`workforce-record-${rec.id}`}
           >
             <div className="flex items-center justify-between mb-1.5">
-              <span className="font-mono text-xs text-primary font-medium">{rec.employeeNumber}</span>
+              <span className="font-mono text-xs text-primary font-medium" dir="ltr">{rec.employeeNumber}</span>
               <Badge
                 variant="outline"
                 className={`text-[10px] px-1.5 py-0 border-0 ${
@@ -408,27 +418,27 @@ function WorkforceHistorySection({ candidateId }: { candidateId: string }) {
                     : "bg-gray-500/10 text-gray-400"
                 }`}
               >
-                {rec.isActive ? "Active" : "Terminated"}
+                {rec.isActive ? t("history.active") : t("history.terminated")}
               </Badge>
             </div>
             {rec.jobTitle && (
-              <p className="text-white text-sm font-medium">{rec.jobTitle}</p>
+              <p className="text-white text-sm font-medium"><bdi>{rec.jobTitle}</bdi></p>
             )}
             {rec.eventName && (
-              <p className="text-muted-foreground text-xs">{rec.eventName}</p>
+              <p className="text-muted-foreground text-xs"><bdi>{rec.eventName}</bdi></p>
             )}
             <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1" dir="ltr">
                 <Calendar className="h-3 w-3" />
-                {new Date(rec.startDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                {rec.endDate && ` — ${new Date(rec.endDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`}
+                {formatDate(rec.startDate, lang)}
+                {rec.endDate && ` — ${formatDate(rec.endDate, lang)}`}
               </span>
               {rec.salary && (
-                <span>{Number(rec.salary).toLocaleString()} SAR</span>
+                <span dir="ltr">{t("history.salaryFmt", { amount: formatNumber(Number(rec.salary)) })}</span>
               )}
             </div>
             {rec.terminationReason && (
-              <p className="text-xs text-amber-400/80 mt-1">Reason: {rec.terminationReason}</p>
+              <p className="text-xs text-amber-400/80 mt-1">{t("history.reason", { reason: rec.terminationReason })}</p>
             )}
           </div>
         ))}
@@ -447,6 +457,8 @@ function CandidateProfileSheet({
   onSaved: (c: Candidate) => void;
 }) {
   const { toast } = useToast();
+  const { t } = useTranslation("talent");
+  const idLabel = useIdLabel();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
 
@@ -456,9 +468,9 @@ function CandidateProfileSheet({
     onSuccess: (updated) => {
       onSaved(updated);
       setEditing(false);
-      toast({ title: "Profile updated" });
+      toast({ title: t("toast.profileUpdated") });
     },
-    onError: () => toast({ title: "Save failed", variant: "destructive" }),
+    onError: () => toast({ title: t("toast.saveFailed"), variant: "destructive" }),
   });
 
   function matchOption(val: string | null | undefined, options: string[]): string {
@@ -493,7 +505,7 @@ function CandidateProfileSheet({
 
   function handleSave() {
     if (form.ibanNumber && !/^SA\d{22}$/.test(form.ibanNumber)) {
-      toast({ title: "Invalid IBAN", description: "IBAN must be SA followed by 22 digits (24 characters total)", variant: "destructive" });
+      toast({ title: t("toast.invalidIban"), description: t("toast.invalidIbanDesc"), variant: "destructive" });
       return;
     }
     const isNonSaudi = form.nationalityText !== "Saudi Arabian";
@@ -526,9 +538,11 @@ function CandidateProfileSheet({
   const c = candidate;
   const initials = c.fullNameEn.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
   const displaySt = (c as any).archivedAt ? "archived" : c.status;
+  const statusLabelText = t(`statusLabel.${displaySt}` as any, displaySt.replace("_", " "));
 
   const nidValue = editing ? form.nationalId : (c.nationalId ?? "");
   const nidLabelText = idLabel(nidValue);
+  const dash = t("profile.dash");
 
   return (
     <Sheet open={!!candidate} onOpenChange={(o) => { if (!o) { setEditing(false); onClose(); } }}>
@@ -540,11 +554,11 @@ function CandidateProfileSheet({
               <AvatarFallback className="bg-primary/10 text-primary font-display text-lg">{initials}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <SheetTitle className="font-display text-xl font-bold text-white truncate">{c.fullNameEn}</SheetTitle>
+              <SheetTitle className="font-display text-xl font-bold text-white truncate"><bdi>{c.fullNameEn}</bdi></SheetTitle>
               <SheetDescription className="text-muted-foreground text-sm flex items-center gap-2 mt-0.5">
-                {c.nationalId && <span>{c.nationalId}</span>}
-                <Badge className={`text-[10px] px-1.5 py-0 ${statusStyles[displaySt] || statusStyles.active}`}>{displaySt}</Badge>
-                {c.source === "smp" && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/50 text-amber-400">SMP</Badge>}
+                {c.nationalId && <span dir="ltr">{c.nationalId}</span>}
+                <Badge className={`text-[10px] px-1.5 py-0 ${statusStyles[displaySt] || statusStyles.active}`}>{statusLabelText}</Badge>
+                {c.source === "smp" && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/50 text-amber-400">{t("profile.smpBadge")}</Badge>}
               </SheetDescription>
             </div>
           </div>
@@ -554,120 +568,120 @@ function CandidateProfileSheet({
           <FormerEmployeeSummary candidateId={c.id} />
 
           <div>
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Contact</h4>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("profile.contact")}</h4>
             <div className="space-y-2.5">
               {c.phone && (
                 <div className="flex items-center gap-3 text-sm">
                   <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="text-white" data-testid="profile-phone">{c.phone}</span>
+                  <span className="text-white" dir="ltr" data-testid="profile-phone">{c.phone}</span>
                 </div>
               )}
               {c.email && (
                 <div className="flex items-center gap-3 text-sm">
                   <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="text-white" data-testid="profile-email">{c.email}</span>
+                  <span className="text-white" dir="ltr" data-testid="profile-email">{c.email}</span>
                 </div>
               )}
               {c.whatsapp && (
                 <div className="flex items-center gap-3 text-sm">
                   <Phone className="h-4 w-4 text-green-500 shrink-0" />
-                  <span className="text-white">WhatsApp: {c.whatsapp}</span>
+                  <span className="text-white">{t("profile.whatsapp")} <span dir="ltr">{c.whatsapp}</span></span>
                 </div>
               )}
             </div>
           </div>
 
           <div>
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Location</h4>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("profile.location")}</h4>
             {editing ? (
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <p className="text-[11px] text-muted-foreground">City</p>
+                  <p className="text-[11px] text-muted-foreground">{t("profile.city")}</p>
                   <select value={form.city} onChange={e => setField("city", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none" data-testid="edit-city">
-                    <option value="" className="bg-card text-muted-foreground">Select...</option>
-                    {KSA_CITIES.map(c => <option key={c} value={c} className="bg-card text-white">{c}</option>)}
+                    <option value="" className="bg-card text-muted-foreground">{t("profile.selectPh")}</option>
+                    {KSA_CITIES.map(city => <option key={city} value={city} className="bg-card text-white">{t(`citiesKsa.${city}` as any, city)}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] text-muted-foreground">Region</p>
+                  <p className="text-[11px] text-muted-foreground">{t("profile.region")}</p>
                   <select value={form.region} onChange={e => setField("region", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none" data-testid="edit-region">
-                    <option value="" className="bg-card text-muted-foreground">Select...</option>
-                    {KSA_REGIONS.map(r => <option key={r} value={r} className="bg-card text-white">{r}</option>)}
+                    <option value="" className="bg-card text-muted-foreground">{t("profile.selectPh")}</option>
+                    {KSA_REGIONS.map(r => <option key={r} value={r} className="bg-card text-white">{t(`regionsKsa.${r}` as any, r)}</option>)}
                   </select>
                 </div>
               </div>
             ) : (
               <div className="flex items-center gap-3 text-sm">
                 <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span className="text-white">{[c.city, c.region].filter(Boolean).join(", ") || "—"}</span>
+                <span className="text-white">{[c.city, c.region].filter(Boolean).join(", ") || dash}</span>
               </div>
             )}
           </div>
 
           <div>
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Personal</h4>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("profile.personal")}</h4>
             {editing ? (
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <p className="text-[11px] text-muted-foreground">Gender</p>
-                  <select value={form.gender} onChange={e => setField("gender", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none capitalize" data-testid="edit-gender">
-                    <option value="" className="bg-card text-muted-foreground">Select...</option>
-                    {GENDER_OPTIONS.map(g => <option key={g} value={g} className="bg-card text-white capitalize">{g}</option>)}
+                  <p className="text-[11px] text-muted-foreground">{t("profile.gender")}</p>
+                  <select value={form.gender} onChange={e => setField("gender", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none" data-testid="edit-gender">
+                    <option value="" className="bg-card text-muted-foreground">{t("profile.selectPh")}</option>
+                    {GENDER_OPTIONS.map(g => <option key={g} value={g} className="bg-card text-white">{t(`gender.${g}` as any, g)}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] text-muted-foreground">Date of Birth</p>
+                  <p className="text-[11px] text-muted-foreground">{t("profile.dob")}</p>
                   <DatePickerField value={form.dateOfBirth} onChange={v => setField("dateOfBirth", v)} className="h-9 bg-muted/30 border-border text-sm" data-testid="edit-dob" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] text-muted-foreground">Nationality</p>
+                  <p className="text-[11px] text-muted-foreground">{t("profile.nationality")}</p>
                   <select value={form.nationalityText} onChange={e => setField("nationalityText", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none" data-testid="edit-nationality">
-                    <option value="" className="bg-card text-muted-foreground">Select...</option>
-                    {NATIONALITY_OPTIONS.map(n => <option key={n} value={n} className="bg-card text-white">{n}</option>)}
+                    <option value="" className="bg-card text-muted-foreground">{t("profile.selectPh")}</option>
+                    {NATIONALITY_OPTIONS.map(n => <option key={n} value={n} className="bg-card text-white">{t(`nationality.${n}` as any, n)}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] text-muted-foreground">Marital Status</p>
-                  <select value={form.maritalStatus} onChange={e => setField("maritalStatus", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none capitalize" data-testid="edit-marital">
-                    <option value="" className="bg-card text-muted-foreground">Select...</option>
-                    {MARITAL_OPTIONS.map(m => <option key={m} value={m} className="bg-card text-white capitalize">{m}</option>)}
+                  <p className="text-[11px] text-muted-foreground">{t("profile.marital")}</p>
+                  <select value={form.maritalStatus} onChange={e => setField("maritalStatus", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none" data-testid="edit-marital">
+                    <option value="" className="bg-card text-muted-foreground">{t("profile.selectPh")}</option>
+                    {MARITAL_OPTIONS.map(m => <option key={m} value={m} className="bg-card text-white">{t(`marital.${m}` as any, m)}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1 col-span-2">
                   <p className="text-[11px] text-muted-foreground">{nidLabelText}</p>
-                  <Input value={form.nationalId} onChange={e => setField("nationalId", e.target.value)} placeholder="10-digit ID number" maxLength={10} className="h-9 bg-muted/30 border-border text-sm font-mono" data-testid="edit-national-id" />
+                  <Input value={form.nationalId} onChange={e => setField("nationalId", e.target.value)} placeholder={t("profile.idPh")} maxLength={10} dir="ltr" className="h-9 bg-muted/30 border-border text-sm font-mono" data-testid="edit-national-id" />
                 </div>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {c.gender && (
                   <div>
-                    <p className="text-[11px] text-muted-foreground">Gender</p>
-                    <p className="text-sm text-white capitalize">{c.gender}</p>
+                    <p className="text-[11px] text-muted-foreground">{t("profile.gender")}</p>
+                    <p className="text-sm text-white">{t(`gender.${c.gender}` as any, c.gender)}</p>
                   </div>
                 )}
                 {c.dateOfBirth && (
                   <div>
-                    <p className="text-[11px] text-muted-foreground">Date of Birth</p>
-                    <p className="text-sm text-white">{c.dateOfBirth}</p>
+                    <p className="text-[11px] text-muted-foreground">{t("profile.dob")}</p>
+                    <p className="text-sm text-white" dir="ltr">{c.dateOfBirth}</p>
                   </div>
                 )}
                 {((c as any).nationalityText || c.nationality) && (
                   <div>
-                    <p className="text-[11px] text-muted-foreground">Nationality</p>
-                    <p className="text-sm text-white capitalize">{(c as any).nationalityText || c.nationality?.replace("_", " ")}</p>
+                    <p className="text-[11px] text-muted-foreground">{t("profile.nationality")}</p>
+                    <p className="text-sm text-white">{String(t(`nationality.${(c as any).nationalityText || c.nationality}` as any, ((c as any).nationalityText || c.nationality?.replace("_", " ")) ?? ""))}</p>
                   </div>
                 )}
                 {c.maritalStatus && (
                   <div>
-                    <p className="text-[11px] text-muted-foreground">Marital Status</p>
-                    <p className="text-sm text-white capitalize">{c.maritalStatus}</p>
+                    <p className="text-[11px] text-muted-foreground">{t("profile.marital")}</p>
+                    <p className="text-sm text-white">{t(`marital.${c.maritalStatus}` as any, c.maritalStatus)}</p>
                   </div>
                 )}
                 {c.nationalId && (
                   <div className="col-span-2">
                     <p className="text-[11px] text-muted-foreground">{nidLabelText}</p>
-                    <p className="text-sm text-white font-mono">{c.nationalId}</p>
+                    <p className="text-sm text-white font-mono" dir="ltr">{c.nationalId}</p>
                   </div>
                 )}
               </div>
@@ -675,20 +689,20 @@ function CandidateProfileSheet({
           </div>
 
           <div>
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Education</h4>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("profile.education")}</h4>
             {editing ? (
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <p className="text-[11px] text-muted-foreground">Education Level</p>
+                  <p className="text-[11px] text-muted-foreground">{t("profile.educationLevel")}</p>
                   <select value={form.educationLevel} onChange={e => setField("educationLevel", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none" data-testid="edit-education">
-                    <option value="" className="bg-card text-muted-foreground">Select...</option>
-                    {EDU_OPTIONS.map(e => <option key={e} value={e} className="bg-card text-white">{e}</option>)}
+                    <option value="" className="bg-card text-muted-foreground">{t("profile.selectPh")}</option>
+                    {EDU_OPTIONS.map(opt => <option key={opt} value={opt} className="bg-card text-white">{t(`education.${opt}` as any, opt)}</option>)}
                   </select>
                 </div>
                 {form.educationLevel === "University and higher" && (
                   <div className="space-y-1">
-                    <p className="text-[11px] text-muted-foreground">Major / Field of Study</p>
-                    <Input value={form.major} onChange={e => setField("major", e.target.value)} placeholder="e.g. Business Administration" className="h-9 bg-muted/30 border-border text-sm" data-testid="edit-major" />
+                    <p className="text-[11px] text-muted-foreground">{t("profile.majorFull")}</p>
+                    <Input value={form.major} onChange={e => setField("major", e.target.value)} placeholder={t("profile.majorPh")} className="h-9 bg-muted/30 border-border text-sm" data-testid="edit-major" />
                   </div>
                 )}
               </div>
@@ -696,22 +710,22 @@ function CandidateProfileSheet({
               <div className="grid grid-cols-2 gap-3">
                 {c.educationLevel && (
                   <div>
-                    <p className="text-[11px] text-muted-foreground">Level</p>
-                    <p className="text-sm text-white">{c.educationLevel}</p>
+                    <p className="text-[11px] text-muted-foreground">{t("profile.level")}</p>
+                    <p className="text-sm text-white">{t(`education.${c.educationLevel}` as any, c.educationLevel)}</p>
                   </div>
                 )}
                 {c.major && (
                   <div>
-                    <p className="text-[11px] text-muted-foreground">Major</p>
+                    <p className="text-[11px] text-muted-foreground">{t("profile.major")}</p>
                     <p className="text-sm text-white">{c.major}</p>
                   </div>
                 )}
-                {!c.educationLevel && !c.major && <p className="text-sm text-muted-foreground col-span-2">—</p>}
+                {!c.educationLevel && !c.major && <p className="text-sm text-muted-foreground col-span-2">{dash}</p>}
               </div>
             )}
             {c.skills && c.skills.length > 0 && (
               <div className="mt-3">
-                <p className="text-[11px] text-muted-foreground mb-1.5">Skills</p>
+                <p className="text-[11px] text-muted-foreground mb-1.5">{t("profile.skills")}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {c.skills.map((s, i) => (
                     <Badge key={i} variant="outline" className="text-[11px] px-2 py-0.5 border-border text-white/80">{s}</Badge>
@@ -721,7 +735,7 @@ function CandidateProfileSheet({
             )}
             {c.languages && c.languages.length > 0 && (
               <div className="mt-3">
-                <p className="text-[11px] text-muted-foreground mb-1.5">Languages</p>
+                <p className="text-[11px] text-muted-foreground mb-1.5">{t("profile.languages")}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {c.languages.map((l, i) => (
                     <Badge key={i} variant="outline" className="text-[11px] px-2 py-0.5 border-primary/30 text-primary">{l}</Badge>
@@ -732,63 +746,63 @@ function CandidateProfileSheet({
           </div>
 
           <div>
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">IBAN</h4>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("profile.iban")}</h4>
             {editing ? (
               <div className="space-y-2">
-                <Input value={form.ibanNumber} onChange={e => setField("ibanNumber", e.target.value.toUpperCase())} placeholder="SA0000000000000000000000" maxLength={24} className="h-9 bg-muted/30 border-border text-sm font-mono" data-testid="edit-iban" />
+                <Input value={form.ibanNumber} onChange={e => setField("ibanNumber", e.target.value.toUpperCase())} placeholder={t("profile.ibanPh")} maxLength={24} dir="ltr" className="h-9 bg-muted/30 border-border text-sm font-mono" data-testid="edit-iban" />
                 {form.ibanNumber && !form.ibanNumber.match(/^SA\d{22}$/) && (
-                  <p className="text-[11px] text-amber-400">IBAN must be SA followed by 22 digits (24 chars total)</p>
+                  <p className="text-[11px] text-amber-400">{t("profile.ibanInvalid")}</p>
                 )}
                 {(() => {
                   const bank = resolveSaudiBank(form.ibanNumber || "");
                   return bank ? (
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <p className="text-[10px] text-muted-foreground mb-0.5">Bank Name</p>
+                        <p className="text-[10px] text-muted-foreground mb-0.5">{t("profile.bankName")}</p>
                         <Input value={bank.ibanBankName} readOnly className="h-8 bg-muted/10 border-border text-xs text-muted-foreground cursor-not-allowed" data-testid="view-bank-name" />
                       </div>
                       <div>
-                        <p className="text-[10px] text-muted-foreground mb-0.5">Bank Code</p>
-                        <Input value={bank.ibanBankCode} readOnly className="h-8 bg-muted/10 border-border text-xs text-muted-foreground cursor-not-allowed font-mono" data-testid="view-bank-code" />
+                        <p className="text-[10px] text-muted-foreground mb-0.5">{t("profile.bankCode")}</p>
+                        <Input value={bank.ibanBankCode} readOnly dir="ltr" className="h-8 bg-muted/10 border-border text-xs text-muted-foreground cursor-not-allowed font-mono" data-testid="view-bank-code" />
                       </div>
                     </div>
                   ) : form.ibanNumber?.length >= 6 ? (
-                    <p className="text-[11px] text-amber-400">Bank not recognised</p>
+                    <p className="text-[11px] text-amber-400">{t("profile.bankUnknown")}</p>
                   ) : null;
                 })()}
               </div>
             ) : (
               <div className="space-y-1">
-                <p className="text-sm text-white font-mono">{(c as any).ibanNumber || "—"}</p>
+                <p className="text-sm text-white font-mono" dir="ltr">{(c as any).ibanNumber || dash}</p>
                 {(c as any).ibanBankName && (
-                  <p className="text-xs text-muted-foreground">{(c as any).ibanBankName} <span className="font-mono text-primary ml-1">{(c as any).ibanBankCode}</span></p>
+                  <p className="text-xs text-muted-foreground">{(c as any).ibanBankName} <span className="font-mono text-primary ms-1" dir="ltr">{(c as any).ibanBankCode}</span></p>
                 )}
               </div>
             )}
           </div>
 
           <div>
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Emergency Contact</h4>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("profile.emergency")}</h4>
             {editing ? (
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <p className="text-[11px] text-muted-foreground">Name</p>
-                  <Input value={form.emergencyContactName} onChange={e => setField("emergencyContactName", e.target.value)} placeholder="Full name" className="h-9 bg-muted/30 border-border text-sm" data-testid="edit-emergency-name" />
+                  <p className="text-[11px] text-muted-foreground">{t("profile.emergencyName")}</p>
+                  <Input value={form.emergencyContactName} onChange={e => setField("emergencyContactName", e.target.value)} placeholder={t("profile.emergencyNamePh")} className="h-9 bg-muted/30 border-border text-sm" data-testid="edit-emergency-name" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] text-muted-foreground">Phone</p>
-                  <Input value={form.emergencyContactPhone} onChange={e => setField("emergencyContactPhone", e.target.value)} placeholder="05xxxxxxxx" className="h-9 bg-muted/30 border-border text-sm" data-testid="edit-emergency-phone" />
+                  <p className="text-[11px] text-muted-foreground">{t("profile.emergencyPhone")}</p>
+                  <Input value={form.emergencyContactPhone} onChange={e => setField("emergencyContactPhone", e.target.value)} placeholder={t("profile.emergencyPhonePh")} dir="ltr" className="h-9 bg-muted/30 border-border text-sm" data-testid="edit-emergency-phone" />
                 </div>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-[11px] text-muted-foreground">Name</p>
-                  <p className="text-sm text-white">{c.emergencyContactName || "—"}</p>
+                  <p className="text-[11px] text-muted-foreground">{t("profile.emergencyName")}</p>
+                  <p className="text-sm text-white">{c.emergencyContactName || dash}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-muted-foreground">Phone</p>
-                  <p className="text-sm text-white">{c.emergencyContactPhone || "—"}</p>
+                  <p className="text-[11px] text-muted-foreground">{t("profile.emergencyPhone")}</p>
+                  <p className="text-sm text-white" dir="ltr">{c.emergencyContactPhone || dash}</p>
                 </div>
               </div>
             )}
@@ -797,9 +811,9 @@ function CandidateProfileSheet({
           {c.hasChronicDiseases && (
             <div>
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5 text-amber-400" /> Health Notes
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-400" /> {t("profile.healthNotes")}
               </h4>
-              <p className="text-sm text-amber-200/80">{c.chronicDiseases || "Chronic condition noted"}</p>
+              <p className="text-sm text-amber-200/80">{c.chronicDiseases || t("profile.healthDefault")}</p>
             </div>
           )}
 
@@ -807,7 +821,7 @@ function CandidateProfileSheet({
 
           {c.notes && (
             <div>
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Notes</h4>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("profile.notes")}</h4>
               <p className="text-sm text-white/70">{c.notes}</p>
             </div>
           )}
@@ -823,11 +837,11 @@ function CandidateProfileSheet({
                 disabled={saveMutation.isPending}
                 data-testid="profile-save"
               >
-                {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Save Changes
+                {saveMutation.isPending ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : null}
+                {t("profile.save")}
               </Button>
               <Button size="sm" variant="outline" className="border-border" onClick={() => setEditing(false)}>
-                Cancel
+                {t("profile.cancel")}
               </Button>
             </>
           ) : (
@@ -839,10 +853,10 @@ function CandidateProfileSheet({
                 onClick={startEditing}
                 data-testid="profile-edit"
               >
-                Edit
+                {t("profile.edit")}
               </Button>
               <Button size="sm" variant="outline" className="border-border" onClick={onClose}>
-                Close
+                {t("profile.close")}
               </Button>
             </>
           )}
@@ -855,6 +869,8 @@ function CandidateProfileSheet({
 export default function TalentPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { t, i18n } = useTranslation("talent");
+  const lang = i18n.language;
   const [, navigate] = useLocation();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -936,9 +952,9 @@ export default function TalentPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
-      toast({ title: "Candidate archived" });
+      toast({ title: t("toast.candidateArchived") });
     },
-    onError: () => toast({ title: "Failed to archive candidate", variant: "destructive" }),
+    onError: () => toast({ title: t("toast.archiveFailed"), variant: "destructive" }),
   });
 
   const restoreMutation = useMutation({
@@ -946,24 +962,24 @@ export default function TalentPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
-      toast({ title: "Candidate restored" });
+      toast({ title: t("toast.candidateRestored") });
     },
-    onError: () => toast({ title: "Failed to restore candidate", variant: "destructive" }),
+    onError: () => toast({ title: t("toast.restoreFailed"), variant: "destructive" }),
   });
 
   const bulkAction = useMutation({
     mutationFn: ({ ids, action }: { ids: string[]; action: "block" | "unblock" | "archive" }) =>
       apiRequest("POST", "/api/candidates/bulk-action", { ids, action }).then(r => r.json()),
     onSuccess: (data) => {
-      const labels: Record<string, string> = { block: "blocked", unblock: "unblocked", archive: "archived" };
-      toast({ title: `${data.affected} candidate(s) ${labels[data.action]}` });
+      const key = data.action === "block" ? "toast.bulkBlocked" : data.action === "unblock" ? "toast.bulkUnblocked" : "toast.bulkArchived";
+      toast({ title: t(key, { count: data.affected, n: formatNumber(data.affected) }) });
       setSelectedIds(new Set());
       setBulkConfirmAction(null);
       queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
     },
     onError: () => {
-      toast({ title: "Bulk action failed", variant: "destructive" });
+      toast({ title: t("toast.bulkActionFailed"), variant: "destructive" });
       setBulkConfirmAction(null);
     },
   });
@@ -1129,16 +1145,16 @@ export default function TalentPage() {
     try {
       const rows = await parseFileToRows(file);
       if (rows.length === 0) {
-        setUploadError("No data rows found in file");
+        setUploadError(t("upload.noDataRows"));
         return;
       }
       if (rows.length > 1000) {
-        setUploadError(`File contains ${rows.length.toLocaleString()} rows. Maximum allowed is 1,000.`);
+        setUploadError(t("upload.tooManyRows", { n: formatNumber(rows.length), max: formatNumber(1000) }));
         return;
       }
       setUploadPreview(rows);
     } catch (err: any) {
-      setUploadError(err.message || "Could not parse file. Please use the template.");
+      setUploadError(err.message || t("upload.parseFail"));
     }
   }
 
@@ -1146,7 +1162,7 @@ export default function TalentPage() {
     if (!uploadPreview) return;
     const smpRows = uploadPreview.filter(r => (r.source || "").toLowerCase() === "smp");
     if (smpRows.length === 0) {
-      toast({ title: "No SMP rows detected", description: "Set the 'source' column to 'smp' for SMP workers.", variant: "destructive" });
+      toast({ title: t("upload.noSmpRows"), description: t("upload.noSmpRowsDesc"), variant: "destructive" });
       return;
     }
     setSmpValidating(true);
@@ -1157,7 +1173,7 @@ export default function TalentPage() {
       const data = await res.json();
       setSmpValidationResults(data.results);
     } catch (err: any) {
-      toast({ title: "Validation failed", description: err.message || "Could not validate SMP rows.", variant: "destructive" });
+      toast({ title: t("upload.validationFailed"), description: err.message || t("upload.validationFailedDesc"), variant: "destructive" });
     } finally {
       setSmpValidating(false);
     }
@@ -1178,7 +1194,7 @@ export default function TalentPage() {
       XLSX.utils.book_append_sheet(wb, ws, "Candidates");
       XLSX.writeFile(wb, `candidates_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch {
-      toast({ title: "Export failed", description: "Could not export candidates.", variant: "destructive" });
+      toast({ title: t("toast.exportFailed"), description: t("toast.exportFailedDesc"), variant: "destructive" });
     } finally {
       setExporting(false);
     }
@@ -1189,9 +1205,9 @@ export default function TalentPage() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white tracking-tight">Talent</h1>
+            <h1 className="text-3xl font-display font-bold text-white tracking-tight">{t("title")}</h1>
             <p className="text-muted-foreground mt-1">
-              Manage and search your candidate database.
+              {t("subtitle")}
             </p>
           </div>
           <div className="flex gap-2">
@@ -1202,58 +1218,58 @@ export default function TalentPage() {
               disabled={exporting}
               data-testid="button-export"
             >
-              <Download className="mr-2 h-4 w-4" />
-              {exporting ? "Exporting…" : "Export All"}
+              <Download className="me-2 h-4 w-4" />
+              {exporting ? t("exporting") : t("exportAll")}
             </Button>
             <Button
               className="h-9 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
               onClick={() => { setUploadOpen(true); setUploadFile(null); setUploadPreview(null); setUploadError(null); }}
               data-testid="button-upload-candidates"
             >
-              <Upload className="mr-2 h-4 w-4" />
-              Bulk Upload
+              <Upload className="me-2 h-4 w-4" />
+              {t("bulkUpload")}
             </Button>
           </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="bg-card border-border shadow-sm border-l-4 border-l-primary">
+          <Card className="bg-card border-border shadow-sm border-s-4 border-s-primary">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Profiles</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("stats.total")}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-profiles">
-                {stats ? stats.total.toLocaleString() : "—"}
+                {stats ? formatNumber(stats.total) : "—"}
               </div>
             </CardContent>
           </Card>
           <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Available</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("stats.available")}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-4xl font-bold font-display text-green-500" data-testid="stat-active">
-                {stats ? stats.active.toLocaleString() : "—"}
+                {stats ? formatNumber(stats.active) : "—"}
               </div>
             </CardContent>
           </Card>
           <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Hired</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("stats.hired")}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-4xl font-bold font-display text-blue-500" data-testid="stat-hired">
-                {stats ? stats.hired.toLocaleString() : "—"}
+                {stats ? formatNumber(stats.hired) : "—"}
               </div>
             </CardContent>
           </Card>
           <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Blocked</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("stats.blocked")}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-4xl font-bold font-display text-red-500" data-testid="stat-blocked">
-                {stats ? stats.blocked.toLocaleString() : "—"}
+                {stats ? formatNumber(stats.blocked) : "—"}
               </div>
             </CardContent>
           </Card>
@@ -1261,10 +1277,10 @@ export default function TalentPage() {
 
         <div className="flex flex-col md:flex-row gap-3 items-start md:items-center bg-card p-4 rounded-sm border border-border">
           <div className="relative flex-1 w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
-              placeholder="Search by ID, name, phone, email"
-              className="pl-10 h-10 bg-muted/30 border-border focus-visible:ring-primary/20"
+              placeholder={t("search.ph")}
+              className="ps-10 h-10 bg-muted/30 border-border focus-visible:ring-primary/20"
               value={search}
               onChange={handleSearchChange}
               data-testid="input-search-candidates"
@@ -1273,26 +1289,26 @@ export default function TalentPage() {
           <div className="flex gap-2 flex-wrap">
             <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); setSelectedIds(new Set()); }}>
               <SelectTrigger className="h-10 w-36 border-border bg-background" data-testid="select-status-filter">
-                <Filter className="mr-2 h-4 w-4" />
-                <SelectValue placeholder="Status" />
+                <Filter className="me-2 h-4 w-4" />
+                <SelectValue placeholder={t("statusFilter.all")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="available">Available</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="hired">Hired</SelectItem>
-                <SelectItem value="blocked">Blocked</SelectItem>
-                <SelectItem value="archived">Archived</SelectItem>
+                <SelectItem value="all">{t("statusFilter.all")}</SelectItem>
+                <SelectItem value="available">{t("statusFilter.available")}</SelectItem>
+                <SelectItem value="inactive">{t("statusFilter.inactive")}</SelectItem>
+                <SelectItem value="hired">{t("statusFilter.hired")}</SelectItem>
+                <SelectItem value="blocked">{t("statusFilter.blocked")}</SelectItem>
+                <SelectItem value="archived">{t("statusFilter.archived")}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); setSelectedIds(new Set()); }}>
               <SelectTrigger className="h-10 w-40 border-border bg-background" data-testid="select-source-filter">
-                <SelectValue placeholder="Classification" />
+                <SelectValue placeholder={t("sourceFilter.all")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Classifications</SelectItem>
-                <SelectItem value="individual">Individual</SelectItem>
-                <SelectItem value="smp">SMP</SelectItem>
+                <SelectItem value="all">{t("sourceFilter.all")}</SelectItem>
+                <SelectItem value="individual">{t("sourceFilter.individual")}</SelectItem>
+                <SelectItem value="smp">{t("sourceFilter.smp")}</SelectItem>
               </SelectContent>
             </Select>
             <Button
@@ -1303,7 +1319,7 @@ export default function TalentPage() {
               data-testid="filter-former-employees"
             >
               <UserCheck className="h-3.5 w-3.5" />
-              Former Employees
+              {t("formerEmployees")}
             </Button>
           </div>
         </div>
@@ -1311,19 +1327,19 @@ export default function TalentPage() {
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between py-3 px-4">
             <CardTitle className="text-base font-display text-white">
-              Candidate List
-              {isFetching && <RefreshCw className="inline ml-2 h-3 w-3 animate-spin text-muted-foreground" />}
+              {t("list.title")}
+              {isFetching && <RefreshCw className="inline ms-2 h-3 w-3 animate-spin text-muted-foreground" />}
             </CardTitle>
             <div className="flex items-center gap-3">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="h-8 border-border bg-background gap-1.5" data-testid="button-toggle-columns">
                     <SlidersHorizontal className="h-3.5 w-3.5" />
-                    Columns
+                    {t("list.columns")}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
-                  <DropdownMenuLabel className="text-xs text-muted-foreground">Toggle columns</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">{t("list.toggleColumns")}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {ALL_COLUMNS.map(({ key, label }) => (
                     <DropdownMenuCheckboxItem
@@ -1333,13 +1349,13 @@ export default function TalentPage() {
                       onSelect={(e) => e.preventDefault()}
                       data-testid={`toggle-col-${key}`}
                     >
-                      {label}
+                      {t(`col.${key}` as any, label)}
                     </DropdownMenuCheckboxItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
               <span className="text-xs text-muted-foreground">
-                Page {page} of {totalPages || 1} · {total.toLocaleString()} records
+                {t("list.pageOf", { page: formatNumber(page), total: formatNumber(totalPages || 1), count: formatNumber(total) })}
               </span>
             </div>
           </CardHeader>
@@ -1351,9 +1367,9 @@ export default function TalentPage() {
             ) : candidates.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Users className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                <p className="text-muted-foreground font-medium">No candidates found</p>
+                <p className="text-muted-foreground font-medium">{t("list.empty")}</p>
                 <p className="text-muted-foreground/60 text-sm mt-1">
-                  {search ? "Try a different search term" : "Upload your candidate database to get started"}
+                  {search ? t("list.emptyHintSearch") : t("list.emptyHintUpload")}
                 </p>
               </div>
             ) : (
@@ -1376,14 +1392,14 @@ export default function TalentPage() {
                           )}
                         </button>
                       </TableHead>
-                      {col("id") && <TableHead className="w-[110px] text-muted-foreground">ID</TableHead>}
+                      {col("id") && <TableHead className="w-[110px] text-muted-foreground">{t("col.id")}</TableHead>}
                       {col("candidate") && (
                         <TableHead
                           className="text-muted-foreground cursor-pointer select-none"
                           onClick={() => handleColumnSort("fullNameEn")}
                           data-testid="sort-candidate"
                         >
-                          <span className="flex items-center">Candidate <SortIcon field="fullNameEn" /></span>
+                          <span className="flex items-center">{t("col.candidate")} <SortIcon field="fullNameEn" /></span>
                         </TableHead>
                       )}
                       {col("classification") && (
@@ -1392,7 +1408,7 @@ export default function TalentPage() {
                           onClick={() => handleColumnSort("source")}
                           data-testid="sort-classification"
                         >
-                          <span className="flex items-center">Classification <SortIcon field="source" /></span>
+                          <span className="flex items-center">{t("col.classification")} <SortIcon field="source" /></span>
                         </TableHead>
                       )}
                       {col("status") && <TableHead className="text-muted-foreground"><StatusInfoHeader /></TableHead>}
@@ -1402,7 +1418,7 @@ export default function TalentPage() {
                           onClick={() => handleColumnSort("phone")}
                           data-testid="sort-phone"
                         >
-                          <span className="flex items-center">Phone <SortIcon field="phone" /></span>
+                          <span className="flex items-center">{t("col.phone")} <SortIcon field="phone" /></span>
                         </TableHead>
                       )}
                       {col("email") && (
@@ -1411,7 +1427,7 @@ export default function TalentPage() {
                           onClick={() => handleColumnSort("email")}
                           data-testid="sort-email"
                         >
-                          <span className="flex items-center">Email <SortIcon field="email" /></span>
+                          <span className="flex items-center">{t("col.email")} <SortIcon field="email" /></span>
                         </TableHead>
                       )}
                       {col("city") && (
@@ -1420,10 +1436,10 @@ export default function TalentPage() {
                           onClick={() => handleColumnSort("city")}
                           data-testid="sort-city"
                         >
-                          <span className="flex items-center">City <SortIcon field="city" /></span>
+                          <span className="flex items-center">{t("col.city")} <SortIcon field="city" /></span>
                         </TableHead>
                       )}
-                      <TableHead className="text-right text-muted-foreground">Actions</TableHead>
+                      <TableHead className="text-end text-muted-foreground">{t("col.actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1450,7 +1466,7 @@ export default function TalentPage() {
                             </button>
                           </TableCell>
                           {col("id") && (
-                            <TableCell className="font-mono text-xs text-muted-foreground">
+                            <TableCell className="font-mono text-xs text-muted-foreground" dir="ltr">
                               {candidate.nationalId ?? "—"}
                             </TableCell>
                           )}
@@ -1464,9 +1480,9 @@ export default function TalentPage() {
                                   </AvatarFallback>
                                 </Avatar>
                                 <div>
-                                  <p className="font-medium text-white text-sm">{candidate.fullNameEn}</p>
+                                  <p className="font-medium text-white text-sm"><bdi>{candidate.fullNameEn}</bdi></p>
                                   {candidate.fullNameAr && (
-                                    <p className="text-xs text-muted-foreground" dir="rtl">{candidate.fullNameAr}</p>
+                                    <p className="text-xs text-muted-foreground" dir="rtl"><bdi>{candidate.fullNameAr}</bdi></p>
                                   )}
                                 </div>
                               </div>
@@ -1483,7 +1499,7 @@ export default function TalentPage() {
                                 }`}
                                 data-testid={`classification-${candidate.id}`}
                               >
-                                {(candidate as any).source === "smp" ? "SMP" : "Individual"}
+                                {(candidate as any).source === "smp" ? t("classification.smp") : t("classification.individual")}
                               </Badge>
                             </TableCell>
                           )}
@@ -1495,26 +1511,29 @@ export default function TalentPage() {
                                   className={`font-medium border-0 text-xs ${statusStyles[displayStatus] ?? "bg-muted text-muted-foreground"}`}
                                   data-testid={`status-${candidate.id}`}
                                 >
-                                  {displayStatus.replace("_", " ")}
+                                  {t(`statusLabel.${displayStatus}` as any, displayStatus.replace("_", " "))}
                                 </Badge>
-                                {candidate.completedStints > 0 && displayStatus !== "hired" && (
-                                  <span
-                                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-300 bg-emerald-500/15 border border-emerald-500/25 px-1.5 py-0.5 rounded-sm"
-                                    title={`Former employee with ${candidate.workforceSeasonCount || candidate.completedStints} completed season(s)`}
-                                    data-testid={`badge-former-employee-${candidate.id}`}
-                                  >
-                                    <UserCheck className="h-2.5 w-2.5" />
-                                    Former Employee{` · ${candidate.workforceSeasonCount || candidate.completedStints} season${(candidate.workforceSeasonCount || candidate.completedStints) !== 1 ? "s" : ""}`}
-                                  </span>
-                                )}
+                                {candidate.completedStints > 0 && displayStatus !== "hired" && (() => {
+                                  const seasons = candidate.workforceSeasonCount || candidate.completedStints;
+                                  return (
+                                    <span
+                                      className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-300 bg-emerald-500/15 border border-emerald-500/25 px-1.5 py-0.5 rounded-sm"
+                                      title={t("rowBadge.formerTitle", { count: seasons, n: formatNumber(seasons) })}
+                                      data-testid={`badge-former-employee-${candidate.id}`}
+                                    >
+                                      <UserCheck className="h-2.5 w-2.5" />
+                                      {t("rowBadge.formerEmployee", { count: seasons, n: formatNumber(seasons) })}
+                                    </span>
+                                  );
+                                })()}
                                 {candidate.unpaidSettlements > 0 && (
                                   <span
                                     className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-300 bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded-sm"
-                                    title={`${candidate.unpaidSettlements} unpaid settlement(s)`}
+                                    title={t("rowBadge.unpaidSettlementTitle", { count: candidate.unpaidSettlements, n: formatNumber(candidate.unpaidSettlements) })}
                                     data-testid={`badge-unpaid-settlement-${candidate.id}`}
                                   >
                                     <AlertTriangle className="h-2.5 w-2.5" />
-                                    Unpaid Settlement
+                                    {t("rowBadge.unpaidSettlement")}
                                   </span>
                                 )}
                               </div>
@@ -1522,14 +1541,14 @@ export default function TalentPage() {
                           )}
                           {col("phone") && (
                             <TableCell>
-                              <span className="text-sm text-muted-foreground font-mono">
+                              <span className="text-sm text-muted-foreground font-mono" dir="ltr">
                                 {candidate.phone || "—"}
                               </span>
                             </TableCell>
                           )}
                           {col("email") && (
                             <TableCell>
-                              <span className="text-sm text-muted-foreground truncate max-w-[180px] block">
+                              <span className="text-sm text-muted-foreground truncate max-w-[180px] block" dir="ltr">
                                 {candidate.email || "—"}
                               </span>
                             </TableCell>
@@ -1541,7 +1560,7 @@ export default function TalentPage() {
                               </span>
                             </TableCell>
                           )}
-                          <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                          <TableCell className="text-end" onClick={e => e.stopPropagation()}>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white" data-testid={`button-actions-${candidate.id}`}>
@@ -1553,8 +1572,8 @@ export default function TalentPage() {
                                   onClick={() => setProfileCandidate(candidate)}
                                   data-testid={`menu-view-profile-${candidate.id}`}
                                 >
-                                  <UserCheck className="mr-2 h-4 w-4" />
-                                  View Profile
+                                  <UserCheck className="me-2 h-4 w-4" />
+                                  {t("rowMenu.viewProfile")}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
@@ -1568,8 +1587,8 @@ export default function TalentPage() {
                                   className={candidate.status === "blocked" ? "text-green-500" : "text-red-500"}
                                   data-testid={`menu-block-${candidate.id}`}
                                 >
-                                  <ShieldAlert className="mr-2 h-4 w-4" />
-                                  {candidate.status === "blocked" ? "Unblock" : "Block"}
+                                  <ShieldAlert className="me-2 h-4 w-4" />
+                                  {candidate.status === "blocked" ? t("rowMenu.unblock") : t("rowMenu.block")}
                                 </DropdownMenuItem>
                                 {status === "archived" ? (
                                   <DropdownMenuItem
@@ -1577,8 +1596,8 @@ export default function TalentPage() {
                                     className="text-green-500"
                                     data-testid={`menu-restore-${candidate.id}`}
                                   >
-                                    <ArchiveRestore className="mr-2 h-4 w-4" />
-                                    Restore
+                                    <ArchiveRestore className="me-2 h-4 w-4" />
+                                    {t("rowMenu.restore")}
                                   </DropdownMenuItem>
                                 ) : (
                                   <DropdownMenuItem
@@ -1586,8 +1605,8 @@ export default function TalentPage() {
                                     className="text-amber-500"
                                     data-testid={`menu-archive-${candidate.id}`}
                                   >
-                                    <Archive className="mr-2 h-4 w-4" />
-                                    Archive
+                                    <Archive className="me-2 h-4 w-4" />
+                                    {t("rowMenu.archive")}
                                   </DropdownMenuItem>
                                 )}
                               </DropdownMenuContent>
@@ -1605,7 +1624,7 @@ export default function TalentPage() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-border">
               <p className="text-xs text-muted-foreground">
-                Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total.toLocaleString()} candidates
+                {t("list.showing", { from: formatNumber(((page - 1) * PAGE_SIZE) + 1), to: formatNumber(Math.min(page * PAGE_SIZE, total)), total: formatNumber(total) })}
               </p>
               <div className="flex gap-2">
                 <Button
@@ -1617,8 +1636,8 @@ export default function TalentPage() {
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="flex items-center text-xs text-muted-foreground px-2">
-                  {page} / {totalPages}
+                <span className="flex items-center text-xs text-muted-foreground px-2" dir="ltr">
+                  {formatNumber(page)} / {formatNumber(totalPages)}
                 </span>
                 <Button
                   variant="outline"
@@ -1635,9 +1654,9 @@ export default function TalentPage() {
         </Card>
 
         {selectedIds.size > 0 && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-card border border-border rounded-lg shadow-2xl px-5 py-3 flex items-center gap-4 animate-in slide-in-from-bottom-4 duration-200" data-testid="bulk-action-bar">
+          <div className="fixed bottom-6 start-1/2 -translate-x-1/2 z-50 bg-card border border-border rounded-lg shadow-2xl px-5 py-3 flex items-center gap-4 animate-in slide-in-from-bottom-4 duration-200" data-testid="bulk-action-bar">
             <span className="text-sm font-medium text-white">
-              {selectedIds.size} selected
+              {t("bulkBar.selected", { n: formatNumber(selectedIds.size) })}
             </span>
             <div className="h-5 w-px bg-border" />
             <Button
@@ -1647,8 +1666,8 @@ export default function TalentPage() {
               onClick={() => setBulkConfirmAction("block")}
               data-testid="bulk-block"
             >
-              <Ban className="h-3.5 w-3.5 mr-1.5" />
-              Block
+              <Ban className="h-3.5 w-3.5 me-1.5" />
+              {t("bulkBar.block")}
             </Button>
             <Button
               size="sm"
@@ -1657,8 +1676,8 @@ export default function TalentPage() {
               onClick={() => setBulkConfirmAction("unblock")}
               data-testid="bulk-unblock"
             >
-              <Unlock className="h-3.5 w-3.5 mr-1.5" />
-              Unblock
+              <Unlock className="h-3.5 w-3.5 me-1.5" />
+              {t("bulkBar.unblock")}
             </Button>
             <Button
               size="sm"
@@ -1679,12 +1698,12 @@ export default function TalentPage() {
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Selected Candidates");
                 XLSX.writeFile(wb, `selected-candidates-${selectedIds.size}.xlsx`);
-                toast({ title: `Exported ${selectedIds.size} candidate(s)` });
+                toast({ title: t("toast.exported", { count: selectedIds.size, n: formatNumber(selectedIds.size) }) });
               }}
               data-testid="bulk-export"
             >
-              <Download className="h-3.5 w-3.5 mr-1.5" />
-              Export
+              <Download className="h-3.5 w-3.5 me-1.5" />
+              {t("bulkBar.export")}
             </Button>
             <Button
               size="sm"
@@ -1693,8 +1712,8 @@ export default function TalentPage() {
               onClick={() => setBulkConfirmAction("archive")}
               data-testid="bulk-archive"
             >
-              <Archive className="h-3.5 w-3.5 mr-1.5" />
-              Archive
+              <Archive className="h-3.5 w-3.5 me-1.5" />
+              {t("bulkBar.archive")}
             </Button>
             <div className="h-5 w-px bg-border" />
             <Button
@@ -1704,8 +1723,8 @@ export default function TalentPage() {
               onClick={() => setSelectedIds(new Set())}
               data-testid="bulk-deselect"
             >
-              <X className="h-3.5 w-3.5 mr-1.5" />
-              Clear
+              <X className="h-3.5 w-3.5 me-1.5" />
+              {t("bulkBar.clear")}
             </Button>
           </div>
         )}
@@ -1715,26 +1734,30 @@ export default function TalentPage() {
         <AlertDialogContent className="bg-card border-border">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white font-display">
-              {bulkConfirmAction === "archive" ? "Archive" : bulkConfirmAction === "block" ? "Block" : "Unblock"} {selectedIds.size} candidate(s)?
+              {bulkConfirmAction === "archive"
+                ? t("bulkConfirm.titleArchive", { n: formatNumber(selectedIds.size) })
+                : bulkConfirmAction === "block"
+                ? t("bulkConfirm.titleBlock", { n: formatNumber(selectedIds.size) })
+                : t("bulkConfirm.titleUnblock", { n: formatNumber(selectedIds.size) })}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
               {bulkConfirmAction === "archive"
-                ? `This will archive ${selectedIds.size} candidate(s). They will be hidden from active listings but all their records (applications, interviews, onboarding) will be preserved. Archived candidates can be restored later.`
+                ? t("bulkConfirm.descArchive", { n: formatNumber(selectedIds.size) })
                 : bulkConfirmAction === "block"
-                ? `This will block ${selectedIds.size} candidate(s) from applying or being processed.`
-                : `This will unblock ${selectedIds.size} candidate(s), restoring their active status.`}
+                ? t("bulkConfirm.descBlock", { n: formatNumber(selectedIds.size) })
+                : t("bulkConfirm.descUnblock", { n: formatNumber(selectedIds.size) })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-border" data-testid="bulk-confirm-cancel">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="border-border" data-testid="bulk-confirm-cancel">{t("bulkConfirm.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className={bulkConfirmAction === "archive" ? "bg-amber-600 hover:bg-amber-700" : bulkConfirmAction === "block" ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"}
               onClick={() => bulkConfirmAction && bulkAction.mutate({ ids: [...selectedIds], action: bulkConfirmAction })}
               disabled={bulkAction.isPending}
               data-testid="bulk-confirm-action"
             >
-              {bulkAction.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {bulkConfirmAction === "archive" ? "Archive" : bulkConfirmAction === "block" ? "Block" : "Unblock"}
+              {bulkAction.isPending ? <Loader2 className="h-4 w-4 animate-spin me-2" /> : null}
+              {bulkConfirmAction === "archive" ? t("bulkConfirm.btnArchive") : bulkConfirmAction === "block" ? t("bulkConfirm.btnBlock") : t("bulkConfirm.btnUnblock")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1752,9 +1775,9 @@ export default function TalentPage() {
       }}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Bulk Upload Candidates</DialogTitle>
+            <DialogTitle>{t("upload.title")}</DialogTitle>
             <DialogDescription>
-              Upload an Excel or CSV file to add candidates to the talent pool. Download the template to match the required format.
+              {t("upload.desc")}
             </DialogDescription>
           </DialogHeader>
 
@@ -1767,7 +1790,7 @@ export default function TalentPage() {
                 data-testid="button-download-template-xlsx"
               >
                 <FileSpreadsheet className="h-4 w-4 text-primary" />
-                Download Excel Template
+                {t("upload.tplXlsx")}
               </Button>
               <Button
                 variant="outline"
@@ -1776,7 +1799,7 @@ export default function TalentPage() {
                 data-testid="button-download-template-csv"
               >
                 <FileDown className="h-4 w-4 text-muted-foreground" />
-                Download CSV Template
+                {t("upload.tplCsv")}
               </Button>
             </div>
 
@@ -1784,8 +1807,8 @@ export default function TalentPage() {
               {!uploadFile ? (
                 <label className="cursor-pointer block">
                   <FileUp className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground mb-1">Click to select an Excel or CSV file</p>
-                  <p className="text-xs text-muted-foreground/60">Supports .xlsx and .csv · Maximum 1,000 rows</p>
+                  <p className="text-sm text-muted-foreground mb-1">{t("upload.drop")}</p>
+                  <p className="text-xs text-muted-foreground/60">{t("upload.dropHint")}</p>
                   <input
                     type="file"
                     accept=".csv,.xlsx,.xls"
@@ -1799,7 +1822,7 @@ export default function TalentPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <FileSpreadsheet className="h-5 w-5 text-primary" />
-                      <span className="text-sm font-medium text-white">{uploadFile.name}</span>
+                      <span className="text-sm font-medium text-white"><bdi>{uploadFile.name}</bdi></span>
                     </div>
                     <Button
                       variant="ghost"
@@ -1812,7 +1835,7 @@ export default function TalentPage() {
                   </div>
                   {uploadPreview && (
                     <p className="text-xs text-muted-foreground">
-                      {uploadPreview.length.toLocaleString()} rows detected
+                      {t("upload.rowsDetected", { count: uploadPreview.length, n: formatNumber(uploadPreview.length) })}
                     </p>
                   )}
                 </div>
@@ -1822,14 +1845,14 @@ export default function TalentPage() {
             {uploadPreview && uploadPreview.length > 0 && (
               <div className="border border-border rounded-sm overflow-hidden">
                 <div className="px-3 py-2 bg-muted/30 text-xs text-muted-foreground font-medium">
-                  Preview (first 3 rows)
+                  {t("upload.preview")}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-border">
                         {Object.keys(uploadPreview[0]).slice(0, 5).map(h => (
-                          <th key={h} className="text-left px-2 py-1.5 text-muted-foreground font-medium">{h}</th>
+                          <th key={h} className="text-start px-2 py-1.5 text-muted-foreground font-medium">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1853,7 +1876,7 @@ export default function TalentPage() {
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs font-semibold text-amber-400 flex items-center gap-2">
                     <AlertTriangle className="h-3.5 w-3.5" />
-                    SMP rows detected ({uploadPreview.filter(r => (r.source || "").toLowerCase() === "smp").length} rows)
+                    {t("upload.smpHeader", { n: formatNumber(uploadPreview.filter(r => (r.source || "").toLowerCase() === "smp").length) })}
                   </p>
                   {!smpValidationResults && (
                     <Button
@@ -1864,29 +1887,29 @@ export default function TalentPage() {
                       disabled={smpValidating}
                       data-testid="button-smp-validate"
                     >
-                      {smpValidating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                      Validate SMP Rows
+                      {smpValidating ? <Loader2 className="h-3 w-3 animate-spin me-1" /> : null}
+                      {t("upload.validateBtn")}
                     </Button>
                   )}
                 </div>
                 {!smpValidationResults && !smpValidating && (
-                  <p className="text-xs text-muted-foreground">Click "Validate SMP Rows" to check for conflicts before uploading.</p>
+                  <p className="text-xs text-muted-foreground">{t("upload.validateHint")}</p>
                 )}
                 {smpValidationResults && (
                   <div className="space-y-2 mt-2">
-                    {/* NEW bucket — list each row explicitly for auditability */}
+                    {/* NEW bucket */}
                     {smpValidationResults.filter(r => r.status === "new").length > 0 && (
                       <div>
                         <p className="text-xs font-semibold text-emerald-400 mb-1">
-                          NEW ({smpValidationResults.filter(r => r.status === "new").length}) — Will be created fresh in the talent pool and added to SMP pipeline
+                          {t("upload.newHeader", { n: formatNumber(smpValidationResults.filter(r => r.status === "new").length) })}
                         </p>
                         <div className="space-y-1">
                           {smpValidationResults.filter(r => r.status === "new").map((result, i) => (
                             <div key={i} className="bg-emerald-500/10 border border-emerald-500/30 rounded p-2" data-testid={`smp-new-row-${i}`}>
                               <p className="text-xs text-emerald-300 font-medium">
-                                {result.row.fullNameEn || result.row.name || "—"}{result.row.nationalId ? ` (ID: ${result.row.nationalId})` : ""}
+                                <bdi>{result.row.fullNameEn || result.row.name || "—"}</bdi>{result.row.nationalId ? ` ${t("upload.idLabel", { id: result.row.nationalId })}` : ""}
                               </p>
-                              {result.row.phone && <p className="text-xs text-muted-foreground">Phone: {result.row.phone}</p>}
+                              {result.row.phone && <p className="text-xs text-muted-foreground">{t("upload.phoneLabel", { phone: result.row.phone })}</p>}
                             </div>
                           ))}
                         </div>
@@ -1900,9 +1923,9 @@ export default function TalentPage() {
                       return (
                         <div key={i} className="bg-blue-500/10 border border-blue-500/30 rounded p-2 flex items-start justify-between gap-2" data-testid={`smp-clean-row-${i}`}>
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-blue-400">CLEAN — Existing talent pool member</p>
+                            <p className="text-xs font-semibold text-blue-400">{t("upload.cleanHeader")}</p>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              {result.candidate?.fullNameEn} (ID: {result.candidate?.nationalId || "—"}) already exists. Confirming will include them under this SMP contract. Their existing profile and history will be preserved.
+                              {t("upload.cleanDesc", { name: result.candidate?.fullNameEn, id: result.candidate?.nationalId || "—" })}
                             </p>
                           </div>
                           <Button
@@ -1918,7 +1941,7 @@ export default function TalentPage() {
                             }}
                             data-testid={`button-smp-confirm-clean-${i}`}
                           >
-                            {confirmed ? "Confirmed ✓" : "Confirm"}
+                            {confirmed ? t("upload.confirmed") : t("upload.confirm")}
                           </Button>
                         </div>
                       );
@@ -1927,14 +1950,14 @@ export default function TalentPage() {
                     {/* BLOCKED bucket */}
                     {smpValidationResults.filter(r => r.status === "blocked").map((result, i) => (
                       <div key={i} className="bg-red-500/10 border border-red-500/30 rounded p-2" data-testid={`smp-blocked-row-${i}`}>
-                        <p className="text-xs font-semibold text-red-400">BLOCKED — {result.candidate?.fullNameEn} (ID: {result.candidate?.nationalId || "—"})</p>
+                        <p className="text-xs font-semibold text-red-400">{t("upload.blockedHeader", { name: result.candidate?.fullNameEn, id: result.candidate?.nationalId || "—" })}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">{result.blockedReason}</p>
-                        <p className="text-xs text-red-400/60 mt-1">Resolve this conflict outside the system and retry.</p>
+                        <p className="text-xs text-red-400/60 mt-1">{t("upload.blockedHint")}</p>
                       </div>
                     ))}
 
                     {smpValidationResults.filter(r => r.status === "blocked").length === 0 && (
-                      <p className="text-xs text-emerald-400 mt-1">✓ No blocked rows. Ready to upload once all CLEAN rows are confirmed.</p>
+                      <p className="text-xs text-emerald-400 mt-1">{t("upload.noBlocked")}</p>
                     )}
                   </div>
                 )}
@@ -1947,7 +1970,7 @@ export default function TalentPage() {
 
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setUploadOpen(false)}>
-                Cancel
+                {t("upload.cancel")}
               </Button>
               <Button
                 className="bg-primary text-primary-foreground"
@@ -1955,7 +1978,6 @@ export default function TalentPage() {
                   !uploadPreview ||
                   uploadPreview.length === 0 ||
                   bulkUpload.isPending ||
-                  // If SMP rows exist, must validate first and have no blocked rows and all clean rows confirmed
                   (uploadPreview.some(r => (r.source || "").toLowerCase() === "smp") && (
                     !smpValidationResults ||
                     smpValidationResults.some(r => r.status === "blocked") ||
@@ -1970,13 +1992,13 @@ export default function TalentPage() {
               >
                 {bulkUpload.isPending ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Uploading...
+                    <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                    {t("upload.uploading")}
                   </>
                 ) : (
                   <>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Upload {uploadPreview?.length?.toLocaleString() ?? 0} Candidates
+                    <Upload className="me-2 h-4 w-4" />
+                    {t("upload.uploadCount", { count: uploadPreview?.length ?? 0, n: formatNumber(uploadPreview?.length ?? 0) })}
                   </>
                 )}
               </Button>
@@ -1997,13 +2019,13 @@ export default function TalentPage() {
       <AlertDialog open={!!blockCandidate} onOpenChange={(o) => !o && setBlockCandidate(null)}>
         <AlertDialogContent className="bg-card border-border">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white font-display">Block Candidate</AlertDialogTitle>
+            <AlertDialogTitle className="text-white font-display">{t("block.title")}</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              Are you sure you want to block <span className="text-white font-medium">{blockCandidate?.fullNameEn}</span>? They will no longer appear in active candidate lists or be eligible for job applications.
+              {t("block.desc")}<span className="text-white font-medium"><bdi>{blockCandidate?.fullNameEn}</bdi></span>{t("block.descSuffix")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-border">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="border-border">{t("block.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 text-white hover:bg-red-700"
               onClick={() => {
@@ -2014,7 +2036,7 @@ export default function TalentPage() {
               }}
               data-testid="confirm-block"
             >
-              Block Candidate
+              {t("block.btn")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -2023,13 +2045,13 @@ export default function TalentPage() {
       <AlertDialog open={!!archiveCandidate} onOpenChange={(o) => !o && setArchiveCandidate(null)}>
         <AlertDialogContent className="bg-card border-border">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white font-display">Archive Candidate</AlertDialogTitle>
+            <AlertDialogTitle className="text-white font-display">{t("archive.title")}</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              This will archive <span className="text-white font-medium">{archiveCandidate?.fullNameEn}</span>. They will be hidden from active listings but all their records (applications, interviews, onboarding) will be preserved. You can restore them later.
+              {t("archive.desc")}<span className="text-white font-medium"><bdi>{archiveCandidate?.fullNameEn}</bdi></span>{t("archive.descSuffix")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-border">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="border-border">{t("archive.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-amber-600 text-white hover:bg-amber-700"
               onClick={() => {
@@ -2040,7 +2062,7 @@ export default function TalentPage() {
               }}
               data-testid="confirm-archive-candidate"
             >
-              Archive Candidate
+              {t("archive.btn")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
