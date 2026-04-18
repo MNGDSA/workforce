@@ -280,6 +280,7 @@ fun CaptureScreen(
 
                                 val entity = AttendanceEntity(
                                     id = UUID.randomUUID().toString(),
+                                    submissionToken = UUID.randomUUID().toString(),
                                     workforceId = EncryptionService.encrypt(workforceId),
                                     attendanceDate = attendanceDate,
                                     encryptedTimestamp = EncryptionService.encrypt(trustedInstant.toString()),

@@ -31,7 +31,10 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.HourglassTop
+import androidx.compose.material.icons.filled.Login
+import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.EventBusy
@@ -72,6 +75,8 @@ import com.luxurycarts.workforce.R
 import coil.request.ImageRequest
 import com.luxurycarts.workforce.WorkforceApp
 import com.luxurycarts.workforce.data.ApiService
+import com.luxurycarts.workforce.data.AttendanceConfig
+import com.luxurycarts.workforce.data.AttendanceStatusResponse
 import com.luxurycarts.workforce.data.User
 import com.luxurycarts.workforce.data.WorkforceRecord
 import com.luxurycarts.workforce.ui.theme.Background
@@ -119,6 +124,30 @@ fun HomeScreen(
     val hasStuckSubmissions = oldestPendingCreatedAt?.let {
         it > 0 && (System.currentTimeMillis() - it) > STUCK_THRESHOLD_MS
     } ?: false
+
+    var attendanceStatus by remember { mutableStateOf<AttendanceStatusResponse?>(null) }
+    var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
+    var showDailyCapDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(wfId, apiService) {
+        if (wfId.isBlank() || apiService == null) return@LaunchedEffect
+        while (true) {
+            try {
+                val resp = apiService.getAttendanceStatus(wfId)
+                if (resp.isSuccessful) {
+                    attendanceStatus = resp.body()
+                }
+            } catch (_: Exception) { }
+            delay(60_000L)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowTick = System.currentTimeMillis()
+            delay(1_000L)
+        }
+    }
 
     val today = LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy"))
 
@@ -557,20 +586,23 @@ fun HomeScreen(
             Spacer(Modifier.height(16.dp))
         }
 
-        Button(
-            onClick = onCheckIn,
-            colors = ButtonDefaults.buttonColors(containerColor = ForestGreen),
-            shape = CircleShape,
-            modifier = Modifier
-                .size(140.dp)
-                .align(Alignment.CenterHorizontally),
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(36.dp))
-                Spacer(Modifier.height(4.dp))
-                Text(stringResource(R.string.check_in_out), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            }
-        }
+        AttendanceStateBlock(
+            status = attendanceStatus,
+            nowMillis = nowTick,
+            wfId = wfId,
+            onCheckIn = {
+                val cap = attendanceStatus?.config?.maxDailySubmissions ?: 2
+                scope.launch {
+                    val today = LocalDate.now().toString()
+                    val countToday = app.database.attendanceDao().getCountForDate(wfId, today)
+                    if (countToday >= cap) {
+                        showDailyCapDialog = true
+                    } else {
+                        onCheckIn()
+                    }
+                }
+            },
+        )
 
         Spacer(Modifier.height(32.dp))
 
@@ -635,6 +667,217 @@ fun HomeScreen(
                 }
             },
         )
+    }
+
+    if (showDailyCapDialog) {
+        AlertDialog(
+            onDismissRequest = { showDailyCapDialog = false },
+            containerColor = Surface,
+            title = { Text(stringResource(R.string.daily_cap_reached_local_title), color = TextPrimary) },
+            text = { Text(stringResource(R.string.daily_cap_reached_local), color = TextSecondary) },
+            confirmButton = {
+                TextButton(onClick = { showDailyCapDialog = false }) {
+                    Text(stringResource(R.string.ok), color = ForestGreen)
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun AttendanceStateBlock(
+    status: AttendanceStatusResponse?,
+    nowMillis: Long,
+    wfId: String,
+    onCheckIn: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        if (status?.shiftAssigned == true && status.shift != null) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Surface),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.Schedule, contentDescription = null, tint = ForestGreen, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            stringResource(R.string.shift_today),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = TextMuted,
+                        )
+                        Text(
+                            stringResource(
+                                R.string.shift_window_format,
+                                status.shift.startTime,
+                                status.shift.endTime,
+                            ),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            stringResource(R.string.shift_duration, status.shift.durationMinutes),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextMuted,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        } else if (status != null && !status.shiftAssigned) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = WarningAmber.copy(alpha = 0.1f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.Warning, contentDescription = null, tint = WarningAmber, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        stringResource(R.string.window_no_shift),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = WarningAmber,
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
+        val cooldownRemaining = remember(status?.cooldownUntil, nowMillis) {
+            val until = status?.cooldownUntil ?: return@remember 0L
+            try {
+                val end = java.time.Instant.parse(until).toEpochMilli()
+                (end - nowMillis).coerceAtLeast(0L)
+            } catch (_: Exception) { 0L }
+        }
+        val cooldownActive = cooldownRemaining > 0L
+
+        val nextAction = status?.nextAllowedAction ?: "check_in"
+        val state = status?.state ?: "not_checked_in"
+        val windowOpen = status?.shiftWindowOpen ?: true
+
+        val (label, color, icon, enabled) = when {
+            state == "completed" -> Quad(
+                stringResource(R.string.state_completed),
+                TextMuted,
+                Icons.Filled.CheckCircle,
+                false,
+            )
+            cooldownActive -> Quad(
+                stringResource(R.string.cooldown_wait, (cooldownRemaining / 1000).toInt()),
+                TextMuted,
+                Icons.Filled.HourglassTop,
+                false,
+            )
+            !windowOpen || nextAction == "none" -> Quad(
+                stringResource(R.string.action_disabled),
+                TextMuted,
+                Icons.Filled.HourglassTop,
+                false,
+            )
+            nextAction == "check_out" -> Quad(
+                stringResource(R.string.action_check_out),
+                androidx.compose.ui.graphics.Color(0xFF3B82F6),
+                Icons.Filled.Logout,
+                true,
+            )
+            else -> Quad(
+                stringResource(R.string.action_check_in),
+                ForestGreen,
+                Icons.Filled.Login,
+                true,
+            )
+        }
+
+        Button(
+            onClick = onCheckIn,
+            enabled = enabled,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (enabled) color else CardBorder,
+                disabledContainerColor = CardBorder,
+            ),
+            shape = CircleShape,
+            modifier = Modifier.size(160.dp),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(36.dp))
+                Spacer(Modifier.height(6.dp))
+                Text(label, fontWeight = FontWeight.Bold, fontSize = 13.sp, textAlign = TextAlign.Center)
+            }
+        }
+
+        if (state == "checked_in" && status?.clockIn != null) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                stringResource(R.string.clocked_in_at, status.clockIn),
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+            )
+        }
+
+        if (state == "completed") {
+            val mins = status?.minutesWorked ?: 0
+            val h = mins / 60
+            val m = mins % 60
+            Spacer(Modifier.height(12.dp))
+            Text(
+                stringResource(R.string.attendance_complete_summary, h, m),
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+            )
+        }
+
+        val reason = status?.windowReason
+        if (reason != null && (!windowOpen || nextAction == "none")) {
+            Spacer(Modifier.height(12.dp))
+            val reasonText = renderReason(reason.code, reason.params, status?.config)
+                ?: status?.windowMessage
+            if (!reasonText.isNullOrBlank()) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = WarningAmber.copy(alpha = 0.1f)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        reasonText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = WarningAmber,
+                        modifier = Modifier.padding(12.dp),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+
+@Composable
+private fun renderReason(code: String, params: Map<String, Any>, config: AttendanceConfig?): String? {
+    fun s(key: String): String? = params[key]?.toString()
+    return when (code) {
+        "BEFORE_SHIFT_WINDOW" -> stringResource(
+            R.string.window_before_shift,
+            s("start") ?: "—",
+            s("earliest") ?: "—",
+            s("wait") ?: "—",
+        )
+        "AFTER_SHIFT_WINDOW" -> stringResource(R.string.window_after_shift, s("end") ?: "—")
+        "MIN_DURATION_NOT_MET" -> stringResource(
+            R.string.window_min_duration,
+            (s("required") ?: config?.minShiftDurationMinutes?.toString() ?: "0").toIntOrNull() ?: 0,
+            (s("remaining") ?: "0").toIntOrNull() ?: 0,
+        )
+        else -> null
     }
 }
 

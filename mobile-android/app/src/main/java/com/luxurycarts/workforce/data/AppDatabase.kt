@@ -42,6 +42,7 @@ data class AttendanceEntity(
     @ColumnInfo(name = "last_ntp_sync_at") val lastNtpSyncAt: String? = null,
     @ColumnInfo(name = "location_source", defaultValue = "gps") val locationSource: String? = null,
     @ColumnInfo(name = "created_at_millis", defaultValue = "0") val createdAtMillis: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "submission_token") val submissionToken: String? = null,
 )
 
 @Dao
@@ -79,9 +80,18 @@ interface AttendanceDao {
 
     @Query("DELETE FROM attendance_submissions WHERE owner_workforce_id = :workforceId")
     suspend fun deleteAllForUser(workforceId: String)
+
+    @Query("SELECT COUNT(*) FROM attendance_submissions WHERE owner_workforce_id = :workforceId AND attendance_date = :date AND sync_status NOT IN ('permanently_rejected')")
+    suspend fun getCountForDate(workforceId: String, date: String): Int
+
+    @Query("SELECT COUNT(*) FROM attendance_submissions WHERE owner_workforce_id = :workforceId AND attendance_date = :date AND sync_status NOT IN ('permanently_rejected')")
+    fun getCountForDateFlow(workforceId: String, date: String): Flow<Int>
+
+    @Query("UPDATE attendance_submissions SET sync_status = 'permanently_rejected', flag_reason = :code WHERE id = :id")
+    suspend fun markPermanentlyRejected(id: String, code: String)
 }
 
-@Database(entities = [AttendanceEntity::class], version = 7, exportSchema = false)
+@Database(entities = [AttendanceEntity::class], version = 8, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun attendanceDao(): AttendanceDao
 
@@ -102,6 +112,12 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE attendance_submissions ADD COLUMN submission_token TEXT")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 Room.databaseBuilder(
@@ -109,7 +125,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "workforce.db",
                 )
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                     .fallbackToDestructiveMigrationFrom(1, 2, 3, 4)
                     .build()
                     .also { INSTANCE = it }

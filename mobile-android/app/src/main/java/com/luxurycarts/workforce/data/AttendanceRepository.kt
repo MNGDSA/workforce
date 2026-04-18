@@ -104,6 +104,7 @@ class AttendanceRepository(
                 val plainWorkforceId = EncryptionService.decrypt(submission.workforceId)
                 val textType = "text/plain".toMediaType()
 
+                val token = submission.submissionToken ?: UUID.randomUUID().toString()
                 val response = apiService.submitAttendance(
                     workforceId = plainWorkforceId.toRequestBody(textType),
                     gpsLat = EncryptionService.decrypt(submission.encryptedGpsLat).toRequestBody(textType),
@@ -120,6 +121,7 @@ class AttendanceRepository(
                     systemClockTimestamp = (submission.systemClockTimestamp ?: "").toRequestBody(textType),
                     lastNtpSyncAt = (submission.lastNtpSyncAt ?: "").toRequestBody(textType),
                     locationSource = (submission.locationSource ?: "unknown").toRequestBody(textType),
+                    submissionToken = token.toRequestBody(textType),
                 )
 
                 if (response.isSuccessful) {
@@ -133,8 +135,21 @@ class AttendanceRepository(
                 } else if (response.code() == 401) {
                     sessionExpired = true
                     break
+                } else if (response.code() == 422) {
+                    dao.markPermanentlyRejected(submission.id, "MIN_DURATION_NOT_MET")
+                    try { File(encPhotoPath).delete() } catch (_: Exception) {}
+                } else if (response.code() == 429) {
+                    dao.markPermanentlyRejected(submission.id, "DAILY_LIMIT_REACHED")
+                    try { File(encPhotoPath).delete() } catch (_: Exception) {}
                 } else if (response.code() == 403) {
-                    terminated = true
+                    val errBody = try { response.errorBody()?.string() } catch (_: Exception) { null }
+                    val code = parseErrorCode(errBody)
+                    if (code == "BEFORE_SHIFT_WINDOW" || code == "AFTER_SHIFT_WINDOW") {
+                        dao.markPermanentlyRejected(submission.id, code)
+                        try { File(encPhotoPath).delete() } catch (_: Exception) {}
+                    } else {
+                        terminated = true
+                    }
                 } else {
                     dao.incrementRetry(submission.id)
                 }
@@ -173,5 +188,13 @@ class AttendanceRepository(
 
     suspend fun clearUserData() {
         dao.deleteAllForUser(workforceId)
+    }
+
+    private fun parseErrorCode(body: String?): String? {
+        if (body.isNullOrBlank()) return null
+        return try {
+            val obj = com.google.gson.Gson().fromJson(body, com.google.gson.JsonObject::class.java)
+            obj?.get("code")?.takeIf { !it.isJsonNull }?.asString
+        } catch (_: Exception) { null }
     }
 }

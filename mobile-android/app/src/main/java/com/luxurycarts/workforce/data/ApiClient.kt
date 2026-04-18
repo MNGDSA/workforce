@@ -43,6 +43,9 @@ interface ApiService {
     @GET("api/config/mobile")
     suspend fun getMobileConfig(): Response<MobileConfigResponse>
 
+    @GET("api/attendance-mobile/status")
+    suspend fun getAttendanceStatus(@Query("workforceId") workforceId: String): Response<AttendanceStatusResponse>
+
     @Multipart
     @POST("api/attendance-mobile/submit")
     suspend fun submitAttendance(
@@ -61,6 +64,7 @@ interface ApiService {
         @Part("systemClockTimestamp") systemClockTimestamp: RequestBody,
         @Part("lastNtpSyncAt") lastNtpSyncAt: RequestBody,
         @Part("locationSource") locationSource: RequestBody,
+        @Part("submissionToken") submissionToken: RequestBody,
     ): Response<SubmissionResponse>
 
     @GET("api/geofence-zones")
@@ -156,8 +160,21 @@ object ApiClient {
             response
         }
 
+        val localeInterceptor = Interceptor { chain ->
+            val locale = java.util.Locale.getDefault()
+            val lang = when (locale.language?.lowercase()) {
+                "ar" -> "ar"
+                else -> "en"
+            }
+            val req = chain.request().newBuilder()
+                .header("Accept-Language", lang)
+                .build()
+            chain.proceed(req)
+        }
+
         val client = OkHttpClient.Builder()
             .cookieJar(jar)
+            .addInterceptor(localeInterceptor)
             .addInterceptor(terminationInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
