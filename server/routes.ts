@@ -1633,10 +1633,13 @@ export async function registerRoutes(
   });
 
   // ─── Job Postings ─────────────────────────────────────────────────────────
-  app.get("/api/jobs", requirePermission("jobs:read"), async (req: Request, res: Response) => {
+  app.get("/api/jobs", requireAuth, async (req: Request, res: Response) => {
     try {
       const { status, eventId } = req.query as Record<string, string>;
-      const data = await storage.getJobPostings({ status, eventId });
+      const isAdminReader = req.authIsSuperAdmin || req.authPermissions?.has("jobs:read");
+      // Non-admins (candidates) can only see active jobs.
+      const effectiveStatus = isAdminReader ? status : "active";
+      const data = await storage.getJobPostings({ status: effectiveStatus, eventId });
       return res.json(data);
     } catch (err) {
       return handleError(res, err);
@@ -1714,9 +1717,17 @@ export async function registerRoutes(
   });
 
   // ─── Applications ─────────────────────────────────────────────────────────
-  app.get("/api/applications", requirePermission("applications:read"), async (req: Request, res: Response) => {
+  app.get("/api/applications", requireAuth, async (req: Request, res: Response) => {
     try {
       const { jobId, candidateId, status } = req.query as Record<string, string>;
+      const isAdminReader = req.authIsSuperAdmin || req.authPermissions?.has("applications:read");
+      if (!isAdminReader) {
+        // Self-service: candidate may only query their own applications.
+        const myCandidate = await storage.getCandidateByUserId(req.authUserId!);
+        if (!myCandidate || !candidateId || candidateId !== myCandidate.id) {
+          return res.status(403).json({ message: "You do not have permission to perform this action.", required: "applications:read" });
+        }
+      }
       const data = await storage.getApplications({ jobId, candidateId, status });
       return res.json(data);
     } catch (err) {
