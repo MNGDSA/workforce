@@ -31,7 +31,12 @@ function getS3Client(): S3Client {
   return s3Client;
 }
 
-export async function uploadFile(localFilePath: string, filename: string, contentType?: string): Promise<string> {
+export async function uploadFile(
+  localFilePath: string,
+  filename: string,
+  contentType?: string,
+  opts: { isPublic?: boolean } = {},
+): Promise<string> {
   if (!isProduction) {
     return `/uploads/${filename}`;
   }
@@ -46,6 +51,7 @@ export async function uploadFile(localFilePath: string, filename: string, conten
       Key: key,
       Body: fileContent,
       ContentType: contentType || "application/octet-stream",
+      ACL: opts.isPublic ? "public-read" : "private",
     }));
     return `https://${spacesBucket}.${spacesEndpoint}/${key}`;
   } finally {

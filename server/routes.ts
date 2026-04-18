@@ -356,7 +356,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid docType. Must be photo, nationalId, iban, or resume" });
       }
       const localPath = req.file.path;
-      const fileUrl = await uploadFile(localPath, req.file.filename, getMimeType(req.file.filename));
+      const fileUrl = await uploadFile(localPath, req.file.filename, getMimeType(req.file.filename), { isPublic: docType === "photo" });
       let photoQualityResult: import("./rekognition").FaceQualityResult | undefined;
 
       if (docType === "photo") {
