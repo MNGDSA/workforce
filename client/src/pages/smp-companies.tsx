@@ -66,7 +66,7 @@ type WorkerRow = {
 function formatGregDate(input: string | Date, locale: string) {
   const d = typeof input === "string" ? new Date(input) : input;
   const tag = locale.startsWith("ar") ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB";
-  return d.toLocaleDateString(tag, { day: "numeric", month: "short", year: "numeric" });
+  return d.toLocaleDateString(tag, { day: "numeric", month: "short", year: "numeric" }); // i18n-numerals: allow (tag pins -u-nu-latn above)
 }
 
 function CreateCompanyDialog({

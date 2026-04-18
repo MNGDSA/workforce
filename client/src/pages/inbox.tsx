@@ -123,7 +123,7 @@ function useTimeAgo() {
 
 function formatDate(iso: string, locale: string) {
   const tag = locale.startsWith("ar") ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB";
-  return new Date(iso).toLocaleDateString(tag, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleDateString(tag, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); // i18n-numerals: allow (tag pins -u-nu-latn above)
 }
 
 export default function InboxPage() {

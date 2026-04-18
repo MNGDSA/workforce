@@ -3,7 +3,7 @@
  *
  * RULE (absolute): all numeric and date output uses **Western Arabic
  * numerals** (0–9) regardless of UI locale. The Eastern Arabic digits
- * (٠١٢٣٤٥٦٧٨٩) and the Arabic separators (٫ ٬) MUST NEVER appear in
+ * (٠١٢٣٤٥٦٧٨٩) and the Arabic separators (٫ ٬) MUST NEVER appear in    // i18n-numerals: allow
  * any rendered output — UI, PDFs, ID cards, SMS, exports, audit log.
  *
  * Every Intl call in this module forces `numberingSystem: 'latn'`. To

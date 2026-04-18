@@ -78,7 +78,7 @@ function daysSince(dateStr: string | null): number {
 }
 
 function formatSAR(n: number, locale: string) {
-  return new Intl.NumberFormat(locale.startsWith("ar") ? "ar-SA" : "en-SA", {
+  return new Intl.NumberFormat(locale.startsWith("ar") ? "ar-SA-u-nu-latn" : "en-SA", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
     numberingSystem: "latn",
@@ -89,7 +89,7 @@ function fmtDate(s: string | null | undefined, locale: string) {
   if (!s) return "—";
   try {
     const tag = locale.startsWith("ar") ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB";
-    return new Date(s).toLocaleDateString(tag, { day: "numeric", month: "short", year: "numeric" });
+    return new Date(s).toLocaleDateString(tag, { day: "numeric", month: "short", year: "numeric" }); // i18n-numerals: allow (tag pins -u-nu-latn above)
   } catch {
     return s;
   }

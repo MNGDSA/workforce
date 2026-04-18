@@ -85,12 +85,12 @@ function useFormatters() {
     formatScheduled(iso: string) {
       const d = new Date(iso);
       return {
-        date: d.toLocaleDateString(dateLocale, { weekday: "short", month: "short", day: "numeric" }),
-        time: d.toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit", hour12: false }),
+        date: d.toLocaleDateString(dateLocale, { weekday: "short", month: "short", day: "numeric" }), // i18n-numerals: allow (dateLocale pins -u-nu-latn)
+        time: d.toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit", hour12: false }), // i18n-numerals: allow (dateLocale pins -u-nu-latn)
       };
     },
     formatCreatedAt(iso: string) {
-      return new Date(iso).toLocaleDateString(dateLocale, { day: "numeric", month: "short", year: "numeric" });
+      return new Date(iso).toLocaleDateString(dateLocale, { day: "numeric", month: "short", year: "numeric" }); // i18n-numerals: allow (dateLocale pins -u-nu-latn)
     },
   };
 }
