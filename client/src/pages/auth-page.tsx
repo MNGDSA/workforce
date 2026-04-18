@@ -300,10 +300,10 @@ export default function AuthPage() {
   const inputPaddedStartClass = "ps-10 h-11 bg-muted/30 border-border focus-visible:border-primary/50 focus-visible:ring-primary/20 transition-all rounded-sm";
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-[40%_60%] bg-background font-sans text-foreground overflow-x-hidden">
+    <div className="min-h-screen w-full max-w-full grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[40%_60%] bg-background font-sans text-foreground overflow-x-clip">
       {/* ── Left Column: Form ─────────────────────────────────── */}
-      <div className="flex flex-col justify-center items-center px-4 py-6 sm:p-8 lg:p-12 relative z-10">
-        <div className="w-full max-w-md space-y-8 animate-in slide-in-from-start-8 duration-700 fade-in">
+      <div className="min-w-0 flex flex-col justify-center items-center px-4 py-6 sm:p-8 lg:p-12 relative z-10">
+        <div className="w-full min-w-0 max-w-md space-y-8 animate-in slide-in-from-start-8 duration-700 fade-in">
 
           {/* Header row: logo + language switcher */}
           <div className="space-y-2">
@@ -466,11 +466,14 @@ export default function AuthPage() {
           ) : (
 
           <Tabs defaultValue={showSignUpFromReset || initialTab === "register" ? "register" : "login"} key={`${showSignUpFromReset}-${initialTab}`} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-8 bg-muted/50 p-1 rounded-sm rtl:[direction:ltr]">
-              <TabsTrigger value="login" className="rounded-sm data-[state=active]:bg-background data-[state=active]:text-foreground font-medium">
+            <TabsList
+              className="grid w-full min-w-0 grid-cols-2 mb-8 bg-muted/50 p-1 rounded-sm"
+              style={isRtl ? { direction: "ltr" } : undefined}
+            >
+              <TabsTrigger value="login" className="rounded-sm data-[state=active]:bg-background data-[state=active]:text-foreground font-medium text-xs sm:text-sm truncate">
                 {t("auth:tabs.login")}
               </TabsTrigger>
-              <TabsTrigger value="register" className="rounded-sm data-[state=active]:bg-background data-[state=active]:text-foreground font-medium">
+              <TabsTrigger value="register" className="rounded-sm data-[state=active]:bg-background data-[state=active]:text-foreground font-medium text-xs sm:text-sm truncate">
                 {t("auth:tabs.register")}
               </TabsTrigger>
             </TabsList>
