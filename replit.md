@@ -103,3 +103,23 @@ The system employs a modern, full-stack architecture.
 | `AWS_ACCESS_KEY_ID` | For Rekognition face verification |
 | `AWS_SECRET_ACCESS_KEY` | For Rekognition face verification |
 | `AWS_REGION` | e.g. `us-east-1` |
+## Internationalization (i18n) — Task #61
+
+The app is fully bilingual: **Arabic (default, RTL)** and **English (LTR)**. Hard rule: **Western digits 0-9 only** anywhere — Eastern Arabic digits (٠١٢٣٤٥٦٧٨٩) and Arabic-Indic separators (٫ ٬) are forbidden in UI, PDFs, and API payloads.
+
+**Frontend**:
+- Stack: `react-i18next` + `i18next-browser-languagedetector`. Default = `ar`.
+- Locale persistence: `localStorage` key `workforce_locale`. Mirrored to user's `users.locale` column when authenticated via `POST /api/auth/locale`.
+- Direction: `LocaleProvider` toggles `<html dir lang>`. RTL achieved with Tailwind logical properties (`ms/me/ps/pe`, `text-start/end`, `border-s/e`, `rounded-s/e`, `start-X/end-X`) — see `scripts/codemod-logical-props.mjs`.
+- Number formatting: `formatNumber()` in `client/src/lib/format.ts` forces `en-US` locale to keep digits Western.
+- ID-card PDFs: both renderers (`client/src/lib/id-card-renderer.ts`, `client/src/lib/card-renderer.tsx`) use Cairo font + `font-variant-numeric: tabular-nums`.
+
+**Backend**:
+- `server/i18n.ts` exports `tr(req, key, params?)` with `{{name}}` placeholder interpolation. Numeric placeholders are formatted with `Intl.NumberFormat("en-US")` to enforce Western digits.
+- Locale resolution priority: `Accept-Language` header → authenticated `user.locale` → default `ar`.
+- 100% coverage: every `message:` string in `server/routes.ts` and `server/auth-middleware.ts` flows through `tr()`. ~340 sites translated, both EN + AR.
+- The client's `queryClient.ts` automatically sends `Accept-Language` from `localStorage.workforce_locale` on every request.
+
+**Lint guard**: `node scripts/audit-numerals.mjs` scans `client/`, `server/`, `shared/` for forbidden characters and exits non-zero on hits. Run before every commit.
+
+**Translation namespaces** (client): `client/src/lib/i18n/locales/{ar,en}/*.json` — one file per page/feature (auth, schedules, talent, profile, common, etc.).
