@@ -1,0 +1,183 @@
+{
+  "page": {
+    "title": "Roles & Access",
+    "subtitle": "Define business units, custom roles with exact permissions, and assign them to staff."
+  },
+  "tabs": {
+    "businessUnits": "Business Units",
+    "roles": "Roles",
+    "users": "Users & Roles"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "saveChanges": "Save Changes",
+    "close": "Close",
+    "delete": "Delete",
+    "active": "Active",
+    "inactive": "Inactive",
+    "deactivated": "Deactivated",
+    "moreInfo": "More information",
+    "system": "System",
+    "custom": "Custom",
+    "staff": "staff",
+    "noUnit": "No unit",
+    "allUnits": "All units",
+    "filterPh": "Filter by name, description, or category…"
+  },
+  "bu": {
+    "headerTitle": "Business Units",
+    "headerSubtitle": "Each unit has an isolated view of its own job applications.",
+    "btnAdd": "Add Unit",
+    "empty": "No business units yet",
+    "h": {
+      "unit": "Unit",
+      "code": "Code",
+      "contact": "Contact",
+      "users": "Users",
+      "status": "Status",
+      "action": "Action"
+    },
+    "dialog": {
+      "titleNew": "New Business Unit",
+      "titleEdit": "Edit Business Unit",
+      "desc": "Each business unit has its own isolated view of job applications.",
+      "lblName": "Unit Name",
+      "phName": "e.g. Makkah Operations",
+      "lblCode": "Code",
+      "phCode": "MKH-OPS",
+      "lblEmail": "Contact Email",
+      "phEmail": "hr@unit.sa",
+      "lblDesc": "Description",
+      "phDesc": "Optional description",
+      "btnCreate": "Create Unit",
+      "errName": "Name is required",
+      "errCode": "Code is required",
+      "errEmail": "Invalid email"
+    },
+    "toast": {
+      "created": "Business unit created",
+      "updated": "Business unit updated",
+      "saveFail": "Failed to save"
+    }
+  },
+  "roles": {
+    "headerTitle": "Roles",
+    "headerSubtitle": "Define custom roles and pick exactly what each one can do. System roles are locked.",
+    "btnAdd": "New Role",
+    "empty": "No roles defined",
+    "h": {
+      "role": "Role",
+      "slug": "Slug",
+      "users": "Users",
+      "type": "Type",
+      "actions": "Actions"
+    },
+    "btnPermissions": "Permissions",
+    "dialog": {
+      "titleNew": "New Role",
+      "titleEdit": "Edit Role",
+      "descNew": "Create a custom role. After saving, set its permissions from the role row.",
+      "descEdit": "Rename or recolor this role. Permissions are managed in the role row.",
+      "lblName": "Name",
+      "phName": "e.g. Site Supervisor",
+      "lblSlug": "Slug",
+      "phSlug": "site_supervisor",
+      "lblDesc": "Description",
+      "phDesc": "What does this role do?",
+      "lblColor": "Color",
+      "btnCreate": "Create Role",
+      "errName": "Name is required",
+      "errSlugChars": "lowercase letters, numbers, _ or -"
+    },
+    "clone": {
+      "title": "Clone \"{{name}}\"",
+      "desc": "Creates a new role with the same permissions.",
+      "lblName": "Name",
+      "phName": "{{name}} (Copy)",
+      "lblSlug": "Slug",
+      "phSlug": "{{slug}}_copy",
+      "btn": "Clone"
+    },
+    "delete": {
+      "title": "Delete \"{{name}}\"?",
+      "desc": "This cannot be undone. If users are still assigned to this role, the deletion will be blocked."
+    },
+    "toast": {
+      "created": "Role created",
+      "updated": "Role updated",
+      "saveFail": "Failed to save role",
+      "cloned": "Role cloned",
+      "cloneFail": "Clone failed",
+      "deleted": "Role deleted",
+      "deleteFail": "Delete failed"
+    }
+  },
+  "perms": {
+    "title": "Permissions — {{name}}",
+    "systemBadge": "System role (read-only)",
+    "descSuper": "Super Admin always has every permission. This list is informational only.",
+    "descSystem": "The Candidate role is system-managed. Its permission set cannot be modified.",
+    "descNormal": "Toggle permissions below. {{selected}}/{{total}} selected.",
+    "noMatches": "No permissions match.",
+    "btnSave": "Save ({{n}})",
+    "toast": {
+      "saved": "Saved {{n}} permissions for {{name}}",
+      "saveFail": "Save failed"
+    }
+  },
+  "users": {
+    "headerTitle": "Users & Roles",
+    "headerSubtitle": "Assign roles and business units to staff members.",
+    "btnInvite": "Invite User",
+    "empty": "No users found",
+    "h": {
+      "user": "User",
+      "role": "Role",
+      "bu": "Business Unit",
+      "status": "Status",
+      "edit": "Edit"
+    },
+    "noRole": "No role — login blocked",
+    "btnSetRole": "Set role",
+    "invite": {
+      "title": "Invite User",
+      "desc": "Add a staff member and assign their role and business unit.",
+      "lblName": "Full Name",
+      "phName": "e.g. Mohammed Al-Qahtani",
+      "lblEmail": "Email",
+      "phEmail": "email@domain.com",
+      "lblId": "ID Number",
+      "phId": "1234567890",
+      "lblRole": "Role",
+      "phRole": "Select role",
+      "lblBu": "Business Unit",
+      "phBu": "Select unit",
+      "buHint": "Not seeing the business unit? Create it first from Business Units.",
+      "lblPassword": "Temporary Password",
+      "phPassword": "Min 8 characters",
+      "btnCreate": "Create User",
+      "err": {
+        "name": "Full name required",
+        "email": "Invalid email",
+        "id": "ID number required",
+        "role": "Role required",
+        "pwMin": "Min 8 characters",
+        "pwUpper": "Must contain an uppercase letter",
+        "pwLower": "Must contain a lowercase letter",
+        "pwNum": "Must contain a number",
+        "pwSym": "Must contain a symbol"
+      }
+    },
+    "edit": {
+      "title": "Edit User"
+    },
+    "toast": {
+      "created": "User created",
+      "createdDesc": "The user can now log in with their credentials.",
+      "createFail": "Failed to create user",
+      "updated": "User updated",
+      "updateFail": "Failed to update"
+    }
+  }
+}

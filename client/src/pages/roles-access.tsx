@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useTranslation } from "react-i18next";
 import DashboardLayout from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,55 +12,25 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Form,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormControl,
-  FormMessage,
+  Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
 } from "@/components/ui/form";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Shield,
-  Building2,
-  Users,
-  Plus,
-  Pencil,
-  Loader2,
-  Lock,
-  Globe,
-  UserCheck,
-  Info,
-  Trash2,
-  Copy,
-  Search,
+  Shield, Building2, Users, Plus, Pencil, Loader2, Lock, Globe, UserCheck,
+  Info, Trash2, Copy, Search,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { formatNumber } from "@/lib/format";
 
-// ─── Shared types ────────────────────────────────────────────────────────────
 type BusinessUnit = {
   id: string;
   name: string;
@@ -124,37 +95,46 @@ function roleBadgeClass(color?: string | null) {
 }
 
 function InfoTooltip({ text }: { text: string }) {
+  const { t } = useTranslation(["rolesAccess"]);
   const [visible, setVisible] = useState(false);
   return (
-    <span className="relative inline-flex items-center ml-1.5 normal-case">
+    <span className="relative inline-flex items-center ms-1.5 normal-case">
       <button
         type="button"
         className="inline-flex items-center justify-center text-muted-foreground/50 hover:text-primary transition-colors"
         onMouseEnter={() => setVisible(true)}
         onMouseLeave={() => setVisible(false)}
-        aria-label="More information"
+        aria-label={t("rolesAccess:common.moreInfo")}
       >
         <Info className="h-3.5 w-3.5" />
       </button>
       {visible && (
-        <span className="absolute right-0 top-full mt-1.5 z-50 w-60 rounded-sm bg-popover border border-border px-3 py-2 text-xs text-muted-foreground shadow-lg leading-relaxed pointer-events-none normal-case tracking-normal font-normal">
-          <span className="absolute right-1.5 bottom-full h-0 w-0 border-x-4 border-x-transparent border-b-4 border-b-border" />
-          {text}
+        <span className="absolute end-0 top-full mt-1.5 z-50 w-60 rounded-sm bg-popover border border-border px-3 py-2 text-xs text-muted-foreground shadow-lg leading-relaxed pointer-events-none normal-case tracking-normal font-normal">
+          <span className="absolute end-1.5 bottom-full h-0 w-0 border-x-4 border-x-transparent border-b-4 border-b-border" />
+          <bdi>{text}</bdi>
         </span>
       )}
     </span>
   );
 }
 
-// ─── Business Unit form ──────────────────────────────────────────────────────
-const buSchema = z.object({
-  name: z.string().min(2, "Name is required"),
-  code: z.string().min(2, "Code is required").max(20).toUpperCase(),
-  description: z.string().optional(),
-  contactEmail: z.string().email("Invalid email").optional().or(z.literal("")),
-  isActive: z.boolean().default(true),
-});
-type BUForm = z.infer<typeof buSchema>;
+function useBuSchema() {
+  const { t } = useTranslation(["rolesAccess"]);
+  return z.object({
+    name: z.string().min(2, t("rolesAccess:bu.dialog.errName")),
+    code: z.string().min(2, t("rolesAccess:bu.dialog.errCode")).max(20).toUpperCase(),
+    description: z.string().optional(),
+    contactEmail: z.string().email(t("rolesAccess:bu.dialog.errEmail")).optional().or(z.literal("")),
+    isActive: z.boolean().default(true),
+  });
+}
+type BUForm = {
+  name: string;
+  code: string;
+  description?: string;
+  contactEmail?: string;
+  isActive: boolean;
+};
 
 function BUDialog({
   open,
@@ -165,8 +145,10 @@ function BUDialog({
   onOpenChange: (v: boolean) => void;
   existing?: BusinessUnit | null;
 }) {
+  const { t } = useTranslation(["rolesAccess"]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const buSchema = useBuSchema();
 
   const form = useForm<BUForm>({
     resolver: zodResolver(buSchema),
@@ -189,12 +171,12 @@ function BUDialog({
       return apiRequest("POST", "/api/business-units", data).then((r) => r.json());
     },
     onSuccess: () => {
-      toast({ title: existing ? "Business unit updated" : "Business unit created" });
+      toast({ title: existing ? t("rolesAccess:bu.toast.updated") : t("rolesAccess:bu.toast.created") });
       queryClient.invalidateQueries({ queryKey: ["/api/business-units"] });
       form.reset();
       onOpenChange(false);
     },
-    onError: () => toast({ title: "Failed to save", variant: "destructive" }),
+    onError: () => toast({ title: t("rolesAccess:bu.toast.saveFail"), variant: "destructive" }),
   });
 
   return (
@@ -203,10 +185,10 @@ function BUDialog({
         <DialogHeader>
           <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
             <Building2 className="h-5 w-5 text-primary" />
-            {existing ? "Edit Business Unit" : "New Business Unit"}
+            {existing ? t("rolesAccess:bu.dialog.titleEdit") : t("rolesAccess:bu.dialog.titleNew")}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground text-sm">
-            Each business unit has its own isolated view of job applications.
+            {t("rolesAccess:bu.dialog.desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -215,9 +197,9 @@ function BUDialog({
             <div className="grid grid-cols-2 gap-3">
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Unit Name</FormLabel>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:bu.dialog.lblName")}</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Makkah Operations" className="bg-muted/30 border-border" {...field} data-testid="input-bu-name" />
+                    <Input placeholder={t("rolesAccess:bu.dialog.phName")} className="bg-muted/30 border-border" {...field} data-testid="input-bu-name" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -225,9 +207,9 @@ function BUDialog({
 
               <FormField control={form.control} name="code" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Code</FormLabel>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:bu.dialog.lblCode")}</FormLabel>
                   <FormControl>
-                    <Input placeholder="MKH-OPS" className="bg-muted/30 border-border font-mono uppercase" {...field} onChange={(e) => field.onChange(e.target.value.toUpperCase())} data-testid="input-bu-code" />
+                    <Input placeholder={t("rolesAccess:bu.dialog.phCode")} dir="ltr" className="bg-muted/30 border-border font-mono uppercase" {...field} onChange={(e) => field.onChange(e.target.value.toUpperCase())} data-testid="input-bu-code" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -235,9 +217,9 @@ function BUDialog({
 
               <FormField control={form.control} name="contactEmail" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Contact Email</FormLabel>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:bu.dialog.lblEmail")}</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="hr@unit.sa" className="bg-muted/30 border-border" {...field} data-testid="input-bu-email" />
+                    <Input type="email" dir="ltr" placeholder={t("rolesAccess:bu.dialog.phEmail")} className="bg-muted/30 border-border" {...field} data-testid="input-bu-email" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -246,18 +228,18 @@ function BUDialog({
 
             <FormField control={form.control} name="description" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Description</FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:bu.dialog.lblDesc")}</FormLabel>
                 <FormControl>
-                  <Input placeholder="Optional description" className="bg-muted/30 border-border" {...field} data-testid="input-bu-description" />
+                  <Input placeholder={t("rolesAccess:bu.dialog.phDesc")} className="bg-muted/30 border-border" {...field} data-testid="input-bu-description" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )} />
 
             <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" variant="outline" className="border-border" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button type="button" variant="outline" className="border-border" onClick={() => onOpenChange(false)}>{t("rolesAccess:common.cancel")}</Button>
               <Button type="submit" className="bg-primary text-primary-foreground font-bold min-w-[120px]" disabled={save.isPending} data-testid="button-save-bu">
-                {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : existing ? "Save Changes" : "Create Unit"}
+                {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : existing ? t("rolesAccess:common.saveChanges") : t("rolesAccess:bu.dialog.btnCreate")}
               </Button>
             </div>
           </form>
@@ -267,17 +249,24 @@ function BUDialog({
   );
 }
 
-// ─── Role create / edit dialog ───────────────────────────────────────────────
-const roleSchema = z.object({
-  name: z.string().min(2, "Name is required").max(100),
-  slug: z.string()
-    .min(2)
-    .max(64)
-    .regex(/^[a-z0-9_-]+$/, "lowercase letters, numbers, _ or -"),
-  description: z.string().max(500).optional(),
-  color: z.string().optional(),
-});
-type RoleForm = z.infer<typeof roleSchema>;
+function useRoleSchema() {
+  const { t } = useTranslation(["rolesAccess"]);
+  return z.object({
+    name: z.string().min(2, t("rolesAccess:roles.dialog.errName")).max(100),
+    slug: z.string()
+      .min(2)
+      .max(64)
+      .regex(/^[a-z0-9_-]+$/, t("rolesAccess:roles.dialog.errSlugChars")),
+    description: z.string().max(500).optional(),
+    color: z.string().optional(),
+  });
+}
+type RoleForm = {
+  name: string;
+  slug: string;
+  description?: string;
+  color?: string;
+};
 
 function slugify(s: string) {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 64);
@@ -292,8 +281,10 @@ function RoleDialog({
   onOpenChange: (v: boolean) => void;
   existing?: Role | null;
 }) {
+  const { t } = useTranslation(["rolesAccess"]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const roleSchema = useRoleSchema();
   const form = useForm<RoleForm>({
     resolver: zodResolver(roleSchema),
     defaultValues: existing
@@ -310,12 +301,12 @@ function RoleDialog({
       return apiRequest("POST", "/api/roles", data).then((r) => r.json());
     },
     onSuccess: () => {
-      toast({ title: existing ? "Role updated" : "Role created" });
+      toast({ title: existing ? t("rolesAccess:roles.toast.updated") : t("rolesAccess:roles.toast.created") });
       queryClient.invalidateQueries({ queryKey: ["/api/roles"] });
       form.reset();
       onOpenChange(false);
     },
-    onError: (e: any) => toast({ title: e?.message ?? "Failed to save role", variant: "destructive" }),
+    onError: (e: { message?: string }) => toast({ title: e?.message ?? t("rolesAccess:roles.toast.saveFail"), variant: "destructive" }),
   });
 
   return (
@@ -324,22 +315,20 @@ function RoleDialog({
         <DialogHeader>
           <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
-            {existing ? "Edit Role" : "New Role"}
+            {existing ? t("rolesAccess:roles.dialog.titleEdit") : t("rolesAccess:roles.dialog.titleNew")}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground text-sm">
-            {existing
-              ? "Rename or recolor this role. Permissions are managed in the role row."
-              : "Create a custom role. After saving, set its permissions from the role row."}
+            {existing ? t("rolesAccess:roles.dialog.descEdit") : t("rolesAccess:roles.dialog.descNew")}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((d) => save.mutate(d))} className="space-y-4 pt-1">
             <FormField control={form.control} name="name" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Name</FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:roles.dialog.lblName")}</FormLabel>
                 <FormControl>
                   <Input
-                    placeholder="e.g. Site Supervisor"
+                    placeholder={t("rolesAccess:roles.dialog.phName")}
                     className="bg-muted/30 border-border"
                     {...field}
                     onChange={(e) => {
@@ -357,9 +346,9 @@ function RoleDialog({
             {!existing && (
               <FormField control={form.control} name="slug" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Slug</FormLabel>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:roles.dialog.lblSlug")}</FormLabel>
                   <FormControl>
-                    <Input placeholder="site_supervisor" className="bg-muted/30 border-border font-mono lowercase" {...field} data-testid="input-role-slug" />
+                    <Input placeholder={t("rolesAccess:roles.dialog.phSlug")} dir="ltr" className="bg-muted/30 border-border font-mono lowercase" {...field} data-testid="input-role-slug" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -367,16 +356,16 @@ function RoleDialog({
             )}
             <FormField control={form.control} name="description" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Description</FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:roles.dialog.lblDesc")}</FormLabel>
                 <FormControl>
-                  <Input placeholder="What does this role do?" className="bg-muted/30 border-border" {...field} data-testid="input-role-description" />
+                  <Input placeholder={t("rolesAccess:roles.dialog.phDesc")} className="bg-muted/30 border-border" {...field} data-testid="input-role-description" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <FormField control={form.control} name="color" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Color</FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:roles.dialog.lblColor")}</FormLabel>
                 <div className="flex flex-wrap gap-2 pt-1">
                   {PALETTE.map((p) => (
                     <button
@@ -392,9 +381,9 @@ function RoleDialog({
               </FormItem>
             )} />
             <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" className="border-border" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button type="button" variant="outline" className="border-border" onClick={() => onOpenChange(false)}>{t("rolesAccess:common.cancel")}</Button>
               <Button type="submit" className="bg-primary text-primary-foreground font-bold min-w-[110px]" disabled={save.isPending} data-testid="button-save-role">
-                {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : existing ? "Save" : "Create Role"}
+                {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : existing ? t("rolesAccess:common.save") : t("rolesAccess:roles.dialog.btnCreate")}
               </Button>
             </DialogFooter>
           </form>
@@ -413,6 +402,7 @@ function CloneRoleDialog({
   onOpenChange: (v: boolean) => void;
   source: Role | null;
 }) {
+  const { t } = useTranslation(["rolesAccess"]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
@@ -422,13 +412,13 @@ function CloneRoleDialog({
     mutationFn: () =>
       apiRequest("POST", `/api/roles/${source!.id}/clone`, { name, slug }).then((r) => r.json()),
     onSuccess: () => {
-      toast({ title: "Role cloned" });
+      toast({ title: t("rolesAccess:roles.toast.cloned") });
       queryClient.invalidateQueries({ queryKey: ["/api/roles"] });
       onOpenChange(false);
       setName("");
       setSlug("");
     },
-    onError: (e: any) => toast({ title: e?.message ?? "Clone failed", variant: "destructive" }),
+    onError: (e: { message?: string }) => toast({ title: e?.message ?? t("rolesAccess:roles.toast.cloneFail"), variant: "destructive" }),
   });
 
   if (!source) return null;
@@ -436,45 +426,46 @@ function CloneRoleDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="font-display text-lg font-bold text-white">Clone "{source.name}"</DialogTitle>
+          <DialogTitle className="font-display text-lg font-bold text-white"><bdi>{t("rolesAccess:roles.clone.title", { name: source.name })}</bdi></DialogTitle>
           <DialogDescription className="text-muted-foreground text-sm">
-            Creates a new role with the same permissions.
+            {t("rolesAccess:roles.clone.desc")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 pt-1">
           <div>
-            <label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Name</label>
+            <label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:roles.clone.lblName")}</label>
             <Input
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
                 setSlug(slugify(e.target.value));
               }}
-              placeholder={`${source.name} (Copy)`}
+              placeholder={t("rolesAccess:roles.clone.phName", { name: source.name })}
               className="bg-muted/30 border-border mt-1"
               data-testid="input-clone-name"
             />
           </div>
           <div>
-            <label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Slug</label>
+            <label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:roles.clone.lblSlug")}</label>
             <Input
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              placeholder={`${source.slug}_copy`}
+              placeholder={t("rolesAccess:roles.clone.phSlug", { slug: source.slug })}
+              dir="ltr"
               className="bg-muted/30 border-border font-mono mt-1"
               data-testid="input-clone-slug"
             />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" className="border-border" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" className="border-border" onClick={() => onOpenChange(false)}>{t("rolesAccess:common.cancel")}</Button>
           <Button
             className="bg-primary text-primary-foreground font-bold min-w-[110px]"
             disabled={!name || !slug || clone.isPending}
             onClick={() => clone.mutate()}
             data-testid="button-confirm-clone"
           >
-            {clone.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Clone"}
+            {clone.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("rolesAccess:roles.clone.btn")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -482,7 +473,6 @@ function CloneRoleDialog({
   );
 }
 
-// ─── Permission editor (per-role) ────────────────────────────────────────────
 function PermissionEditorDialog({
   open,
   onOpenChange,
@@ -494,6 +484,7 @@ function PermissionEditorDialog({
   role: Role | null;
   permissions: Permission[];
 }) {
+  const { t, i18n } = useTranslation(["rolesAccess"]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -508,9 +499,6 @@ function PermissionEditorDialog({
     enabled: open && !!role,
   });
 
-  // Hydrate the selection set whenever the dialog opens for a (possibly new)
-  // role and the server has returned its permission list. Reset on close so
-  // the next open starts fresh.
   useEffect(() => {
     if (open && rolePerms && rolePerms.roleId === role?.id) {
       setSelected(new Set(rolePerms.permissions));
@@ -545,20 +533,20 @@ function PermissionEditorDialog({
         permissions: Array.from(selected),
       }).then((r) => r.json()),
     onSuccess: () => {
-      toast({ title: `Saved ${selectedCount} permissions for ${role!.name}` });
+      toast({ title: t("rolesAccess:perms.toast.saved", { n: formatNumber(selectedCount, i18n.language), name: role!.name }) });
       queryClient.invalidateQueries({ queryKey: ["/api/roles", role?.id, "permissions"] });
       onOpenChange(false);
     },
-    onError: (e: any) => toast({ title: e?.message ?? "Save failed", variant: "destructive" }),
+    onError: (e: { message?: string }) => toast({ title: e?.message ?? t("rolesAccess:perms.toast.saveFail"), variant: "destructive" }),
   });
 
   function toggle(k: string) {
     if (isSystem) return;
     const next = new Set(selected);
-    next.has(k) ? next.delete(k) : next.add(k);
+    if (next.has(k)) next.delete(k); else next.add(k);
     setSelected(next);
   }
-  function toggleCategory(cat: string, perms: Permission[]) {
+  function toggleCategory(_cat: string, perms: Permission[]) {
     if (isSystem) return;
     const allSelected = perms.every((p) => selected.has(p.key));
     const next = new Set(selected);
@@ -576,38 +564,38 @@ function PermissionEditorDialog({
         <DialogHeader>
           <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
-            Permissions — {role.name}
+            <bdi>{t("rolesAccess:perms.title", { name: role.name })}</bdi>
             {isSystem && (
-              <Badge variant="outline" className="ml-2 border-amber-500/30 text-amber-400 bg-amber-500/10 gap-1">
-                <Lock className="h-3 w-3" /> System role (read-only)
+              <Badge variant="outline" className="ms-2 border-amber-500/30 text-amber-400 bg-amber-500/10 gap-1">
+                <Lock className="h-3 w-3" /> {t("rolesAccess:perms.systemBadge")}
               </Badge>
             )}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground text-sm">
             {isSuperAdmin
-              ? "Super Admin always has every permission. This list is informational only."
+              ? t("rolesAccess:perms.descSuper")
               : isSystem
-                ? "The Candidate role is system-managed. Its permission set cannot be modified."
-                : `Toggle permissions below. ${selectedCount}/${totalCount} selected.`}
+                ? t("rolesAccess:perms.descSystem")
+                : t("rolesAccess:perms.descNormal", { selected: formatNumber(selectedCount, i18n.language), total: formatNumber(totalCount, i18n.language) })}
           </DialogDescription>
         </DialogHeader>
 
         <div className="relative my-3">
-          <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Search className="h-4 w-4 absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Filter by name, description, or category…"
+            placeholder={t("rolesAccess:common.filterPh")}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="pl-9 bg-muted/30 border-border"
+            className="ps-9 bg-muted/30 border-border"
             data-testid="input-permission-filter"
           />
         </div>
 
-        <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+        <div className="flex-1 overflow-y-auto pe-2 space-y-4">
           {loadingRolePerms ? (
             <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
           ) : grouped.length === 0 ? (
-            <p className="text-muted-foreground text-sm text-center py-8">No permissions match.</p>
+            <p className="text-muted-foreground text-sm text-center py-8">{t("rolesAccess:perms.noMatches")}</p>
           ) : (
             grouped.map(([cat, perms]) => {
               const catSelected = perms.filter((p) => selected.has(p.key)).length;
@@ -623,9 +611,9 @@ function PermissionEditorDialog({
                         disabled={isSystem}
                         data-testid={`checkbox-cat-${cat}`}
                       />
-                      <span className="text-sm font-semibold text-white uppercase tracking-wider">{cat}</span>
-                      <Badge variant="outline" className="border-border text-xs text-muted-foreground">
-                        {catSelected}/{perms.length}
+                      <span className="text-sm font-semibold text-white uppercase tracking-wider"><bdi>{cat}</bdi></span>
+                      <Badge variant="outline" className="border-border text-xs text-muted-foreground" dir="ltr">
+                        {formatNumber(catSelected, i18n.language)}/{formatNumber(perms.length, i18n.language)}
                       </Badge>
                     </div>
                   </div>
@@ -642,8 +630,8 @@ function PermissionEditorDialog({
                           data-testid={`checkbox-perm-${p.key}`}
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-white truncate">{p.description}</p>
-                          <p className="text-xs text-muted-foreground font-mono mt-0.5">{p.key}</p>
+                          <p className="text-sm text-white truncate"><bdi>{p.description}</bdi></p>
+                          <p className="text-xs text-muted-foreground font-mono mt-0.5" dir="ltr">{p.key}</p>
                         </div>
                       </label>
                     ))}
@@ -656,7 +644,7 @@ function PermissionEditorDialog({
 
         <DialogFooter className="pt-3 border-t border-border">
           <Button variant="outline" className="border-border" onClick={() => onOpenChange(false)}>
-            {isSystem ? "Close" : "Cancel"}
+            {isSystem ? t("rolesAccess:common.close") : t("rolesAccess:common.cancel")}
           </Button>
           {!isSystem && (
             <Button
@@ -665,7 +653,7 @@ function PermissionEditorDialog({
               disabled={save.isPending}
               data-testid="button-save-permissions"
             >
-              {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Save (${selectedCount})`}
+              {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("rolesAccess:perms.btnSave", { n: formatNumber(selectedCount, i18n.language) })}
             </Button>
           )}
         </DialogFooter>
@@ -674,7 +662,6 @@ function PermissionEditorDialog({
   );
 }
 
-// ─── Delete-role confirm ─────────────────────────────────────────────────────
 function DeleteRoleDialog({
   open,
   onOpenChange,
@@ -684,36 +671,37 @@ function DeleteRoleDialog({
   onOpenChange: (v: boolean) => void;
   role: Role | null;
 }) {
+  const { t } = useTranslation(["rolesAccess"]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const del = useMutation({
     mutationFn: () => apiRequest("DELETE", `/api/roles/${role!.id}`).then((r) => r.json()),
     onSuccess: () => {
-      toast({ title: "Role deleted" });
+      toast({ title: t("rolesAccess:roles.toast.deleted") });
       queryClient.invalidateQueries({ queryKey: ["/api/roles"] });
       onOpenChange(false);
     },
-    onError: (e: any) => toast({ title: e?.message ?? "Delete failed", variant: "destructive" }),
+    onError: (e: { message?: string }) => toast({ title: e?.message ?? t("rolesAccess:roles.toast.deleteFail"), variant: "destructive" }),
   });
   if (!role) return null;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="font-display text-lg font-bold text-white">Delete "{role.name}"?</DialogTitle>
+          <DialogTitle className="font-display text-lg font-bold text-white"><bdi>{t("rolesAccess:roles.delete.title", { name: role.name })}</bdi></DialogTitle>
           <DialogDescription className="text-muted-foreground text-sm">
-            This cannot be undone. If users are still assigned to this role, the deletion will be blocked.
+            {t("rolesAccess:roles.delete.desc")}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" className="border-border" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" className="border-border" onClick={() => onOpenChange(false)}>{t("rolesAccess:common.cancel")}</Button>
           <Button
             className="bg-red-500/90 text-white hover:bg-red-500"
             onClick={() => del.mutate()}
             disabled={del.isPending}
             data-testid="button-confirm-delete-role"
           >
-            {del.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+            {del.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("rolesAccess:common.delete")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -721,21 +709,30 @@ function DeleteRoleDialog({
   );
 }
 
-// ─── User invite & edit (now use dynamic role list from /api/roles) ──────────
-const inviteSchema = z.object({
-  fullName: z.string().min(2, "Full name required"),
-  email: z.string().email("Invalid email"),
-  username: z.string().min(3, "ID number required"),
-  roleId: z.string().min(1, "Role required"),
-  businessUnitId: z.string().optional(),
-  password: z.string()
-    .min(8, "Min 8 characters")
-    .regex(/[A-Z]/, "Must contain an uppercase letter")
-    .regex(/[a-z]/, "Must contain a lowercase letter")
-    .regex(/[0-9]/, "Must contain a number")
-    .regex(/[^A-Za-z0-9]/, "Must contain a symbol"),
-});
-type InviteForm = z.infer<typeof inviteSchema>;
+function useInviteSchema() {
+  const { t } = useTranslation(["rolesAccess"]);
+  return z.object({
+    fullName: z.string().min(2, t("rolesAccess:users.invite.err.name")),
+    email: z.string().email(t("rolesAccess:users.invite.err.email")),
+    username: z.string().min(3, t("rolesAccess:users.invite.err.id")),
+    roleId: z.string().min(1, t("rolesAccess:users.invite.err.role")),
+    businessUnitId: z.string().optional(),
+    password: z.string()
+      .min(8, t("rolesAccess:users.invite.err.pwMin"))
+      .regex(/[A-Z]/, t("rolesAccess:users.invite.err.pwUpper"))
+      .regex(/[a-z]/, t("rolesAccess:users.invite.err.pwLower"))
+      .regex(/[0-9]/, t("rolesAccess:users.invite.err.pwNum"))
+      .regex(/[^A-Za-z0-9]/, t("rolesAccess:users.invite.err.pwSym")),
+  });
+}
+type InviteForm = {
+  fullName: string;
+  email: string;
+  username: string;
+  roleId: string;
+  businessUnitId?: string;
+  password: string;
+};
 
 function InviteUserDialog({
   open,
@@ -748,8 +745,10 @@ function InviteUserDialog({
   businessUnits: BusinessUnit[];
   assignableRoles: Role[];
 }) {
+  const { t } = useTranslation(["rolesAccess"]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const inviteSchema = useInviteSchema();
 
   const form = useForm<InviteForm>({
     resolver: zodResolver(inviteSchema),
@@ -763,12 +762,12 @@ function InviteUserDialog({
         businessUnitId: data.businessUnitId || null,
       }).then((r) => r.json()),
     onSuccess: () => {
-      toast({ title: "User created", description: "The user can now log in with their credentials." });
+      toast({ title: t("rolesAccess:users.toast.created"), description: t("rolesAccess:users.toast.createdDesc") });
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       form.reset();
       onOpenChange(false);
     },
-    onError: () => toast({ title: "Failed to create user", variant: "destructive" }),
+    onError: () => toast({ title: t("rolesAccess:users.toast.createFail"), variant: "destructive" }),
   });
 
   return (
@@ -777,10 +776,10 @@ function InviteUserDialog({
         <DialogHeader>
           <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-2">
             <UserCheck className="h-5 w-5 text-primary" />
-            Invite User
+            {t("rolesAccess:users.invite.title")}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground text-sm">
-            Add a staff member and assign their role and business unit.
+            {t("rolesAccess:users.invite.desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -789,22 +788,22 @@ function InviteUserDialog({
             <div className="grid grid-cols-2 gap-3">
               <FormField control={form.control} name="fullName" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Full Name</FormLabel>
-                  <FormControl><Input placeholder="e.g. Mohammed Al-Qahtani" className="bg-muted/30 border-border" {...field} data-testid="input-invite-name" /></FormControl>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:users.invite.lblName")}</FormLabel>
+                  <FormControl><Input placeholder={t("rolesAccess:users.invite.phName")} className="bg-muted/30 border-border" {...field} data-testid="input-invite-name" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
               <FormField control={form.control} name="email" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Email</FormLabel>
-                  <FormControl><Input type="email" placeholder="email@domain.com" className="bg-muted/30 border-border" {...field} data-testid="input-invite-email" /></FormControl>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:users.invite.lblEmail")}</FormLabel>
+                  <FormControl><Input type="email" dir="ltr" placeholder={t("rolesAccess:users.invite.phEmail")} className="bg-muted/30 border-border" {...field} data-testid="input-invite-email" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
               <FormField control={form.control} name="username" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">ID Number</FormLabel>
-                  <FormControl><Input placeholder="1234567890" className="bg-muted/30 border-border" {...field} data-testid="input-invite-username" /></FormControl>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:users.invite.lblId")}</FormLabel>
+                  <FormControl><Input dir="ltr" placeholder={t("rolesAccess:users.invite.phId")} className="bg-muted/30 border-border" {...field} data-testid="input-invite-username" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -813,16 +812,16 @@ function InviteUserDialog({
             <div className="grid grid-cols-2 gap-3">
               <FormField control={form.control} name="roleId" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Role</FormLabel>
+                  <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:users.invite.lblRole")}</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger className="bg-muted/30 border-border" data-testid="select-invite-role">
-                        <SelectValue placeholder="Select role" />
+                        <SelectValue placeholder={t("rolesAccess:users.invite.phRole")} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       {assignableRoles.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                        <SelectItem key={r.id} value={r.id}><bdi>{r.name}</bdi></SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -833,19 +832,19 @@ function InviteUserDialog({
               <FormField control={form.control} name="businessUnitId" render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold flex items-center">
-                    Business Unit
-                    <InfoTooltip text="Not seeing the business unit? Create it first from Business Units." />
+                    {t("rolesAccess:users.invite.lblBu")}
+                    <InfoTooltip text={t("rolesAccess:users.invite.buHint")} />
                   </FormLabel>
                   <Select onValueChange={(v) => field.onChange(v === "none" ? "" : v)} value={field.value || "none"}>
                     <FormControl>
                       <SelectTrigger className="bg-muted/30 border-border" data-testid="select-invite-bu">
-                        <SelectValue placeholder="Select unit" />
+                        <SelectValue placeholder={t("rolesAccess:users.invite.phBu")} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="none">No unit</SelectItem>
+                      <SelectItem value="none">{t("rolesAccess:common.noUnit")}</SelectItem>
                       {businessUnits.filter((b) => b.isActive).map((bu) => (
-                        <SelectItem key={bu.id} value={bu.id}>{bu.name}</SelectItem>
+                        <SelectItem key={bu.id} value={bu.id}><bdi>{bu.name}</bdi></SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -856,16 +855,16 @@ function InviteUserDialog({
 
             <FormField control={form.control} name="password" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Temporary Password</FormLabel>
-                <FormControl><Input type="password" placeholder="Min 8 characters" className="bg-muted/30 border-border" {...field} data-testid="input-invite-password" /></FormControl>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:users.invite.lblPassword")}</FormLabel>
+                <FormControl><Input type="password" placeholder={t("rolesAccess:users.invite.phPassword")} className="bg-muted/30 border-border" {...field} data-testid="input-invite-password" /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
 
             <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" variant="outline" className="border-border" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button type="button" variant="outline" className="border-border" onClick={() => onOpenChange(false)}>{t("rolesAccess:common.cancel")}</Button>
               <Button type="submit" className="bg-primary text-primary-foreground font-bold min-w-[120px]" disabled={create.isPending} data-testid="button-submit-invite">
-                {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create User"}
+                {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("rolesAccess:users.invite.btnCreate")}
               </Button>
             </div>
           </form>
@@ -895,6 +894,7 @@ function EditUserDialog({
   businessUnits: BusinessUnit[];
   assignableRoles: Role[];
 }) {
+  const { t } = useTranslation(["rolesAccess"]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -914,11 +914,11 @@ function EditUserDialog({
         businessUnitId: data.businessUnitId || null,
       }).then((r) => r.json()),
     onSuccess: () => {
-      toast({ title: "User updated" });
+      toast({ title: t("rolesAccess:users.toast.updated") });
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       onOpenChange(false);
     },
-    onError: () => toast({ title: "Failed to update", variant: "destructive" }),
+    onError: () => toast({ title: t("rolesAccess:users.toast.updateFail"), variant: "destructive" }),
   });
 
   if (!user) return null;
@@ -927,24 +927,24 @@ function EditUserDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="font-display text-lg font-bold text-white">Edit User</DialogTitle>
-          <DialogDescription className="text-muted-foreground text-sm">{user.fullName ?? user.email}</DialogDescription>
+          <DialogTitle className="font-display text-lg font-bold text-white">{t("rolesAccess:users.edit.title")}</DialogTitle>
+          <DialogDescription className="text-muted-foreground text-sm"><bdi>{user.fullName ?? user.email}</bdi></DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit((d) => save.mutate(d))} className="space-y-4 pt-1">
             <FormField control={form.control} name="roleId" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Role</FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:users.invite.lblRole")}</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger className="bg-muted/30 border-border" data-testid="select-edit-role">
-                      <SelectValue placeholder="Select role" />
+                      <SelectValue placeholder={t("rolesAccess:users.invite.phRole")} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     {assignableRoles.map((r) => (
-                      <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                      <SelectItem key={r.id} value={r.id}><bdi>{r.name}</bdi></SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -953,7 +953,7 @@ function EditUserDialog({
 
             <FormField control={form.control} name="businessUnitId" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Business Unit</FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:users.invite.lblBu")}</FormLabel>
                 <Select onValueChange={(v) => field.onChange(v === "none" ? "" : v)} value={field.value || "none"}>
                   <FormControl>
                     <SelectTrigger className="bg-muted/30 border-border" data-testid="select-edit-bu">
@@ -961,9 +961,9 @@ function EditUserDialog({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="none">No unit</SelectItem>
+                    <SelectItem value="none">{t("rolesAccess:common.noUnit")}</SelectItem>
                     {businessUnits.filter((b) => b.isActive).map((bu) => (
-                      <SelectItem key={bu.id} value={bu.id}>{bu.name}</SelectItem>
+                      <SelectItem key={bu.id} value={bu.id}><bdi>{bu.name}</bdi></SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -972,7 +972,7 @@ function EditUserDialog({
 
             <FormField control={form.control} name="isActive" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Status</FormLabel>
+                <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:users.h.status")}</FormLabel>
                 <Select onValueChange={(v) => field.onChange(v === "true")} value={String(field.value)}>
                   <FormControl>
                     <SelectTrigger className="bg-muted/30 border-border" data-testid="select-edit-status">
@@ -980,17 +980,17 @@ function EditUserDialog({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="true">Active</SelectItem>
-                    <SelectItem value="false">Deactivated</SelectItem>
+                    <SelectItem value="true">{t("rolesAccess:common.active")}</SelectItem>
+                    <SelectItem value="false">{t("rolesAccess:common.deactivated")}</SelectItem>
                   </SelectContent>
                 </Select>
               </FormItem>
             )} />
 
             <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" variant="outline" className="border-border" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button type="button" variant="outline" className="border-border" onClick={() => onOpenChange(false)}>{t("rolesAccess:common.cancel")}</Button>
               <Button type="submit" className="bg-primary text-primary-foreground font-bold min-w-[110px]" disabled={save.isPending} data-testid="button-save-user">
-                {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("rolesAccess:common.save")}
               </Button>
             </div>
           </form>
@@ -1000,8 +1000,8 @@ function EditUserDialog({
   );
 }
 
-// ─── Embeddable content (used by Settings) ───────────────────────────────────
 export function RolesAccessContent() {
+  const { t, i18n } = useTranslation(["rolesAccess"]);
   const [buDialogOpen, setBuDialogOpen] = useState(false);
   const [editingBu, setEditingBu] = useState<BusinessUnit | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -1056,30 +1056,29 @@ export function RolesAccessContent() {
         <Tabs defaultValue="roles" className="w-full">
           <TabsList className="bg-card border border-border h-auto p-1 gap-1 w-full grid grid-cols-3">
             <TabsTrigger value="business-units" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary h-10 gap-2">
-              <Building2 className="h-4 w-4" /> Business Units
+              <Building2 className="h-4 w-4" /> {t("rolesAccess:tabs.businessUnits")}
             </TabsTrigger>
             <TabsTrigger value="roles" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary h-10 gap-2">
-              <Shield className="h-4 w-4" /> Roles
+              <Shield className="h-4 w-4" /> {t("rolesAccess:tabs.roles")}
             </TabsTrigger>
             <TabsTrigger value="users" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary h-10 gap-2">
-              <Users className="h-4 w-4" /> Users &amp; Roles
+              <Users className="h-4 w-4" /> {t("rolesAccess:tabs.users")}
             </TabsTrigger>
           </TabsList>
 
-          {/* ── Business Units ─────────────────────────────────────────────── */}
           <TabsContent value="business-units" className="mt-4">
             <Card className="bg-card border-border">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="text-lg font-display text-white">Business Units</CardTitle>
-                  <p className="text-muted-foreground text-sm mt-0.5">Each unit has an isolated view of its own job applications.</p>
+                  <CardTitle className="text-lg font-display text-white">{t("rolesAccess:bu.headerTitle")}</CardTitle>
+                  <p className="text-muted-foreground text-sm mt-0.5">{t("rolesAccess:bu.headerSubtitle")}</p>
                 </div>
                 <Button
                   className="bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs h-9 gap-1.5"
                   onClick={() => { setEditingBu(null); setBuDialogOpen(true); }}
                   data-testid="button-add-bu"
                 >
-                  <Plus className="h-4 w-4" /> Add Unit
+                  <Plus className="h-4 w-4" /> {t("rolesAccess:bu.btnAdd")}
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
@@ -1088,18 +1087,18 @@ export function RolesAccessContent() {
                 ) : businessUnits.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 text-center px-6">
                     <Building2 className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                    <p className="text-muted-foreground font-medium">No business units yet</p>
+                    <p className="text-muted-foreground font-medium">{t("rolesAccess:bu.empty")}</p>
                   </div>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow className="border-border hover:bg-transparent">
-                        <TableHead className="text-muted-foreground">Unit</TableHead>
-                        <TableHead className="text-muted-foreground hidden md:table-cell">Code</TableHead>
-                        <TableHead className="text-muted-foreground hidden md:table-cell">Contact</TableHead>
-                        <TableHead className="text-muted-foreground">Users</TableHead>
-                        <TableHead className="text-muted-foreground">Status</TableHead>
-                        <TableHead className="text-right text-muted-foreground">Action</TableHead>
+                        <TableHead className="text-muted-foreground">{t("rolesAccess:bu.h.unit")}</TableHead>
+                        <TableHead className="text-muted-foreground hidden md:table-cell">{t("rolesAccess:bu.h.code")}</TableHead>
+                        <TableHead className="text-muted-foreground hidden md:table-cell">{t("rolesAccess:bu.h.contact")}</TableHead>
+                        <TableHead className="text-muted-foreground">{t("rolesAccess:bu.h.users")}</TableHead>
+                        <TableHead className="text-muted-foreground">{t("rolesAccess:bu.h.status")}</TableHead>
+                        <TableHead className="text-end text-muted-foreground">{t("rolesAccess:bu.h.action")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1108,25 +1107,25 @@ export function RolesAccessContent() {
                         return (
                           <TableRow key={bu.id} className="border-border hover:bg-muted/20" data-testid={`row-bu-${bu.id}`}>
                             <TableCell>
-                              <p className="text-white font-medium text-sm">{bu.name}</p>
-                              {bu.description && <p className="text-muted-foreground text-xs mt-0.5 truncate max-w-[200px]">{bu.description}</p>}
+                              <p className="text-white font-medium text-sm"><bdi>{bu.name}</bdi></p>
+                              {bu.description && <p className="text-muted-foreground text-xs mt-0.5 truncate max-w-[200px]"><bdi>{bu.description}</bdi></p>}
                             </TableCell>
                             <TableCell className="hidden md:table-cell">
-                              <code className="font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">{bu.code}</code>
+                              <code className="font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded" dir="ltr">{bu.code}</code>
                             </TableCell>
                             <TableCell className="hidden md:table-cell">
-                              <span className="text-sm text-muted-foreground">{bu.contactEmail ?? "—"}</span>
+                              <span className="text-sm text-muted-foreground" dir="ltr">{bu.contactEmail ?? "—"}</span>
                             </TableCell>
                             <TableCell>
-                              <span className="text-sm text-white font-medium">{userCount}</span>
-                              <span className="text-xs text-muted-foreground ml-1">staff</span>
+                              <span className="text-sm text-white font-medium" dir="ltr">{formatNumber(userCount, i18n.language)}</span>
+                              <span className="text-xs text-muted-foreground ms-1">{t("rolesAccess:common.staff")}</span>
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className={bu.isActive ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10" : "border-border text-muted-foreground"}>
-                                {bu.isActive ? "Active" : "Inactive"}
+                                {bu.isActive ? t("rolesAccess:common.active") : t("rolesAccess:common.inactive")}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-end">
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -1147,14 +1146,13 @@ export function RolesAccessContent() {
             </Card>
           </TabsContent>
 
-          {/* ── Roles (NEW: editable) ──────────────────────────────────────── */}
           <TabsContent value="roles" className="mt-4">
             <Card className="bg-card border-border">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="text-lg font-display text-white">Roles</CardTitle>
+                  <CardTitle className="text-lg font-display text-white">{t("rolesAccess:roles.headerTitle")}</CardTitle>
                   <p className="text-muted-foreground text-sm mt-0.5">
-                    Define custom roles and pick exactly what each one can do. System roles are locked.
+                    {t("rolesAccess:roles.headerSubtitle")}
                   </p>
                 </div>
                 <Button
@@ -1162,7 +1160,7 @@ export function RolesAccessContent() {
                   onClick={() => { setEditingRole(null); setRoleDialogOpen(true); }}
                   data-testid="button-add-role"
                 >
-                  <Plus className="h-4 w-4" /> New Role
+                  <Plus className="h-4 w-4" /> {t("rolesAccess:roles.btnAdd")}
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
@@ -1171,17 +1169,17 @@ export function RolesAccessContent() {
                 ) : roles.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 text-center">
                     <Shield className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                    <p className="text-muted-foreground font-medium">No roles defined</p>
+                    <p className="text-muted-foreground font-medium">{t("rolesAccess:roles.empty")}</p>
                   </div>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow className="border-border hover:bg-transparent">
-                        <TableHead className="text-muted-foreground">Role</TableHead>
-                        <TableHead className="text-muted-foreground hidden md:table-cell">Slug</TableHead>
-                        <TableHead className="text-muted-foreground">Users</TableHead>
-                        <TableHead className="text-muted-foreground">Type</TableHead>
-                        <TableHead className="text-right text-muted-foreground">Actions</TableHead>
+                        <TableHead className="text-muted-foreground">{t("rolesAccess:roles.h.role")}</TableHead>
+                        <TableHead className="text-muted-foreground hidden md:table-cell">{t("rolesAccess:roles.h.slug")}</TableHead>
+                        <TableHead className="text-muted-foreground">{t("rolesAccess:roles.h.users")}</TableHead>
+                        <TableHead className="text-muted-foreground">{t("rolesAccess:roles.h.type")}</TableHead>
+                        <TableHead className="text-end text-muted-foreground">{t("rolesAccess:roles.h.actions")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1192,27 +1190,27 @@ export function RolesAccessContent() {
                           <TableRow key={r.id} className="border-border hover:bg-muted/20" data-testid={`row-role-${r.id}`}>
                             <TableCell>
                               <div className="flex items-center gap-2">
-                                <Badge variant="outline" className={`border ${roleBadgeClass(r.color)}`}>{r.name}</Badge>
+                                <Badge variant="outline" className={`border ${roleBadgeClass(r.color)}`}><bdi>{r.name}</bdi></Badge>
                                 {isSys && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
                               </div>
-                              {r.description && <p className="text-muted-foreground text-xs mt-1 truncate max-w-[300px]">{r.description}</p>}
+                              {r.description && <p className="text-muted-foreground text-xs mt-1 truncate max-w-[300px]"><bdi>{r.description}</bdi></p>}
                             </TableCell>
                             <TableCell className="hidden md:table-cell">
-                              <code className="font-mono text-xs bg-muted/40 text-muted-foreground px-1.5 py-0.5 rounded">{r.slug}</code>
+                              <code className="font-mono text-xs bg-muted/40 text-muted-foreground px-1.5 py-0.5 rounded" dir="ltr">{r.slug}</code>
                             </TableCell>
                             <TableCell>
-                              <span className="text-sm text-white font-medium">{count}</span>
+                              <span className="text-sm text-white font-medium" dir="ltr">{formatNumber(count, i18n.language)}</span>
                             </TableCell>
                             <TableCell>
                               {isSys ? (
                                 <Badge variant="outline" className="border-amber-500/30 text-amber-400 bg-amber-500/10 gap-1">
-                                  <Lock className="h-3 w-3" /> System
+                                  <Lock className="h-3 w-3" /> {t("rolesAccess:common.system")}
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className="border-border text-muted-foreground">Custom</Badge>
+                                <Badge variant="outline" className="border-border text-muted-foreground">{t("rolesAccess:common.custom")}</Badge>
                               )}
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-end">
                               <div className="flex justify-end gap-1">
                                 <Button
                                   size="sm"
@@ -1221,7 +1219,7 @@ export function RolesAccessContent() {
                                   onClick={() => { setPermEditorRole(r); setPermEditorOpen(true); }}
                                   data-testid={`button-perms-${r.id}`}
                                 >
-                                  <Shield className="h-3.5 w-3.5" /> Permissions
+                                  <Shield className="h-3.5 w-3.5" /> {t("rolesAccess:roles.btnPermissions")}
                                 </Button>
                                 {!isSys && (
                                   <Button
@@ -1266,20 +1264,19 @@ export function RolesAccessContent() {
             </Card>
           </TabsContent>
 
-          {/* ── Users & Roles ──────────────────────────────────────────────── */}
           <TabsContent value="users" className="mt-4">
             <Card className="bg-card border-border">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="text-lg font-display text-white">Users &amp; Roles</CardTitle>
-                  <p className="text-muted-foreground text-sm mt-0.5">Assign roles and business units to staff members.</p>
+                  <CardTitle className="text-lg font-display text-white">{t("rolesAccess:users.headerTitle")}</CardTitle>
+                  <p className="text-muted-foreground text-sm mt-0.5">{t("rolesAccess:users.headerSubtitle")}</p>
                 </div>
                 <Button
                   className="bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs h-9 gap-1.5"
                   onClick={() => setInviteOpen(true)}
                   data-testid="button-invite-user"
                 >
-                  <Plus className="h-4 w-4" /> Invite User
+                  <Plus className="h-4 w-4" /> {t("rolesAccess:users.btnInvite")}
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
@@ -1288,17 +1285,17 @@ export function RolesAccessContent() {
                 ) : staffUsers.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 text-center">
                     <Users className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                    <p className="text-muted-foreground font-medium">No users found</p>
+                    <p className="text-muted-foreground font-medium">{t("rolesAccess:users.empty")}</p>
                   </div>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow className="border-border hover:bg-transparent">
-                        <TableHead className="text-muted-foreground">User</TableHead>
-                        <TableHead className="text-muted-foreground">Role</TableHead>
-                        <TableHead className="text-muted-foreground hidden md:table-cell">Business Unit</TableHead>
-                        <TableHead className="text-muted-foreground">Status</TableHead>
-                        <TableHead className="text-right text-muted-foreground">Edit</TableHead>
+                        <TableHead className="text-muted-foreground">{t("rolesAccess:users.h.user")}</TableHead>
+                        <TableHead className="text-muted-foreground">{t("rolesAccess:users.h.role")}</TableHead>
+                        <TableHead className="text-muted-foreground hidden md:table-cell">{t("rolesAccess:users.h.bu")}</TableHead>
+                        <TableHead className="text-muted-foreground">{t("rolesAccess:users.h.status")}</TableHead>
+                        <TableHead className="text-end text-muted-foreground">{t("rolesAccess:users.h.edit")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1308,35 +1305,35 @@ export function RolesAccessContent() {
                         return (
                           <TableRow key={u.id} className="border-border hover:bg-muted/20" data-testid={`row-user-${u.id}`}>
                             <TableCell>
-                              <p className="text-white font-medium text-sm">{u.fullName ?? u.username}</p>
-                              <p className="text-muted-foreground text-xs">{u.email}</p>
+                              <p className="text-white font-medium text-sm"><bdi>{u.fullName ?? u.username}</bdi></p>
+                              <p className="text-muted-foreground text-xs" dir="ltr">{u.email}</p>
                             </TableCell>
                             <TableCell>
                               {r ? (
                                 <Badge variant="outline" className={`border text-xs font-medium ${roleBadgeClass(r.color)}`}>
-                                  {r.name}
+                                  <bdi>{r.name}</bdi>
                                 </Badge>
                               ) : (
                                 <Badge variant="outline" className="border-red-500/30 text-red-400 bg-red-500/10 text-xs gap-1">
-                                  <Lock className="h-3 w-3" /> No role — login blocked
+                                  <Lock className="h-3 w-3" /> {t("rolesAccess:users.noRole")}
                                 </Badge>
                               )}
                             </TableCell>
                             <TableCell className="hidden md:table-cell">
                               {bu ? (
-                                <span className="text-sm text-white">{bu.name}</span>
+                                <span className="text-sm text-white"><bdi>{bu.name}</bdi></span>
                               ) : (
                                 <span className="text-sm text-muted-foreground/50 flex items-center gap-1">
-                                  <Globe className="h-3.5 w-3.5" /> All units
+                                  <Globe className="h-3.5 w-3.5" /> {t("rolesAccess:common.allUnits")}
                                 </span>
                               )}
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className={u.isActive ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10" : "border-border text-muted-foreground"}>
-                                {u.isActive ? "Active" : "Inactive"}
+                                {u.isActive ? t("rolesAccess:common.active") : t("rolesAccess:common.inactive")}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-end">
                               <Button
                                 size="sm"
                                 variant={r ? "ghost" : "outline"}
@@ -1344,7 +1341,7 @@ export function RolesAccessContent() {
                                 onClick={() => setEditingUser(u)}
                                 data-testid={`button-edit-user-${u.id}`}
                               >
-                                {r ? <Pencil className="h-3.5 w-3.5" /> : "Set role"}
+                                {r ? <Pencil className="h-3.5 w-3.5" /> : t("rolesAccess:users.btnSetRole")}
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -1359,7 +1356,6 @@ export function RolesAccessContent() {
         </Tabs>
       </div>
 
-      {/* Dialogs */}
       <BUDialog
         open={buDialogOpen}
         onOpenChange={(v) => { setBuDialogOpen(v); if (!v) setEditingBu(null); }}
@@ -1404,15 +1400,16 @@ export function RolesAccessContent() {
 }
 
 export default function RolesAccessPage() {
+  const { t } = useTranslation(["rolesAccess"]);
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto">
         <div className="mb-6">
           <h1 className="text-3xl font-display font-bold text-white tracking-tight flex items-center gap-3">
             <Shield className="h-8 w-8 text-primary" />
-            Roles &amp; Access
+            {t("rolesAccess:page.title")}
           </h1>
-          <p className="text-muted-foreground mt-1">Define business units, custom roles with exact permissions, and assign them to staff.</p>
+          <p className="text-muted-foreground mt-1">{t("rolesAccess:page.subtitle")}</p>
         </div>
         <RolesAccessContent />
       </div>
