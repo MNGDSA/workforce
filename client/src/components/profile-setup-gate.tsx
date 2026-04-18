@@ -92,6 +92,7 @@ const NATIONALITIES_RAW = [
   "---",
   ...ALL_NATIONALITIES.filter((n) => !PINNED_NATIONALITIES.includes(n)),
 ];
+export const NATIONALITY_OPTIONS_LIST = NATIONALITIES_RAW;
 
 const KSA_CITIES = [
   "Makkah", "Madinah", "Jeddah", "Riyadh", "Taif", "Dammam", "Khobar",

@@ -50,6 +50,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
+import { NATIONALITY_OPTIONS_LIST } from "@/components/profile-setup-gate";
 import { useTranslation, Trans } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -2733,13 +2734,22 @@ export default function CandidatePortal() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-white">{t("portal:profile.nationality")}</label>
-                  <Input
+                  <select
                     name="nationalityText"
                     defaultValue={String(candidateProfile?.nationalityText ?? candidateProfile?.nationality ?? "")}
-                    placeholder={t("portal:profile.nationalityPlaceholder")}
-                    className="bg-background border-border"
-                    data-testid="input-nationality"
-                  />
+                    dir={i18n.language?.startsWith("ar") ? "rtl" : "ltr"}
+                    className="w-full h-10 bg-background border border-border rounded-md px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
+                    data-testid="select-nationality"
+                  >
+                    <option value="" className="bg-card text-muted-foreground">{t("portal:profile.nationalityPlaceholder")}</option>
+                    {NATIONALITY_OPTIONS_LIST.map((n, i) =>
+                      n === "---" ? (
+                        <option key={`sep-${i}`} disabled className="bg-card text-muted-foreground">{"─".repeat(20)}</option>
+                      ) : (
+                        <option key={n} value={n} className="bg-card text-white">{n}</option>
+                      )
+                    )}
+                  </select>
                 </div>
               </div>
             </div>
