@@ -2785,7 +2785,7 @@ export default function CandidatePortal() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-white">{t("portal:profile.region")} <span className="text-red-400">*</span></label>
-                  <Select value={profileRegion} onValueChange={setProfileRegion}>
+                  <Select value={profileRegion} onValueChange={setProfileRegion} dir={i18n.language?.startsWith("ar") ? "rtl" : "ltr"}>
                     <SelectTrigger className="bg-background border-border" data-testid="select-region">
                       <SelectValue placeholder={t("portal:profile.selectRegion")} />
                     </SelectTrigger>
@@ -2875,7 +2875,7 @@ export default function CandidatePortal() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-white">{t("portal:profile.educationLevel")}</label>
-                    <Select value={profileEduLevel} onValueChange={setProfileEduLevel}>
+                    <Select value={profileEduLevel} onValueChange={setProfileEduLevel} dir={i18n.language?.startsWith("ar") ? "rtl" : "ltr"}>
                       <SelectTrigger className="bg-background border-border" data-testid="select-educationLevel">
                         <SelectValue placeholder={t("portal:profile.selectEducation")} />
                       </SelectTrigger>
