@@ -36,6 +36,8 @@ import {
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
+import { formatNumber } from "@/lib/format";
 
 type Department = {
   id: string;
@@ -100,33 +102,35 @@ function PositionTreeNode({
   onAddChild: (parentId: string) => void;
   togglePending: boolean;
 }) {
+  const { t, i18n } = useTranslation(["departments"]);
+  const isRtl = i18n.dir() === "rtl";
   return (
     <>
       <div
         className={`group flex items-center gap-2 py-2 px-3 rounded-sm transition-colors hover:bg-muted/30 ${
           !node.isActive ? "opacity-50" : ""
         }`}
-        style={{ paddingLeft: `${12 + depth * 20}px` }}
+        style={isRtl ? { paddingRight: `${12 + depth * 20}px` } : { paddingLeft: `${12 + depth * 20}px` }}
         data-testid={`position-row-${node.id}`}
       >
-        {depth > 0 && <CornerDownRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />}
+        {depth > 0 && <CornerDownRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 rtl:rotate-180" />}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-white truncate">{node.title}</span>
-            <span className="text-[10px] font-mono text-muted-foreground">{node.code}</span>
+            <span className="text-sm font-medium text-white truncate"><bdi>{node.title}</bdi></span>
+            <span className="text-[10px] font-mono text-muted-foreground" dir="ltr">{node.code}</span>
             {node.gradeLevel !== null && (
               <span className="text-[10px] text-primary/70 bg-primary/10 px-1.5 rounded">
-                G{node.gradeLevel}
+                {t("departments:common.grade", { n: formatNumber(node.gradeLevel, i18n.language) })}
               </span>
             )}
             {!node.isActive && (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-0 bg-red-500/10 text-red-400">
-                Inactive
+                {t("departments:common.inactive")}
               </Badge>
             )}
           </div>
           {node.titleAr && (
-            <span className="text-xs text-muted-foreground" dir="rtl">{node.titleAr}</span>
+            <span className="text-xs text-muted-foreground" dir="rtl"><bdi>{node.titleAr}</bdi></span>
           )}
         </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -135,7 +139,7 @@ function PositionTreeNode({
             variant="ghost"
             className="h-7 w-7 p-0 text-muted-foreground hover:text-white"
             onClick={() => onAddChild(node.id)}
-            title="Add child position"
+            title={t("departments:posForm.addChildTitle")}
             data-testid={`button-add-child-${node.id}`}
           >
             <Plus className="h-3.5 w-3.5" />
@@ -145,7 +149,7 @@ function PositionTreeNode({
             variant="ghost"
             className="h-7 w-7 p-0 text-muted-foreground hover:text-white"
             onClick={() => onEdit(node)}
-            title="Edit"
+            title={t("departments:posForm.editTitle")}
             data-testid={`button-edit-position-${node.id}`}
           >
             <Pencil className="h-3.5 w-3.5" />
@@ -156,7 +160,7 @@ function PositionTreeNode({
             className={`h-7 w-7 p-0 ${node.isActive ? "text-amber-400 hover:text-amber-300" : "text-green-400 hover:text-green-300"}`}
             onClick={() => onToggle(node.id)}
             disabled={togglePending}
-            title={node.isActive ? "Deactivate" : "Activate"}
+            title={node.isActive ? t("departments:posForm.deactivateTitle") : t("departments:posForm.activateTitle")}
             data-testid={`button-toggle-position-${node.id}`}
           >
             {node.isActive ? <PowerOff className="h-3.5 w-3.5" /> : <Power className="h-3.5 w-3.5" />}
@@ -187,6 +191,7 @@ function DepartmentForm({
   onOpenChange: (v: boolean) => void;
   department: Department | null;
 }) {
+  const { t } = useTranslation(["departments"]);
   const qc = useQueryClient();
   const { toast } = useToast();
   const isEdit = !!department;
@@ -215,14 +220,14 @@ function DepartmentForm({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/departments"] });
       onOpenChange(false);
-      toast({ title: isEdit ? "Department updated" : "Department created" });
+      toast({ title: isEdit ? t("departments:deptForm.updatedToast") : t("departments:deptForm.createdToast") });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("departments:deptForm.errorToast"), description: e.message, variant: "destructive" }),
   });
 
   const handleSubmit = () => {
     if (!name.trim() || !code.trim()) {
-      toast({ title: "Name and Code are required", variant: "destructive" });
+      toast({ title: t("departments:deptForm.required"), variant: "destructive" });
       return;
     }
     mutation.mutate({
@@ -238,26 +243,26 @@ function DepartmentForm({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md bg-zinc-950 border-zinc-800 text-white">
         <DialogHeader>
-          <DialogTitle className="font-display">{isEdit ? "Edit Department" : "New Department"}</DialogTitle>
-          <DialogDescription className="sr-only">{isEdit ? "Edit department details" : "Create a new department"}</DialogDescription>
+          <DialogTitle className="font-display">{isEdit ? t("departments:deptForm.edit") : t("departments:deptForm.new")}</DialogTitle>
+          <DialogDescription className="sr-only">{isEdit ? t("departments:deptForm.editDesc") : t("departments:deptForm.newDesc")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 mt-2">
           <div className="space-y-1.5">
-            <Label className="text-white">Name *</Label>
+            <Label className="text-white">{t("departments:deptForm.name")} *</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Operations"
+              placeholder={t("departments:deptForm.namePh")}
               className="bg-muted/30 border-border"
               data-testid="input-dept-name"
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-white">Name (Arabic)</Label>
+            <Label className="text-white">{t("departments:deptForm.nameAr")}</Label>
             <Input
               value={nameAr}
               onChange={(e) => setNameAr(e.target.value)}
-              placeholder="e.g., العمليات"
+              placeholder={t("departments:deptForm.nameArPh")}
               className="bg-muted/30 border-border"
               dir="rtl"
               data-testid="input-dept-name-ar"
@@ -265,33 +270,35 @@ function DepartmentForm({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-white">Code *</Label>
+              <Label className="text-white">{t("departments:deptForm.code")} *</Label>
               <Input
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="e.g., OPS"
+                placeholder={t("departments:deptForm.codePh")}
                 maxLength={20}
+                dir="ltr"
                 className="bg-muted/30 border-border font-mono uppercase"
                 data-testid="input-dept-code"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-white">Sort Order</Label>
+              <Label className="text-white">{t("departments:deptForm.sort")}</Label>
               <Input
                 type="number"
                 value={sortOrder}
                 onChange={(e) => setSortOrder(e.target.value)}
+                dir="ltr"
                 className="bg-muted/30 border-border"
                 data-testid="input-dept-sort"
               />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-white">Description</Label>
+            <Label className="text-white">{t("departments:deptForm.description")}</Label>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief description..."
+              placeholder={t("departments:deptForm.descriptionPh")}
               rows={2}
               className="bg-muted/30 border-border resize-none"
               data-testid="input-dept-description"
@@ -303,8 +310,8 @@ function DepartmentForm({
             disabled={mutation.isPending}
             data-testid="button-save-dept"
           >
-            {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEdit ? "Update Department" : "Create Department"}
+            {mutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+            {isEdit ? t("departments:deptForm.update") : t("departments:deptForm.create")}
           </Button>
         </div>
       </DialogContent>
@@ -327,6 +334,7 @@ function PositionForm({
   parentPositionId: string | null;
   existingPositions: Position[];
 }) {
+  const { t } = useTranslation(["departments"]);
   const qc = useQueryClient();
   const { toast } = useToast();
   const isEdit = !!position;
@@ -363,14 +371,14 @@ function PositionForm({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/positions"] });
       onOpenChange(false);
-      toast({ title: isEdit ? "Position updated" : "Position created" });
+      toast({ title: isEdit ? t("departments:posForm.updatedToast") : t("departments:posForm.createdToast") });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("departments:posForm.errorToast"), description: e.message, variant: "destructive" }),
   });
 
   const handleSubmit = () => {
     if (!title.trim() || !code.trim()) {
-      toast({ title: "Title and Code are required", variant: "destructive" });
+      toast({ title: t("departments:posForm.required"), variant: "destructive" });
       return;
     }
     mutation.mutate({
@@ -389,26 +397,26 @@ function PositionForm({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md bg-zinc-950 border-zinc-800 text-white">
         <DialogHeader>
-          <DialogTitle className="font-display">{isEdit ? "Edit Position" : "New Position"}</DialogTitle>
-          <DialogDescription className="sr-only">{isEdit ? "Edit position details" : "Create a new position"}</DialogDescription>
+          <DialogTitle className="font-display">{isEdit ? t("departments:posForm.edit") : t("departments:posForm.new")}</DialogTitle>
+          <DialogDescription className="sr-only">{isEdit ? t("departments:posForm.editDesc") : t("departments:posForm.newDesc")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 mt-2">
           <div className="space-y-1.5">
-            <Label className="text-white">Title *</Label>
+            <Label className="text-white">{t("departments:posForm.title")} *</Label>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Zone A Supervisor"
+              placeholder={t("departments:posForm.titlePh")}
               className="bg-muted/30 border-border"
               data-testid="input-pos-title"
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-white">Title (Arabic)</Label>
+            <Label className="text-white">{t("departments:posForm.titleAr")}</Label>
             <Input
               value={titleAr}
               onChange={(e) => setTitleAr(e.target.value)}
-              placeholder="e.g., مشرف المنطقة أ"
+              placeholder={t("departments:posForm.titleArPh")}
               className="bg-muted/30 border-border"
               dir="rtl"
               data-testid="input-pos-title-ar"
@@ -416,60 +424,63 @@ function PositionForm({
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-white">Code *</Label>
+              <Label className="text-white">{t("departments:posForm.code")} *</Label>
               <Input
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="OPS-SUP"
+                placeholder={t("departments:posForm.codePh")}
                 maxLength={20}
+                dir="ltr"
                 className="bg-muted/30 border-border font-mono uppercase"
                 data-testid="input-pos-code"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-white">Grade</Label>
+              <Label className="text-white">{t("departments:posForm.grade")}</Label>
               <Input
                 type="number"
                 value={gradeLevel}
                 onChange={(e) => setGradeLevel(e.target.value)}
                 placeholder="—"
+                dir="ltr"
                 className="bg-muted/30 border-border"
                 data-testid="input-pos-grade"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-white">Sort</Label>
+              <Label className="text-white">{t("departments:posForm.sort")}</Label>
               <Input
                 type="number"
                 value={sortOrder}
                 onChange={(e) => setSortOrder(e.target.value)}
+                dir="ltr"
                 className="bg-muted/30 border-border"
                 data-testid="input-pos-sort"
               />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-white">Reports To</Label>
+            <Label className="text-white">{t("departments:posForm.reportsTo")}</Label>
             <Select value={parentId} onValueChange={setParentId}>
               <SelectTrigger className="bg-muted/30 border-border" data-testid="select-pos-parent">
-                <SelectValue placeholder="None (root position)" />
+                <SelectValue placeholder={t("departments:posForm.noneRoot")} />
               </SelectTrigger>
               <SelectContent className="bg-zinc-950 border-zinc-800">
-                <SelectItem value="none">None (root position)</SelectItem>
+                <SelectItem value="none">{t("departments:posForm.noneRoot")}</SelectItem>
                 {parentOptions.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
-                    {p.title} ({p.code})
+                    <bdi>{p.title}</bdi> (<span dir="ltr">{p.code}</span>)
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-white">Description</Label>
+            <Label className="text-white">{t("departments:posForm.description")}</Label>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Role description..."
+              placeholder={t("departments:posForm.descriptionPh")}
               rows={2}
               className="bg-muted/30 border-border resize-none"
               data-testid="input-pos-description"
@@ -481,8 +492,8 @@ function PositionForm({
             disabled={mutation.isPending}
             data-testid="button-save-position"
           >
-            {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEdit ? "Update Position" : "Create Position"}
+            {mutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+            {isEdit ? t("departments:posForm.update") : t("departments:posForm.create")}
           </Button>
         </div>
       </DialogContent>
@@ -491,6 +502,7 @@ function PositionForm({
 }
 
 export default function DepartmentsPage() {
+  const { t } = useTranslation(["departments"]);
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -539,9 +551,9 @@ export default function DepartmentsPage() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/departments"] });
-      toast({ title: "Department status updated" });
+      toast({ title: t("departments:toggle.deptUpdated") });
     },
-    onError: (e: Error) => toast({ title: "Cannot toggle", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("departments:toggle.cannotToggle"), description: e.message, variant: "destructive" }),
   });
 
   const togglePosMutation = useMutation({
@@ -552,9 +564,9 @@ export default function DepartmentsPage() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/positions"] });
-      toast({ title: "Position status updated" });
+      toast({ title: t("departments:toggle.posUpdated") });
     },
-    onError: (e: Error) => toast({ title: "Cannot toggle", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("departments:toggle.cannotToggle"), description: e.message, variant: "destructive" }),
   });
 
   const filteredDepts = useMemo(() => {
@@ -580,10 +592,10 @@ export default function DepartmentsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-display font-bold text-white tracking-tight" data-testid="text-page-title">
-              Departments & Positions
+              {t("departments:page.title")}
             </h1>
             <p className="text-muted-foreground mt-1">
-              Define your organizational structure — departments and the positions within them.
+              {t("departments:page.subtitle")}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -593,14 +605,14 @@ export default function DepartmentsPage() {
                 onCheckedChange={setShowInactive}
                 data-testid="switch-show-inactive"
               />
-              <Label className="text-xs text-muted-foreground">Show inactive</Label>
+              <Label className="text-xs text-muted-foreground">{t("departments:page.showInactive")}</Label>
             </div>
             <Button
               className="bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs h-10"
               onClick={() => { setEditingDept(null); setDeptFormOpen(true); }}
               data-testid="button-add-department"
             >
-              <Plus className="mr-2 h-4 w-4" /> New Department
+              <Plus className="me-2 h-4 w-4" /> {t("departments:page.newDepartment")}
             </Button>
           </div>
         </div>
@@ -610,12 +622,12 @@ export default function DepartmentsPage() {
             <Card className="bg-card border-border">
               <div className="p-3 border-b border-border">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search departments..."
-                    className="pl-9 bg-muted/30 border-border h-9 text-sm"
+                    placeholder={t("departments:list.search")}
+                    className="ps-9 bg-muted/30 border-border h-9 text-sm"
                     data-testid="input-search-departments"
                   />
                 </div>
@@ -629,8 +641,8 @@ export default function DepartmentsPage() {
                   <div className="py-12 text-center text-muted-foreground text-sm">
                     <Building2 className="h-8 w-8 mx-auto mb-3 opacity-30" />
                     {allDepartments.length === 0
-                      ? "No departments yet. Create one to get started."
-                      : "No departments match your search."}
+                      ? t("departments:list.emptyAll")
+                      : t("departments:list.emptySearch")}
                   </div>
                 ) : (
                   <div className="divide-y divide-border">
@@ -638,29 +650,29 @@ export default function DepartmentsPage() {
                       <button
                         key={dept.id}
                         onClick={() => setSelectedDeptId(dept.id)}
-                        className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors group ${
+                        className={`w-full text-start px-4 py-3 flex items-center gap-3 transition-colors group ${
                           selectedDeptId === dept.id
-                            ? "bg-primary/10 border-l-2 border-primary"
-                            : "hover:bg-muted/30 border-l-2 border-transparent"
+                            ? "bg-primary/10 border-s-2 border-primary"
+                            : "hover:bg-muted/30 border-s-2 border-transparent"
                         } ${!dept.isActive ? "opacity-50" : ""}`}
                         data-testid={`dept-item-${dept.id}`}
                       >
                         <Building2 className={`h-4 w-4 flex-shrink-0 ${selectedDeptId === dept.id ? "text-primary" : "text-muted-foreground"}`} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-white truncate">{dept.name}</span>
-                            <span className="text-[10px] font-mono text-muted-foreground">{dept.code}</span>
+                            <span className="text-sm font-medium text-white truncate"><bdi>{dept.name}</bdi></span>
+                            <span className="text-[10px] font-mono text-muted-foreground" dir="ltr">{dept.code}</span>
                           </div>
                           {dept.nameAr && (
-                            <span className="text-xs text-muted-foreground block truncate" dir="rtl">{dept.nameAr}</span>
+                            <span className="text-xs text-muted-foreground block truncate" dir="rtl"><bdi>{dept.nameAr}</bdi></span>
                           )}
                           {!dept.isActive && (
                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-0 bg-red-500/10 text-red-400 mt-0.5">
-                              Inactive
+                              {t("departments:common.inactive")}
                             </Badge>
                           )}
                         </div>
-                        <ChevronRight className={`h-4 w-4 flex-shrink-0 transition-colors ${
+                        <ChevronRight className={`h-4 w-4 flex-shrink-0 transition-colors rtl:rotate-180 ${
                           selectedDeptId === dept.id ? "text-primary" : "text-muted-foreground/30 group-hover:text-muted-foreground"
                         }`} />
                       </button>
@@ -676,8 +688,8 @@ export default function DepartmentsPage() {
               <Card className="bg-card border-border">
                 <CardContent className="py-20 text-center text-muted-foreground">
                   <Layers className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                  <p className="text-lg font-medium text-white/60">Select a department</p>
-                  <p className="text-sm mt-1">Choose a department from the left to view and manage its positions.</p>
+                  <p className="text-lg font-medium text-white/60">{t("departments:panel.selectTitle")}</p>
+                  <p className="text-sm mt-1">{t("departments:panel.selectHint")}</p>
                 </CardContent>
               </Card>
             ) : (
@@ -686,12 +698,12 @@ export default function DepartmentsPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h2 className="text-lg font-display font-bold text-white" data-testid="text-selected-dept">
-                        {selectedDept.name}
+                        <bdi>{selectedDept.name}</bdi>
                       </h2>
-                      <span className="text-xs font-mono text-muted-foreground">{selectedDept.code}</span>
+                      <span className="text-xs font-mono text-muted-foreground" dir="ltr">{selectedDept.code}</span>
                       {!selectedDept.isActive && (
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-0 bg-red-500/10 text-red-400">
-                          Inactive
+                          {t("departments:common.inactive")}
                         </Badge>
                       )}
                     </div>
@@ -710,7 +722,7 @@ export default function DepartmentsPage() {
                       }}
                       data-testid="button-edit-dept"
                     >
-                      <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                      <Pencil className="h-3.5 w-3.5 me-1" /> {t("departments:panel.edit")}
                     </Button>
                     <Button
                       size="sm"
@@ -721,9 +733,9 @@ export default function DepartmentsPage() {
                       data-testid="button-toggle-dept"
                     >
                       {selectedDept.isActive ? (
-                        <><PowerOff className="h-3.5 w-3.5 mr-1" /> Deactivate</>
+                        <><PowerOff className="h-3.5 w-3.5 me-1" /> {t("departments:panel.deactivate")}</>
                       ) : (
-                        <><Power className="h-3.5 w-3.5 mr-1" /> Activate</>
+                        <><Power className="h-3.5 w-3.5 me-1" /> {t("departments:panel.activate")}</>
                       )}
                     </Button>
                     <Button
@@ -736,7 +748,7 @@ export default function DepartmentsPage() {
                       }}
                       data-testid="button-add-position"
                     >
-                      <Plus className="h-3.5 w-3.5 mr-1" /> Add Position
+                      <Plus className="h-3.5 w-3.5 me-1" /> {t("departments:panel.addPosition")}
                     </Button>
                   </div>
                 </div>
@@ -749,7 +761,7 @@ export default function DepartmentsPage() {
                   ) : deptPositions.length === 0 ? (
                     <div className="py-12 text-center text-muted-foreground text-sm">
                       <Layers className="h-8 w-8 mx-auto mb-3 opacity-30" />
-                      No positions defined yet.
+                      {t("departments:panel.noPositions")}
                     </div>
                   ) : (
                     <div className="divide-y divide-border/50">
@@ -777,7 +789,7 @@ export default function DepartmentsPage() {
                         <>
                           <div className="px-3 py-2 bg-muted/10">
                             <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                              Inactive Positions
+                              {t("departments:panel.inactiveHeading")}
                             </span>
                           </div>
                           {inactiveTree.map((node) => (

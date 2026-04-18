@@ -1,0 +1,81 @@
+{
+  "page": {
+    "title": "الإدارات والمناصب",
+    "subtitle": "حدّد الهيكل التنظيمي — الإدارات والمناصب التابعة لها.",
+    "showInactive": "إظهار المعطّلة",
+    "newDepartment": "إدارة جديدة"
+  },
+  "list": {
+    "search": "ابحث في الإدارات...",
+    "emptyAll": "لا توجد إدارات بعد. أنشئ إدارة للبدء.",
+    "emptySearch": "لا توجد إدارات مطابقة لبحثك."
+  },
+  "panel": {
+    "selectTitle": "اختر إدارة",
+    "selectHint": "اختر إدارة من الجانب لعرض مناصبها وإدارتها.",
+    "edit": "تعديل",
+    "deactivate": "تعطيل",
+    "activate": "تفعيل",
+    "addPosition": "إضافة منصب",
+    "noPositions": "لا توجد مناصب معرّفة بعد.",
+    "inactiveHeading": "المناصب المعطّلة"
+  },
+  "common": {
+    "inactive": "معطّل",
+    "grade": "د{{n}}"
+  },
+  "deptForm": {
+    "edit": "تعديل إدارة",
+    "new": "إدارة جديدة",
+    "editDesc": "تعديل تفاصيل الإدارة",
+    "newDesc": "إنشاء إدارة جديدة",
+    "name": "الاسم",
+    "namePh": "مثال: العمليات",
+    "nameAr": "الاسم (بالعربية)",
+    "nameArPh": "مثال: العمليات",
+    "code": "الرمز",
+    "codePh": "مثال: OPS",
+    "sort": "ترتيب الفرز",
+    "description": "الوصف",
+    "descriptionPh": "وصف مختصر...",
+    "update": "تحديث الإدارة",
+    "create": "إنشاء الإدارة",
+    "required": "الاسم والرمز حقول إلزامية",
+    "createdToast": "تم إنشاء الإدارة",
+    "updatedToast": "تم تحديث الإدارة",
+    "errorToast": "خطأ"
+  },
+  "posForm": {
+    "edit": "تعديل منصب",
+    "new": "منصب جديد",
+    "editDesc": "تعديل تفاصيل المنصب",
+    "newDesc": "إنشاء منصب جديد",
+    "title": "المسمى",
+    "titlePh": "مثال: مشرف المنطقة أ",
+    "titleAr": "المسمى (بالعربية)",
+    "titleArPh": "مثال: مشرف المنطقة أ",
+    "code": "الرمز",
+    "codePh": "OPS-SUP",
+    "grade": "الدرجة",
+    "sort": "الفرز",
+    "reportsTo": "التبعية",
+    "noneRoot": "بدون (منصب جذري)",
+    "description": "الوصف",
+    "descriptionPh": "وصف الدور...",
+    "update": "تحديث المنصب",
+    "create": "إنشاء المنصب",
+    "required": "المسمى والرمز حقول إلزامية",
+    "createdToast": "تم إنشاء المنصب",
+    "updatedToast": "تم تحديث المنصب",
+    "errorToast": "خطأ",
+    "addChildTitle": "إضافة منصب فرعي",
+    "editTitle": "تعديل",
+    "deactivateTitle": "تعطيل",
+    "activateTitle": "تفعيل"
+  },
+  "toggle": {
+    "deptUpdated": "تم تحديث حالة الإدارة",
+    "posUpdated": "تم تحديث حالة المنصب",
+    "cannotToggle": "تعذّر التبديل"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "page": {
+    "title": "Departments & Positions",
+    "subtitle": "Define your organizational structure — departments and the positions within them.",
+    "showInactive": "Show inactive",
+    "newDepartment": "New Department"
+  },
+  "list": {
+    "search": "Search departments...",
+    "emptyAll": "No departments yet. Create one to get started.",
+    "emptySearch": "No departments match your search."
+  },
+  "panel": {
+    "selectTitle": "Select a department",
+    "selectHint": "Choose a department from the side to view and manage its positions.",
+    "edit": "Edit",
+    "deactivate": "Deactivate",
+    "activate": "Activate",
+    "addPosition": "Add Position",
+    "noPositions": "No positions defined yet.",
+    "inactiveHeading": "Inactive Positions"
+  },
+  "common": {
+    "inactive": "Inactive",
+    "grade": "G{{n}}"
+  },
+  "deptForm": {
+    "edit": "Edit Department",
+    "new": "New Department",
+    "editDesc": "Edit department details",
+    "newDesc": "Create a new department",
+    "name": "Name",
+    "namePh": "e.g., Operations",
+    "nameAr": "Name (Arabic)",
+    "nameArPh": "e.g., العمليات",
+    "code": "Code",
+    "codePh": "e.g., OPS",
+    "sort": "Sort Order",
+    "description": "Description",
+    "descriptionPh": "Brief description...",
+    "update": "Update Department",
+    "create": "Create Department",
+    "required": "Name and Code are required",
+    "createdToast": "Department created",
+    "updatedToast": "Department updated",
+    "errorToast": "Error"
+  },
+  "posForm": {
+    "edit": "Edit Position",
+    "new": "New Position",
+    "editDesc": "Edit position details",
+    "newDesc": "Create a new position",
+    "title": "Title",
+    "titlePh": "e.g., Zone A Supervisor",
+    "titleAr": "Title (Arabic)",
+    "titleArPh": "e.g., مشرف المنطقة أ",
+    "code": "Code",
+    "codePh": "OPS-SUP",
+    "grade": "Grade",
+    "sort": "Sort",
+    "reportsTo": "Reports To",
+    "noneRoot": "None (root position)",
+    "description": "Description",
+    "descriptionPh": "Role description...",
+    "update": "Update Position",
+    "create": "Create Position",
+    "required": "Title and Code are required",
+    "createdToast": "Position created",
+    "updatedToast": "Position updated",
+    "errorToast": "Error",
+    "addChildTitle": "Add child position",
+    "editTitle": "Edit",
+    "deactivateTitle": "Deactivate",
+    "activateTitle": "Activate"
+  },
+  "toggle": {
+    "deptUpdated": "Department status updated",
+    "posUpdated": "Position status updated",
+    "cannotToggle": "Cannot toggle"
+  }
+}
