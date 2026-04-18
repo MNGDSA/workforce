@@ -9,6 +9,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { formatNumber } from "@/lib/format";
 import {
   Workflow,
   Plus,
@@ -68,162 +70,38 @@ function getIcon(trigger: string): React.ElementType {
   return iconMap[trigger] ?? Workflow;
 }
 
-// ─── Category filters ────────────────────────────────────────────────────────
 const COMMUNICATION_TRIGGERS = ["candidate.created", "interview.scheduled", "application.submitted"];
 const PIPELINE_TRIGGERS      = ["candidate.incomplete_profile", "workforce.contract_ending"];
 
-// ─── Template definitions ────────────────────────────────────────────────────
 interface RuleTemplate {
+  key: string;
   icon: React.ElementType;
   iconColor: string;
   iconBg: string;
-  title: string;
-  description: string;
   when: string;
   then: string;
-  tag: string;
+  tag: "Email" | "SMS" | "Flag" | "Stage" | "Alert";
   tagColor: string;
 }
 
 const COMMUNICATION_TEMPLATES: RuleTemplate[] = [
-  {
-    icon: Mail,
-    iconColor: "text-rose-400",
-    iconBg: "bg-rose-500/10",
-    title: "Rejection Notice Email",
-    description: "Automatically email candidates when their application is rejected.",
-    when: "application.rejected",
-    then: "email.send › rejection_template",
-    tag: "Email",
-    tagColor: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  },
-  {
-    icon: CheckCheck,
-    iconColor: "text-green-400",
-    iconBg: "bg-green-500/10",
-    title: "Offer Letter Email",
-    description: "Send a personalised offer letter email when a candidate is marked as hired.",
-    when: "candidate.hired",
-    then: "email.send › offer_letter_template",
-    tag: "Email",
-    tagColor: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  },
-  {
-    icon: FileText,
-    iconColor: "text-amber-400",
-    iconBg: "bg-amber-500/10",
-    title: "Document Request SMS",
-    description: "Notify candidates via SMS when required documents are missing from their profile.",
-    when: "candidate.documents_missing",
-    then: "sms.send › document_request",
-    tag: "SMS",
-    tagColor: "bg-purple-500/10 text-purple-400 border-purple-500/20",
-  },
-  {
-    icon: RefreshCw,
-    iconColor: "text-sky-400",
-    iconBg: "bg-sky-500/10",
-    title: "Interview Reschedule Alert",
-    description: "Notify the candidate and interviewer via SMS when an interview is rescheduled.",
-    when: "interview.rescheduled",
-    then: "sms.send › reschedule_alert",
-    tag: "SMS",
-    tagColor: "bg-purple-500/10 text-purple-400 border-purple-500/20",
-  },
-  {
-    icon: Send,
-    iconColor: "text-teal-400",
-    iconBg: "bg-teal-500/10",
-    title: "Pre-Interview Brief",
-    description: "Send candidates a preparation brief 2 hours before their interview slot.",
-    when: "interview.upcoming_2h",
-    then: "email.send › interview_brief",
-    tag: "Email",
-    tagColor: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  },
-  {
-    icon: PhoneCall,
-    iconColor: "text-indigo-400",
-    iconBg: "bg-indigo-500/10",
-    title: "No-Show Follow-Up SMS",
-    description: "Reach out automatically when a candidate misses a scheduled interview.",
-    when: "interview.no_show",
-    then: "sms.send › no_show_followup",
-    tag: "SMS",
-    tagColor: "bg-purple-500/10 text-purple-400 border-purple-500/20",
-  },
+  { key: "rejection_email", icon: Mail, iconColor: "text-rose-400", iconBg: "bg-rose-500/10", when: "application.rejected", then: "email.send › rejection_template", tag: "Email", tagColor: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
+  { key: "offer_email", icon: CheckCheck, iconColor: "text-green-400", iconBg: "bg-green-500/10", when: "candidate.hired", then: "email.send › offer_letter_template", tag: "Email", tagColor: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
+  { key: "doc_request_sms", icon: FileText, iconColor: "text-amber-400", iconBg: "bg-amber-500/10", when: "candidate.documents_missing", then: "sms.send › document_request", tag: "SMS", tagColor: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
+  { key: "reschedule_sms", icon: RefreshCw, iconColor: "text-sky-400", iconBg: "bg-sky-500/10", when: "interview.rescheduled", then: "sms.send › reschedule_alert", tag: "SMS", tagColor: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
+  { key: "pre_interview_brief", icon: Send, iconColor: "text-teal-400", iconBg: "bg-teal-500/10", when: "interview.upcoming_2h", then: "email.send › interview_brief", tag: "Email", tagColor: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
+  { key: "no_show_sms", icon: PhoneCall, iconColor: "text-indigo-400", iconBg: "bg-indigo-500/10", when: "interview.no_show", then: "sms.send › no_show_followup", tag: "SMS", tagColor: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
 ];
 
 const PIPELINE_TEMPLATES: RuleTemplate[] = [
-  {
-    icon: ShieldAlert,
-    iconColor: "text-red-400",
-    iconBg: "bg-red-500/10",
-    title: "Blacklist Screening",
-    description: "Automatically flag candidates who appear on the internal blacklist upon profile creation.",
-    when: "candidate.created",
-    then: "flag.check_blacklist",
-    tag: "Flag",
-    tagColor: "bg-red-500/10 text-red-400 border-red-500/20",
-  },
-  {
-    icon: Users,
-    iconColor: "text-orange-400",
-    iconBg: "bg-orange-500/10",
-    title: "Duplicate Profile Detection",
-    description: "Detect and flag duplicate national ID submissions to prevent double-entry.",
-    when: "candidate.duplicate_detected",
-    then: "flag.merge_review",
-    tag: "Flag",
-    tagColor: "bg-red-500/10 text-red-400 border-red-500/20",
-  },
-  {
-    icon: TrendingUp,
-    iconColor: "text-emerald-400",
-    iconBg: "bg-emerald-500/10",
-    title: "Auto-Advance Stage",
-    description: "Move qualified candidates to the interview stage once their profile score exceeds the threshold.",
-    when: "candidate.score_threshold_met",
-    then: "pipeline.advance_stage",
-    tag: "Stage",
-    tagColor: "bg-green-500/10 text-green-400 border-green-500/20",
-  },
-  {
-    icon: Bell,
-    iconColor: "text-yellow-400",
-    iconBg: "bg-yellow-500/10",
-    title: "Coverage Below Minimum",
-    description: "Alert the operations manager when shift coverage drops below the configured minimum threshold.",
-    when: "workforce.below_threshold",
-    then: "notify.operations_manager",
-    tag: "Alert",
-    tagColor: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  },
-  {
-    icon: ClipboardCheck,
-    iconColor: "text-blue-400",
-    iconBg: "bg-blue-500/10",
-    title: "Profile Completeness Check",
-    description: "Validate that mandatory profile fields are filled before advancing a candidate to interviews.",
-    when: "stage.pre_interview",
-    then: "flag.incomplete_check",
-    tag: "Flag",
-    tagColor: "bg-red-500/10 text-red-400 border-red-500/20",
-  },
-  {
-    icon: Zap,
-    iconColor: "text-purple-400",
-    iconBg: "bg-purple-500/10",
-    title: "Contract Renewal Prompt",
-    description: "Notify HR 14 days before a worker's contract expires to prompt renewal or offboarding.",
-    when: "workforce.contract_expiry_14d",
-    then: "notify.hr_manager",
-    tag: "Alert",
-    tagColor: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  },
+  { key: "blacklist", icon: ShieldAlert, iconColor: "text-red-400", iconBg: "bg-red-500/10", when: "candidate.created", then: "flag.check_blacklist", tag: "Flag", tagColor: "bg-red-500/10 text-red-400 border-red-500/20" },
+  { key: "duplicate", icon: Users, iconColor: "text-orange-400", iconBg: "bg-orange-500/10", when: "candidate.duplicate_detected", then: "flag.merge_review", tag: "Flag", tagColor: "bg-red-500/10 text-red-400 border-red-500/20" },
+  { key: "auto_advance", icon: TrendingUp, iconColor: "text-emerald-400", iconBg: "bg-emerald-500/10", when: "candidate.score_threshold_met", then: "pipeline.advance_stage", tag: "Stage", tagColor: "bg-green-500/10 text-green-400 border-green-500/20" },
+  { key: "coverage_alert", icon: Bell, iconColor: "text-yellow-400", iconBg: "bg-yellow-500/10", when: "workforce.below_threshold", then: "notify.operations_manager", tag: "Alert", tagColor: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
+  { key: "completeness_check", icon: ClipboardCheck, iconColor: "text-blue-400", iconBg: "bg-blue-500/10", when: "stage.pre_interview", then: "flag.incomplete_check", tag: "Flag", tagColor: "bg-red-500/10 text-red-400 border-red-500/20" },
+  { key: "contract_renewal", icon: Zap, iconColor: "text-purple-400", iconBg: "bg-purple-500/10", when: "workforce.contract_expiry_14d", then: "notify.hr_manager", tag: "Alert", tagColor: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
 ];
 
-// ─── Reusable rules table ────────────────────────────────────────────────────
 function RulesTable({
   rules,
   isLoading,
@@ -235,6 +113,7 @@ function RulesTable({
   emptyLabel: string;
   toggleRule: (args: { id: string; isEnabled: boolean }) => void;
 }) {
+  const { t, i18n } = useTranslation(["automation", "common"]);
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -254,11 +133,11 @@ function RulesTable({
     <Table>
       <TableHeader>
         <TableRow className="border-border hover:bg-transparent">
-          <TableHead className="text-muted-foreground pl-6">Rule Name</TableHead>
-          <TableHead className="text-muted-foreground hidden md:table-cell">Trigger & Action</TableHead>
-          <TableHead className="text-muted-foreground text-center">Executions</TableHead>
-          <TableHead className="text-muted-foreground text-center">Status</TableHead>
-          <TableHead className="text-right text-muted-foreground pr-6">Manage</TableHead>
+          <TableHead className="text-muted-foreground ps-6">{t("automation:table.name")}</TableHead>
+          <TableHead className="text-muted-foreground hidden md:table-cell">{t("automation:table.triggerAction")}</TableHead>
+          <TableHead className="text-muted-foreground text-center">{t("automation:table.executions")}</TableHead>
+          <TableHead className="text-muted-foreground text-center">{t("automation:table.status")}</TableHead>
+          <TableHead className="text-end text-muted-foreground pe-6">{t("automation:table.manage")}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -267,15 +146,15 @@ function RulesTable({
           const Icon = getIcon(rule.trigger);
           return (
             <TableRow key={rule.id} className="border-border hover:bg-muted/20" data-testid={`row-rule-${rule.id}`}>
-              <TableCell className="pl-6 py-4">
+              <TableCell className="ps-6 py-4">
                 <div className="flex items-center gap-3">
                   <div className={`h-10 w-10 rounded-md ${bg} flex items-center justify-center shrink-0`}>
                     <Icon className={`h-5 w-5 ${color}`} />
                   </div>
                   <div>
-                    <div className="font-medium text-white">{rule.name}</div>
+                    <div className="font-medium text-white"><bdi>{rule.name}</bdi></div>
                     {rule.description && (
-                      <div className="text-xs text-muted-foreground mt-0.5 max-w-[200px] truncate">{rule.description}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5 max-w-[200px] truncate"><bdi>{rule.description}</bdi></div>
                     )}
                   </div>
                 </div>
@@ -283,22 +162,22 @@ function RulesTable({
               <TableCell className="hidden md:table-cell py-4">
                 <div className="flex flex-col gap-2 text-sm">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider w-16">When</span>
-                    <Badge variant="outline" className="bg-muted/30 border-border font-normal text-xs">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider w-16">{t("automation:table.when")}</span>
+                    <Badge variant="outline" className="bg-muted/30 border-border font-normal text-xs" dir="ltr">
                       {rule.trigger.replace(/\./g, " › ")}
                     </Badge>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider w-16">Then</span>
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider w-16">{t("automation:table.then")}</span>
                     <div className="flex items-center gap-2">
-                      <ArrowRight className="h-3 w-3 text-primary" />
-                      <span className="text-white text-xs">{rule.action}</span>
+                      <ArrowRight className="h-3 w-3 text-primary rtl:rotate-180" />
+                      <span className="text-white text-xs" dir="ltr">{rule.action}</span>
                     </div>
                   </div>
                 </div>
               </TableCell>
               <TableCell className="py-4 text-center">
-                <span className="font-mono text-sm text-white">{rule.runCount.toLocaleString()}</span>
+                <span className="font-mono text-sm text-white"><bdi>{formatNumber(rule.runCount, i18n.language)}</bdi></span>
               </TableCell>
               <TableCell className="py-4">
                 <div className="flex justify-center">
@@ -309,7 +188,7 @@ function RulesTable({
                   />
                 </div>
               </TableCell>
-              <TableCell className="text-right pr-6 py-4">
+              <TableCell className="text-end pe-6 py-4">
                 <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white" data-testid={`button-rule-actions-${rule.id}`}>
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
@@ -322,35 +201,35 @@ function RulesTable({
   );
 }
 
-// ─── Template grid ────────────────────────────────────────────────────────────
-function TemplateGrid({ templates, onAdd }: { templates: RuleTemplate[]; onAdd: (t: RuleTemplate) => void }) {
+function TemplateGrid({ templates, onAdd }: { templates: RuleTemplate[]; onAdd: (tpl: RuleTemplate) => void }) {
+  const { t } = useTranslation(["automation", "common"]);
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-      {templates.map((t) => (
-        <Card key={t.title} className="bg-card border-border hover:border-primary/40 transition-colors group">
+      {templates.map((tpl) => (
+        <Card key={tpl.key} className="bg-card border-border hover:border-primary/40 transition-colors group">
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className={`h-9 w-9 rounded-md ${t.iconBg} flex items-center justify-center shrink-0`}>
-                  <t.icon className={`h-4 w-4 ${t.iconColor}`} />
+                <div className={`h-9 w-9 rounded-md ${tpl.iconBg} flex items-center justify-center shrink-0`}>
+                  <tpl.icon className={`h-4 w-4 ${tpl.iconColor}`} />
                 </div>
-                <CardTitle className="text-sm text-white leading-snug">{t.title}</CardTitle>
+                <CardTitle className="text-sm text-white leading-snug">{t(`automation:templates.${tpl.key}.title`)}</CardTitle>
               </div>
-              <Badge variant="outline" className={`text-[10px] shrink-0 ${t.tagColor}`}>{t.tag}</Badge>
+              <Badge variant="outline" className={`text-[10px] shrink-0 ${tpl.tagColor}`}>{t(`automation:tags.${tpl.tag}`)}</Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <CardDescription className="text-xs leading-relaxed">{t.description}</CardDescription>
+            <CardDescription className="text-xs leading-relaxed">{t(`automation:templates.${tpl.key}.description`)}</CardDescription>
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center gap-2">
-                <span className="text-muted-foreground uppercase tracking-wider font-semibold w-12">When</span>
-                <Badge variant="outline" className="bg-muted/30 border-border font-normal text-[10px]">{t.when.replace(/\./g, " › ")}</Badge>
+                <span className="text-muted-foreground uppercase tracking-wider font-semibold w-12">{t("automation:table.when")}</span>
+                <Badge variant="outline" className="bg-muted/30 border-border font-normal text-[10px]" dir="ltr">{tpl.when.replace(/\./g, " › ")}</Badge>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-muted-foreground uppercase tracking-wider font-semibold w-12">Then</span>
+                <span className="text-muted-foreground uppercase tracking-wider font-semibold w-12">{t("automation:table.then")}</span>
                 <div className="flex items-center gap-1.5">
-                  <ArrowRight className="h-3 w-3 text-primary shrink-0" />
-                  <span className="text-white text-[10px] font-mono">{t.then}</span>
+                  <ArrowRight className="h-3 w-3 text-primary shrink-0 rtl:rotate-180" />
+                  <span className="text-white text-[10px] font-mono" dir="ltr">{tpl.then}</span>
                 </div>
               </div>
             </div>
@@ -358,11 +237,11 @@ function TemplateGrid({ templates, onAdd }: { templates: RuleTemplate[]; onAdd: 
               size="sm"
               variant="outline"
               className="w-full border-border text-muted-foreground hover:text-white hover:border-primary/50 text-xs h-8 rounded-sm"
-              onClick={() => onAdd(t)}
-              data-testid={`button-add-template-${t.title.replace(/\s+/g, "-").toLowerCase()}`}
+              onClick={() => onAdd(tpl)}
+              data-testid={`button-add-template-${tpl.key}`}
             >
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              Add Rule
+              <Plus className="me-1.5 h-3.5 w-3.5" />
+              {t("automation:addRule")}
             </Button>
           </CardContent>
         </Card>
@@ -371,8 +250,8 @@ function TemplateGrid({ templates, onAdd }: { templates: RuleTemplate[]; onAdd: 
   );
 }
 
-// ─── Page ────────────────────────────────────────────────────────────────────
 export default function AutomationPage() {
+  const { t, i18n } = useTranslation(["automation", "common"]);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -398,10 +277,10 @@ export default function AutomationPage() {
   const activeCount = rules.filter(r => r.isEnabled).length;
   const totalExecs  = rules.reduce((acc, r) => acc + r.runCount, 0);
 
-  function handleAddTemplate(t: RuleTemplate) {
+  function handleAddTemplate(tpl: RuleTemplate) {
     toast({
-      title: "Rule Added",
-      description: `"${t.title}" has been added as a draft rule. Enable it when ready.`,
+      title: t("automation:toasts.addedTitle"),
+      description: t("automation:toasts.addedDescription", { title: t(`automation:templates.${tpl.key}.title`) }),
     });
   }
 
@@ -410,54 +289,56 @@ export default function AutomationPage() {
       <div className="space-y-6 max-w-6xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white tracking-tight">Rules & Automation</h1>
-            <p className="text-muted-foreground mt-1">Automate repetitive tasks and streamline your hiring pipeline.</p>
+            <h1 className="text-3xl font-display font-bold text-white tracking-tight">{t("automation:title")}</h1>
+            <p className="text-muted-foreground mt-1">{t("automation:subtitle")}</p>
           </div>
           <div className="flex gap-3">
             <Button variant="outline" className="border-border" data-testid="button-test-workflows">
-              <PlayCircle className="mr-2 h-4 w-4" />
-              Test Workflows
+              <PlayCircle className="me-2 h-4 w-4" />
+              {t("automation:testWorkflows")}
             </Button>
             <Button className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs" data-testid="button-create-rule">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Rule
+              <Plus className="me-2 h-4 w-4" />
+              {t("automation:createRule")}
             </Button>
           </div>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="bg-card border-border shadow-sm border-l-4 border-l-primary">
+          <Card className="bg-card border-border shadow-sm border-s-4 border-s-primary">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Active Rules</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("automation:stats.active")}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-4xl font-bold font-display text-white" data-testid="stat-active-rules">
-                {isLoading ? "—" : activeCount}
+                <bdi>{isLoading ? "—" : formatNumber(activeCount, i18n.language)}</bdi>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Out of {rules.length} total</p>
+              <p className="text-xs text-muted-foreground mt-1"><bdi>{t("automation:stats.activeSub", { count: rules.length })}</bdi></p>
             </CardContent>
           </Card>
 
           <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Executions</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("automation:stats.totalExecutions")}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-executions">
-                {isLoading ? "—" : totalExecs.toLocaleString()}
+                <bdi>{isLoading ? "—" : formatNumber(totalExecs, i18n.language)}</bdi>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Across all rules</p>
+              <p className="text-xs text-muted-foreground mt-1">{t("automation:stats.totalExecutionsSub")}</p>
             </CardContent>
           </Card>
 
           <Card className="bg-card border-border shadow-sm bg-gradient-to-br from-card to-primary/10">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Hours Saved</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("automation:stats.hoursSaved")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white">~{Math.round(totalExecs * 0.05)}h</div>
-              <p className="text-xs text-muted-foreground mt-1">Estimated time saved</p>
+              <div className="text-4xl font-bold font-display text-white">
+                <bdi>{t("automation:stats.hoursSavedValue", { count: formatNumber(Math.round(totalExecs * 0.05), i18n.language) })}</bdi>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">{t("automation:stats.hoursSavedSub")}</p>
             </CardContent>
           </Card>
         </div>
@@ -466,15 +347,15 @@ export default function AutomationPage() {
         <Tabs defaultValue="all" className="mt-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <TabsList className="bg-muted/20">
-              <TabsTrigger value="all">All Workflows</TabsTrigger>
-              <TabsTrigger value="communication">Communication</TabsTrigger>
-              <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
+              <TabsTrigger value="all">{t("automation:tabs.all")}</TabsTrigger>
+              <TabsTrigger value="communication">{t("automation:tabs.communication")}</TabsTrigger>
+              <TabsTrigger value="pipeline">{t("automation:tabs.pipeline")}</TabsTrigger>
             </TabsList>
             <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search rules..."
-                className="pl-9 bg-muted/30 border-border focus-visible:ring-primary/20 h-9 rounded-sm w-full"
+                placeholder={t("automation:search")}
+                className="ps-9 bg-muted/30 border-border focus-visible:ring-primary/20 h-9 rounded-sm w-full"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 data-testid="input-search-rules"
@@ -489,7 +370,7 @@ export default function AutomationPage() {
                 <RulesTable
                   rules={filtered}
                   isLoading={isLoading}
-                  emptyLabel="No automation rules found"
+                  emptyLabel={t("automation:empty.all")}
                   toggleRule={({ id, isEnabled }) => toggleRule.mutate({ id, isEnabled })}
                 />
               </CardContent>
@@ -498,15 +379,14 @@ export default function AutomationPage() {
 
           {/* ── Communication ── */}
           <TabsContent value="communication" className="space-y-6 m-0">
-            {/* Active communication rules */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-base font-semibold text-white">Active Communication Rules</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">Rules that send SMS or email notifications to candidates and staff.</p>
+                  <h2 className="text-base font-semibold text-white">{t("automation:sections.activeCommunication")}</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">{t("automation:sections.activeCommunicationSub")}</p>
                 </div>
                 <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-xs">
-                  {communicationRules.length} rule{communicationRules.length !== 1 ? "s" : ""}
+                  <bdi>{t("automation:sections.ruleCount", { count: communicationRules.length })}</bdi>
                 </Badge>
               </div>
               <Card className="bg-card border-border">
@@ -514,19 +394,18 @@ export default function AutomationPage() {
                   <RulesTable
                     rules={communicationRules}
                     isLoading={isLoading}
-                    emptyLabel="No communication rules configured. Add one from the templates below."
+                    emptyLabel={t("automation:empty.communication")}
                     toggleRule={({ id, isEnabled }) => toggleRule.mutate({ id, isEnabled })}
                   />
                 </CardContent>
               </Card>
             </div>
 
-            {/* Templates */}
             <div className="space-y-3">
               <div className="w-full h-px bg-border" />
               <div>
-                <h2 className="text-base font-semibold text-white">Quick-Add Templates</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Pre-built communication workflows — click Add Rule to enable.</p>
+                <h2 className="text-base font-semibold text-white">{t("automation:sections.quickAdd")}</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">{t("automation:sections.quickAddCommunicationSub")}</p>
               </div>
               <TemplateGrid templates={COMMUNICATION_TEMPLATES} onAdd={handleAddTemplate} />
             </div>
@@ -534,15 +413,14 @@ export default function AutomationPage() {
 
           {/* ── Pipeline ── */}
           <TabsContent value="pipeline" className="space-y-6 m-0">
-            {/* Active pipeline rules */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-base font-semibold text-white">Active Pipeline Rules</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">Rules that manage candidate progression, flags, and workforce health checks.</p>
+                  <h2 className="text-base font-semibold text-white">{t("automation:sections.activePipeline")}</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">{t("automation:sections.activePipelineSub")}</p>
                 </div>
                 <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-xs">
-                  {pipelineRules.length} rule{pipelineRules.length !== 1 ? "s" : ""}
+                  <bdi>{t("automation:sections.ruleCount", { count: pipelineRules.length })}</bdi>
                 </Badge>
               </div>
               <Card className="bg-card border-border">
@@ -550,19 +428,18 @@ export default function AutomationPage() {
                   <RulesTable
                     rules={pipelineRules}
                     isLoading={isLoading}
-                    emptyLabel="No pipeline rules configured. Add one from the templates below."
+                    emptyLabel={t("automation:empty.pipeline")}
                     toggleRule={({ id, isEnabled }) => toggleRule.mutate({ id, isEnabled })}
                   />
                 </CardContent>
               </Card>
             </div>
 
-            {/* Templates */}
             <div className="space-y-3">
               <div className="w-full h-px bg-border" />
               <div>
-                <h2 className="text-base font-semibold text-white">Quick-Add Templates</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Pre-built pipeline and operations automation — click Add Rule to enable.</p>
+                <h2 className="text-base font-semibold text-white">{t("automation:sections.quickAdd")}</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">{t("automation:sections.quickAddPipelineSub")}</p>
               </div>
               <TemplateGrid templates={PIPELINE_TEMPLATES} onAdd={handleAddTemplate} />
             </div>

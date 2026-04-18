@@ -1,0 +1,108 @@
+{
+  "title": "Rules & Automation",
+  "subtitle": "Automate repetitive tasks and streamline your hiring pipeline.",
+  "testWorkflows": "Test Workflows",
+  "createRule": "Create Rule",
+  "addRule": "Add Rule",
+  "stats": {
+    "active": "Active Rules",
+    "activeSub": "Out of {{count}} total",
+    "totalExecutions": "Total Executions",
+    "totalExecutionsSub": "Across all rules",
+    "hoursSaved": "Hours Saved",
+    "hoursSavedValue": "~{{count}}h",
+    "hoursSavedSub": "Estimated time saved"
+  },
+  "tabs": {
+    "all": "All Workflows",
+    "communication": "Communication",
+    "pipeline": "Pipeline"
+  },
+  "search": "Search rules...",
+  "table": {
+    "name": "Rule Name",
+    "triggerAction": "Trigger & Action",
+    "executions": "Executions",
+    "status": "Status",
+    "manage": "Manage",
+    "when": "When",
+    "then": "Then"
+  },
+  "empty": {
+    "all": "No automation rules found",
+    "communication": "No communication rules configured. Add one from the templates below.",
+    "pipeline": "No pipeline rules configured. Add one from the templates below."
+  },
+  "sections": {
+    "activeCommunication": "Active Communication Rules",
+    "activeCommunicationSub": "Rules that send SMS or email notifications to candidates and staff.",
+    "activePipeline": "Active Pipeline Rules",
+    "activePipelineSub": "Rules that manage candidate progression, flags, and workforce health checks.",
+    "quickAdd": "Quick-Add Templates",
+    "quickAddCommunicationSub": "Pre-built communication workflows — click Add Rule to enable.",
+    "quickAddPipelineSub": "Pre-built pipeline and operations automation — click Add Rule to enable.",
+    "ruleCount_one": "{{count}} rule",
+    "ruleCount_other": "{{count}} rules"
+  },
+  "tags": {
+    "Email": "Email",
+    "SMS": "SMS",
+    "Flag": "Flag",
+    "Stage": "Stage",
+    "Alert": "Alert"
+  },
+  "templates": {
+    "rejection_email": {
+      "title": "Rejection Notice Email",
+      "description": "Automatically email candidates when their application is rejected."
+    },
+    "offer_email": {
+      "title": "Offer Letter Email",
+      "description": "Send a personalised offer letter email when a candidate is marked as hired."
+    },
+    "doc_request_sms": {
+      "title": "Document Request SMS",
+      "description": "Notify candidates via SMS when required documents are missing from their profile."
+    },
+    "reschedule_sms": {
+      "title": "Interview Reschedule Alert",
+      "description": "Notify the candidate and interviewer via SMS when an interview is rescheduled."
+    },
+    "pre_interview_brief": {
+      "title": "Pre-Interview Brief",
+      "description": "Send candidates a preparation brief 2 hours before their interview slot."
+    },
+    "no_show_sms": {
+      "title": "No-Show Follow-Up SMS",
+      "description": "Reach out automatically when a candidate misses a scheduled interview."
+    },
+    "blacklist": {
+      "title": "Blacklist Screening",
+      "description": "Automatically flag candidates who appear on the internal blacklist upon profile creation."
+    },
+    "duplicate": {
+      "title": "Duplicate Profile Detection",
+      "description": "Detect and flag duplicate national ID submissions to prevent double-entry."
+    },
+    "auto_advance": {
+      "title": "Auto-Advance Stage",
+      "description": "Move qualified candidates to the interview stage once their profile score exceeds the threshold."
+    },
+    "coverage_alert": {
+      "title": "Coverage Below Minimum",
+      "description": "Alert the operations manager when shift coverage drops below the configured minimum threshold."
+    },
+    "completeness_check": {
+      "title": "Profile Completeness Check",
+      "description": "Validate that mandatory profile fields are filled before advancing a candidate to interviews."
+    },
+    "contract_renewal": {
+      "title": "Contract Renewal Prompt",
+      "description": "Notify HR 14 days before a worker's contract expires to prompt renewal or offboarding."
+    }
+  },
+  "toasts": {
+    "addedTitle": "Rule Added",
+    "addedDescription": "\"{{title}}\" has been added as a draft rule. Enable it when ready."
+  }
+}
