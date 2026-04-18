@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Briefcase, Loader2, ChevronLeft,
@@ -293,6 +294,7 @@ export default function ApplyJobDialog({
   onSuccess: (jobId: string) => void;
 }) {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   // Read candidate from localStorage (set during login/register)
   const candidate: StoredCandidate = (() => {
@@ -313,20 +315,18 @@ export default function ApplyJobDialog({
 
   const apply = useMutation({
     mutationFn: async (answers?: Record<string, string>) => {
-      // Use existing candidate id if available, otherwise create a minimal record
-      let candidateId = candidate.id;
-
-      if (!candidateId) {
-        const newCandidate = await apiRequest("POST", "/api/candidates", {
-          fullNameEn: candidate.fullNameEn ?? "",
-          phone: candidate.phone ?? "",
-          nationalId: candidate.nationalId ?? "",
-        }).then(r => r.json());
-        candidateId = newCandidate.id;
+      // Candidate identity must come from the authenticated session that
+      // /api/auth/register (or /api/auth/login) established. If localStorage
+      // has been wiped between sign-up and submit (clear site data, weird
+      // tab restore, etc.) we cannot create candidates from the public
+      // dialog — the public path is OTP-gated registration only. Bounce
+      // them back through /auth and let returnTo bring them right back.
+      if (!candidate.id) {
+        throw new Error("SESSION_LOST");
       }
 
       await apiRequest("POST", "/api/applications", {
-        candidateId,
+        candidateId: candidate.id,
         jobId: job!.id,
         status: "new",
         questionSetAnswers: answers ? { questionSetId: job!.questionSetId, answers } : null,
@@ -339,7 +339,20 @@ export default function ApplyJobDialog({
       onSuccess(jobId);
       onOpenChange(false);
     },
-    onError: () => toast({ title: "Failed to submit", description: "Please try again.", variant: "destructive" }),
+    onError: (e: any) => {
+      if (e?.message === "SESSION_LOST") {
+        toast({
+          title: "Please sign in again",
+          description: "Your session was lost. Sign in to finish your application.",
+          variant: "destructive",
+        });
+        onOpenChange(false);
+        const ret = encodeURIComponent(`/jobs/${job!.id}`);
+        setLocation(`/auth?tab=signup&returnTo=${ret}`);
+        return;
+      }
+      toast({ title: "Failed to submit", description: e?.message || "Please try again.", variant: "destructive" });
+    },
   });
 
   function handleClose() {
