@@ -662,7 +662,7 @@ export default function AuthPage() {
                         onKeyDown={(e) => e.key === "Enter" && /^05\d{8}$/.test(regPhone) && sendOtp(regPhone)}
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground">{t("auth:register.phoneStepSubtitle")}</p>
+                    <p className={`text-xs text-muted-foreground ${isRtl ? "text-right" : "text-left"}`}>{t("auth:register.phoneStepSubtitle")}</p>
                   </div>
                   {registerError && (
                     <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-sm text-sm text-destructive">
