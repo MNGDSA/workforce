@@ -1141,6 +1141,13 @@ export async function registerRoutes(
 
   app.get("/api/candidates/:id/contract-history", requireAuth, async (req: Request, res: Response) => {
     try {
+      const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("candidates:read");
+      if (!isAdmin) {
+        const myCand = await storage.getCandidateByUserId(req.authUserId!);
+        if (!myCand || myCand.id !== req.params.id) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
       const contracts = await storage.getContractHistory(req.params.id);
       return res.json(contracts);
     } catch (err) {
@@ -1150,6 +1157,13 @@ export async function registerRoutes(
 
   app.get("/api/candidates/:id", requireAuth, async (req: Request, res: Response) => {
     try {
+      const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("candidates:read");
+      if (!isAdmin) {
+        const myCand = await storage.getCandidateByUserId(req.authUserId!);
+        if (!myCand || myCand.id !== req.params.id) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
       const candidate = await storage.getCandidate(req.params.id);
       if (!candidate) return res.status(404).json({ message: "Candidate not found" });
       return res.json(candidate);
@@ -1815,6 +1829,16 @@ export async function registerRoutes(
     try {
       const data = insertApplicationSchema.parse(req.body);
 
+      // Authorization: admin with applications:create OR candidate applying on own behalf.
+      const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("applications:create");
+      if (!isAdmin) {
+        const myCand = await storage.getCandidateByUserId(req.authUserId!);
+        if (!myCand || !data.candidateId || myCand.id !== data.candidateId) {
+          return res.status(403).json({ message: "You can only apply on your own behalf." });
+        }
+      }
+
+
       // ── SMP reverse gate (source-agnostic, workforce-record-authoritative) ────
       // Block individual job applications for candidates who are:
       //   1. Currently active SMP workers, or
@@ -2268,6 +2292,13 @@ export async function registerRoutes(
 
   app.get("/api/workforce/by-candidate/:candidateId", requireAuth, async (req: Request, res: Response) => {
     try {
+      const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("workforce:read");
+      if (!isAdmin) {
+        const myCand = await storage.getCandidateByUserId(req.authUserId!);
+        if (!myCand || myCand.id !== req.params.candidateId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
       const record = await storage.getWorkforceByCandidateId(req.params.candidateId);
       return res.json(record ?? null);
     } catch (err) {
@@ -2277,6 +2308,13 @@ export async function registerRoutes(
 
   app.get("/api/workforce/all-by-candidate/:candidateId", requireAuth, async (req: Request, res: Response) => {
     try {
+      const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("workforce:read");
+      if (!isAdmin) {
+        const myCand = await storage.getCandidateByUserId(req.authUserId!);
+        if (!myCand || myCand.id !== req.params.candidateId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
       const records = await storage.getAllWorkforceByCandidateId(req.params.candidateId);
       return res.json(records);
     } catch (err) {
@@ -3807,6 +3845,15 @@ export async function registerRoutes(
       if (!contract) return res.status(404).json({ message: "Contract not found" });
       if (contract.status === "signed") return res.status(409).json({ message: "Contract already signed" });
 
+      // Authorization: admin with candidate_contracts:manage OR the contract's own candidate.
+      const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("candidate_contracts:manage");
+      if (!isAdmin) {
+        const myCand = await storage.getCandidateByUserId(req.authUserId!);
+        if (!myCand || !contract.candidateId || myCand.id !== contract.candidateId) {
+          return res.status(403).json({ message: "You can only sign your own contract." });
+        }
+      }
+
       const ip = req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
 
       const updated = await storage.updateCandidateContract(contract.id, {
@@ -3848,6 +3895,15 @@ export async function registerRoutes(
     try {
       const contract = await storage.getCandidateContract(req.params.id);
       if (!contract) return res.status(404).json({ message: "Contract not found" });
+
+      const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("candidate_contracts:read");
+      if (!isAdmin) {
+        const myCand = await storage.getCandidateByUserId(req.authUserId!);
+        if (!myCand || !contract.candidateId || myCand.id !== contract.candidateId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
+
       const template = await storage.getContractTemplate(contract.templateId);
       return res.json({
         contract,
@@ -3900,14 +3956,14 @@ export async function registerRoutes(
   });
 
   // ─── SMS Plugins ──────────────────────────────────────────────────────────
-  app.get("/api/sms-plugins", requireAuth, async (_req: Request, res: Response) => {
+  app.get("/api/sms-plugins", requirePermission("settings:read"), async (_req: Request, res: Response) => {
     try {
       const plugins = await storage.getSmsPlugins();
       return res.json(plugins);
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/sms-plugins", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/sms-plugins", requirePermission("settings:write"), async (req: Request, res: Response) => {
     try {
       const { pluginConfig, credentials } = req.body as { pluginConfig: unknown; credentials?: Record<string, string> };
       if (!pluginConfig) return res.status(400).json({ message: "pluginConfig is required" });
@@ -3928,7 +3984,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/sms-plugins/validate", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/sms-plugins/validate", requirePermission("settings:write"), async (req: Request, res: Response) => {
     try {
       const validation = validatePluginConfig(req.body);
       if (!validation.valid) return res.status(400).json({ valid: false, error: validation.error });
@@ -3936,7 +3992,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/sms-plugins/:id/credentials", requireAuth, async (req: Request, res: Response) => {
+  app.patch("/api/sms-plugins/:id/credentials", requirePermission("settings:write"), async (req: Request, res: Response) => {
     try {
       const credentials = z.record(z.string()).parse(req.body);
       const plugin = await storage.updateSmsPluginCredentials(req.params.id, credentials);
@@ -3945,7 +4001,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/sms-plugins/:id/activate", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/sms-plugins/:id/activate", requirePermission("settings:write"), async (req: Request, res: Response) => {
     try {
       const ok = await storage.activateSmsPlugin(req.params.id);
       if (!ok) return res.status(404).json({ message: "Plugin not found" });
@@ -3953,7 +4009,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/sms-plugins/:id/test", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/sms-plugins/:id/test", requirePermission("settings:write"), async (req: Request, res: Response) => {
     try {
       const { to, message } = z.object({
         to: z.string().min(7),
@@ -3970,7 +4026,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.delete("/api/sms-plugins/:id", requireAuth, async (req: Request, res: Response) => {
+  app.delete("/api/sms-plugins/:id", requirePermission("settings:write"), async (req: Request, res: Response) => {
     try {
       const ok = await storage.deleteSmsPlugin(req.params.id);
       if (!ok) return res.status(404).json({ message: "Plugin not found" });
@@ -5978,13 +6034,25 @@ export async function registerRoutes(
   });
 
   // ─── Photo Change Request Endpoints ────────────────────────────────────────
-  app.get("/api/photo-change-requests", requirePermission("photo_requests:read"), async (req: Request, res: Response) => {
+  app.get("/api/photo-change-requests", requireAuth, async (req: Request, res: Response) => {
     try {
-      const filters = {
-        candidateId: req.query.candidateId as string | undefined,
-        status: req.query.status as string | undefined,
-      };
-      const requests = await storage.getPhotoChangeRequests(filters);
+      const candidateId = req.query.candidateId as string | undefined;
+      const status = req.query.status as string | undefined;
+
+      // Authorization: admin with photo_requests:read OR candidate scoped to own id.
+      const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("photo_requests:read");
+      if (!isAdmin) {
+        const myCand = await storage.getCandidateByUserId(req.authUserId!);
+        if (!myCand) return res.status(403).json({ message: "Access denied" });
+        if (!candidateId) {
+          return res.status(400).json({ message: "candidateId is required" });
+        }
+        if (candidateId !== myCand.id) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
+
+      const requests = await storage.getPhotoChangeRequests({ candidateId, status });
       return res.json(requests);
     } catch (err) { return handleError(res, err); }
   });
@@ -6636,6 +6704,16 @@ export async function registerRoutes(
     try {
       const userId = getAuthUserId(req);
       if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+      // Authorization: admin with payroll:read OR candidate viewing own payslips.
+      const isAdmin = req.authIsSuperAdmin || (req.authPermissions?.has("payroll:read") ?? false);
+      if (!isAdmin) {
+        const myCand = await storage.getCandidateByUserId(userId);
+        if (!myCand || myCand.id !== req.params.candidateId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
+
       const txns = await storage.getPayrollTransactions({ candidateId: req.params.candidateId });
       const enriched = await Promise.all(txns.map(async (txn) => {
         const line = await storage.getPayRunLine(txn.payRunLineId);
@@ -6643,7 +6721,6 @@ export async function registerRoutes(
         let eventName: string | null = null;
         if (run?.eventId) { const ev = await storage.getEvent(run.eventId); eventName = ev?.name ?? null; }
 
-        const isAdmin = userId !== null;
         let ibanDisplay = txn.ibanUsed;
         if (ibanDisplay && !isAdmin) {
           ibanDisplay = ibanDisplay.slice(0, 4) + " " + ibanDisplay.slice(4, 8) + " **** **** **" + ibanDisplay.slice(-2);
