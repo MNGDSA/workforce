@@ -1,0 +1,77 @@
+{
+  "name": "GoInfinito SMS",
+  "description": "CITC-compliant SMS gateway for Saudi Arabia via GoInfinito (ValueFirst)",
+  "version": "1.1.0",
+  "author": "Workforce Platform",
+  "credentials": [
+    {
+      "key": "clientId",
+      "label": "Client ID",
+      "type": "text",
+      "required": true,
+      "placeholder": "Your GoInfinito Client ID",
+      "hint": "Found in your GoInfinito dashboard."
+    },
+    {
+      "key": "clientPassword",
+      "label": "Client Password",
+      "type": "secret",
+      "required": true,
+      "placeholder": "Your GoInfinito Client Password",
+      "hint": "Found in your GoInfinito dashboard."
+    },
+    {
+      "key": "senderId",
+      "label": "Sender ID",
+      "type": "text",
+      "required": true,
+      "placeholder": "e.g. WORKFORCE",
+      "hint": "Case-sensitive — must match your approved Sender ID exactly as shown in the GoInfinito portal (e.g. TANAQOL not Tanaqol). Must be pre-registered with CITC (CST). Promotional IDs must end with -AD."
+    }
+  ],
+  "send": {
+    "endpoint": "https://api.goinfinito.me/unified/v2/send",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "x-client-id": "{{clientId}}",
+      "x-client-password": "{{clientPassword}}"
+    },
+    "body": {
+      "sms": {
+        "ver": "2.0",
+        "dlr": {
+          "url": ""
+        },
+        "messages": [
+          {
+            "udh": "0",
+            "text": "{{message}}",
+            "property": 0,
+            "id": "{{timestamp}}",
+            "addresses": [
+              {
+                "from": "{{senderId}}",
+                "to": "{{to}}",
+                "seq": "1",
+                "tag": ""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "successStatusCodes": [
+      200
+    ],
+    "responseSuccessField": "status",
+    "responseSuccessValue": "Success",
+    "responsePartialErrorPath": "messageack.guids.0.errors",
+    "responseMessageIdPath": "messageack.guids.0.guid",
+    "responseErrorPath": "statustext"
+  },
+  "compliance": {
+    "region": "Saudi Arabia",
+    "notes": "Sender ID must be pre-registered with CITC (CST). Promotional messages restricted to 9:00 AM – 8:00 PM KSA time."
+  }
+}
