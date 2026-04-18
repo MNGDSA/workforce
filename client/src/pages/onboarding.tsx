@@ -1,4 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { formatNumber, formatDate } from "@/lib/format";
 import { printContract } from "@/lib/print-contract";
 import { PdfViewer } from "@/components/pdf-viewer";
 import { DatePickerField } from "@/components/ui/date-picker-field";
@@ -159,6 +161,7 @@ function prereqTotal(isSmp: boolean) {
 }
 
 function AutoSaveNotes({ recordId, initialValue, onSave }: { recordId: string; initialValue: string; onSave: (id: string, notes: string) => void }) {
+  const { t } = useTranslation("onboarding");
   const [value, setValue] = useState(initialValue);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -186,16 +189,16 @@ function AutoSaveNotes({ recordId, initialValue, onSave }: { recordId: string; i
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <Label className="text-zinc-400 text-sm">Notes</Label>
+        <Label className="text-zinc-400 text-sm">{t("checklist.notes")}</Label>
         <span className="text-[11px] text-zinc-500 flex items-center gap-1">
-          {saveStatus === "saving" && <><Loader2 className="h-3 w-3 animate-spin" /> Saving…</>}
-          {saveStatus === "saved" && <><Check className="h-3 w-3 text-emerald-500" /> Saved</>}
-          {saveStatus === "idle" && "Auto-saved"}
+          {saveStatus === "saving" && <><Loader2 className="h-3 w-3 animate-spin" /> {t("checklist.saving")}</>}
+          {saveStatus === "saved" && <><Check className="h-3 w-3 text-emerald-500" /> {t("checklist.saved")}</>}
+          {saveStatus === "idle" && t("checklist.autoSaved")}
         </span>
       </div>
       <Textarea
         data-testid="textarea-onboarding-notes"
-        placeholder="Add notes about this candidate's onboarding…"
+        placeholder={t("checklist.notesPlaceholder")}
         value={value}
         onChange={e => { setValue(e.target.value); debouncedSave(e.target.value); }}
         className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600 resize-none text-sm"
@@ -219,6 +222,7 @@ interface CandidateContractRecord {
 }
 
 function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { onboardingRecord: OnboardingRecord; candidate: Candidate | undefined; docsComplete: boolean }) {
+  const { t, i18n } = useTranslation("onboarding");
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -239,9 +243,9 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/candidate-contracts"] });
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
-      toast({ title: "Contract generated and ready for signing" });
+      toast({ title: t("toasts.contractGenerated") });
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message, variant: "destructive" }),
   });
 
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -265,9 +269,9 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
     <div className={`border-t border-zinc-800 pt-4 mt-4 ${isLocked ? "opacity-50" : ""}`}>
       <div className="flex items-center gap-2 mb-3">
         <FileSignature className="h-4 w-4 text-primary" />
-        <span className="text-sm font-medium text-white">Phase 2: Employment Contract</span>
+        <span className="text-sm font-medium text-white">{t("contract.phase2")}</span>
         {isLocked && (
-          <Badge className="text-[10px] bg-zinc-800 text-zinc-500 border-0">Complete documents first</Badge>
+          <Badge className="text-[10px] bg-zinc-800 text-zinc-500 border-0">{t("contract.completeDocsFirst")}</Badge>
         )}
       </div>
 
@@ -275,7 +279,7 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
           <p className="text-xs text-zinc-500 flex items-center gap-1.5">
             <Clock className="h-3 w-3" />
-            Complete all document requirements above to unlock contract generation
+            {t("contract.unlockHint")}
           </p>
         </div>
       ) : latestContract ? (
@@ -288,7 +292,7 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
                 <Clock className="h-4 w-4 text-yellow-500" />
               )}
               <span className="text-sm text-white">
-                {latestContract.status === "signed" ? "Contract Signed" : latestContract.status === "awaiting_signing" ? "Awaiting Signing" : latestContract.status === "sent" ? "Sent to Candidate" : "Contract Generated"}
+                {latestContract.status === "signed" ? t("contract.statusSigned") : latestContract.status === "awaiting_signing" ? t("contract.statusAwaiting") : latestContract.status === "sent" ? t("contract.statusSent") : t("contract.statusGenerated")}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -300,33 +304,33 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
                 data-testid="button-view-candidate-contract"
               >
                 <Eye className="h-3 w-3 mr-1" />
-                View
+                {t("contract.view")}
               </Button>
               <Badge className={`text-xs border-0 ${latestContract.status === "signed" ? "bg-emerald-900/40 text-emerald-400" : "bg-yellow-900/40 text-yellow-400"}`}>
-                {latestContract.status === "signed" ? "Signed" : latestContract.status === "awaiting_signing" ? "Awaiting" : latestContract.status}
+                {latestContract.status === "signed" ? t("contract.badgeSigned") : latestContract.status === "awaiting_signing" ? t("contract.badgeAwaiting") : latestContract.status}
               </Badge>
             </div>
           </div>
           {latestContract.signedAt && (
-            <p className="text-xs text-zinc-500">
-              Signed on {new Date(latestContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+            <p className="text-xs text-zinc-500" dir="ltr">
+              {t("contract.signedOn", { date: formatDate(latestContract.signedAt, i18n.language) })}
             </p>
           )}
         </div>
       ) : (
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 space-y-3">
-          <p className="text-xs text-zinc-400">Select a contract template to generate for this candidate:</p>
+          <p className="text-xs text-zinc-400">{t("contract.selectTemplate")}</p>
           <div className="flex gap-2">
             <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
               <SelectTrigger className="bg-zinc-800 border-zinc-700 flex-1" data-testid="select-contract-template">
-                <SelectValue placeholder="Select template…" />
+                <SelectValue placeholder={t("contract.templatePlaceholder")} />
               </SelectTrigger>
               <SelectContent className="bg-zinc-900 border-zinc-700">
-                {templates.map(t => (
-                  <SelectItem key={t.id} value={t.id}>{t.name} (v{t.version})</SelectItem>
+                {templates.map(tpl => (
+                  <SelectItem key={tpl.id} value={tpl.id}><bdi>{tpl.name}</bdi> ({t("templates.version", { n: formatNumber(tpl.version) })})</SelectItem>
                 ))}
                 {templates.length === 0 && (
-                  <SelectItem value="none" disabled>No active templates — create one first</SelectItem>
+                  <SelectItem value="none" disabled>{t("contract.noActiveTemplates")}</SelectItem>
                 )}
               </SelectContent>
             </Select>
@@ -338,7 +342,7 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
               data-testid="button-generate-contract"
             >
               {generateMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
-              Generate
+              {t("contract.generate")}
             </Button>
           </div>
         </div>
@@ -350,13 +354,13 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
             <DialogHeader>
               <DialogTitle className="font-display text-lg flex items-center gap-2">
                 <Eye className="h-5 w-5 text-primary" />
-                Candidate Contract
+                {t("contract.candidateContractTitle")}
                 {latestContract.status === "signed" && (
-                  <Badge className="bg-emerald-900/40 text-emerald-400 border-0 text-xs">Signed</Badge>
+                  <Badge className="bg-emerald-900/40 text-emerald-400 border-0 text-xs">{t("contract.badgeSigned")}</Badge>
                 )}
               </DialogTitle>
               <DialogDescription className="text-zinc-400 text-sm">
-                Viewing the candidate's generated contract with actual data.
+                {t("contract.candidateContractDescription")}
               </DialogDescription>
             </DialogHeader>
             <div className="contract-print-area mt-4 bg-white text-black rounded-lg p-8 space-y-6 font-serif">
@@ -375,11 +379,11 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
               )}
               {Array.isArray(latestContract.snapshotArticles || previewTpl.articles) && (latestContract.snapshotArticles || previewTpl.articles).map((article: any, idx: number) => (
                 <div key={idx}>
-                  <h3 className="font-bold text-sm mb-1">Article {idx + 1}: {article.title}</h3>
+                  <h3 className="font-bold text-sm mb-1">{t("contract.articlePrefix", { n: formatNumber(idx + 1), title: article.title })}</h3>
                   <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVars(article.body || "", latestContract.snapshotVariables)}</p>
                   {Array.isArray(article.subArticles) && article.subArticles.map((sub: any, subIdx: number) => (
                     <div key={subIdx} className="ml-6 mt-2">
-                      <h4 className="font-bold text-sm mb-0.5">{idx + 1}.{subIdx + 1} {sub.title}</h4>
+                      <h4 className="font-bold text-sm mb-0.5">{formatNumber(idx + 1)}.{formatNumber(subIdx + 1)} {sub.title}</h4>
                       <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVars(sub.body || "", latestContract.snapshotVariables)}</p>
                     </div>
                   ))}
@@ -393,34 +397,36 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
               <div className="border-t pt-6 mt-8">
                 <div className="grid grid-cols-2 gap-8">
                   <div className="space-y-2">
-                    <p className="text-sm font-bold">First Party (Employer)</p>
-                    <p className="text-xs text-gray-600">{(previewTpl as any).companyName || "Luxury Carts Company Ltd"}</p>
+                    <p className="text-sm font-bold">{t("contract.firstParty")}</p>
+                    <p className="text-xs text-gray-600"><bdi>{(previewTpl as any).companyName || t("contract.defaultCompany")}</bdi></p>
                     <div className="border-b border-gray-400 mt-8 pt-6"></div>
-                    <p className="text-xs text-gray-500">Authorized Signature & Stamp</p>
+                    <p className="text-xs text-gray-500">{t("contract.authorizedSignature")}</p>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-sm font-bold">Second Party (Employee)</p>
-                    <p className="text-xs text-gray-600">{latestContract.snapshotVariables?.fullName || candidate?.fullName || "Employee"}</p>
+                    <p className="text-sm font-bold">{t("contract.secondParty")}</p>
+                    <p className="text-xs text-gray-600"><bdi>{latestContract.snapshotVariables?.fullName || (candidate as any)?.fullName || t("contract.defaultName")}</bdi></p>
                     {latestContract.status === "signed" && latestContract.signedAt ? (
                       <div className="mt-4 pt-2 text-center">
                         <div className="inline-block border-2 border-emerald-600 rounded-md px-4 py-2">
-                          <p className="text-xs font-bold text-emerald-700">DIGITALLY SIGNED</p>
-                          <p className="text-[10px] text-gray-500 mt-0.5">
-                            {new Date(latestContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} at{" "}
-                            {new Date(latestContract.signedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                          <p className="text-xs font-bold text-emerald-700">{t("contract.digitallySigned")}</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5" dir="ltr">
+                            {t("contract.digitallySignedAt", {
+                              date: formatDate(latestContract.signedAt, i18n.language),
+                              time: new Intl.DateTimeFormat("en-GB", { numberingSystem: "latn", hour: "2-digit", minute: "2-digit" }).format(new Date(latestContract.signedAt)),
+                            })}
                           </p>
                         </div>
                       </div>
                     ) : (
                       <>
                         <div className="border-b border-gray-400 mt-8 pt-6"></div>
-                        <p className="text-xs text-gray-500">Employee Signature</p>
+                        <p className="text-xs text-gray-500">{t("contract.employeeSignature")}</p>
                       </>
                     )}
                   </div>
                 </div>
                 <div className="mt-6 text-center">
-                  <p className="text-xs text-gray-500">Date: {latestContract.signedAt ? new Date(latestContract.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "____________________"}</p>
+                  <p className="text-xs text-gray-500" dir="ltr">{t("contract.dateLabel", { date: latestContract.signedAt ? formatDate(latestContract.signedAt, i18n.language, { day: "numeric", month: "long", year: "numeric" }) : t("contract.dateBlank") })}</p>
                 </div>
               </div>
               {(previewTpl as any).documentFooter && (
@@ -435,7 +441,7 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
             <div className="flex justify-end mt-3 no-print">
               <Button variant="outline" className="border-zinc-700 text-zinc-300 gap-2" onClick={() => printContract(previewTpl?.name || 'Contract')}>
                 <Download className="h-4 w-4" />
-                Print / Export PDF
+                {t("contract.printExport")}
               </Button>
             </div>
           </DialogContent>
@@ -477,6 +483,7 @@ const AVAILABLE_VARIABLES = [
 ];
 
 function ContractTemplatesTab() {
+  const { t } = useTranslation("onboarding");
   const { toast } = useToast();
   const qc = useQueryClient();
   const [editorOpen, setEditorOpen] = useState(false);
@@ -508,39 +515,39 @@ function ContractTemplatesTab() {
     mutationFn: (data: any) => apiRequest("POST", "/api/contract-templates", data).then(r => r.json()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/contract-templates"] });
-      toast({ title: "Template created" });
+      toast({ title: t("toasts.templateCreated") });
       closeEditor();
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message, variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) => apiRequest("PATCH", `/api/contract-templates/${id}`, data).then(r => r.json()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/contract-templates"] });
-      toast({ title: "Template updated" });
+      toast({ title: t("toasts.templateUpdated") });
       closeEditor();
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/contract-templates/${id}`).then(r => r.json()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/contract-templates"] });
-      toast({ title: "Template deleted" });
+      toast({ title: t("toasts.templateDeleted") });
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message, variant: "destructive" }),
   });
 
   const newVersionMutation = useMutation({
     mutationFn: (id: string) => apiRequest("POST", `/api/contract-templates/${id}/new-version`, {}).then(r => r.json()),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["/api/contract-templates"] });
-      toast({ title: `New version (v${data.version}) created` });
+      toast({ title: t("toasts.newVersion", { n: formatNumber(data.version) }) });
       openEditor(data);
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message, variant: "destructive" }),
   });
 
   const logoUploadMutation = useMutation({
@@ -548,14 +555,14 @@ function ContractTemplatesTab() {
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch(`/api/contract-templates/${id}/logo`, { method: "POST", body: formData });
-      if (!res.ok) throw new Error("Logo upload failed");
+      if (!res.ok) throw new Error(t("toasts.logoUploadFailed"));
       return res.json();
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/contract-templates"] });
-      toast({ title: "Logo uploaded" });
+      toast({ title: t("toasts.logoUploaded") });
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message, variant: "destructive" }),
   });
 
   function openEditor(template?: ContractTemplate) {
@@ -596,12 +603,12 @@ function ContractTemplatesTab() {
 
   function handleSave() {
     if (!formName.trim()) {
-      toast({ title: "Template name is required", variant: "destructive" });
+      toast({ title: t("toasts.templateNameRequired"), variant: "destructive" });
       return;
     }
     const validArticles = formArticles.filter(a => a.title.trim() || a.body.trim());
     if (validArticles.length === 0) {
-      toast({ title: "Add at least one article", variant: "destructive" });
+      toast({ title: t("toasts.addAtLeastOneArticle"), variant: "destructive" });
       return;
     }
     const payload = {
@@ -669,7 +676,7 @@ function ContractTemplatesTab() {
   function insertVariableAtCursor(variable: string) {
     const target = lastFocusedTextarea.current;
     if (!target) {
-      toast({ title: "Click inside the preamble or an article body first", variant: "destructive" });
+      toast({ title: t("toasts.clickInsideFirst"), variant: "destructive" });
       return;
     }
 
@@ -731,8 +738,8 @@ function ContractTemplatesTab() {
     return result;
   }
 
-  const activeTemplates = templates.filter(t => t.status !== "archived");
-  const archivedTemplates = templates.filter(t => t.status === "archived");
+  const activeTemplates = templates.filter(tpl => tpl.status !== "archived");
+  const archivedTemplates = templates.filter(tpl => tpl.status === "archived");
 
   const statusBadge = (s: string) => {
     const styles: Record<string, string> = {
@@ -743,11 +750,18 @@ function ContractTemplatesTab() {
     return styles[s] || styles.draft;
   };
 
+  const statusLabel = (s: string) => {
+    if (s === "draft") return t("templates.statusDraft");
+    if (s === "active") return t("templates.statusActive");
+    if (s === "archived") return t("templates.archived");
+    return s;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-zinc-400 text-sm">Create and manage employment contract templates for auto-generation</p>
+          <p className="text-zinc-400 text-sm">{t("templates.subtitle")}</p>
         </div>
         <Button
           data-testid="button-create-template"
@@ -755,7 +769,7 @@ function ContractTemplatesTab() {
           className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
         >
           <Plus className="h-4 w-4" />
-          Create Template
+          {t("templates.create")}
         </Button>
       </div>
 
@@ -766,38 +780,39 @@ function ContractTemplatesTab() {
       ) : activeTemplates.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <FileText className="h-12 w-12 text-zinc-700 mb-4" />
-          <p className="text-zinc-400 font-medium">No contract templates yet</p>
-          <p className="text-zinc-600 text-sm mt-1">Create a template to start generating employment contracts</p>
+          <p className="text-zinc-400 font-medium">{t("templates.empty")}</p>
+          <p className="text-zinc-600 text-sm mt-1">{t("templates.emptyHint")}</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {activeTemplates.map(t => {
-            const eventName = eventsData.find(e => e.id === t.eventId)?.name;
+          {activeTemplates.map(tpl => {
+            const eventName = eventsData.find(e => e.id === tpl.eventId)?.name;
+            const articleCount = Array.isArray(tpl.articles) ? tpl.articles.length : 0;
             return (
               <div
-                key={t.id}
-                data-testid={`card-template-${t.id}`}
+                key={tpl.id}
+                data-testid={`card-template-${tpl.id}`}
                 className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4"
               >
                 <div className="h-12 w-12 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0">
-                  {t.logoUrl ? (
-                    <img src={t.logoUrl} alt="Logo" className="h-10 w-10 object-contain rounded" />
+                  {tpl.logoUrl ? (
+                    <img src={tpl.logoUrl} alt={t("templates.logo")} className="h-10 w-10 object-contain rounded" />
                   ) : (
                     <FileText className="h-6 w-6 text-zinc-500" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-white text-sm">{t.name}</span>
-                    <Badge className={`text-xs px-2 py-0.5 ${statusBadge(t.status)} border-0`}>
-                      {t.status}
+                    <span className="font-semibold text-white text-sm"><bdi>{tpl.name}</bdi></span>
+                    <Badge className={`text-xs px-2 py-0.5 ${statusBadge(tpl.status)} border-0`}>
+                      {statusLabel(tpl.status)}
                     </Badge>
-                    <span className="text-zinc-600 text-xs">v{t.version}</span>
+                    <span className="text-zinc-600 text-xs">{t("templates.version", { n: formatNumber(tpl.version) })}</span>
                   </div>
                   <div className="flex gap-3 mt-1 text-xs text-zinc-500">
-                    {t.companyName && <span>{t.companyName}</span>}
-                    {eventName && <span>Event: {eventName}</span>}
-                    <span>{(Array.isArray(t.articles) ? t.articles.length : 0)} article{(Array.isArray(t.articles) ? t.articles.length : 0) !== 1 ? "s" : ""}</span>
+                    {tpl.companyName && <span><bdi>{tpl.companyName}</bdi></span>}
+                    {eventName && <span>{t("templates.eventLabel", { name: eventName })}</span>}
+                    <span>{t("templates.articleCount", { n: formatNumber(articleCount), count: articleCount })}</span>
                   </div>
                 </div>
                 <div className="flex gap-2 shrink-0">
@@ -805,21 +820,21 @@ function ContractTemplatesTab() {
                     size="sm"
                     variant="outline"
                     className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 gap-1"
-                    onClick={() => setPreviewTemplate(t)}
-                    data-testid={`button-preview-template-${t.id}`}
+                    onClick={() => setPreviewTemplate(tpl)}
+                    data-testid={`button-preview-template-${tpl.id}`}
                   >
                     <Eye className="h-3.5 w-3.5" />
-                    Preview
+                    {t("templates.preview")}
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
                     className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 gap-1"
-                    onClick={() => openEditor(t)}
-                    data-testid={`button-edit-template-${t.id}`}
+                    onClick={() => openEditor(tpl)}
+                    data-testid={`button-edit-template-${tpl.id}`}
                   >
                     <Pencil className="h-3.5 w-3.5" />
-                    Edit
+                    {t("templates.edit")}
                   </Button>
                   <Button
                     size="sm"
@@ -827,34 +842,34 @@ function ContractTemplatesTab() {
                     className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 gap-1"
                     onClick={() => {
                       if (logoInputRef.current) {
-                        logoInputRef.current.dataset.templateId = t.id;
+                        logoInputRef.current.dataset.templateId = tpl.id;
                         logoInputRef.current.click();
                       }
                     }}
-                    data-testid={`button-upload-logo-${t.id}`}
+                    data-testid={`button-upload-logo-${tpl.id}`}
                   >
                     <Image className="h-3.5 w-3.5" />
-                    Logo
+                    {t("templates.logo")}
                   </Button>
-                  {t.status === "active" && (
+                  {tpl.status === "active" && (
                     <Button
                       size="sm"
                       variant="outline"
                       className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 gap-1"
-                      onClick={() => newVersionMutation.mutate(t.id)}
-                      data-testid={`button-new-version-${t.id}`}
+                      onClick={() => newVersionMutation.mutate(tpl.id)}
+                      data-testid={`button-new-version-${tpl.id}`}
                     >
                       <Copy className="h-3.5 w-3.5" />
-                      New Version
+                      {t("templates.newVersion")}
                     </Button>
                   )}
-                  {t.status === "draft" && (
+                  {tpl.status === "draft" && (
                     <Button
                       size="sm"
                       variant="outline"
                       className="border-red-900/60 text-red-400 hover:bg-red-950/40 gap-1"
-                      onClick={() => deleteMutation.mutate(t.id)}
-                      data-testid={`button-delete-template-${t.id}`}
+                      onClick={() => deleteMutation.mutate(tpl.id)}
+                      data-testid={`button-delete-template-${tpl.id}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -869,14 +884,14 @@ function ContractTemplatesTab() {
       {archivedTemplates.length > 0 && (
         <details className="mt-4">
           <summary className="text-xs text-zinc-500 cursor-pointer hover:text-zinc-400">
-            Archived versions ({archivedTemplates.length})
+            {t("templates.archivedToggle", { n: formatNumber(archivedTemplates.length) })}
           </summary>
           <div className="space-y-2 mt-2">
-            {archivedTemplates.map(t => (
-              <div key={t.id} className="bg-zinc-950 border border-zinc-900 rounded-lg p-3 flex items-center gap-3 opacity-60">
+            {archivedTemplates.map(tpl => (
+              <div key={tpl.id} className="bg-zinc-950 border border-zinc-900 rounded-lg p-3 flex items-center gap-3 opacity-60">
                 <FileText className="h-4 w-4 text-zinc-600" />
-                <span className="text-sm text-zinc-500">{t.name} v{t.version}</span>
-                <Badge className="text-xs px-2 py-0.5 bg-zinc-800 text-zinc-500 border-0">archived</Badge>
+                <span className="text-sm text-zinc-500"><bdi>{tpl.name}</bdi> {t("templates.version", { n: formatNumber(tpl.version) })}</span>
+                <Badge className="text-xs px-2 py-0.5 bg-zinc-800 text-zinc-500 border-0">{t("templates.archived")}</Badge>
               </div>
             ))}
           </div>
@@ -903,35 +918,35 @@ function ContractTemplatesTab() {
           <DialogHeader>
             <DialogTitle className="font-display text-lg flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary" />
-              {editingTemplate ? `Edit Template: ${editingTemplate.name}` : "Create Contract Template"}
+              {editingTemplate ? t("templates.editTitle", { name: editingTemplate.name }) : t("templates.createTitle")}
             </DialogTitle>
             <DialogDescription className="text-zinc-400 text-sm">
-              Define the contract structure with articles. Use {"{{variables}}"} for auto-filled candidate data.
+              {t("templates.editorDescription", { vars: "{{variables}}" })}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 mt-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs text-zinc-400 uppercase tracking-wider">Template Name *</Label>
+                <Label className="text-xs text-zinc-400 uppercase tracking-wider">{t("templates.name")}</Label>
                 <Input
                   data-testid="input-template-name"
                   value={formName}
                   onChange={e => setFormName(e.target.value)}
-                  placeholder="e.g. Ramadan 2026 Employment Agreement"
+                  placeholder={t("templates.namePlaceholder")}
                   className="bg-zinc-900 border-zinc-700"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-zinc-400 uppercase tracking-wider">Linked Event</Label>
+                <Label className="text-xs text-zinc-400 uppercase tracking-wider">{t("templates.linkedEvent")}</Label>
                 <Select value={formEventId} onValueChange={setFormEventId}>
                   <SelectTrigger className="bg-zinc-900 border-zinc-700" data-testid="select-template-event">
-                    <SelectValue placeholder="No event linked" />
+                    <SelectValue placeholder={t("templates.noEvent")} />
                   </SelectTrigger>
                   <SelectContent className="bg-zinc-900 border-zinc-700">
-                    <SelectItem value="none">No event linked</SelectItem>
+                    <SelectItem value="none">{t("templates.noEvent")}</SelectItem>
                     {eventsData.map(e => (
-                      <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                      <SelectItem key={e.id} value={e.id}><bdi>{e.name}</bdi></SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -940,24 +955,24 @@ function ContractTemplatesTab() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs text-zinc-400 uppercase tracking-wider">Company Name</Label>
+                <Label className="text-xs text-zinc-400 uppercase tracking-wider">{t("templates.companyName")}</Label>
                 <Input
                   data-testid="input-company-name"
                   value={formCompanyName}
                   onChange={e => setFormCompanyName(e.target.value)}
-                  placeholder="e.g. Luxury Carts Company Ltd"
+                  placeholder={t("templates.companyPlaceholder")}
                   className="bg-zinc-900 border-zinc-700"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-zinc-400 uppercase tracking-wider">Status</Label>
+                <Label className="text-xs text-zinc-400 uppercase tracking-wider">{t("templates.status")}</Label>
                 <Select value={formStatus} onValueChange={(v: any) => setFormStatus(v)}>
                   <SelectTrigger className="bg-zinc-900 border-zinc-700" data-testid="select-template-status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-zinc-900 border-zinc-700">
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="draft">{t("templates.draft")}</SelectItem>
+                    <SelectItem value="active">{t("templates.active")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -965,17 +980,17 @@ function ContractTemplatesTab() {
 
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2 space-y-1.5">
-                <Label className="text-xs text-zinc-400 uppercase tracking-wider">Header Text</Label>
+                <Label className="text-xs text-zinc-400 uppercase tracking-wider">{t("templates.headerText")}</Label>
                 <Input
                   data-testid="input-header-text"
                   value={formHeaderText}
                   onChange={e => setFormHeaderText(e.target.value)}
-                  placeholder="e.g. Employment Contract"
+                  placeholder={t("templates.headerPlaceholder")}
                   className="bg-zinc-900 border-zinc-700"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-zinc-400 uppercase tracking-wider">Logo Position</Label>
+                <Label className="text-xs text-zinc-400 uppercase tracking-wider">{t("templates.logoPosition")}</Label>
                 <div className="flex gap-1">
                   {(["left", "center", "right"] as const).map(pos => (
                     <button
@@ -985,7 +1000,7 @@ function ContractTemplatesTab() {
                       className={`flex-1 h-9 rounded text-xs font-medium transition-colors ${formLogoAlignment === pos ? "bg-primary text-primary-foreground" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"}`}
                       onClick={() => setFormLogoAlignment(pos)}
                     >
-                      {pos.charAt(0).toUpperCase() + pos.slice(1)}
+                      {pos === "left" ? t("templates.logoLeft") : pos === "center" ? t("templates.logoCenter") : t("templates.logoRight")}
                     </button>
                   ))}
                 </div>
@@ -994,41 +1009,46 @@ function ContractTemplatesTab() {
 
             <div className="border-t border-zinc-800 pt-4 space-y-4">
               <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-3">
-                <p className="text-xs text-zinc-500 mb-2">Available variables (click to insert at cursor):</p>
+                <p className="text-xs text-zinc-500 mb-2">{t("templates.availableVars")}</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {AVAILABLE_VARIABLES.map(v => (
-                    <button
-                      key={v.key}
-                      type="button"
-                      className="text-xs px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-emerald-400 rounded font-mono transition-colors"
-                      onClick={() => insertVariableAtCursor(v.key)}
-                    >
-                      {v.key}
-                    </button>
-                  ))}
+                  {AVAILABLE_VARIABLES.map(v => {
+                    const varKey = v.key.replace(/[{}]/g, "");
+                    return (
+                      <button
+                        key={v.key}
+                        type="button"
+                        className="text-xs px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-emerald-400 rounded font-mono transition-colors"
+                        onClick={() => insertVariableAtCursor(v.key)}
+                        title={t(`vars.${varKey}`, { defaultValue: v.label })}
+                        dir="ltr"
+                      >
+                        {v.key}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs text-zinc-400 uppercase tracking-wider">Preamble & Recitals</Label>
+                <Label className="text-xs text-zinc-400 uppercase tracking-wider">{t("templates.preamble")}</Label>
                 <Textarea
                   value={formPreamble}
                   onChange={e => setFormPreamble(e.target.value)}
                   onFocus={() => { lastFocusedTextarea.current = { type: "preamble" }; }}
-                  placeholder="e.g. This Employment Contract is entered into between {{companyName}} (hereinafter referred to as the &quot;Employer&quot;) and {{fullName}} (hereinafter referred to as the &quot;Employee&quot;), holder of ID No. {{nationalId}}…"
+                  placeholder={t("templates.preamblePlaceholder")}
                   className="bg-zinc-900 border-zinc-700 text-sm min-h-24"
                   data-testid="input-preamble"
                 />
-                <p className="text-[11px] text-zinc-600">Introductory section — identifies the parties, recites the background, and sets up the definitions before the numbered articles begin.</p>
+                <p className="text-[11px] text-zinc-600">{t("templates.preambleHint")}</p>
               </div>
             </div>
 
             <div className="border-t border-zinc-800 pt-4">
               <div className="flex items-center justify-between mb-3">
-                <Label className="text-xs text-zinc-400 uppercase tracking-wider">Contract Articles</Label>
+                <Label className="text-xs text-zinc-400 uppercase tracking-wider">{t("templates.articles")}</Label>
                 <Button size="sm" variant="outline" className="border-zinc-700 text-zinc-300 gap-1" onClick={addArticle} data-testid="button-add-article">
                   <Plus className="h-3.5 w-3.5" />
-                  Add Article
+                  {t("templates.addArticle")}
                 </Button>
               </div>
 
@@ -1036,11 +1056,11 @@ function ContractTemplatesTab() {
                 {formArticles.map((article, idx) => (
                   <div key={idx} className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 space-y-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-zinc-600 font-mono w-16 shrink-0">Art. {idx + 1}</span>
+                      <span className="text-xs text-zinc-600 font-mono w-16 shrink-0">{t("templates.articleAbbr", { n: formatNumber(idx + 1) })}</span>
                       <Input
                         value={article.title}
                         onChange={e => updateArticle(idx, "title", e.target.value)}
-                        placeholder="Article title"
+                        placeholder={t("templates.articleTitle")}
                         className="bg-zinc-800 border-zinc-700 h-8 text-sm flex-1"
                         data-testid={`input-article-title-${idx}`}
                       />
@@ -1060,18 +1080,18 @@ function ContractTemplatesTab() {
                       value={article.body}
                       onChange={e => updateArticle(idx, "body", e.target.value)}
                       onFocus={() => { lastFocusedTextarea.current = { type: "article", idx }; }}
-                      placeholder="Article body — use {{variables}} for auto-filled data"
+                      placeholder={t("templates.articleBody", { vars: "{{variables}}" })}
                       className="bg-zinc-800 border-zinc-700 text-sm min-h-20"
                       data-testid={`input-article-body-${idx}`}
                     />
                     {(article.subArticles || []).map((sub, subIdx) => (
                       <div key={subIdx} className="ml-8 border-l-2 border-zinc-700 pl-3 space-y-1.5">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-zinc-600 font-mono w-12 shrink-0">{idx + 1}.{subIdx + 1}</span>
+                          <span className="text-xs text-zinc-600 font-mono w-12 shrink-0">{formatNumber(idx + 1)}.{formatNumber(subIdx + 1)}</span>
                           <Input
                             value={sub.title}
                             onChange={e => updateSubArticle(idx, subIdx, "title", e.target.value)}
-                            placeholder="Sub-article title"
+                            placeholder={t("templates.subArticleTitle")}
                             className="bg-zinc-800 border-zinc-700 h-7 text-xs flex-1"
                             data-testid={`input-subarticle-title-${idx}-${subIdx}`}
                           />
@@ -1083,7 +1103,7 @@ function ContractTemplatesTab() {
                           value={sub.body}
                           onChange={e => updateSubArticle(idx, subIdx, "body", e.target.value)}
                           onFocus={() => { lastFocusedTextarea.current = { type: "subarticle", idx, subIdx }; }}
-                          placeholder="Sub-article body — use {{variables}} for auto-filled data"
+                          placeholder={t("templates.subArticleBody", { vars: "{{variables}}" })}
                           className="bg-zinc-800 border-zinc-700 text-xs min-h-16"
                           data-testid={`input-subarticle-body-${idx}-${subIdx}`}
                         />
@@ -1097,7 +1117,7 @@ function ContractTemplatesTab() {
                       data-testid={`button-add-subarticle-${idx}`}
                     >
                       <Plus className="h-3 w-3 mr-1" />
-                      Add Sub-Article {idx + 1}.{(article.subArticles || []).length + 1}
+                      {t("templates.addSubArticle", { n: `${formatNumber(idx + 1)}.${formatNumber((article.subArticles || []).length + 1)}` })}
                     </Button>
                   </div>
                 ))}
@@ -1105,34 +1125,34 @@ function ContractTemplatesTab() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs text-zinc-400 uppercase tracking-wider">Testimonium</Label>
+              <Label className="text-xs text-zinc-400 uppercase tracking-wider">{t("templates.testimonium")}</Label>
               <Textarea
                 data-testid="input-footer-text"
                 value={formFooterText}
                 onChange={e => setFormFooterText(e.target.value)}
                 onFocus={() => { lastFocusedTextarea.current = { type: "preamble" }; }}
-                placeholder="e.g. IN WITNESS WHEREOF, the parties hereto have executed this Agreement as of the date first written above."
+                placeholder={t("templates.testimoniumPlaceholder")}
                 className="bg-zinc-900 border-zinc-700 text-sm min-h-20"
               />
-              <p className="text-[11px] text-zinc-600">Closing clause — the formal attestation that the parties have agreed and signed the contract.</p>
+              <p className="text-[11px] text-zinc-600">{t("templates.testimoniumHint")}</p>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs text-zinc-400 uppercase tracking-wider">Document Footer</Label>
+              <Label className="text-xs text-zinc-400 uppercase tracking-wider">{t("templates.documentFooter")}</Label>
               <Textarea
                 data-testid="input-document-footer"
                 value={formDocumentFooter}
                 onChange={e => setFormDocumentFooter(e.target.value)}
-                placeholder="e.g. Luxury Carts Company Ltd | CR No. 4030123456 | P.O. Box 12345, Makkah 21955, Saudi Arabia | Tel: +966 12 345 6789"
+                placeholder={t("templates.documentFooterPlaceholder")}
                 className="bg-zinc-900 border-zinc-700 text-[11px] min-h-16 font-mono"
               />
-              <p className="text-[11px] text-zinc-600">Small print at the bottom of every page — company name, commercial registration, address, contact details.</p>
+              <p className="text-[11px] text-zinc-600">{t("templates.documentFooterHint")}</p>
             </div>
           </div>
 
           <DialogFooter className="mt-4">
             <Button variant="outline" className="border-zinc-700" onClick={closeEditor}>
-              Cancel
+              {t("templates.cancel")}
             </Button>
             <Button
               onClick={handleSave}
@@ -1141,7 +1161,7 @@ function ContractTemplatesTab() {
               data-testid="button-save-template"
             >
               {(createMutation.isPending || updateMutation.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
-              {editingTemplate ? "Update Template" : "Create Template"}
+              {editingTemplate ? t("templates.update") : t("templates.createBtn")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1152,10 +1172,10 @@ function ContractTemplatesTab() {
           <DialogHeader>
             <DialogTitle className="font-display text-lg flex items-center gap-2">
               <Eye className="h-5 w-5 text-primary" />
-              Preview: {previewTemplate?.name}
+              {t("templates.previewTitle", { name: previewTemplate?.name ?? "" })}
             </DialogTitle>
             <DialogDescription className="text-zinc-400 text-sm">
-              This shows how the contract will look with sample data filled in.
+              {t("templates.previewDescription")}
             </DialogDescription>
           </DialogHeader>
           {previewTemplate && (
@@ -1176,11 +1196,11 @@ function ContractTemplatesTab() {
                 )}
                 {Array.isArray(previewTemplate.articles) && previewTemplate.articles.map((article: any, idx: number) => (
                   <div key={idx}>
-                    <h3 className="font-bold text-sm mb-1">Article {idx + 1}: {article.title}</h3>
+                    <h3 className="font-bold text-sm mb-1">{t("contract.articlePrefix", { n: formatNumber(idx + 1), title: article.title })}</h3>
                     <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVariables(article.body)}</p>
                     {Array.isArray(article.subArticles) && article.subArticles.map((sub: any, subIdx: number) => (
                       <div key={subIdx} className="ml-6 mt-2">
-                        <h4 className="font-bold text-sm mb-0.5">{idx + 1}.{subIdx + 1} {sub.title}</h4>
+                        <h4 className="font-bold text-sm mb-0.5">{formatNumber(idx + 1)}.{formatNumber(subIdx + 1)} {sub.title}</h4>
                         <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVariables(sub.body)}</p>
                       </div>
                     ))}
@@ -1194,20 +1214,20 @@ function ContractTemplatesTab() {
                 <div className="border-t pt-6 mt-8">
                   <div className="grid grid-cols-2 gap-8">
                     <div className="space-y-2">
-                      <p className="text-sm font-bold">First Party (Employer)</p>
-                      <p className="text-xs text-gray-600">{(previewTemplate as any).companyName || "Luxury Carts Company Ltd"}</p>
+                      <p className="text-sm font-bold">{t("contract.firstParty")}</p>
+                      <p className="text-xs text-gray-600"><bdi>{(previewTemplate as any).companyName || t("contract.defaultCompany")}</bdi></p>
                       <div className="border-b border-gray-400 mt-8 pt-6"></div>
-                      <p className="text-xs text-gray-500">Authorized Signature & Stamp</p>
+                      <p className="text-xs text-gray-500">{t("contract.authorizedSignature")}</p>
                     </div>
                     <div className="space-y-2">
-                      <p className="text-sm font-bold">Second Party (Employee)</p>
-                      <p className="text-xs text-gray-600">________________________</p>
+                      <p className="text-sm font-bold">{t("contract.secondParty")}</p>
+                      <p className="text-xs text-gray-600">{t("templates.previewSignature")}</p>
                       <div className="border-b border-gray-400 mt-8 pt-6"></div>
-                      <p className="text-xs text-gray-500">Employee Signature</p>
+                      <p className="text-xs text-gray-500">{t("contract.employeeSignature")}</p>
                     </div>
                   </div>
                   <div className="mt-6 text-center">
-                    <p className="text-xs text-gray-500">Date: ____________________</p>
+                    <p className="text-xs text-gray-500" dir="ltr">{t("contract.dateLabel", { date: t("contract.dateBlank") })}</p>
                   </div>
                 </div>
                 {(previewTemplate as any).documentFooter && (
@@ -1227,7 +1247,7 @@ function ContractTemplatesTab() {
                   data-testid="button-print-contract"
                 >
                   <Download className="h-4 w-4" />
-                  Print / Export PDF
+                  {t("contract.printExport")}
                 </Button>
               </div>
             </>
@@ -1249,6 +1269,7 @@ function ProgressBar({ value, total }: { value: number; total: number }) {
 }
 
 export default function OnboardingPage() {
+  const { t, i18n } = useTranslation("onboarding");
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -1305,8 +1326,8 @@ export default function OnboardingPage() {
   });
   const getAdminName = useCallback((id: string | null | undefined) => {
     if (!id) return null;
-    return adminUsers.find(u => u.id === id)?.fullName ?? "Unknown admin";
-  }, [adminUsers]);
+    return adminUsers.find(u => u.id === id)?.fullName ?? t("admin.unknown");
+  }, [adminUsers, t]);
 
   type AdmitItem = { candidateId: string; applicationId: string | null; jobId: string | null; hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean };
   const admitMutation = useMutation({
@@ -1319,9 +1340,9 @@ export default function OnboardingPage() {
       setSelectedIds(new Set());
       setAdmitSearch("");
       setAdmitPage(1);
-      toast({ title: `${items.length} candidate${items.length !== 1 ? "s" : ""} admitted to onboarding` });
+      toast({ title: t("toasts.admitted", { n: formatNumber(items.length), count: items.length }) });
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message ?? "Could not admit candidates", variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message ?? t("toasts.admitFailed"), variant: "destructive" }),
   });
 
   const checklistMutation = useMutation({
@@ -1332,7 +1353,7 @@ export default function OnboardingPage() {
       // Refresh the local checklist record
       setChecklistRecord(prev => prev ? { ...prev, ...(checklistMutation.variables?.data as any) } : prev);
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message, variant: "destructive" }),
   });
 
   const { data: meUser } = useQuery<{ id: string; fullName?: string }>({
@@ -1344,9 +1365,9 @@ export default function OnboardingPage() {
     mutationFn: (id: string) => apiRequest("PATCH", `/api/onboarding/${id}`, { status: "rejected", rejectedBy: meUser?.id ?? null }).then(r => r.json()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
-      toast({ title: "Candidate rejected from onboarding" });
+      toast({ title: t("toasts.rejected") });
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message, variant: "destructive" }),
   });
 
   const convertMutation = useMutation({
@@ -1357,9 +1378,9 @@ export default function OnboardingPage() {
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
       setConvertRecord(null);
       setConvertForm({ startDate: "", salary: "", eventId: "", smpCompanyId: "" });
-      toast({ title: "Successfully converted to employee!", description: "Employee record created." });
+      toast({ title: t("toasts.converted"), description: t("toasts.convertedDesc") });
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message, variant: "destructive" }),
   });
 
   const bulkConvertMutation = useMutation({
@@ -1372,17 +1393,17 @@ export default function OnboardingPage() {
       setBulkConvertForm({ startDate: "", salary: "", eventId: "", smpCompanyId: "" });
       const errCount = data.errors?.length ?? 0;
       toast({
-        title: `${data.converted} employee${data.converted !== 1 ? "s" : ""} created`,
-        description: errCount > 0 ? `${errCount} failed — check records individually.` : "All ready candidates converted successfully.",
+        title: t("toasts.bulkConverted", { n: formatNumber(data.converted), count: data.converted }),
+        description: errCount > 0 ? t("toasts.bulkConvertedFailed", { n: formatNumber(errCount) }) : t("toasts.bulkConvertedAll"),
         variant: errCount > 0 ? "destructive" : "default",
       });
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message, variant: "destructive" }),
   });
 
   const { data: activeTemplates = [] } = useQuery<ContractTemplate[]>({
     queryKey: ["/api/contract-templates"],
-    select: (data: ContractTemplate[]) => data.filter(t => t.status === "active"),
+    select: (data: ContractTemplate[]) => data.filter(tpl => tpl.status === "active"),
   });
 
   const { data: smpCompanies = [] } = useQuery<{ id: string; name: string; isActive: boolean }[]>({
@@ -1400,20 +1421,20 @@ export default function OnboardingPage() {
       setBulkContractOpen(false);
       setBulkContractTemplateId("");
       toast({
-        title: `Contracts generated for ${data.generated} candidate${data.generated !== 1 ? "s" : ""}`,
-        description: data.failed > 0 ? `${data.failed} failed — check records individually.` : "All candidates notified by SMS.",
+        title: t("toasts.contractsGenerated", { n: formatNumber(data.generated), count: data.generated }),
+        description: data.failed > 0 ? t("toasts.contractsFailed", { n: formatNumber(data.failed) }) : t("toasts.contractsNotified"),
       });
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/onboarding/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
-      toast({ title: "Record removed" });
+      toast({ title: t("toasts.recordRemoved") });
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message, variant: "destructive" }),
   });
 
   const deleteDocMutation = useMutation({
@@ -1422,13 +1443,17 @@ export default function OnboardingPage() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       qc.invalidateQueries({ queryKey: ["/api/candidates"] });
-      const labels: Record<string, string> = { photo: "Photo", nationalId: "National ID", iban: "IBAN Certificate" };
-      toast({ title: `${labels[vars.docType] ?? "Document"} removed`, description: "Candidate will see the missing document on next login." });
+      const labelMap: Record<string, string> = {
+        photo: t("docs.photo"),
+        nationalId: t("docs.nationalId"),
+        iban: t("docs.iban"),
+      };
+      toast({ title: t("toasts.docRemoved", { label: labelMap[vars.docType] ?? t("docs.document") }), description: t("toasts.docRemovedDesc") });
       const flagMap: Record<string, string> = { photo: "hasPhoto", nationalId: "hasNationalId", iban: "hasIban" };
       const flag = flagMap[vars.docType];
       if (flag) setChecklistRecord(prev => prev ? { ...prev, [flag]: false } : prev);
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message, variant: "destructive" }),
   });
 
   const filtered = records.filter(r => {
@@ -1524,8 +1549,8 @@ export default function OnboardingPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white tracking-tight">Onboarding</h1>
-            <p className="text-zinc-400 mt-1 text-sm">Convert shortlisted candidates into employees after prerequisite verification</p>
+            <h1 className="text-3xl font-display font-bold text-white tracking-tight">{t("page.title")}</h1>
+            <p className="text-zinc-400 mt-1 text-sm">{t("page.subtitle")}</p>
           </div>
         </div>
 
@@ -1533,11 +1558,11 @@ export default function OnboardingPage() {
           <TabsList className="bg-zinc-900 border border-zinc-800 p-1">
             <TabsTrigger value="pipeline" className="data-[state=active]:bg-zinc-800 data-[state=active]:text-white text-zinc-400 gap-2" data-testid="tab-pipeline">
               <ClipboardCheck className="h-4 w-4" />
-              Onboarding Pipeline
+              {t("tabs.pipeline")}
             </TabsTrigger>
             <TabsTrigger value="templates" className="data-[state=active]:bg-zinc-800 data-[state=active]:text-white text-zinc-400 gap-2" data-testid="tab-templates">
               <FileText className="h-4 w-4" />
-              Contract Templates
+              {t("tabs.templates")}
             </TabsTrigger>
           </TabsList>
 
@@ -1551,7 +1576,7 @@ export default function OnboardingPage() {
                 className="border-blue-700 text-blue-400 hover:bg-blue-900/30 gap-2"
               >
                 <FileSignature className="h-4 w-4" />
-                Bulk Generate Contracts
+                {t("actions.bulkGenerateContracts")}
               </Button>
             )}
             {stats.convertible > 0 && (
@@ -1562,7 +1587,7 @@ export default function OnboardingPage() {
                 className="border-emerald-700 text-emerald-400 hover:bg-emerald-900/30 gap-2"
               >
                 <UserCheck className="h-4 w-4" />
-                Convert All Ready ({stats.convertible})
+                {t("actions.convertAllReady", { n: formatNumber(stats.convertible) })}
               </Button>
             )}
             <Button
@@ -1571,22 +1596,22 @@ export default function OnboardingPage() {
               className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white gap-2"
             >
               <Plus className="h-4 w-4" />
-              Admit Candidate
+              {t("actions.admit")}
             </Button>
           </div>
 
         {/* KPI Row */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {[
-            { label: "Total",       value: stats.total,      color: "text-white" },
-            { label: "Pending",     value: stats.pending,    color: "text-zinc-400" },
-            { label: "In Progress", value: stats.inProgress, color: "text-yellow-400" },
-            { label: "Ready",       value: stats.ready,      color: "text-emerald-400" },
-            { label: "Converted",   value: stats.converted,  color: "text-blue-400" },
+            { key: "total",      label: t("stats.total"),      value: stats.total,      color: "text-white" },
+            { key: "pending",    label: t("stats.pending"),    value: stats.pending,    color: "text-zinc-400" },
+            { key: "inProgress", label: t("stats.inProgress"), value: stats.inProgress, color: "text-yellow-400" },
+            { key: "ready",      label: t("stats.ready"),      value: stats.ready,      color: "text-emerald-400" },
+            { key: "converted",  label: t("stats.converted"),  value: stats.converted,  color: "text-blue-400" },
           ].map(s => (
-            <div key={s.label} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+            <div key={s.key} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
               <p className="text-xs text-zinc-500 uppercase tracking-wide">{s.label}</p>
-              <p className={`text-2xl font-bold ${s.color} mt-1`} data-testid={`stat-onboarding-${s.label.toLowerCase().replace(" ", "-")}`}>{s.value}</p>
+              <p className={`text-2xl font-bold ${s.color} mt-1`} data-testid={`stat-onboarding-${s.key}`}>{formatNumber(s.value)}</p>
             </div>
           ))}
         </div>
@@ -1597,7 +1622,7 @@ export default function OnboardingPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
             <Input
               data-testid="input-search-onboarding"
-              placeholder="Search by name, ID number, or phone…"
+              placeholder={t("filters.searchPlaceholder")}
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="pl-9 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500"
@@ -1605,24 +1630,24 @@ export default function OnboardingPage() {
           </div>
           <Select value={eventFilter} onValueChange={setEventFilter}>
             <SelectTrigger data-testid="select-event-filter-onboarding" className="w-40 bg-zinc-900 border-zinc-700 text-white">
-              <SelectValue placeholder="All Events" />
+              <SelectValue placeholder={t("filters.allEvents")} />
             </SelectTrigger>
             <SelectContent className="bg-zinc-900 border-zinc-700">
-              <SelectItem value="all">All Events</SelectItem>
+              <SelectItem value="all">{t("filters.allEvents")}</SelectItem>
               {eventsList.map((evt) => (
-                <SelectItem key={evt.id} value={evt.id}>{evt.name}</SelectItem>
+                <SelectItem key={evt.id} value={evt.id}><bdi>{evt.name}</bdi></SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger data-testid="select-status-filter" className="w-40 bg-zinc-900 border-zinc-700 text-white">
-              <SelectValue placeholder="All statuses" />
+              <SelectValue placeholder={t("filters.allStatuses")} />
             </SelectTrigger>
             <SelectContent className="bg-zinc-900 border-zinc-700">
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="active">{t("filters.active")}</SelectItem>
+              <SelectItem value="all">{t("filters.allStatuses")}</SelectItem>
               {Object.entries(STATUS_CONFIG).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                <SelectItem key={k} value={k}>{t(`status.${k}`, { defaultValue: v.label })}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -1636,8 +1661,8 @@ export default function OnboardingPage() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Users className="h-12 w-12 text-zinc-700 mb-4" />
-            <p className="text-zinc-400 font-medium">No onboarding records found</p>
-            <p className="text-zinc-600 text-sm mt-1">Admit a shortlisted candidate to begin the onboarding process</p>
+            <p className="text-zinc-400 font-medium">{t("empty.records")}</p>
+            <p className="text-zinc-600 text-sm mt-1">{t("empty.recordsHint")}</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -1671,22 +1696,22 @@ export default function OnboardingPage() {
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-white text-sm">{candidate?.fullNameEn ?? "Unknown"}</span>
-                      {candidate?.nationalId && <span className="text-zinc-500 text-xs font-mono">{candidate.nationalId}</span>}
+                      <span className="font-semibold text-white text-sm"><bdi>{candidate?.fullNameEn ?? t("record.unknown")}</bdi></span>
+                      {candidate?.nationalId && <span className="text-zinc-500 text-xs font-mono" dir="ltr">{candidate.nationalId}</span>}
                       <Badge className={`text-xs px-2 py-0.5 ${cfg.color} border-0`}>
                         <StatusIcon className="h-3 w-3 mr-1" />
-                        {cfg.label}
+                        {t(`status.${rec.status}`, { defaultValue: cfg.label })}
                       </Badge>
                       {isOffered && !isConverted && (
-                        <Badge data-testid={`badge-offered-${rec.id}`} className="text-[10px] px-1.5 py-0.5 bg-cyan-900/50 text-cyan-400 border-0">Offered</Badge>
+                        <Badge data-testid={`badge-offered-${rec.id}`} className="text-[10px] px-1.5 py-0.5 bg-cyan-900/50 text-cyan-400 border-0">{t("badges.offered")}</Badge>
                       )}
                       {isSmp && (
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-800 text-blue-400">SMP</Badge>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-800 text-blue-400">{t("badges.smp")}</Badge>
                       )}
                       {isRejected && rec.rejectedAt && (
                         <span className="text-[11px] text-zinc-500">
-                          Rejected {new Date(rec.rejectedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} at {new Date(rec.rejectedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                          {rec.rejectedBy && <> by <strong className="text-zinc-400">{getAdminName(rec.rejectedBy)}</strong></>}
+                          {t("record.rejectedOn", { date: formatDate(rec.rejectedAt, i18n.language, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) })}
+                          {rec.rejectedBy && <> {t("record.byAdmin")} <strong className="text-zinc-400"><bdi>{getAdminName(rec.rejectedBy)}</bdi></strong></>}
                         </span>
                       )}
                     </div>
@@ -1700,17 +1725,17 @@ export default function OnboardingPage() {
                           <div className="flex items-center gap-1 text-xs">
                             <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${phase >= 1 ? (docsComplete ? "bg-emerald-900/40 text-emerald-400" : "bg-yellow-900/40 text-yellow-400") : "bg-zinc-800 text-zinc-500"}`}>
                               <ClipboardCheck className="h-3 w-3" />
-                              Docs {docsDone}/{docPrereqs.length}
+                              {t("phases.docs", { done: formatNumber(docsDone), total: formatNumber(docPrereqs.length) })}
                             </div>
                             <div className={`w-4 h-px ${phase >= 2 ? "bg-emerald-700" : "bg-zinc-700"}`} />
                             <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${isSmpPipeline ? "bg-zinc-800 text-zinc-600" : phase >= 2 ? (contractSigned ? "bg-emerald-900/40 text-emerald-400" : "bg-yellow-900/40 text-yellow-400") : "bg-zinc-800 text-zinc-600"}`}>
                               <FileSignature className="h-3 w-3" />
-                              {isSmpPipeline ? "N/A" : contractSigned ? "Signed" : docsComplete ? "Awaiting Signature" : "Not Generated"}
+                              {isSmpPipeline ? t("phases.notApplicable") : contractSigned ? t("phases.signed") : docsComplete ? t("phases.awaitingSignature") : t("phases.notGenerated")}
                             </div>
                             <div className={`w-4 h-px ${phase >= 3 ? "bg-emerald-700" : "bg-zinc-700"}`} />
                             <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${phase >= 3 ? "bg-emerald-900/40 text-emerald-400" : "bg-zinc-800 text-zinc-600"}`}>
                               <CheckCircle2 className="h-3 w-3" />
-                              {isConverted ? "Converted" : phase >= 3 ? "Ready" : "—"}
+                              {isConverted ? t("phases.converted") : phase >= 3 ? t("phases.ready") : "—"}
                             </div>
                           </div>
                         </div>
@@ -1729,7 +1754,7 @@ export default function OnboardingPage() {
                         onClick={() => setChecklistRecord(rec)}
                       >
                         <ClipboardCheck className="h-3.5 w-3.5" />
-                        Checklist
+                        {t("actions.checklist")}
                       </Button>
                     )}
                     {isReady && (
@@ -1750,12 +1775,12 @@ export default function OnboardingPage() {
                           }}
                         >
                           <UserCheck className="h-3.5 w-3.5" />
-                          Convert to Employee
+                          {t("actions.convertToEmployee")}
                         </Button>
                         {!canConvert && isReady && !isSmpPipeline && (
                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-yellow-400 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
                             <FileSignature className="h-3 w-3 inline mr-1" />
-                            Contract must be signed first
+                            {t("actions.contractMustBeSigned")}
                           </div>
                         )}
                       </div>
@@ -1770,13 +1795,13 @@ export default function OnboardingPage() {
                         disabled={rejectMutation.isPending}
                       >
                         <XCircle className="h-3.5 w-3.5" />
-                        Reject
+                        {t("actions.reject")}
                       </Button>
                     )}
                     {isConverted && (
                       <div className="flex items-center gap-1 text-blue-400 text-xs">
                         <CheckCircle2 className="h-4 w-4" />
-                        <span>Moved to Workforce</span>
+                        <span>{t("actions.movedToWorkforce")}</span>
                       </div>
                     )}
                   </div>
@@ -1797,9 +1822,9 @@ export default function OnboardingPage() {
       <Dialog open={admitOpen} onOpenChange={setAdmitOpen}>
         <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-lg">
           <DialogHeader>
-            <DialogTitle className="font-display text-lg">Admit Candidates to Onboarding</DialogTitle>
+            <DialogTitle className="font-display text-lg">{t("admit.title")}</DialogTitle>
             <DialogDescription className="text-zinc-400 text-sm">
-              Select one or more interviewed / shortlisted candidates to admit.
+              {t("admit.description")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 mt-2">
@@ -1808,7 +1833,7 @@ export default function OnboardingPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
               <Input
                 data-testid="input-admit-search"
-                placeholder="Search candidates…"
+                placeholder={t("admit.searchPlaceholder")}
                 value={admitSearch}
                 onChange={e => { setAdmitSearch(e.target.value); setAdmitPage(1); }}
                 className="pl-9 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500"
@@ -1844,11 +1869,11 @@ export default function OnboardingPage() {
                   }`}>
                     {(allPageSelected || somePageSelected) && <span className="text-white text-[9px] font-bold leading-none">{allPageSelected ? "✓" : "–"}</span>}
                   </div>
-                  {allPageSelected ? "Deselect all on page" : "Select all on page"}
+                  {allPageSelected ? t("admit.deselectAll") : t("admit.selectAll")}
                 </button>
                 {selectedIds.size > 0 && (
                   <span className="text-xs text-[hsl(155,45%,55%)] font-medium">
-                    {selectedIds.size} selected total
+                    {t("admit.selectedTotal", { n: formatNumber(selectedIds.size) })}
                   </span>
                 )}
               </div>
@@ -1859,8 +1884,8 @@ export default function OnboardingPage() {
               {admitFiltered.length === 0 ? (
                 <div className="text-center py-8 text-zinc-500 text-sm">
                   {eligibleCandidates.length === 0
-                    ? "No eligible candidates — candidates must be interviewed or shortlisted first"
-                    : "No candidates match your search"}
+                    ? t("admit.noEligible")
+                    : t("admit.noMatch")}
                 </div>
               ) : admitPageCandidates.map(c => {
                 const isSelected = selectedIds.has(c.id);
@@ -1886,13 +1911,13 @@ export default function OnboardingPage() {
                       {c.fullNameEn.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white truncate">{c.fullNameEn}</p>
-                      {c.nationalId && <p className="text-xs text-zinc-500 font-mono">{c.nationalId}</p>}
+                      <p className="text-sm font-medium text-white truncate"><bdi>{c.fullNameEn}</bdi></p>
+                      {c.nationalId && <p className="text-xs text-zinc-500 font-mono" dir="ltr">{c.nationalId}</p>}
                     </div>
                     <div className="flex gap-1 shrink-0">
-                      {c.hasPhoto      && <span title="Photo"      className="text-emerald-500"><Camera     className="h-3.5 w-3.5" /></span>}
-                      {c.hasIban       && <span title="IBAN"       className="text-emerald-500"><CreditCard  className="h-3.5 w-3.5" /></span>}
-                      {c.hasNationalId && <span title="National ID" className="text-emerald-500"><IdCard     className="h-3.5 w-3.5" /></span>}
+                      {c.hasPhoto      && <span title={t("docs.photo")}      className="text-emerald-500"><Camera     className="h-3.5 w-3.5" /></span>}
+                      {c.hasIban       && <span title={t("docs.iban")}       className="text-emerald-500"><CreditCard  className="h-3.5 w-3.5" /></span>}
+                      {c.hasNationalId && <span title={t("docs.nationalId")} className="text-emerald-500"><IdCard     className="h-3.5 w-3.5" /></span>}
                     </div>
                   </button>
                 );
@@ -1910,10 +1935,10 @@ export default function OnboardingPage() {
                   onClick={() => setAdmitPage(p => Math.max(1, p - 1))}
                   className="border-zinc-700 text-zinc-300 h-7 px-2 text-xs"
                 >
-                  ← Prev
+                  {t("admit.prev")}
                 </Button>
                 <span className="text-xs text-zinc-500">
-                  Page {admitPage} of {admitTotalPages} &nbsp;·&nbsp; {admitFiltered.length} eligible
+                  {t("admit.pageOf", { page: formatNumber(admitPage), total: formatNumber(admitTotalPages) })} &nbsp;·&nbsp; {t("admit.eligibleCount", { n: formatNumber(admitFiltered.length) })}
                 </span>
                 <Button
                   data-testid="button-admit-next-page"
@@ -1923,7 +1948,7 @@ export default function OnboardingPage() {
                   onClick={() => setAdmitPage(p => Math.min(admitTotalPages, p + 1))}
                   className="border-zinc-700 text-zinc-300 h-7 px-2 text-xs"
                 >
-                  Next →
+                  {t("admit.next")}
                 </Button>
               </div>
             )}
@@ -1935,7 +1960,7 @@ export default function OnboardingPage() {
                 className="border-zinc-700 text-zinc-300"
                 onClick={() => { setAdmitOpen(false); setSelectedIds(new Set()); setAdmitSearch(""); setAdmitPage(1); }}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 data-testid="button-confirm-admit"
@@ -1946,8 +1971,8 @@ export default function OnboardingPage() {
                 {admitMutation.isPending
                   ? <Loader2 className="h-4 w-4 animate-spin" />
                   : selectedIds.size > 0
-                    ? `Admit ${selectedIds.size} Candidate${selectedIds.size !== 1 ? "s" : ""}`
-                    : "Select Candidates"}
+                    ? t("admit.confirmN", { n: formatNumber(selectedIds.size), count: selectedIds.size })
+                    : t("admit.selectFirst")}
               </Button>
             </div>
           </div>
@@ -1958,12 +1983,17 @@ export default function OnboardingPage() {
       <Sheet open={!!checklistRecord} onOpenChange={o => !o && setChecklistRecord(null)}>
         <SheetContent className="bg-zinc-950 border-zinc-800 text-white w-full sm:max-w-md overflow-y-auto">
           <SheetHeader>
-            <SheetTitle className="font-display text-lg">Onboarding Checklist</SheetTitle>
-            <SheetDescription className="text-zinc-400 text-sm">
-              {checklistRecord && (() => {
+            <SheetTitle className="font-display text-lg">{t("checklist.title")}</SheetTitle>
+            <SheetDescription className="text-zinc-400 text-sm" asChild>
+              {checklistRecord ? (() => {
                 const c = getCandidateFor(checklistRecord);
-                return `${c?.fullNameEn ?? "Candidate"}${c?.nationalId ? ` — ${c.nationalId}` : ""}`;
-              })()}
+                return (
+                  <div>
+                    <bdi>{c?.fullNameEn ?? t("record.candidate")}</bdi>
+                    {c?.nationalId ? <> — <span dir="ltr">{c.nationalId}</span></> : null}
+                  </div>
+                );
+              })() : <div />}
             </SheetDescription>
           </SheetHeader>
 
@@ -1978,20 +2008,20 @@ export default function OnboardingPage() {
               {checklistIsSmp && (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-950/30 border border-blue-800/40 text-blue-300 text-xs">
                   <Users className="h-3.5 w-3.5 shrink-0" />
-                  SMP worker — lighter checklist (photo + ID only)
+                  {t("checklist.smpHint")}
                 </div>
               )}
               {/* Progress summary */}
               <div className="bg-zinc-900 rounded-lg p-4">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-zinc-400">Completion</span>
-                  <span className="text-sm font-medium text-white">{checklistDone}/{checklistTotal}</span>
+                  <span className="text-sm text-zinc-400">{t("checklist.completion")}</span>
+                  <span className="text-sm font-medium text-white">{formatNumber(checklistDone)}/{formatNumber(checklistTotal)}</span>
                 </div>
                 <ProgressBar value={checklistDone} total={checklistTotal} />
                 {checklistDone === checklistTotal && (
                   <p className="text-xs text-emerald-400 mt-2 flex items-center gap-1">
                     <CheckCircle2 className="h-3.5 w-3.5" />
-                    All prerequisites complete — candidate is ready to convert
+                    {t("checklist.allComplete")}
                   </p>
                 )}
               </div>
@@ -2029,9 +2059,9 @@ export default function OnboardingPage() {
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-white flex items-center gap-2">
                             <p.icon className="h-4 w-4 text-zinc-400" />
-                            {p.label}
+                            {t(`prereq.${p.key}.label`, { defaultValue: p.label })}
                           </div>
-                          <p className="text-xs text-zinc-500 mt-0.5">{p.hint}</p>
+                          <p className="text-xs text-zinc-500 mt-0.5">{t(`prereq.${p.key}.hint`, { defaultValue: p.hint })}</p>
                         </div>
                         {checked && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />}
                       </div>
@@ -2045,19 +2075,19 @@ export default function OnboardingPage() {
                                 return p.profileKey === "photoUrl" && isImg ? (
                                   <button className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer" onClick={openPreview}>
                                     <Eye className="h-5 w-5 text-emerald-400 shrink-0" />
-                                    <img src={profileValue} alt="Candidate photo" className="h-8 w-8 rounded-sm object-cover border border-zinc-600" />
-                                    <span className="text-sm text-emerald-400 underline underline-offset-2">View photo</span>
+                                    <img src={profileValue} alt={t("checklist.candidatePhotoAlt")} className="h-8 w-8 rounded-sm object-cover border border-zinc-600" />
+                                    <span className="text-sm text-emerald-400 underline underline-offset-2">{t("checklist.viewPhoto")}</span>
                                   </button>
                                 ) : (
                                   <button className="flex items-center gap-3 hover:text-emerald-300 transition-colors cursor-pointer" onClick={openPreview}>
                                     <Eye className="h-5 w-5 text-emerald-400 shrink-0" />
-                                    <span className="text-sm text-emerald-400 underline underline-offset-2">{isImg ? "View image" : "View document"}</span>
+                                    <span className="text-sm text-emerald-400 underline underline-offset-2">{isImg ? t("checklist.viewImage") : t("checklist.viewDocument")}</span>
                                   </button>
                                 );
                               })()}
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
-                              <Badge variant="outline" className="text-[10px] border-emerald-800 text-emerald-400">Uploaded</Badge>
+                              <Badge variant="outline" className="text-[10px] border-emerald-800 text-emerald-400">{t("checklist.uploaded")}</Badge>
                               {!isConverted && docType && (
                                 <Button
                                   variant="ghost"
@@ -2066,8 +2096,12 @@ export default function OnboardingPage() {
                                   data-testid={`button-delete-doc-${docType}`}
                                   onClick={e => {
                                     e.stopPropagation();
-                                    const labels: Record<string, string> = { photo: "Photo", nationalId: "National ID", iban: "IBAN Certificate" };
-                                    setPendingDeleteDoc({ candidateId: cand!.id, docType: docType!, label: labels[docType!] ?? "Document" });
+                                    const labels: Record<string, string> = {
+                                      photo: t("docs.photo"),
+                                      nationalId: t("docs.nationalId"),
+                                      iban: t("docs.iban"),
+                                    };
+                                    setPendingDeleteDoc({ candidateId: cand!.id, docType: docType!, label: labels[docType!] ?? t("docs.document") });
                                   }}
                                 >
                                   <Trash2 className="h-3 w-3" />
@@ -2081,7 +2115,7 @@ export default function OnboardingPage() {
                         <div className="mt-2 ml-8 bg-zinc-800/40 rounded-md p-2 border border-zinc-700/30">
                           <p className="text-[11px] text-zinc-500 flex items-center gap-1.5">
                             <TriangleAlert className="h-3 w-3" />
-                            Not yet submitted by candidate
+                            {t("checklist.notSubmitted")}
                           </p>
                         </div>
                       )}
@@ -2119,18 +2153,18 @@ export default function OnboardingPage() {
                   }`}>
                     {fullyReady ? (
                       <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 shrink-0" /> Ready to convert — use the "Convert to Employee" button on the main list
+                        <CheckCircle2 className="h-4 w-4 shrink-0" /> {t("checklist.readyHint")}
                       </div>
                     ) : (
                       <>
                         {!docsAllDone && (
                           <div className="flex items-center gap-2">
-                            <TriangleAlert className="h-4 w-4 shrink-0" /> {checklistTotal - checklistDone} document(s) still outstanding
+                            <TriangleAlert className="h-4 w-4 shrink-0" /> {t("checklist.outstanding", { n: formatNumber(checklistTotal - checklistDone), count: checklistTotal - checklistDone })}
                           </div>
                         )}
                         {docsAllDone && contractRequired && !contractDone && (
                           <div className="flex items-center gap-2 text-yellow-400">
-                            <FileSignature className="h-4 w-4 shrink-0" /> Contract must be signed before conversion
+                            <FileSignature className="h-4 w-4 shrink-0" /> {t("checklist.contractFirst")}
                           </div>
                         )}
                       </>
@@ -2150,41 +2184,41 @@ export default function OnboardingPage() {
           <DialogHeader>
             <DialogTitle className="font-display text-lg flex items-center gap-2">
               <UserCheck className="h-5 w-5 text-emerald-400" />
-              Convert to Employee
+              {t("convert.title")}
             </DialogTitle>
-            <DialogDescription className="text-zinc-400 text-sm">
-              {convertRecord && (() => {
+            <DialogDescription className="text-zinc-400 text-sm" asChild>
+              {convertRecord ? (() => {
                 const c = getCandidateFor(convertRecord);
-                return `${c?.fullNameEn ?? "Candidate"} will be moved to Workforce.`;
-              })()}
+                return <div>{t("convert.willMove", { name: c?.fullNameEn ?? t("record.candidate") })}</div>;
+              })() : <div />}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 mt-2">
             <div className="bg-emerald-950/20 border border-emerald-800/40 rounded-lg p-3 text-sm text-emerald-300 flex items-start gap-2">
               <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-              All prerequisites verified. Fill in the employment details to complete the conversion.
+              {t("convert.verifiedHint")}
             </div>
 
             <div className="grid gap-3">
               <div className="space-y-1.5">
-                <Label className="text-zinc-400 text-sm">Event <span className="text-red-400">*</span></Label>
+                <Label className="text-zinc-400 text-sm">{t("convert.event")} <span className="text-red-400">*</span></Label>
                 <Select
                   value={convertForm.eventId}
                   onValueChange={v => setConvertForm(f => ({ ...f, eventId: v }))}
                 >
                   <SelectTrigger data-testid="select-convert-event" className="bg-zinc-900 border-zinc-700 text-white">
-                    <SelectValue placeholder="Select an event…" />
+                    <SelectValue placeholder={t("convert.eventPlaceholder")} />
                   </SelectTrigger>
                   <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
                     {eventsList.map(ev => (
-                      <SelectItem key={ev.id} value={ev.id} className="text-white focus:bg-zinc-800">{ev.name}</SelectItem>
+                      <SelectItem key={ev.id} value={ev.id} className="text-white focus:bg-zinc-800"><bdi>{ev.name}</bdi></SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-zinc-400 text-sm">Start Date <span className="text-red-400">*</span></Label>
+                <Label className="text-zinc-400 text-sm">{t("convert.startDate")} <span className="text-red-400">*</span></Label>
                 <DatePickerField
                   data-testid="input-convert-startdate"
                   value={convertForm.startDate}
@@ -2195,27 +2229,27 @@ export default function OnboardingPage() {
               {/* SMP Company selector — required for SMP candidates (no applicationId) */}
               {convertRecord && !convertRecord.applicationId && (
                 <div className="space-y-1.5">
-                  <Label className="text-zinc-400 text-sm">SMP Company <span className="text-red-400">*</span></Label>
+                  <Label className="text-zinc-400 text-sm">{t("convert.smpCompany")} <span className="text-red-400">*</span></Label>
                   <select
                     data-testid="select-convert-smp-company"
                     value={convertForm.smpCompanyId}
                     onChange={e => setConvertForm(f => ({ ...f, smpCompanyId: e.target.value }))}
                     className="w-full h-10 bg-zinc-900 border border-zinc-700 rounded-md px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
                   >
-                    <option value="" className="bg-zinc-900 text-zinc-400">— Select SMP company —</option>
+                    <option value="" className="bg-zinc-900 text-zinc-400">{t("convert.smpPlaceholder")}</option>
                     {smpCompanies.map(c => (
                       <option key={c.id} value={c.id} className="bg-zinc-900 text-white">{c.name}</option>
                     ))}
                   </select>
-                  <p className="text-[11px] text-red-400/70">Required — SMP workers must be linked to a company.</p>
+                  <p className="text-[11px] text-red-400/70">{t("convert.smpRequired")}</p>
                 </div>
               )}
               <div className="space-y-1.5">
-                <Label className="text-zinc-400 text-sm">Monthly Salary (SAR)</Label>
+                <Label className="text-zinc-400 text-sm">{t("convert.salary")}</Label>
                 <Input
                   data-testid="input-convert-salary"
                   type="number"
-                  placeholder="e.g. 4500"
+                  placeholder={t("convert.salaryPlaceholder")}
                   value={convertForm.salary}
                   onChange={e => setConvertForm(f => ({ ...f, salary: e.target.value }))}
                   className="bg-zinc-900 border-zinc-700 text-white"
@@ -2229,7 +2263,7 @@ export default function OnboardingPage() {
                 className="border-zinc-700 text-zinc-300"
                 onClick={() => setConvertRecord(null)}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 data-testid="button-confirm-convert"
@@ -2245,7 +2279,7 @@ export default function OnboardingPage() {
                 })}
                 className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white gap-2"
               >
-                {convertMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><UserCheck className="h-4 w-4" /> Confirm & Convert</>}
+                {convertMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><UserCheck className="h-4 w-4" /> {t("convert.confirm")}</>}
               </Button>
             </div>
           </div>
@@ -2256,25 +2290,25 @@ export default function OnboardingPage() {
       <Dialog open={bulkConvertOpen} onOpenChange={setBulkConvertOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Bulk Convert to Employees</DialogTitle>
+            <DialogTitle>{t("bulkConvert.title")}</DialogTitle>
             <DialogDescription>
-              Convert {stats.convertible} eligible candidate{stats.convertible !== 1 ? "s" : ""} into employee{stats.convertible !== 1 ? "s" : ""} at once. Fill in the shared employment details below.
+              {t("bulkConvert.description", { n: formatNumber(stats.convertible), count: stats.convertible })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="bg-emerald-900/20 border border-emerald-800 rounded-lg p-3 flex items-center gap-3">
               <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
               <div>
-                <p className="text-sm font-medium text-emerald-300">{stats.convertible} candidate{stats.convertible !== 1 ? "s" : ""} ready to convert</p>
-                <p className="text-xs text-emerald-400/70">All prerequisites verified &amp; contracts signed</p>
+                <p className="text-sm font-medium text-emerald-300">{t("bulkConvert.ready", { n: formatNumber(stats.convertible), count: stats.convertible })}</p>
+                <p className="text-xs text-emerald-400/70">{t("bulkConvert.readyHint")}</p>
               </div>
             </div>
             {stats.readyNoContract > 0 && (
               <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-3 flex items-center gap-3">
                 <FileSignature className="h-5 w-5 text-yellow-400 shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-yellow-300">{stats.readyNoContract} candidate{stats.readyNoContract !== 1 ? "s" : ""} skipped</p>
-                  <p className="text-xs text-yellow-400/70">Contract not yet signed — generate &amp; sign contracts first</p>
+                  <p className="text-sm font-medium text-yellow-300">{t("bulkConvert.skipped", { n: formatNumber(stats.readyNoContract), count: stats.readyNoContract })}</p>
+                  <p className="text-xs text-yellow-400/70">{t("bulkConvert.skippedHint")}</p>
                 </div>
               </div>
             )}
@@ -2284,23 +2318,23 @@ export default function OnboardingPage() {
               return (
                 <div className="space-y-3">
                   <div>
-                    <Label className="text-zinc-300 text-sm">Event <span className="text-red-400">*</span></Label>
+                    <Label className="text-zinc-300 text-sm">{t("convert.event")} <span className="text-red-400">*</span></Label>
                     <Select
                       value={bulkConvertForm.eventId}
                       onValueChange={v => setBulkConvertForm(f => ({ ...f, eventId: v }))}
                     >
                       <SelectTrigger data-testid="select-bulk-event" className="bg-zinc-900 border-zinc-700 text-white mt-1">
-                        <SelectValue placeholder="Select an event…" />
+                        <SelectValue placeholder={t("convert.eventPlaceholder")} />
                       </SelectTrigger>
                       <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
                         {eventsList.map(ev => (
-                          <SelectItem key={ev.id} value={ev.id} className="text-white focus:bg-zinc-800">{ev.name}</SelectItem>
+                          <SelectItem key={ev.id} value={ev.id} className="text-white focus:bg-zinc-800"><bdi>{ev.name}</bdi></SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-zinc-300 text-sm">Start Date <span className="text-red-400">*</span></Label>
+                    <Label className="text-zinc-300 text-sm">{t("convert.startDate")} <span className="text-red-400">*</span></Label>
                     <DatePickerField
                       data-testid="input-bulk-start-date"
                       value={bulkConvertForm.startDate}
@@ -2310,27 +2344,27 @@ export default function OnboardingPage() {
                   </div>
                   {hasSmpReady && (
                     <div>
-                      <Label className="text-zinc-300 text-sm">SMP Company <span className="text-red-400">*</span></Label>
+                      <Label className="text-zinc-300 text-sm">{t("convert.smpCompany")} <span className="text-red-400">*</span></Label>
                       <select
                         data-testid="select-bulk-smp-company"
                         value={bulkConvertForm.smpCompanyId}
                         onChange={e => setBulkConvertForm(f => ({ ...f, smpCompanyId: e.target.value }))}
                         className="w-full h-10 bg-zinc-900 border border-zinc-700 rounded-md px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none mt-1"
                       >
-                        <option value="" className="bg-zinc-900 text-zinc-400">— Select SMP company —</option>
+                        <option value="" className="bg-zinc-900 text-zinc-400">{t("convert.smpPlaceholder")}</option>
                         {smpCompanies.map(c => (
                           <option key={c.id} value={c.id} className="bg-zinc-900 text-white">{c.name}</option>
                         ))}
                       </select>
-                      <p className="text-[11px] text-red-400/70 mt-1">Required for SMP candidates in this batch.</p>
+                      <p className="text-[11px] text-red-400/70 mt-1">{t("bulkConvert.smpRequired")}</p>
                     </div>
                   )}
                   <div>
-                    <Label className="text-zinc-300 text-sm">Monthly Salary (SAR)</Label>
+                    <Label className="text-zinc-300 text-sm">{t("convert.salary")}</Label>
                     <Input
                       data-testid="input-bulk-salary"
                       type="number"
-                      placeholder="e.g. 4500"
+                      placeholder={t("convert.salaryPlaceholder")}
                       value={bulkConvertForm.salary}
                       onChange={e => setBulkConvertForm(f => ({ ...f, salary: e.target.value }))}
                       className="bg-zinc-900 border-zinc-700 text-white mt-1"
@@ -2338,7 +2372,7 @@ export default function OnboardingPage() {
                   </div>
                   <div className="flex justify-end gap-2 pt-2">
                     <Button variant="outline" onClick={() => setBulkConvertOpen(false)} className="border-zinc-700 text-zinc-300">
-                      Cancel
+                      {t("common.cancel")}
                     </Button>
                     <Button
                       data-testid="button-confirm-bulk-convert"
@@ -2355,8 +2389,8 @@ export default function OnboardingPage() {
                       className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
                     >
                       {bulkConvertMutation.isPending
-                        ? <><Loader2 className="h-4 w-4 animate-spin" /> Converting...</>
-                        : <><UserCheck className="h-4 w-4" /> Convert {stats.convertible} Employee{stats.convertible !== 1 ? "s" : ""}</>
+                        ? <><Loader2 className="h-4 w-4 animate-spin" /> {t("bulkConvert.converting")}</>
+                        : <><UserCheck className="h-4 w-4" /> {t("bulkConvert.confirm", { n: formatNumber(stats.convertible), count: stats.convertible })}</>
                       }
                     </Button>
                   </div>
@@ -2371,36 +2405,36 @@ export default function OnboardingPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileSignature className="h-5 w-5 text-blue-400" />
-              Bulk Generate Contracts
+              {t("bulkContracts.title")}
             </DialogTitle>
             <DialogDescription>
-              Generate employment contracts for all active onboarding candidates. Each candidate will be notified by SMS.
+              {t("bulkContracts.description")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-3 flex items-center gap-3">
               <FileText className="h-5 w-5 text-blue-400 shrink-0" />
               <div>
-                <p className="text-sm font-medium text-blue-300">{records.filter(r => r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated").length} eligible candidates</p>
-                <p className="text-xs text-blue-400/70">Non-SMP candidates with complete documents will receive contracts</p>
+                <p className="text-sm font-medium text-blue-300">{t("bulkContracts.eligible", { n: formatNumber(records.filter(r => r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated").length) })}</p>
+                <p className="text-xs text-blue-400/70">{t("bulkContracts.eligibleHint")}</p>
               </div>
             </div>
             <div>
-              <Label className="text-zinc-300 text-sm">Contract Template *</Label>
+              <Label className="text-zinc-300 text-sm">{t("bulkContracts.template")}</Label>
               <Select value={bulkContractTemplateId} onValueChange={setBulkContractTemplateId}>
                 <SelectTrigger className="bg-zinc-900 border-zinc-700 mt-1" data-testid="select-bulk-contract-template">
-                  <SelectValue placeholder="Select template…" />
+                  <SelectValue placeholder={t("bulkContracts.templatePlaceholder")} />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-zinc-700">
-                  {activeTemplates.map(t => (
-                    <SelectItem key={t.id} value={t.id}>{t.name} (v{t.version})</SelectItem>
+                  {activeTemplates.map(tpl => (
+                    <SelectItem key={tpl.id} value={tpl.id}><bdi>{tpl.name}</bdi> ({t("templates.version", { n: formatNumber(tpl.version) })})</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setBulkContractOpen(false)} className="border-zinc-700 text-zinc-300">
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 data-testid="button-confirm-bulk-contracts"
@@ -2418,8 +2452,8 @@ export default function OnboardingPage() {
                 className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
               >
                 {bulkContractMutation.isPending
-                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
-                  : <><FileSignature className="h-4 w-4" /> Generate Contracts</>
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> {t("bulkContracts.generating")}</>
+                  : <><FileSignature className="h-4 w-4" /> {t("bulkContracts.confirm")}</>
                 }
               </Button>
             </div>
@@ -2429,13 +2463,13 @@ export default function OnboardingPage() {
       <AlertDialog open={!!rejectConfirmId} onOpenChange={(v) => { if (!v) setRejectConfirmId(null); }}>
         <AlertDialogContent className="bg-card border-border">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Reject this candidate?</AlertDialogTitle>
+            <AlertDialogTitle className="text-white">{t("rejectConfirm.title")}</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              This will remove the candidate from the onboarding pipeline. You can re-admit them later if needed.
+              {t("rejectConfirm.description")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-border" data-testid="button-reject-cancel">Keep</AlertDialogCancel>
+            <AlertDialogCancel className="border-border" data-testid="button-reject-cancel">{t("rejectConfirm.keep")}</AlertDialogCancel>
             <AlertDialogAction
               data-testid="button-reject-confirm"
               className="bg-red-600 text-white hover:bg-red-700"
@@ -2444,7 +2478,7 @@ export default function OnboardingPage() {
                 setRejectConfirmId(null);
               }}
             >
-              Yes, Reject
+              {t("rejectConfirm.confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -2452,13 +2486,13 @@ export default function OnboardingPage() {
       <AlertDialog open={!!pendingDeleteDoc} onOpenChange={(v) => { if (!v) setPendingDeleteDoc(null); }}>
         <AlertDialogContent className="bg-card border-border">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Delete {pendingDeleteDoc?.label}?</AlertDialogTitle>
+            <AlertDialogTitle className="text-white">{t("deleteDoc.title", { label: pendingDeleteDoc?.label ?? "" })}</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              This will permanently remove the uploaded file. The candidate will be notified by SMS and will need to re-upload it.
+              {t("deleteDoc.description")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-border" data-testid="button-delete-doc-cancel">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="border-border" data-testid="button-delete-doc-cancel">{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               data-testid="button-delete-doc-confirm"
               className="bg-red-600 text-white hover:bg-red-700"
@@ -2467,7 +2501,7 @@ export default function OnboardingPage() {
                 setPendingDeleteDoc(null);
               }}
             >
-              Yes, Delete
+              {t("deleteDoc.confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -2475,12 +2509,17 @@ export default function OnboardingPage() {
       <Dialog open={!!docPreview} onOpenChange={(v) => { if (!v) setDocPreview(null); }}>
         <DialogContent className="bg-zinc-950 border-zinc-800 max-w-2xl max-h-[90vh] p-0">
           <DialogHeader className="px-5 pt-5 pb-0">
-            <DialogTitle className="text-white font-display">{docPreview?.label ?? "Document Preview"}</DialogTitle>
-            <DialogDescription className="text-zinc-400 text-sm">
-              {checklistRecord && (() => {
+            <DialogTitle className="text-white font-display">{docPreview?.label ?? t("docPreview.title")}</DialogTitle>
+            <DialogDescription className="text-zinc-400 text-sm" asChild>
+              {checklistRecord ? (() => {
                 const c = getCandidateFor(checklistRecord);
-                return c ? `${c.fullNameEn}${c.nationalId ? ` — ${c.nationalId}` : ""}` : "";
-              })()}
+                return c ? (
+                  <div>
+                    <bdi>{c.fullNameEn}</bdi>
+                    {c.nationalId ? <> — <span dir="ltr">{c.nationalId}</span></> : null}
+                  </div>
+                ) : <div />;
+              })() : <div />}
             </DialogDescription>
           </DialogHeader>
           <div className="px-5 pb-4 flex items-center justify-center min-h-[300px] max-h-[70vh] overflow-auto">
@@ -2493,9 +2532,9 @@ export default function OnboardingPage() {
                 <div className="h-16 w-16 rounded-full bg-zinc-800 flex items-center justify-center">
                   <Eye className="h-7 w-7 text-zinc-400" />
                 </div>
-                <p className="text-zinc-400 text-sm">Preview not available for this file type</p>
+                <p className="text-zinc-400 text-sm">{t("docPreview.notAvailable")}</p>
                 <a href={docPreview?.url} target="_blank" rel="noopener noreferrer" className="text-emerald-400 text-sm underline underline-offset-2 flex items-center gap-1" data-testid="link-download-doc">
-                  Download file <ExternalLink className="h-3 w-3" />
+                  {t("docPreview.download")} <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
             )}
@@ -2503,11 +2542,11 @@ export default function OnboardingPage() {
           <DialogFooter className="px-5 pb-5 pt-4 border-t border-zinc-800">
             <a href={docPreview?.url} target="_blank" rel="noopener noreferrer" data-testid="button-open-new-tab">
               <Button variant="outline" size="sm" className="border-zinc-700 text-zinc-300 hover:text-white gap-1.5">
-                <ExternalLink className="h-3.5 w-3.5" /> Open in new tab
+                <ExternalLink className="h-3.5 w-3.5" /> {t("docPreview.openNewTab")}
               </Button>
             </a>
             <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white" onClick={() => setDocPreview(null)} data-testid="button-close-preview">
-              Close
+              {t("common.close")}
             </Button>
           </DialogFooter>
         </DialogContent>
