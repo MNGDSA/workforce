@@ -629,7 +629,7 @@ export default function AuthPage() {
             <TabsContent value="register" className="space-y-4">
 
               {/* Step indicator */}
-              <div className="flex items-center gap-2 mb-2">
+              <div className={`flex items-center gap-2 mb-2 ${isRtl ? "flex-row-reverse justify-start" : ""}`}>
                 {(["phone", "otp", "details"] as RegStep[]).map((step, i) => (
                   <div key={step} className="flex items-center gap-2">
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${regStep === step ? "bg-primary text-primary-foreground" : i < ["phone","otp","details"].indexOf(regStep) ? "bg-primary/20 text-primary" : "bg-muted/40 text-muted-foreground"}`}>
