@@ -4,6 +4,7 @@ import { PdfViewer } from "@/components/pdf-viewer";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { toProxiedFileUrl } from "@/lib/file-url";
 import Layout from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -2003,6 +2004,9 @@ export default function OnboardingPage() {
                   let profileValue = p.profileKey && cand ? (cand as any)[p.profileKey] : null;
                   if (!profileValue && p.profileKey === "ibanFileUrl" && cand?.ibanNumber?.startsWith("/uploads/")) {
                     profileValue = cand.ibanNumber;
+                  }
+                  if (profileValue && p.profileKey && p.profileKey !== "photoUrl") {
+                    profileValue = toProxiedFileUrl(profileValue) ?? profileValue;
                   }
                   const hasProfileData = !!profileValue;
                   const isFilePrereq = p.isFile && p.profileKey;

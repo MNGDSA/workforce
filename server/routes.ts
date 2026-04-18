@@ -7,7 +7,7 @@ import fs from "fs";
 import crypto from "crypto";
 import { storage, createInboxItem } from "./storage";
 import { db } from "./db";
-import { uploadFile, deleteFile, getMimeType } from "./file-storage";
+import { uploadFile, deleteFile, getMimeType, getFileBuffer } from "./file-storage";
 import { getAuthenticatedUser, listUserRepos, getRepo, listRepoIssues, listRepoPullRequests } from "./github";
 import {
   inboxItems,
@@ -343,6 +343,46 @@ export async function registerRoutes(
       });
     } catch (err) {
       return res.status(500).json({ message: "Failed to fetch config" });
+    }
+  });
+
+  // ─── Authenticated File Proxy ──────────────────────────────────────────────
+  // Serves private candidate documents (national_id, iban, resume) from DO Spaces
+  // through an authenticated, authorization-checked proxy. Photos remain
+  // public-read on Spaces and use direct URLs.
+  app.get(/^\/api\/files\/(uploads\/.+)$/, requireAuth, async (req: Request, res: Response) => {
+    try {
+      const key = (req.params as any)[0] as string;
+      if (!key || key.includes("..")) return res.status(400).json({ message: "Invalid file path" });
+
+      const spacesBucket = process.env.SPACES_BUCKET || "";
+      const spacesEndpoint = process.env.SPACES_ENDPOINT || "";
+      const candidateUrls = [
+        `https://${spacesBucket}.${spacesEndpoint}/${key}`,
+        `/${key}`, // dev fallback path stored as `/uploads/xxx`
+      ];
+
+      let owner;
+      for (const u of candidateUrls) {
+        owner = await storage.getCandidateByFileUrl(u);
+        if (owner) break;
+      }
+      if (!owner) return res.status(404).json({ message: "File not found" });
+
+      const isAdmin =
+        req.authIsSuperAdmin ||
+        req.authPermissions?.has("candidates:read");
+      const isOwner = owner.userId === req.authUserId;
+      if (!isAdmin && !isOwner) {
+        return res.status(403).json({ message: "You do not have permission to view this file." });
+      }
+
+      const buffer = await getFileBuffer(candidateUrls[0]);
+      res.setHeader("Content-Type", getMimeType(key));
+      res.setHeader("Cache-Control", "private, max-age=300");
+      return res.send(buffer);
+    } catch (err) {
+      return handleError(res, err);
     }
   });
 

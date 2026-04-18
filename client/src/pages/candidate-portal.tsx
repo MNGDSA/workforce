@@ -76,6 +76,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { apiRequest } from "@/lib/queryClient";
+import { toProxiedFileUrl } from "@/lib/file-url";
 import { useToast } from "@/hooks/use-toast";
 import { resolveSaudiBank } from "@/lib/saudi-banks";
 import Cropper from "react-easy-crop";
@@ -519,10 +520,10 @@ function ProfileCompletionCard({
   };
 
   const docUrlMap: Record<DocKey, string | null> = {
-    resume: profile?.resumeUrl || null,
+    resume: toProxiedFileUrl(profile?.resumeUrl),
     photo: profile?.photoUrl || null,
-    nationalId: profile?.nationalIdFileUrl || null,
-    iban: profile?.ibanFileUrl || null,
+    nationalId: toProxiedFileUrl(profile?.nationalIdFileUrl),
+    iban: toProxiedFileUrl(profile?.ibanFileUrl),
   };
 
   const isDone = (key: DocKey) => dbFlags[key] || !!justUploaded[key];
