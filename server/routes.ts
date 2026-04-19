@@ -70,6 +70,10 @@ import {
   verifySubmissionToken,
   signServerTime,
 } from "./lib/submission-token";
+import {
+  verifyAttendanceIntegrityToken,
+  computeAttendanceNonceHex,
+} from "./play-integrity";
 
 function getAuthUserId(req: Request): string | null {
   const cookie = req.headers.cookie;
@@ -5976,6 +5980,12 @@ export async function registerRoutes(
         lastNtpSyncAt: z.string().optional(),
         locationSource: z.string().optional(),
         submissionToken: z.string().optional(),
+        // Task #88 — Play Integrity verdict token from the device.
+        // Optional in the schema so capture flows from older builds and
+        // pre-rollout staging keep working; the actual gate lives in
+        // `verifyAttendanceIntegrityToken` which only enforces when
+        // PLAY_INTEGRITY_ENABLED=true.
+        integrityToken: z.string().optional(),
       });
 
       const parsed = schema.parse(req.body);
@@ -6146,6 +6156,49 @@ export async function registerRoutes(
             verification: { status: existingToken.status, deduplicated: true },
           },
         );
+      }
+
+      // ── Task #88 — Play Integrity verdict gate ───────────────────────
+      // When PLAY_INTEGRITY_ENABLED=true the verifier hard-rejects any
+      // submit whose integrity token is missing, malformed, or whose
+      // verdict fails app/device/account checks. When disabled (default)
+      // this is a pass-through, preserving the existing accept-everything
+      // behaviour for dev / staging / pre-rollout builds.
+      //
+      // The canonical nonce is recomputed server-side from the same
+      // fields the device used to bind the token. Order MUST match
+      // `computeAttendanceNonceHex` and the device-side payload-hash
+      // construction in `AttendanceRepository.attemptSubmission` (see
+      // docs/android-release-runbook.md §3.2).
+      let photoSha256Hex = "";
+      try {
+        const photoBytes = await fs.promises.readFile(req.file.path);
+        photoSha256Hex = crypto
+          .createHash("sha256")
+          .update(photoBytes)
+          .digest("hex");
+      } catch (err) {
+        console.warn(
+          "[attendance-mobile/submit] failed to hash photo for integrity nonce:",
+          err,
+        );
+      }
+      const expectedNonceHex = computeAttendanceNonceHex({
+        workforceId: parsed.workforceId,
+        timestamp: parsed.timestamp ?? parsed.clientTimestamp ?? "",
+        gpsLat: parsed.gpsLat,
+        gpsLng: parsed.gpsLng,
+        photoSha256Hex,
+      });
+      const integrity = await verifyAttendanceIntegrityToken(
+        parsed.integrityToken,
+        expectedNonceHex,
+      );
+      if (!integrity.ok) {
+        return res.status(403).json({
+          code: integrity.code,
+          message: integrity.reason,
+        });
       }
 
       const orgTz = await getOrgTimezone();

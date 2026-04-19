@@ -253,12 +253,15 @@ classifier in `AttendanceRepository.attemptSubmission`).
    `googleapis` call (the exact call site is documented inline in that
    file). Verify against `expectedNonceHex` and the appropriate verdict
    fields.
-4. In the attendance submit handler in `server/routes.ts` (search for
-   `app.post("/api/attendance-mobile/submit"`), call
-   `verifyAttendanceIntegrityToken(req.body.integrityToken,
+4. **Done (Task #88).** The attendance submit handler in
+   `server/routes.ts` (search for `app.post("/api/attendance-mobile/submit"`)
+   already calls `verifyAttendanceIntegrityToken(parsed.integrityToken,
    computeAttendanceNonceHex({...}))` immediately after the per-token
-   dedupe check and before the daily-cap check. On `ok=false`, return
-   `403` with `{ message, code }` so the device classifier can route it.
+   dedupe check and before the daily-cap check, and returns `403`
+   with `{ code, message }` on `ok=false` so the device classifier
+   routes `INTEGRITY_*` codes correctly. No further code change is
+   required to enforce — flipping `PLAY_INTEGRITY_ENABLED=true` (after
+   step 3 above is completed) is sufficient to turn the gate on.
 
 ### 3.4 Rollout staging
 
