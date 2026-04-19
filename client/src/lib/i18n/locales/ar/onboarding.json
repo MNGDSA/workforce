@@ -7,6 +7,10 @@
       "templates": "قوالب العقود"
     }
   },
+  "tabs": {
+    "pipeline": "قائمة الإلحاق",
+    "templates": "قوالب العقود"
+  },
   "status": {
     "pending": "قيد الانتظار",
     "in_progress": "قيد التنفيذ",
@@ -25,6 +29,7 @@
     "total": "الإجمالي",
     "pending": "قيد الانتظار",
     "in_progress": "قيد التنفيذ",
+    "inProgress": "قيد التنفيذ",
     "ready": "جاهز",
     "converted": "تم التحويل"
   },

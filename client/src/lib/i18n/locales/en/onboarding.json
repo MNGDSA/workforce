@@ -7,6 +7,10 @@
       "templates": "Contract Templates"
     }
   },
+  "tabs": {
+    "pipeline": "Onboarding Pipeline",
+    "templates": "Contract Templates"
+  },
   "status": {
     "pending": "Pending",
     "in_progress": "In Progress",
@@ -25,6 +29,7 @@
     "total": "Total",
     "pending": "Pending",
     "in_progress": "In Progress",
+    "inProgress": "In Progress",
     "ready": "Ready",
     "converted": "Converted"
   },
