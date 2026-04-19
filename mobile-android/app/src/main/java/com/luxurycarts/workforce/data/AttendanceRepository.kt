@@ -84,7 +84,21 @@ class AttendanceRepository(
         gpsLng: Double,
         gpsAccuracy: Float?,
         trustReport: com.luxurycarts.workforce.services.DeviceTrustReport? = null,
+        // Task #85 step 4 — server-issued, HMAC-signed submission token
+        // obtained from the most recent /api/attendance-mobile/status
+        // call. Persisted onto the entity at capture time so the eventual
+        // /submit can prove this row was authorised at that moment.
+        // Nullable because the capture flow may have happened before
+        // the token-issuing /status call could be made (e.g. status was
+        // attempted but the network was offline). In that case the
+        // sync pipeline will surface NeedsAttention(TOKEN_MISSING) and
+        // the user is prompted to refresh status before retrying.
+        submissionToken: String? = null,
     ) {
+        // Local row id stays a client-side UUID — this is the Room
+        // primary key, not the server-side dedup token. The dedup token
+        // is the `submissionToken` argument above and MUST come from
+        // the server (see Task #85 / docs/api-error-codes.md).
         val id = UUID.randomUUID().toString()
         val trustedInstant = ntpTimeService?.getTrustedInstant() ?: Instant.now()
         val systemClockInstant = Instant.now()
@@ -121,9 +135,14 @@ class AttendanceRepository(
             systemClockTimestamp = systemClockInstant.toString(),
             lastNtpSyncAt = lastNtpSync?.toString(),
             staleClock = staleClock,
+            submissionToken = submissionToken,
         )
         dao.insert(entity)
-        SyncTelemetry.logEvent(context, "submission_saved", "id=$id staleClock=$staleClock")
+        SyncTelemetry.logEvent(
+            context,
+            "submission_saved",
+            "id=$id staleClock=$staleClock hasToken=${submissionToken != null}",
+        )
     }
 
     data class SyncResult(
@@ -414,10 +433,25 @@ class AttendanceRepository(
             }
             val textType = "text/plain".toMediaType()
 
-            val token = submission.submissionToken ?: run {
-                val newToken = UUID.randomUUID().toString()
-                dao.setSubmissionTokenIfMissing(submission.id, newToken)
-                newToken
+            // Task #85 step 5 — the submission token MUST come from the
+            // server (issued by /api/attendance-mobile/status, persisted
+            // onto the entity at capture time). The previous fallback
+            // that minted a client-side UUID here re-opened the very
+            // pre-claim attack the new HMAC contract closes — a hostile
+            // client could pre-register a UUID server-side and lock out
+            // a legitimate worker from submitting under that token.
+            //
+            // Older entities saved before this build will not have a
+            // server token; surface them as NeedsAttention so the user
+            // refreshes status (which mints a fresh HMAC token) before
+            // we re-attempt. This drains the legacy queue on the next
+            // user interaction without silently weakening the contract.
+            val token = submission.submissionToken
+            if (token.isNullOrBlank()) {
+                return SyncOutcome.NeedsAttention(
+                    "TOKEN_MISSING",
+                    "Submission was captured before a server-issued token was available; refresh attendance status and retry.",
+                )
             }
 
             val response: Response<SubmissionResponse> = try {
@@ -443,8 +477,13 @@ class AttendanceRepository(
                 return classifyThrowable(t)
             }
 
-            // Inspect the body for terminated/disabled before classifying 403,
-            // so the worker-termination path is reached when the server says so.
+            // Task #85 step 3 — parse the structured `code` field once,
+            // then route on exact-match. The previous substring-match
+            // path (`body.contains("terminated")`) was a footgun: any
+            // server message that happened to mention "terminated" or
+            // "disabled" (translated copy, debug logs, audit events,
+            // future product features) would wipe the worker's session.
+            // Catalog: docs/api-error-codes.md.
             var terminatedSignal = false
             val errBodyString = if (!response.isSuccessful) {
                 try {
@@ -459,14 +498,21 @@ class AttendanceRepository(
                 }
             } else null
 
+            val parsedCode = parseErrorCode(errBodyString)
+
             if (response.code() == 403) {
-                val parsedCode = parseErrorCode(errBodyString)
                 if (parsedCode == "BEFORE_SHIFT_WINDOW" || parsedCode == "AFTER_SHIFT_WINDOW") {
                     return SyncOutcome.PermanentClientError(parsedCode, 403)
                 }
-                if (errBodyString != null && (errBodyString.contains("terminated") || errBodyString.contains("disabled"))) {
-                    terminatedSignal = true
-                }
+                terminatedSignal = parsedCode == "ACCOUNT_DISABLED" ||
+                    parsedCode == "ACCOUNT_TERMINATED" ||
+                    parsedCode == "ACCOUNT_INACTIVE" ||
+                    // Backwards compat: pre-Task-#85 server emits the
+                    // `terminated: true` boolean alongside (or instead of)
+                    // the structured `code`. Keep the legacy fallback for
+                    // exactly one release cycle, scoped to a narrow JSON-
+                    // field check so unrelated copy can never trip it.
+                    (errBodyString?.contains("\"terminated\":true") == true)
             }
 
             // 422 is the single domain-specific permanent override:
@@ -481,7 +527,7 @@ class AttendanceRepository(
                 return SyncOutcome.PermanentClientError("MIN_DURATION_NOT_MET", 422)
             }
 
-            val outcome = classifyResponse(response, terminatedSignal)
+            val outcome = classifyResponse(response, terminatedSignal, parsedCode)
             if (outcome is SyncOutcome.Synced) {
                 val body = response.body()
                 val sub = body?.submission

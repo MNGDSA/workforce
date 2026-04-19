@@ -63,6 +63,13 @@ import XLSX from "xlsx";
 // Auth token signing/verification is centralized in `./auth-token` so this
 // module and `auth-middleware.ts` cannot drift on the secret.
 import { signAuthToken, verifyAuthToken } from "./auth-token";
+// Task #85 — canonical mobile error codes + HMAC submission tokens.
+import { MobileErrorCodes, mobileError } from "./lib/mobile-error-codes";
+import {
+  issueSubmissionToken,
+  verifySubmissionToken,
+  signServerTime,
+} from "./lib/submission-token";
 
 function getAuthUserId(req: Request): string | null {
   const cookie = req.headers.cookie;
@@ -314,12 +321,38 @@ export async function registerRoutes(
       // Force the client to clear the bad session and log in again.
       try { (req.session as any)?.destroy?.(() => undefined); } catch {}
       res.clearCookie("connect.sid");
-      return res.status(401).json({ message: tr(req, "auth.sessionExpired"), sessionInvalid: true });
+      // Task #85: structured `code` for the Android client. Legacy
+      // `sessionInvalid: true` retained for one release cycle.
+      return res.status(401).json({
+        code: MobileErrorCodes.SESSION_EXPIRED,
+        message: tr(req, "auth.sessionExpired"),
+        sessionInvalid: true,
+      });
     }
     if (status === "disabled") {
-      return res.status(403).json({ message: tr(req, "auth.accountDisabled"), terminated: true });
+      return mobileError(
+        res,
+        403,
+        MobileErrorCodes.ACCOUNT_DISABLED,
+        tr(req, "auth.accountDisabled"),
+        {},
+        true, // legacy `terminated: true` for old Android builds
+      );
     }
     next();
+  });
+
+  // Task #85 step 6 — signed authoritative server time. Lets the
+  // Android client periodically reconcile its NTP offset against an
+  // authenticated reference, sidestepping the unauthenticated UDP NTP
+  // attack surface (F-02). Authenticated so it cannot be used as an
+  // anonymous oracle / time-pin probe.
+  app.get("/api/time", requireAuth, async (_req: Request, res: Response) => {
+    try {
+      return res.json(signServerTime());
+    } catch (err) {
+      return handleError(res, err);
+    }
   });
 
   app.get("/api/ntp-health", requirePermission("system:ntp_check"), async (req: Request, res: Response) => {
@@ -5828,6 +5861,14 @@ export async function registerRoutes(
         }
       }
 
+      // Task #85 step 4 — mint a single-use, HMAC-signed submission
+      // token bound to this workforceId. The Android client persists
+      // it alongside the captured row at capture time and replays it
+      // on the next /submit. The 24h validity window is enough for a
+      // worker who pulls status at shift-start to sync later in the
+      // day even after going offline.
+      const issued = issueSubmissionToken(workforceId);
+
       return res.json({
         state,
         nextAllowedAction: shiftWindowOpen ? nextAllowedAction : "none",
@@ -5852,6 +5893,8 @@ export async function registerRoutes(
         },
         date: dateStr,
         currentTime,
+        submissionToken: issued.token,
+        submissionTokenExpiresAt: issued.expiresAt,
       });
     } catch (err) { return handleError(res, err); }
   });
@@ -5865,7 +5908,14 @@ export async function registerRoutes(
 
   app.post("/api/attendance-mobile/submit", requireAuth, upload.single("photo"), async (req: Request, res: Response) => {
     try {
-      if (!req.file) return res.status(400).json({ message: tr(req, "photo.required") });
+      if (!req.file) {
+        return mobileError(
+          res,
+          400,
+          MobileErrorCodes.PHOTO_REQUIRED,
+          tr(req, "photo.required"),
+        );
+      }
 
       const schema = z.object({
         workforceId: z.string().min(1),
@@ -5890,21 +5940,43 @@ export async function registerRoutes(
 
       const userId = getAuthUserId(req);
       if (!userId) {
-        return res.status(401).json({ message: tr(req, "auth.required") });
+        return mobileError(
+          res,
+          401,
+          MobileErrorCodes.AUTH_REQUIRED,
+          tr(req, "auth.required"),
+        );
       }
       const authUser = await storage.getUser(userId);
       if (!authUser || !authUser.isActive) {
-        return res.status(403).json({ message: tr(req, "user.deactivated"), terminated: true });
+        return mobileError(
+          res,
+          403,
+          MobileErrorCodes.ACCOUNT_DISABLED,
+          tr(req, "user.deactivated"),
+          {},
+          true,
+        );
       }
 
       const wfRecord = await storage.getWorkforceEmployee(parsed.workforceId);
       if (!wfRecord) {
-        return res.status(404).json({ message: tr(req, "workforce.notFound") });
+        return mobileError(
+          res,
+          404,
+          MobileErrorCodes.WORKFORCE_NOT_FOUND,
+          tr(req, "workforce.notFound"),
+        );
       }
       if (wfRecord.candidateId) {
         const candidate = await storage.getCandidate(wfRecord.candidateId);
         if (!candidate || candidate.userId !== userId) {
-          return res.status(403).json({ message: tr(req, "workforce.ownershipMismatch") });
+          return mobileError(
+            res,
+            403,
+            MobileErrorCodes.WORKFORCE_OWNERSHIP_MISMATCH,
+            tr(req, "workforce.ownershipMismatch"),
+          );
         }
       }
       if (!wfRecord.isActive) {
@@ -5920,23 +5992,93 @@ export async function registerRoutes(
           }
           const endTime = new Date(wfRecord.endDate).getTime();
           if (!Number.isFinite(endTime) || captureTime === null || captureTime > endTime) {
-            return res.status(403).json({ message: tr(req, "workforce.terminated"), terminated: true });
+            return mobileError(
+              res,
+              403,
+              MobileErrorCodes.ACCOUNT_TERMINATED,
+              tr(req, "workforce.terminated"),
+              {},
+              true,
+            );
           }
         } else {
-          return res.status(403).json({ message: tr(req, "workforce.inactive"), terminated: true });
+          return mobileError(
+            res,
+            403,
+            MobileErrorCodes.ACCOUNT_INACTIVE,
+            tr(req, "workforce.inactive"),
+            {},
+            true,
+          );
         }
       }
 
-      // ── Pre-pipeline gate: submission boundaries ──
+      // ── Task #85 step 4: server-issued submission-token verification ──
+      // The Android client receives the token from /status and replays
+      // it here. We verify the HMAC, ensure the embedded workforceId
+      // matches the request's workforceId (so a token issued for
+      // worker A can't be replayed against worker B), and then fall
+      // through to the existing UNIQUE-token dedup path for replay
+      // detection.
+      //
+      // Backwards compat: legacy raw-UUID tokens (pre-Task-#85
+      // builds) are accepted with a telemetry log and the same dedup
+      // semantics for one release cycle.
+      let tokenIsLegacyUuid = false;
       if (parsed.submissionToken) {
+        const verdict = verifySubmissionToken(parsed.submissionToken);
+        if (!verdict.ok) {
+          const status = verdict.code === "TOKEN_EXPIRED" ? 400 : 400;
+          return mobileError(
+            res,
+            status,
+            verdict.code === "TOKEN_EXPIRED"
+              ? MobileErrorCodes.TOKEN_EXPIRED
+              : MobileErrorCodes.TOKEN_INVALID,
+            verdict.code === "TOKEN_EXPIRED"
+              ? "Submission token has expired; please refresh attendance status and retry."
+              : "Submission token is invalid.",
+          );
+        }
+        if (verdict.legacy) {
+          tokenIsLegacyUuid = true;
+          console.warn(
+            "[attendance-mobile/submit] legacy raw-UUID submissionToken accepted (workforceId=%s) — Android client predates Task #85",
+            parsed.workforceId,
+          );
+        } else if (verdict.workforceId !== parsed.workforceId) {
+          return mobileError(
+            res,
+            400,
+            MobileErrorCodes.TOKEN_INVALID,
+            "Submission token was issued for a different workforce.",
+          );
+        }
+
         const [existingToken] = await db
           .select()
           .from(attendanceSubmissions)
           .where(eq(attendanceSubmissions.submissionToken, parsed.submissionToken))
           .limit(1);
         if (existingToken) {
-          return res.status(200).json({ submission: existingToken, verification: { status: existingToken.status, deduplicated: true } });
+          // 200 + deduplicated:true is the historical "already accepted"
+          // shape. The Android client treats this as AlreadySynced via
+          // the body's `verification.deduplicated` flag.
+          return res.status(200).json({
+            submission: existingToken,
+            verification: { status: existingToken.status, deduplicated: true },
+            code: MobileErrorCodes.TOKEN_USED,
+          });
         }
+      } else {
+        // Task #85: token is now mandatory for the new contract. We
+        // still accept the request to keep the older field clients
+        // working (they will simply not gain HMAC protection until
+        // they update); a telemetry warning surfaces field adoption.
+        console.warn(
+          "[attendance-mobile/submit] missing submissionToken (workforceId=%s) — Android client predates Task #85",
+          parsed.workforceId,
+        );
       }
 
       const orgTz = await getOrgTimezone();
@@ -6035,8 +6177,15 @@ export async function registerRoutes(
       // ── End pre-pipeline gate ──
 
       const photoUrl = await uploadFile(req.file.path, req.file.filename, getMimeType(req.file.filename));
-      const ts = parsed.clientTimestamp || parsed.timestamp;
       const serverReceivedAt = new Date();
+      // Task #85 step 6 — the server's wall clock at the moment the
+      // request was received is the authoritative time-of-record. The
+      // client-supplied `clientTimestamp` / `ntpTimestamp` are kept
+      // as advisory metadata (audit / drift detection), but they no
+      // longer drive the row's `submitted_at` column. This closes
+      // F-02: a tampered Android clock can no longer back-date or
+      // forward-date a submission past the shift window.
+      const submittedAt = serverReceivedAt;
 
       let ntpTs: Date | null = null;
       let sysClockTs: Date | null = null;
@@ -6095,7 +6244,7 @@ export async function registerRoutes(
           gpsLat: String(parsed.gpsLat),
           gpsLng: String(parsed.gpsLng),
           gpsAccuracy: parsed.gpsAccuracy ? String(parsed.gpsAccuracy) : null,
-          submittedAt: ts ? new Date(ts) : new Date(),
+          submittedAt,
           status: "pending",
           mockLocationDetected: parsed.mockLocationDetected ?? null,
           isEmulator: parsed.isEmulator ?? null,

@@ -278,6 +278,34 @@ fun CaptureScreen(
                                     return@launch
                                 }
 
+                                // Task #85 step 5 — fetch a fresh, server-issued
+                                // HMAC submission token before persisting the row.
+                                // The token is bound to this workforceId and good
+                                // for 24h, so a worker who captures online and
+                                // then loses connectivity can still sync later
+                                // in the day. We do NOT block capture on a token
+                                // failure — if the network is flaky we save the
+                                // row without a token and the sync pipeline will
+                                // surface NeedsAttention(TOKEN_MISSING), which
+                                // prompts the user to reconnect and refresh
+                                // status before retrying.
+                                val serverUrl = com.luxurycarts.workforce.SERVER_URL
+                                val session = app.sessionManager.getSession()
+                                val apiService = com.luxurycarts.workforce.data.ApiClient
+                                    .create(serverUrl) { /* no-op cookie sink */ }
+                                if (!session?.authCookie.isNullOrBlank()) {
+                                    com.luxurycarts.workforce.data.ApiClient
+                                        .restoreCookie(serverUrl, session!!.authCookie!!)
+                                }
+                                val serverIssuedToken: String? = try {
+                                    val statusResp = apiService.getAttendanceStatus(workforceId)
+                                    if (statusResp.isSuccessful) {
+                                        statusResp.body()?.submissionToken
+                                    } else null
+                                } catch (_: Exception) {
+                                    null
+                                }
+
                                 val trustReport = DeviceTrustManager.generateReport(context, location.rawLocation)
                                 val trustedInstant = ntpService.getTrustedInstant() ?: Instant.now()
                                 val systemClockInstant = Instant.now()
@@ -293,7 +321,16 @@ fun CaptureScreen(
 
                                 val entity = AttendanceEntity(
                                     id = UUID.randomUUID().toString(),
-                                    submissionToken = UUID.randomUUID().toString(),
+                                    // Task #85 step 5 — server-issued token only.
+                                    // The previous client-side UUID re-opened the
+                                    // pre-claim attack the new HMAC contract
+                                    // closes. Null is acceptable here: the sync
+                                    // pipeline (see AttendanceRepository.attemptSubmission)
+                                    // will not blindly fall back to a UUID; it
+                                    // will surface NeedsAttention(TOKEN_MISSING)
+                                    // and the user can refresh status to mint
+                                    // a fresh token.
+                                    submissionToken = serverIssuedToken,
                                     workforceId = EncryptionService.encrypt(workforceId),
                                     attendanceDate = attendanceDate,
                                     encryptedTimestamp = EncryptionService.encrypt(trustedInstant.toString()),

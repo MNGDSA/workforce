@@ -199,6 +199,13 @@ data class AttendanceStatusResponse(
     val config: AttendanceConfig? = null,
     val date: String? = null,
     @SerializedName("currentTime") val currentTime: String? = null,
+    // Task #85 step 4 — server-issued, HMAC-signed submission token.
+    // The capture flow persists this onto the AttendanceEntity so that
+    // /submit can verify the row was actually authorised at status-
+    // check time (closing the pre-claim attack on client-generated
+    // UUID tokens). Nullable so older server builds keep parsing.
+    @SerializedName("submissionToken") val submissionToken: String? = null,
+    @SerializedName("submissionTokenExpiresAt") val submissionTokenExpiresAt: String? = null,
 )
 
 data class ShiftInfo(

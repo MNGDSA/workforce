@@ -78,7 +78,11 @@ fun computeNextRetryAtMillis(
  * Map an HTTP response or thrown exception to a [SyncOutcome] bucket.
  * Used by [AttendanceRepository.syncPending].
  */
-fun classifyResponse(response: Response<*>, terminatedSignal: Boolean): SyncOutcome = when {
+fun classifyResponse(
+    response: Response<*>,
+    terminatedSignal: Boolean,
+    parsedCode: String? = null,
+): SyncOutcome = when {
     response.isSuccessful -> SyncOutcome.Synced
     response.code() == 409 -> SyncOutcome.AlreadySynced
     response.code() == 401 -> SyncOutcome.SessionExpired
@@ -86,6 +90,16 @@ fun classifyResponse(response: Response<*>, terminatedSignal: Boolean): SyncOutc
     response.code() == 408 -> SyncOutcome.RetryTransient("HTTP 408 timeout", 408)
     response.code() == 429 -> SyncOutcome.RetryTransient("HTTP 429 throttled", 429)
     response.code() in 500..599 -> SyncOutcome.RetryTransient("HTTP ${response.code()} server error", response.code())
+    // Task #85 step 5 — server-issued submission token verdicts. The
+    // request envelope is well-formed but the token itself is rejected.
+    // Treat as NeedsAttention so the user surfaces back to a /status
+    // call to mint a fresh token, rather than spinning on auto-retry.
+    response.code() == 400 && parsedCode == "TOKEN_INVALID" ->
+        SyncOutcome.PermanentClientError("TOKEN_INVALID", 400)
+    response.code() == 400 && parsedCode == "TOKEN_EXPIRED" ->
+        SyncOutcome.PermanentClientError("TOKEN_EXPIRED", 400)
+    response.code() == 400 && parsedCode == "TOKEN_MISSING" ->
+        SyncOutcome.PermanentClientError("TOKEN_MISSING", 400)
     else -> SyncOutcome.PermanentClientError("HTTP_${response.code()}", response.code())
 }
 

@@ -162,10 +162,26 @@ object ApiClient {
             val isAuthRequest = request.url.encodedPath.contains("/api/auth/")
             val response = chain.proceed(request)
             if (!isAuthRequest && (response.code == 403 || response.code == 401)) {
+                // Task #85 step 3 — exact-match the server's structured
+                // `code` field instead of substring-matching the human
+                // message. The previous body.contains("terminated")
+                // path was a footgun: any server message that mentioned
+                // "terminated" (e.g. translated copy, debug logs) would
+                // wipe an active session. Catalog: docs/api-error-codes.md.
                 val body = response.peekBody(1024).string()
-                val terminated = body.contains("terminated") ||
-                    body.contains("disabled") ||
-                    body.contains("Account is disabled")
+                val code = parseStructuredErrorCode(body)
+                val terminated = code == "ACCOUNT_DISABLED" ||
+                    code == "ACCOUNT_TERMINATED" ||
+                    code == "ACCOUNT_INACTIVE" ||
+                    code == "SESSION_EXPIRED" ||
+                    // Backwards compat: pre-Task-#85 server builds (or
+                    // routes that have not yet been ported) still emit
+                    // the legacy `terminated: true` boolean. Keep the
+                    // legacy fallback for one release cycle, scoped to
+                    // an exact JSON-field check rather than a substring
+                    // sweep so unrelated copy can never trip it.
+                    body.contains("\"terminated\":true") ||
+                    body.contains("\"sessionInvalid\":true")
                 if (terminated) {
                     // Task #43 step 2: previously the interceptor early-
                     // returned when isSyncInProgress was true, which
@@ -293,6 +309,23 @@ object ApiClient {
                 "ApiClient",
                 "awaitSyncCompletion timed out after ${timeoutMillis}ms — proceeding with session clear",
             )
+        }
+    }
+
+    /**
+     * Task #85 step 3 — parse the server's structured `code` field out
+     * of an error body without relying on substring matching of the
+     * (localised) `message`. Returns null on any parse failure so the
+     * interceptor falls through to its (legacy-compat) defaults.
+     */
+    private fun parseStructuredErrorCode(body: String?): String? {
+        if (body.isNullOrBlank()) return null
+        return try {
+            val obj = com.google.gson.Gson()
+                .fromJson(body, com.google.gson.JsonObject::class.java)
+            obj?.get("code")?.takeIf { !it.isJsonNull }?.asString
+        } catch (_: Exception) {
+            null
         }
     }
 
