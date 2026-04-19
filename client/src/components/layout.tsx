@@ -737,7 +737,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
         {!collapsed && (
           <>
             <span className="flex-1 text-start">{label}</span>
-            <ChevronDown className={cn("h-4 w-4 transition-transform duration-200 shrink-0", open ? "rotate-0" : "-rotate-90")} />
+            <ChevronDown className={cn("h-4 w-4 transition-transform duration-200 shrink-0", open ? "rotate-0" : "-rotate-90 rtl:rotate-90")} />
           </>
         )}
       </button>
