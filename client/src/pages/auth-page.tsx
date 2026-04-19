@@ -826,7 +826,7 @@ export default function AuthPage() {
                   <bdi>© {formatNumber(new Date().getFullYear(), { useGrouping: false })}</bdi>
                 </span>
               ) : (
-                <bdi>© {new Date().getFullYear()} Luxury Carts Company Ltd.</bdi>
+                <bdi>Luxury Carts Company Ltd. © {new Date().getFullYear()}</bdi>
               )}
             </p>
           </div>
