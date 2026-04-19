@@ -986,11 +986,14 @@ export async function registerRoutes(
         return res.status(429).json({ message: tr(req, "otp.tooManyAttempts") });
       }
 
-      // Generic "invalid" response shape — used for both "no OTP exists for
-      // this phone" and "wrong code". Returning a distinct 404 for the first
-      // case turned this endpoint into a free phone-number enumeration oracle
-      // (an attacker could probe which Saudi mobile numbers had requested an
-      // OTP). We collapse the two error paths into one indistinguishable 400.
+      // Single generic "invalid" response shape used for EVERY failure path —
+      // no OTP, wrong code, expired, already verified, attempts exhausted.
+      // Returning differentiated messages here would let an attacker probe a
+      // phone number's OTP state (does it exist? was it already used? is it
+      // throttled?) and enumerate Saudi mobile numbers that have ever
+      // registered with the system. The legitimate user always gets here from
+      // a flow where they just requested a fresh OTP, so the loss of detail
+      // is acceptable.
       const genericInvalid = () => res.status(400).json({ message: tr(req, "otp.invalid") });
 
       const otp = await storage.getLatestOtpVerification(normalizedPhone);
@@ -998,14 +1001,9 @@ export async function registerRoutes(
         await recordOtpVerifyFailure(req);
         return genericInvalid();
       }
-      if (otp.verifiedAt) {
-        return res.status(400).json({ message: tr(req, "otp.alreadyVerified") });
-      }
-      if (new Date() > otp.expiresAt) {
-        return res.status(400).json({ message: tr(req, "otp.expired") });
-      }
-      if (otp.attempts >= 5) {
-        return res.status(400).json({ message: tr(req, "otp.tooManyAttempts") });
+      if (otp.verifiedAt || new Date() > otp.expiresAt || otp.attempts >= 5) {
+        await recordOtpVerifyFailure(req);
+        return genericInvalid();
       }
       if (!verifyOtpHash(code, otp.code)) {
         await storage.incrementOtpAttempts(otp.id);
@@ -1291,7 +1289,7 @@ export async function registerRoutes(
         }
       }
 
-      console.log(`[Reset] OTP sent to ${phone} for national ID ${clean}, expires ${expiresAt.toISOString()}`);
+      console.log(`[Reset] OTP sent to ${redactPhone(phone)} for national ID ${redactNationalId(clean)}, expires ${expiresAt.toISOString()}`);
       return res.json(generic);
     } catch (err) {
       console.error("[Reset] request handler error (returning generic):", err);
