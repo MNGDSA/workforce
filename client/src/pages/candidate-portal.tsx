@@ -1751,6 +1751,16 @@ export default function CandidatePortal() {
   const [photoChangeCropSrc, setPhotoChangeCropSrc] = useState<string | null>(null);
   const [photoChangeUploading, setPhotoChangeUploading] = useState(false);
 
+  // Always start the portal at the very top — some browsers (especially
+  // after the document direction flips to RTL) restore a stale scroll
+  // position that lands the candidate halfway down the page.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, []);
+
   const storedCandidate = (() => {
     try { return JSON.parse(localStorage.getItem("workforce_candidate") || "{}"); } catch { return {}; }
   })();
