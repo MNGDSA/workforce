@@ -153,7 +153,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { requireAuth, requirePermission, requireOwnership, markPublic, invalidateRoleCache, getAuthKind } from "./auth-middleware";
 import { checkLoginRateLimit, recordLoginFailure, recordLoginSuccess } from "./login-rate-limit";
-import { checkOtpVerifyIp, recordOtpVerifyFailure, checkOtpRequestIp, recordOtpRequest } from "./otp-throttle";
+import { checkOtpVerifyIp, recordOtpVerifyFailure, tryReserveOtpRequest } from "./otp-throttle";
 import { verifyOtpHash } from "./otp-hash";
 
 const UPLOADS_DIR = path.resolve("uploads");
@@ -849,19 +849,20 @@ export async function registerRoutes(
       }).parse(req.body);
       const normalizedPhone = phone;
 
-      // Per-IP burst limiter (prevents distributed phone-rotation abuse)
-      const ipDecision = await checkOtpRequestIp(req);
+      // Per-IP burst limiter — atomic reserve-then-decide. Closes the
+      // same-burst race where N concurrent requests could all pass a separate
+      // check-then-record pattern before any of them incremented the counter.
+      const ipDecision = await tryReserveOtpRequest(req);
       if (!ipDecision.allowed) {
         res.setHeader("Retry-After", String(ipDecision.retryAfterSec));
         return res.status(429).json({ message: tr(req, "otp.tooMany") });
       }
 
-      // Rate limit: max 3 OTP requests per phone per 10 minutes
+      // Per-phone limit: max 3 OTP requests per phone per 10 minutes
       const recentCount = await storage.countRecentOtpRequests(normalizedPhone, 10 * 60 * 1000);
       if (recentCount >= 3) {
         return res.status(429).json({ message: tr(req, "otp.tooMany") });
       }
-      await recordOtpRequest(req);
 
       // Check if active SMS plugin exists
       const smsPlugin = await storage.getActiveSmsPlugin();

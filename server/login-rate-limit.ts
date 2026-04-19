@@ -3,24 +3,12 @@ import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { auditLogs, loginRateLimitBuckets } from "@shared/schema";
 import { and, eq, gt, lt } from "drizzle-orm";
+import { getClientIp } from "./client-ip";
 
 const WINDOW_MIN = 15;
 const LOCKOUT_MIN = 30;
 const MAX_ATTEMPTS = 5;
 const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
-
-function getClientIp(req: Request): string {
-  // DO App Platform / typical reverse proxy: the load balancer APPENDS the
-  // real client IP to any client-supplied X-Forwarded-For. So the rightmost
-  // entry is the only one we trust. Taking the leftmost would let an attacker
-  // pre-poison the header to rotate fake IPs and bypass the limiter.
-  const xff = req.headers["x-forwarded-for"];
-  if (typeof xff === "string" && xff.length > 0) {
-    const parts = xff.split(",");
-    return parts[parts.length - 1]!.trim();
-  }
-  return req.ip ?? "unknown";
-}
 
 function sanitizeIdentifierForLog(id: string): string {
   if (!id) return "(empty)";
