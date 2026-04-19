@@ -187,13 +187,27 @@ const uploadXlsx = multer({
   },
 });
 
-function handleError(res: Response, err: unknown) {
+function handleError(res: Response, err: unknown, req?: Request) {
   console.error(err);
   if (err instanceof z.ZodError) {
-    return res.status(400).json({ message: tr(req, "common.validation"), errors: err.errors });
+    // Task #85: every error response on a mobile-consumed route must
+    // include a stable `code` field so the Android client can route
+    // on it. Validation errors are no exception — they map to the
+    // canonical VALIDATION_FAILED code (see docs/api-error-codes.md).
+    const message = req
+      ? tr(req, "common.validation")
+      : "Validation failed";
+    return res.status(400).json({
+      code: MobileErrorCodes.VALIDATION_FAILED,
+      message,
+      errors: err.errors,
+    });
   }
   const message = err instanceof Error ? err.message : "Internal server error";
-  return res.status(500).json({ message });
+  return res.status(500).json({
+    code: MobileErrorCodes.INTERNAL_ERROR,
+    message,
+  });
 }
 
 /**
@@ -5743,17 +5757,45 @@ export async function registerRoutes(
   app.get("/api/attendance-mobile/status", requireAuth, async (req: Request, res: Response) => {
     try {
       const workforceId = req.query.workforceId as string;
-      if (!workforceId) return res.status(400).json({ message: tr(req, "common.workforceIdRequired") });
+      if (!workforceId) {
+        // Task #85 step 2 — every mobile-consumed error path must
+        // emit a structured `code`. See docs/api-error-codes.md.
+        return mobileError(
+          res,
+          400,
+          MobileErrorCodes.VALIDATION_FAILED,
+          tr(req, "common.workforceIdRequired"),
+        );
+      }
 
       const userId = getAuthUserId(req);
-      if (!userId) return res.status(401).json({ message: tr(req, "auth.required") });
+      if (!userId) {
+        return mobileError(
+          res,
+          401,
+          MobileErrorCodes.SESSION_EXPIRED,
+          tr(req, "auth.required"),
+        );
+      }
 
       const wfRecord = await storage.getWorkforceEmployee(workforceId);
-      if (!wfRecord) return res.status(404).json({ message: tr(req, "workforce.notFound") });
+      if (!wfRecord) {
+        return mobileError(
+          res,
+          404,
+          MobileErrorCodes.WORKFORCE_NOT_FOUND,
+          tr(req, "workforce.notFound"),
+        );
+      }
       if (wfRecord.candidateId) {
         const candidate = await storage.getCandidate(wfRecord.candidateId);
         if (!candidate || candidate.userId !== userId) {
-          return res.status(403).json({ message: tr(req, "workforce.ownershipMismatch") });
+          return mobileError(
+            res,
+            403,
+            MobileErrorCodes.WORKFORCE_OWNERSHIP_MISMATCH,
+            tr(req, "workforce.ownershipMismatch"),
+          );
         }
       }
 
@@ -6021,63 +6063,88 @@ export async function registerRoutes(
       // through to the existing UNIQUE-token dedup path for replay
       // detection.
       //
-      // Backwards compat: legacy raw-UUID tokens (pre-Task-#85
-      // builds) are accepted with a telemetry log and the same dedup
-      // semantics for one release cycle.
-      let tokenIsLegacyUuid = false;
-      if (parsed.submissionToken) {
-        const verdict = verifySubmissionToken(parsed.submissionToken);
-        if (!verdict.ok) {
-          const status = verdict.code === "TOKEN_EXPIRED" ? 400 : 400;
-          return mobileError(
-            res,
-            status,
-            verdict.code === "TOKEN_EXPIRED"
-              ? MobileErrorCodes.TOKEN_EXPIRED
-              : MobileErrorCodes.TOKEN_INVALID,
-            verdict.code === "TOKEN_EXPIRED"
-              ? "Submission token has expired; please refresh attendance status and retry."
-              : "Submission token is invalid.",
-          );
-        }
-        if (verdict.legacy) {
-          tokenIsLegacyUuid = true;
-          console.warn(
-            "[attendance-mobile/submit] legacy raw-UUID submissionToken accepted (workforceId=%s) — Android client predates Task #85",
-            parsed.workforceId,
-          );
-        } else if (verdict.workforceId !== parsed.workforceId) {
+      // Task #85 step 4 — strict enforcement.
+      //
+      // The submission token is REQUIRED. A request with no token is
+      // a pre-Task-#85 client that never received the new HMAC
+      // contract; rejecting it with 400 TOKEN_MISSING forces the
+      // worker to update / refresh status before they can submit and
+      // closes the dedup pre-claim attack surface (a hostile client
+      // could mint UUIDs of its own choosing and lock out legitimate
+      // workers from the dedup table).
+      //
+      // Legacy raw-UUID tokens are NOT accepted by default. The
+      // `ALLOW_LEGACY_SUBMISSION_TOKENS` env flag exists as an
+      // explicit, time-bounded escape hatch (intended to be flipped
+      // off and the code path removed entirely in follow-up #93 once
+      // ≥99% of devices have rolled to the new build).
+      const allowLegacyTokens = process.env.ALLOW_LEGACY_SUBMISSION_TOKENS === "true";
+
+      if (!parsed.submissionToken) {
+        return mobileError(
+          res,
+          400,
+          MobileErrorCodes.TOKEN_MISSING,
+          "Submission token is required. Refresh attendance status to obtain one.",
+        );
+      }
+
+      const verdict = verifySubmissionToken(parsed.submissionToken);
+      if (!verdict.ok) {
+        return mobileError(
+          res,
+          400,
+          verdict.code === "TOKEN_EXPIRED"
+            ? MobileErrorCodes.TOKEN_EXPIRED
+            : MobileErrorCodes.TOKEN_INVALID,
+          verdict.code === "TOKEN_EXPIRED"
+            ? "Submission token has expired; please refresh attendance status and retry."
+            : "Submission token is invalid.",
+        );
+      }
+      if (verdict.legacy) {
+        if (!allowLegacyTokens) {
           return mobileError(
             res,
             400,
             MobileErrorCodes.TOKEN_INVALID,
-            "Submission token was issued for a different workforce.",
+            "Legacy submission token format is no longer accepted. Please update the app and retry.",
           );
         }
+        console.warn(
+          "[attendance-mobile/submit] legacy raw-UUID submissionToken accepted under ALLOW_LEGACY_SUBMISSION_TOKENS flag (workforceId=%s)",
+          parsed.workforceId,
+        );
+      } else if (verdict.workforceId !== parsed.workforceId) {
+        return mobileError(
+          res,
+          400,
+          MobileErrorCodes.TOKEN_INVALID,
+          "Submission token was issued for a different workforce.",
+        );
+      }
 
-        const [existingToken] = await db
-          .select()
-          .from(attendanceSubmissions)
-          .where(eq(attendanceSubmissions.submissionToken, parsed.submissionToken))
-          .limit(1);
-        if (existingToken) {
-          // 200 + deduplicated:true is the historical "already accepted"
-          // shape. The Android client treats this as AlreadySynced via
-          // the body's `verification.deduplicated` flag.
-          return res.status(200).json({
+      // Replay detection: the token has already been redeemed.
+      // Per docs/api-error-codes.md this is HTTP 409 with code
+      // TOKEN_USED (NOT a 200 success — the Android client treats
+      // 409 as AlreadySynced and drops the local row, but a 200
+      // would falsely advance the state machine on a different
+      // device replaying the same token).
+      const [existingToken] = await db
+        .select()
+        .from(attendanceSubmissions)
+        .where(eq(attendanceSubmissions.submissionToken, parsed.submissionToken))
+        .limit(1);
+      if (existingToken) {
+        return mobileError(
+          res,
+          409,
+          MobileErrorCodes.TOKEN_USED,
+          "Submission token has already been used.",
+          {
             submission: existingToken,
             verification: { status: existingToken.status, deduplicated: true },
-            code: MobileErrorCodes.TOKEN_USED,
-          });
-        }
-      } else {
-        // Task #85: token is now mandatory for the new contract. We
-        // still accept the request to keep the older field clients
-        // working (they will simply not gain HMAC protection until
-        // they update); a telemetry warning surfaces field adoption.
-        console.warn(
-          "[attendance-mobile/submit] missing submissionToken (workforceId=%s) — Android client predates Task #85",
-          parsed.workforceId,
+          },
         );
       }
 
