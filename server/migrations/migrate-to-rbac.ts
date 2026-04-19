@@ -64,11 +64,14 @@ async function main() {
   `);
   console.log(`[rbac-migrate] NULL role_id → candidate (orphans cleared)`);
 
+  // ALTER TABLE ... SET DEFAULT does not accept parameter placeholders for the
+  // literal value, so we splice. Escape via SQL's canonical single-quote
+  // doubling so any future role id (including ones containing apostrophes) is
+  // handled safely without throwing.
   // nosemgrep: javascript.drizzle-orm.security.audit.ban-drizzle-sql-raw
-  // candidateRole.id is a server-generated UUID, never user input. ALTER TABLE
-  // SET DEFAULT does not accept parameter placeholders for the literal value.
+  const safeDefault = candidateRole.id.replace(/'/g, "''");
   await db.execute(sql.raw(
-    `ALTER TABLE users ALTER COLUMN role_id SET DEFAULT '${candidateRole.id}'`
+    `ALTER TABLE users ALTER COLUMN role_id SET DEFAULT '${safeDefault}'`
   ));
   await db.execute(sql`ALTER TABLE users ALTER COLUMN role_id SET NOT NULL`);
   console.log(`[rbac-migrate] role_id default + NOT NULL applied`);

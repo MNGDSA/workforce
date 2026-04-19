@@ -86,11 +86,11 @@ async function sweep(): Promise<string[]> {
 
   const counts: Record<string, number> = {};
   for (const t of allTables) {
-    // nosemgrep: javascript.drizzle-orm.security.audit.ban-drizzle-sql-raw
-    // `t` is a table name read from information_schema.tables in the same
-    // session — not user input. Quoted to handle reserved words.
+    // sql.identifier handles reserved words and any embedded quote characters
+    // safely — no manual string escaping. Source is information_schema.tables
+    // (same session); identifier escaping is defense in depth.
     const r = await db.execute<{ n: string }>(
-      sql`SELECT COUNT(*)::int AS n FROM ${sql.raw(`"${t}"`)}`
+      sql`SELECT COUNT(*)::int AS n FROM ${sql.identifier(t)}`
     );
     counts[t] = Number((r.rows as { n: string }[])[0]?.n ?? 0);
   }
@@ -138,12 +138,10 @@ async function reset() {
   console.log("\n━━━  PHASE 2 — WIPE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
   if (toWipe.length > 0) {
-    const tableList = toWipe.map((t) => `"${t}"`).join(", ");
-    // nosemgrep: javascript.drizzle-orm.security.audit.ban-drizzle-sql-raw
-    // `tableList` is built from information_schema.tables (see sweep above) —
-    // never user input. TRUNCATE syntax does not accept parameter placeholders
-    // for the table list.
-    await db.execute(sql`TRUNCATE ${sql.raw(tableList)} CASCADE`);
+    // sql.identifier per name + sql.join → properly escaped, comma-separated
+    // identifier list. Equivalent to: TRUNCATE "t1", "t2", "t3" CASCADE.
+    const idents = sql.join(toWipe.map((t) => sql.identifier(t)), sql`, `);
+    await db.execute(sql`TRUNCATE ${idents} CASCADE`);
     console.log(`  ✓  Truncated ${toWipe.length} tables`);
   } else {
     console.log("  (nothing to truncate)");
