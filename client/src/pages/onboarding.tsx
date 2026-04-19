@@ -1553,7 +1553,7 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        <Tabs defaultValue="pipeline" className="w-full">
+        <Tabs defaultValue="pipeline" className="w-full" dir={i18n.dir() as "ltr" | "rtl"}>
           <TabsList className="bg-zinc-900 border border-zinc-800 p-1">
             <TabsTrigger value="pipeline" className="data-[state=active]:bg-zinc-800 data-[state=active]:text-white text-zinc-400 gap-2" data-testid="tab-pipeline">
               <ClipboardCheck className="h-4 w-4" />
