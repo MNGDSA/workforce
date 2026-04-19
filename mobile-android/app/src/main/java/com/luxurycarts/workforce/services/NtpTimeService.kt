@@ -45,6 +45,18 @@ class NtpTimeService(context: Context) {
     val hasEverSynced: Boolean
         get() = ntpOffset != Long.MIN_VALUE
 
+    /**
+     * Returns true if the local NTP offset was last refreshed within the
+     * supplied window. Used by the sync pipeline to decide whether a
+     * config-fetch failure should still allow new submissions through.
+     */
+    fun isNtpFresh(thresholdMillis: Long = 6L * 60L * 60L * 1000L): Boolean {
+        if (!hasEverSynced) return false
+        val ts = lastNtpSyncTimestamp
+        if (ts == 0L) return false
+        return (System.currentTimeMillis() - ts) <= thresholdMillis
+    }
+
     fun getTrustedInstant(): Instant? {
         if (!hasEverSynced) return null
         val correctedMillis = System.currentTimeMillis() + ntpOffset

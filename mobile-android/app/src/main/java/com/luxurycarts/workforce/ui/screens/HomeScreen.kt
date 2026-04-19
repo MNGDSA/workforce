@@ -91,6 +91,7 @@ import com.luxurycarts.workforce.ui.theme.TextMuted
 import com.luxurycarts.workforce.ui.theme.TextPrimary
 import com.luxurycarts.workforce.ui.theme.TextSecondary
 import com.luxurycarts.workforce.ui.theme.ErrorRed
+import com.luxurycarts.workforce.ui.theme.SuccessGreen
 import com.luxurycarts.workforce.ui.theme.WarningAmber
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -123,6 +124,8 @@ fun HomeScreen(
     val wfId = workforceRecord?.id ?: app.sessionManager.workforceId ?: ""
     val pendingCount by app.database.attendanceDao().getPendingCount(wfId)
         .collectAsState(initial = 0)
+    val needsAttentionCount by app.database.attendanceDao().getNeedsAttentionCount(wfId)
+        .collectAsState(initial = 0)
     val oldestPendingCreatedAt by app.database.attendanceDao().getOldestPendingCreatedAt(wfId)
         .collectAsState(initial = null)
     val hasStuckSubmissions = oldestPendingCreatedAt?.let {
@@ -132,6 +135,12 @@ fun HomeScreen(
     var attendanceStatus by remember { mutableStateOf<AttendanceStatusResponse?>(null) }
     var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
     var showDailyCapDialog by remember { mutableStateOf(false) }
+    var lastSync by remember {
+        mutableStateOf<com.luxurycarts.workforce.data.SyncTelemetry.LastSyncResult?>(null)
+    }
+    LaunchedEffect(nowTick / 5_000L) {
+        lastSync = com.luxurycarts.workforce.data.SyncTelemetry.readLastSyncResult(context)
+    }
 
     LaunchedEffect(wfId, apiService) {
         if (wfId.isBlank() || apiService == null) return@LaunchedEffect
@@ -597,6 +606,76 @@ fun HomeScreen(
                                 color = ErrorRed.copy(alpha = 0.8f),
                             )
                         }
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
+        lastSync?.let { ls ->
+            val labelRes = when (ls.bucket) {
+                "ok" -> R.string.last_sync_ok
+                "partial" -> R.string.last_sync_partial
+                "failed" -> R.string.last_sync_failed
+                "session_expired" -> R.string.last_sync_session_expired
+                "terminated" -> R.string.last_sync_terminated
+                else -> R.string.last_sync_unknown
+            }
+            val tint = when (ls.bucket) {
+                "ok" -> SuccessGreen
+                "partial" -> WarningAmber
+                else -> ErrorRed
+            }
+            val tsLabel = remember(ls.timestampMillis) {
+                java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                    .format(java.util.Date(ls.timestampMillis))
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Filled.Sync, contentDescription = null, tint = tint, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    stringResource(
+                        R.string.last_sync_line,
+                        stringResource(labelRes),
+                        tsLabel,
+                        ls.pendingCount,
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = tint,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
+        if (needsAttentionCount > 0) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = ErrorRed.copy(alpha = 0.1f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onHistory() },
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.Warning, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            stringResource(R.string.submissions_need_attention, needsAttentionCount),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = ErrorRed,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            stringResource(R.string.submissions_need_attention_detail),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = ErrorRed.copy(alpha = 0.8f),
+                        )
                     }
                 }
             }

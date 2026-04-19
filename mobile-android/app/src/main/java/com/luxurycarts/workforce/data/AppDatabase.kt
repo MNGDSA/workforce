@@ -43,6 +43,12 @@ data class AttendanceEntity(
     @ColumnInfo(name = "location_source", defaultValue = "gps") val locationSource: String? = null,
     @ColumnInfo(name = "created_at_millis", defaultValue = "0") val createdAtMillis: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "submission_token") val submissionToken: String? = null,
+    @ColumnInfo(name = "next_retry_at_millis", defaultValue = "0") val nextRetryAtMillis: Long = 0L,
+    @ColumnInfo(name = "last_attempt_at_millis", defaultValue = "0") val lastAttemptAtMillis: Long = 0L,
+    @ColumnInfo(name = "last_error_code") val lastErrorCode: String? = null,
+    @ColumnInfo(name = "last_http_status", defaultValue = "0") val lastHttpStatus: Int = 0,
+    @ColumnInfo(name = "needs_attention", defaultValue = "0") val needsAttention: Boolean = false,
+    @ColumnInfo(name = "stale_clock", defaultValue = "0") val staleClock: Boolean = false,
 )
 
 @Dao
@@ -54,8 +60,25 @@ interface AttendanceDao {
     @Query("SELECT * FROM attendance_submissions WHERE sync_status = 'pending' AND owner_workforce_id = :workforceId ORDER BY attendance_date ASC")
     suspend fun getPending(workforceId: String): List<AttendanceEntity>
 
+    /**
+     * Pending submissions that are eligible for an automatic retry attempt right
+     * now: not flagged as needing manual attention, and the backoff window has
+     * elapsed (or no backoff set yet).
+     */
+    @Query("SELECT * FROM attendance_submissions WHERE sync_status = 'pending' AND owner_workforce_id = :workforceId AND needs_attention = 0 AND next_retry_at_millis <= :nowMillis ORDER BY attendance_date ASC")
+    suspend fun getPendingDue(workforceId: String, nowMillis: Long): List<AttendanceEntity>
+
     @Query("SELECT COUNT(*) FROM attendance_submissions WHERE sync_status = 'pending' AND owner_workforce_id = :workforceId")
     fun getPendingCount(workforceId: String): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM attendance_submissions WHERE sync_status = 'pending' AND owner_workforce_id = :workforceId AND needs_attention = 1")
+    fun getNeedsAttentionCount(workforceId: String): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM attendance_submissions WHERE sync_status = 'pending' AND owner_workforce_id = :workforceId AND needs_attention = 1")
+    suspend fun getNeedsAttentionCountSync(workforceId: String): Int
+
+    @Query("SELECT * FROM attendance_submissions WHERE sync_status = 'pending' AND owner_workforce_id = :workforceId AND needs_attention = 1 ORDER BY attendance_date ASC")
+    suspend fun getNeedsAttention(workforceId: String): List<AttendanceEntity>
 
     @Query("SELECT MIN(created_at_millis) FROM attendance_submissions WHERE sync_status = 'pending' AND owner_workforce_id = :workforceId AND created_at_millis > 0")
     fun getOldestPendingCreatedAt(workforceId: String): Flow<Long?>
@@ -68,6 +91,30 @@ interface AttendanceDao {
 
     @Query("UPDATE attendance_submissions SET retry_count = retry_count + 1 WHERE id = :id")
     suspend fun incrementRetry(id: String)
+
+    /**
+     * Record a transient retry attempt: bump the visible counter, remember when
+     * we tried, what error code we saw, and when to try again.
+     */
+    @Query("UPDATE attendance_submissions SET retry_count = retry_count + 1, last_attempt_at_millis = :nowMillis, next_retry_at_millis = :nextRetryAtMillis, last_error_code = :errorCode, last_http_status = :httpStatus WHERE id = :id")
+    suspend fun recordRetry(id: String, nowMillis: Long, nextRetryAtMillis: Long, errorCode: String, httpStatus: Int)
+
+    @Query("UPDATE attendance_submissions SET needs_attention = 1, last_attempt_at_millis = :nowMillis, last_error_code = :errorCode, last_http_status = :httpStatus WHERE id = :id")
+    suspend fun markNeedsAttention(id: String, nowMillis: Long, errorCode: String, httpStatus: Int)
+
+    /**
+     * User tapped "Retry": clear attention flag and try again immediately.
+     * The sentinel `next_retry_at_millis = -1` marks this row as a one-shot
+     * user-initiated attempt; `syncPending()` reads that sentinel to bypass
+     * the >24h auto-stop gate exactly once so the user can actually recover
+     * stuck submissions. The sentinel is consumed by the next `recordRetry`
+     * / `updateSyncResult` / `markPermanentlyRejected` call.
+     */
+    @Query("UPDATE attendance_submissions SET needs_attention = 0, next_retry_at_millis = -1, last_error_code = NULL, last_http_status = 0 WHERE id = :id")
+    suspend fun clearNeedsAttention(id: String)
+
+    @Query("UPDATE attendance_submissions SET stale_clock = :stale WHERE id = :id")
+    suspend fun setStaleClock(id: String, stale: Boolean)
 
     @Query("DELETE FROM attendance_submissions WHERE sync_status IN ('synced', 'verified') AND attendance_date < :cutoffDate AND owner_workforce_id = :workforceId")
     suspend fun purgeOld(workforceId: String, cutoffDate: String)
@@ -92,9 +139,12 @@ interface AttendanceDao {
 
     @Query("UPDATE attendance_submissions SET submission_token = :token WHERE id = :id AND submission_token IS NULL")
     suspend fun setSubmissionTokenIfMissing(id: String, token: String)
+
+    @Query("SELECT * FROM attendance_submissions WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): AttendanceEntity?
 }
 
-@Database(entities = [AttendanceEntity::class], version = 8, exportSchema = false)
+@Database(entities = [AttendanceEntity::class], version = 9, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun attendanceDao(): AttendanceDao
 
@@ -121,6 +171,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE attendance_submissions ADD COLUMN next_retry_at_millis INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE attendance_submissions ADD COLUMN last_attempt_at_millis INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE attendance_submissions ADD COLUMN last_error_code TEXT")
+                db.execSQL("ALTER TABLE attendance_submissions ADD COLUMN last_http_status INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE attendance_submissions ADD COLUMN needs_attention INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE attendance_submissions ADD COLUMN stale_clock INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 Room.databaseBuilder(
@@ -128,7 +189,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "workforce.db",
                 )
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                     .fallbackToDestructiveMigrationFrom(1, 2, 3, 4)
                     .build()
                     .also { INSTANCE = it }

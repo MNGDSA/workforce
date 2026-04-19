@@ -121,6 +121,18 @@ Issues that have been fixed and verified. Kept for historical reference. Each en
 - **Status notes:**
   - 2026-04-19 — Fixed under Task #66. Stabilized the `ImageRequest` with `remember(photoUrl, serverUrl)`, added explicit `size(80dp)`, enabled memory + disk cache policies, and added a Person vector painter as both `placeholder` and `fallback`. Configured a global Coil `ImageLoader` via `WorkforceApp : ImageLoaderFactory` (25% RAM memory cache, 50 MB disk cache, `respectCacheHeaders=true`). Added a fire-and-forget `Coil.imageLoader(ctx).enqueue(...)` prefetch in `LoginScreen.kt` immediately after a successful login. On the backend, the dev `/uploads` static handler and the production DO Spaces `PutObjectCommand` now both emit `Cache-Control: ... max-age=86400, must-revalidate` for photos, with ETag/Last-Modified left enabled so subsequent requests return 304. Verified visually that warm-cache loads render essentially instantly and cold-cache loads show the placeholder icon over the brand circle until the photo crossfades in.
 
+### ISSUE-004 — Attendance submissions could silently disappear after sync failures
+
+- **Logged:** 2026-04-19
+- **Severity:** Critical
+- **Component:** Mobile (mobile-android / AttendanceRepository sync pipeline)
+- **Description:** Workers reported successful capture but attendance never appeared on the server. Pending rows occasionally got stuck without surfacing to the user, decrypted temp photo files leaked into cache, and the 5-strike retry cap could permanently abandon submissions after a transient outage. Mobile config fetch failures could also corrupt NTP server settings. Root cause: broad `catch (_: Exception)` blocks in the submit loop swallowed all errors without classification or telemetry; temp files were not cleaned via `finally`; retries used a hard cap rather than exponential backoff with operator visibility; the config fetch overwrote NTP fields even when the response was missing/invalid.
+- **Impact:** Workers using the Android app could lose attendance submissions silently after transient network/server outages.
+- **Workaround:** None.
+- **Related Tasks:** #67
+- **Status notes:**
+  - 2026-04-19 — Fixed under task-67. Rewrote `AttendanceRepository.submitOne()` to classify errors per-attempt (`SyncOutcome` in `SyncTelemetry.kt`), persist HTTP status / error code per row, switch to exponential backoff with jitter via `computeNextRetryAtMillis`, and auto-promote rows older than 24h to `needs_attention`. Temp photo files are deleted in a `finally` block. The mobile config fetch now keeps existing NTP config on failure and writes a telemetry event instead of overwriting fields with nulls. Added `getNeedsAttentionCount` / `retryNow()` plumbing, a Home banner, and per-row Retry buttons in History so workers can recover stuck submissions manually. DB upgraded to v9 with migration 8→9 adding `next_retry_at_millis`, `last_attempt_at_millis`, `last_error_code`, `last_http_status`, `needs_attention`, `stale_clock`. Bilingual strings added in `values/` and `values-ar/`.
+
 ### ISSUE-005 — Role identifier (slug) field validation behaves inconsistently
 
 - **Logged:** 2026-04-19

@@ -14,6 +14,7 @@ import androidx.work.WorkerParameters
 import com.luxurycarts.workforce.WorkforceApp
 import com.luxurycarts.workforce.data.ApiClient
 import com.luxurycarts.workforce.data.AttendanceRepository
+import com.luxurycarts.workforce.data.SyncTelemetry
 import java.util.concurrent.TimeUnit
 
 class SyncWorker(
@@ -67,8 +68,21 @@ class SyncWorker(
                 }
             } else if (configResp.code() == 403 || configResp.code() == 401) {
                 isTerminated = true
+            } else {
+                // Non-success but not auth — keep existing config, log it.
+                SyncTelemetry.logEvent(
+                    applicationContext,
+                    "worker_config_fetch_non_success",
+                    "http=${configResp.code()}",
+                )
             }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            SyncTelemetry.logEvent(
+                applicationContext,
+                "worker_config_fetch_failed",
+                "${e.javaClass.simpleName}: ${e.message}",
+            )
+        }
 
         val sixHoursMs = 6 * 60 * 60 * 1000L
         val sinceLastSync = System.currentTimeMillis() - ntpService.lastNtpSyncTimestamp
@@ -77,14 +91,20 @@ class SyncWorker(
         }
 
         val dao = app.database.attendanceDao()
-        val repository = AttendanceRepository(dao, apiService, workforceId, ntpService)
+        val repository = AttendanceRepository(dao, apiService, workforceId, ntpService, applicationContext)
 
         if (isTerminated) {
             val remaining = dao.getPending(workforceId)
             if (remaining.isNotEmpty()) {
                 try {
                     repository.syncPending()
-                } catch (_: Exception) { }
+                } catch (e: Exception) {
+                    SyncTelemetry.logEvent(
+                        applicationContext,
+                        "worker_terminated_flush_failed",
+                        "${e.javaClass.simpleName}: ${e.message}",
+                    )
+                }
             }
             session.clear()
             ApiClient.reset()
@@ -93,6 +113,20 @@ class SyncWorker(
 
         return try {
             val syncResult = repository.syncPending()
+            val pendingNow = dao.getPending(workforceId).size
+            val attentionNow = dao.getNeedsAttentionCountSync(workforceId)
+            val bucket = when {
+                syncResult.sessionExpired -> "session_expired"
+                syncResult.terminated -> "terminated"
+                pendingNow == 0 -> "ok"
+                else -> "partial"
+            }
+            SyncTelemetry.recordLastSyncResult(
+                applicationContext,
+                bucket,
+                pendingNow,
+                attentionNow,
+            )
             when {
                 syncResult.sessionExpired -> {
                     session.clear()
@@ -104,7 +138,13 @@ class SyncWorker(
                     if (remaining.isNotEmpty()) {
                         try {
                             repository.syncPending()
-                        } catch (_: Exception) { }
+                        } catch (e: Exception) {
+                            SyncTelemetry.logEvent(
+                                applicationContext,
+                                "worker_post_terminate_flush_failed",
+                                "${e.javaClass.simpleName}: ${e.message}",
+                            )
+                        }
                     }
                     session.clear()
                     ApiClient.reset()
@@ -112,7 +152,19 @@ class SyncWorker(
                 }
                 else -> Result.success()
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            SyncTelemetry.logEvent(
+                applicationContext,
+                "worker_sync_failed",
+                "${e.javaClass.simpleName}: ${e.message}",
+            )
+            SyncTelemetry.recordLastSyncResult(
+                applicationContext,
+                bucket = "failed",
+                pendingCount = try { dao.getPending(workforceId).size } catch (_: Exception) { -1 },
+                needsAttentionCount = try { dao.getNeedsAttentionCountSync(workforceId) } catch (_: Exception) { -1 },
+                detail = "${e.javaClass.simpleName}: ${e.message}",
+            )
             Result.retry()
         }
     }
