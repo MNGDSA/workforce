@@ -65,7 +65,7 @@
     "bankName": "Bank Name",
     "bankNamePh": "Auto-detected from IBAN",
     "bankCode": "Bank Code",
-    "bankCodePh": "Auto-detected",
+    "bankCodePh": "Auto-detected from IBAN",
     "emergencyTitle": "Emergency Contact",
     "emergencyDesc": "Someone we can reach in case of an emergency during work.",
     "emergencyName": "Full Name",
