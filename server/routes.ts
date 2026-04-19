@@ -842,8 +842,10 @@ export async function registerRoutes(
   // ─── OTP: Request code ─────────────────────────────────────────────────────
   app.post("/api/auth/otp/request", markPublic, async (req: Request, res: Response) => {
     try {
-      const { phone } = z.object({ phone: z.string().min(9) }).parse(req.body);
-      const normalizedPhone = phone.trim().replace(/\s+/g, "");
+      const { phone } = z.object({
+        phone: z.string().trim().regex(/^05\d{8}$/, "invalid_sa_mobile"),
+      }).parse(req.body);
+      const normalizedPhone = phone;
 
       // Rate limit: max 3 OTP requests per phone per 10 minutes
       const recentCount = await storage.countRecentOtpRequests(normalizedPhone, 10 * 60 * 1000);
@@ -881,10 +883,10 @@ export async function registerRoutes(
   app.post("/api/auth/otp/verify", markPublic, async (req: Request, res: Response) => {
     try {
       const { phone, code } = z.object({
-        phone: z.string().min(9),
-        code: z.string().length(6),
+        phone: z.string().trim().regex(/^05\d{8}$/, "invalid_sa_mobile"),
+        code: z.string().regex(/^\d{6}$/, "invalid_otp_format"),
       }).parse(req.body);
-      const normalizedPhone = phone.trim().replace(/\s+/g, "");
+      const normalizedPhone = phone;
 
       const otp = await storage.getLatestOtpVerification(normalizedPhone);
       if (!otp) {
@@ -958,6 +960,22 @@ export async function registerRoutes(
       const existingByNationalId = await storage.getUserByNationalId(nationalId.trim());
       if (existingByNationalId) {
         return res.status(409).json({ message: tr(req, "register.nationalIdExists") });
+      }
+
+      // Atomically consume the OTP BEFORE creating the user. The conditional UPDATE
+      // closes the TOCTOU race where two parallel /register calls (different national
+      // IDs) could share one OTP. Only the request that flips usedForRegistration
+      // from false → true gets to proceed.
+      const consumed = await db
+        .update(otpVerifications)
+        .set({ usedForRegistration: true })
+        .where(and(
+          eq(otpVerifications.id, otpId),
+          eq(otpVerifications.usedForRegistration, false),
+        ))
+        .returning({ id: otpVerifications.id });
+      if (consumed.length === 0) {
+        return res.status(400).json({ message: tr(req, "otp.alreadyUsed") });
       }
 
       // Phone transfer check: if phone was previously assigned, flag old record
@@ -1061,31 +1079,35 @@ export async function registerRoutes(
 
   // ─── Reset password: initiate (lookup by National ID, send OTP) ──────────
   app.post("/api/auth/reset-password/request", markPublic, async (req: Request, res: Response) => {
+    // Always returns the same generic 200 response shape regardless of whether the
+    // national ID matches an account, prevents enumeration of accounts/phones.
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    const generic = { ok: true, expiresAt: expiresAt.toISOString() };
+
     try {
       const { nationalId } = req.body as { nationalId?: string };
-      if (!nationalId) {
+      if (!nationalId || typeof nationalId !== "string" || !nationalId.trim()) {
         return res.status(400).json({ message: tr(req, "common.nationalIdRequired") });
       }
       const clean = nationalId.trim();
+
       const user = await storage.getUserByNationalId(clean);
-      if (!user) {
-        return res.status(404).json({ message: tr(req, "auth.noAccountForId") });
-      }
-      if (!user.phone) {
-        return res.status(400).json({ message: tr(req, "auth.noPhoneOnFile") });
-      }
-      if (!user.isActive) {
-        return res.status(403).json({ message: tr(req, "auth.accountDisabled") });
+      // Silent no-ops for: missing user, missing phone, disabled account.
+      if (!user || !user.phone || !user.isActive) {
+        console.log(`[Reset] Generic OK returned for national ID ${clean} (no eligible account).`);
+        return res.json(generic);
       }
 
       const phone = user.phone;
+
+      // Per-phone rate limit applied silently (still generic 200 to caller).
       const recentCount = await storage.countRecentOtpRequests(phone, 10 * 60 * 1000);
       if (recentCount >= 3) {
-        return res.status(429).json({ message: tr(req, "otp.tooMany") });
+        console.log(`[Reset] Rate-limited national ID ${clean} (silent).`);
+        return res.json(generic);
       }
 
       const code = String(Math.floor(100000 + Math.random() * 900000));
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
       await storage.createOtpVerification(phone, code, expiresAt);
 
       const activePlugin = await storage.getActiveSmsPlugin();
@@ -1095,15 +1117,14 @@ export async function registerRoutes(
         const result = await sendSmsViaPlugin(activePlugin, phone, resetMsg);
         if (!result.success) {
           console.error("[Reset] SMS delivery failed:", result.error);
-          return res.status(502).json({ message: tr(req, "otp.sendFailed") });
         }
       }
 
-      const masked = phone.replace(/.(?=.{2})/g, "x");
       console.log(`[Reset] OTP sent to ${phone} for national ID ${clean}, expires ${expiresAt.toISOString()}`);
-      return res.json({ maskedPhone: masked, phone, expiresAt: expiresAt.toISOString() });
+      return res.json(generic);
     } catch (err) {
-      return handleError(res, err);
+      console.error("[Reset] request handler error (returning generic):", err);
+      return res.json(generic);
     }
   });
 
