@@ -46,7 +46,9 @@ export function signAuthToken(userId: string): string {
   return `${payload}.${sig}`;
 }
 
-export function verifyAuthToken(token: string): string | null {
+export type VerifiedAuthToken = { uid: string; iat: number };
+
+export function verifyAuthToken(token: string): VerifiedAuthToken | null {
   const parts = token.split(".");
   if (parts.length !== 2) return null;
   const [payload, sig] = parts;
@@ -57,10 +59,10 @@ export function verifyAuthToken(token: string): string | null {
   if (sig !== expected) return null;
   try {
     const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    if (!data.uid) return null;
-    const age = Date.now() - (data.iat || 0);
+    if (!data.uid || typeof data.iat !== "number") return null;
+    const age = Date.now() - data.iat;
     if (age > TOKEN_TTL_MS) return null;
-    return data.uid;
+    return { uid: data.uid, iat: data.iat };
   } catch {
     return null;
   }

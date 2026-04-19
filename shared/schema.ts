@@ -129,6 +129,10 @@ export const users = pgTable(
     locale: varchar("locale", { length: 8 }).notNull().default("ar"),
     isActive: boolean("is_active").notNull().default(true),
     lastLogin: timestamp("last_login"),
+    // Server-side token revocation: any wf_auth token whose `iat` is at or
+    // before this timestamp is rejected by requireAuth. Set on logout so
+    // stale cookies copied off-device cannot replay until the 7-day TTL.
+    tokensInvalidatedAt: timestamp("tokens_invalidated_at"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
   },

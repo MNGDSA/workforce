@@ -107,6 +107,13 @@ function readBearerToken(req: Request): string | null {
 function getAuthUserId(req: Request): string | null {
   const tok = readWfAuthCookie(req) ?? readBearerToken(req);
   if (!tok) return null;
+  const v = verifyAuthToken(tok);
+  return v?.uid ?? null;
+}
+
+function getAuthTokenInfo(req: Request) {
+  const tok = readWfAuthCookie(req) ?? readBearerToken(req);
+  if (!tok) return null;
   return verifyAuthToken(tok);
 }
 
@@ -140,7 +147,8 @@ function audit(req: Request, kind: "401" | "403", required?: string) {
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.rbacGuard) req.rbacGuard = { kind: "auth" };
-  const userId = getAuthUserId(req);
+  const tokenInfo = getAuthTokenInfo(req);
+  const userId = tokenInfo?.uid ?? null;
   if (!userId) {
     audit(req, "401");
     // Task #85 step 2 — every error response on a mobile-consumed
@@ -160,6 +168,21 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return res.status(401).json({
       code: MobileErrorCodes.SESSION_EXPIRED,
       message: tr(req, "auth.inactive"),
+    });
+  }
+  // Server-side token revocation. Logout sets users.tokensInvalidatedAt = now();
+  // any token whose `iat` is at or before that instant is treated as expired.
+  // This is what makes /api/auth/logout actually log the user out — without
+  // this check the stateless wf_auth cookie would replay until its 7-day TTL.
+  if (
+    tokenInfo &&
+    (user as any).tokensInvalidatedAt &&
+    tokenInfo.iat <= new Date((user as any).tokensInvalidatedAt).getTime()
+  ) {
+    audit(req, "401");
+    return res.status(401).json({
+      code: MobileErrorCodes.SESSION_EXPIRED,
+      message: tr(req, "auth.sessionExpired"),
     });
   }
   req.authUserId = userId;

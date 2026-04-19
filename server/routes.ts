@@ -78,10 +78,10 @@ import {
 function getAuthUserId(req: Request): string | null {
   const cookie = req.headers.cookie;
   const cookieMatch = cookie ? cookie.match(/wf_auth=([^;]+)/) : null;
-  if (cookieMatch) return verifyAuthToken(cookieMatch[1]);
+  if (cookieMatch) return verifyAuthToken(cookieMatch[1])?.uid ?? null;
   const authHeader = req.headers.authorization;
   const bearerMatch = authHeader ? authHeader.match(/^Bearer\s+(.+)$/i) : null;
-  if (bearerMatch) return verifyAuthToken(bearerMatch[1].trim());
+  if (bearerMatch) return verifyAuthToken(bearerMatch[1].trim())?.uid ?? null;
   return null;
 }
 
@@ -338,7 +338,9 @@ export async function registerRoutes(
       // Session points to a user that no longer exists (e.g. deleted/re-registered).
       // Force the client to clear the bad session and log in again.
       try { (req.session as any)?.destroy?.(() => undefined); } catch {}
-      res.clearCookie("connect.sid");
+      const isProd = process.env.NODE_ENV === "production";
+      res.clearCookie("wf_auth",     { path: "/", httpOnly: true, sameSite: "lax", secure: isProd });
+      res.clearCookie("connect.sid", { path: "/", httpOnly: true, sameSite: "lax", secure: isProd });
       // Task #85: structured `code` for the Android client. Legacy
       // `sessionInvalid: true` retained for one release cycle.
       return res.status(401).json({
@@ -718,10 +720,35 @@ export async function registerRoutes(
     }
   });
 
-  // Destroy server session + clear cookie. Public so logged-out clients can call it idempotently.
+  // Destroy server session + clear BOTH auth cookies. Public so logged-out
+  // clients can call it idempotently. The active auth cookie is `wf_auth`
+  // (HMAC token, see /api/auth/login below); `connect.sid` is the legacy
+  // express-session cookie kept around for one release cycle. Attributes
+  // here MUST mirror the ones used at set-time, otherwise the browser
+  // ignores the clear directive and the user stays logged in for up to
+  // 7 days.
   app.post("/api/auth/logout", markPublic, async (req: Request, res: Response) => {
+    // 1. Server-side revocation: mark every wf_auth token issued at-or-before
+    //    NOW as invalid for this user. requireAuth enforces this on next hit.
+    //    Without this step the stateless wf_auth cookie would replay for up
+    //    to 7 days even after the browser cleared it.
+    const userId = getAuthUserId(req);
+    if (userId) {
+      try {
+        await db
+          .update(users)
+          .set({ tokensInvalidatedAt: new Date(), updatedAt: new Date() })
+          .where(eq(users.id, userId));
+      } catch (e) {
+        console.error("[logout] failed to set tokensInvalidatedAt", e);
+      }
+    }
+    // 2. Destroy the legacy express-session if present.
     try { (req.session as any)?.destroy?.(() => undefined); } catch {}
-    res.clearCookie("connect.sid");
+    // 3. Tell the browser to drop both cookies. Attributes MUST mirror set-time.
+    const isProd = process.env.NODE_ENV === "production";
+    res.clearCookie("wf_auth",     { path: "/", httpOnly: true, sameSite: "lax", secure: isProd });
+    res.clearCookie("connect.sid", { path: "/", httpOnly: true, sameSite: "lax", secure: isProd });
     return res.json({ ok: true });
   });
 
@@ -729,17 +756,18 @@ export async function registerRoutes(
     try {
       const { identifier, password } = req.body;
       if (!identifier || !password) {
-        return res.status(400).json({ message: tr(req, "auth.loginCreds") });
+        return mobileError(res, 400, MobileErrorCodes.REQUIRED_FIELDS, tr(req, "auth.loginCreds"));
       }
 
       const rl = await checkLoginRateLimit(req, identifier);
       if (!rl.allowed) {
         res.setHeader("Retry-After", String(rl.retryAfterSec));
         const minutes = Math.ceil(rl.retryAfterSec / 60);
-        return res.status(429).json({
-          message: tr(req, "auth.loginRateLimit", { minutes }),
-          retryAfterSec: rl.retryAfterSec,
-        });
+        return mobileError(
+          res, 429, MobileErrorCodes.RATE_LIMITED,
+          tr(req, "auth.loginRateLimit", { minutes }),
+          { retryAfterSec: rl.retryAfterSec },
+        );
       }
 
       const clean = String(identifier).trim();
@@ -753,17 +781,17 @@ export async function registerRoutes(
 
       if (!user) {
         recordLoginFailure(req, identifier);
-        return res.status(401).json({ message: tr(req, "auth.invalidCreds") });
+        return mobileError(res, 401, MobileErrorCodes.AUTH_INVALID, tr(req, "auth.invalidCreds"));
       }
 
       if (!user.isActive) {
-        return res.status(403).json({ message: tr(req, "auth.accountDisabled") });
+        return mobileError(res, 403, MobileErrorCodes.ACCOUNT_DISABLED, tr(req, "auth.accountDisabled"));
       }
 
       const valid = await bcrypt.compare(password, user.password);
       if (!valid) {
         recordLoginFailure(req, identifier);
-        return res.status(401).json({ message: tr(req, "auth.invalidCreds") });
+        return mobileError(res, 401, MobileErrorCodes.AUTH_INVALID, tr(req, "auth.invalidCreds"));
       }
 
       recordLoginSuccess(req, identifier);
