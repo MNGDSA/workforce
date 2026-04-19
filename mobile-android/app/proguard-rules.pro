@@ -34,12 +34,16 @@
 # AndroidX Security Crypto
 -keep class androidx.security.crypto.** { *; }
 
-# Task #84: SQLCipher native bridge — JNI lookups fail under R8 if classes
-# are renamed. Without these keep rules the release build crashes at first
-# DB open with `UnsatisfiedLinkError: net.sqlcipher.database.SQLiteDatabase`.
--keep class net.sqlcipher.** { *; }
--keep class net.sqlcipher.database.** { *; }
--dontwarn net.sqlcipher.**
+# Task #84 + 16 KB compliance: SQLCipher native bridge — JNI lookups fail
+# under R8 if classes are renamed. Without these keep rules the release
+# build crashes at first DB open with
+# `UnsatisfiedLinkError: net.zetetic.database.sqlcipher.SQLiteDatabase`.
+# Package path is `net.zetetic.database.sqlcipher.*` (the renamed
+# `net.zetetic:sqlcipher-android` artifact), not the legacy
+# `net.sqlcipher.*` path.
+-keep class net.zetetic.database.** { *; }
+-keep class net.zetetic.database.sqlcipher.** { *; }
+-dontwarn net.zetetic.database.**
 
 # WorkManager
 -keep class * extends androidx.work.Worker

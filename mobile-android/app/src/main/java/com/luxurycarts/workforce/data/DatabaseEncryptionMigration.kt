@@ -2,7 +2,7 @@ package com.luxurycarts.workforce.data
 
 import android.content.Context
 import android.util.Log
-import net.sqlcipher.database.SQLiteDatabase
+import net.zetetic.database.sqlcipher.SQLiteDatabase
 import java.io.File
 
 /**
@@ -54,7 +54,11 @@ internal object DatabaseEncryptionMigration {
             return
         }
 
-        SQLiteDatabase.loadLibs(context)
+        // The new `net.zetetic:sqlcipher-android` artifact loads its native
+        // library via `System.loadLibrary` rather than the legacy
+        // `SQLiteDatabase.loadLibs(context)` helper. Idempotent — safe to
+        // call on every cold-start migration attempt.
+        System.loadLibrary("sqlcipher")
 
         // Step A: checkpoint WAL into the main file so the export below
         // sees every committed transaction even if `-wal`/`-shm` are

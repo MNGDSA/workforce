@@ -244,7 +244,8 @@ abstract class AppDatabase : RoomDatabase() {
                 val passphraseForMigration = DatabaseKeyManager.getOrCreatePassphrase(appContext)
                 DatabaseEncryptionMigration.ensureMigrated(appContext, DB_NAME, passphraseForMigration)
                 val passphraseForRoom = DatabaseKeyManager.getOrCreatePassphrase(appContext)
-                val sqlCipherFactory = net.sqlcipher.database.SupportFactory(passphraseForRoom)
+                val sqlCipherFactory =
+                    net.zetetic.database.sqlcipher.SupportOpenHelperFactory(passphraseForRoom)
 
                 Room.databaseBuilder(
                     appContext,

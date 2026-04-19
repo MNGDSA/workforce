@@ -175,20 +175,21 @@ dependencies {
     // migration smoke test in `mobile-android/docs/keystore-rotation.md`.
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
-    // Task #84: encrypt the Room database at rest. SQLCipher's
-    // `SupportFactory` plugs into Room's openHelperFactory; the passphrase
-    // is wrapped by our AndroidKeyStore-backed `EncryptionService` (see
+    // Task #84 + 16 KB page-size compliance: encrypt the Room database at
+    // rest. SQLCipher's open-helper factory plugs into Room via
+    // `openHelperFactory`; the passphrase is wrapped by our
+    // AndroidKeyStore-backed `EncryptionService` (see
     // `data/DatabaseKeyManager.kt`).
     //
-    // We pin the legacy `net.zetetic:android-database-sqlcipher` artifact
-    // (package `net.sqlcipher.database.*`) rather than the renamed
-    // `net.zetetic:sqlcipher-android` (package
-    // `net.zetetic.database.sqlcipher.*`) because the former keeps
-    // `SupportFactory(byte[])` source-compatible with hundreds of Room +
-    // SQLCipher integration guides and our own migration code in
-    // `DatabaseEncryptionMigration.kt`. Re-evaluate at the next major
-    // SQLCipher release.
-    implementation("net.zetetic:android-database-sqlcipher:4.5.4")
+    // We use the modern `net.zetetic:sqlcipher-android` artifact (package
+    // `net.zetetic.database.sqlcipher.*`) rather than the legacy
+    // `net.zetetic:android-database-sqlcipher` (package
+    // `net.sqlcipher.database.*`) because the legacy artifact ships
+    // `libsqlcipher.so` LOAD segments that are NOT 16 KB-aligned, which
+    // Play Store rejects from Nov 1, 2025 for apps targeting Android 15+
+    // (we are on `targetSdk = 35`). The new artifact has 16 KB-aligned
+    // native libraries and removes the need to call `loadLibs(context)`.
+    implementation("net.zetetic:sqlcipher-android:4.6.1")
     implementation("androidx.sqlite:sqlite-ktx:2.4.0")
 
     implementation("androidx.work:work-runtime-ktx:2.10.0")
