@@ -7,6 +7,8 @@
 // (PLAY_INTEGRITY_ENABLED=true) hard-rejects any submit that is missing,
 // malformed, or whose verdict fails app/device/account checks.
 //
+import { createHash } from "node:crypto";
+
 // State of this module:
 //   - The toggle and rejection contract are wired today (off by default).
 //   - The actual verdict-decoding call to the Play Integrity API is
@@ -105,7 +107,6 @@ export function computeAttendanceNonceHex(parts: {
   gpsLng: string | number;
   photoSha256Hex?: string;
 }): string {
-  const crypto = require("crypto") as typeof import("crypto");
   const canon = [
     parts.workforceId,
     parts.timestamp,
@@ -113,5 +114,5 @@ export function computeAttendanceNonceHex(parts: {
     String(parts.gpsLng),
     parts.photoSha256Hex ?? "",
   ].join("|");
-  return crypto.createHash("sha256").update(canon, "utf8").digest("hex");
+  return createHash("sha256").update(canon, "utf8").digest("hex");
 }
