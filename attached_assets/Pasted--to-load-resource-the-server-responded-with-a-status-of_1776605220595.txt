@@ -1,0 +1,70 @@
+ to load resource: the server responded with a status of 500 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 500 ()
+
+index-D5mbNK_l.js:20  POST https://workforce.tanaqolapp.com/api/auth/login 500 (Internal Server Error)
+ve @ index-D5mbNK_l.js:20
+_e @ index-D5mbNK_l.js:20
+(anonymous) @ index-D5mbNK_l.js:20
+await in (anonymous)
+XM @ index-D5mbNK_l.js:9
+(anonymous) @ index-D5mbNK_l.js:9
+tR @ index-D5mbNK_l.js:9
+v_ @ index-D5mbNK_l.js:9
+R_ @ index-D5mbNK_l.js:10
+aae @ index-D5mbNK_l.js:10
+index-D5mbNK_l.js:20  POST https://workforce.tanaqolapp.com/api/auth/login 500 (Internal Server Error)
+ve @ index-D5mbNK_l.js:20
+_e @ index-D5mbNK_l.js:20
+(anonymous) @ index-D5mbNK_l.js:20
+await in (anonymous)
+XM @ index-D5mbNK_l.js:9
+(anonymous) @ index-D5mbNK_l.js:9
+tR @ index-D5mbNK_l.js:9
+v_ @ index-D5mbNK_l.js:9
+R_ @ index-D5mbNK_l.js:10
+aae @ index-D5mbNK_l.js:10
+index-D5mbNK_l.js:20  POST https://workforce.tanaqolapp.com/api/auth/login 500 (Internal Server Error)
+ve @ index-D5mbNK_l.js:20
+_e @ index-D5mbNK_l.js:20
+(anonymous) @ index-D5mbNK_l.js:20
+await in (anonymous)
+XM @ index-D5mbNK_l.js:9
+(anonymous) @ index-D5mbNK_l.js:9
+tR @ index-D5mbNK_l.js:9
+v_ @ index-D5mbNK_l.js:9
+R_ @ index-D5mbNK_l.js:10
+aae @ index-D5mbNK_l.js:10
+index-D5mbNK_l.js:20  POST https://workforce.tanaqolapp.com/api/auth/login 500 (Internal Server Error)
+ve @ index-D5mbNK_l.js:20
+_e @ index-D5mbNK_l.js:20
+(anonymous) @ index-D5mbNK_l.js:20
+await in (anonymous)
+XM @ index-D5mbNK_l.js:9
+(anonymous) @ index-D5mbNK_l.js:9
+tR @ index-D5mbNK_l.js:9
+v_ @ index-D5mbNK_l.js:9
+R_ @ index-D5mbNK_l.js:10
+aae @ index-D5mbNK_l.js:10
+index-D5mbNK_l.js:20  POST https://workforce.tanaqolapp.com/api/auth/login 500 (Internal Server Error)
+ve @ index-D5mbNK_l.js:20
+_e @ index-D5mbNK_l.js:20
+(anonymous) @ index-D5mbNK_l.js:20
+await in (anonymous)
+XM @ index-D5mbNK_l.js:9
+(anonymous) @ index-D5mbNK_l.js:9
+tR @ index-D5mbNK_l.js:9
+v_ @ index-D5mbNK_l.js:9
+R_ @ index-D5mbNK_l.js:10
+aae @ index-D5mbNK_l.js:10
+index-D5mbNK_l.js:20  POST https://workforce.tanaqolapp.com/api/auth/login 500 (Internal Server Error)
+ve @ index-D5mbNK_l.js:20
+_e @ index-D5mbNK_l.js:20
+(anonymous) @ index-D5mbNK_l.js:20
+await in (anonymous)
+XM @ index-D5mbNK_l.js:9
+(anonymous) @ index-D5mbNK_l.js:9
+tR @ index-D5mbNK_l.js:9
+v_ @ index-D5mbNK_l.js:9
+R_ @ index-D5mbNK_l.js:10
+aae @ index-D5mbNK_l.js:10
+index-D5mbNK_l.js:20  POST https://workforce.tanaqolapp.com/api/auth/login 500 (Internal Server Error)

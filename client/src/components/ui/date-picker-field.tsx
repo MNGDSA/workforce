@@ -1,20 +1,11 @@
 import * as React from "react";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 type View = "days" | "months" | "years";
-
-const MONTH_NAMES = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-const MONTH_FULL = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 function daysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
@@ -36,12 +27,39 @@ interface DatePickerFieldProps {
 export function DatePickerField({
   value,
   onChange,
-  placeholder = "Select date",
+  placeholder,
   className,
   min,
   max,
   "data-testid": testId,
 }: DatePickerFieldProps) {
+  const { t, i18n } = useTranslation(["common"]);
+  const isRtl = i18n.language?.startsWith("ar");
+  // Force Western Arabic numerals everywhere (project rule).
+  const intlLocale = isRtl ? "ar-u-nu-latn" : "en-US";
+
+  const { MONTH_NAMES, MONTH_FULL, DAY_LABELS } = useMemo(() => {
+    const months: string[] = [];
+    const monthsFull: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(2020, i, 1);
+      months.push(d.toLocaleDateString(intlLocale, { month: "short" }));
+      monthsFull.push(d.toLocaleDateString(intlLocale, { month: "long" }));
+    }
+    const days: string[] = [];
+    // Sunday = Jan 5, 2020; iterate Sun..Sat.
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(2020, 0, 5 + i);
+      const wk = d.toLocaleDateString(intlLocale, { weekday: "short" });
+      days.push(wk.length > 2 ? wk.slice(0, 2) : wk);
+    }
+    return { MONTH_NAMES: months, MONTH_FULL: monthsFull, DAY_LABELS: days };
+  }, [intlLocale]);
+
+  // In RTL the visual "previous" arrow points right, "next" points left.
+  const PrevIcon = isRtl ? ChevronRight : ChevronLeft;
+  const NextIcon = isRtl ? ChevronLeft : ChevronRight;
+
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<View>("days");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -102,8 +120,9 @@ export function DatePickerField({
   }, [open, updatePosition]);
 
   const displayText = parsed
-    ? `${parsed.getDate()} ${MONTH_NAMES[parsed.getMonth()]} ${parsed.getFullYear()}`
+    ? parsed.toLocaleDateString(intlLocale, { day: "numeric", month: "long", year: "numeric" })
     : "";
+  const placeholderText = placeholder ?? t("common:datePicker.selectDate", "Select date");
 
   function selectDay(day: number) {
     const m = String(viewMonth + 1).padStart(2, "0");
@@ -133,34 +152,36 @@ export function DatePickerField({
 
   const totalDays = daysInMonth(viewYear, viewMonth);
   const firstDay = startDay(viewYear, viewMonth);
+  const fmtNum = (n: number) => n.toLocaleString(intlLocale);
 
   const calendarDropdown = open && dropdownPos ? createPortal(
     <div
       ref={dropdownRef}
       data-datepicker-portal
-      className="fixed z-[9999] w-[280px] rounded-md border border-border bg-card shadow-xl p-3 animate-in fade-in-0 zoom-in-95"
+      dir={isRtl ? "rtl" : "ltr"}
+      className="fixed z-[9999] w-[280px] rounded-md border border-border bg-card shadow-xl p-3 animate-in fade-in-0 zoom-in-95 font-sans"
       style={{ top: dropdownPos.top, left: dropdownPos.left, pointerEvents: "auto" }}
     >
           {view === "days" && (
             <>
               <div className="flex items-center justify-between mb-2">
                 <button type="button" onClick={prevMonth} className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-white transition-colors">
-                  <ChevronLeft className="h-4 w-4" />
+                  <PrevIcon className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
                   onClick={() => setView("months")}
                   className="text-sm font-medium text-white hover:text-primary transition-colors px-2 py-1 rounded hover:bg-muted/30"
                 >
-                  {MONTH_FULL[viewMonth]} {viewYear}
+                  {MONTH_FULL[viewMonth]} {fmtNum(viewYear)}
                 </button>
                 <button type="button" onClick={nextMonth} className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-white transition-colors">
-                  <ChevronRight className="h-4 w-4" />
+                  <NextIcon className="h-4 w-4" />
                 </button>
               </div>
               <div className="grid grid-cols-7 gap-0 mb-1">
-                {DAY_LABELS.map((d) => (
-                  <div key={d} className="text-center text-[11px] text-muted-foreground font-medium py-1">{d}</div>
+                {DAY_LABELS.map((d, i) => (
+                  <div key={i} className="text-center text-[11px] text-muted-foreground font-medium py-1">{d}</div>
                 ))}
               </div>
               <div className="grid grid-cols-7 gap-0">
@@ -172,8 +193,8 @@ export function DatePickerField({
                   const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                   const isSelected = value === dateStr;
                   const isToday = (() => {
-                    const t = new Date();
-                    return day === t.getDate() && viewMonth === t.getMonth() && viewYear === t.getFullYear();
+                    const today = new Date();
+                    return day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
                   })();
                   return (
                     <button
@@ -189,7 +210,7 @@ export function DatePickerField({
                             : "text-white/80 hover:bg-muted/40 hover:text-white"
                       )}
                     >
-                      {day}
+                      {fmtNum(day)}
                     </button>
                   );
                 })}
@@ -201,17 +222,17 @@ export function DatePickerField({
             <>
               <div className="flex items-center justify-between mb-3">
                 <button type="button" onClick={() => setViewYear(viewYear - 1)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-white transition-colors">
-                  <ChevronLeft className="h-4 w-4" />
+                  <PrevIcon className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
                   onClick={() => { setYearRangeStart(Math.floor(viewYear / 12) * 12); setView("years"); }}
                   className="text-sm font-medium text-white hover:text-primary transition-colors px-2 py-1 rounded hover:bg-muted/30"
                 >
-                  {viewYear}
+                  {fmtNum(viewYear)}
                 </button>
                 <button type="button" onClick={() => setViewYear(viewYear + 1)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-white transition-colors">
-                  <ChevronRight className="h-4 w-4" />
+                  <NextIcon className="h-4 w-4" />
                 </button>
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -219,7 +240,7 @@ export function DatePickerField({
                   const isCurrent = i === viewMonth && viewYear === (parsed?.getFullYear() ?? -1) && i === (parsed?.getMonth() ?? -1);
                   return (
                     <button
-                      key={m}
+                      key={i}
                       type="button"
                       onClick={() => selectMonth(i)}
                       className={cn(
@@ -241,13 +262,13 @@ export function DatePickerField({
             <>
               <div className="flex items-center justify-between mb-3">
                 <button type="button" onClick={() => setYearRangeStart(yearRangeStart - 12)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-white transition-colors">
-                  <ChevronLeft className="h-4 w-4" />
+                  <PrevIcon className="h-4 w-4" />
                 </button>
                 <span className="text-sm font-medium text-white">
-                  {yearRangeStart} – {yearRangeStart + 11}
+                  {fmtNum(yearRangeStart)} – {fmtNum(yearRangeStart + 11)}
                 </span>
                 <button type="button" onClick={() => setYearRangeStart(yearRangeStart + 12)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-white transition-colors">
-                  <ChevronRight className="h-4 w-4" />
+                  <NextIcon className="h-4 w-4" />
                 </button>
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -266,7 +287,7 @@ export function DatePickerField({
                           : "text-white/80 hover:bg-muted/40 hover:text-white"
                       )}
                     >
-                      {y}
+                      {fmtNum(y)}
                     </button>
                   );
                 })}
@@ -291,7 +312,7 @@ export function DatePickerField({
         )}
       >
         <CalendarDays className="h-4 w-4 text-muted-foreground shrink-0" />
-        <span className="flex-1 text-start truncate">{displayText || placeholder}</span>
+        <span className="flex-1 text-start truncate">{displayText || placeholderText}</span>
       </button>
       {calendarDropdown}
     </div>

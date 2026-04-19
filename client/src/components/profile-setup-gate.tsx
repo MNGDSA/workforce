@@ -541,7 +541,7 @@ function Step2Form({
               placeholder="SA0000000000000000000000"
               maxLength={24}
               dir="ltr"
-              className="bg-muted/30 border-border font-mono uppercase"
+              className="bg-muted/30 border-border uppercase"
               data-testid="input-iban"
             />
             <p className="text-[11px] text-muted-foreground mt-1">{t("profileSetup:step2.ibanFormat")}</p>
@@ -564,7 +564,7 @@ function Step2Form({
                 readOnly
                 dir="ltr"
                 placeholder={t("profileSetup:step2.bankCodePh")}
-                className="bg-muted/10 border-border text-muted-foreground cursor-not-allowed select-none font-mono"
+                className="bg-muted/10 border-border text-muted-foreground cursor-not-allowed select-none"
                 data-testid="input-bank-code"
               />
             </FieldWrapper>
@@ -761,6 +761,16 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
   const [s1data,   setS1data]   = useState<Partial<Step1>>({});
   const [s2data,   setS2data]   = useState<Partial<Step2>>({});
   const [completed, setCompleted] = useState(candidate?.profileCompleted ?? false);
+
+  // Always start each step at the top of the page (some browsers, especially
+  // when the document direction flips to RTL, otherwise restore a stale
+  // scroll position that lands the user halfway down the form).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [step]);
 
   const updateCandidate = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {

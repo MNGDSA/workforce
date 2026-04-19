@@ -68,5 +68,8 @@
   "pdf": {
     "loadFailed": "Failed to load PDF",
     "pageOf": "Page {{page}} of {{total}}"
+  },
+  "datePicker": {
+    "selectDate": "Select date"
   }
 }

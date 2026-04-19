@@ -68,5 +68,8 @@
   "pdf": {
     "loadFailed": "تعذر تحميل الملف",
     "pageOf": "صفحة {{page}} من {{total}}"
+  },
+  "datePicker": {
+    "selectDate": "اختر التاريخ"
   }
 }
