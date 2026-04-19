@@ -624,19 +624,26 @@ export default function AuthPage() {
             {/* ── REGISTER TAB ── */}
             <TabsContent value="register" className="space-y-4">
 
-              {/* Step indicator */}
-              <div className={`flex items-center gap-2 mb-2 ${isRtl ? "flex-row-reverse justify-start" : ""}`}>
-                {(["phone", "otp", "details"] as RegStep[]).map((step, i) => (
-                  <div key={step} className={`flex items-center gap-2 ${isRtl ? "flex-row-reverse" : ""}`}>
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${regStep === step ? "bg-primary text-primary-foreground" : i < ["phone","otp","details"].indexOf(regStep) ? "bg-primary/20 text-primary" : "bg-muted/40 text-muted-foreground"}`}>
-                      {i < ["phone","otp","details"].indexOf(regStep) ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
+              {/* Step indicator — let the browser mirror flex flow in RTL,
+                  no manual flex-row-reverse (which previously placed the
+                  connector line between a step's number and its label). */}
+              <div className="flex items-center gap-2 mb-2">
+                {(["phone", "otp", "details"] as RegStep[]).map((step, i) => {
+                  const currentIdx = ["phone", "otp", "details"].indexOf(regStep);
+                  const isDone = i < currentIdx;
+                  const isCurrent = regStep === step;
+                  return (
+                    <div key={step} className="flex items-center gap-2">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${isCurrent ? "bg-primary text-primary-foreground" : isDone ? "bg-primary/20 text-primary" : "bg-muted/40 text-muted-foreground"}`}>
+                        {isDone ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
+                      </div>
+                      <span className={`text-xs font-medium hidden sm:inline whitespace-nowrap ${isCurrent ? "text-white" : "text-muted-foreground"}`}>
+                        {step === "phone" ? t("auth:register.phoneLabel") : step === "otp" ? t("auth:register.verifyOtp") : t("auth:register.detailsStepTitle")}
+                      </span>
+                      {i < 2 && <div className="h-px bg-border w-4 mx-1 shrink-0" />}
                     </div>
-                    <span className={`text-xs font-medium hidden sm:inline ${regStep === step ? "text-white" : "text-muted-foreground"}`}>
-                      {step === "phone" ? t("auth:register.phoneLabel") : step === "otp" ? t("auth:register.verifyOtp") : t("auth:register.detailsStepTitle")}
-                    </span>
-                    {i < 2 && <div className="flex-1 h-px bg-border w-4 mx-1" />}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* ── Step 1: Phone ── */}
