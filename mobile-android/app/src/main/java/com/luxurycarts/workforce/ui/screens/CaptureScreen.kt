@@ -290,12 +290,12 @@ fun CaptureScreen(
                                 // prompts the user to reconnect and refresh
                                 // status before retrying.
                                 val serverUrl = com.luxurycarts.workforce.SERVER_URL
-                                val session = app.sessionManager.getSession()
+                                val authCookie = app.sessionManager.authCookie
                                 val apiService = com.luxurycarts.workforce.data.ApiClient
                                     .create(serverUrl) { /* no-op cookie sink */ }
-                                if (!session?.authCookie.isNullOrBlank()) {
+                                if (!authCookie.isNullOrBlank()) {
                                     com.luxurycarts.workforce.data.ApiClient
-                                        .restoreCookie(serverUrl, session!!.authCookie!!)
+                                        .restoreCookie(serverUrl, authCookie)
                                 }
                                 val serverIssuedToken: String? = try {
                                     val statusResp = apiService.getAttendanceStatus(workforceId)
