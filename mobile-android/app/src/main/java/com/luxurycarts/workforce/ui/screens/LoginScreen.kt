@@ -41,6 +41,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.luxurycarts.workforce.R
+import coil.Coil
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import com.google.gson.Gson
 import com.luxurycarts.workforce.WorkforceApp
 import com.luxurycarts.workforce.data.ApiClient
@@ -226,6 +229,26 @@ fun LoginScreen(
                                     }
                                 } catch (_: Exception) { }
                                 app.ntpTimeService.syncNtp()
+
+                                val photoUrl = activeRecord.photoUrl
+                                if (!photoUrl.isNullOrBlank()) {
+                                    try {
+                                        val ctx = app.applicationContext
+                                        // Match HomeScreen's avatar request size exactly so the
+                                        // prefetch shares the same memory cache key (80dp at the
+                                        // device's actual density), not just the disk cache.
+                                        val avatarSizePx = (80f * ctx.resources.displayMetrics.density)
+                                            .toInt()
+                                            .coerceAtLeast(1)
+                                        val prefetchReq = ImageRequest.Builder(ctx)
+                                            .data("$normalizedUrl$photoUrl")
+                                            .size(avatarSizePx)
+                                            .memoryCachePolicy(CachePolicy.ENABLED)
+                                            .diskCachePolicy(CachePolicy.ENABLED)
+                                            .build()
+                                        Coil.imageLoader(ctx).enqueue(prefetchReq)
+                                    } catch (_: Exception) { }
+                                }
 
                                 onLoginSuccess(body.user, activeRecord, api)
                             } else {

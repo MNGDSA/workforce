@@ -52,6 +52,12 @@ export async function uploadFile(
       Body: fileContent,
       ContentType: contentType || "application/octet-stream",
       ACL: opts.isPublic ? "public-read" : "private",
+      // Photos are immutable per upload (filenames are random); use a
+      // private cache so the OkHttp / Coil disk cache on the worker's device
+      // can revalidate after 24h without intermediaries sharing the bytes.
+      CacheControl: opts.isPublic
+        ? "private, max-age=86400, must-revalidate"
+        : "private, max-age=300",
     }));
     return `https://${spacesBucket}.${spacesEndpoint}/${key}`;
   } finally {

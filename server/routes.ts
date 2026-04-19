@@ -270,10 +270,18 @@ export async function registerRoutes(
 
   if (process.env.NODE_ENV !== "production") {
     app.use("/uploads", express.static(UPLOADS_DIR, {
+      etag: true,
+      lastModified: true,
       setHeaders: (res, filePath) => {
-        if (filePath.endsWith(".pdf")) {
+        const lower = filePath.toLowerCase();
+        if (lower.endsWith(".pdf")) {
           res.setHeader("Content-Type", "application/pdf");
           res.setHeader("Content-Disposition", "inline");
+        }
+        const isImage = lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png");
+        if (isImage) {
+          // Allow OkHttp / Coil disk cache to serve revalidated copies for ~24h.
+          res.setHeader("Cache-Control", "private, max-age=86400, must-revalidate");
         }
         res.setHeader("X-Content-Type-Options", "nosniff");
       }

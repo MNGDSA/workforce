@@ -96,4 +96,14 @@ Issues that someone has picked up and is actively diagnosing or working on a fix
 
 Issues that have been fixed and verified. Kept for historical reference. Each entry should end with a dated note describing what fixed it.
 
-*(no entries yet)*
+### ISSUE-003 — Android home screen profile photo slow to render after login
+
+- **Logged:** 2026-04-19
+- **Severity:** Medium
+- **Component:** Mobile
+- **Description:** After login, the worker profile photo on the Android home screen took a noticeable delay to render, leaving a blank/grey circle visible. Root cause was three-fold: (1) the `AsyncImage` on `HomeScreen.kt` had no size hint, no explicit memory/disk cache policy, no placeholder, and rebuilt the `ImageRequest` on every recomposition; (2) Coil had no application-level `ImageLoader`, so the disk cache was effectively non-persistent; (3) the backend served photo bytes without `Cache-Control`, so OkHttp's HTTP cache never validated stored copies.
+- **Impact:** All workers using the Android app — slow visual feedback on the home screen, especially on cold start or weak networks.
+- **Workaround:** None.
+- **Related Tasks:** #66
+- **Status notes:**
+  - 2026-04-19 — Fixed under Task #66. Stabilized the `ImageRequest` with `remember(photoUrl, serverUrl)`, added explicit `size(80dp)`, enabled memory + disk cache policies, and added a Person vector painter as both `placeholder` and `fallback`. Configured a global Coil `ImageLoader` via `WorkforceApp : ImageLoaderFactory` (25% RAM memory cache, 50 MB disk cache, `respectCacheHeaders=true`). Added a fire-and-forget `Coil.imageLoader(ctx).enqueue(...)` prefetch in `LoginScreen.kt` immediately after a successful login. On the backend, the dev `/uploads` static handler and the production DO Spaces `PutObjectCommand` now both emit `Cache-Control: ... max-age=86400, must-revalidate` for photos, with ETag/Last-Modified left enabled so subsequent requests return 304. Verified visually that warm-cache loads render essentially instantly and cold-cache loads show the placeholder icon over the brand circle until the photo crossfades in.

@@ -63,8 +63,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -72,7 +74,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.luxurycarts.workforce.R
+import coil.request.CachePolicy
 import coil.request.ImageRequest
+import coil.size.Scale
 import com.luxurycarts.workforce.WorkforceApp
 import com.luxurycarts.workforce.data.ApiService
 import com.luxurycarts.workforce.data.AttendanceConfig
@@ -359,16 +363,29 @@ fun HomeScreen(
             ) {
                 Box(contentAlignment = Alignment.BottomEnd) {
                     val photoUrl = workforceRecord?.photoUrl
+                    val avatarSizePx = with(LocalDensity.current) { 80.dp.roundToPx() }
+                    val placeholderPainter = rememberVectorPainter(Icons.Filled.Person)
                     if (photoUrl != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(context)
+                        val request = remember(photoUrl, serverUrl, avatarSizePx) {
+                            ImageRequest.Builder(context)
                                 .data("$serverUrl$photoUrl")
+                                .size(avatarSizePx)
+                                .scale(Scale.FILL)
                                 .crossfade(true)
-                                .build(),
+                                .memoryCachePolicy(CachePolicy.ENABLED)
+                                .diskCachePolicy(CachePolicy.ENABLED)
+                                .build()
+                        }
+                        AsyncImage(
+                            model = request,
                             contentDescription = stringResource(R.string.change_profile_photo),
+                            placeholder = placeholderPainter,
+                            fallback = placeholderPainter,
+                            error = placeholderPainter,
                             modifier = Modifier
                                 .size(80.dp)
                                 .clip(CircleShape)
+                                .background(CardBorder)
                                 .border(2.dp, ForestGreen, CircleShape)
                                 .clickable { showPhotoDialog = true },
                             contentScale = ContentScale.Crop,
