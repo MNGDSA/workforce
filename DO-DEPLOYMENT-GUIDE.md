@@ -90,7 +90,7 @@ A step-by-step guide to deploy the Workforce app on DigitalOcean App Platform.
 7. Set **Network** settings:
    - **HTTP Port**: `8080`
    - **Internal/External routing**: Keep as **External** (public-facing — both admin dashboard and mobile app connect to it)
-   - **Health Check Path**: Leave default (`/`) — the app serves the React frontend on `/` which returns 200
+   - **Health Check Path**: Set to `/api/health` (returns `{"status":"ok"}` without touching the database — preferred over `/` so DO doesn't load the React bundle on every probe)
    - **CORS**: Not needed here — the API and frontend are served from the same origin
 
 > **What happens during build?**
@@ -300,9 +300,9 @@ All endpoints require authentication (JWT token from login).
 - Make sure the build command includes `npm install` before `npm run build`
 
 ### Multiple instances causing session issues
-- Sessions use server-side memory by default in this setup
-- With 2+ instances behind a load balancer, users may get logged out when routed to a different instance
-- The app uses JWT-based auth tokens, so this shouldn't be an issue — but if it is, switch to database-backed sessions
+- The app uses cookie-based auth (`wf_auth` cookie verified server-side against the `users` table on every request) — no in-memory session state
+- With 2+ instances behind a load balancer, users stay logged in regardless of which instance handles the request
+- If you ever switch to in-memory or sticky sessions, you'll need to add Redis or database-backed session storage
 
 ---
 
