@@ -667,11 +667,13 @@ export default function AuthPage() {
                     <p className={`text-xs text-muted-foreground ${isRtl ? "text-right" : "text-left"}`}>{t("auth:register.phoneStepSubtitle")}</p>
                     {regPhone.length > 0 && !/^05\d{8}$/.test(regPhone) && (
                       <p
+                        role="alert"
+                        aria-live="polite"
                         className={`text-xs text-destructive flex items-center gap-1 ${isRtl ? "text-right flex-row-reverse" : "text-left"}`}
                         data-testid="text-phone-validation-hint"
                       >
                         <AlertCircle className="h-3 w-3 shrink-0" />
-                        <span>{t("common:invalidPhone")}</span>
+                        <span>{t("common:errors.invalidPhone")}</span>
                       </p>
                     )}
                   </div>
