@@ -1,5 +1,8 @@
 package com.luxurycarts.workforce.data
 
+import android.util.Log
+import com.luxurycarts.workforce.BuildConfig
+import okhttp3.CertificatePinner
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
@@ -151,9 +154,22 @@ object ApiClient {
             val request = chain.request()
             val isAuthRequest = request.url.encodedPath.contains("/api/auth/")
             val response = chain.proceed(request)
-            if (!isAuthRequest && !isSyncInProgress && (response.code == 403 || response.code == 401)) {
+            if (!isAuthRequest && (response.code == 403 || response.code == 401)) {
                 val body = response.peekBody(1024).string()
-                if (body.contains("terminated") || body.contains("disabled") || body.contains("Account is disabled")) {
+                val terminated = body.contains("terminated") ||
+                    body.contains("disabled") ||
+                    body.contains("Account is disabled")
+                if (terminated) {
+                    // Task #43 step 2: previously the interceptor early-
+                    // returned when isSyncInProgress was true, which
+                    // meant a termination signal observed *during* a
+                    // sync batch was silently dropped. We now wait
+                    // (bounded) for the in-flight sync to drain so
+                    // queued uploads finish *before* credentials are
+                    // wiped. Anything still in flight after the
+                    // deadline is force-aborted via session.clear() to
+                    // avoid an indefinitely-zombied terminated account.
+                    awaitSyncCompletion(SYNC_DRAIN_TIMEOUT_MS)
                     onSessionTerminated?.invoke()
                 }
             }
@@ -179,14 +195,51 @@ object ApiClient {
             chain.proceed(req)
         }
 
-        val client = OkHttpClient.Builder()
+        // Task #43 step 1: SSL certificate pinning for the production
+        // hostname. Pins are configured via BuildConfig fields populated
+        // from gradle.properties so they can be rotated without a code
+        // change. We pin the SubjectPublicKeyInfo SHA-256 of the leaf +
+        // a backup intermediate so pin-rotation never bricks the field.
+        //
+        // Defensive fallback: if the pin set is empty (placeholder build
+        // or rotation drill), we log a loud warning and proceed
+        // unpinned rather than hard-crashing every worker mid-Hajj. The
+        // log line is filterable via `adb logcat -s ApiClient` for
+        // remote-triage.
+        val pinHost = BuildConfig.CERT_PIN_HOST.takeIf { it.isNotBlank() }
+        val rawPins = BuildConfig.CERT_PINS
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+
+        val builder = OkHttpClient.Builder()
             .cookieJar(jar)
             .addInterceptor(localeInterceptor)
             .addInterceptor(terminationInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
-            .build()
+
+        if (pinHost != null && rawPins.isNotEmpty()) {
+            val pinnerBuilder = CertificatePinner.Builder()
+            for (pin in rawPins) {
+                // Each pin is expected as "sha256/<base64>" per OkHttp
+                // contract. We accept either the full string or just
+                // the base64 portion for operator convenience.
+                val normalized = if (pin.startsWith("sha256/")) pin else "sha256/$pin"
+                pinnerBuilder.add(pinHost, normalized)
+            }
+            builder.certificatePinner(pinnerBuilder.build())
+            Log.i("ApiClient", "TLS pinning enabled host=$pinHost pinCount=${rawPins.size}")
+        } else {
+            Log.w(
+                "ApiClient",
+                "TLS pinning DISABLED — CERT_PIN_HOST or CERT_PINS empty in BuildConfig. " +
+                    "Re-populate gradle.properties (CERT_PIN_HOST, CERT_PINS) before production rollout.",
+            )
+        }
+
+        val client = builder.build()
 
         val service = Retrofit.Builder()
             .baseUrl(url)
@@ -209,4 +262,33 @@ object ApiClient {
         currentBaseUrl = null
         cookieJar = null
     }
+
+    /**
+     * Task #43 step 2: block until any in-flight sync batch completes,
+     * up to [timeoutMillis]. Used by the termination interceptor so
+     * `session.clear()` never wipes credentials mid-upload. Polling is
+     * used in preference to a Mutex/CountDownLatch because the sync
+     * flag is already volatile and the wait is short-lived (≤ 5 s).
+     */
+    fun awaitSyncCompletion(timeoutMillis: Long) {
+        if (!isSyncInProgress) return
+        val deadline = System.currentTimeMillis() + timeoutMillis
+        while (isSyncInProgress && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(POLL_INTERVAL_MS)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return
+            }
+        }
+        if (isSyncInProgress) {
+            Log.w(
+                "ApiClient",
+                "awaitSyncCompletion timed out after ${timeoutMillis}ms — proceeding with session clear",
+            )
+        }
+    }
+
+    private const val SYNC_DRAIN_TIMEOUT_MS: Long = 5_000L
+    private const val POLL_INTERVAL_MS: Long = 50L
 }

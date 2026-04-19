@@ -1,9 +1,34 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
 }
+
+// Task #43 step 1 & 3: load operator-supplied secrets (release keystore
+// credentials and TLS pin material) from gradle.properties or the
+// process environment. Either source works so CI can inject via env
+// without committing values to disk. Empty strings are tolerated and
+// trigger a graceful skip in both consumers.
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) load(f.inputStream())
+}
+fun resolveSecret(key: String): String =
+    System.getenv(key)
+        ?: (project.findProperty(key) as String?)
+        ?: localProps.getProperty(key)
+        ?: ""
+
+val keystorePath = resolveSecret("WORKFORCE_KEYSTORE_FILE")
+val keystorePassword = resolveSecret("WORKFORCE_KEYSTORE_PASSWORD")
+val keyAlias = resolveSecret("WORKFORCE_KEY_ALIAS")
+val keyPassword = resolveSecret("WORKFORCE_KEY_PASSWORD")
+val certPinHost = resolveSecret("WORKFORCE_CERT_PIN_HOST")
+    .ifEmpty { "workforce.tanaqolapp.com" }
+val certPins = resolveSecret("WORKFORCE_CERT_PINS")
 
 android {
     namespace = "com.luxurycarts.workforce"
@@ -12,9 +37,47 @@ android {
     defaultConfig {
         applicationId = "com.luxurycarts.workforce"
         minSdk = 26
-        targetSdk = 34
+        // Task #43 step 4: target Android 15. Edge-to-edge enforcement
+        // was handled by Task #83 (systemBarsPadding on every screen).
+        // Predictive back is opted in via the manifest application
+        // attribute `android:enableOnBackInvokedCallback="true"`.
+        // We don't use foreground services so the FGS-restrictions
+        // changes do not apply.
+        targetSdk = 35
         versionCode = 2
         versionName = "1.0.1"
+
+        // Task #43 step 1: pin material is exposed at runtime via
+        // BuildConfig so OkHttp's CertificatePinner can be configured
+        // without bundling the values into resources or strings.
+        buildConfigField("String", "CERT_PIN_HOST", "\"$certPinHost\"")
+        buildConfigField("String", "CERT_PINS", "\"$certPins\"")
+    }
+
+    // Task #43 step 3: release signing config wired from environment /
+    // gradle.properties. If WORKFORCE_KEYSTORE_FILE is not set, we
+    // skip the signingConfig assignment entirely; gradle then falls
+    // back to debug signing for unsigned local builds (CI that
+    // produces a Play-track build MUST set the four env vars).
+    val hasReleaseSigning = keystorePath.isNotEmpty() &&
+        keystorePassword.isNotEmpty() &&
+        keyAlias.isNotEmpty() &&
+        keyPassword.isNotEmpty() &&
+        file(keystorePath).exists()
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = keystorePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
     }
 
     buildTypes {
@@ -25,6 +88,15 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                logger.warn(
+                    "WORKFORCE release build will be UNSIGNED — set WORKFORCE_KEYSTORE_FILE / " +
+                        "WORKFORCE_KEYSTORE_PASSWORD / WORKFORCE_KEY_ALIAS / WORKFORCE_KEY_PASSWORD " +
+                        "in gradle.properties or the CI environment to produce a Play-uploadable APK."
+                )
+            }
         }
         debug {
             isMinifyEnabled = false

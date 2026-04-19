@@ -2,7 +2,7 @@ package com.luxurycarts.workforce.services
 
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKeys
+import androidx.security.crypto.MasterKey
 import com.luxurycarts.workforce.data.SyncTelemetry
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -13,12 +13,18 @@ import kotlinx.coroutines.withContext
 
 class NtpTimeService(private val appContext: Context) {
 
-    private val masterKey = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
+    // Task #43 step 5: migrated from deprecated `MasterKeys.getOrCreate`
+    // to the modern `MasterKey.Builder` API. AES-256-GCM material lives
+    // in the AndroidKeyStore so existing prefs keep decrypting after
+    // upgrade.
+    private val masterKey: MasterKey = MasterKey.Builder(appContext)
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+        .build()
 
     private val prefs = EncryptedSharedPreferences.create(
+        appContext,
         "workforce_ntp",
         masterKey,
-        appContext,
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
     )

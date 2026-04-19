@@ -2,16 +2,23 @@ package com.luxurycarts.workforce.services
 
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKeys
+import androidx.security.crypto.MasterKey
 
 class SessionManager(context: Context) {
 
-    private val masterKey = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
+    // Task #43 step 5: migrated from the deprecated `MasterKeys.getOrCreate`
+    // to the modern `MasterKey.Builder` API. The underlying key material
+    // (AES-256-GCM in the AndroidKeyStore) is identical, so existing
+    // EncryptedSharedPreferences files keep decrypting without any
+    // forced re-key step on upgrade.
+    private val masterKey: MasterKey = MasterKey.Builder(context)
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+        .build()
 
     private val prefs = EncryptedSharedPreferences.create(
+        context,
         "workforce_session",
         masterKey,
-        context,
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
     )
