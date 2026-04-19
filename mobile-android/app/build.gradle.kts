@@ -7,11 +7,13 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-// Task #43 step 1 & 3: load operator-supplied secrets (release keystore
-// credentials and TLS pin material) from gradle.properties or the
-// process environment. Either source works so CI can inject via env
-// without committing values to disk. Empty strings are tolerated and
-// trigger a graceful skip in both consumers.
+// ── Operator-supplied secrets (Task #43 + Task #82) ────────────────────────
+// Release keystore credentials and TLS pin material are loaded from the
+// process environment, gradle.properties, or local.properties (in that
+// order). Empty strings are tolerated and trigger a graceful skip in both
+// consumers — the release build then falls back to debug signing so a
+// fresh checkout still compiles. See `docs/android-release-runbook.md`
+// for the full release flow and the WORKFORCE_* variable list.
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) load(f.inputStream())
@@ -54,11 +56,13 @@ android {
         buildConfigField("String", "CERT_PINS", "\"$certPins\"")
     }
 
-    // Task #43 step 3: release signing config wired from environment /
-    // gradle.properties. If WORKFORCE_KEYSTORE_FILE is not set, we
-    // skip the signingConfig assignment entirely; gradle then falls
-    // back to debug signing for unsigned local builds (CI that
-    // produces a Play-track build MUST set the four env vars).
+    // Task #43 step 3 + Task #82 F-09: release signing config wired from
+    // environment / gradle.properties / local.properties. If
+    // WORKFORCE_KEYSTORE_FILE is not set (or the file does not exist),
+    // we skip the signingConfig assignment entirely and fall back to
+    // debug signing below — fresh checkouts still compile, but the
+    // resulting AAB CANNOT be uploaded to Play. CI that produces a
+    // Play-track build MUST set the four WORKFORCE_* env vars.
     val hasReleaseSigning = keystorePath.isNotEmpty() &&
         keystorePassword.isNotEmpty() &&
         keyAlias.isNotEmpty() &&
@@ -88,14 +92,22 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            if (hasReleaseSigning) {
-                signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
             } else {
+                // Fallback so `assembleRelease` still works on a clean
+                // checkout without secrets. Builds produced this way are
+                // for local smoke-testing only and CANNOT be uploaded to
+                // Play (Play rejects debug-signed AABs). See
+                // docs/android-release-runbook.md.
                 logger.warn(
-                    "WORKFORCE release build will be UNSIGNED — set WORKFORCE_KEYSTORE_FILE / " +
-                        "WORKFORCE_KEYSTORE_PASSWORD / WORKFORCE_KEY_ALIAS / WORKFORCE_KEY_PASSWORD " +
-                        "in gradle.properties or the CI environment to produce a Play-uploadable APK."
+                    "[signing] No release keystore configured — falling back to debug " +
+                        "signing. DO NOT upload this artifact to Play. Set " +
+                        "WORKFORCE_KEYSTORE_FILE / WORKFORCE_KEYSTORE_PASSWORD / " +
+                        "WORKFORCE_KEY_ALIAS / WORKFORCE_KEY_PASSWORD in gradle.properties " +
+                        "or the CI environment to produce a Play-uploadable AAB."
                 )
+                signingConfigs.getByName("debug")
             }
         }
         debug {

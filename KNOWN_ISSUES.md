@@ -88,7 +88,17 @@ Issues that have been logged but no one is actively investigating yet.
 
 Issues that someone has picked up and is actively diagnosing or working on a fix for.
 
-*(no entries yet)*
+### ISSUE-007 — Android Play release readiness blocked on Play Console access
+
+- **Logged:** 2026-04-19
+- **Severity:** High
+- **Component:** Mobile + Backend + Infrastructure
+- **Description:** Three production-rollout prerequisites for the Android workforce app cannot be fully closed today because we have neither a Google Play Console account nor a linked Google Cloud project: (1) signed release AAB upload to Play (F-09), (2) live Crashlytics/Sentry crash dashboard (F-10), and (3) Play Integrity verdict enforcement on the attendance submit endpoint (F-03 + Play Integrity). Without these, distributing to ~10K devices is not viable: we cannot ship via Play, we have no crash telemetry on rollout, and the attendance submit endpoint can be called by any HTTP client that holds a session cookie.
+- **Impact:** Blocks production rollout of the Android workforce app to the worker fleet.
+- **Workaround:** Sideloaded debug builds during pre-rollout testing only. The in-app scaffolding (env-driven Gradle signing config, `CrashReporter` interface with NoOp default, `PlayIntegrityProvider` interface with NoOp default, server-side `play-integrity.ts` toggleable verifier) is already in place so the operational swap is a small, well-bounded change once Play access exists.
+- **Related Tasks:** #82
+- **Status notes:**
+  - 2026-04-19 — Logged under task #82. Landed: env-driven release signing in `mobile-android/app/build.gradle.kts` (with debug-signing fallback so fresh checkouts compile, and a loud warning so debug-signed AABs are not mistakenly uploaded), `keystore.properties.example` template, `.gitignore` entries for keystore / Firebase / service-account JSON, `CrashReporter` abstraction with `NoOpCrashReporter` and salted-SHA256 employee-number hashing for non-PII tagging, `PlayIntegrityProvider` abstraction with `NoOpPlayIntegrityProvider`, server-side `server/play-integrity.ts` with `PLAY_INTEGRITY_ENABLED` env toggle (off by default; pass-through behaviour preserves the existing submit contract), and a comprehensive `docs/android-release-runbook.md` covering keystore generation, Play App Signing enrolment, Crashlytics swap-in, Play Integrity wire-up (device + server), staged rollout playbook, and an end-to-end verification checklist. Operational follow-ups (actual keystore creation, Crashlytics SDK swap-in, Play Integrity SDK wire-up, server googleapis decode call) are blocked on Play Console + GCP provisioning and tracked in the runbook.
 
 ---
 

@@ -24,6 +24,16 @@ Any floating UI elements (dropdowns, tooltips, popovers, autocompletes) rendered
 
 For tooltip info icons, use Lucide's `Info` icon directly without wrapping it in a `rounded-full border` button to avoid a double-circle effect. Use a plain unstyled button with only `text-muted-foreground hover:text-primary` classes.
 
+## Release & Operations
+
+- **Android Play release readiness:** the workforce app's release-signing,
+  crash-reporting, and Play Integrity wiring is scaffolded but the
+  operational rollout is deferred until a Google Play Console account and a
+  linked Google Cloud project are provisioned. The full playbook —
+  keystore generation, Play App Signing enrolment, Crashlytics swap-in,
+  Play Integrity device + server wire-up, staged rollout — lives in
+  `docs/android-release-runbook.md`. Tracked under issue ISSUE-007.
+
 ## System Architecture
 
 The system employs a modern, full-stack architecture designed for scalability and maintainability.
