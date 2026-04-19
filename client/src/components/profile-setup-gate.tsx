@@ -276,7 +276,7 @@ function Step1Form({
 }: {
   defaults: Partial<Step1>; onNext: (d: Step1) => void; candidate: StoredCandidate;
 }) {
-  const { t } = useTranslation(["profileSetup"]);
+  const { t, i18n } = useTranslation(["profileSetup"]);
   const { step1: step1Schema } = useMemo(() => buildSchemas(t), [t]);
 
   // Translated lookup tables
