@@ -10,7 +10,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState, useEffect, Fragment, useRef } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,8 +25,8 @@ import {
 } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import {
-  Briefcase, Plus, Search, MapPin, Building, MoreHorizontal, Loader2, Users, X,
-  FileDown, FileUp, ChevronRight, Calendar, UserCheck, Save, CheckCircle2, AlertTriangle, Filter,
+  Briefcase, Plus, Search, MapPin, Building, MoreHorizontal, Loader2, Users,
+  FileDown, ChevronRight, Calendar, UserCheck, Save, Filter,
 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -408,8 +408,6 @@ function exportToExcel(
   XLSX.writeFile(wb, `applicants-${job.title.replace(/\s+/g, "-")}.xlsx`);
 }
 
-type ImportResult = { succeeded: number; failed: number; errors: string[] };
-
 function ApplicantsSheet({
   job,
   open,
@@ -420,12 +418,8 @@ function ApplicantsSheet({
   onOpenChange: (v: boolean) => void;
 }) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [appSearch, setAppSearch] = useState("");
   const [appStatusFilter, setAppStatusFilter] = useState<string>("all");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const { t, i18n } = useTranslation(["jobPosting"]);
   const isAr = i18n.language.startsWith("ar");
 
@@ -468,71 +462,6 @@ function ApplicantsSheet({
     const matchesStatus = appStatusFilter === "all" || app.status === appStatusFilter;
     return matchesSearch && matchesStatus;
   });
-
-  const bulkUpdate = useMutation({
-    mutationFn: (updates: { id: string; status: string }[]) =>
-      apiRequest("POST", "/api/applications/bulk-status", { updates }).then((r) => r.json()),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/applications", job?.id] });
-      setImportResult({ succeeded: data.succeeded, failed: data.failed, errors: data.results.filter((r: { success: boolean }) => !r.success).map((r: { id: string }) => r.id) });
-    },
-    onError: () => toast({ title: t("jobPosting:applicants.toast.bulkFail"), variant: "destructive" }),
-  });
-
-  function handleImport(file: File) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const wb = XLSX.read(e.target?.result, { type: "array" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "", range: 1 });
-
-        const missing = BULK_FIXED_COLS.filter((col) => !(col in (rows[0] ?? {})));
-        if (missing.length) {
-          toast({ title: t("jobPosting:applicants.toast.formatErr"), description: t("jobPosting:applicants.toast.missingCols", { cols: missing.join(", ") }), variant: "destructive" });
-          return;
-        }
-
-        if (rows.length !== applications.length) {
-          toast({ title: t("jobPosting:applicants.toast.rowMismatch"), description: t("jobPosting:applicants.toast.rowMismatchDesc", { rows: formatNumber(rows.length, i18n.language), apps: formatNumber(applications.length, i18n.language) }), variant: "destructive" });
-          return;
-        }
-
-        const knownIds = new Set(applications.map((a) => a.id));
-        const unknownIds = rows.filter((r) => !knownIds.has(r["__app_id"])).map((r) => r["__app_id"]);
-        if (unknownIds.length) {
-          toast({ title: t("jobPosting:applicants.toast.unknownIds"), description: t("jobPosting:applicants.toast.unknownIdsDesc", { n: formatNumber(unknownIds.length, i18n.language) }), variant: "destructive" });
-          return;
-        }
-
-        const invalid: string[] = [];
-        const updates: { id: string; status: string }[] = [];
-        for (const row of rows) {
-          const newStatus = row["New Status"].trim().toLowerCase();
-          if (!(VALID_STATUSES as readonly string[]).includes(newStatus)) {
-            invalid.push(`"${row["Candidate Name"]}" → "${row["New Status"]}"`);
-          } else if (newStatus !== row["Current Status"].trim().toLowerCase()) {
-            updates.push({ id: row["__app_id"], status: newStatus });
-          }
-        }
-        if (invalid.length) {
-          const detail = `${invalid.slice(0, 3).join("; ")}${invalid.length > 3 ? ` (+${formatNumber(invalid.length - 3, i18n.language)} more)` : ""}`;
-          toast({ title: t("jobPosting:applicants.toast.invalidStatus"), description: t("jobPosting:applicants.toast.invalidStatusDesc", { detail, valid: VALID_STATUSES.join(", ") }), variant: "destructive" });
-          return;
-        }
-        if (updates.length === 0) {
-          toast({ title: t("jobPosting:applicants.toast.noChanges"), description: t("jobPosting:applicants.toast.noChangesDesc") });
-          return;
-        }
-
-        bulkUpdate.mutate(updates);
-      } catch {
-        toast({ title: t("jobPosting:applicants.toast.parseFail"), description: t("jobPosting:applicants.toast.parseFailDesc"), variant: "destructive" });
-      }
-    };
-    reader.readAsArrayBuffer(file);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  }
 
   if (!job) return null;
 
@@ -586,41 +515,9 @@ function ApplicantsSheet({
                 <FileDown className="h-4 w-4" />
                 {t("jobPosting:applicants.btnExport")}
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-primary/40 text-primary gap-1.5 hover:bg-primary/10"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={applications.length === 0 || bulkUpdate.isPending}
-                data-testid="button-import-applicants"
-              >
-                {bulkUpdate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-                {t("jobPosting:applicants.btnImport")}
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx"
-                className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImport(f); e.target.value = ""; }}
-              />
             </div>
           </div>
         </SheetHeader>
-
-        {importResult && (
-          <div className={`mx-6 mt-4 p-3 rounded-sm border flex items-start gap-3 text-sm ${importResult.failed === 0 ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-amber-500/10 border-amber-500/30 text-amber-400"}`}>
-            {importResult.failed === 0 ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
-            <div className="flex-1">
-              <span className="font-medium">{t("jobPosting:applicants.imp.succeeded", { count: importResult.succeeded, replace: { count: formatNumber(importResult.succeeded, i18n.language) } })}</span>
-              {importResult.failed > 0 && <span className="ms-2">· {t("jobPosting:applicants.imp.failed", { count: importResult.failed, replace: { count: formatNumber(importResult.failed, i18n.language) } })}</span>}
-              {importResult.errors.length > 0 && (
-                <p className="text-xs mt-1 opacity-80" dir="ltr">{t("jobPosting:applicants.imp.errorIds", { ids: importResult.errors.slice(0, 5).join(", ") })}</p>
-              )}
-            </div>
-            <button onClick={() => setImportResult(null)} className="text-muted-foreground hover:text-white"><X className="h-4 w-4" /></button>
-          </div>
-        )}
 
         {applications.length > 0 && (
           <div className="px-6 py-3 border-b border-border space-y-2">

@@ -430,7 +430,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
 
   const bulkShortlistMutation = useMutation({
     mutationFn: (items: { appId: string; candidateId: string }[]) =>
-      apiRequest("POST", "/api/applications/bulk-status", {
+      apiRequest("POST", "/api/applications/bulk-shortlist", {
         updates: items.map(i => ({ id: i.appId, status: "shortlisted" })),
       }).then(r => r.json()),
     onSuccess: (result, items) => {

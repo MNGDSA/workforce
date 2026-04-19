@@ -2100,13 +2100,17 @@ export async function registerRoutes(
     }
   });
 
-  // ─── Bulk application status update ────────────────────────────────────────
-  app.post("/api/applications/bulk-status", requirePermission("applications:bulk_status"), async (req: Request, res: Response) => {
+  // ─── Bulk shortlist applications (interviews flow only) ───────────────────
+  // Dedicated, scope-limited endpoint: the only legitimate caller is the
+  // interviews page bulk-shortlist action. The previous generic bulk-status
+  // endpoint was retired alongside the applicants-import drop (task #65) so
+  // there is no longer a path for arbitrary status changes via spreadsheet.
+  app.post("/api/applications/bulk-shortlist", requirePermission("applications:bulk_shortlist"), async (req: Request, res: Response) => {
     try {
       const { updates } = z.object({
         updates: z.array(z.object({
           id: z.string(),
-          status: z.enum(["new", "shortlisted", "interviewed", "offered", "hired", "rejected"]),
+          status: z.literal("shortlisted"),
         })).min(1),
       }).parse(req.body);
 

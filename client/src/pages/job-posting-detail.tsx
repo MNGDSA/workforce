@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { useState, useRef, Fragment } from "react";
+import { useState, Fragment } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout";
@@ -24,10 +24,6 @@ import {
   Calendar,
   Loader2,
   FileDown,
-  FileUp,
-  CheckCircle2,
-  AlertTriangle,
-  X,
   ChevronRight,
   UserCheck,
   Banknote,
@@ -144,8 +140,6 @@ function exportToExcel(
   XLSX.writeFile(wb, `applicants-${job.title.replace(/\s+/g, "-")}.xlsx`);
 }
 
-type ImportResult = { succeeded: number; failed: number; errors: string[] };
-
 export default function JobPostingDetailPage() {
   const params = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -153,10 +147,8 @@ export default function JobPostingDetailPage() {
   const { t } = useTranslation(["jobPosting", "common"]);
   const queryClient = useQueryClient();
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [appSearch, setAppSearch] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: job, isLoading: jobLoading } = useQuery<JobPosting>({
     queryKey: ["/api/jobs", params.id],
@@ -197,68 +189,6 @@ export default function JobPostingDetailPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/applications", params.id] }),
     onError: () => toast({ title: t("jobPosting:detail.updateFailed"), variant: "destructive" }),
   });
-
-  const bulkUpdate = useMutation({
-    mutationFn: (updates: { id: string; status: string }[]) =>
-      apiRequest("POST", "/api/applications/bulk-status", { updates }).then((r) => r.json()),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/applications", params.id] });
-      setImportResult({
-        succeeded: data.succeeded, failed: data.failed,
-        errors: data.results.filter((r: { success: boolean }) => !r.success).map((r: { id: string }) => r.id),
-      });
-    },
-    onError: () => toast({ title: t("jobPosting:detail.bulkUpdateFailed"), variant: "destructive" }),
-  });
-
-  function handleImport(file: File) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const wb = XLSX.read(e.target?.result, { type: "array" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "", range: 1 });
-        const missing = BULK_FIXED_COLS.filter((col) => !(col in (rows[0] ?? {})));
-        if (missing.length) {
-          toast({ title: t("jobPosting:detail.formatError"), description: t("jobPosting:detail.missingColumns", { cols: missing.join(", ") }), variant: "destructive" });
-          return;
-        }
-        if (rows.length !== applications.length) {
-          toast({ title: t("jobPosting:detail.rowCountMismatch"), description: t("jobPosting:detail.rowCountMismatchDesc", { file: formatNumber(rows.length), job: formatNumber(applications.length) }), variant: "destructive" });
-          return;
-        }
-        const knownIds = new Set(applications.map((a) => a.id));
-        const unknownIds = rows.filter((r) => !knownIds.has(r["__app_id"]));
-        if (unknownIds.length) {
-          toast({ title: t("jobPosting:detail.unknownAppIds"), description: t("jobPosting:detail.unknownAppIdsDesc", { n: formatNumber(unknownIds.length) }), variant: "destructive" });
-          return;
-        }
-        const invalid: string[] = [];
-        const updates: { id: string; status: string }[] = [];
-        for (const row of rows) {
-          const newStatus = row["New Status"].trim().toLowerCase();
-          if (!(VALID_STATUSES as readonly string[]).includes(newStatus)) {
-            invalid.push(`"${row["Candidate Name"]}" → "${row["New Status"]}"`);
-          } else if (newStatus !== row["Current Status"].trim().toLowerCase()) {
-            updates.push({ id: row["__app_id"], status: newStatus });
-          }
-        }
-        if (invalid.length) {
-          toast({ title: t("jobPosting:detail.invalidStatus"), description: t("jobPosting:detail.invalidStatusDesc", { samples: invalid.slice(0, 3).join("; "), valid: VALID_STATUSES.join(", ") }), variant: "destructive" });
-          return;
-        }
-        if (updates.length === 0) {
-          toast({ title: t("jobPosting:detail.noChanges") });
-          return;
-        }
-        bulkUpdate.mutate(updates);
-      } catch {
-        toast({ title: t("jobPosting:detail.parseFailed"), variant: "destructive" });
-      }
-    };
-    reader.readAsArrayBuffer(file);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  }
 
   const filteredApps = applications.filter(a => {
     const c = candidateMap[a.candidateId];
@@ -429,37 +359,8 @@ export default function JobPostingDetailPage() {
                   <FileDown className="h-4 w-4" />
                   {t("jobPosting:detail.export")}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-primary/40 text-primary gap-1.5 hover:bg-primary/10"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={applications.length === 0 || bulkUpdate.isPending}
-                  data-testid="button-import-applicants"
-                >
-                  {bulkUpdate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-                  {t("jobPosting:detail.import")}
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".xlsx"
-                  className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImport(f); e.target.value = ""; }}
-                />
               </div>
             </div>
-
-            {importResult && (
-              <div className={`p-3 rounded-sm border flex items-start gap-3 text-sm ${importResult.failed === 0 ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-amber-500/10 border-amber-500/30 text-amber-400"}`}>
-                {importResult.failed === 0 ? <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" /> : <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />}
-                <div className="flex-1">
-                  <span className="font-medium">{t("jobPosting:detail.succeededUpdated", { n: formatNumber(importResult.succeeded) })}</span>
-                  {importResult.failed > 0 && <span className="ms-2 text-destructive">{t("jobPosting:detail.failedCount", { n: formatNumber(importResult.failed) })}</span>}
-                </div>
-                <button onClick={() => setImportResult(null)} className="hover:opacity-70"><X className="h-4 w-4" /></button>
-              </div>
-            )}
 
             <Card className="bg-card border-border">
               <CardContent className="p-0">

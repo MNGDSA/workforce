@@ -64,7 +64,7 @@ export const PERMISSION_CATALOG = [
   { key: "jobs:archive",              resource: "jobs",         action: "archive",      description: "Archive / unarchive job",          category: "Jobs & Applications" },
   { key: "applications:read",         resource: "applications", action: "read",         description: "List & view applications",         category: "Jobs & Applications" },
   { key: "applications:update",       resource: "applications", action: "update",       description: "Edit application status / notes",  category: "Jobs & Applications" },
-  { key: "applications:bulk_status",  resource: "applications", action: "bulk_status",  description: "Bulk change application status",   category: "Jobs & Applications" },
+  { key: "applications:bulk_shortlist", resource: "applications", action: "bulk_shortlist", description: "Bulk shortlist applications from the interviews flow", category: "Jobs & Applications" },
 
   // ─── Interviews ──
   { key: "interviews:read",   resource: "interviews", action: "read",   description: "List & view interviews", category: "Interviews" },

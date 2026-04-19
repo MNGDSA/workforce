@@ -96,6 +96,19 @@ Issues that someone has picked up and is actively diagnosing or working on a fix
 
 Issues that have been fixed and verified. Kept for historical reference. Each entry should end with a dated note describing what fixed it.
 
+### ISSUE-002 — Job posting applicants import — hard drop
+
+- **Logged:** 2026-04-19
+- **Severity:** Medium
+- **Component:** Admin Panel
+- **Description:** The job-posting backoffice exposed a spreadsheet upload control on both the job-posting list page (applicants drawer) and the job-posting detail page. That upload path consumed a previously exported workbook, read the "New Status" column, and bulk-updated application statuses. It bypassed the proper recruitment pipeline (applications, screening, interviews) and was a recurring source of dirty data. Operators occasionally re-uploaded stale exports, silently reverting decisions made elsewhere in the app.
+- **Impact:** Recruitment data integrity. Admin operators on the job-posting screens.
+- **Workaround:** None — the only safe path was to instruct operators not to use the button.
+- **Related Tasks:** #65
+- **Status notes:**
+  - 2026-04-19 — Logged.
+  - 2026-04-19 — Resolved by task #65. The upload control, file input, status banner, parser, and the associated mutation were removed from both job-posting screens. All applicant-upload translation strings were stripped from the EN and AR `jobPosting` namespaces. The export button is unchanged. The previous generic `/api/applications/bulk-status` endpoint was retired and replaced by a dedicated, status-locked `/api/applications/bulk-shortlist` endpoint that only supports the interviews flow's bulk-shortlist action; the matching permission key was renamed from `applications:bulk_status` to `applications:bulk_shortlist` and the interviews page was updated to call the new path. A Playwright suite (`e2e-tests/suites/job-posting-import-removed.ts`) asserts the upload button is absent on both screens and that the export button is still present. Verification: zero matches across non-doc files for the removed identifiers; `tsc` clean for the touched files (only pre-existing unrelated errors remain).
+
 ### ISSUE-003 — Android home screen profile photo slow to render after login
 
 - **Logged:** 2026-04-19

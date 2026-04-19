@@ -6,6 +6,7 @@ import * as candidatePortalFlow from "./candidate-portal-flow";
 import * as candidatePhotoManagement from "./candidate-photo-management";
 import * as inboxAttendanceReview from "./inbox-attendance-review";
 import * as geofenceManagement from "./geofence-management";
+import * as jobPostingImportRemoved from "./job-posting-import-removed";
 
 export type TestSuite = {
   name: string;
@@ -22,6 +23,7 @@ export const allSuites: TestSuite[] = [
   candidatePhotoManagement,
   inboxAttendanceReview,
   geofenceManagement,
+  jobPostingImportRemoved,
 ];
 
 export {
@@ -33,4 +35,5 @@ export {
   candidatePhotoManagement,
   inboxAttendanceReview,
   geofenceManagement,
+  jobPostingImportRemoved,
 };
