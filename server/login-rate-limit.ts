@@ -102,6 +102,10 @@ async function upsertFailure(scope: "ip" | "identifier", key: string): Promise<U
   //  - If the resulting attempt_count crosses MAX_ATTEMPTS, set locked_until.
   //  - was_locked tells the caller "this call is the one that flipped it locked"
   //    so we audit only the transition, not every subsequent failure.
+  // nosemgrep: javascript.drizzle-orm.security.audit.ban-drizzle-sql-raw
+  // sql.raw below interpolates module-level numeric constants (WINDOW_MIN,
+  // LOCKOUT_MIN, MAX_ATTEMPTS) — never user input. PostgreSQL INTERVAL syntax
+  // does not accept parameter placeholders for the literal interval value.
   const result = await db.execute(sql`
     INSERT INTO login_rate_limit_buckets
       (scope, key, attempt_count, window_start, locked_until, updated_at)

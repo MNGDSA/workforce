@@ -64,6 +64,9 @@ async function main() {
   `);
   console.log(`[rbac-migrate] NULL role_id → candidate (orphans cleared)`);
 
+  // nosemgrep: javascript.drizzle-orm.security.audit.ban-drizzle-sql-raw
+  // candidateRole.id is a server-generated UUID, never user input. ALTER TABLE
+  // SET DEFAULT does not accept parameter placeholders for the literal value.
   await db.execute(sql.raw(
     `ALTER TABLE users ALTER COLUMN role_id SET DEFAULT '${candidateRole.id}'`
   ));

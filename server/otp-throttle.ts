@@ -56,6 +56,9 @@ async function bumpFailure(
   maxAttempts: number,
 ): Promise<void> {
   try {
+    // nosemgrep: javascript.drizzle-orm.security.audit.ban-drizzle-sql-raw
+    // sql.raw below interpolates module-level numeric constants only — never
+    // user input. PG INTERVAL syntax does not accept parameter placeholders.
     await db.execute(sql`
       INSERT INTO login_rate_limit_buckets
         (scope, key, attempt_count, window_start, locked_until, updated_at)
