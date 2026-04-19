@@ -918,9 +918,7 @@ export async function registerRoutes(
   // ─── OTP: Request code ─────────────────────────────────────────────────────
   app.post("/api/auth/otp/request", markPublic, async (req: Request, res: Response) => {
     try {
-      const { phone } = z.object({
-        phone: z.string().trim().regex(/^05\d{8}$/, "invalid_sa_mobile"),
-      }).parse(req.body);
+      const { phone } = z.object({ phone: saPhoneSchema }).parse(req.body);
       const normalizedPhone = phone;
 
       // Per-IP burst limiter — atomic reserve-then-decide. Closes the
@@ -975,7 +973,7 @@ export async function registerRoutes(
   app.post("/api/auth/otp/verify", markPublic, async (req: Request, res: Response) => {
     try {
       const { phone, code } = z.object({
-        phone: z.string().trim().regex(/^05\d{8}$/, "invalid_sa_mobile"),
+        phone: saPhoneSchema,
         code: z.string().regex(/^\d{6}$/, "invalid_otp_format"),
       }).parse(req.body);
       const normalizedPhone = phone;

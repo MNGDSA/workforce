@@ -565,9 +565,8 @@ function AdminUserForm({
         <Input
           dir="ltr"
           inputMode="tel"
-          maxLength={10}
           value={value.phone}
-          onChange={(e) => set("phone", e.target.value.replace(/[^\d]/g, "").slice(0, 10))}
+          onChange={(e) => set("phone", e.target.value)}
           placeholder="05XXXXXXXX"
           data-testid="input-phone"
         />
