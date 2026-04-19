@@ -605,23 +605,17 @@ export default function AuthPage() {
                     </div>
                   ));
                 return (
-                  <div className="mt-6 space-y-2">
-                    <p className={`text-muted-foreground/70 uppercase tracking-widest font-semibold text-center ${isRtl ? "text-sm" : "text-xs"}`}>
-                      {isRtl ? "يستخدم نظام وورك فورس تقنيات يستعملها كل من" : "Workforce Utilizes Technologies used by"}
-                    </p>
-                    <div
-                      className="overflow-hidden"
-                      style={{ maskImage: "linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)" }}
-                    >
-                      <div className="flex items-center animate-marquee w-max py-3 hover:[animation-play-state:paused]">
-                        <div className="flex items-center gap-10 shrink-0 pe-10">
-                          {renderLogos("a")}
-                        </div>
-                        <div className="flex items-center gap-10 shrink-0 pe-10" aria-hidden="true">
-                          {renderLogos("b")}
-                        </div>
-                      </div>
-                    </div>
+                  <div className="mt-6 flex items-center justify-center gap-3" data-testid="text-powered-by">
+                    <span className={`text-muted-foreground/70 uppercase tracking-widest font-semibold ${isRtl ? "text-sm" : "text-xs"}`}>
+                      {isRtl ? "مدعوم بواسطة" : "Powered by"}
+                    </span>
+                    <img
+                      src="/logos/aws.svg"
+                      alt="Amazon Web Services"
+                      className="h-7 w-auto opacity-70 hover:opacity-100 transition-opacity duration-200 select-none"
+                      draggable={false}
+                      data-testid="img-powered-by-logo"
+                    />
                   </div>
                 );
               })()}
