@@ -77,7 +77,7 @@ export default function LegalPage({ type }: { type: PageType }) {
 
       <footer className="border-t border-border/50 py-6">
         <p className="text-center text-xs text-muted-foreground">
-          {t("legal:copyright", { year: formatNumber(new Date().getFullYear(), i18n.language) })}
+          {t("legal:copyright", { year: formatNumber(new Date().getFullYear(), i18n.language, { useGrouping: false }) })}
         </p>
       </footer>
     </div>
