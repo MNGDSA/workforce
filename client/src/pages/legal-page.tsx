@@ -50,7 +50,6 @@ export default function LegalPage({ type }: { type: PageType }) {
           </div>
           <div>
             <h1 className="text-2xl font-display font-bold text-white" data-testid="text-legal-title">{title}</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">{t("legal:company")}</p>
           </div>
         </div>
 
