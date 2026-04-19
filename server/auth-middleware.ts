@@ -193,7 +193,7 @@ export function requirePermission(key: PermissionKey) {
     if (req.authPermissions?.has(key)) return next();
     audit(req, "403", key);
     return res.status(403).json({
-      code: MobileErrorCodes.AUTH_REQUIRED,
+      code: MobileErrorCodes.PERMISSION_DENIED,
       message: tr(req, "auth.noPermission"),
       required: key,
     });

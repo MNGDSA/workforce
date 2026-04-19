@@ -88,6 +88,14 @@ fun classifyResponse(
     response.code() == 401 -> SyncOutcome.SessionExpired
     response.code() == 403 && terminatedSignal -> SyncOutcome.Terminated
     response.code() == 408 -> SyncOutcome.RetryTransient("HTTP 408 timeout", 408)
+    // Task #85 — distinguish documented domain-specific 429 codes from
+    // transient throttling. DAILY_LIMIT_REACHED is a permanent outcome
+    // for today's submission attempt and must NOT be auto-retried in a
+    // tight loop; it is surfaced to the worker as "you've hit the
+    // daily cap". Generic RATE_LIMITED stays transient so the existing
+    // backoff logic continues to apply.
+    response.code() == 429 && parsedCode == "DAILY_LIMIT_REACHED" ->
+        SyncOutcome.PermanentClientError("DAILY_LIMIT_REACHED", 429)
     response.code() == 429 -> SyncOutcome.RetryTransient("HTTP 429 throttled", 429)
     response.code() in 500..599 -> SyncOutcome.RetryTransient("HTTP ${response.code()} server error", response.code())
     // Task #85 step 5 — server-issued submission token verdicts.
