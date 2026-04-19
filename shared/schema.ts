@@ -717,11 +717,15 @@ export type Notification = typeof notifications.$inferSelect;
 export type InsertQuestionSet = z.infer<typeof insertQuestionSetSchema>;
 export type QuestionSet = typeof questionSets.$inferSelect;
 
-export const insertSMPCompanySchema = createInsertSchema(smpCompanies).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
+export const insertSMPCompanySchema = createInsertSchema(smpCompanies)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    contactPhone: optionalSaPhoneSchema,
+  });
 export type InsertSMPCompany = z.infer<typeof insertSMPCompanySchema>;
 export type SMPCompany = typeof smpCompanies.$inferSelect;
 
