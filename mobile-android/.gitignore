@@ -9,3 +9,16 @@
 .cxx
 local.properties
 /app/build
+
+# Release signing — never commit. See keystore.properties.example.
+keystore.properties
+*.keystore
+*.jks
+upload-keystore.*
+
+# Crash reporting / Firebase config — never commit.
+app/google-services.json
+sentry.properties
+
+# Play Integrity service-account JSON — never commit.
+play-integrity-service-account.json
