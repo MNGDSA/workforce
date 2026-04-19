@@ -41,6 +41,41 @@ class AttendanceRepository(
 
         /** NTP sync older than this is considered stale. */
         const val NTP_STALE_THRESHOLD_MS: Long = 6L * 60L * 60L * 1000L
+
+        /**
+         * Step 4 (F-17): rows that have been parked in `needs_attention`
+         * for longer than this are eligible for the manual purge button
+         * on the History screen and the periodic auto-purge inside
+         * [purgeStuckNeedsAttention].
+         */
+        const val STUCK_NEEDS_ATTENTION_PURGE_MS: Long = 90L * 24L * 60L * 60L * 1000L
+    }
+
+    /**
+     * Step 4 (F-17): how many `needs_attention` rows are currently
+     * eligible for the 90-day purge. Surfaced on the History screen so
+     * the user sees the actual recoverable count before tapping.
+     */
+    suspend fun countStuckPurgeable(): Int {
+        val cutoff = System.currentTimeMillis() - STUCK_NEEDS_ATTENTION_PURGE_MS
+        return dao.countStuckNeedsAttention(workforceId, cutoff)
+    }
+
+    /**
+     * Step 4 (F-17): user-initiated purge of stuck rows older than 90
+     * days. Returns the number of rows deleted.
+     */
+    suspend fun purgeStuckSubmissions(): Int {
+        val cutoff = System.currentTimeMillis() - STUCK_NEEDS_ATTENTION_PURGE_MS
+        val deleted = dao.purgeStuckNeedsAttention(workforceId, cutoff)
+        if (deleted > 0) {
+            SyncTelemetry.logEvent(
+                context,
+                "stuck_purge",
+                "deleted=$deleted cutoff=$cutoff",
+            )
+        }
+        return deleted
     }
 
     suspend fun saveSubmission(
@@ -313,6 +348,27 @@ class AttendanceRepository(
 
         val cutoff = LocalDate.now().minusDays(30).toString()
         dao.purgeOld(workforceId, cutoff)
+
+        // Step 4 (F-17): also auto-purge needs_attention rows older
+        // than 90 days so abandoned-account stuck rows do not
+        // accumulate forever across multi-season deployments.
+        try {
+            val stuckCutoff = System.currentTimeMillis() - STUCK_NEEDS_ATTENTION_PURGE_MS
+            val deleted = dao.purgeStuckNeedsAttention(workforceId, stuckCutoff)
+            if (deleted > 0) {
+                SyncTelemetry.logEvent(
+                    context,
+                    "auto_stuck_purge",
+                    "deleted=$deleted cutoff=$stuckCutoff",
+                )
+            }
+        } catch (e: Exception) {
+            SyncTelemetry.logEvent(
+                context,
+                "auto_stuck_purge_failed",
+                "${e.javaClass.simpleName}: ${e.message}",
+            )
+        }
 
         refreshStatuses()
         return SyncResult(terminated = terminated, sessionExpired = sessionExpired, configChanged = configChanged)

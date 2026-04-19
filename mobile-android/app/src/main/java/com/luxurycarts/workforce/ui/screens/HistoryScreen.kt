@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,9 +24,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -88,16 +91,53 @@ fun HistoryScreen(
     val decryptedPhotos = remember { mutableStateMapOf<String, String>() }
     val scope = rememberCoroutineScope()
 
+    // Step 4 (F-17): live count of stuck rows older than 90 days that
+    // the user can manually purge.
+    var stuckPurgeable by remember { mutableStateOf(0) }
+    var showPurgeDialog by remember { mutableStateOf(false) }
+    var purgeMessage by remember { mutableStateOf<String?>(null) }
+    // Build a thin Repository instance once; we reuse it for both the
+    // count probe and the user-initiated purge so telemetry and
+    // business logic stay centralised in AttendanceRepository
+    // (Step 4 / F-17).
+    val stuckRepo = remember(workforceId) {
+        val app = WorkforceApp.instance
+        val session = app.sessionManager
+        val serverUrl = com.luxurycarts.workforce.SERVER_URL
+        val apiService = ApiClient.create(serverUrl) { cookie ->
+            session.authCookie = cookie
+        }
+        if (!session.authCookie.isNullOrBlank()) {
+            ApiClient.restoreCookie(serverUrl, session.authCookie!!)
+        }
+        AttendanceRepository(
+            app.database.attendanceDao(),
+            apiService,
+            workforceId,
+            app.ntpTimeService,
+            context.applicationContext,
+        )
+    }
+    androidx.compose.runtime.LaunchedEffect(submissions.size) {
+        try {
+            stuckPurgeable = withContext(Dispatchers.IO) { stuckRepo.countStuckPurgeable() }
+        } catch (_: Exception) {
+            stuckPurgeable = 0
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background),
+            .background(Background)
+            // Step 7 (F-26): respect status/nav bar insets on Android 15.
+            .systemBarsPadding(),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Surface)
-                .padding(top = 48.dp, bottom = 16.dp, start = 16.dp, end = 20.dp),
+                .padding(top = 16.dp, bottom = 16.dp, start = 16.dp, end = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
@@ -113,6 +153,29 @@ fun HistoryScreen(
                 stringResource(R.string.records_count, submissions.size),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextMuted,
+            )
+        }
+
+        // Step 4 (F-17): manual purge affordance. Visible only when
+        // there are actually stuck-and-old rows to recover, so the
+        // happy-path history view is not cluttered.
+        if (stuckPurgeable > 0) {
+            Button(
+                onClick = { showPurgeDialog = true },
+                colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(stringResource(R.string.delete_stuck_old_count, stuckPurgeable))
+            }
+        }
+        purgeMessage?.let { msg ->
+            Text(
+                msg,
+                style = MaterialTheme.typography.bodySmall,
+                color = SuccessGreen,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
 
@@ -181,6 +244,38 @@ fun HistoryScreen(
                 }
             }
         }
+    }
+
+    if (showPurgeDialog) {
+        AlertDialog(
+            onDismissRequest = { showPurgeDialog = false },
+            containerColor = Surface,
+            title = { Text(stringResource(R.string.delete_stuck_confirm_title), color = TextPrimary) },
+            text = { Text(stringResource(R.string.delete_stuck_confirm_body), color = TextSecondary) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPurgeDialog = false
+                    scope.launch {
+                        try {
+                            val deleted = withContext(Dispatchers.IO) {
+                                stuckRepo.purgeStuckSubmissions()
+                            }
+                            stuckPurgeable = withContext(Dispatchers.IO) {
+                                stuckRepo.countStuckPurgeable()
+                            }
+                            purgeMessage = context.getString(R.string.delete_stuck_done, deleted)
+                        } catch (_: Exception) { }
+                    }
+                }) {
+                    Text(stringResource(R.string.delete), color = ErrorRed)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPurgeDialog = false }) {
+                    Text(stringResource(R.string.cancel), color = TextMuted)
+                }
+            },
+        )
     }
 }
 

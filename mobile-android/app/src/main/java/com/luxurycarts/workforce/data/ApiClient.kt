@@ -160,14 +160,21 @@ object ApiClient {
             response
         }
 
+        // Step 5 (F-18): snapshot the current locale ONCE at client
+        // construction time. A mid-flight language toggle that flips
+        // Locale.getDefault() must NOT cause a single sync batch to
+        // emit mixed Accept-Language headers (which then produces
+        // mixed-locale error messages, mixed-locale flag reasons, and
+        // generally confuses the server-side localisation contract).
+        // The caller MUST call ApiClient.reset() when the user changes
+        // language so the next create() picks up the new locale.
+        val snapshotLanguage = when (java.util.Locale.getDefault().language?.lowercase()) {
+            "ar" -> "ar"
+            else -> "en"
+        }
         val localeInterceptor = Interceptor { chain ->
-            val locale = java.util.Locale.getDefault()
-            val lang = when (locale.language?.lowercase()) {
-                "ar" -> "ar"
-                else -> "en"
-            }
             val req = chain.request().newBuilder()
-                .header("Accept-Language", lang)
+                .header("Accept-Language", snapshotLanguage)
                 .build()
             chain.proceed(req)
         }

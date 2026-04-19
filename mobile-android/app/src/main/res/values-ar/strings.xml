@@ -243,4 +243,10 @@
     <string name="attendance_complete_summary">عملت %1$d ساعة و%2$d دقيقة اليوم</string>
     <string name="clocked_in_at">تم تسجيل الحضور في %1$s</string>
     <string name="ok">حسناً</string>
+    <string name="delete_stuck_old">حذف التسجيلات العالقة الأقدم من 90 يوماً</string>
+    <string name="delete_stuck_old_count">حذف %1$d تسجيلاً عالقاً أقدم من 90 يوماً</string>
+    <string name="delete_stuck_confirm_title">حذف التسجيلات العالقة؟</string>
+    <string name="delete_stuck_confirm_body">سيؤدي هذا إلى حذف التسجيلات التي ظلت في حالة «تحتاج إلى مراجعة» لأكثر من 90 يوماً نهائياً. لا يمكن التراجع عن هذا الإجراء.</string>
+    <string name="delete_stuck_done">تم حذف %1$d تسجيلاً عالقاً</string>
+    <string name="delete">حذف</string>
 </resources>

@@ -20,7 +20,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -210,6 +212,10 @@ fun CaptureScreen(
                 },
                 modifier = Modifier
                     .align(Alignment.TopStart)
+                    // Step 7 (F-26): keep the back button below the
+                    // status bar on Android 15 edge-to-edge devices
+                    // while leaving the camera preview full-screen.
+                    .statusBarsPadding()
                     .padding(16.dp),
             ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = Color.White)
@@ -218,6 +224,10 @@ fun CaptureScreen(
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    // Step 7 (F-26): keep the capture button above the
+                    // navigation bar (gesture pill / 3-button nav) on
+                    // Android 15 edge-to-edge devices.
+                    .navigationBarsPadding()
                     .padding(bottom = 60.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {

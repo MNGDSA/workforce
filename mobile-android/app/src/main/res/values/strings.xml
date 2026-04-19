@@ -243,4 +243,10 @@
     <string name="attendance_complete_summary">Worked %1$dh %2$dm today</string>
     <string name="clocked_in_at">Clocked in at %1$s</string>
     <string name="ok">OK</string>
+    <string name="delete_stuck_old">Delete stuck submissions older than 90 days</string>
+    <string name="delete_stuck_old_count">Delete %1$d stuck submission(s) older than 90 days</string>
+    <string name="delete_stuck_confirm_title">Delete stuck submissions?</string>
+    <string name="delete_stuck_confirm_body">This will permanently remove submissions that have been stuck in &quot;needs attention&quot; for more than 90 days. This cannot be undone.</string>
+    <string name="delete_stuck_done">Deleted %1$d stuck submission(s)</string>
+    <string name="delete">Delete</string>
 </resources>

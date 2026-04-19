@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.Icons
@@ -67,14 +68,16 @@ fun MapScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background),
+            .background(Background)
+            // Step 7 (F-26): respect status/nav bar insets on Android 15.
+            .systemBarsPadding(),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .zIndex(1f)
                 .background(Surface)
-                .padding(top = 48.dp, bottom = 16.dp, start = 16.dp, end = 20.dp),
+                .padding(top = 16.dp, bottom = 16.dp, start = 16.dp, end = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {

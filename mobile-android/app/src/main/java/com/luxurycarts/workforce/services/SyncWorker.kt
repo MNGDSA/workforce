@@ -15,7 +15,10 @@ import com.luxurycarts.workforce.WorkforceApp
 import com.luxurycarts.workforce.data.ApiClient
 import com.luxurycarts.workforce.data.AttendanceRepository
 import com.luxurycarts.workforce.data.SyncTelemetry
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class SyncWorker(
     context: Context,
@@ -27,12 +30,38 @@ class SyncWorker(
         val session = app.sessionManager
         val ntpService = app.ntpTimeService
 
+        // Step 3 (F-16): cookie-restore-before-work gate. Force the
+        // EncryptedSharedPreferences-backed session manager to fully
+        // initialize before we touch any network code, so a cold-start
+        // worker never races against in-flight key unwrapping and fires
+        // an un-authenticated request that returns 401 → "session expired".
+        awaitAuthCookieRestored(session)
+
         if (!session.isSessionValid || session.workforceId == null) {
             return Result.failure()
         }
 
         val snapshotWorkforceId = session.workforceId!!
 
+        // Step 1 (F-07): process-wide single-flight guard keyed off the
+        // workforceId. Even if the periodic and immediate unique work
+        // names somehow co-execute, this mutex serialises them inside the
+        // process so the manual-retry sentinel
+        // (next_retry_at_millis = -1) is never observed by two workers
+        // simultaneously and clearNeedsAttention can't be silently
+        // overwritten by an overlapping recordRetry.
+        val mutex = syncMutexes.getOrPut(snapshotWorkforceId) { Mutex() }
+        return mutex.withLock {
+            runSync(app, session, ntpService, snapshotWorkforceId)
+        }
+    }
+
+    private suspend fun runSync(
+        app: WorkforceApp,
+        session: com.luxurycarts.workforce.services.SessionManager,
+        ntpService: NtpTimeService,
+        snapshotWorkforceId: String,
+    ): Result {
         val apiService = ApiClient.create(com.luxurycarts.workforce.SERVER_URL) { cookie ->
             session.authCookie = cookie
         }
@@ -46,6 +75,21 @@ class SyncWorker(
         } finally {
             ApiClient.isSyncInProgress = false
         }
+    }
+
+    /**
+     * Touch the auth cookie under the EncryptedSharedPreferences master key
+     * so that any first-time AndroidKeyStore unwrap completes synchronously
+     * before any network request leaves the device. This makes the
+     * cookie-restore order explicit and observable in tests.
+     */
+    private fun awaitAuthCookieRestored(session: SessionManager) {
+        // Reading authCookie forces EncryptedSharedPreferences to fully
+        // initialise (open the keystore, derive the AES-GCM key, decrypt
+        // the prefs file). If the read returns null we still proceed — the
+        // session validity check below will short-circuit cleanly.
+        @Suppress("UNUSED_VARIABLE")
+        val cookie = session.authCookie
     }
 
     private suspend fun doSyncWork(
@@ -172,6 +216,11 @@ class SyncWorker(
     companion object {
         private const val PERIODIC_WORK_NAME = "attendance_sync_periodic"
         private const val IMMEDIATE_WORK_NAME = "attendance_sync_immediate"
+
+        // Step 1 (F-07): process-wide mutex registry keyed by workforceId.
+        // ConcurrentHashMap so concurrent first-touch from periodic and
+        // immediate workers cannot race on the lookup itself.
+        private val syncMutexes = ConcurrentHashMap<String, Mutex>()
 
         fun schedule(context: Context) {
             val constraints = Constraints.Builder()

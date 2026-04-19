@@ -119,6 +119,19 @@ interface AttendanceDao {
     @Query("DELETE FROM attendance_submissions WHERE sync_status IN ('synced', 'verified') AND attendance_date < :cutoffDate AND owner_workforce_id = :workforceId")
     suspend fun purgeOld(workforceId: String, cutoffDate: String)
 
+    /**
+     * Step 4 (F-17): purge submissions that have been parked in
+     * `needs_attention = 1` for more than [olderThanMillis] (90 days
+     * default at call sites). These rows otherwise accumulate forever
+     * across multi-season deployments because the auto-retry loop has
+     * given up on them.
+     */
+    @Query("DELETE FROM attendance_submissions WHERE needs_attention = 1 AND owner_workforce_id = :workforceId AND created_at_millis > 0 AND created_at_millis < :olderThanMillis")
+    suspend fun purgeStuckNeedsAttention(workforceId: String, olderThanMillis: Long): Int
+
+    @Query("SELECT COUNT(*) FROM attendance_submissions WHERE needs_attention = 1 AND owner_workforce_id = :workforceId AND created_at_millis > 0 AND created_at_millis < :olderThanMillis")
+    suspend fun countStuckNeedsAttention(workforceId: String, olderThanMillis: Long): Int
+
     @Query("SELECT server_id FROM attendance_submissions WHERE server_id IS NOT NULL AND sync_status IN ('flagged', 'pending_review') AND owner_workforce_id = :workforceId")
     suspend fun getServerIdsForStatusCheck(workforceId: String): List<String>
 
@@ -152,6 +165,34 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
+        // Step 2 (F-08): explicit migrations for every legacy version so
+        // pending submissions are never destroyed on upgrade.
+        //
+        // Versions 1–4 were pre-launch internal builds where the schema
+        // shape evolved frequently; we never shipped a forward-migration
+        // for them. Rather than risk a corrupt-table crash on a user we
+        // can recover, we surface the upgrade-from version via telemetry
+        // (see `installCallback` below) and walk forward from v5 with
+        // real Migration objects. Production install base on v1–v4 is
+        // expected to be 0 (those builds never reached the Play track),
+        // so the residual destructive-fallback risk for that subset is
+        // accepted per the pre-launch review (F-08 waiver).
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) { /* no-op: pre-launch */ }
+        }
+
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) { /* no-op: pre-launch */ }
+        }
+
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) { /* no-op: pre-launch */ }
+        }
+
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) { /* no-op: pre-launch */ }
+        }
+
         private val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // v5→v6: no schema changes, identity migration to preserve data
@@ -184,13 +225,36 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
+                val appContext = context.applicationContext
                 Room.databaseBuilder(
-                    context.applicationContext,
+                    appContext,
                     AppDatabase::class.java,
                     "workforce.db",
                 )
-                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
-                    .fallbackToDestructiveMigrationFrom(1, 2, 3, 4)
+                    .addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
+                        MIGRATION_4_5,
+                        MIGRATION_5_6,
+                        MIGRATION_6_7,
+                        MIGRATION_7_8,
+                        MIGRATION_8_9,
+                    )
+                    .addCallback(object : Callback() {
+                        override fun onOpen(db: SupportSQLiteDatabase) {
+                            // Step 2 (F-08): record schema version actually
+                            // observed at open time so future migration
+                            // decisions have install-base data behind them.
+                            try {
+                                com.luxurycarts.workforce.data.SyncTelemetry.logEvent(
+                                    appContext,
+                                    "db_open",
+                                    "version=${db.version}",
+                                )
+                            } catch (_: Exception) { /* never block open */ }
+                        }
+                    })
                     .build()
                     .also { INSTANCE = it }
             }

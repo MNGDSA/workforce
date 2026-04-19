@@ -3,6 +3,7 @@ package com.luxurycarts.workforce.services
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
+import com.luxurycarts.workforce.data.SyncTelemetry
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -10,14 +11,14 @@ import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class NtpTimeService(context: Context) {
+class NtpTimeService(private val appContext: Context) {
 
     private val masterKey = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
 
     private val prefs = EncryptedSharedPreferences.create(
         "workforce_ntp",
         masterKey,
-        context,
+        appContext,
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
     )
@@ -71,25 +72,51 @@ class NtpTimeService(context: Context) {
         return Instant.ofEpochMilli(ts)
     }
 
+    /**
+     * Step 6 (F-20): try the configured server first, then a prioritised
+     * fallback list with short per-server timeouts. A blip on any single
+     * upstream (e.g. time.google.com) during shift-start can no longer
+     * tip 10,000 clients into stale-clock deferral simultaneously.
+     */
     suspend fun syncNtp(): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val ntpTime = queryNtpTime(ntpServerUrl)
+        val configured = ntpServerUrl.takeIf { it.isNotBlank() } ?: "time.google.com"
+        val candidates = linkedSetOf(
+            configured,
+            "time.google.com",
+            "time.cloudflare.com",
+            "time.windows.com",
+            "0.pool.ntp.org",
+        ).toList()
+
+        for (server in candidates) {
+            val started = System.currentTimeMillis()
+            val ntpTime = try { queryNtpTime(server) } catch (_: Exception) { null }
+            val latency = System.currentTimeMillis() - started
             if (ntpTime != null) {
                 ntpOffset = ntpTime - System.currentTimeMillis()
                 lastNtpSyncTimestamp = System.currentTimeMillis()
-                true
+                SyncTelemetry.logEvent(
+                    appContext,
+                    "ntp_sync_ok",
+                    "server=$server latencyMs=$latency",
+                )
+                return@withContext true
             } else {
-                false
+                SyncTelemetry.logEvent(
+                    appContext,
+                    "ntp_sync_failed",
+                    "server=$server latencyMs=$latency",
+                )
             }
-        } catch (_: Exception) {
-            false
         }
+        false
     }
 
     private fun queryNtpTime(server: String): Long? {
+        var socket: DatagramSocket? = null
         return try {
             val address = InetAddress.getByName(server)
-            val socket = DatagramSocket()
+            socket = DatagramSocket()
             socket.soTimeout = 5000
 
             val ntpData = ByteArray(48)
@@ -100,12 +127,13 @@ class NtpTimeService(context: Context) {
 
             val response = DatagramPacket(ntpData, ntpData.size)
             socket.receive(response)
-            socket.close()
 
             val transmitTimestamp = extractTimestamp(ntpData, 40)
             transmitTimestamp
         } catch (_: Exception) {
             null
+        } finally {
+            try { socket?.close() } catch (_: Exception) { }
         }
     }
 

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -320,10 +321,15 @@ fun HomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
+            // Step 7 (F-26): keep important controls (logout button,
+            // welcome header) inside the safe area on Android 15 devices
+            // where enableEdgeToEdge() makes the status/navigation bars
+            // transparent and overlapping by default.
+            .systemBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp),
     ) {
-        Spacer(Modifier.height(56.dp))
+        Spacer(Modifier.height(16.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
