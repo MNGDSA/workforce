@@ -8,7 +8,7 @@ import crypto from "crypto";
 import { storage, createInboxItem } from "./storage";
 import { db } from "./db";
 import { tr } from "./i18n";
-import { saPhoneSchema, optionalSaPhoneSchema, patchSaPhoneSchema, normalizeSaPhone, cleanContactPhone } from "@shared/phone";
+import { saPhoneSchema, patchSaPhoneSchema, normalizeSaPhone } from "@shared/phone";
 import { uploadFile, deleteFile, getMimeType, getFileBuffer } from "./file-storage";
 import { getAuthenticatedUser, listUserRepos, getRepo, listRepoIssues, listRepoPullRequests } from "./github";
 import {
