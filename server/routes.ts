@@ -1043,8 +1043,14 @@ export async function registerRoutes(
         });
       }
 
-      // Validate OTP — look up by ID directly to avoid stale-phone-lookup bug
-      const normalizedPhone = phone.trim().replace(/\s+/g, "");
+      // Validate OTP — look up by ID directly to avoid stale-phone-lookup bug.
+      // Phone is canonicalized via the shared helper so any input shape
+      // (+966, 00966, spaces, Arabic-Indic digits) matches the canonical
+      // 05XXXXXXXX value the OTP route persisted.
+      const normalizedPhone = normalizeSaPhone(phone);
+      if (!normalizedPhone) {
+        return res.status(400).json({ message: tr(req, "common.errors.invalidPhone") });
+      }
       const otp = await storage.getOtpVerificationById(otpId);
       if (!otp || otp.phone !== normalizedPhone) {
         return res.status(400).json({ message: tr(req, "otp.invalidSession") });
