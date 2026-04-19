@@ -2047,7 +2047,7 @@ export class DatabaseStorage implements IStorage {
     convertedBy?: string,
   ): Promise<WorkforceRecord> {
     return await this.withEmployeeNumberRetry(() => db.transaction(async (tx) => {
-      const [rec] = await tx.select().from(onboarding).where(eq(onboarding.id, id));
+      const [rec] = await tx.select().from(onboarding).where(eq(onboarding.id, id)).for("update");
       if (!rec) throw new Error("Onboarding record not found");
       if (rec.status === "converted") throw new Error("Already converted to employee");
       if (rec.status !== "ready") throw new Error(`Cannot convert — status is "${rec.status}", must be "ready"`);
