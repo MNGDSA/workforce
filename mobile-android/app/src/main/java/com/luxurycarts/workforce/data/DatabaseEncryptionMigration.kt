@@ -100,13 +100,21 @@ internal object DatabaseEncryptionMigration {
         }
 
         try {
-            // SQLCipher accepts byte[] passphrase directly; this avoids
-            // the lossy String(bytes, ISO_8859_1) round-trip that was
-            // re-encoding bytes >= 0x80 and could produce a key that
-            // does NOT match the byte[] later passed to SupportFactory.
+            // The legacy `net.sqlcipher.database.SQLiteDatabase` API only
+            // exposes String / char[] overloads — there is no byte[] form
+            // for openDatabase / openOrCreateDatabase (that exists only on
+            // SupportFactory, which is why AppDatabase wires the raw
+            // ByteArray straight into Room).
+            //
+            // To stay byte-perfect-equivalent to the SupportFactory key,
+            // we use SQLCipher's raw-key syntax: a String of the form
+            // "x'<64-hex-chars>'". SQLCipher detects the prefix, skips
+            // its KDF, and uses the bytes directly — so the key here
+            // matches the key Room will derive on next open.
+            val rawKeyHexPragma = passphrase.toRawKeyPragmaString()
             val encrypted = SQLiteDatabase.openOrCreateDatabase(
                 dbFile.absolutePath,
-                passphrase,
+                rawKeyHexPragma,
                 null,
             )
             try {
@@ -126,11 +134,11 @@ internal object DatabaseEncryptionMigration {
                 encrypted.close()
             }
 
-            // Verify: re-open encrypted (byte[] passphrase, same form Room
-            // will use), count rows in attendance_submissions.
+            // Verify: re-open encrypted using the same raw-key form, count
+            // rows in attendance_submissions.
             val verify = SQLiteDatabase.openDatabase(
                 dbFile.absolutePath,
-                passphrase,
+                rawKeyHexPragma,
                 null,
                 SQLiteDatabase.OPEN_READONLY,
             )
@@ -173,6 +181,23 @@ internal object DatabaseEncryptionMigration {
             }
             throw e
         }
+    }
+
+    /**
+     * Render a raw key as SQLCipher's `PRAGMA key = "x'...'"` literal form.
+     * This is the only way to feed raw key bytes through the legacy
+     * `net.sqlcipher.database.SQLiteDatabase` open APIs (which expose only
+     * String / char[] overloads) without going through SQLCipher's KDF and
+     * therefore producing a different effective key than `SupportFactory`
+     * would derive from the same byte[].
+     */
+    private fun ByteArray.toRawKeyPragmaString(): String {
+        val hex = StringBuilder(size * 2)
+        for (b in this) {
+            hex.append(Character.forDigit((b.toInt() ushr 4) and 0x0F, 16))
+            hex.append(Character.forDigit(b.toInt() and 0x0F, 16))
+        }
+        return "x'$hex'"
     }
 
     /**
