@@ -177,7 +177,7 @@ fun HomeScreen(
     val strErrorOpeningCamera = stringResource(R.string.error_opening_camera, "")
 
     val candidateId = workforceRecord?.candidateId
-    val serverUrl = app.sessionManager.serverUrl.trimEnd('/')
+    val serverUrl = com.luxurycarts.workforce.SERVER_URL.trimEnd('/')
 
     LaunchedEffect(candidateId) {
         if (candidateId == null || apiService == null) return@LaunchedEffect

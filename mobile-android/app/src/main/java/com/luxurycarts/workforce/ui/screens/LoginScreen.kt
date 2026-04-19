@@ -45,6 +45,7 @@ import coil.Coil
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.google.gson.Gson
+import com.luxurycarts.workforce.SERVER_URL
 import com.luxurycarts.workforce.WorkforceApp
 import com.luxurycarts.workforce.data.ApiClient
 import com.luxurycarts.workforce.data.ApiService
@@ -70,7 +71,6 @@ fun LoginScreen(
     val app = WorkforceApp.instance
     val scope = rememberCoroutineScope()
 
-    var serverUrl by remember { mutableStateOf(app.sessionManager.serverUrl.ifEmpty { "https://" }) }
     var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
@@ -128,17 +128,6 @@ fun LoginScreen(
             Spacer(Modifier.height(16.dp))
 
             OutlinedTextField(
-                value = serverUrl,
-                onValueChange = { serverUrl = it },
-                label = { Text(stringResource(R.string.server_url)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                colors = fieldColors,
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            OutlinedTextField(
                 value = identifier,
                 onValueChange = { identifier = it },
                 label = { Text(stringResource(R.string.id_number_phone)) },
@@ -167,16 +156,11 @@ fun LoginScreen(
 
             Button(
                 onClick = {
-                    if (serverUrl.isBlank() || identifier.isBlank() || password.isBlank()) {
+                    if (identifier.isBlank() || password.isBlank()) {
                         errorMessage = allFieldsRequired
                         return@Button
                     }
-                    var normalizedUrl = serverUrl.trim().trimEnd('/')
-                    if (normalizedUrl.startsWith("http://")) {
-                        normalizedUrl = "https://" + normalizedUrl.removePrefix("http://")
-                    } else if (!normalizedUrl.startsWith("https://")) {
-                        normalizedUrl = "https://$normalizedUrl"
-                    }
+                    val normalizedUrl = SERVER_URL
                     isLoading = true
                     errorMessage = null
                     scope.launch {
@@ -207,7 +191,7 @@ fun LoginScreen(
                                     return@launch
                                 }
 
-                                app.sessionManager.serverUrl = normalizedUrl
+                                app.sessionManager.serverUrl = SERVER_URL
                                 app.sessionManager.userJson = Gson().toJson(body.user)
                                 app.sessionManager.candidateJson = Gson().toJson(body.candidate)
                                 app.sessionManager.candidateId = body.candidate.id
@@ -286,9 +270,9 @@ fun LoginScreen(
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
-                    .clickable(enabled = serverUrl.length > 8) {
+                    .clickable {
                         val api = try {
-                            ApiClient.create(serverUrl.trim().trimEnd('/'))
+                            ApiClient.create(SERVER_URL)
                         } catch (_: Exception) { null }
                         if (api != null) onForgotPassword(api)
                     },

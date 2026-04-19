@@ -27,17 +27,17 @@ class SyncWorker(
         val session = app.sessionManager
         val ntpService = app.ntpTimeService
 
-        if (!session.isSessionValid || session.workforceId == null || session.serverUrl.isEmpty()) {
+        if (!session.isSessionValid || session.workforceId == null) {
             return Result.failure()
         }
 
         val snapshotWorkforceId = session.workforceId!!
 
-        val apiService = ApiClient.create(session.serverUrl) { cookie ->
+        val apiService = ApiClient.create(com.luxurycarts.workforce.SERVER_URL) { cookie ->
             session.authCookie = cookie
         }
         if (session.authCookie != null) {
-            ApiClient.restoreCookie(session.serverUrl, session.authCookie!!)
+            ApiClient.restoreCookie(com.luxurycarts.workforce.SERVER_URL, session.authCookie!!)
         }
 
         ApiClient.isSyncInProgress = true

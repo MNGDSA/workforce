@@ -142,8 +142,7 @@ fun HistoryScreen(
                                 val app = WorkforceApp.instance
                                 val session = app.sessionManager
                                 val wfId = session.workforceId ?: return@launch
-                                val serverUrl = session.serverUrl
-                                if (serverUrl.isBlank()) return@launch
+                                val serverUrl = com.luxurycarts.workforce.SERVER_URL
                                 val apiService = ApiClient.create(serverUrl) { cookie ->
                                     session.authCookie = cookie
                                 }
