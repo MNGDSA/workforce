@@ -334,6 +334,14 @@ export interface IStorage {
   markOtpVerified(id: string): Promise<void>;
   markOtpUsedForRegistration(id: string): Promise<void>;
   countRecentOtpRequests(phone: string, sinceMs: number): Promise<number>;
+  tryReserveAndCreateOtpVerification(
+    phone: string,
+    code: string,
+    expiresAt: Date,
+    purpose: "registration" | "password_reset",
+    max: number,
+    sinceMs: number,
+  ): Promise<{ ok: true; otp: OtpVerification } | { ok: false }>;
   flagPhoneTransferred(candidateId: string): Promise<void>;
 
   // Contract Templates
@@ -2257,6 +2265,42 @@ export class DatabaseStorage implements IStorage {
       .from(otpVerifications)
       .where(and(eq(otpVerifications.phone, phone), sql`${otpVerifications.createdAt} >= ${since}`));
     return Number(result?.count ?? 0);
+  }
+
+  /**
+   * Atomic per-phone OTP quota: takes a Postgres transaction-scoped advisory
+   * lock keyed on the phone number, re-counts recent rows under the lock, and
+   * either inserts the new OTP or returns `{ ok: false }`. Closes the
+   * check-then-insert race that previously let a fast burst exceed the cap.
+   *
+   * The advisory lock is per-phone (hashtext is fine for partitioning), so
+   * concurrent OTP requests for *different* phones do not serialize.
+   */
+  async tryReserveAndCreateOtpVerification(
+    phone: string,
+    code: string,
+    expiresAt: Date,
+    purpose: "registration" | "password_reset",
+    max: number,
+    sinceMs: number,
+  ): Promise<{ ok: true; otp: OtpVerification } | { ok: false }> {
+    const { hashOtp } = await import("./otp-hash");
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${phone}))`);
+      const since = new Date(Date.now() - sinceMs);
+      const [row] = await tx
+        .select({ count: count() })
+        .from(otpVerifications)
+        .where(and(eq(otpVerifications.phone, phone), sql`${otpVerifications.createdAt} >= ${since}`));
+      if (Number(row?.count ?? 0) >= max) {
+        return { ok: false } as const;
+      }
+      const [otp] = await tx
+        .insert(otpVerifications)
+        .values({ phone, code: hashOtp(code), purpose, expiresAt, attempts: 0 })
+        .returning();
+      return { ok: true, otp } as const;
+    });
   }
 
   async flagPhoneTransferred(candidateId: string): Promise<void> {

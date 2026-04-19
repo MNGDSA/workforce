@@ -70,23 +70,15 @@ export function log(message: string, source = "express") {
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
 
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      log(logLine);
+      // PDPL/PII-safety: do NOT capture or log response bodies. They include
+      // names, phones, national IDs, IBANs, and other personal data. Status
+      // line + duration is enough for ops; deep diagnostics belong in the
+      // error logger or a redacted audit log, not the request log.
+      log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
     }
   });
 

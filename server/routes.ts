@@ -218,6 +218,53 @@ function handleError(res: Response, err: unknown, req?: Request) {
 }
 
 /**
+ * PII-safe phone redactor for server logs. Keeps the country/operator prefix
+ * and the last two digits — enough to triage support reports without writing
+ * a full Saudi mobile number into rotated app logs (PDPL).
+ *   05XXXXXXXX  -> 05•••••67
+ *   +9665XXXXXXXXX -> +9665•••••89
+ */
+function redactPhone(phone: string | null | undefined): string {
+  if (!phone) return "<none>";
+  const s = String(phone);
+  if (s.length <= 4) return "•".repeat(s.length);
+  return s.slice(0, 2) + "•".repeat(Math.max(0, s.length - 4)) + s.slice(-2);
+}
+
+/** PII-safe national-ID redactor — keeps last two digits only. */
+function redactNationalId(nid: string | null | undefined): string {
+  if (!nid) return "<none>";
+  const s = String(nid);
+  if (s.length <= 2) return "•".repeat(s.length);
+  return "•".repeat(s.length - 2) + s.slice(-2);
+}
+
+/**
+ * Authorization gate for candidate self-service endpoints (document upload,
+ * document delete, etc.). Passes if (a) caller is admin/super_admin with
+ * `candidates:update`, OR (b) caller is the candidate identified by
+ * `candidateId`. Sends a 403 and returns false otherwise.
+ */
+async function assertCandidateOwnerOrAdmin(
+  req: Request,
+  res: Response,
+  candidateId: string,
+): Promise<boolean> {
+  const isAdmin =
+    req.authIsSuperAdmin === true ||
+    req.authPermissions?.has("candidates:update") === true;
+  if (isAdmin) return true;
+  if (!req.authUserId) {
+    res.status(401).json({ message: tr(req, "auth.required") });
+    return false;
+  }
+  const myCand = await storage.getCandidateByUserId(req.authUserId);
+  if (myCand && myCand.id === candidateId) return true;
+  res.status(403).json({ message: tr(req, "common.accessDenied") });
+  return false;
+}
+
+/**
  * Resolve the preferred locale for a candidate's outbound notifications.
  * Reads the linked user's `locale` column; falls back to project default.
  */
@@ -490,6 +537,11 @@ export async function registerRoutes(
   app.post("/api/candidates/:id/documents", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
+      // Authorization: admin with candidates:update OR candidate uploading
+      // their own document. Without this check any authenticated user could
+      // overwrite another candidate's photo / national ID / IBAN / CV by
+      // guessing the UUID (classic IDOR).
+      if (!(await assertCandidateOwnerOrAdmin(req, res, id))) return;
       const docType = req.body.docType as string;
       if (!req.file) return res.status(400).json({ message: tr(req, "file.noUpload") });
       if (!["photo", "nationalId", "iban", "resume"].includes(docType)) {
@@ -606,6 +658,8 @@ export async function registerRoutes(
   app.delete("/api/candidates/:id/documents/:docType", requireAuth, async (req: Request, res: Response) => {
     try {
       const { id, docType } = req.params;
+      // Same IDOR fix as the upload endpoint above — admin OR self only.
+      if (!(await assertCandidateOwnerOrAdmin(req, res, id))) return;
       if (!["photo", "nationalId", "iban"].includes(docType)) {
         return res.status(400).json({ message: tr(req, "file.invalidDocTypeShort") });
       }
@@ -877,12 +931,6 @@ export async function registerRoutes(
         return res.status(429).json({ message: tr(req, "otp.tooMany") });
       }
 
-      // Per-phone limit: max 3 OTP requests per phone per 10 minutes
-      const recentCount = await storage.countRecentOtpRequests(normalizedPhone, 10 * 60 * 1000);
-      if (recentCount >= 3) {
-        return res.status(429).json({ message: tr(req, "otp.tooMany") });
-      }
-
       // Check if active SMS plugin exists
       const smsPlugin = await storage.getActiveSmsPlugin();
       if (!smsPlugin) {
@@ -893,7 +941,20 @@ export async function registerRoutes(
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-      await storage.createOtpVerification(normalizedPhone, code, expiresAt);
+      // Per-phone limit: max 3 OTP requests per phone per 10 minutes — reserved
+      // and inserted atomically under a per-phone advisory lock so concurrent
+      // requests for the same number cannot both pass the cap.
+      const reserved = await storage.tryReserveAndCreateOtpVerification(
+        normalizedPhone,
+        code,
+        expiresAt,
+        "registration",
+        3,
+        10 * 60 * 1000,
+      );
+      if (!reserved.ok) {
+        return res.status(429).json({ message: tr(req, "otp.tooMany") });
+      }
 
       // Phone-only flow (no user record yet) — honour request locale.
       const message = tr(req, "sms.otpVerification", { code });
@@ -904,7 +965,7 @@ export async function registerRoutes(
         return res.status(502).json({ message: tr(req, "otp.sendFailed") });
       }
 
-      console.log(`[OTP] Sent to ${normalizedPhone}, expires ${expiresAt.toISOString()}`);
+      console.log(`[OTP] Sent to ${redactPhone(normalizedPhone)}, expires ${expiresAt.toISOString()}`);
       return res.json({ success: true, expiresAt });
     } catch (err) { return handleError(res, err); }
   });
@@ -925,10 +986,17 @@ export async function registerRoutes(
         return res.status(429).json({ message: tr(req, "otp.tooManyAttempts") });
       }
 
+      // Generic "invalid" response shape — used for both "no OTP exists for
+      // this phone" and "wrong code". Returning a distinct 404 for the first
+      // case turned this endpoint into a free phone-number enumeration oracle
+      // (an attacker could probe which Saudi mobile numbers had requested an
+      // OTP). We collapse the two error paths into one indistinguishable 400.
+      const genericInvalid = () => res.status(400).json({ message: tr(req, "otp.invalid") });
+
       const otp = await storage.getLatestOtpVerification(normalizedPhone);
       if (!otp) {
         await recordOtpVerifyFailure(req);
-        return res.status(404).json({ message: tr(req, "otp.notFound") });
+        return genericInvalid();
       }
       if (otp.verifiedAt) {
         return res.status(400).json({ message: tr(req, "otp.alreadyVerified") });
@@ -942,8 +1010,7 @@ export async function registerRoutes(
       if (!verifyOtpHash(code, otp.code)) {
         await storage.incrementOtpAttempts(otp.id);
         await recordOtpVerifyFailure(req);
-        const remaining = 4 - otp.attempts;
-        return res.status(400).json({ message: tr(req, "otp.incorrectRemaining", { remaining }) });
+        return genericInvalid();
       }
 
       await storage.markOtpVerified(otp.id);
@@ -1192,21 +1259,27 @@ export async function registerRoutes(
       const user = await storage.getUserByNationalId(clean);
       // Silent no-ops for: missing user, missing phone, disabled account.
       if (!user || !user.phone || !user.isActive) {
-        console.log(`[Reset] Generic OK returned for national ID ${clean} (no eligible account).`);
+        console.log(`[Reset] Generic OK returned for national ID ${redactNationalId(clean)} (no eligible account).`);
         return res.json(generic);
       }
 
       const phone = user.phone;
 
-      // Per-phone rate limit applied silently (still generic 200 to caller).
-      const recentCount = await storage.countRecentOtpRequests(phone, 10 * 60 * 1000);
-      if (recentCount >= 3) {
-        console.log(`[Reset] Rate-limited national ID ${clean} (silent).`);
+      // Per-phone rate limit + insert applied atomically and silently
+      // (still generic 200 to caller). See storage.tryReserveAndCreateOtpVerification.
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const reserved = await storage.tryReserveAndCreateOtpVerification(
+        phone,
+        code,
+        expiresAt,
+        "password_reset",
+        3,
+        10 * 60 * 1000,
+      );
+      if (!reserved.ok) {
+        console.log(`[Reset] Rate-limited national ID ${redactNationalId(clean)} (silent).`);
         return res.json(generic);
       }
-
-      const code = String(Math.floor(100000 + Math.random() * 900000));
-      await storage.createOtpVerification(phone, code, expiresAt, "password_reset");
 
       const activePlugin = await storage.getActiveSmsPlugin();
       if (activePlugin) {
