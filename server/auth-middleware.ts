@@ -104,17 +104,35 @@ function readBearerToken(req: Request): string | null {
 // HMAC verification lives in `server/auth-token.ts` so routes.ts and this
 // middleware share one secret. See that module for the rationale.
 
+// The "kind" of an authenticated request — derived from the transport, NOT
+// from anything inside the token. wf_auth cookie ⇒ web (browser); Bearer
+// header ⇒ mobile (Android attendance app). We MUST keep these separate
+// so a web logout never invalidates a field worker's mobile session.
+export type AuthKind = "web" | "mobile";
+
 function getAuthUserId(req: Request): string | null {
-  const tok = readWfAuthCookie(req) ?? readBearerToken(req);
+  const cookieTok = readWfAuthCookie(req);
+  const bearerTok = cookieTok ? null : readBearerToken(req);
+  const tok = cookieTok ?? bearerTok;
   if (!tok) return null;
-  const v = verifyAuthToken(tok);
-  return v?.uid ?? null;
+  return verifyAuthToken(tok)?.uid ?? null;
 }
 
-function getAuthTokenInfo(req: Request) {
-  const tok = readWfAuthCookie(req) ?? readBearerToken(req);
+function getAuthTokenInfo(req: Request): { uid: string; iat: number; kind: AuthKind } | null {
+  const cookieTok = readWfAuthCookie(req);
+  const bearerTok = cookieTok ? null : readBearerToken(req);
+  const tok = cookieTok ?? bearerTok;
   if (!tok) return null;
-  return verifyAuthToken(tok);
+  const v = verifyAuthToken(tok);
+  if (!v) return null;
+  return { ...v, kind: cookieTok ? "web" : "mobile" };
+}
+
+/** Public helper for routes that need to know which transport the caller used. */
+export function getAuthKind(req: Request): AuthKind | null {
+  if (readWfAuthCookie(req)) return "web";
+  if (readBearerToken(req)) return "mobile";
+  return null;
 }
 
 // ─── Audit ─────────────────────────────────────────────────────────────────
@@ -170,20 +188,23 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       message: tr(req, "auth.inactive"),
     });
   }
-  // Server-side token revocation. Logout sets users.tokensInvalidatedAt = now();
-  // any token whose `iat` is at or before that instant is treated as expired.
-  // This is what makes /api/auth/logout actually log the user out — without
-  // this check the stateless wf_auth cookie would replay until its 7-day TTL.
-  if (
-    tokenInfo &&
-    (user as any).tokensInvalidatedAt &&
-    tokenInfo.iat <= new Date((user as any).tokensInvalidatedAt).getTime()
-  ) {
-    audit(req, "401");
-    return res.status(401).json({
-      code: MobileErrorCodes.SESSION_EXPIRED,
-      message: tr(req, "auth.sessionExpired"),
-    });
+  // Server-side token revocation, scoped to the TRANSPORT the request came
+  // in on. Web logout bumps `web_tokens_invalidated_at`; we only consult
+  // that column for cookie-borne requests. Bearer-borne (Android) requests
+  // consult `mobile_tokens_invalidated_at`. This is what lets a candidate
+  // sign out of the web portal without killing their Android attendance
+  // device for the same user_id mid-shift.
+  if (tokenInfo) {
+    const u: any = user;
+    const cutoff =
+      tokenInfo.kind === "web" ? u.webTokensInvalidatedAt : u.mobileTokensInvalidatedAt;
+    if (cutoff && tokenInfo.iat <= new Date(cutoff).getTime()) {
+      audit(req, "401");
+      return res.status(401).json({
+        code: MobileErrorCodes.SESSION_EXPIRED,
+        message: tr(req, "auth.sessionExpired"),
+      });
+    }
   }
   req.authUserId = userId;
   req.authUser = user;

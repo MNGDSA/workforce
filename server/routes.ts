@@ -151,7 +151,7 @@ function validateProfileCompleteness(candidate: Record<string, any>): string[] {
 }
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { requireAuth, requirePermission, requireOwnership, markPublic, invalidateRoleCache } from "./auth-middleware";
+import { requireAuth, requirePermission, requireOwnership, markPublic, invalidateRoleCache, getAuthKind } from "./auth-middleware";
 import { checkLoginRateLimit, recordLoginFailure, recordLoginSuccess } from "./login-rate-limit";
 
 const UPLOADS_DIR = path.resolve("uploads");
@@ -728,28 +728,36 @@ export async function registerRoutes(
   // ignores the clear directive and the user stays logged in for up to
   // 7 days.
   app.post("/api/auth/logout", markPublic, async (req: Request, res: Response) => {
-    // 1. Server-side revocation: mark every wf_auth token issued at-or-before
-    //    NOW as invalid for this user. requireAuth enforces this on next hit.
-    //    Without this step the stateless wf_auth cookie would replay for up
-    //    to 7 days even after the browser cleared it.
+    // 1. Server-side revocation, scoped to the TRANSPORT that called us.
+    //    Web logout (cookie) bumps web_tokens_invalidated_at only.
+    //    Mobile logout (Bearer) bumps mobile_tokens_invalidated_at only.
+    //    This is critical: the 7-day wf_auth TTL was deliberately chosen
+    //    so Android attendance devices don't have to re-auth daily during
+    //    Hajj/Ramadan field deployments. A web sign-out must not kick a
+    //    field worker's phone offline mid-shift.
     const userId = getAuthUserId(req);
-    if (userId) {
+    const kind = getAuthKind(req); // "web" | "mobile" | null
+    if (userId && kind) {
       try {
-        await db
-          .update(users)
-          .set({ tokensInvalidatedAt: new Date(), updatedAt: new Date() })
-          .where(eq(users.id, userId));
+        const now = new Date();
+        const patch =
+          kind === "web"
+            ? { webTokensInvalidatedAt: now, updatedAt: now }
+            : { mobileTokensInvalidatedAt: now, updatedAt: now };
+        await db.update(users).set(patch).where(eq(users.id, userId));
       } catch (e) {
-        console.error("[logout] failed to set tokensInvalidatedAt", e);
+        console.error("[logout] failed to bump revocation column", e);
       }
     }
     // 2. Destroy the legacy express-session if present.
     try { (req.session as any)?.destroy?.(() => undefined); } catch {}
-    // 3. Tell the browser to drop both cookies. Attributes MUST mirror set-time.
+    // 3. Tell the browser to drop both cookies (web logouts only need
+    //    this — mobile clients don't store cookies — but it's harmless
+    //    on a Bearer-only request and keeps the response idempotent).
     const isProd = process.env.NODE_ENV === "production";
     res.clearCookie("wf_auth",     { path: "/", httpOnly: true, sameSite: "lax", secure: isProd });
     res.clearCookie("connect.sid", { path: "/", httpOnly: true, sameSite: "lax", secure: isProd });
-    return res.json({ ok: true });
+    return res.json({ ok: true, kind });
   });
 
   app.post("/api/auth/login", markPublic, async (req: Request, res: Response) => {

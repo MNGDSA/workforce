@@ -129,10 +129,18 @@ export const users = pgTable(
     locale: varchar("locale", { length: 8 }).notNull().default("ar"),
     isActive: boolean("is_active").notNull().default(true),
     lastLogin: timestamp("last_login"),
-    // Server-side token revocation: any wf_auth token whose `iat` is at or
-    // before this timestamp is rejected by requireAuth. Set on logout so
-    // stale cookies copied off-device cannot replay until the 7-day TTL.
-    tokensInvalidatedAt: timestamp("tokens_invalidated_at"),
+    // Server-side token revocation, split by TRANSPORT so that web logout
+    // never kills a worker's Android attendance device (and vice versa).
+    // The wf_auth HMAC token is shared by both transports — what tells us
+    // which "session" a request belongs to is the carrier:
+    //   • Cookie `wf_auth=…`               → web    → checked against web col
+    //   • Header `Authorization: Bearer …` → mobile → checked against mobile col
+    // requireAuth rejects a token whose `iat` is at-or-before the column for
+    // its transport. Logout bumps only the column matching the request that
+    // initiated it. The 7-day token TTL stays intentionally long for the
+    // Android fleet (Hajj/Ramadan field deployments with spotty connectivity).
+    webTokensInvalidatedAt: timestamp("web_tokens_invalidated_at"),
+    mobileTokensInvalidatedAt: timestamp("mobile_tokens_invalidated_at"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
   },
