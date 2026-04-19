@@ -20,6 +20,13 @@
         android:usesCleartextTraffic="false"
         android:enableOnBackInvokedCallback="true">
 
+        <!--
+          Task #84: component-export audit.
+          MainActivity is the only exported component because it carries the
+          LAUNCHER intent-filter (Play Store requires this to be reachable
+          from the home screen). It accepts no external Intents beyond the
+          launcher action and performs no implicit data handling.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -30,6 +37,11 @@
             </intent-filter>
         </activity>
 
+        <!--
+          Task #84: FileProvider is explicitly NOT exported. It is used solely
+          for in-app camera capture URIs and in-app sharing (no external
+          Intent receivers). Path scope is restricted by @xml/file_paths.
+        -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

@@ -138,6 +138,7 @@ object SyncTelemetry {
         latencyMs: Long,
         detail: String? = null,
     ) {
+        val safeDetail = scrubMessage(detail)
         val line = buildString {
             append('{')
             append("\"ts\":\"").append(nowTs()).append('"')
@@ -146,8 +147,8 @@ object SyncTelemetry {
             append(",\"http\":").append(httpStatus)
             append(",\"attempt\":").append(attempt)
             append(",\"latencyMs\":").append(latencyMs)
-            if (detail != null) {
-                append(",\"detail\":\"").append(detail.replace("\"", "'").take(240)).append('"')
+            if (safeDetail != null) {
+                append(",\"detail\":\"").append(safeDetail.replace("\"", "'").take(240)).append('"')
             }
             append('}')
         }
@@ -156,17 +157,61 @@ object SyncTelemetry {
     }
 
     fun logEvent(context: Context?, event: String, detail: String? = null) {
+        val safeDetail = scrubMessage(detail)
         val line = buildString {
             append('{')
             append("\"ts\":\"").append(nowTs()).append('"')
             append(",\"event\":\"").append(event).append('"')
-            if (detail != null) {
-                append(",\"detail\":\"").append(detail.replace("\"", "'").take(240)).append('"')
+            if (safeDetail != null) {
+                append(",\"detail\":\"").append(safeDetail.replace("\"", "'").take(240)).append('"')
             }
             append('}')
         }
         Log.i(TAG, line)
         appendLine(context, line)
+    }
+
+    /**
+     * Task #84: strip locally-identifying or secret-shaped substrings from
+     * a telemetry detail before it reaches Logcat or the on-disk log file.
+     *
+     * Threat model: any `e.message` we forward (typically an
+     * [java.io.IOException] or [SecurityException] thrown by the Android
+     * crypto / filesystem stack) routinely contains:
+     *   - absolute `/data/data/<package>/...` paths that disclose the
+     *     internal storage layout to anyone with `adb logcat` access,
+     *   - the literal AndroidKeyStore alias `workforce_encryption_key`
+     *     which is a useful tell for an attacker triaging device images,
+     *   - the EncryptedSharedPreferences master-key alias
+     *     `_androidx_security_master_key_`,
+     *   - long base64 blobs that may include wrapped key material.
+     *
+     * The scrub is deliberately permissive (returns the original string
+     * unchanged when no sensitive substring matches) so day-to-day
+     * debugging is unaffected. The replacement tokens are stable so a
+     * developer reading a sanitised log can still recognise the shape of
+     * the original error.
+     *
+     * Marked `@JvmStatic` and exposed at object scope so the pure-JVM
+     * unit test in `app/src/test/.../SyncTelemetryScrubTest.kt` can
+     * exercise it without Android infrastructure.
+     */
+    @JvmStatic
+    fun scrubMessage(input: String?): String? {
+        if (input.isNullOrEmpty()) return input
+        var out = input
+        // Filesystem paths under /data/data/<pkg>/... and /data/user/0/...
+        out = out.replace(Regex("""/data/(?:data|user/\d+)/[\w./\-_]+"""), "[path]")
+        // Per-app filesDir/cacheDir absolute paths often surfaced by Room
+        // and by File.createTempFile on older OEM ROMs.
+        out = out.replace(Regex("""/storage/emulated/\d+/[\w./\-_]+"""), "[ext-path]")
+        // Known sensitive Keystore/key aliases.
+        out = out.replace("workforce_encryption_key", "[key]")
+        out = out.replace("_androidx_security_master_key_", "[mk]")
+        // Long base64-shaped blobs (>=48 chars of base64 alphabet) — any
+        // wrapped key material, IV+ciphertext blob, or token would match.
+        out = out.replace(Regex("""[A-Za-z0-9+/]{48,}={0,2}"""), "[b64]")
+        return out
     }
 
     /**

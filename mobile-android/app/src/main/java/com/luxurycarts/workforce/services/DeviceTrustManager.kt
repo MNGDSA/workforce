@@ -119,6 +119,18 @@ object DeviceTrustManager {
         return location?.provider ?: "unknown"
     }
 
+    /**
+     * Heuristic device fingerprint composed from public [Build] fields.
+     *
+     * **Advisory only**: this is **not** a cryptographic device identity.
+     * Every component is user-visible to any app on the device, can be spoofed
+     * on a rooted/custom-ROM device, and may collide on identically-provisioned
+     * stock devices (corporate fleet OEM images, emulator farms). Use solely
+     * for anomaly correlation in fraud review — never as an authentication
+     * factor or as a primary key for trust decisions. The server-side hardened
+     * device-attestation contract (Task #88 / Play Integrity) is the
+     * authoritative trust signal; this string is a forensics breadcrumb.
+     */
     fun getDeviceFingerprint(): String {
         return "${Build.MANUFACTURER}|${Build.MODEL}|${Build.PRODUCT}|${Build.HARDWARE}|${Build.FINGERPRINT.take(80)}"
     }

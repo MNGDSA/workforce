@@ -14,8 +14,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.graphics.asImageBitmap
+import com.luxurycarts.workforce.ui.components.SecureScreen
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -45,7 +49,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.luxurycarts.workforce.R
 import com.luxurycarts.workforce.data.ApiClient
 import com.luxurycarts.workforce.data.AttendanceDao
@@ -69,7 +72,6 @@ import com.luxurycarts.workforce.ui.theme.WarningAmber
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -82,13 +84,21 @@ fun HistoryScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    // Task #84: history shows decrypted attendance photos and PII; never
+    // allow OS screenshots / recents thumbnails / casting to capture them.
+    SecureScreen()
     val submissions by dao.getSubmissions(workforceId).collectAsState(initial = emptyList())
 
     androidx.compose.runtime.LaunchedEffect(Unit) {
         SyncWorker.syncNow(context)
     }
     var expandedId by remember { mutableStateOf<String?>(null) }
-    val decryptedPhotos = remember { mutableStateMapOf<String, String>() }
+    // Task #84: in-memory only — decrypted JPEG bytes never touch disk.
+    // Replaces the previous `mutableStateMapOf<String, String>()` of cache
+    // file paths, which leaked plaintext photos into context.cacheDir
+    // until the OS reclaimed the directory (could be days on a low-IO
+    // device, indefinitely on a debuggable build).
+    val decryptedPhotos = remember { mutableStateMapOf<String, ByteArray>() }
     val scope = rememberCoroutineScope()
 
     // Step 4 (F-17): live count of stuck rows older than 90 days that
@@ -225,18 +235,15 @@ fun HistoryScreen(
                                 SyncWorker.syncNow(context.applicationContext)
                             }
                         },
-                        decryptedPhotoPath = decryptedPhotos[item.id],
+                        decryptedPhotoBytes = decryptedPhotos[item.id],
                         onLoadPhoto = {
                             scope.launch {
                                 try {
-                                    val encPath = withContext(Dispatchers.IO) {
-                                        EncryptionService.decrypt(item.encryptedPhotoPath)
+                                    val bytes = withContext(Dispatchers.IO) {
+                                        val encPath = EncryptionService.decrypt(item.encryptedPhotoPath)
+                                        EncryptionService.decryptToBytes(encPath)
                                     }
-                                    val tempFile = File(context.cacheDir, "preview_${item.id}.jpg")
-                                    withContext(Dispatchers.IO) {
-                                        EncryptionService.decryptFile(encPath, tempFile.absolutePath)
-                                    }
-                                    decryptedPhotos[item.id] = tempFile.absolutePath
+                                    decryptedPhotos[item.id] = bytes
                                 } catch (_: Exception) {}
                             }
                         },
@@ -285,7 +292,7 @@ private fun HistoryItem(
     isExpanded: Boolean,
     onToggle: () -> Unit,
     onRetry: () -> Unit,
-    decryptedPhotoPath: String?,
+    decryptedPhotoBytes: ByteArray?,
     onLoadPhoto: () -> Unit,
 ) {
     val dateFormatted = try {
@@ -446,16 +453,25 @@ private fun HistoryItem(
                 }
                 if (item.retryCount > 0) DetailLine(stringResource(R.string.retries), item.retryCount.toString())
 
-                if (decryptedPhotoPath != null) {
-                    AsyncImage(
-                        model = File(decryptedPhotoPath),
-                        contentDescription = stringResource(R.string.tap_to_view_photo),
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .clip(RoundedCornerShape(8.dp)),
-                    )
+                if (decryptedPhotoBytes != null) {
+                    // Task #84: decode straight from in-memory bytes; never
+                    // write the decrypted JPEG to disk. The bitmap is keyed
+                    // off the byte-array reference so re-composition only
+                    // pays the decode cost when the underlying bytes change.
+                    val bitmap = remember(decryptedPhotoBytes) {
+                        BitmapFactory.decodeByteArray(decryptedPhotoBytes, 0, decryptedPhotoBytes.size)
+                    }
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = stringResource(R.string.tap_to_view_photo),
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                        )
+                    }
                 } else {
                     Box(
                         modifier = Modifier

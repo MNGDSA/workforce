@@ -89,6 +89,9 @@ fun CaptureScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    // Task #84: live camera preview + captured selfie are biometric data;
+    // block OS screenshots, recents thumbnails, and screen mirroring.
+    com.luxurycarts.workforce.ui.components.SecureScreen()
     val scope = rememberCoroutineScope()
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 

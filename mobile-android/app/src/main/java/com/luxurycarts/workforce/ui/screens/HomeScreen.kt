@@ -121,6 +121,9 @@ fun HomeScreen(
 ) {
     val app = WorkforceApp.instance
     val context = LocalContext.current
+    // Task #84: home screen surfaces worker name, role, employee ID and
+    // live attendance counters — protected against screenshots / mirroring.
+    com.luxurycarts.workforce.ui.components.SecureScreen()
     val scope = rememberCoroutineScope()
     val wfId = workforceRecord?.id ?: app.sessionManager.workforceId ?: ""
     val pendingCount by app.database.attendanceDao().getPendingCount(wfId)

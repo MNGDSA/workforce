@@ -149,9 +149,44 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
+    // Task #43 / Task #84: pinned to 1.1.0-alpha06 intentionally.
+    //
+    // We require `MasterKey.Builder` (introduced in 1.1.0-alpha) for
+    // EncryptedSharedPreferences key construction in SessionManager — the
+    // older 1.0.0 `MasterKeys.getOrCreate` API is deprecated and triggers
+    // a lint warning. As of 2026-04 there is no 1.1.0 stable release;
+    // alpha06 is the most recent, has been on Maven for >18 months without
+    // API churn in the Master-Key surface, and is what every comparable
+    // production app on the Play track ships.
+    //
+    // DO NOT bump to a newer alpha without re-running the encrypted-prefs
+    // migration smoke test in `mobile-android/docs/keystore-rotation.md`.
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // Task #84: encrypt the Room database at rest. SQLCipher's
+    // `SupportFactory` plugs into Room's openHelperFactory; the passphrase
+    // is wrapped by our AndroidKeyStore-backed `EncryptionService` (see
+    // `data/DatabaseKeyManager.kt`).
+    //
+    // We pin the legacy `net.zetetic:android-database-sqlcipher` artifact
+    // (package `net.sqlcipher.database.*`) rather than the renamed
+    // `net.zetetic:sqlcipher-android` (package
+    // `net.zetetic.database.sqlcipher.*`) because the former keeps
+    // `SupportFactory(byte[])` source-compatible with hundreds of Room +
+    // SQLCipher integration guides and our own migration code in
+    // `DatabaseEncryptionMigration.kt`. Re-evaluate at the next major
+    // SQLCipher release.
+    implementation("net.zetetic:android-database-sqlcipher:4.5.4")
+    implementation("androidx.sqlite:sqlite-ktx:2.4.0")
+
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // Task #84: pure-JVM unit tests for telemetry scrubbing
+    // (`SyncTelemetry.scrubMessage`). Kept minimal — no Robolectric, no
+    // instrumentation runner, so this dependency does not bloat the APK
+    // or slow the CI release build.
+    testImplementation("junit:junit:4.13.2")
 }

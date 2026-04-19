@@ -223,14 +223,35 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private const val DB_NAME = "workforce.db"
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val appContext = context.applicationContext
+
+                // Task #84: at-rest database encryption.
+                // 1. Materialise (or generate) the SQLCipher passphrase.
+                //    The keystore-wrapped passphrase blob lives in plain
+                //    SharedPreferences but is only decryptable via the
+                //    AndroidKeyStore-resident AES-256-GCM key.
+                // 2. Run the one-time legacy plaintext → SQLCipher export
+                //    so existing installs preserve their pending
+                //    submissions across the upgrade.
+                // 3. Wire SQLCipher's SupportFactory into Room. The
+                //    factory zeroes the passphrase byte array after use,
+                //    so we MUST allocate a fresh copy after the migration
+                //    consumed the first one.
+                val passphraseForMigration = DatabaseKeyManager.getOrCreatePassphrase(appContext)
+                DatabaseEncryptionMigration.ensureMigrated(appContext, DB_NAME, passphraseForMigration)
+                val passphraseForRoom = DatabaseKeyManager.getOrCreatePassphrase(appContext)
+                val sqlCipherFactory = net.sqlcipher.database.SupportFactory(passphraseForRoom)
+
                 Room.databaseBuilder(
                     appContext,
                     AppDatabase::class.java,
-                    "workforce.db",
+                    DB_NAME,
                 )
+                    .openHelperFactory(sqlCipherFactory)
                     .addMigrations(
                         MIGRATION_1_2,
                         MIGRATION_2_3,

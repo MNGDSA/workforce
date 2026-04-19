@@ -83,6 +83,42 @@ object EncryptionService {
         }
     }
 
+    /**
+     * Task #84: stream-decrypt an encrypted file straight into a
+     * [ByteArray] without ever materialising plaintext on disk.
+     *
+     * Used by the history thumbnail viewer so the decrypted JPEG never
+     * lands in the on-disk Coil cache or the app cacheDir, where an
+     * `adb pull` from a debuggable build (or any device that has gone
+     * through forensic acquisition) could recover it after the user
+     * "closed" the photo. The bytes live only in process memory and are
+     * dropped as soon as the composable leaves the composition.
+     */
+    fun decryptToBytes(inputPath: String): ByteArray {
+        val key = getOrCreateKey()
+        return File(inputPath).inputStream().buffered().use { fis ->
+            val iv = ByteArray(IV_SIZE)
+            var totalRead = 0
+            while (totalRead < IV_SIZE) {
+                val read = fis.read(iv, totalRead, IV_SIZE - totalRead)
+                if (read == -1) throw IllegalStateException("Encrypted file too short")
+                totalRead += read
+            }
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
+            CipherInputStream(fis, cipher).use { cis ->
+                java.io.ByteArrayOutputStream().use { out ->
+                    val buffer = ByteArray(STREAM_BUFFER_SIZE)
+                    var bytesRead: Int
+                    while (cis.read(buffer).also { bytesRead = it } != -1) {
+                        out.write(buffer, 0, bytesRead)
+                    }
+                    out.toByteArray()
+                }
+            }
+        }
+    }
+
     fun decryptFile(inputPath: String, outputPath: String) {
         val key = getOrCreateKey()
 
