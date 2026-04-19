@@ -557,6 +557,7 @@ function Step2Form({
               <Input
                 value={watch("ibanBankName") || ""}
                 readOnly
+                dir="ltr"
                 placeholder={t("profileSetup:step2.bankNamePh")}
                 className="bg-muted/10 border-border text-muted-foreground cursor-not-allowed select-none"
                 data-testid="input-bank-name"
