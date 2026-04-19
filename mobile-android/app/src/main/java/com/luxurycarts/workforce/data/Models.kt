@@ -184,6 +184,41 @@ data class ExcuseRequestSubmit(
     val reason: String,
 )
 
+data class AttendanceStatusResponse(
+    val state: String,
+    @SerializedName("nextAllowedAction") val nextAllowedAction: String,
+    @SerializedName("shiftAssigned") val shiftAssigned: Boolean = false,
+    val shift: ShiftInfo? = null,
+    @SerializedName("clockIn") val clockIn: String? = null,
+    @SerializedName("clockOut") val clockOut: String? = null,
+    @SerializedName("minutesWorked") val minutesWorked: Int? = null,
+    @SerializedName("shiftWindowOpen") val shiftWindowOpen: Boolean = true,
+    @SerializedName("windowMessage") val windowMessage: String? = null,
+    @SerializedName("windowReason") val windowReason: WindowReason? = null,
+    @SerializedName("cooldownUntil") val cooldownUntil: String? = null,
+    val config: AttendanceConfig? = null,
+    val date: String? = null,
+    @SerializedName("currentTime") val currentTime: String? = null,
+)
+
+data class ShiftInfo(
+    @SerializedName("startTime") val startTime: String,
+    @SerializedName("endTime") val endTime: String,
+    @SerializedName("durationMinutes") val durationMinutes: Int,
+)
+
+data class WindowReason(
+    val code: String,
+    val params: Map<String, Any> = emptyMap(),
+)
+
+data class AttendanceConfig(
+    @SerializedName("earlyBufferMinutes") val earlyBufferMinutes: Int = 30,
+    @SerializedName("lateBufferMinutes") val lateBufferMinutes: Int = 30,
+    @SerializedName("minShiftDurationMinutes") val minShiftDurationMinutes: Int = 240,
+    @SerializedName("maxDailySubmissions") val maxDailySubmissions: Int = 2,
+)
+
 data class ExcuseRequest(
     val id: String,
     @SerializedName("workforceId") val workforceId: String,
