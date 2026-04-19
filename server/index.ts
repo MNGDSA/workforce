@@ -104,6 +104,20 @@ app.use((req, res, next) => {
     log(`boot migration failed: ${err}`, "boot-migrate");
   }
 
+  // Production safety net: verify critical tables exist. If drizzle-kit push
+  // failed during build, fail fast with a clear operator message instead of
+  // serving 500s for every API request.
+  try {
+    const { ensureCriticalTables } = await import("./migrations/ensure-critical-tables");
+    await ensureCriticalTables(log);
+  } catch (err) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("Refusing to start: critical schema missing.", err);
+      process.exit(1);
+    }
+    log(`ensure-critical-tables failed (non-prod, continuing): ${err}`, "ensure-tables");
+  }
+
   // Seed RBAC system roles & permission catalog before routes mount,
   // so requirePermission cache loads against a populated DB.
   try {
