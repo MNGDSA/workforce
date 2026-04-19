@@ -891,7 +891,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
                 aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
               >
                 {collapsed
-                  ? <ChevronsRight className="h-4 w-4" />
+                  ? <ChevronsRight className="h-4 w-4 rtl:rotate-180" />
                   : <>
                       <ChevronsLeft className="h-4 w-4 rtl:rotate-180" />
                       <span>{t("layout:sidebar.collapse")}</span>
