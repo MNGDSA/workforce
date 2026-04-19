@@ -111,7 +111,7 @@
   "docs": {
     "requiredDocs": "المستندات المطلوبة",
     "profileCompletion": "اكتمال الملف",
-    "overallStrength": "قوة الملف الإجمالية",
+    "overallStrength": "نسبة الإكتمال",
     "complete": "اكتملت المستندات!",
     "reupload": "إعادة الرفع",
     "clickToView": "اضغط للعرض",
