@@ -1,0 +1,25 @@
+Checked the upstream and there's no overlap on the merged branch — my single Task #82 commit sits cleanly on top of Task #43, and nothing newer has landed on main-repl/main while I was working (0 commits behind).
+
+The overlap risk is limited to the specific files I touched. If the main agent is editing any of these in parallel, that's where conflicts will surface at the next merge:
+
+Modified files (highest overlap risk):
+
+mobile-android/app/build.gradle.kts — I already merged with Task #43's TLS-pinning + WORKFORCE_* signing setup; only added a debug-signing fallback in the release buildType
+mobile-android/.gitignore — appended keystore/google-services/sentry/play-integrity entries
+mobile-android/app/src/main/java/com/luxurycarts/workforce/WorkforceApp.kt — added crash-reporter init + user-hash tagging in onCreate
+KNOWN_ISSUES.md — added ISSUE-007
+replit.md — added a "Release & Operations" pointer
+New files (only conflict if the main agent created the same paths):
+
+mobile-android/app/src/main/java/com/luxurycarts/workforce/services/CrashReporter.kt
+mobile-android/app/src/main/java/com/luxurycarts/workforce/services/PlayIntegrityProvider.kt
+mobile-android/keystore.properties.example
+server/play-integrity.ts
+docs/android-release-runbook.md
+A few things worth flagging:
+
+The signing config uses the WORKFORCE_* env-var namespace already established by Task #43 — if the main agent picks a different naming (e.g. ANDROID_*), we'll need to align.
+server/play-integrity.ts is a standalone module not yet wired into server/routes.ts — by design, so the main agent's attendance-route work won't collide. (Wiring is tracked as follow-up #88.)
+PLAY_INTEGRITY_ENABLED defaults to off, so production behaviour is unchanged today.
+The currently-failing workflow log is just EADDRINUSE on port 5000 — unrelated to my changes; it cleared after the restart.
+I can't see what the main agent has in-flight from this isolated environment (only what's been pushed). If you'd like, point me at a specific file or area you're worried about and I'll diff it directly.
