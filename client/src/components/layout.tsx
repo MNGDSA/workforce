@@ -918,7 +918,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
         {/* Main Content */}
         <div className={cn(
           "flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out",
-          collapsed ? "lg:pl-16" : "lg:pl-64"
+          collapsed ? "lg:ps-16" : "lg:ps-64"
         )}>
           {/* Top Header */}
           <header className="h-16 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-40 px-6 flex items-center justify-between">
