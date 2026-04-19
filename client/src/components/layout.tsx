@@ -53,7 +53,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { createPortal } from "react-dom";
 import { useDebounce } from "@/hooks/use-debounce";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { CalendarPlus, CalendarMinus, AlertCircle, CheckCheck, X as XIcon } from "lucide-react";
@@ -633,8 +633,10 @@ export default function DashboardLayout({ children }: LayoutProps) {
     .split(" ").filter(Boolean).slice(0, 2)
     .map((w: string) => w[0]).join("").toUpperCase() || "AU";
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try { await fetch("/api/auth/logout", { method: "POST", credentials: "include" }); } catch {}
     localStorage.removeItem("workforce_candidate");
+    queryClient.clear();
     setLocation("/auth");
   };
 

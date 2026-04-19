@@ -718,6 +718,13 @@ export async function registerRoutes(
     }
   });
 
+  // Destroy server session + clear cookie. Public so logged-out clients can call it idempotently.
+  app.post("/api/auth/logout", markPublic, async (req: Request, res: Response) => {
+    try { (req.session as any)?.destroy?.(() => undefined); } catch {}
+    res.clearCookie("connect.sid");
+    return res.json({ ok: true });
+  });
+
   app.post("/api/auth/login", markPublic, async (req: Request, res: Response) => {
     try {
       const { identifier, password } = req.body;

@@ -38,49 +38,60 @@ import GeofencesPage from "@/pages/geofences";
 import DepartmentsPage from "@/pages/departments";
 import BroadcastPage from "@/pages/broadcast";
 import OrgChartPage from "@/pages/org-chart";
+import { RequireAdmin, RequireCandidate } from "@/lib/auth-guard";
+
+const admin = (Component: React.ComponentType<any>) => () => (
+  <RequireAdmin><Component /></RequireAdmin>
+);
 
 function Router() {
   return (
     <Switch>
+      {/* Public */}
       <Route path="/" component={AuthPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/privacy-policy" component={() => <LegalPage type="privacy" />} />
       <Route path="/terms-conditions" component={() => <LegalPage type="terms" />} />
-      <Route path="/dashboard" component={Dashboard} />
-      <Route path="/job-posting" component={JobPostingPage} />
-      <Route path="/job-posting/:id" component={JobPostingDetailPage} />
-      <Route path="/talent" component={TalentPage} />
-      <Route path="/events" component={EventsPage} />
-      <Route path="/smp-companies" component={SMPCompaniesPage} />
-      <Route path="/smp-contracts">{() => <Redirect to="/smp-companies" />}</Route>
-      <Route path="/workforce" component={WorkforcePage} />
-      <Route path="/interviews" component={InterviewsPage} />
-      <Route path="/interviews/schedule" component={ScheduleInterviewPage} />
-      <Route path="/interviews/:id/candidates" component={InterviewCandidatesPage} />
-      <Route path="/automation" component={AutomationPage} />
-      <Route path="/notifications" component={NotificationsPage} />
-      <Route path="/settings" component={SettingsPage} />
-      <Route path="/documentation" component={DocumentationPage} />
-      <Route path="/question-sets" component={QuestionSetsPage} />
-      <Route path="/payroll" component={PayrollPage} />
-      <Route path="/reports" component={ReportsPage} />
-      <Route path="/profile" component={ProfilePage} />
-      <Route path="/onboarding" component={OnboardingPage} />
-      <Route path="/id-cards" component={IdCardsPage} />
-      <Route path="/attendance" component={SchedulesPage} />
-      <Route path="/schedules">{() => <Redirect to="/attendance" />}</Route>
-      <Route path="/assets" component={AssetsPage} />
-      <Route path="/offboarding" component={OffboardingPage} />
-      <Route path="/audit-log" component={AuditLogPage} />
-      <Route path="/inbox" component={InboxPage} />
-      <Route path="/geofences" component={GeofencesPage} />
-      <Route path="/departments" component={DepartmentsPage} />
-      <Route path="/broadcast" component={BroadcastPage} />
-      <Route path="/org-chart" component={OrgChartPage} />
-      <Route path="/candidate-portal" component={() => (
-        <ProfileSetupGate><CandidatePortal /></ProfileSetupGate>
-      )} />
       <Route path="/jobs/:id" component={JobDetailPage} />
+
+      {/* Candidate-only portal */}
+      <Route path="/candidate-portal" component={() => (
+        <RequireCandidate><ProfileSetupGate><CandidatePortal /></ProfileSetupGate></RequireCandidate>
+      )} />
+
+      {/* Admin-only (any non-candidate role with a session) */}
+      <Route path="/dashboard" component={admin(Dashboard)} />
+      <Route path="/job-posting" component={admin(JobPostingPage)} />
+      <Route path="/job-posting/:id" component={admin(JobPostingDetailPage)} />
+      <Route path="/talent" component={admin(TalentPage)} />
+      <Route path="/events" component={admin(EventsPage)} />
+      <Route path="/smp-companies" component={admin(SMPCompaniesPage)} />
+      <Route path="/smp-contracts">{() => <Redirect to="/smp-companies" />}</Route>
+      <Route path="/workforce" component={admin(WorkforcePage)} />
+      <Route path="/interviews" component={admin(InterviewsPage)} />
+      <Route path="/interviews/schedule" component={admin(ScheduleInterviewPage)} />
+      <Route path="/interviews/:id/candidates" component={admin(InterviewCandidatesPage)} />
+      <Route path="/automation" component={admin(AutomationPage)} />
+      <Route path="/notifications" component={admin(NotificationsPage)} />
+      <Route path="/settings" component={admin(SettingsPage)} />
+      <Route path="/documentation" component={admin(DocumentationPage)} />
+      <Route path="/question-sets" component={admin(QuestionSetsPage)} />
+      <Route path="/payroll" component={admin(PayrollPage)} />
+      <Route path="/reports" component={admin(ReportsPage)} />
+      <Route path="/profile" component={admin(ProfilePage)} />
+      <Route path="/onboarding" component={admin(OnboardingPage)} />
+      <Route path="/id-cards" component={admin(IdCardsPage)} />
+      <Route path="/attendance" component={admin(SchedulesPage)} />
+      <Route path="/schedules">{() => <Redirect to="/attendance" />}</Route>
+      <Route path="/assets" component={admin(AssetsPage)} />
+      <Route path="/offboarding" component={admin(OffboardingPage)} />
+      <Route path="/audit-log" component={admin(AuditLogPage)} />
+      <Route path="/inbox" component={admin(InboxPage)} />
+      <Route path="/geofences" component={admin(GeofencesPage)} />
+      <Route path="/departments" component={admin(DepartmentsPage)} />
+      <Route path="/broadcast" component={admin(BroadcastPage)} />
+      <Route path="/org-chart" component={admin(OrgChartPage)} />
+
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>

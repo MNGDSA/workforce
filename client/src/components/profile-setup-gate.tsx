@@ -23,7 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { resolveSaudiBank } from "@/lib/saudi-banks";
 import { formatNumber } from "@/lib/format";
@@ -857,7 +857,12 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
         </div>
         <button
           type="button"
-          onClick={() => { localStorage.removeItem("workforce_candidate"); setLocation("/auth"); }}
+          onClick={async () => {
+            try { await fetch("/api/auth/logout", { method: "POST", credentials: "include" }); } catch {}
+            localStorage.removeItem("workforce_candidate");
+            queryClient.clear();
+            setLocation("/auth");
+          }}
           className="flex items-center gap-2 text-xs text-muted-foreground hover:text-white transition-colors"
           data-testid="button-logout"
         >
