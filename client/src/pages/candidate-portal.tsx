@@ -486,8 +486,8 @@ const ALL_DOC_ITEMS: {
 }[] = [
   { key: "photo",      i18nKey: "photo",      maxMb: 3, accept: ".jpg,.jpeg,.png",      icon: <ImageIcon className="h-4 w-4" /> },
   { key: "nationalId", i18nKey: "nationalId", maxMb: 5, accept: ".pdf,.jpg,.jpeg,.png", icon: <CreditCard className="h-4 w-4" /> },
-  { key: "resume",     i18nKey: "resume",     maxMb: 5, accept: ".pdf,.doc,.docx",      icon: <FileText className="h-4 w-4" />, individualOnly: true },
   { key: "iban",       i18nKey: "iban",       maxMb: 5, accept: ".pdf,.jpg,.jpeg,.png", icon: <Landmark className="h-4 w-4" />, individualOnly: true },
+  { key: "resume",     i18nKey: "resume",     maxMb: 5, accept: ".pdf,.doc,.docx",      icon: <FileText className="h-4 w-4" />, individualOnly: true },
 ];
 
 function ProfileCompletionCard({
