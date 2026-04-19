@@ -303,8 +303,8 @@ export default function AuthPage() {
   return (
     <div className="min-h-screen w-full max-w-full grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[40%_60%] bg-background font-sans text-foreground overflow-x-clip">
       {/* ── Left Column: Form ─────────────────────────────────── */}
-      <div className="min-w-0 flex flex-col justify-center items-center px-4 py-6 sm:p-8 lg:p-12 relative z-10">
-        <div className="w-full min-w-0 max-w-md space-y-8 animate-in slide-in-from-start-8 duration-700 fade-in">
+      <div className="min-h-screen min-w-0 flex flex-col items-center px-4 py-6 sm:p-8 lg:p-12 relative z-10">
+        <div className="w-full min-w-0 max-w-md space-y-8 animate-in slide-in-from-start-8 duration-700 fade-in my-auto">
 
           {/* Header row: logo + language switcher */}
           <div className="space-y-2">
@@ -816,30 +816,31 @@ export default function AuthPage() {
             </TabsContent>
           </Tabs>
           )}
+        </div>
 
-          <div className="pt-8 border-t border-border/50 text-xs text-muted-foreground space-y-3">
-            <div className="flex items-center justify-center gap-4 flex-wrap">
-              <Link href="/privacy-policy" className="hover:text-foreground transition-colors">{t("auth:legal.privacy")}</Link>
-              <span className="text-border">·</span>
-              <Link href="/terms-conditions" className="hover:text-foreground transition-colors">{t("auth:legal.terms")}</Link>
-              <span className="text-border">·</span>
-              <a
-                href={supportEmail ? `mailto:${supportEmail}` : "#"}
-                className="hover:text-foreground transition-colors"
-                data-testid="link-contact-support"
-                {...(supportEmail ? {} : { onClick: (e: React.MouseEvent) => e.preventDefault() })}
-              >{t("auth:support.needHelp")}</a>
-            </div>
-            <p className="text-center">
-              {isRtl ? (
-                <span dir="rtl">
-                  <bdi>شركة العربة الفاخرة المحدودة © {formatNumber(new Date().getFullYear(), { useGrouping: false })}</bdi>
-                </span>
-              ) : (
-                <bdi>Luxury Carts Company Ltd. © {new Date().getFullYear()}</bdi>
-              )}
-            </p>
+        {/* Footer pinned to the bottom of the left column */}
+        <div className="w-full max-w-md pt-8 border-t border-border/50 text-xs text-muted-foreground space-y-3 mt-auto">
+          <div className="flex items-center justify-center gap-4 flex-wrap">
+            <Link href="/privacy-policy" className="hover:text-foreground transition-colors">{t("auth:legal.privacy")}</Link>
+            <span className="text-border">·</span>
+            <Link href="/terms-conditions" className="hover:text-foreground transition-colors">{t("auth:legal.terms")}</Link>
+            <span className="text-border">·</span>
+            <a
+              href={supportEmail ? `mailto:${supportEmail}` : "#"}
+              className="hover:text-foreground transition-colors"
+              data-testid="link-contact-support"
+              {...(supportEmail ? {} : { onClick: (e: React.MouseEvent) => e.preventDefault() })}
+            >{t("auth:support.needHelp")}</a>
           </div>
+          <p className="text-center">
+            {isRtl ? (
+              <span dir="rtl">
+                <bdi>شركة العربة الفاخرة المحدودة © {formatNumber(new Date().getFullYear(), { useGrouping: false })}</bdi>
+              </span>
+            ) : (
+              <bdi>Luxury Carts Company Ltd. © {new Date().getFullYear()}</bdi>
+            )}
+          </p>
         </div>
       </div>
 
