@@ -36,3 +36,9 @@ id = "e5jSS7UXuSKfgrI7TN3eu"
 uri = "file://.local/exports/workforce_prod_20260418_034807.sql.gz"
 type = "unspecified"
 title = "Prod DB dump (plain SQL, gzipped)"
+
+[[outputs]]
+id = "suLLa3PNqTkSbVdKPSv04"
+uri = "file://.local/reports/android-prelaunch-review.md"
+type = "text"
+title = "WORKFORCE Android — Pre-Production Review for 10K Rollout"
