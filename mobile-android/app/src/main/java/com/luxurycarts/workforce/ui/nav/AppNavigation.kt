@@ -11,6 +11,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.google.gson.Gson
+import com.luxurycarts.workforce.SERVER_URL
 import com.luxurycarts.workforce.WorkforceApp
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -67,25 +68,23 @@ fun AppNavigation() {
         app.sessionManager.userJson?.let {
             user = Gson().fromJson(it, User::class.java)
         }
-        if (app.sessionManager.serverUrl.isNotEmpty()) {
-            val api = ApiClient.create(app.sessionManager.serverUrl) { cookie ->
-                app.sessionManager.authCookie = cookie
-            }
-            ApiClient.onSessionTerminated = {
-                SyncWorker.cancel(app)
-                app.sessionManager.clear()
-                ApiClient.reset()
-                isLoggedIn = false
-                user = null
-                workforceRecord = null
-                apiService = null
-            }
-            val savedCookie = app.sessionManager.authCookie
-            if (savedCookie != null) {
-                ApiClient.restoreCookie(app.sessionManager.serverUrl, savedCookie)
-            }
-            apiService = api
+        val api = ApiClient.create(SERVER_URL) { cookie ->
+            app.sessionManager.authCookie = cookie
         }
+        ApiClient.onSessionTerminated = {
+            SyncWorker.cancel(app)
+            app.sessionManager.clear()
+            ApiClient.reset()
+            isLoggedIn = false
+            user = null
+            workforceRecord = null
+            apiService = null
+        }
+        val savedCookie = app.sessionManager.authCookie
+        if (savedCookie != null) {
+            ApiClient.restoreCookie(SERVER_URL, savedCookie)
+        }
+        apiService = api
     }
 
     LaunchedEffect(isLoggedIn, apiService) {

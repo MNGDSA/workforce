@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,8 +44,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.luxurycarts.workforce.R
+import com.luxurycarts.workforce.data.ApiClient
 import com.luxurycarts.workforce.data.AttendanceDao
 import com.luxurycarts.workforce.data.AttendanceEntity
+import com.luxurycarts.workforce.data.AttendanceRepository
+import com.luxurycarts.workforce.WorkforceApp
 import com.luxurycarts.workforce.services.EncryptionService
 import com.luxurycarts.workforce.ui.components.StatusBadge
 import com.luxurycarts.workforce.ui.theme.Background
@@ -57,6 +62,7 @@ import com.luxurycarts.workforce.ui.theme.TextMuted
 import com.luxurycarts.workforce.ui.theme.TextPrimary
 import com.luxurycarts.workforce.ui.theme.TextSecondary
 import com.luxurycarts.workforce.services.SyncWorker
+import com.luxurycarts.workforce.ui.theme.WarningAmber
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -131,6 +137,31 @@ fun HistoryScreen(
                         item = item,
                         isExpanded = expandedId == item.id,
                         onToggle = { expandedId = if (expandedId == item.id) null else item.id },
+                        onRetry = {
+                            scope.launch {
+                                val app = WorkforceApp.instance
+                                val session = app.sessionManager
+                                val wfId = session.workforceId ?: return@launch
+                                val serverUrl = com.luxurycarts.workforce.SERVER_URL
+                                val apiService = ApiClient.create(serverUrl) { cookie ->
+                                    session.authCookie = cookie
+                                }
+                                if (!session.authCookie.isNullOrBlank()) {
+                                    ApiClient.restoreCookie(serverUrl, session.authCookie!!)
+                                }
+                                val repo = AttendanceRepository(
+                                    app.database.attendanceDao(),
+                                    apiService,
+                                    wfId,
+                                    app.ntpTimeService,
+                                    context.applicationContext,
+                                )
+                                withContext(Dispatchers.IO) { repo.retryNow(item.id) }
+                                // Kick the worker immediately so the user gets fast feedback
+                                // instead of waiting for the next periodic cycle.
+                                SyncWorker.syncNow(context.applicationContext)
+                            }
+                        },
                         decryptedPhotoPath = decryptedPhotos[item.id],
                         onLoadPhoto = {
                             scope.launch {
@@ -158,6 +189,7 @@ private fun HistoryItem(
     item: AttendanceEntity,
     isExpanded: Boolean,
     onToggle: () -> Unit,
+    onRetry: () -> Unit,
     decryptedPhotoPath: String?,
     onLoadPhoto: () -> Unit,
 ) {
@@ -198,7 +230,61 @@ private fun HistoryItem(
                     Text(stringResource(R.string.taken_at, timeFormatted), style = MaterialTheme.typography.bodySmall, color = TextMuted)
                 }
             }
-            StatusBadge(status = item.syncStatus)
+            Column(horizontalAlignment = Alignment.End) {
+                StatusBadge(status = item.syncStatus)
+                if (item.needsAttention) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.needs_attention_label),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = ErrorRed,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                if (item.staleClock) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        stringResource(R.string.stale_clock_label),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = WarningAmber,
+                    )
+                }
+            }
+        }
+
+        if (item.needsAttention) {
+            HorizontalDivider(color = Border)
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                item.lastErrorCode?.let {
+                    val reason = if (item.lastHttpStatus > 0) "$it (HTTP ${item.lastHttpStatus})" else it
+                    Text(
+                        stringResource(R.string.needs_attention_reason, reason),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
+                }
+                if (item.lastAttemptAtMillis > 0L) {
+                    val attemptStr = try {
+                        Instant.ofEpochMilli(item.lastAttemptAtMillis)
+                            .atZone(ZoneId.systemDefault())
+                            .format(DateTimeFormatter.ofPattern("MMM d, hh:mm a"))
+                    } catch (_: Exception) { "" }
+                    if (attemptStr.isNotEmpty()) {
+                        Text(
+                            stringResource(R.string.last_sync_attempt, attemptStr),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted,
+                        )
+                    }
+                }
+                Button(
+                    onClick = onRetry,
+                    colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.retry_now))
+                }
+            }
         }
 
         if (isExpanded) {

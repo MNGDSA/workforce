@@ -41,7 +41,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.luxurycarts.workforce.R
+import coil.Coil
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import com.google.gson.Gson
+import com.luxurycarts.workforce.SERVER_URL
 import com.luxurycarts.workforce.WorkforceApp
 import com.luxurycarts.workforce.data.ApiClient
 import com.luxurycarts.workforce.data.ApiService
@@ -67,7 +71,6 @@ fun LoginScreen(
     val app = WorkforceApp.instance
     val scope = rememberCoroutineScope()
 
-    var serverUrl by remember { mutableStateOf(app.sessionManager.serverUrl.ifEmpty { "https://" }) }
     var identifier by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
@@ -125,17 +128,6 @@ fun LoginScreen(
             Spacer(Modifier.height(16.dp))
 
             OutlinedTextField(
-                value = serverUrl,
-                onValueChange = { serverUrl = it },
-                label = { Text(stringResource(R.string.server_url)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                colors = fieldColors,
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            OutlinedTextField(
                 value = identifier,
                 onValueChange = { identifier = it },
                 label = { Text(stringResource(R.string.id_number_phone)) },
@@ -164,16 +156,11 @@ fun LoginScreen(
 
             Button(
                 onClick = {
-                    if (serverUrl.isBlank() || identifier.isBlank() || password.isBlank()) {
+                    if (identifier.isBlank() || password.isBlank()) {
                         errorMessage = allFieldsRequired
                         return@Button
                     }
-                    var normalizedUrl = serverUrl.trim().trimEnd('/')
-                    if (normalizedUrl.startsWith("http://")) {
-                        normalizedUrl = "https://" + normalizedUrl.removePrefix("http://")
-                    } else if (!normalizedUrl.startsWith("https://")) {
-                        normalizedUrl = "https://$normalizedUrl"
-                    }
+                    val normalizedUrl = SERVER_URL
                     isLoading = true
                     errorMessage = null
                     scope.launch {
@@ -204,7 +191,7 @@ fun LoginScreen(
                                     return@launch
                                 }
 
-                                app.sessionManager.serverUrl = normalizedUrl
+                                app.sessionManager.serverUrl = SERVER_URL
                                 app.sessionManager.userJson = Gson().toJson(body.user)
                                 app.sessionManager.candidateJson = Gson().toJson(body.candidate)
                                 app.sessionManager.candidateId = body.candidate.id
@@ -226,6 +213,26 @@ fun LoginScreen(
                                     }
                                 } catch (_: Exception) { }
                                 app.ntpTimeService.syncNtp()
+
+                                val photoUrl = activeRecord.photoUrl
+                                if (!photoUrl.isNullOrBlank()) {
+                                    try {
+                                        val ctx = app.applicationContext
+                                        // Match HomeScreen's avatar request size exactly so the
+                                        // prefetch shares the same memory cache key (80dp at the
+                                        // device's actual density), not just the disk cache.
+                                        val avatarSizePx = (80f * ctx.resources.displayMetrics.density)
+                                            .toInt()
+                                            .coerceAtLeast(1)
+                                        val prefetchReq = ImageRequest.Builder(ctx)
+                                            .data("$normalizedUrl$photoUrl")
+                                            .size(avatarSizePx)
+                                            .memoryCachePolicy(CachePolicy.ENABLED)
+                                            .diskCachePolicy(CachePolicy.ENABLED)
+                                            .build()
+                                        Coil.imageLoader(ctx).enqueue(prefetchReq)
+                                    } catch (_: Exception) { }
+                                }
 
                                 onLoginSuccess(body.user, activeRecord, api)
                             } else {
@@ -263,9 +270,9 @@ fun LoginScreen(
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
-                    .clickable(enabled = serverUrl.length > 8) {
+                    .clickable {
                         val api = try {
-                            ApiClient.create(serverUrl.trim().trimEnd('/'))
+                            ApiClient.create(SERVER_URL)
                         } catch (_: Exception) { null }
                         if (api != null) onForgotPassword(api)
                     },
