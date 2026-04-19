@@ -34,6 +34,7 @@
     "admit": "Admit Candidate",
     "checklist": "Checklist",
     "convert": "Convert to Employee",
+    "convertToEmployee": "Convert to Employee",
     "reject": "Reject",
     "movedToWorkforce": "Moved to Workforce",
     "contractMustBeSigned": "Contract must be signed first"
