@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { saPhoneSchema } from "@shared/phone";
 import { createPortal } from "react-dom";
 import { printContract } from "@/lib/print-contract";
 import { useLocation } from "wouter";
@@ -327,7 +328,7 @@ const NAV_LABELS: Record<NavKey, string> = {
 
 const applySchema = z.object({
   fullNameEn: z.string().min(2, "Full name is required"),
-  phone: z.string().min(9, "Phone number is required"),
+  phone: saPhoneSchema,
   nationalId: z.string().min(5, "National ID or Iqama number is required"),
 });
 type ApplyForm = z.infer<typeof applySchema>;

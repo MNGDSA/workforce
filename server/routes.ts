@@ -8,6 +8,7 @@ import crypto from "crypto";
 import { storage, createInboxItem } from "./storage";
 import { db } from "./db";
 import { tr } from "./i18n";
+import { saPhoneSchema, optionalSaPhoneSchema, patchSaPhoneSchema, normalizeSaPhone, cleanContactPhone } from "@shared/phone";
 import { uploadFile, deleteFile, getMimeType, getFileBuffer } from "./file-storage";
 import { getAuthenticatedUser, listUserRepos, getRepo, listRepoIssues, listRepoPullRequests } from "./github";
 import {
@@ -3601,7 +3602,7 @@ export async function registerRoutes(
         roleId: z.string().uuid(),
         fullName: z.string().min(2, "Full name is required"),
         nationalId: z.string().min(8, "National ID is required"),
-        phone: z.string().min(8, "Phone is required"),
+        phone: saPhoneSchema,
         email: z.string().email("Valid email is required"),
         username: z.string().min(3, "Username is required"),
       });
@@ -3654,7 +3655,7 @@ export async function registerRoutes(
       const bodySchema = z.object({
         fullName: z.string().min(2).optional(),
         nationalId: z.string().min(8).optional(),
-        phone: z.string().min(8).optional(),
+        phone: patchSaPhoneSchema,
         email: z.string().email().optional(),
         username: z.string().min(3).optional(),
         roleId: z.string().uuid().optional(),

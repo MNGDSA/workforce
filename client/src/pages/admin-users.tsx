@@ -562,7 +562,16 @@ function AdminUserForm({
       </div>
       <div className="space-y-1.5">
         <Label className="text-white">{t("adminUsers:form.phone")}</Label>
-        <Input dir="ltr" value={value.phone} onChange={(e) => set("phone", e.target.value)} placeholder={t("adminUsers:form.phonePh")} data-testid="input-phone" />
+        <Input
+          dir="ltr"
+          inputMode="tel"
+          maxLength={10}
+          value={value.phone}
+          onChange={(e) => set("phone", e.target.value.replace(/[^\d]/g, "").slice(0, 10))}
+          placeholder="05XXXXXXXX"
+          data-testid="input-phone"
+        />
+        <p className="text-xs text-muted-foreground">{t("common:errors.invalidPhone")}</p>
       </div>
       <div className="space-y-1.5">
         <Label className="text-white">{t("adminUsers:form.email")}</Label>

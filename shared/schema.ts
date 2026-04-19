@@ -592,17 +592,24 @@ export const otpVerifications = pgTable("otp_verifications", {
 });
 
 // ─── Insert Schemas (Zod) ───────────────────────────────────────────────────
+import { optionalSaPhoneSchema, optionalContactPhoneSchema } from "./phone";
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
   lastLogin: true,
+}).extend({
+  phone: optionalSaPhoneSchema,
 });
 
 export const insertCandidateSchema = createInsertSchema(candidates).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  phone: optionalSaPhoneSchema,
+  emergencyContactPhone: optionalContactPhoneSchema,
 });
 
 export const insertEventSchema = createInsertSchema(events).omit({
