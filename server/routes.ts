@@ -1002,8 +1002,9 @@ export async function registerRoutes(
       }
 
       // Hash before the transaction (bcrypt is the slow part — keep the
-      // transaction's lock window minimal).
-      const syntheticEmail = `${nationalId.trim()}@candidate.workforce.sa`;
+      // transaction's lock window minimal). Email is intentionally NOT
+      // synthesized — the candidate provides a real one later in the
+      // profile-completion step (or leaves it empty).
       const hashed = await bcrypt.hash(password, 12);
 
       // Wrap OTP consume + user create + candidate create in a single
@@ -1050,7 +1051,7 @@ export async function registerRoutes(
             .insert(users)
             .values({
               username: nationalId.trim(),
-              email: syntheticEmail,
+              email: null,
               password: hashed,
               fullName: fullName.trim(),
               phone: normalizedPhone,
@@ -1073,7 +1074,7 @@ export async function registerRoutes(
                 userId: createdUser.id,
                 phone: normalizedPhone,
                 fullNameEn: fullName.trim(),
-                email: syntheticEmail,
+                email: null,
               })
               .where(eq(candidates.id, existingByNidRows[0].id))
               .returning();
@@ -1085,7 +1086,7 @@ export async function registerRoutes(
                 fullNameEn: fullName.trim(),
                 phone: normalizedPhone,
                 nationalId: nationalId.trim(),
-                email: syntheticEmail,
+                email: null,
                 status: "available",
                 country: "SA",
                 userId: createdUser.id,
