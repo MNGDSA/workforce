@@ -1005,7 +1005,16 @@ export async function registerRoutes(
       await storage.markOtpUsedForRegistration(otpId);
 
       const { password: _, ...safeUser } = user;
-      return res.status(201).json({ user: safeUser, candidate });
+
+      // Auto-login the freshly registered user — mirror the cookie issued by /api/auth/login
+      const token = signAuthToken(user.id);
+      const securFlag = process.env.NODE_ENV === "production" ? "; Secure" : "";
+      res.setHeader(
+        "Set-Cookie",
+        `wf_auth=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}${securFlag}`,
+      );
+
+      return res.status(201).json({ user: { ...safeUser, role: "candidate" }, candidate });
     } catch (err) {
       return handleError(res, err);
     }
