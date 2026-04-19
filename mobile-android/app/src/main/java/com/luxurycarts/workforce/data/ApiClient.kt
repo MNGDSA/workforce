@@ -62,6 +62,13 @@ interface ApiService {
         @Part("isEmulator") isEmulator: RequestBody,
         @Part("rootDetected") rootDetected: RequestBody,
         @Part("locationProvider") locationProvider: RequestBody,
+        // Task #84: ADVISORY-ONLY signal. Built from `Build.MANUFACTURER`,
+        // `Build.MODEL`, and `Settings.Secure.ANDROID_ID` (see
+        // `DeviceTrustManager.getDeviceFingerprint`). Trivially spoofable
+        // by any rooted device or Frida hook — the server MUST treat this
+        // as a soft correlation hint only, NOT as a security boundary.
+        // Replace with Play Integrity / hardware attestation before
+        // relying on this for access control. Tracked as follow-up #92.
         @Part("deviceFingerprint") deviceFingerprint: RequestBody,
         @Part("ntpTimestamp") ntpTimestamp: RequestBody,
         @Part("systemClockTimestamp") systemClockTimestamp: RequestBody,
