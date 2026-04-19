@@ -152,7 +152,13 @@ export function DatePickerField({
 
   const totalDays = daysInMonth(viewYear, viewMonth);
   const firstDay = startDay(viewYear, viewMonth);
-  const fmtNum = (n: number) => n.toLocaleString(intlLocale);
+  // Always disable thousands separators — years like 2026 must never render
+  // as "2,026", and day numbers never need grouping either.
+  const numberFmt = useMemo(
+    () => new Intl.NumberFormat(intlLocale, { useGrouping: false }),
+    [intlLocale],
+  );
+  const fmtNum = (n: number) => numberFmt.format(n);
 
   const calendarDropdown = open && dropdownPos ? createPortal(
     <div

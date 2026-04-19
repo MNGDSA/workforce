@@ -243,14 +243,18 @@ function SelectField({ value, onChange, options, labels, placeholder, error, "da
 function ToggleGroup({ value, onChange, label, required }: {
   value: boolean; onChange: (v: boolean) => void; label: string; required?: boolean;
 }) {
-  const { t } = useTranslation(["profileSetup"]);
+  const { t, i18n } = useTranslation(["profileSetup"]);
+  // In Arabic the user expects "No" on the right and "Yes" on the left, so
+  // swap the DOM order so RTL reading flow lands them in the right spots.
+  const isRtl = i18n.language?.startsWith("ar");
+  const order: boolean[] = isRtl ? [false, true] : [true, false];
   return (
     <div className="space-y-2">
       <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
         {label}{required && <span className="text-red-500 ms-0.5">*</span>}
       </Label>
       <div className="flex gap-2">
-        {[true, false].map((opt) => (
+        {order.map((opt) => (
           <button
             key={String(opt)}
             type="button"
@@ -303,7 +307,7 @@ function Step1Form({
       dateOfBirth:     defaults.dateOfBirth ?? "",
       city:            defaults.city ?? "",
       region:          defaults.region ?? "",
-      email:           defaults.email ?? candidate.email ?? "",
+      email:           defaults.email ?? "",
       maritalStatus:   defaults.maritalStatus ?? "",
     },
   });
