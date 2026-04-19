@@ -219,24 +219,24 @@ function handleError(res: Response, err: unknown, req?: Request) {
 
 /**
  * PII-safe phone redactor for server logs. Keeps the country/operator prefix
- * and the last two digits — enough to triage support reports without writing
+ * and the last four digits — enough to triage support reports without writing
  * a full Saudi mobile number into rotated app logs (PDPL).
- *   05XXXXXXXX  -> 05•••••67
- *   +9665XXXXXXXXX -> +9665•••••89
+ *   05XXXXXXXX     -> 05••••6789
+ *   +9665XXXXXXXXX -> +9665•••••6789
  */
 function redactPhone(phone: string | null | undefined): string {
   if (!phone) return "<none>";
   const s = String(phone);
-  if (s.length <= 4) return "•".repeat(s.length);
-  return s.slice(0, 2) + "•".repeat(Math.max(0, s.length - 4)) + s.slice(-2);
+  if (s.length <= 6) return "•".repeat(s.length);
+  return s.slice(0, 2) + "•".repeat(Math.max(0, s.length - 6)) + s.slice(-4);
 }
 
-/** PII-safe national-ID redactor — keeps last two digits only. */
+/** PII-safe national-ID redactor — keeps last four digits only. */
 function redactNationalId(nid: string | null | undefined): string {
   if (!nid) return "<none>";
   const s = String(nid);
-  if (s.length <= 2) return "•".repeat(s.length);
-  return "•".repeat(s.length - 2) + s.slice(-2);
+  if (s.length <= 4) return "•".repeat(s.length);
+  return "•".repeat(s.length - 4) + s.slice(-4);
 }
 
 /**
