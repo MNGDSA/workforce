@@ -90,7 +90,7 @@ A step-by-step guide to deploy the Workforce app on DigitalOcean App Platform.
 7. Set **Network** settings:
    - **HTTP Port**: `8080`
    - **Internal/External routing**: Keep as **External** (public-facing — both admin dashboard and mobile app connect to it)
-   - **Health Check Path**: Set to `/api/health` (returns `{"status":"ok"}` without touching the database — preferred over `/` so DO doesn't load the React bundle on every probe)
+   - **Health Check Path**: Set to `/api/health` — returns `200 {"status":"ok", ...}` when the app and database are reachable, or `503` if the DB readiness check (`SELECT 1`) fails. Preferred over `/` because it avoids loading the React bundle on every probe and gives DO a true readiness signal.
    - **CORS**: Not needed here — the API and frontend are served from the same origin
 
 > **What happens during build?**
