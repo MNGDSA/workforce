@@ -60,9 +60,13 @@ const PERMISSIVE: PermissiveTarget[] = [
   { table: "sms_broadcast_recipients", column: "phone" },
 ];
 
+type DbRow = { id: unknown; v: unknown };
+type CollisionRow = { id: unknown };
+
 async function fetchAll(table: string, column: string): Promise<{ id: string; v: string | null }[]> {
   const r = await db.execute(sql`SELECT id::text AS id, ${sql.raw(column)} AS v FROM ${sql.raw(table)} WHERE ${sql.raw(column)} IS NOT NULL`);
-  return (r.rows as any[]).map((row) => ({ id: String(row.id), v: row.v == null ? null : String(row.v) }));
+  const rows = (r.rows ?? []) as DbRow[];
+  return rows.map((row) => ({ id: String(row.id), v: row.v == null ? null : String(row.v) }));
 }
 
 async function auditStrict(t: StrictTarget): Promise<Row[]> {
@@ -127,9 +131,10 @@ async function main() {
     const collision = await db.execute(
       sql`SELECT id::text AS id FROM ${sql.raw(r.table)} WHERE ${sql.raw(r.column)} = ${r.after} AND id::text <> ${r.id} LIMIT 1`,
     );
-    if ((collision.rows ?? []).length > 0) {
+    const collisionRows = (collision.rows ?? []) as CollisionRow[];
+    if (collisionRows.length > 0) {
       r.action = "collision";
-      r.note = `would collide with row ${(collision.rows[0] as any).id}`;
+      r.note = `would collide with row ${String(collisionRows[0].id)}`;
     }
   }
 
