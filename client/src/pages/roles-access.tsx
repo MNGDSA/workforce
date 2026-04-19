@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -249,27 +249,54 @@ function BUDialog({
   );
 }
 
-function useRoleSchema() {
+const SLUG_REGEX = /^[a-z0-9_-]+$/;
+
+function useRoleCreateSchema() {
   const { t } = useTranslation(["rolesAccess"]);
   return z.object({
     name: z.string().min(2, t("rolesAccess:roles.dialog.errName")).max(100),
     slug: z.string()
-      .min(2)
-      .max(64)
-      .regex(/^[a-z0-9_-]+$/, t("rolesAccess:roles.dialog.errSlugChars")),
+      .min(2, t("rolesAccess:roles.dialog.errSlugLen"))
+      .max(64, t("rolesAccess:roles.dialog.errSlugLen"))
+      .regex(SLUG_REGEX, t("rolesAccess:roles.dialog.errSlugChars")),
     description: z.string().max(500).optional(),
     color: z.string().optional(),
   });
 }
-type RoleForm = {
+function useRoleEditSchema() {
+  const { t } = useTranslation(["rolesAccess"]);
+  return z.object({
+    name: z.string().min(2, t("rolesAccess:roles.dialog.errName")).max(100),
+    description: z.string().max(500).optional(),
+    color: z.string().optional(),
+  });
+}
+type RoleCreateForm = {
   name: string;
   slug: string;
   description?: string;
   color?: string;
 };
+type RoleEditForm = {
+  name: string;
+  description?: string;
+  color?: string;
+};
 
+// Canonical slug generator. Keeps underscore as the join character to remain
+// consistent with the existing system slugs (super_admin, candidate, …) that
+// are already persisted in the database. Output is guaranteed to satisfy
+// SLUG_REGEX or be the empty string (when the input has no Latin
+// alphanumerics, e.g. pure Arabic names).
 function slugify(s: string) {
-  return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 64);
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 64)
+    .replace(/_+$/g, "");
 }
 
 function RoleDialog({
@@ -284,19 +311,25 @@ function RoleDialog({
   const { t } = useTranslation(["rolesAccess"]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const roleSchema = useRoleSchema();
-  const form = useForm<RoleForm>({
-    resolver: zodResolver(roleSchema),
+  const createSchema = useRoleCreateSchema();
+  const editSchema = useRoleEditSchema();
+  const isEdit = !!existing;
+  const form = useForm<RoleCreateForm>({
+    resolver: zodResolver(isEdit ? (editSchema as unknown as typeof createSchema) : createSchema),
     defaultValues: existing
       ? { name: existing.name, slug: existing.slug, description: existing.description ?? "", color: existing.color ?? "slate" }
       : { name: "", slug: "", description: "", color: "blue" },
   });
+  // Tracks the slug value most recently auto-generated from the name field.
+  // Auto-sync re-engages whenever the slug input is empty OR still matches the
+  // last value we wrote (so the user can clear the slug to resume sync).
+  const lastAutoSlug = useRef<string>("");
 
   const save = useMutation({
-    mutationFn: async (data: RoleForm) => {
+    mutationFn: async (data: RoleCreateForm | RoleEditForm) => {
       if (existing) {
-        const { slug: _slug, ...patch } = data;
-        return apiRequest("PATCH", `/api/roles/${existing.id}`, patch).then((r) => r.json());
+        const { name, description, color } = data as RoleEditForm;
+        return apiRequest("PATCH", `/api/roles/${existing.id}`, { name, description, color }).then((r) => r.json());
       }
       return apiRequest("POST", "/api/roles", data).then((r) => r.json());
     },
@@ -333,8 +366,20 @@ function RoleDialog({
                     {...field}
                     onChange={(e) => {
                       field.onChange(e);
-                      if (!existing && !form.formState.dirtyFields.slug) {
-                        form.setValue("slug", slugify(e.target.value));
+                      if (!existing) {
+                        const currentSlug = form.getValues("slug") ?? "";
+                        const userOwnsSlug =
+                          currentSlug.length > 0 && currentSlug !== lastAutoSlug.current;
+                        if (!userOwnsSlug) {
+                          const next = slugify(e.target.value);
+                          // Don't overwrite an empty slug field with another
+                          // empty value (happens for pure non-Latin input);
+                          // leave the field blank so the user enters one.
+                          if (next.length > 0 || currentSlug.length > 0) {
+                            form.setValue("slug", next, { shouldValidate: false, shouldDirty: false });
+                            lastAutoSlug.current = next;
+                          }
+                        }
                       }
                     }}
                     data-testid="input-role-name"
@@ -348,8 +393,24 @@ function RoleDialog({
                 <FormItem>
                   <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("rolesAccess:roles.dialog.lblSlug")}</FormLabel>
                   <FormControl>
-                    <Input placeholder={t("rolesAccess:roles.dialog.phSlug")} dir="ltr" className="bg-muted/30 border-border font-mono lowercase" {...field} data-testid="input-role-slug" />
+                    <Input
+                      placeholder={t("rolesAccess:roles.dialog.phSlug")}
+                      dir="ltr"
+                      className="bg-muted/30 border-border font-mono lowercase"
+                      {...field}
+                      onChange={(e) => {
+                        // Once the user edits the slug to anything other than
+                        // the last auto value, treat it as user-owned so name
+                        // changes stop overwriting it. Clearing the field
+                        // re-engages auto-sync on the next name keystroke.
+                        field.onChange(e);
+                      }}
+                      data-testid="input-role-slug"
+                    />
                   </FormControl>
+                  <p className="text-xs text-muted-foreground" data-testid="text-role-slug-hint">
+                    {t("rolesAccess:roles.dialog.slugHint")}
+                  </p>
                   <FormMessage />
                 </FormItem>
               )} />

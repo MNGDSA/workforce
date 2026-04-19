@@ -107,3 +107,15 @@ Issues that have been fixed and verified. Kept for historical reference. Each en
 - **Related Tasks:** #66
 - **Status notes:**
   - 2026-04-19 — Fixed under Task #66. Stabilized the `ImageRequest` with `remember(photoUrl, serverUrl)`, added explicit `size(80dp)`, enabled memory + disk cache policies, and added a Person vector painter as both `placeholder` and `fallback`. Configured a global Coil `ImageLoader` via `WorkforceApp : ImageLoaderFactory` (25% RAM memory cache, 50 MB disk cache, `respectCacheHeaders=true`). Added a fire-and-forget `Coil.imageLoader(ctx).enqueue(...)` prefetch in `LoginScreen.kt` immediately after a successful login. On the backend, the dev `/uploads` static handler and the production DO Spaces `PutObjectCommand` now both emit `Cache-Control: ... max-age=86400, must-revalidate` for photos, with ETag/Last-Modified left enabled so subsequent requests return 304. Verified visually that warm-cache loads render essentially instantly and cold-cache loads show the placeholder icon over the brand circle until the photo crossfades in.
+
+### ISSUE-005 — Role identifier (slug) field validation behaves inconsistently
+
+- **Logged:** 2026-04-19
+- **Severity:** Low
+- **Component:** Admin Panel
+- **Description:** In Settings → Roles & Access → New Role, the slug/identifier field had three small inconsistencies: (1) the regex permitted `-` but the auto-`slugify()` helper only ever emitted `_`, sending mixed signals to the user, (2) auto-sync from the name field shut off permanently after the user touched the slug field once (`dirtyFields.slug`) — even if they reverted their change, and (3) on edit the slug field was hidden but the same schema still enforced a `min(2)` rule against the form's stale state, which could block a PATCH-only edit in edge cases.
+- **Impact:** Confusing UX when creating new roles. No data loss; existing slugs unaffected.
+- **Workaround:** Type the slug manually.
+- **Related Tasks:** #68
+- **Status notes:**
+  - 2026-04-19 — Fixed in task #68. Aligned slug regex, slugify helper (kept underscore as canonical join character to match existing `super_admin`/`candidate` slugs), and on-screen helper text. Split `useRoleSchema` into `useRoleCreateSchema` (validates slug) and `useRoleEditSchema` (omits slug entirely). Replaced `dirtyFields.slug` check with a `useRef`-tracked "last auto value" so clearing the slug re-engages auto-sync. Added bilingual (EN/AR) helper text under the slug field. Pure non-Latin name input no longer overwrites the slug with empty.

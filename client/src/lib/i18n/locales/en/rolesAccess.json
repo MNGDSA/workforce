@@ -88,7 +88,9 @@
       "lblColor": "Color",
       "btnCreate": "Create Role",
       "errName": "Name is required",
-      "errSlugChars": "lowercase letters, numbers, _ or -"
+      "errSlugChars": "Use lowercase letters, numbers, hyphens (-) or underscores (_) only",
+      "errSlugLen": "Identifier must be 2–64 characters",
+      "slugHint": "Lowercase letters, numbers, hyphens and underscores; 2–64 characters."
     },
     "clone": {
       "title": "Clone \"{{name}}\"",
