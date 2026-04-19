@@ -579,7 +579,11 @@ export const smsPlugins = pgTable("sms_plugins", {
 export const otpVerifications = pgTable("otp_verifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   phone: text("phone").notNull(),
-  code: varchar("code", { length: 6 }).notNull(),
+  // Stored as HMAC-SHA256 hex (64 chars), never plaintext. See server/otp-hash.ts.
+  code: text("code").notNull(),
+  // Binds the OTP to its issuance flow so a code minted for password reset
+  // can never satisfy a registration check, and vice versa.
+  purpose: text("purpose").notNull().default("registration"),
   expiresAt: timestamp("expires_at").notNull(),
   attempts: integer("attempts").notNull().default(0),
   verifiedAt: timestamp("verified_at"),

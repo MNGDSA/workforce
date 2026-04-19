@@ -153,6 +153,8 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { requireAuth, requirePermission, requireOwnership, markPublic, invalidateRoleCache, getAuthKind } from "./auth-middleware";
 import { checkLoginRateLimit, recordLoginFailure, recordLoginSuccess } from "./login-rate-limit";
+import { checkOtpVerifyIp, recordOtpVerifyFailure, checkOtpRequestIp, recordOtpRequest } from "./otp-throttle";
+import { verifyOtpHash } from "./otp-hash";
 
 const UPLOADS_DIR = path.resolve("uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -847,11 +849,19 @@ export async function registerRoutes(
       }).parse(req.body);
       const normalizedPhone = phone;
 
+      // Per-IP burst limiter (prevents distributed phone-rotation abuse)
+      const ipDecision = await checkOtpRequestIp(req);
+      if (!ipDecision.allowed) {
+        res.setHeader("Retry-After", String(ipDecision.retryAfterSec));
+        return res.status(429).json({ message: tr(req, "otp.tooMany") });
+      }
+
       // Rate limit: max 3 OTP requests per phone per 10 minutes
       const recentCount = await storage.countRecentOtpRequests(normalizedPhone, 10 * 60 * 1000);
       if (recentCount >= 3) {
         return res.status(429).json({ message: tr(req, "otp.tooMany") });
       }
+      await recordOtpRequest(req);
 
       // Check if active SMS plugin exists
       const smsPlugin = await storage.getActiveSmsPlugin();
@@ -888,8 +898,16 @@ export async function registerRoutes(
       }).parse(req.body);
       const normalizedPhone = phone;
 
+      // Per-IP throttle (in addition to per-phone attempt counter on the OTP row)
+      const ipDecision = await checkOtpVerifyIp(req);
+      if (!ipDecision.allowed) {
+        res.setHeader("Retry-After", String(ipDecision.retryAfterSec));
+        return res.status(429).json({ message: tr(req, "otp.tooManyAttempts") });
+      }
+
       const otp = await storage.getLatestOtpVerification(normalizedPhone);
       if (!otp) {
+        await recordOtpVerifyFailure(req);
         return res.status(404).json({ message: tr(req, "otp.notFound") });
       }
       if (otp.verifiedAt) {
@@ -901,8 +919,9 @@ export async function registerRoutes(
       if (otp.attempts >= 5) {
         return res.status(400).json({ message: tr(req, "otp.tooManyAttempts") });
       }
-      if (otp.code !== code.trim()) {
+      if (!verifyOtpHash(code, otp.code)) {
         await storage.incrementOtpAttempts(otp.id);
+        await recordOtpVerifyFailure(req);
         const remaining = 4 - otp.attempts;
         return res.status(400).json({ message: tr(req, "otp.incorrectRemaining", { remaining }) });
       }
@@ -964,14 +983,15 @@ export async function registerRoutes(
 
       // Atomically consume the OTP BEFORE creating the user. The conditional UPDATE
       // closes the TOCTOU race where two parallel /register calls (different national
-      // IDs) could share one OTP. Only the request that flips usedForRegistration
-      // from false → true gets to proceed.
+      // IDs) could share one OTP. Purpose check rejects a password-reset OTP being
+      // used to satisfy registration.
       const consumed = await db
         .update(otpVerifications)
         .set({ usedForRegistration: true })
         .where(and(
           eq(otpVerifications.id, otpId),
           eq(otpVerifications.usedForRegistration, false),
+          eq(otpVerifications.purpose, "registration"),
         ))
         .returning({ id: otpVerifications.id });
       if (consumed.length === 0) {
@@ -1108,7 +1128,7 @@ export async function registerRoutes(
       }
 
       const code = String(Math.floor(100000 + Math.random() * 900000));
-      await storage.createOtpVerification(phone, code, expiresAt);
+      await storage.createOtpVerification(phone, code, expiresAt, "password_reset");
 
       const activePlugin = await storage.getActiveSmsPlugin();
       if (activePlugin) {
@@ -1157,7 +1177,7 @@ export async function registerRoutes(
       }
 
       const otp = await storage.getOtpVerificationById(otpId);
-      if (!otp || otp.phone !== user.phone) {
+      if (!otp || otp.phone !== user.phone || otp.purpose !== "password_reset") {
         return res.status(400).json({ message: tr(req, "otp.invalidSessionShort") });
       }
       if (!otp.verifiedAt) {
@@ -1167,9 +1187,24 @@ export async function registerRoutes(
         return res.status(400).json({ message: tr(req, "otp.sessionExpiredShort") });
       }
 
+      // Atomically consume the OTP BEFORE writing the new password. Closes the
+      // replay race where the same verified reset-OTP could overwrite the
+      // password multiple times until the 30-min window expired.
+      const consumed = await db
+        .update(otpVerifications)
+        .set({ usedForRegistration: true })
+        .where(and(
+          eq(otpVerifications.id, otpId),
+          eq(otpVerifications.usedForRegistration, false),
+          eq(otpVerifications.purpose, "password_reset"),
+        ))
+        .returning({ id: otpVerifications.id });
+      if (consumed.length === 0) {
+        return res.status(400).json({ message: tr(req, "otp.alreadyUsed") });
+      }
+
       const hashed = await bcrypt.hash(newPassword, 12);
       await storage.updateUser(user.id, { password: hashed });
-      await storage.markOtpUsedForRegistration(otpId);
 
       return res.json({ message: tr(req, "passwordReset.success") });
     } catch (err) {

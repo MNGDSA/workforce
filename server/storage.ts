@@ -2160,8 +2160,19 @@ export class DatabaseStorage implements IStorage {
 
   // ─── OTP Verifications ────────────────────────────────────────────────────
 
-  async createOtpVerification(phone: string, code: string, expiresAt: Date): Promise<OtpVerification> {
-    const [otp] = await db.insert(otpVerifications).values({ phone, code, expiresAt, attempts: 0 }).returning();
+  async createOtpVerification(
+    phone: string,
+    code: string,
+    expiresAt: Date,
+    purpose: "registration" | "password_reset" = "registration",
+  ): Promise<OtpVerification> {
+    // OTP codes are stored as HMAC-SHA256 hex (peppered) — never plaintext.
+    // See server/otp-hash.ts.
+    const { hashOtp } = await import("./otp-hash");
+    const [otp] = await db
+      .insert(otpVerifications)
+      .values({ phone, code: hashOtp(code), purpose, expiresAt, attempts: 0 })
+      .returning();
     return otp;
   }
 
