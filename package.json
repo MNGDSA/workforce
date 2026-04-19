@@ -81,6 +81,7 @@
     "esbuild": "^0.25.12",
     "express": "^5.0.1",
     "express-session": "^1.18.1",
+    "fast-glob": "^3.3.3",
     "framer-motion": "^12.23.24",
     "i18next": "^26.0.5",
     "i18next-browser-languagedetector": "^8.2.1",
