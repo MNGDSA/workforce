@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
+import { sanitizeSaMobileInput, normalizeSaMobileOnBlur, isValidSaMobile } from "@/lib/phone-input";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout";
@@ -868,7 +869,25 @@ function EmployeeDetailDialog({
                 {editPersonal ? (
                   <div className="grid grid-cols-2 gap-3">
                     <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.email")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.email} onChange={e => setPersonalForm(f => ({ ...f, email: e.target.value }))} data-testid="input-personal-email" dir="ltr" /></div>
-                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.phone")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.phone} onChange={e => setPersonalForm(f => ({ ...f, phone: e.target.value }))} data-testid="input-personal-phone" dir="ltr" /></div>
+                    <div>
+                      <label className="text-zinc-500 text-xs">{t("dialog.infoLabels.phone")}</label>
+                      <Input
+                        className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700"
+                        value={personalForm.phone}
+                        onChange={e => setPersonalForm(f => ({ ...f, phone: sanitizeSaMobileInput(e.target.value) }))}
+                        onBlur={e => setPersonalForm(f => ({ ...f, phone: normalizeSaMobileOnBlur(e.target.value) }))}
+                        placeholder="05XXXXXXXX"
+                        inputMode="tel"
+                        maxLength={10}
+                        data-testid="input-personal-phone"
+                        dir="ltr"
+                      />
+                      {personalForm.phone.length > 0 && !isValidSaMobile(personalForm.phone) && (
+                        <p className="mt-1 text-[11px] text-amber-400" data-testid="text-personal-phone-validation-hint">
+                          {String(t("common:errors.invalidPhone", { defaultValue: "Please enter a valid Saudi mobile (05XXXXXXXX)." } as any))}
+                        </p>
+                      )}
+                    </div>
                     <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.dateOfBirth")}</label><Input type="date" className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.dateOfBirth} onChange={e => setPersonalForm(f => ({ ...f, dateOfBirth: e.target.value }))} data-testid="input-personal-dob" /></div>
                     <div>
                       <label className="text-zinc-500 text-xs">{t("dialog.infoLabels.gender")}</label>

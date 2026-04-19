@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import DashboardLayout from "@/components/layout";
+import { sanitizeSaMobileInput, normalizeSaMobileOnBlur, isValidSaMobile } from "@/lib/phone-input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -644,7 +645,22 @@ function CompanySheet({
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-white text-sm">{t("smpCompanies:create.contactPhone")}</Label>
-                    <Input value={editForm.contactPhone ?? ""} onChange={e => setEditForm(f => ({ ...f, contactPhone: e.target.value }))} dir="ltr" className="bg-muted/30 border-border" data-testid="input-edit-contact-phone" />
+                    <Input
+                      value={editForm.contactPhone ?? ""}
+                      onChange={e => setEditForm(f => ({ ...f, contactPhone: sanitizeSaMobileInput(e.target.value) }))}
+                      onBlur={e => setEditForm(f => ({ ...f, contactPhone: normalizeSaMobileOnBlur(e.target.value) }))}
+                      placeholder="05XXXXXXXX"
+                      inputMode="tel"
+                      maxLength={10}
+                      dir="ltr"
+                      className="bg-muted/30 border-border"
+                      data-testid="input-edit-contact-phone"
+                    />
+                    {(editForm.contactPhone ?? "").length > 0 && !isValidSaMobile(editForm.contactPhone ?? "") && (
+                      <p className="text-[11px] text-amber-400" data-testid="text-edit-contact-phone-validation-hint">
+                        {String(t("common:errors.invalidPhone", { defaultValue: "Please enter a valid Saudi mobile (05XXXXXXXX)." } as any))}
+                      </p>
+                    )}
                   </div>
                   <div className="col-span-2 space-y-1.5">
                     <Label className="text-white text-sm">{t("smpCompanies:create.contactEmail")}</Label>

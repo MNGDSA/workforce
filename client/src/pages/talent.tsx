@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState, useCallback, useRef } from "react";
+import { sanitizeSaMobileInput, normalizeSaMobileOnBlur, isValidSaMobile } from "@/lib/phone-input";
 import { useLocation } from "wouter";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useToast } from "@/hooks/use-toast";
@@ -791,7 +792,22 @@ function CandidateProfileSheet({
                 </div>
                 <div className="space-y-1">
                   <p className="text-[11px] text-muted-foreground">{t("profile.emergencyPhone")}</p>
-                  <Input value={form.emergencyContactPhone} onChange={e => setField("emergencyContactPhone", e.target.value)} placeholder={t("profile.emergencyPhonePh")} dir="ltr" className="h-9 bg-muted/30 border-border text-sm" data-testid="edit-emergency-phone" />
+                  <Input
+                    value={form.emergencyContactPhone}
+                    onChange={e => setField("emergencyContactPhone", sanitizeSaMobileInput(e.target.value))}
+                    onBlur={e => setField("emergencyContactPhone", normalizeSaMobileOnBlur(e.target.value))}
+                    placeholder="05XXXXXXXX"
+                    inputMode="tel"
+                    maxLength={10}
+                    dir="ltr"
+                    className="h-9 bg-muted/30 border-border text-sm"
+                    data-testid="edit-emergency-phone"
+                  />
+                  {form.emergencyContactPhone.length > 0 && !isValidSaMobile(form.emergencyContactPhone) && (
+                    <p className="text-[11px] text-amber-400" data-testid="text-emergency-phone-validation-hint">
+                      {String(t("common:errors.invalidPhone", { defaultValue: "Please enter a valid Saudi mobile (05XXXXXXXX)." } as any))}
+                    </p>
+                  )}
                 </div>
               </div>
             ) : (

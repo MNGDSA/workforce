@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { saPhoneSchema } from "@shared/phone";
+import { sanitizeSaMobileInput, normalizeSaMobileOnBlur, isValidSaMobile } from "@/lib/phone-input";
 import { createPortal } from "react-dom";
 import { printContract } from "@/lib/print-contract";
 import { useLocation } from "wouter";
@@ -1854,6 +1855,7 @@ export default function CandidatePortal() {
   const [profileEduLevel, setProfileEduLevel] = useState("");
   const [profileMajor,    setProfileMajor]    = useState("");
   const [profileRegion,   setProfileRegion]   = useState("");
+  const [profilePhone,    setProfilePhone]    = useState("");
   const [ibanValue,      setIbanValue]       = useState("");
   const [pwCurrent,  setPwCurrent]  = useState("");
   const [pwNew,      setPwNew]      = useState("");
@@ -1912,6 +1914,7 @@ export default function CandidatePortal() {
       setProfileEduLevel(String(candidateProfile.educationLevel ?? ""));
       setProfileMajor(String(candidateProfile.major ?? ""));
       setProfileRegion(String(candidateProfile.region ?? ""));
+      setProfilePhone(String(candidateProfile.phone ?? storedCandidate.phone ?? ""));
       setIbanValue(String(candidateProfile.ibanNumber ?? ""));
     }
     if (!open) { setPwCurrent(""); setPwNew(""); setPwConfirm(""); }
@@ -2779,12 +2782,21 @@ export default function CandidatePortal() {
                   <label className="text-sm font-medium text-white">{t("portal:profile.phone")}</label>
                   <Input
                     name="phone"
-                    defaultValue={String(candidateProfile?.phone ?? storedCandidate.phone ?? "")}
-                    placeholder={t("portal:profile.phonePlaceholder")}
+                    value={profilePhone}
+                    onChange={e => setProfilePhone(sanitizeSaMobileInput(e.target.value))}
+                    onBlur={e => setProfilePhone(normalizeSaMobileOnBlur(e.target.value))}
+                    placeholder="05XXXXXXXX"
+                    inputMode="tel"
+                    maxLength={10}
                     className="bg-background border-border"
                     data-testid="input-phone"
                     dir="ltr"
                   />
+                  {profilePhone.length > 0 && !isValidSaMobile(profilePhone) && (
+                    <p className="text-[11px] text-amber-400" data-testid="text-profile-phone-validation-hint">
+                      {String(t("common:errors.invalidPhone", { defaultValue: "Please enter a valid Saudi mobile (05XXXXXXXX)." } as any))}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-white">{t("portal:profile.email")}</label>
