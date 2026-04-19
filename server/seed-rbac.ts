@@ -101,8 +101,24 @@ export async function seedRbac(log: (msg: string, src?: string) => void) {
   // 4. Super Admin keeps zero rows (middleware grants all)
   await db.delete(rolePermissions).where(eq(rolePermissions.roleId, superAdmin.id));
 
+  // 5. Default admin roles (non-system, editable). Created on first boot so the
+  // Settings → Admin Users role dropdown is never empty. Permissions for these
+  // are configured by the Super Admin in Settings → Roles & Access.
+  const defaultAdminRoles: { name: string; slug: string; description: string; color: string }[] = [
+    { name: "Admin",                   slug: "admin",                  description: "General back-office administrator.",                          color: "#2563eb" },
+    { name: "HR Manager",              slug: "hr_manager",             description: "Manages HR operations and approvals.",                       color: "#7c3aed" },
+    { name: "HR Specialist",           slug: "hr_specialist",          description: "Day-to-day HR work: candidates, onboarding, employees.",     color: "#059669" },
+    { name: "HR Attendance Reviewer",  slug: "hr_attendance_reviewer", description: "Reviews attendance submissions and excuse requests.",        color: "#0891b2" },
+    { name: "Auditor",                 slug: "auditor",                description: "Read-only access to records and audit logs.",                color: "#d97706" },
+    { name: "Recruiter",               slug: "recruiter",              description: "Manages job postings, applications, and interviews.",        color: "#db2777" },
+  ];
+  await db
+    .insert(roles)
+    .values(defaultAdminRoles.map((r) => ({ ...r, isSystem: false })))
+    .onConflictDoNothing({ target: roles.slug });
+
   log(
-    `RBAC seed complete: ${values.length} permissions, 2 system roles, ${CANDIDATE_PERMISSIONS.length} candidate perms`,
+    `RBAC seed complete: ${values.length} permissions, 2 system roles + ${defaultAdminRoles.length} default admin roles, ${CANDIDATE_PERMISSIONS.length} candidate perms`,
     "rbac-seed"
   );
 
