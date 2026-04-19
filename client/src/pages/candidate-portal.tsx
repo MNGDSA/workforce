@@ -2608,8 +2608,9 @@ export default function CandidatePortal() {
               <ProfileCompletionCard toast={toast} candidateId={candidateId!} isSmp={isSmp} />
             )}
 
-            {/* Contract in sidebar for candidate / individual employee */}
-            {(portalMode === "candidate" || portalMode === "employee_individual") && (
+            {/* Contract widget shown ONLY for candidates (pre-conversion).
+                After conversion to employee, the contract lives in the dedicated "My Contract" tab. */}
+            {portalMode === "candidate" && (
               <Card className="bg-card border-border">
                 <CardContent className="p-5">
                   <ContractSection candidateId={candidateId!} candidateName={displayName} readOnly={!canSignContract} onboardingId={currentOnboarding?.id} />
