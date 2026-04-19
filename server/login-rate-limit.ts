@@ -7,8 +7,21 @@ import { getClientIp } from "./client-ip";
 
 const WINDOW_MIN = 15;
 const LOCKOUT_MIN = 30;
-const MAX_ATTEMPTS = 5;
+// Per-identifier lock is the primary protection — it follows the actual user
+// regardless of which IP they happen to be on. Per-IP is the secondary abuse
+// guard with a much higher threshold so KSA mobile carrier CGN (where
+// thousands of legit users share one public IP) does not trigger it during
+// shift-change bursts.
+const IDENTIFIER_MAX_ATTEMPTS = 5;
+const IP_MAX_ATTEMPTS = 50;
+// Backwards-compat alias for the per-identifier audit log + RETURNING clause
+// shaping. The two scopes are otherwise computed independently.
+const MAX_ATTEMPTS = IDENTIFIER_MAX_ATTEMPTS;
 const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+
+function maxFor(scope: "ip" | "identifier"): number {
+  return scope === "ip" ? IP_MAX_ATTEMPTS : IDENTIFIER_MAX_ATTEMPTS;
+}
 
 function sanitizeIdentifierForLog(id: string): string {
   if (!id) return "(empty)";
@@ -84,6 +97,7 @@ interface UpsertResult {
 }
 
 async function upsertFailure(scope: "ip" | "identifier", key: string): Promise<UpsertResult | null> {
+  const maxAttempts = maxFor(scope);
   // Single atomic UPSERT:
   //  - INSERT a fresh row at attempt_count=1 if none exists.
   //  - On conflict: if the existing window has expired, reset to 1; else +1.
@@ -114,7 +128,7 @@ async function upsertFailure(scope: "ip" | "identifier", key: string): Promise<U
         WHEN (CASE
                 WHEN login_rate_limit_buckets.window_start < NOW() - INTERVAL '${sql.raw(String(WINDOW_MIN))} minutes' THEN 1
                 ELSE login_rate_limit_buckets.attempt_count + 1
-              END) >= ${MAX_ATTEMPTS}
+              END) >= ${maxAttempts}
           AND (login_rate_limit_buckets.locked_until IS NULL OR login_rate_limit_buckets.locked_until <= NOW())
           THEN NOW() + INTERVAL '${sql.raw(String(LOCKOUT_MIN))} minutes'
         ELSE login_rate_limit_buckets.locked_until
@@ -125,7 +139,7 @@ async function upsertFailure(scope: "ip" | "identifier", key: string): Promise<U
       locked_until,
       (locked_until IS NOT NULL AND locked_until > NOW()
        AND updated_at = NOW()
-       AND (xmax = 0 OR attempt_count >= ${MAX_ATTEMPTS})) AS was_locked
+       AND (xmax = 0 OR attempt_count >= ${maxAttempts})) AS was_locked
   `);
   const rows: any[] = (result as any).rows ?? (result as any) ?? [];
   if (!rows[0]) return null;
@@ -139,11 +153,11 @@ async function upsertFailure(scope: "ip" | "identifier", key: string): Promise<U
 // "was_locked" is best-effort from the SQL — to make the audit trigger crisp
 // we additionally check: if the row's attempt_count == MAX_ATTEMPTS exactly,
 // this caller is the one that crossed the threshold.
-function justCrossedThreshold(r: UpsertResult | null): boolean {
+function justCrossedThreshold(r: UpsertResult | null, scope: "ip" | "identifier"): boolean {
   if (!r) return false;
   if (!r.locked_until) return false;
   if (r.locked_until.getTime() <= Date.now()) return false;
-  return r.attempt_count === MAX_ATTEMPTS;
+  return r.attempt_count === maxFor(scope);
 }
 
 export async function recordLoginFailure(req: Request, identifierRaw: unknown): Promise<void> {
@@ -152,11 +166,11 @@ export async function recordLoginFailure(req: Request, identifierRaw: unknown): 
 
   try {
     const ipResult = await upsertFailure("ip", ip);
-    if (justCrossedThreshold(ipResult)) auditLockout(req, "ip", ip, id);
+    if (justCrossedThreshold(ipResult, "ip")) auditLockout(req, "ip", ip, id);
 
     if (id) {
       const idResult = await upsertFailure("identifier", id);
-      if (justCrossedThreshold(idResult)) auditLockout(req, "identifier", id, id);
+      if (justCrossedThreshold(idResult, "identifier")) auditLockout(req, "identifier", id, id);
     }
   } catch {
     // never break login on rate-limit infra failure — fail open

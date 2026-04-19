@@ -576,6 +576,40 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  /**
+   * Single-query identifier resolution for /login. Replaces the previous
+   * 4-roundtrip cascade (phone → nationalId → email → username) with one
+   * indexed OR query — cuts login DB latency to a single round-trip even
+   * during 100-req/sec bursts. Precedence is enforced in JS by priority,
+   * matching the old waterfall ordering exactly.
+   */
+  async getUserByAnyIdentifier(identifier: string): Promise<User | undefined> {
+    const clean = identifier.trim();
+    const rows = await db
+      .select()
+      .from(users)
+      .where(
+        or(
+          eq(users.phone, clean),
+          eq(users.nationalId, clean),
+          eq(users.email, clean),
+          eq(users.username, clean),
+        ),
+      )
+      .limit(4);
+    if (rows.length === 0) return undefined;
+    if (rows.length === 1) return rows[0];
+    // Multiple users matched (e.g., one user's username equals another's
+    // national id). Apply the legacy precedence: phone > nationalId > email > username.
+    const byPhone = rows.find((u) => u.phone === clean);
+    if (byPhone) return byPhone;
+    const byNid = rows.find((u) => u.nationalId === clean);
+    if (byNid) return byNid;
+    const byEmail = rows.find((u) => u.email === clean);
+    if (byEmail) return byEmail;
+    return rows.find((u) => u.username === clean);
+  }
+
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
     return user;

@@ -150,10 +150,11 @@ function validateProfileCompleteness(candidate: Record<string, any>): string[] {
   return missing;
 }
 import { z } from "zod";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import { requireAuth, requirePermission, requireOwnership, markPublic, invalidateRoleCache, getAuthKind } from "./auth-middleware";
 import { checkLoginRateLimit, recordLoginFailure, recordLoginSuccess } from "./login-rate-limit";
 import { checkOtpVerifyIp, recordOtpVerifyFailure, tryReserveOtpRequest } from "./otp-throttle";
+import "./otp-maintenance";
 import { verifyOtpHash } from "./otp-hash";
 
 const UPLOADS_DIR = path.resolve("uploads");
@@ -782,12 +783,8 @@ export async function registerRoutes(
 
       const clean = String(identifier).trim();
 
-      // Lookup priority: phone → national ID → email → username (fallback)
-      let user =
-        await storage.getUserByPhone(clean) ??
-        await storage.getUserByNationalId(clean) ??
-        await storage.getUserByEmail(clean) ??
-        await storage.getUserByUsername(clean);
+      // Single-query identifier resolution (was 4 sequential roundtrips).
+      const user = await storage.getUserByAnyIdentifier(clean);
 
       if (!user) {
         recordLoginFailure(req, identifier);
@@ -798,6 +795,7 @@ export async function registerRoutes(
         return mobileError(res, 403, MobileErrorCodes.ACCOUNT_DISABLED, tr(req, "auth.accountDisabled"));
       }
 
+      // Native bcrypt — releases the event loop to libuv thread pool.
       const valid = await bcrypt.compare(password, user.password);
       if (!valid) {
         recordLoginFailure(req, identifier);
@@ -805,10 +803,10 @@ export async function registerRoutes(
       }
 
       recordLoginSuccess(req, identifier);
-      await storage.updateUser(user.id, { lastLogin: new Date() } as any);
 
       const { password: _, ...safeUser } = user;
 
+      // Critical-path lookup: only fetch role + candidate once for the response shape.
       let candidate = null;
       const loginRole = user.roleId ? await storage.getRole(user.roleId) : null;
       const isCandidate = loginRole?.slug === "candidate";
@@ -817,25 +815,46 @@ export async function registerRoutes(
         if (!candidate && user.nationalId) {
           candidate = await storage.getCandidateByNationalId(user.nationalId) ?? null;
         }
-        if (candidate) {
-          if (!candidate.userId) {
-            await storage.updateCandidate(candidate.id, { userId: user.id });
-          }
-          const updateFields: Record<string, any> = { lastLoginAt: new Date() };
-          if (candidate.status !== "blocked" && candidate.status !== "hired") {
-            updateFields.status = "available";
-          }
-          await storage.updateCandidate(candidate.id, updateFields);
-          candidate.lastLoginAt = new Date();
-          if (updateFields.status) candidate.status = updateFields.status;
-        }
       }
 
       const token = signAuthToken(user.id);
       const securFlag = process.env.NODE_ENV === "production" ? "; Secure" : "";
       res.setHeader("Set-Cookie", `wf_auth=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}${securFlag}`);
 
-      return res.json({ user: { ...safeUser, role: loginRole?.slug ?? null }, candidate });
+      // Reflect optimistic candidate updates into the response body so the UI
+      // sees the new lastLoginAt / status immediately, while the actual DB
+      // writes happen after the response is sent (deferred — see setImmediate
+      // below). This trims ~3 DB round-trips off the login critical path.
+      if (candidate) {
+        const newStatus = candidate.status !== "blocked" && candidate.status !== "hired"
+          ? "available"
+          : candidate.status;
+        candidate.lastLoginAt = new Date();
+        if (newStatus !== candidate.status) candidate.status = newStatus as any;
+      }
+
+      const response = res.json({ user: { ...safeUser, role: loginRole?.slug ?? null }, candidate });
+
+      // Fire-and-forget post-login bookkeeping. Failures do not affect login.
+      const userId = user.id;
+      const candForDefer = candidate;
+      setImmediate(async () => {
+        try {
+          await storage.updateUser(userId, { lastLogin: new Date() } as any);
+          if (candForDefer) {
+            const updateFields: Record<string, any> = { lastLoginAt: new Date() };
+            if (!candForDefer.userId) updateFields.userId = userId;
+            if (candForDefer.status !== "blocked" && candForDefer.status !== "hired") {
+              updateFields.status = "available";
+            }
+            await storage.updateCandidate(candForDefer.id, updateFields);
+          }
+        } catch (e) {
+          console.error("[login] deferred post-login update failed:", e);
+        }
+      });
+
+      return response;
     } catch (err) {
       return handleError(res, err);
     }
@@ -982,66 +1001,123 @@ export async function registerRoutes(
         return res.status(409).json({ message: tr(req, "register.nationalIdExists") });
       }
 
-      // Atomically consume the OTP BEFORE creating the user. The conditional UPDATE
-      // closes the TOCTOU race where two parallel /register calls (different national
-      // IDs) could share one OTP. Purpose check rejects a password-reset OTP being
-      // used to satisfy registration.
-      const consumed = await db
-        .update(otpVerifications)
-        .set({ usedForRegistration: true })
-        .where(and(
-          eq(otpVerifications.id, otpId),
-          eq(otpVerifications.usedForRegistration, false),
-          eq(otpVerifications.purpose, "registration"),
-        ))
-        .returning({ id: otpVerifications.id });
-      if (consumed.length === 0) {
-        return res.status(400).json({ message: tr(req, "otp.alreadyUsed") });
-      }
-
-      // Phone transfer check: if phone was previously assigned, flag old record
-      const existingByPhone = await storage.getCandidateByPhone(normalizedPhone);
-      if (existingByPhone) {
-        console.log(`[Register] Phone ${normalizedPhone} previously belonged to candidate ${existingByPhone.id}. Flagging as transferred.`);
-        await storage.flagPhoneTransferred(existingByPhone.id);
-      }
-
+      // Hash before the transaction (bcrypt is the slow part — keep the
+      // transaction's lock window minimal).
       const syntheticEmail = `${nationalId.trim()}@candidate.workforce.sa`;
       const hashed = await bcrypt.hash(password, 12);
 
-      const user = await storage.createUser({
-        username: nationalId.trim(),
-        email: syntheticEmail,
-        password: hashed,
-        fullName: fullName.trim(),
-        phone: normalizedPhone,
-        nationalId: nationalId.trim(),
-        role: "candidate",
-        isActive: true,
-      });
+      // Wrap OTP consume + user create + candidate create in a single
+      // transaction. Any failure rolls back BOTH the OTP-consumed flag and the
+      // partial user/candidate writes — no orphan-user-with-burned-OTP states.
+      let user, candidate;
+      try {
+        ({ user, candidate } = await db.transaction(async (tx) => {
+          // Atomic OTP consume — rejects double-use, cross-purpose replay, and
+          // any race where two parallel registers share one OTP.
+          const consumed = await tx
+            .update(otpVerifications)
+            .set({ usedForRegistration: true })
+            .where(and(
+              eq(otpVerifications.id, otpId),
+              eq(otpVerifications.usedForRegistration, false),
+              eq(otpVerifications.purpose, "registration"),
+            ))
+            .returning({ id: otpVerifications.id });
+          if (consumed.length === 0) {
+            throw new Error("OTP_ALREADY_USED");
+          }
 
-      let candidate = await storage.getCandidateByNationalId(nationalId.trim());
-      if (candidate) {
-        await storage.updateCandidate(candidate.id, {
-          userId: user.id,
-          phone: normalizedPhone,
-          fullNameEn: fullName.trim(),
-          email: syntheticEmail,
-        });
-        candidate = (await storage.getCandidate(candidate.id))!;
-      } else {
-        candidate = await storage.createCandidate({
-          fullNameEn: fullName.trim(),
-          phone: normalizedPhone,
-          nationalId: nationalId.trim(),
-          email: syntheticEmail,
-          status: "available",
-          country: "SA",
-          userId: user.id,
-        });
+          // Phone-transfer flag (best-effort within the same tx)
+          const existingByPhoneRows = await tx
+            .select()
+            .from(candidates)
+            .where(eq(candidates.phone, normalizedPhone))
+            .limit(1);
+          const existingByPhone = existingByPhoneRows[0];
+          if (existingByPhone) {
+            console.log(`[Register] Phone ${normalizedPhone} previously belonged to candidate ${existingByPhone.id}. Flagging as transferred and releasing phone.`);
+            // Release the phone from the prior owner (set to null) so the new
+            // candidate can claim it without breaking getCandidateByPhone()
+            // resolution. Mirrors the legacy storage.flagPhoneTransferred()
+            // semantics that this transactional path replaced.
+            await tx
+              .update(candidates)
+              .set({ phone: null, phoneTransferredAt: new Date(), updatedAt: new Date() } as any)
+              .where(eq(candidates.id, existingByPhone.id));
+          }
+
+          const [createdUser] = await tx
+            .insert(users)
+            .values({
+              username: nationalId.trim(),
+              email: syntheticEmail,
+              password: hashed,
+              fullName: fullName.trim(),
+              phone: normalizedPhone,
+              nationalId: nationalId.trim(),
+              isActive: true,
+            } as any)
+            .returning();
+
+          // Reuse pre-existing candidate row by national ID, else create.
+          const existingByNidRows = await tx
+            .select()
+            .from(candidates)
+            .where(eq(candidates.nationalId, nationalId.trim()))
+            .limit(1);
+          let createdCandidate;
+          if (existingByNidRows[0]) {
+            const [updated] = await tx
+              .update(candidates)
+              .set({
+                userId: createdUser.id,
+                phone: normalizedPhone,
+                fullNameEn: fullName.trim(),
+                email: syntheticEmail,
+              })
+              .where(eq(candidates.id, existingByNidRows[0].id))
+              .returning();
+            createdCandidate = updated;
+          } else {
+            const [inserted] = await tx
+              .insert(candidates)
+              .values({
+                fullNameEn: fullName.trim(),
+                phone: normalizedPhone,
+                nationalId: nationalId.trim(),
+                email: syntheticEmail,
+                status: "available",
+                country: "SA",
+                userId: createdUser.id,
+              } as any)
+              .returning();
+            createdCandidate = inserted;
+          }
+
+          return { user: createdUser, candidate: createdCandidate };
+        }));
+      } catch (e: any) {
+        if (e?.message === "OTP_ALREADY_USED") {
+          return res.status(400).json({ message: tr(req, "otp.alreadyUsed") });
+        }
+        // Map PG unique-violation races (code 23505) to deterministic 409s
+        // instead of leaking a generic 500 + raw error message. Constraint
+        // name disambiguates which uniqueness lost the race.
+        if (e?.code === "23505") {
+          const constraint = String(e?.constraint ?? "");
+          if (constraint.includes("phone")) {
+            return res.status(409).json({ message: tr(req, "register.phoneExists") });
+          }
+          if (constraint.includes("national")) {
+            return res.status(409).json({ message: tr(req, "register.nationalIdExists") });
+          }
+          if (constraint.includes("email") || constraint.includes("username")) {
+            return res.status(409).json({ message: tr(req, "register.duplicate") });
+          }
+          return res.status(409).json({ message: tr(req, "register.duplicate") });
+        }
+        throw e;
       }
-
-      await storage.markOtpUsedForRegistration(otpId);
 
       const { password: _, ...safeUser } = user;
 

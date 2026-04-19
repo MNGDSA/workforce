@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { users, automationRules, geofenceZones, roles } from "@shared/schema";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import { eq } from "drizzle-orm";
 
 async function seed() {

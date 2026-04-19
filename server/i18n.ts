@@ -74,6 +74,8 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     // Registration
     "register.allFieldsOtp":      "All fields including OTP verification are required",
     "register.nationalIdExists":  "An account with this National ID already exists",
+    "register.phoneExists":       "An account with this phone number already exists",
+    "register.duplicate":         "An account with these details already exists",
     "common.allFieldsRequired":   "All fields are required",
 
     // Generic resource lookups
@@ -410,6 +412,8 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     // Registration
     "register.allFieldsOtp":      "جميع الحقول مطلوبة بما في ذلك التحقق برمز OTP",
     "register.nationalIdExists":  "يوجد حساب مسجل برقم الهوية هذا بالفعل",
+    "register.phoneExists":       "يوجد حساب مسجل برقم الجوال هذا بالفعل",
+    "register.duplicate":         "يوجد حساب مسجل بهذه البيانات بالفعل",
     "common.allFieldsRequired":   "جميع الحقول مطلوبة",
 
     // Generic resource lookups

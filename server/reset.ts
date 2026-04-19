@@ -27,7 +27,7 @@
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { users, automationRules, roles } from "@shared/schema";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 
 // ─── Tables that are NEVER wiped (config / reference data) ───────────────────
 const KEEP_TABLES = new Set([
