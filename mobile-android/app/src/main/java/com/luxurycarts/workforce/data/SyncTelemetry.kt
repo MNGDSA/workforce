@@ -90,16 +90,22 @@ fun classifyResponse(
     response.code() == 408 -> SyncOutcome.RetryTransient("HTTP 408 timeout", 408)
     response.code() == 429 -> SyncOutcome.RetryTransient("HTTP 429 throttled", 429)
     response.code() in 500..599 -> SyncOutcome.RetryTransient("HTTP ${response.code()} server error", response.code())
-    // Task #85 step 5 — server-issued submission token verdicts. The
-    // request envelope is well-formed but the token itself is rejected.
-    // Treat as NeedsAttention so the user surfaces back to a /status
-    // call to mint a fresh token, rather than spinning on auto-retry.
+    // Task #85 step 5 — server-issued submission token verdicts.
+    // The request envelope was well-formed but the token itself was
+    // rejected (signature failed, token expired, never present, or
+    // bound to a different workforce). These are RECOVERABLE: the
+    // user just needs to refresh attendance status to mint a fresh
+    // HMAC token, and the row's encrypted photo is still on disk.
+    // Routing them to NeedsAttention (instead of PermanentClientError)
+    // keeps the local file intact and surfaces an actionable banner
+    // in the UI; PermanentClientError would have deleted the source
+    // file and the worker would lose the capture.
     response.code() == 400 && parsedCode == "TOKEN_INVALID" ->
-        SyncOutcome.PermanentClientError("TOKEN_INVALID", 400)
+        SyncOutcome.NeedsAttention("TOKEN_INVALID", "Submission token rejected by server; refresh status and retry.")
     response.code() == 400 && parsedCode == "TOKEN_EXPIRED" ->
-        SyncOutcome.PermanentClientError("TOKEN_EXPIRED", 400)
+        SyncOutcome.NeedsAttention("TOKEN_EXPIRED", "Submission token expired; refresh status and retry.")
     response.code() == 400 && parsedCode == "TOKEN_MISSING" ->
-        SyncOutcome.PermanentClientError("TOKEN_MISSING", 400)
+        SyncOutcome.NeedsAttention("TOKEN_MISSING", "Server did not receive a submission token; refresh status and retry.")
     else -> SyncOutcome.PermanentClientError("HTTP_${response.code()}", response.code())
 }
 

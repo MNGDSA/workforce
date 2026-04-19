@@ -24,6 +24,7 @@ import { eq } from "drizzle-orm";
 import type { PermissionKey } from "@shared/permissions";
 import { SUPER_ADMIN_SLUG } from "@shared/permissions";
 import { verifyAuthToken } from "./auth-token";
+import { MobileErrorCodes } from "./lib/mobile-error-codes";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -142,12 +143,24 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   const userId = getAuthUserId(req);
   if (!userId) {
     audit(req, "401");
-    return res.status(401).json({ message: tr(req, "auth.required") });
+    // Task #85 step 2 — every error response on a mobile-consumed
+    // route must include a stable structured `code`. Auth failures
+    // surface here before route handlers run, so the contract is
+    // satisfied by emitting `code` from the middleware itself. The
+    // Android `ApiClient` termination interceptor routes on this
+    // exact value (see docs/api-error-codes.md).
+    return res.status(401).json({
+      code: MobileErrorCodes.AUTH_REQUIRED,
+      message: tr(req, "auth.required"),
+    });
   }
   const user = await storage.getUser(userId);
   if (!user || !user.isActive) {
     audit(req, "401");
-    return res.status(401).json({ message: tr(req, "auth.inactive") });
+    return res.status(401).json({
+      code: MobileErrorCodes.SESSION_EXPIRED,
+      message: tr(req, "auth.inactive"),
+    });
   }
   req.authUserId = userId;
   req.authUser = user;
@@ -155,7 +168,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   if (!req.authRoleId) {
     // Post-T10: every user must have role_id. If somehow missing, deny.
     audit(req, "401");
-    return res.status(401).json({ message: tr(req, "auth.noRole") });
+    return res.status(401).json({
+      code: MobileErrorCodes.SESSION_EXPIRED,
+      message: tr(req, "auth.noRole"),
+    });
   }
   const cached = await getRoleFromCache(req.authRoleId);
   req.authRoleSlug = cached?.slug ?? null;
@@ -177,6 +193,7 @@ export function requirePermission(key: PermissionKey) {
     if (req.authPermissions?.has(key)) return next();
     audit(req, "403", key);
     return res.status(403).json({
+      code: MobileErrorCodes.AUTH_REQUIRED,
       message: tr(req, "auth.noPermission"),
       required: key,
     });
@@ -213,7 +230,10 @@ export function requireOwnership(
       // fall through to 403
     }
     audit(req, "403", "ownership");
-    return res.status(403).json({ message: tr(req, "auth.ownershipOnly") });
+    return res.status(403).json({
+      code: MobileErrorCodes.WORKFORCE_OWNERSHIP_MISMATCH,
+      message: tr(req, "auth.ownershipOnly"),
+    });
   };
 }
 
