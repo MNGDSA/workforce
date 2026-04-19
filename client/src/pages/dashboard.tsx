@@ -10,8 +10,6 @@ import {
   Clock,
   TrendingUp,
   MoreHorizontal,
-  CheckCircle2,
-  AlertCircle,
   Loader2,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -29,18 +27,6 @@ const statusColor: Record<string, string> = {
   hired: "bg-green-500/10 text-green-400",
   rejected: "bg-red-500/10 text-red-400",
   withdrawn: "bg-gray-500/10 text-gray-400",
-};
-
-const upcomingShifts = [
-  { roleKey: "morningCrew",   timeKey: "morning",   staffNum: 12, staffTotal: 15, pct: 80,  status: "warning" },
-  { roleKey: "afternoonCrew", timeKey: "afternoon", staffNum: 15, staffTotal: 15, pct: 100, status: "success" },
-  { roleKey: "nightShift",    timeKey: "night",     staffNum: 4,  staffTotal: 5,  pct: 80,  status: "success" },
-];
-
-const SHIFT_LABELS: Record<string, { role: string; time: string }> = {
-  morningCrewmorning:     { role: "Morning Crew - Makkah Central",   time: "06:00 - 14:00" },
-  afternoonCrewafternoon: { role: "Afternoon Crew - Madinah Gate",   time: "14:00 - 22:00" },
-  nightShiftnight:        { role: "Night Shift - Security",          time: "22:00 - 06:00" },
 };
 
 export default function Dashboard() {
@@ -88,9 +74,6 @@ export default function Dashboard() {
               <Calendar className="me-2 h-4 w-4" />
               <bdi>{formatDate(new Date(), i18n.language, { month: "short", year: "numeric", day: undefined })}</bdi>
             </Button>
-            <Button className="h-9 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs">
-              {t("dashboard:actions.postJob")}
-            </Button>
           </div>
         </div>
 
@@ -118,8 +101,8 @@ export default function Dashboard() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
+        <div className="grid grid-cols-1 gap-8">
+          <div className="space-y-8">
             {/* Recent Applications */}
             <Card className="bg-card border-border">
               <CardHeader className="flex flex-row items-center justify-between">
@@ -167,85 +150,6 @@ export default function Dashboard() {
                     ))}
                   </div>
                 )}
-              </CardContent>
-            </Card>
-
-            {/* Recruitment Funnel */}
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle className="text-lg font-display text-white">{t("dashboard:sections.recruitmentFunnel")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[250px] w-full bg-muted/20 rounded-sm flex items-center justify-center border border-dashed border-border">
-                  <p className="text-muted-foreground text-sm">{t("dashboard:sections.funnelEmpty")}</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-8">
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle className="text-lg font-display text-white">{t("dashboard:sections.shiftCoverage")}</CardTitle>
-                <p className="text-sm text-muted-foreground">{t("dashboard:sections.shiftCoverageSub")}</p>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {upcomingShifts.map((shift, i) => {
-                  const labels = SHIFT_LABELS[shift.roleKey + shift.timeKey];
-                  const staff = `${formatNumber(shift.staffNum, i18n.language)}/${formatNumber(shift.staffTotal, i18n.language)}`;
-                  return (
-                    <div key={i} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-white"><bdi>{labels.role}</bdi></p>
-                        {shift.pct < 90 ? (
-                          <AlertCircle className="h-4 w-4 text-amber-500" />
-                        ) : (
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span><bdi>{labels.time}</bdi></span>
-                        <span className={shift.pct < 90 ? "text-amber-500 font-bold" : "text-green-500"}>
-                          <bdi>{staff}</bdi>
-                        </span>
-                      </div>
-                      <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                        <div
-                          className={`h-full transition-all ${shift.pct < 90 ? "bg-amber-500" : "bg-green-500"}`}
-                          style={{ width: `${shift.pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-                <Button variant="outline" className="w-full mt-4 border-dashed border-border text-muted-foreground hover:text-primary hover:border-primary/50">
-                  {t("dashboard:actions.viewFullSchedule")}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-card border-border bg-gradient-to-br from-card to-muted/20">
-              <CardHeader>
-                <CardTitle className="text-lg font-display text-white">{t("dashboard:sections.quickActions")}</CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-3">
-                <Button variant="secondary" className="h-auto py-4 flex flex-col gap-2 bg-muted hover:bg-primary/20 hover:text-primary border border-border hover:border-primary/50 transition-all" data-testid="button-add-candidate">
-                  <Users className="h-6 w-6" />
-                  <span className="text-xs">{t("dashboard:actions.addCandidate")}</span>
-                </Button>
-                <Button variant="secondary" className="h-auto py-4 flex flex-col gap-2 bg-muted hover:bg-primary/20 hover:text-primary border border-border hover:border-primary/50 transition-all" data-testid="button-create-job">
-                  <Briefcase className="h-6 w-6" />
-                  <span className="text-xs">{t("dashboard:actions.postApplication")}</span>
-                </Button>
-                <Button variant="secondary" className="h-auto py-4 flex flex-col gap-2 bg-muted hover:bg-primary/20 hover:text-primary border border-border hover:border-primary/50 transition-all" data-testid="button-log-hours">
-                  <Clock className="h-6 w-6" />
-                  <span className="text-xs">{t("dashboard:actions.logHours")}</span>
-                </Button>
-                <Button variant="secondary" className="h-auto py-4 flex flex-col gap-2 bg-muted hover:bg-primary/20 hover:text-primary border border-border hover:border-primary/50 transition-all" data-testid="button-report-issue">
-                  <AlertCircle className="h-6 w-6" />
-                  <span className="text-xs">{t("dashboard:actions.reportIssue")}</span>
-                </Button>
               </CardContent>
             </Card>
           </div>
