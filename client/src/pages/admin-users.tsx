@@ -599,7 +599,7 @@ function AdminUserForm({
           placeholder={mode === "create" ? t("adminUsers:form.passwordPhCreate") : t("adminUsers:form.passwordPhEdit")}
           data-testid="input-password"
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground text-start" dir="auto">
           {t("adminUsers:form.passwordHint")}
         </p>
       </div>

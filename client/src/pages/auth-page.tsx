@@ -427,7 +427,7 @@ export default function AuthPage() {
                     />
                   </div>
                   {resetNewPassword.length > 0 && (
-                    <p className="text-xs text-muted-foreground" data-testid="reset-password-strength-rules">
+                    <p className="text-xs text-muted-foreground text-start" dir={isRtl ? "rtl" : "ltr"} data-testid="reset-password-strength-rules">
                       {t("auth:register.passwordHint")}
                     </p>
                   )}
@@ -776,7 +776,7 @@ export default function AuthPage() {
                             </div>
                           </FormControl>
                           {field.value?.length > 0 && (
-                            <p className="text-xs text-muted-foreground mt-2" data-testid="register-password-strength-rules">
+                            <p className="text-xs text-muted-foreground mt-2 text-start" dir={isRtl ? "rtl" : "ltr"} data-testid="register-password-strength-rules">
                               {t("auth:register.passwordHint")}
                             </p>
                           )}
