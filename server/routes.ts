@@ -5224,9 +5224,105 @@ export async function registerRoutes(
   });
 
   // ─── Audit Logs ───────────────────────────────────────────────────────────────
+  const AUDIT_EXPORT_MAX_ROWS = 500_000;
+
+  function csvEscape(value: unknown): string {
+    if (value === null || value === undefined) return "";
+    const s = typeof value === "string" ? value : (value instanceof Date ? value.toISOString() : (typeof value === "object" ? JSON.stringify(value) : String(value)));
+    if (s.includes(",") || s.includes("\"") || s.includes("\n") || s.includes("\r")) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  }
+
+  const AUDIT_EXPORT_HEADERS = [
+    "Timestamp", "Actor", "Action", "Entity Type", "Entity ID",
+    "Employee Number", "Subject Name", "Description", "Metadata",
+  ];
+
+  function auditRowToValues(log: any): (string | number | null)[] {
+    return [
+      log.createdAt ? new Date(log.createdAt).toISOString() : "",
+      log.actorName ?? "System",
+      log.action ?? "",
+      log.entityType ?? "",
+      log.entityId ?? "",
+      log.employeeNumber ?? "",
+      log.subjectName ?? "",
+      log.description ?? "",
+      log.metadata ? JSON.stringify(log.metadata) : "",
+    ];
+  }
+
   app.get("/api/audit-logs", requirePermission("audit_logs:read"), async (req: Request, res: Response) => {
     try {
-      const { page, limit, search, entityType, actorId } = req.query as Record<string, string>;
+      const { page, limit, search, entityType, actorId, cursor, format, export: exportFlag } = req.query as Record<string, string>;
+      const isExport = exportFlag === "true" || format === "csv" || format === "xlsx";
+
+      if (isExport) {
+        const fmt = (format ?? "csv").toLowerCase();
+        if (fmt !== "csv" && fmt !== "xlsx") {
+          return res.status(400).json({ message: "format must be csv or xlsx" });
+        }
+        const filters = {
+          search: search || undefined,
+          entityType: entityType || undefined,
+          actorId: actorId || undefined,
+        };
+        const ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+        const filename = `audit-log-${ts}.${fmt}`;
+
+        if (fmt === "csv") {
+          res.setHeader("Content-Type", "text/csv; charset=utf-8");
+          res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+          res.setHeader("Cache-Control", "no-store");
+          // BOM for Excel UTF-8 compatibility
+          res.write("\uFEFF");
+          res.write(AUDIT_EXPORT_HEADERS.map(csvEscape).join(",") + "\n");
+          let total = 0;
+          for await (const chunk of storage.iterateAuditLogsForExport({ ...filters, chunkSize: 2000, maxRows: AUDIT_EXPORT_MAX_ROWS })) {
+            for (const log of chunk) {
+              res.write(auditRowToValues(log).map(csvEscape).join(",") + "\n");
+              total++;
+            }
+            if (total >= AUDIT_EXPORT_MAX_ROWS) break;
+          }
+          return res.end();
+        }
+
+        // xlsx — accumulate in chunks (capped) then write workbook
+        const aoa: (string | number | null)[][] = [AUDIT_EXPORT_HEADERS];
+        let total = 0;
+        for await (const chunk of storage.iterateAuditLogsForExport({ ...filters, chunkSize: 2000, maxRows: AUDIT_EXPORT_MAX_ROWS })) {
+          for (const log of chunk) {
+            aoa.push(auditRowToValues(log));
+            total++;
+          }
+          if (total >= AUDIT_EXPORT_MAX_ROWS) break;
+        }
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Audit Log");
+        const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.setHeader("Cache-Control", "no-store");
+        return res.send(buf);
+      }
+
+      // Cursor-based mode (preferred for infinite scroll)
+      if (cursor !== undefined || req.query.mode === "cursor") {
+        const result = await storage.getAuditLogsCursor({
+          cursor: cursor || undefined,
+          limit: limit ? Math.min(parseInt(limit), 200) : 50,
+          search: search || undefined,
+          entityType: entityType || undefined,
+          actorId: actorId || undefined,
+        });
+        return res.json(result);
+      }
+
+      // Legacy page-based mode (kept for backwards compatibility)
       const result = await storage.getAuditLogs({
         page: page ? parseInt(page) : 1,
         limit: limit ? Math.min(parseInt(limit), 200) : 50,

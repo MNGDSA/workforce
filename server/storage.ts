@@ -152,6 +152,8 @@ export interface IStorage {
   // Audit Logs
   createAuditLog(data: InsertAuditLog): Promise<AuditLog>;
   getAuditLogs(params?: { page?: number; limit?: number; search?: string; entityType?: string; actorId?: string }): Promise<{ data: AuditLog[]; total: number }>;
+  getAuditLogsCursor(params: { cursor?: string; limit: number; search?: string; entityType?: string; actorId?: string }): Promise<{ data: AuditLog[]; total: number; nextCursor: string | null }>;
+  iterateAuditLogsForExport(params: { search?: string; entityType?: string; actorId?: string; chunkSize?: number; maxRows: number }): AsyncGenerator<AuditLog[], void, unknown>;
 
   // Users
   getUser(id: string): Promise<User | undefined>;
@@ -3198,7 +3200,16 @@ export class DatabaseStorage implements IStorage {
     const page = params?.page ?? 1;
     const limit = params?.limit ?? 50;
     const offset = (page - 1) * limit;
-    const conditions = [];
+    const where = this.buildAuditLogWhere(params);
+    const [data, [{ cnt }]] = await Promise.all([
+      db.select().from(auditLogs).where(where).orderBy(desc(auditLogs.createdAt)).limit(limit).offset(offset),
+      db.select({ cnt: count() }).from(auditLogs).where(where),
+    ]);
+    return { data, total: Number(cnt) };
+  }
+
+  private buildAuditLogWhere(params?: { search?: string; entityType?: string; actorId?: string; cursor?: string }) {
+    const conditions: any[] = [];
     if (params?.entityType) conditions.push(eq(auditLogs.entityType, params.entityType));
     if (params?.actorId) conditions.push(eq(auditLogs.actorId, params.actorId));
     if (params?.search) {
@@ -3210,12 +3221,50 @@ export class DatabaseStorage implements IStorage {
         sql`LOWER(${auditLogs.subjectName}) LIKE ${s}`,
       )!);
     }
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    if (params?.cursor) {
+      const cursorDate = new Date(params.cursor);
+      if (!isNaN(cursorDate.getTime())) {
+        conditions.push(sql`${auditLogs.createdAt} < ${cursorDate}`);
+      }
+    }
+    return conditions.length > 0 ? and(...conditions) : undefined;
+  }
+
+  async getAuditLogsCursor(params: { cursor?: string; limit: number; search?: string; entityType?: string; actorId?: string }): Promise<{ data: AuditLog[]; total: number; nextCursor: string | null }> {
+    const limit = Math.min(Math.max(params.limit, 1), 200);
+    const filterWhere = this.buildAuditLogWhere({ search: params.search, entityType: params.entityType, actorId: params.actorId });
+    const pageWhere = this.buildAuditLogWhere(params);
     const [data, [{ cnt }]] = await Promise.all([
-      db.select().from(auditLogs).where(where).orderBy(desc(auditLogs.createdAt)).limit(limit).offset(offset),
-      db.select({ cnt: count() }).from(auditLogs).where(where),
+      db.select().from(auditLogs).where(pageWhere).orderBy(desc(auditLogs.createdAt), desc(auditLogs.id)).limit(limit + 1),
+      db.select({ cnt: count() }).from(auditLogs).where(filterWhere),
     ]);
-    return { data, total: Number(cnt) };
+    let nextCursor: string | null = null;
+    let trimmed = data;
+    if (data.length > limit) {
+      trimmed = data.slice(0, limit);
+      const lastRow = trimmed[trimmed.length - 1];
+      nextCursor = lastRow?.createdAt ? new Date(lastRow.createdAt).toISOString() : null;
+    }
+    return { data: trimmed, total: Number(cnt), nextCursor };
+  }
+
+  async *iterateAuditLogsForExport(params: { search?: string; entityType?: string; actorId?: string; chunkSize?: number; maxRows: number }): AsyncGenerator<AuditLog[], void, unknown> {
+    const chunkSize = Math.min(params.chunkSize ?? 2000, 5000);
+    let cursor: string | undefined;
+    let yielded = 0;
+    while (yielded < params.maxRows) {
+      const remaining = params.maxRows - yielded;
+      const take = Math.min(chunkSize, remaining);
+      const where = this.buildAuditLogWhere({ search: params.search, entityType: params.entityType, actorId: params.actorId, cursor });
+      const rows = await db.select().from(auditLogs).where(where).orderBy(desc(auditLogs.createdAt), desc(auditLogs.id)).limit(take);
+      if (rows.length === 0) return;
+      yield rows;
+      yielded += rows.length;
+      if (rows.length < take) return;
+      const last = rows[rows.length - 1];
+      cursor = last?.createdAt ? new Date(last.createdAt).toISOString() : undefined;
+      if (!cursor) return;
+    }
   }
 
   // ─── Inbox Items ────────────────────────────────────────────────────────────

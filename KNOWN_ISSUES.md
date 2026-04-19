@@ -119,3 +119,15 @@ Issues that have been fixed and verified. Kept for historical reference. Each en
 - **Related Tasks:** #68
 - **Status notes:**
   - 2026-04-19 — Fixed in task #68. Aligned slug regex, slugify helper (kept underscore as canonical join character to match existing `super_admin`/`candidate` slugs), and on-screen helper text. Split `useRoleSchema` into `useRoleCreateSchema` (validates slug) and `useRoleEditSchema` (omits slug entirely). Replaced `dirtyFields.slug` check with a `useRef`-tracked "last auto value" so clearing the slug re-engages auto-sync. Added bilingual (EN/AR) helper text under the slug field. Pure non-Latin name input no longer overwrites the slug with empty.
+
+### ISSUE-006 — Audit Log lacks export and uses page-based pagination — won't scale
+
+- **Logged:** 2026-04-19
+- **Severity:** Medium
+- **Component:** Admin Panel + Backend
+- **Description:** The Audit Log page used fixed page-based pagination (50 rows per page) and offered no export. Paging through thousands of pages becomes unusable as the table grows, and operators routinely need to share filtered audit slices with auditors / regulators / internal investigations.
+- **Impact:** Operators could not extract audit slices for compliance review, and deep navigation through large result sets was effectively impossible.
+- **Workaround:** None.
+- **Related Tasks:** #69
+- **Status notes:**
+  - 2026-04-19 — Fixed via task #69. Added Excel/CSV export endpoint at `/api/audit-logs?format=csv|xlsx&export=true` (server-side keyset pagination, streamed CSV, chunked XLSX, capped at 500K rows). Replaced page-based pagination with `useInfiniteQuery` + `@tanstack/react-virtual` virtualized infinite scroll keyed by `createdAt` cursor with an IntersectionObserver sentinel. The existing `audit_logs_created_at_idx` index already supports the keyset pagination path.
