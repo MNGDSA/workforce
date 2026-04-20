@@ -189,8 +189,9 @@ async function comparePair(pair: Pair, region: string): Promise<RawResult> {
     const resp = await client.send(cmd);
     const top = resp.FaceMatches?.[0];
     return { pair, similarity: top?.Similarity ?? 0 };
-  } catch (err: any) {
-    return { pair, similarity: -1, error: err?.message ?? "unknown" };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "unknown";
+    return { pair, similarity: -1, error: msg };
   }
 }
 
