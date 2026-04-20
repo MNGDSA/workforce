@@ -1095,7 +1095,10 @@ function ReclassifyConfirmDialog({
   const toSmp = state?.to === "smp";
   return (
     <AlertDialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
-      <AlertDialogContent data-testid="dialog-reclassify-confirm">
+      <AlertDialogContent
+        className="start-auto end-auto left-[50%] -translate-x-1/2 bg-card border-border"
+        data-testid="dialog-reclassify-confirm"
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>
             {String(t(toSmp ? "reclassify.toSmp.title" : "reclassify.toIndividual.title"))}
