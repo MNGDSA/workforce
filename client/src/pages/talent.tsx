@@ -556,10 +556,12 @@ function CandidateProfileSheet({
             </Avatar>
             <div className="flex-1 min-w-0">
               <SheetTitle className="font-display text-xl font-bold text-white truncate"><bdi>{c.fullNameEn}</bdi></SheetTitle>
-              <SheetDescription className="text-muted-foreground text-sm flex items-center gap-2 mt-0.5">
-                {c.nationalId && <span dir="ltr">{c.nationalId}</span>}
-                <Badge className={`text-[10px] px-1.5 py-0 ${statusStyles[displaySt] || statusStyles.active}`}>{statusLabelText}</Badge>
-                {c.source === "smp" && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/50 text-amber-400">{t("profile.smpBadge")}</Badge>}
+              <SheetDescription asChild>
+                <div className="text-muted-foreground text-sm flex items-center gap-2 mt-0.5">
+                  {c.nationalId && <span dir="ltr">{c.nationalId}</span>}
+                  <Badge className={`text-[10px] px-1.5 py-0 ${statusStyles[displaySt] || statusStyles.active}`}>{statusLabelText}</Badge>
+                  {c.source === "smp" && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/50 text-amber-400">{t("profile.smpBadge")}</Badge>}
+                </div>
               </SheetDescription>
             </div>
           </div>
