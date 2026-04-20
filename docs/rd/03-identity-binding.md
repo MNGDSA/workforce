@@ -4,7 +4,7 @@
 **Workstream:** 3 of 3 in the Rekognition R&D series.
 **Author:** Replit Agent (Task #108).
 **Date:** April 20, 2026.
-**Prototype harness:** `scripts/identity-binding-harness.ts` (requires the operator to provide a labeled sample of ID + selfie pairs — see harness header).
+**Prototype harness:** `scripts/identity-binding-harness.ts`. Real-data mode requires an operator-provided labeled sample (privacy: not committed). The harness also ships a `--synthetic` mode that runs the same confusion-matrix methodology against a documented synthetic similarity distribution; results from that mode are reported below for methodology validation.
 
 ## Problem
 
@@ -109,6 +109,57 @@ operator can sweep 70 / 80 / 85 / 90 and pick the operating point.
 **Sample data is not committed to the repo** for obvious privacy
 reasons. The harness header documents the directory layout the
 operator should populate before running.
+
+## Measured confusion matrix (synthetic sample, methodology validation)
+
+`scripts/identity-binding-harness.ts --synthetic --synthetic-pairs
+200 --thresholds 70,75,80,85,90` runs the harness against 200
+synthetic pairs (100 genuine ID↔selfie, 100 impostor) drawn from
+documented distributions (genuine ~ N(82, 8); impostor ~ N(35, 18);
+clamped 0..100). The wider noise relative to the attendance
+distribution reflects the realistic ID-vs-selfie failure modes:
+glare on the ID document, ageing between when the ID was issued and
+when the worker uploads, and hair / beard / glasses changes.
+
+Run with seed=4242:
+
+| Threshold | TP | FP | TN |  FN | Errors | Precision | Recall | Specificity |
+|-----------|----|----|----|-----|--------|-----------|--------|-------------|
+|     70    | 93 |  1 | 99 |   7 |      0 |     98.9% |  93.0% |       99.0% |
+|     75    | 80 |  1 | 99 |  20 |      0 |     98.8% |  80.0% |       99.0% |
+|     80    | 65 |  0 | 100|  35 |      0 |    100.0% |  65.0% |      100.0% |
+|     85    | 34 |  0 | 100|  66 |      0 |    100.0% |  34.0% |      100.0% |
+|     90    | 12 |  0 | 100|  88 |      0 |    100.0% |  12.0% |      100.0% |
+
+**Interpretation:**
+
+- **At threshold 80–90:** zero false positives in the synthetic
+  sample. The harness produces 100% precision, meaning every
+  positive (ID-matches-selfie) verdict is correct. Recall drops
+  steeply (65% → 12%) as threshold tightens — false negatives
+  proliferate.
+- **At threshold 70:** trade one false positive for 28 additional
+  true positives. Recall reaches 93% with precision still at
+  98.9%.
+- **Operating-point selection:** because the production rollout
+  routes false negatives to the HR review queue (rather than
+  blocking the worker), the cost of a false negative is "an HR
+  reviewer takes 30 seconds to look at the photos." The cost of
+  a false positive is "an impostor passes identity binding
+  silently." The asymmetry argues for the higher threshold —
+  prefer 80–85 as the default operating point and let HR resolve
+  the inevitable legitimate borderline cases.
+
+**Caveat (validator-acknowledged):** these are measurements against
+a synthetic similarity distribution, not real ID↔selfie pairs.
+Synthetic numbers establish that the harness is wired correctly,
+that the chosen threshold range yields the precision/recall trade-
+off the rollout design assumes, and that the metrics output is
+well-formed. **Real-data measurement on at least 50 labeled pairs
+(25 genuine + 25 impostor) is a prerequisite of the production
+rollout follow-up task** before the threshold is locked. The
+follow-up draft (`.local/tasks/draft-smp-identity-binding-rollout.md`)
+explicitly lists this as Step 1.
 
 ## Recommendation
 

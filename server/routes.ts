@@ -594,6 +594,18 @@ export async function registerRoutes(
         // without spinning up Express. See the truth table there for
         // why active-employee re-uploads still fail-open during
         // outages (HR review is the safety net).
+        //
+        // INTERIM PROXY (Task #108): we treat
+        // `candidate.hasPhoto && candidate.photoUrl` as "previously
+        // validated photo on file." This is correct under current
+        // upload paths because the only way `candidate.hasPhoto`
+        // becomes true is via a successful Rekognition pass earlier
+        // in this same handler. If a future caller sets
+        // `hasPhoto=true` without going through this validation
+        // (e.g. a back-office import), it will incorrectly count as
+        // "validated." The follow-up identity-binding work will
+        // introduce an explicit `photoValidatedAt` column and this
+        // proxy can be replaced.
         const hasPreviouslyValidatedPhoto = !!(candidate.hasPhoto && candidate.photoUrl);
         const fallbackDecision = decideRekognitionFallbackAction({
           qualityCheckSkipped: !!qualityResult.qualityCheckSkipped,
