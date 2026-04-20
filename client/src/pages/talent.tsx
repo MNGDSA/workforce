@@ -1090,7 +1090,7 @@ function ReclassifyConfirmDialog({
   onConfirm: () => void;
   pending: boolean;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation("talent");
   const open = !!state;
   const toSmp = state?.to === "smp";
   return (
@@ -1098,31 +1098,22 @@ function ReclassifyConfirmDialog({
       <AlertDialogContent data-testid="dialog-reclassify-confirm">
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {String(t(toSmp ? "reclassify.toSmp.title" : "reclassify.toIndividual.title", {
-              defaultValue: toSmp ? "Reclassify as SMP worker?" : "Reclassify as Individual?",
-            } as any))}
+            {String(t(toSmp ? "reclassify.toSmp.title" : "reclassify.toIndividual.title"))}
           </AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-2">
               <p>
-                {String(t(toSmp ? "reclassify.toSmp.body" : "reclassify.toIndividual.body", {
-                  defaultValue: toSmp
-                    ? "{{name}} will be moved to the SMP workforce. If they have not activated yet, status resets to awaiting activation and a fresh activation SMS will be sent. Their portal experience will switch to SMP-mode (no IBAN, no CV, no Jobs tab)."
-                    : "{{name}} will be moved back to the Individual talent pool. They lose access to SMP-only flows and the SMP company linkage will be cleared on their next workforce deployment.",
-                  name: state?.name ?? "",
-                } as any))}
+                {String(t(toSmp ? "reclassify.toSmp.body" : "reclassify.toIndividual.body", { name: state?.name ?? "" }))}
               </p>
               <p className="text-xs text-amber-400">
-                {String(t("reclassify.warning", {
-                  defaultValue: "This will fail if the worker has any active blockers (open application, scheduled interview, active workforce contract).",
-                } as any))}
+                {String(t("reclassify.warning"))}
               </p>
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending} data-testid="button-reclassify-cancel">
-            {String(t("common.cancel", { defaultValue: "Cancel" } as any))}
+            {String(t("reclassify.cancel"))}
           </AlertDialogCancel>
           <AlertDialogAction
             disabled={pending}
@@ -1131,10 +1122,8 @@ function ReclassifyConfirmDialog({
             data-testid="button-reclassify-confirm"
           >
             {pending
-              ? String(t("common.working", { defaultValue: "Working…" } as any))
-              : String(t(toSmp ? "reclassify.toSmp.cta" : "reclassify.toIndividual.cta", {
-                  defaultValue: toSmp ? "Reclassify as SMP" : "Reclassify as Individual",
-                } as any))}
+              ? String(t("reclassify.working"))
+              : String(t(toSmp ? "reclassify.toSmp.cta" : "reclassify.toIndividual.cta"))}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

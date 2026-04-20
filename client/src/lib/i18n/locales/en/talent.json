@@ -296,5 +296,20 @@
     "mixedSkipped": ", {{n}} skipped (duplicates)",
     "dupDetails": "Row {{row}}: {{reason}}",
     "uploadFailed": "Upload failed"
+  },
+  "reclassify": {
+    "warning": "This will fail if the worker has any active blockers (open application, scheduled interview, active workforce contract).",
+    "working": "Working…",
+    "toSmp": {
+      "title": "Reclassify as SMP worker?",
+      "body": "{{name}} will be moved to the SMP workforce. If they have not activated yet, status resets to awaiting activation and a fresh activation SMS will be sent. Their portal experience will switch to SMP-mode (no IBAN, no CV, no Jobs tab).",
+      "cta": "Reclassify as SMP"
+    },
+    "toIndividual": {
+      "title": "Reclassify as Individual?",
+      "body": "{{name}} will be moved back to the Individual talent pool. They lose access to SMP-only flows and the SMP company linkage will be cleared on their next workforce deployment.",
+      "cta": "Reclassify as Individual"
+    },
+    "cancel": "Cancel"
   }
 }
