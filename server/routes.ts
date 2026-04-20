@@ -1125,6 +1125,16 @@ export async function registerRoutes(
       // profile-completion step (or leaves it empty).
       const hashed = await bcrypt.hash(password, 12);
 
+      // Resolve the candidate role id — users.role_id is NOT NULL post-T10
+      // (see server/auth-middleware.ts:213). Without this, every Individual
+      // signup would 500 with a not-null violation.
+      const candidateRole = await storage.getRoleBySlug("candidate");
+      if (!candidateRole) {
+        console.error("[Register] Candidate role missing from RBAC seed");
+        return res.status(500).json({ message: tr(req, "common.errors.internal") });
+      }
+      const candidateRoleId = candidateRole.id;
+
       // Wrap OTP consume + user create + candidate create in a single
       // transaction. Any failure rolls back BOTH the OTP-consumed flag and the
       // partial user/candidate writes — no orphan-user-with-burned-OTP states.
@@ -1175,6 +1185,7 @@ export async function registerRoutes(
               phone: normalizedPhone,
               nationalId: nationalId.trim(),
               isActive: true,
+              roleId: candidateRoleId,
             } as any)
             .returning();
 
