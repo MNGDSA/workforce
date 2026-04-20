@@ -513,6 +513,8 @@ function CandidateProfileSheet({
       ibanBankCode: (c as any).ibanBankCode ?? "",
       emergencyContactName: c.emergencyContactName ?? "",
       emergencyContactPhone: c.emergencyContactPhone ?? "",
+      phone: c.phone ?? "",
+      email: c.email ?? "",
     });
     setEditing(true);
   }
@@ -522,8 +524,17 @@ function CandidateProfileSheet({
       toast({ title: t("toast.invalidIban"), description: t("toast.invalidIbanDesc"), variant: "destructive" });
       return;
     }
+    if (form.phone && !isValidSaMobile(form.phone)) {
+      toast({
+        title: String(t("common:errors.invalidPhone", { defaultValue: "Please enter a valid Saudi mobile (05XXXXXXXX)." } as any)),
+        variant: "destructive",
+      });
+      return;
+    }
     const isNonSaudi = form.nationalityText !== "Saudi Arabian";
     saveMutation.mutate({
+      phone: form.phone || null,
+      email: form.email || null,
       city: form.city || null,
       region: form.region || null,
       gender: form.gender || null,
@@ -585,26 +596,78 @@ function CandidateProfileSheet({
 
           <div>
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("profile.contact")}</h4>
-            <div className="space-y-2.5">
-              {c.phone && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="text-white" dir="ltr" data-testid="profile-phone">{c.phone}</span>
+            {editing ? (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">{t("profile.phone", { defaultValue: "Phone" } as any)}</p>
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <Input
+                      value={form.phone}
+                      onChange={e => setField("phone", sanitizeSaMobileInput(e.target.value))}
+                      onBlur={e => setField("phone", normalizeSaMobileOnBlur(e.target.value))}
+                      placeholder="05XXXXXXXX"
+                      inputMode="tel"
+                      maxLength={10}
+                      dir="ltr"
+                      className="h-9 bg-muted/30 border-border text-sm flex-1"
+                      data-testid="edit-phone"
+                    />
+                  </div>
+                  {form.phone.length > 0 && !isValidSaMobile(form.phone) && (
+                    <p className="text-[11px] text-amber-400" data-testid="text-phone-validation-hint">
+                      {String(t("common:errors.invalidPhone", { defaultValue: "Please enter a valid Saudi mobile (05XXXXXXXX)." } as any))}
+                    </p>
+                  )}
                 </div>
-              )}
-              {c.email && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="text-white" dir="ltr" data-testid="profile-email">{c.email}</span>
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">{t("profile.email", { defaultValue: "Email" } as any)}</p>
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <Input
+                      value={form.email}
+                      onChange={e => setField("email", e.target.value.trim())}
+                      placeholder="name@example.com"
+                      inputMode="email"
+                      type="email"
+                      dir="ltr"
+                      className="h-9 bg-muted/30 border-border text-sm flex-1"
+                      data-testid="edit-email"
+                    />
+                  </div>
                 </div>
-              )}
-              {c.whatsapp && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Phone className="h-4 w-4 text-green-500 shrink-0" />
-                  <span className="text-white">{t("profile.whatsapp")} <span dir="ltr">{c.whatsapp}</span></span>
-                </div>
-              )}
-            </div>
+                {c.whatsapp && (
+                  <div className="flex items-center gap-3 text-sm">
+                    <Phone className="h-4 w-4 text-green-500 shrink-0" />
+                    <span className="text-white">{t("profile.whatsapp")} <span dir="ltr">{c.whatsapp}</span></span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {c.phone && (
+                  <div className="flex items-center gap-3 text-sm">
+                    <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-white" dir="ltr" data-testid="profile-phone">{c.phone}</span>
+                  </div>
+                )}
+                {c.email && (
+                  <div className="flex items-center gap-3 text-sm">
+                    <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-white" dir="ltr" data-testid="profile-email">{c.email}</span>
+                  </div>
+                )}
+                {c.whatsapp && (
+                  <div className="flex items-center gap-3 text-sm">
+                    <Phone className="h-4 w-4 text-green-500 shrink-0" />
+                    <span className="text-white">{t("profile.whatsapp")} <span dir="ltr">{c.whatsapp}</span></span>
+                  </div>
+                )}
+                {!c.phone && !c.email && !c.whatsapp && (
+                  <p className="text-sm text-muted-foreground">{dash}</p>
+                )}
+              </div>
+            )}
           </div>
 
           <div>
