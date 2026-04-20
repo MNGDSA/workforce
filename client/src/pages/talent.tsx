@@ -1079,6 +1079,69 @@ function CandidateProfileSheet({
   );
 }
 
+function ReclassifyConfirmDialog({
+  state,
+  onCancel,
+  onConfirm,
+  pending,
+}: {
+  state: { id: string; name: string; to: "individual" | "smp" } | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+  pending: boolean;
+}) {
+  const { t } = useTranslation();
+  const open = !!state;
+  const toSmp = state?.to === "smp";
+  return (
+    <AlertDialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
+      <AlertDialogContent data-testid="dialog-reclassify-confirm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {String(t(toSmp ? "reclassify.toSmp.title" : "reclassify.toIndividual.title", {
+              defaultValue: toSmp ? "Reclassify as SMP worker?" : "Reclassify as Individual?",
+            } as any))}
+          </AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-2">
+              <p>
+                {String(t(toSmp ? "reclassify.toSmp.body" : "reclassify.toIndividual.body", {
+                  defaultValue: toSmp
+                    ? "{{name}} will be moved to the SMP workforce. If they have not activated yet, status resets to awaiting activation and a fresh activation SMS will be sent. Their portal experience will switch to SMP-mode (no IBAN, no CV, no Jobs tab)."
+                    : "{{name}} will be moved back to the Individual talent pool. They lose access to SMP-only flows and the SMP company linkage will be cleared on their next workforce deployment.",
+                  name: state?.name ?? "",
+                } as any))}
+              </p>
+              <p className="text-xs text-amber-400">
+                {String(t("reclassify.warning", {
+                  defaultValue: "This will fail if the worker has any active blockers (open application, scheduled interview, active workforce contract).",
+                } as any))}
+              </p>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={pending} data-testid="button-reclassify-cancel">
+            {String(t("common.cancel", { defaultValue: "Cancel" } as any))}
+          </AlertDialogCancel>
+          <AlertDialogAction
+            disabled={pending}
+            onClick={onConfirm}
+            className={toSmp ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}
+            data-testid="button-reclassify-confirm"
+          >
+            {pending
+              ? String(t("common.working", { defaultValue: "Working…" } as any))
+              : String(t(toSmp ? "reclassify.toSmp.cta" : "reclassify.toIndividual.cta", {
+                  defaultValue: toSmp ? "Reclassify as SMP" : "Reclassify as Individual",
+                } as any))}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 export default function TalentPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1143,6 +1206,13 @@ export default function TalentPage() {
   const [archiveCandidate, setArchiveCandidate] = useState<Candidate | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkConfirmAction, setBulkConfirmAction] = useState<"block" | "unblock" | "archive" | null>(null);
+  // Reclassify confirm: row-menu reclassify actions stage their intent here
+  // so an AlertDialog can ask the admin to confirm before mutating.
+  const [reclassifyConfirm, setReclassifyConfirm] = useState<{
+    id: string;
+    name: string;
+    to: "individual" | "smp";
+  } | null>(null);
 
   function toggleColumn(key: ColumnKey) {
     setVisibleColumns(prev => {
@@ -1920,7 +1990,7 @@ export default function TalentPage() {
                                       </DropdownMenuItem>
                                     )}
                                     <DropdownMenuItem
-                                      onClick={() => reclassifyMutation.mutate({ id: candidate.id, classification: "individual" })}
+                                      onClick={() => setReclassifyConfirm({ id: candidate.id, name: candidate.fullNameEn, to: "individual" })}
                                       data-testid={`menu-reclassify-individual-${candidate.id}`}
                                     >
                                       <Repeat className="me-2 h-4 w-4" />
@@ -1932,7 +2002,7 @@ export default function TalentPage() {
                                   <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
-                                      onClick={() => reclassifyMutation.mutate({ id: candidate.id, classification: "smp" })}
+                                      onClick={() => setReclassifyConfirm({ id: candidate.id, name: candidate.fullNameEn, to: "smp" })}
                                       data-testid={`menu-reclassify-smp-${candidate.id}`}
                                     >
                                       <Repeat className="me-2 h-4 w-4" />
@@ -2159,6 +2229,19 @@ export default function TalentPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ReclassifyConfirmDialog
+        state={reclassifyConfirm}
+        pending={reclassifyMutation.isPending}
+        onCancel={() => setReclassifyConfirm(null)}
+        onConfirm={() => {
+          if (!reclassifyConfirm) return;
+          reclassifyMutation.mutate(
+            { id: reclassifyConfirm.id, classification: reclassifyConfirm.to },
+            { onSettled: () => setReclassifyConfirm(null) },
+          );
+        }}
+      />
 
       <Dialog open={uploadOpen} onOpenChange={(v) => {
         setUploadOpen(v);
