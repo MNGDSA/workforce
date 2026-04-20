@@ -21,6 +21,8 @@ export const PERMISSION_CATALOG = [
   { key: "candidates:documents_read",  resource: "candidates", action: "documents_read",  description: "View candidate documents",                      category: "Candidates" },
   { key: "candidates:documents_write", resource: "candidates", action: "documents_write", description: "Upload / delete candidate documents",           category: "Candidates" },
   { key: "candidates:smp_manage",      resource: "candidates", action: "smp_manage",      description: "Validate & commit SMP candidate batches",       category: "Candidates" },
+  { key: "candidates:reclassify",      resource: "candidates", action: "reclassify",      description: "Reclassify SMP worker to individual",           category: "Candidates" },
+  { key: "candidates:send_to_onboarding", resource: "candidates", action: "send_to_onboarding", description: "Send activated SMP workers to onboarding", category: "Candidates" },
 
   // ─── Workforce ──
   { key: "workforce:read",             resource: "workforce",  action: "read",            description: "List & view workforce records",                 category: "Workforce" },

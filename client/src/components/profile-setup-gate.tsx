@@ -943,7 +943,7 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
               <Step1Form defaults={s1data} onNext={handleStep1} candidate={candidate} />
             )}
             {step === 2 && (
-              <Step2Form defaults={s2data} onNext={handleStep2} onBack={() => setStep(1)} isSmp={candidate.source === "smp"} />
+              <Step2Form defaults={s2data} onNext={handleStep2} onBack={() => setStep(1)} isSmp={(candidate as any).classification === "smp"} />
             )}
             {step === 3 && (
               <Step3Form

@@ -249,16 +249,44 @@ app.use((req, res, next) => {
     }
   }
 
+  // Task #107: SMS outbox drain (every 30s) + daily awaiting-activation sweep.
+  async function runSmsOutboxDrain() {
+    try {
+      const { drainSmsOutbox } = await import("./sms-outbox");
+      const result = await drainSmsOutbox();
+      if (result.sent > 0 || result.deadLettered > 0) {
+        log(`SMS outbox: sent=${result.sent} dlq=${result.deadLettered} pending=${result.remaining}`, "scheduler");
+      }
+    } catch (err) {
+      log(`SMS outbox drain error: ${err}`, "scheduler");
+    }
+  }
+
+  async function runAwaitingActivationSweep() {
+    try {
+      const swept = await storage.sweepStaleAwaitingActivationCandidates();
+      if (swept > 0) {
+        log(`Awaiting-activation sweep: flipped ${swept} stale candidate(s) → inactive`, "scheduler");
+      }
+    } catch (err) {
+      log(`Awaiting-activation sweep error: ${err}`, "scheduler");
+    }
+  }
+
   // Run all once at startup, then every 24 hours
   runAutoActivateUpcomingEvents();
   runAutoCloseExpiredEvents();
   runEventDateAlertScheduler();
   runCandidateAgeOut();
+  runSmsOutboxDrain();
+  runAwaitingActivationSweep();
   const schedulerTimers = [
     setInterval(runAutoActivateUpcomingEvents, 24 * 60 * 60 * 1000),
     setInterval(runAutoCloseExpiredEvents, 24 * 60 * 60 * 1000),
     setInterval(runEventDateAlertScheduler, 24 * 60 * 60 * 1000),
     setInterval(runCandidateAgeOut, 24 * 60 * 60 * 1000),
+    setInterval(runSmsOutboxDrain, 30 * 1000),
+    setInterval(runAwaitingActivationSweep, 24 * 60 * 60 * 1000),
   ];
 
   // ─── Graceful Shutdown ──────────────────────────────────────────────────────

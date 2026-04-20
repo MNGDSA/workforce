@@ -24,6 +24,34 @@ Any floating UI elements (dropdowns, tooltips, popovers, autocompletes) rendered
 
 For tooltip info icons, use Lucide's `Info` icon directly without wrapping it in a `rounded-full border` button to avoid a double-circle effect. Use a plain unstyled button with only `text-muted-foreground hover:text-primary` classes.
 
+## Operating principles
+
+- **Optimize all flows for low-skill operators.** Assume admins miss
+  dashboard signals, tooltips, and warning chips. Prefer self-healing
+  server logic over UI affordances that require notice. Loud, helpful
+  errors over silent fallbacks.
+
+- **Two-table identity split for candidates and users.** A `candidates`
+  row may exist without a `users` row — `candidates.userId` is nullable.
+  SMP workers come into the system via bulk upload as candidates with
+  no user record. The activation endpoint
+  (`POST /api/auth/activate`) is the **only** code path that creates
+  the `users` row for an SMP worker; it consumes a single-use 21-day
+  activation token, creates the user, links it to the candidate, and
+  flips `candidates.status` from `awaiting_activation` to `available`.
+
+- **Scheduled-session and direct-hire/apply pipelines are
+  individual-classification-only by hard rule.** SMP workers reach
+  onboarding via the SMP commit + Send-to-Onboarding flow, never via
+  these pipelines. The exclusion is enforced at both the listing/picker
+  layer (so SMP candidates never appear) **and** every action layer
+  that mutates invitee/applicant sets. The single authority for the
+  check is the `assertIndividualPipelineEligible(candidateIds)` helper
+  in `server/pipeline-eligibility.ts`. Historical note: `interviews.ts`
+  serves both interview-labeled and training-labeled scheduled
+  sessions through one code path — the file name is legacy, the code
+  is shared.
+
 ## Release & Operations
 
 - **Rekognition resilience (Task #108, Workstream 1):** profile-photo

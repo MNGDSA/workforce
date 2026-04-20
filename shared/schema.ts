@@ -23,6 +23,23 @@ export const candidateStatusEnum = pgEnum("candidate_status", [
   "inactive",
   "blocked",
   "hired",
+  "awaiting_activation",
+]);
+
+// Task #107: Replaces the legacy free-text `candidates.source` column.
+// Determines whether a candidate goes through the individual self-signup
+// pipeline (jobs/interviews/payslips/contract) or the SMP-batch pipeline
+// (parent-company-mediated, no IBAN/CV/jobs/payslips).
+export const candidateClassificationEnum = pgEnum("candidate_classification", [
+  "individual",
+  "smp",
+]);
+
+// Task #107: SMS outbox kinds — drives template selection at drain time.
+export const smsOutboxKindEnum = pgEnum("sms_outbox_kind", [
+  "smp_activation",
+  "smp_activation_reissue",
+  "smp_activation_self_heal",
 ]);
 
 export const genderEnum = pgEnum("gender", ["male", "female", "other", "prefer_not_to_say"]);
@@ -211,7 +228,7 @@ export const candidates = pgTable(
     hasNationalId: boolean("has_national_id").notNull().default(false),
     hasIban: boolean("has_iban").notNull().default(false),
     // Classification & Activity
-    source: text("source").notNull().default("individual"),
+    classification: candidateClassificationEnum("classification").notNull().default("individual"),
     lastLoginAt: timestamp("last_login_at"),
     // Meta
     resumeUrl: text("resume_url"),
@@ -241,6 +258,81 @@ export const candidates = pgTable(
     passportNumberIdx: uniqueIndex("candidates_passport_number_idx").on(t.passportNumber),
     statusCityIdx: index("candidates_status_city_idx").on(t.status, t.city),
     fullNameEnIdx: index("candidates_full_name_en_idx").on(t.fullNameEn),
+    // Task #107: composite for the awaiting-activation sweep, the SMP
+    // exclusion filters in interviews/applications, and the talent list.
+    classificationStatusIdx: index("candidates_classification_status_idx").on(
+      t.classification,
+      t.status,
+    ),
+  })
+);
+
+// ─── Candidate Activation Tokens (Task #107) ───────────────────────────────
+// One-time tokens minted at SMP worker creation (or reissue/self-heal). Plain
+// token is sent in SMS, only the SHA-256 hash is stored. Single live token per
+// candidate is enforced by the partial unique index below — re-issuance
+// invalidates any prior live row inside the same transaction.
+export const candidateActivationTokens = pgTable(
+  "candidate_activation_tokens",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    candidateId: varchar("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    consumedAt: timestamp("consumed_at"),
+    invalidatedAt: timestamp("invalidated_at"),
+    smsSentAt: timestamp("sms_sent_at"),
+    createdByUserId: varchar("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    tokenHashIdx: uniqueIndex("cand_activation_tokens_hash_idx").on(t.tokenHash),
+    expiresAtIdx: index("cand_activation_tokens_expires_at_idx").on(t.expiresAt),
+    // Live-token invariant. Postgres syntax: drizzle accepts raw `where` via
+    // sql template — exposed via the .where() builder method.
+    // Live-token invariant — at most one un-consumed, un-invalidated row per
+    // candidate. Expiry is checked at consumption time (the predicate must
+    // be IMMUTABLE, so `now()` cannot appear here). Reissue paths MUST
+    // stamp `invalidated_at` on the prior live row inside the same tx.
+    liveTokenPerCandidateIdx: uniqueIndex("cand_activation_tokens_live_idx")
+      .on(t.candidateId)
+      .where(sql`consumed_at IS NULL AND invalidated_at IS NULL`),
+    candidateIdx: index("cand_activation_tokens_candidate_idx").on(t.candidateId),
+  })
+);
+
+// ─── SMS Outbox (Task #107) ────────────────────────────────────────────────
+// Decouples enqueue (e.g. inside an SMP commit transaction or a bulk reissue)
+// from delivery (rate-limited, retried). The outbox worker drains rows in
+// `FOR UPDATE SKIP LOCKED` claims; on success stamps sent_at, on transient
+// failure increments attempts, after 5 attempts stamps dead_letter_at.
+export const smsOutbox = pgTable(
+  "sms_outbox",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    recipientPhone: varchar("recipient_phone", { length: 20 }).notNull(),
+    kind: smsOutboxKindEnum("kind").notNull(),
+    payload: jsonb("payload").notNull(),
+    candidateId: varchar("candidate_id").references(() => candidates.id, {
+      onDelete: "set null",
+    }),
+    dedupeKey: varchar("dedupe_key", { length: 100 }),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    sentAt: timestamp("sent_at"),
+    deadLetterAt: timestamp("dead_letter_at"),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    pendingIdx: index("sms_outbox_pending_idx")
+      .on(t.createdAt)
+      .where(sql`sent_at IS NULL AND dead_letter_at IS NULL`),
+    dedupeIdx: uniqueIndex("sms_outbox_dedupe_idx").on(t.dedupeKey),
+    candidateIdx: index("sms_outbox_candidate_idx").on(t.candidateId),
   })
 );
 
@@ -296,6 +388,10 @@ export const smpCompanies = pgTable(
     nameIdx: index("smp_companies_name_idx").on(t.name),
     crNumberIdx: uniqueIndex("smp_companies_cr_number_idx").on(t.crNumber),
     activeIdx: index("smp_companies_active_idx").on(t.isActive),
+    // Task #107: case-insensitive uniqueness so the bulk-upload company
+    // matcher can lookup by lower(name) and reject ambiguous duplicates.
+    lowerNameIdx: uniqueIndex("smp_companies_lower_name_idx")
+      .on(sql`lower(${t.name})`),
   })
 );
 
@@ -680,6 +776,28 @@ export const insertQuestionSetSchema = createInsertSchema(questionSets).omit({
   createdAt: true,
   updatedAt: true,
 });
+
+// Task #107
+export const insertCandidateActivationTokenSchema = createInsertSchema(candidateActivationTokens).omit({
+  id: true,
+  createdAt: true,
+  consumedAt: true,
+  invalidatedAt: true,
+  smsSentAt: true,
+});
+export type InsertCandidateActivationToken = z.infer<typeof insertCandidateActivationTokenSchema>;
+export type CandidateActivationToken = typeof candidateActivationTokens.$inferSelect;
+
+export const insertSmsOutboxSchema = createInsertSchema(smsOutbox).omit({
+  id: true,
+  createdAt: true,
+  sentAt: true,
+  deadLetterAt: true,
+  attempts: true,
+  lastError: true,
+});
+export type InsertSmsOutbox = z.infer<typeof insertSmsOutboxSchema>;
+export type SmsOutboxRow = typeof smsOutbox.$inferSelect;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -1538,14 +1656,14 @@ export const candidateQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(1000).default(100),
   search: z.string().optional(),
-  status: z.enum(["available", "active", "inactive", "blocked", "hired"]).optional(),
+  status: z.enum(["available", "active", "inactive", "blocked", "hired", "awaiting_activation"]).optional(),
   archived: z.enum(["true"]).optional(),
   city: z.string().optional(),
   nationality: z.enum(["saudi", "non_saudi"]).optional(),
   gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),
-  source: z.enum(["individual", "smp"]).optional(),
+  classification: z.enum(["individual", "smp"]).optional(),
   formerEmployee: z.enum(["true"]).optional(),
-  sortBy: z.enum(["createdAt", "fullNameEn", "rating", "city", "source", "phone", "email"]).default("createdAt"),
+  sortBy: z.enum(["createdAt", "fullNameEn", "rating", "city", "classification", "phone", "email"]).default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 

@@ -150,7 +150,7 @@ function validateProfileCompleteness(candidate: Record<string, any>): string[] {
   if (!candidate.emergencyContactName) missing.push("Emergency Contact Name");
   if (!candidate.emergencyContactPhone) missing.push("Emergency Contact Phone");
   if (!(candidate.languages && candidate.languages.length > 0)) missing.push("Languages");
-  if (candidate.source !== "smp") {
+  if (candidate.classification !== "smp") {
     if (!candidate.ibanNumber) missing.push("IBAN Number");
   }
   return missing;
@@ -1119,6 +1119,15 @@ export async function registerRoutes(
         return res.status(409).json({ message: tr(req, "register.nationalIdExists") });
       }
 
+      // Task #107: SMP-classified candidates cannot self-register. Their account
+      // must be created via the activation link sent by their SMP company.
+      // (The check covers the pre-activation state where userId is still NULL,
+      // which would otherwise slip past the getUserByNationalId() guard above.)
+      const existingCandByNid = await storage.getCandidateByNationalId(nationalId.trim());
+      if (existingCandByNid && (existingCandByNid as any).classification === "smp") {
+        return res.status(409).json({ message: tr(req, "smp.cannotSelfRegister") });
+      }
+
       // Hash before the transaction (bcrypt is the slow part — keep the
       // transaction's lock window minimal). Email is intentionally NOT
       // synthesized — the candidate provides a real one later in the
@@ -1321,6 +1330,32 @@ export async function registerRoutes(
       const user = await storage.getUserByNationalId(clean);
       // Silent no-ops for: missing user, missing phone, disabled account.
       if (!user || !user.phone || !user.isActive) {
+        // Task #107: SMP self-heal — un-activated SMP candidate uses the
+        // forgot-password flow because they never received (or lost) their
+        // activation SMS. Silently mint a fresh activation token + enqueue an
+        // SMS, throttled to 1 per 10 minutes per candidate via outbox dedupe.
+        try {
+          const cand = await storage.getCandidateByNationalId(clean);
+          if (cand && (cand as any).classification === "smp" && !cand.userId && cand.phone) {
+            const { mintActivationToken } = await import("./activation-tokens");
+            const { enqueueActivationSms } = await import("./sms-outbox");
+            const bucket = Math.floor(Date.now() / (10 * 60 * 1000)); // 10-min window
+            const dedupeKey = `selfheal:${cand.id}:${bucket}`;
+            const { plainToken, tokenRow } = await mintActivationToken(cand.id, null);
+            await enqueueActivationSms({
+              candidateId: cand.id,
+              recipientPhone: cand.phone,
+              plainToken,
+              tokenRowId: tokenRow.id,
+              candidateLocale: ((cand as any).locale === "en" ? "en" : "ar"),
+              kind: "smp_activation_self_heal",
+              dedupeKey,
+            });
+            console.log(`[Reset/SelfHeal] Activation SMS enqueued for candidate ${cand.id} (NID ${redactNationalId(clean)}).`);
+          }
+        } catch (selfHealErr) {
+          console.error("[Reset/SelfHeal] error (silent):", selfHealErr);
+        }
         console.log(`[Reset] Generic OK returned for national ID ${redactNationalId(clean)} (no eligible account).`);
         return res.json(generic);
       }
@@ -1423,6 +1458,71 @@ export async function registerRoutes(
     } catch (err) {
       return handleError(res, err);
     }
+  });
+
+  // ─── SMP worker activation: consume token + create user (Task #107) ───────
+  app.post("/api/auth/activate", markPublic, async (req: Request, res: Response) => {
+    try {
+      const { token, password } = req.body as { token?: string; password?: string };
+      if (!token) return res.status(400).json({ message: tr(req, "activation.invalid") });
+      if (!password || password.length < 8) {
+        return res.status(400).json({ message: tr(req, "activation.passwordTooShort") });
+      }
+      const { consumeActivationToken, ActivationError } = await import("./activation-tokens");
+      try {
+        const result = await consumeActivationToken(token, password);
+        return res.json({
+          ok: true,
+          candidateId: result.candidateId,
+          message: tr(req, "activation.success"),
+        });
+      } catch (e) {
+        if (e instanceof ActivationError) {
+          const i18n = e.code === "EXPIRED"
+            ? "activation.expired"
+            : e.code === "CONSUMED"
+            ? "activation.consumed"
+            : "activation.invalid";
+          return res.status(400).json({ code: e.code, message: tr(req, i18n) });
+        }
+        throw e;
+      }
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // GET variant lets the client pre-validate the token (show "expired" page
+  // before asking for a password). Returns 200 with `{ valid: true }` or 400.
+  app.get("/api/auth/activate", markPublic, async (req: Request, res: Response) => {
+    const token = (req.query.token as string) ?? "";
+    if (!token) return res.status(400).json({ valid: false, code: "INVALID" });
+    const { hashToken } = await import("./activation-tokens");
+    const { candidateActivationTokens, candidates } = await import("@shared/schema");
+    const [row] = await db
+      .select({
+        id: candidateActivationTokens.id,
+        candidateId: candidateActivationTokens.candidateId,
+        consumedAt: candidateActivationTokens.consumedAt,
+        invalidatedAt: candidateActivationTokens.invalidatedAt,
+        expiresAt: candidateActivationTokens.expiresAt,
+      })
+      .from(candidateActivationTokens)
+      .where(eq(candidateActivationTokens.tokenHash, hashToken(token)));
+    if (!row) return res.status(400).json({ valid: false, code: "INVALID" });
+    if (row.consumedAt) return res.status(400).json({ valid: false, code: "CONSUMED" });
+    if (row.invalidatedAt) return res.status(400).json({ valid: false, code: "CONSUMED" });
+    if (row.expiresAt < new Date()) return res.status(400).json({ valid: false, code: "EXPIRED" });
+    const [cand] = await db
+      .select({ fullNameEn: candidates.fullNameEn, phone: candidates.phone })
+      .from(candidates)
+      .where(eq(candidates.id, row.candidateId));
+    return res.json({
+      valid: true,
+      candidateName: cand?.fullNameEn ?? null,
+      // Last 3 digits only — confirms identity without leaking the full number.
+      phoneSuffix: cand?.phone ? cand.phone.slice(-3) : null,
+    });
   });
 
   // ─── System Settings (public — no auth) ──────────────────────────────────
@@ -1676,8 +1776,28 @@ export async function registerRoutes(
         }
       }
 
+      // Task #107: Phone-change invalidates pending activation SMS rows.
+      // Detect the change BEFORE the update so we can invalidate any
+      // outbox rows still pointed at the old phone (otherwise the worker
+      // would deliver an activation link to a number the candidate no
+      // longer owns).
+      const phoneChanging =
+        typeof data.phone === "string" &&
+        (await storage.getCandidate(req.params.id))?.phone !== data.phone;
+
       const candidate = await storage.updateCandidate(req.params.id, data);
       if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
+
+      if (phoneChanging) {
+        try {
+          const { invalidatePendingActivationSms } = await import("./sms-outbox");
+          const n = await invalidatePendingActivationSms(req.params.id);
+          if (n > 0) console.log(`[candidates:patch] Phone changed → invalidated ${n} pending activation SMS for ${req.params.id}.`);
+        } catch (e) {
+          console.error("[candidates:patch] phone-change invalidation failed:", e);
+        }
+      }
+
       return res.json(candidate);
     } catch (err) {
       return handleError(res, err);
@@ -1740,8 +1860,14 @@ export async function registerRoutes(
       if (rawCandidates.length > 1000) {
         return res.status(400).json({ message: tr(req, "candidate.bulkUploadLimit") });
       }
-      // SMP workers must use /api/candidates/smp-validate + /api/candidates/smp-commit
-      const smpRows = rawCandidates.filter((c: Record<string, unknown>) => c.source === "smp");
+      // Task #107: bulk path on this endpoint is no longer SMP-aware. SMP
+      // workers come in via /api/candidates/smp-validate + /api/candidates/smp-commit
+      // (the dedicated SMP-only bulk path on the talent page). Reject any
+      // attempt to sneak SMP rows through this endpoint.
+      const smpRows = rawCandidates.filter(
+        (c: Record<string, unknown>) =>
+          c.classification === "smp" || c.source === "smp",
+      );
       if (smpRows.length > 0) {
         return res.status(400).json({ message: tr(req, "smp.bulkNotAllowed") });
       }
@@ -1889,51 +2015,36 @@ export async function registerRoutes(
         });
       }
 
-      const created: string[] = [];  // new candidate IDs
-      const attached: string[] = []; // existing candidate IDs added to onboarding
-      const skipped: string[] = [];  // blocked or invalid rows skipped
+      // Task #107: SMP commit no longer creates onboarding records. The flow:
+      //   NEW row    → create candidate as awaiting_activation, mint token, enqueue activation SMS.
+      //   CLEAN row  → flip classification to smp; if userId is null mint token + SMS, else just stamp.
+      //   BLOCKED    → skip (client should not have sent these but defense in depth).
+      // Onboarding records are created later by the admin "Send to Onboarding"
+      // action (see /api/candidates/send-to-onboarding) once workers activate.
+      const created: string[] = [];
+      const reclassified: string[] = []; // existing candidates flipped to SMP
+      const skipped: string[] = [];
 
-      // Helper: build a typed SMP onboarding payload (no `as any` required)
-      const buildSmpOnboardingPayload = (candidateId: string, hasPhoto: boolean, hasNationalId: boolean, notes: string): InsertOnboarding => ({
-        candidateId,
-        eventId: eventId ?? null,
-        jobId: jobId ?? null,
-        applicationId: null,
-        hasPhoto,
-        hasIban: false,
-        hasNationalId,
-        hasMedicalFitness: false,
-        hasSignedContract: false,
-        hasEmergencyContact: false,
-        status: "pending",
-        notes,
-      });
+      const { getCandidateBlockers } = await import("./candidate-blockers");
+      const { mintActivationToken } = await import("./activation-tokens");
+      const { enqueueActivationSms } = await import("./sms-outbox");
 
-      // Helper: re-check BLOCKED conditions server-side (never trust client-side status)
-      const isBlockedServerSide = async (candidateId: string): Promise<string | null> => {
-        const activeWf = await storage.getWorkforceByCandidateId(candidateId);
-        if (activeWf && activeWf.isActive) {
-          return activeWf.employmentType === "smp"
-            ? "Currently under an active SMP contract"
-            : "Active individual employment — cannot add to SMP batch";
-        }
-        const onboardingRecords = await storage.getOnboardingRecords({ candidateId });
-        const activeOnboarding = onboardingRecords.find(ob => ob.status !== "converted" && ob.status !== "rejected" && ob.status !== "terminated");
-        if (activeOnboarding) {
-          return "In active onboarding — remove from onboarding first";
-        }
-        const interviews = await storage.getInterviews({ candidateId });
-        const scheduledInterview = interviews.find(iv => iv.status === "scheduled" || iv.status === "in_progress");
-        if (scheduledInterview) {
-          return "In active interview group";
-        }
-        const apps = await storage.getApplications({ candidateId });
-        const activeApp = apps.find(a => ["new", "reviewing", "shortlisted", "interviewed", "offered"].includes(a.status));
-        if (activeApp) {
-          return "Application under review";
-        }
-        return null;
-      }
+      // Helper: enqueue activation SMS for a freshly-set-up SMP candidate.
+      const enqueueIfPhoneOnFile = async (candidateId: string, kind: "smp_activation" | "smp_activation_reissue" = "smp_activation") => {
+        const cand = await storage.getCandidate(candidateId);
+        if (!cand?.phone) return;
+        if (cand.userId) return; // already activated, no need
+        const { plainToken, tokenRow } = await mintActivationToken(candidateId, req.authUserId ?? null);
+        await enqueueActivationSms({
+          candidateId,
+          recipientPhone: cand.phone,
+          plainToken,
+          tokenRowId: tokenRow.id,
+          candidateLocale: "ar",
+          kind,
+          dedupeKey: `activation:${tokenRow.id}`,
+        });
+      };
 
       for (const result of validationResults) {
         if (result.status === "blocked") {
@@ -1942,53 +2053,45 @@ export async function registerRoutes(
         }
 
         if (result.status === "clean" && result.candidate) {
-          // CLEAN (confirmed=true already verified above): re-validate server-side before attaching
+          // Re-check blockers via the single authority. Refuse if any.
           const candidateId = result.candidate.id;
-          const blockReason = await isBlockedServerSide(candidateId);
-          if (blockReason) {
+          const [blockers] = await getCandidateBlockers([candidateId]);
+          if (blockers && blockers.reasons.length > 0) {
             skipped.push(candidateId);
-            continue; // reject: conditions changed between validate and commit
+            continue;
           }
-          // Attach to SMP batch via onboarding record
-          const existingObs = await storage.getOnboardingRecords({ candidateId });
-          const alreadyActive = existingObs.find(r => r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated");
-          if (!alreadyActive) {
-            const candidateData = await storage.getCandidate(candidateId);
-            await storage.createOnboardingRecord(buildSmpOnboardingPayload(
-              candidateId,
-              candidateData?.hasPhoto ?? false,
-              candidateData?.hasNationalId ?? false,
-              "Added via SMP batch upload (CLEAN match — existing talent DB member)",
-            ));
-          }
-          attached.push(candidateId);
+          // Flip classification to smp. Status flips to awaiting_activation
+          // only if the candidate has no user account (un-activated).
+          const cand = await storage.getCandidate(candidateId);
+          if (!cand) { skipped.push(candidateId); continue; }
+          const newStatus = cand.userId ? cand.status : "awaiting_activation";
+          await storage.updateCandidate(candidateId, {
+            classification: "smp",
+            status: newStatus as any,
+          } as any);
+          await enqueueIfPhoneOnFile(candidateId);
+          reclassified.push(candidateId);
           continue;
         }
 
         if (result.status === "new") {
-          // NEW: check nationalId doesn't now exist (race condition guard)
+          // Race-guard: if nationalId now matches an existing candidate, treat as CLEAN.
           const row = result.row;
           if (row.nationalId) {
             const maybeExisting = await storage.getCandidateByNationalId(row.nationalId.trim());
             if (maybeExisting) {
-              // Became a CLEAN candidate between validate and commit — treat as CLEAN
-              // Race-condition CLEAN rows do not require client confirmation; re-validate server-side instead
-              const blockReason = await isBlockedServerSide(maybeExisting.id);
-              if (blockReason) {
+              const [blockers] = await getCandidateBlockers([maybeExisting.id]);
+              if (blockers && blockers.reasons.length > 0) {
                 skipped.push(row.nationalId);
                 continue;
               }
-              const existingObs = await storage.getOnboardingRecords({ candidateId: maybeExisting.id });
-              const alreadyActive = existingObs.find(r => r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated");
-              if (!alreadyActive) {
-                await storage.createOnboardingRecord(buildSmpOnboardingPayload(
-                  maybeExisting.id,
-                  maybeExisting.hasPhoto ?? false,
-                  maybeExisting.hasNationalId ?? false,
-                  "Added via SMP batch upload (race-condition CLEAN match)",
-                ));
-              }
-              attached.push(maybeExisting.id);
+              const newStatus = maybeExisting.userId ? maybeExisting.status : "awaiting_activation";
+              await storage.updateCandidate(maybeExisting.id, {
+                classification: "smp",
+                status: newStatus as any,
+              } as any);
+              await enqueueIfPhoneOnFile(maybeExisting.id);
+              reclassified.push(maybeExisting.id);
               continue;
             }
           }
@@ -1997,16 +2100,12 @@ export async function registerRoutes(
               fullNameEn: row.fullNameEn || row.name || "",
               nationalId:  row.nationalId || null,
               phone:        row.phone || null,
-              source:       "smp",
+              classification: "smp",
+              status: "awaiting_activation",
               profileCompleted: false,
             });
             const newCandidate = await storage.createCandidate(parsed);
-            await storage.createOnboardingRecord(buildSmpOnboardingPayload(
-              newCandidate.id,
-              false,
-              false,
-              "Added via SMP batch upload (NEW — created fresh)",
-            ));
+            await enqueueIfPhoneOnFile(newCandidate.id);
             created.push(newCandidate.id);
           } catch (parseErr) {
             skipped.push(row.nationalId ?? row.fullNameEn ?? "?");
@@ -2016,10 +2115,140 @@ export async function registerRoutes(
 
       return res.json({
         created: created.length,
-        attached: attached.length,
+        reclassified: reclassified.length,
         skipped: skipped.length,
-        message: tr(req, "smp.batchCommitted", { created: created.length, attached: attached.length, skipped: skipped.length }),
+        message: tr(req, "smp.batchCommitted", { created: created.length, attached: reclassified.length, skipped: skipped.length }),
       });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // ─── Task #107: SMP admin actions (reissue, send-to-onboarding, reclassify) ─
+
+  // Bulk re-issue activation SMS for SMP candidates still in awaiting_activation.
+  // Mints a fresh token (invalidating the previous live token via the unique
+  // partial index) and enqueues a new SMS row with kind=smp_activation_reissue.
+  app.post("/api/candidates/smp-reissue-activation", requirePermission("candidates:smp_manage"), async (req: Request, res: Response) => {
+    try {
+      const { ids } = req.body as { ids?: string[] };
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: tr(req, "common.idsRequired") });
+      }
+      if (ids.length > 500) {
+        return res.status(400).json({ message: tr(req, "candidate.bulkActionLimit") });
+      }
+      const { mintActivationToken } = await import("./activation-tokens");
+      const { enqueueActivationSms } = await import("./sms-outbox");
+
+      let reissued = 0, skipped = 0;
+      const skippedReasons: { id: string; reason: string }[] = [];
+      for (const id of ids) {
+        const cand = await storage.getCandidate(id);
+        if (!cand) { skipped++; skippedReasons.push({ id, reason: "not_found" }); continue; }
+        if ((cand as any).classification !== "smp") { skipped++; skippedReasons.push({ id, reason: "not_smp" }); continue; }
+        if (cand.userId) { skipped++; skippedReasons.push({ id, reason: "already_activated" }); continue; }
+        if (!cand.phone) { skipped++; skippedReasons.push({ id, reason: "no_phone" }); continue; }
+        const { plainToken, tokenRow } = await mintActivationToken(cand.id, req.authUserId ?? null);
+        await enqueueActivationSms({
+          candidateId: cand.id,
+          recipientPhone: cand.phone,
+          plainToken,
+          tokenRowId: tokenRow.id,
+          candidateLocale: ((cand as any).locale === "en" ? "en" : "ar"),
+          kind: "smp_activation_reissue",
+          dedupeKey: `activation:${tokenRow.id}`,
+        });
+        reissued++;
+      }
+      return res.json({ reissued, skipped, skippedReasons });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // Bulk send activated SMP workers into the onboarding pipeline. Creates
+  // an onboarding row per candidate (no application linkage, since SMP
+  // workers do not apply individually). Refuses any id that's still
+  // awaiting_activation or has any outstanding blocker.
+  app.post("/api/candidates/send-to-onboarding", requirePermission("candidates:smp_manage"), async (req: Request, res: Response) => {
+    try {
+      const { ids, eventId } = req.body as { ids?: string[]; eventId?: string };
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: tr(req, "common.idsRequired") });
+      }
+      if (ids.length > 500) {
+        return res.status(400).json({ message: tr(req, "candidate.bulkActionLimit") });
+      }
+      const { getCandidateBlockers } = await import("./candidate-blockers");
+      const blockers = await getCandidateBlockers(ids);
+      const blockerById = new Map(blockers.map((b) => [b.candidateId, b]));
+
+      let onboarded = 0, skipped = 0;
+      const skippedReasons: { id: string; reason: string }[] = [];
+
+      for (const id of ids) {
+        const cand = await storage.getCandidate(id);
+        if (!cand) { skipped++; skippedReasons.push({ id, reason: "not_found" }); continue; }
+        if ((cand as any).classification !== "smp") { skipped++; skippedReasons.push({ id, reason: "not_smp" }); continue; }
+        if ((cand as any).status === "awaiting_activation" || !cand.userId) {
+          skipped++; skippedReasons.push({ id, reason: "not_activated" }); continue;
+        }
+        const b = blockerById.get(id);
+        if (b && b.reasons.length > 0) {
+          skipped++; skippedReasons.push({ id, reason: b.reasons[0] }); continue;
+        }
+        try {
+          await storage.createOnboardingRecord({
+            candidateId: id,
+            eventId: eventId ?? null,
+            applicationId: null,
+            status: "pending",
+          } as any);
+          onboarded++;
+        } catch (e) {
+          console.error(`[send-to-onboarding] ${id} failed:`, e);
+          skipped++; skippedReasons.push({ id, reason: "create_failed" });
+        }
+      }
+      return res.json({ onboarded, skipped, skippedReasons });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // Reclassify a candidate between individual ↔ smp. Refuses if the candidate
+  // has any outstanding blocker (active workforce, pending onboarding,
+  // scheduled session, pending application).
+  app.post("/api/candidates/:id/reclassify", requirePermission("candidates:smp_manage"), async (req: Request, res: Response) => {
+    try {
+      const { classification } = req.body as { classification?: "individual" | "smp" };
+      if (classification !== "individual" && classification !== "smp") {
+        return res.status(400).json({ message: tr(req, "common.invalidPayload") });
+      }
+      const cand = await storage.getCandidate(req.params.id);
+      if (!cand) return res.status(404).json({ message: tr(req, "candidate.notFound") });
+      if ((cand as any).classification === classification) {
+        return res.json({ candidate: cand, changed: false });
+      }
+      const { getCandidateBlockers } = await import("./candidate-blockers");
+      const [b] = await getCandidateBlockers([req.params.id]);
+      if (b && b.reasons.length > 0) {
+        return res.status(409).json({
+          message: tr(req, "candidate.blockedByPipeline"),
+          blockers: b.reasons,
+        });
+      }
+      // When flipping smp→individual on an un-activated candidate, also
+      // invalidate any pending activation SMS — they'll register normally now.
+      const updated = await storage.updateCandidate(req.params.id, { classification } as any);
+      if (classification === "individual" && !cand.userId) {
+        try {
+          const { invalidatePendingActivationSms } = await import("./sms-outbox");
+          await invalidatePendingActivationSms(req.params.id);
+        } catch {}
+      }
+      return res.json({ candidate: updated, changed: true });
     } catch (err) {
       return handleError(res, err);
     }
@@ -2347,6 +2576,22 @@ export async function registerRoutes(
         }
       }
 
+      // Task #107: Single-authority SMP-exclusion gate. The inline
+      // workforce/onboarding checks above predate the classification authority
+      // and are kept for back-compat; the new classification check is the
+      // canonical individual-pipeline filter.
+      if (data.candidateId) {
+        try {
+          const { assertIndividualPipelineEligible } = await import("./pipeline-eligibility");
+          await assertIndividualPipelineEligible([data.candidateId]);
+        } catch (e: any) {
+          if (e?.code === "SMP_NOT_ELIGIBLE") {
+            return res.status(400).json({ message: tr(req, "pipeline.smpNotEligible"), blockedIds: e.blockedIds });
+          }
+          throw e;
+        }
+      }
+
       const app_ = await storage.createApplication(data);
       return res.status(201).json(app_);
     } catch (err) {
@@ -2407,6 +2652,26 @@ export async function registerRoutes(
   app.post("/api/interviews", requirePermission("interviews:create"), async (req: Request, res: Response) => {
     try {
       const data = insertInterviewSchema.parse(req.body);
+
+      // Task #107: scheduled-session pipeline is individual-classification-only.
+      // Reject the entire request if any invitee (or single-candidate target)
+      // is classified=smp.
+      const inviteeIds: string[] = [
+        ...(Array.isArray((data as any).invitedCandidateIds) ? (data as any).invitedCandidateIds : []),
+        ...(((data as any).candidateId) ? [(data as any).candidateId] : []),
+      ];
+      if (inviteeIds.length > 0) {
+        try {
+          const { assertIndividualPipelineEligible } = await import("./pipeline-eligibility");
+          await assertIndividualPipelineEligible(inviteeIds);
+        } catch (e: any) {
+          if (e?.code === "SMP_NOT_ELIGIBLE") {
+            return res.status(400).json({ message: tr(req, "pipeline.smpNotEligible"), blockedIds: e.blockedIds });
+          }
+          throw e;
+        }
+      }
+
       const interview = await storage.createInterview(data);
 
       // ── Fire SMS to invited candidates ────────────────────────────────────

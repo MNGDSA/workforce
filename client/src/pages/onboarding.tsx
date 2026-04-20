@@ -1526,7 +1526,7 @@ export default function OnboardingPage() {
   const readyAll = records.filter(r => r.status === "ready");
   const convertibleReady = readyAll.filter(r => {
     const candidate = candidates.find(c => c.id === r.candidateId);
-    const isSmpCandidate = candidate?.source === "smp";
+    const isSmpCandidate = (candidate as any)?.classification === "smp";
     const isSmpPipeline = isSmpCandidate || !r.applicationId;
     const contractSigned = r.hasSignedContract || !!r.contractSignedAt;
     return isSmpPipeline || contractSigned;
@@ -1667,7 +1667,7 @@ export default function OnboardingPage() {
           <div className="space-y-3">
             {filtered.map(rec => {
               const candidate = getCandidateFor(rec);
-              const isSmp = candidate?.source === "smp";
+              const isSmp = (candidate as any)?.classification === "smp";
               const done = prereqCount(rec, isSmp);
               const total = prereqTotal(isSmp);
               const cfg = STATUS_CONFIG[rec.status];
@@ -1998,7 +1998,7 @@ export default function OnboardingPage() {
 
           {checklistRecord && (() => {
             const checklistCand = getCandidateFor(checklistRecord);
-            const checklistIsSmp = checklistCand?.source === "smp";
+            const checklistIsSmp = (checklistCand as any)?.classification === "smp";
             const checklistPrereqs = getPrerequisites(checklistIsSmp);
             const checklistDone = prereqCount(checklistRecord, checklistIsSmp);
             const checklistTotal = prereqTotal(checklistIsSmp);

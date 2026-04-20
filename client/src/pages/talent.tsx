@@ -120,7 +120,7 @@ const statusStyles: Record<string, string> = {
   hired: "bg-blue-500/10 text-blue-400",
 };
 
-type SortField = "createdAt" | "fullNameEn" | "city" | "source" | "phone" | "email";
+type SortField = "createdAt" | "fullNameEn" | "city" | "classification" | "phone" | "email";
 
 type ColumnKey = "id" | "candidate" | "classification" | "status" | "phone" | "email" | "city";
 
@@ -560,7 +560,7 @@ function CandidateProfileSheet({
                 <div className="text-muted-foreground text-sm flex items-center gap-2 mt-0.5">
                   {c.nationalId && <span dir="ltr">{c.nationalId}</span>}
                   <Badge className={`text-[10px] px-1.5 py-0 ${statusStyles[displaySt] || statusStyles.active}`}>{statusLabelText}</Badge>
-                  {c.source === "smp" && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/50 text-amber-400">{t("profile.smpBadge")}</Badge>}
+                  {(c as any).classification === "smp" && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/50 text-amber-400">{t("profile.smpBadge")}</Badge>}
                 </div>
               </SheetDescription>
             </div>
@@ -942,7 +942,7 @@ export default function TalentPage() {
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
     ...(status && status !== "all" && status !== "archived" ? { status } : {}),
     ...(status === "archived" ? { archived: "true" } : {}),
-    ...(sourceFilter && sourceFilter !== "all" ? { source: sourceFilter } : {}),
+    ...(sourceFilter && sourceFilter !== "all" ? { classification: sourceFilter } : {}),
     ...(formerEmployeeFilter ? { formerEmployee: "true" } : {}),
   });
 
@@ -1040,7 +1040,7 @@ export default function TalentPage() {
             nationality: c.nationality === "saudi" ? "saudi" : c.nationality === "non_saudi" ? "non_saudi" : undefined,
             gender: c.gender || undefined,
             dateOfBirth: c.dateOfBirth || undefined,
-            source: "individual" as const,
+            classification: "individual" as const,
           }));
           const indivRes = await apiRequest("POST", "/api/candidates/bulk", { candidates: mapped }).then(r => r.json());
           return {
@@ -1063,7 +1063,7 @@ export default function TalentPage() {
         nationality: c.nationality === "saudi" ? "saudi" : c.nationality === "non_saudi" ? "non_saudi" : undefined,
         gender: c.gender || undefined,
         dateOfBirth: c.dateOfBirth || undefined,
-        source: c.source === "smp" ? "smp" as const : "individual" as const,
+        classification: (c as any).classification === "smp" || c.source === "smp" ? "smp" as const : "individual" as const,
       }));
       const res = await apiRequest("POST", "/api/candidates/bulk", { candidates: mapped }).then(r => r.json());
       return { mode: "individual", individual: res };
@@ -1443,10 +1443,10 @@ export default function TalentPage() {
                       {col("classification") && (
                         <TableHead
                           className="text-muted-foreground cursor-pointer select-none"
-                          onClick={() => handleColumnSort("source")}
+                          onClick={() => handleColumnSort("classification")}
                           data-testid="sort-classification"
                         >
-                          <span className="flex items-center">{t("col.classification")} <SortIcon field="source" /></span>
+                          <span className="flex items-center">{t("col.classification")} <SortIcon field="classification" /></span>
                         </TableHead>
                       )}
                       {col("status") && <TableHead className="text-muted-foreground"><StatusInfoHeader /></TableHead>}
@@ -1528,13 +1528,13 @@ export default function TalentPage() {
                               <Badge
                                 variant="outline"
                                 className={`font-medium text-xs border-0 ${
-                                  (candidate as any).source === "smp"
+                                  (candidate as any).classification === "smp"
                                     ? "bg-violet-500/10 text-violet-400"
                                     : "bg-blue-500/10 text-blue-400"
                                 }`}
                                 data-testid={`classification-${candidate.id}`}
                               >
-                                {(candidate as any).source === "smp" ? t("classification.smp") : t("classification.individual")}
+                                {(candidate as any).classification === "smp" ? t("classification.smp") : t("classification.individual")}
                               </Badge>
                             </TableCell>
                           )}

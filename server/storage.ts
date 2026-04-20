@@ -195,6 +195,7 @@ export interface IStorage {
   autoCloseExpiredEvents(): Promise<{ count: number; names: string[] }>;
   autoActivateUpcomingEvents(): Promise<{ count: number; names: string[] }>;
   ageOutInactiveCandidates(): Promise<number>;
+  sweepStaleAwaitingActivationCandidates(): Promise<number>;
   countJobPostingsByEvent(eventId: string): Promise<number>;
 
   // Job Postings
@@ -667,7 +668,7 @@ export class DatabaseStorage implements IStorage {
     if (city) conditions.push(ilike(candidates.city, `%${city}%`));
     if (nationality) conditions.push(eq(candidates.nationality, nationality as any));
     if (gender) conditions.push(eq(candidates.gender, gender as any));
-    if ((query as any).source) conditions.push(eq(candidates.source, (query as any).source));
+    if ((query as any).classification) conditions.push(eq(candidates.classification, (query as any).classification));
     if ((query as any).archived === "true") {
       conditions.push(isNotNull(candidates.archivedAt));
     } else {
@@ -685,7 +686,7 @@ export class DatabaseStorage implements IStorage {
       sortBy === "fullNameEn" ? candidates.fullNameEn
       : sortBy === "rating" ? candidates.rating
       : sortBy === "city" ? candidates.city
-      : sortBy === "source" ? candidates.source
+      : sortBy === "classification" ? candidates.classification
       : sortBy === "phone" ? candidates.phone
       : sortBy === "email" ? candidates.email
       : candidates.createdAt;
@@ -873,7 +874,7 @@ export class DatabaseStorage implements IStorage {
     const data = await db.select({
       id: candidates.id,
       fullNameEn: candidates.fullNameEn,
-      source: candidates.source,
+      classification: candidates.classification,
       status: candidates.status,
       phone: candidates.phone,
       email: candidates.email,
@@ -899,7 +900,7 @@ export class DatabaseStorage implements IStorage {
     const headers = ["ID", "Full Name", "Classification", "Status", "Phone", "Email", "City", "Region", "Nationality", "National ID", "IBAN", "Bank Name", "Bank Code", "IBAN Account First Name", "IBAN Account Last Name", "Gender", "Date of Birth", "Education", "Major", "Created At"];
     const rows = data.map(r => [
       r.id, r.fullNameEn || "",
-      r.source || "individual", r.status, r.phone || "", r.email || "",
+      r.classification || "individual", r.status, r.phone || "", r.email || "",
       r.city || "", r.region || "", r.nationality || "", r.nationalId || "",
       r.ibanNumber || "", r.ibanBankName || "", r.ibanBankCode || "",
       r.ibanAccountFirstName || "", r.ibanAccountLastName || "",
@@ -1021,6 +1022,29 @@ export class DatabaseStorage implements IStorage {
       ))
       .returning({ id: events.id, name: events.name });
     return { count: activated.length, names: activated.map(e => e.name) };
+  }
+
+  // Task #107: SMP awaiting-activation sweep — flips to inactive any
+  // candidate whose live activation token has expired AND who has no
+  // un-consumed/un-invalidated token still alive. Runs daily.
+  async sweepStaleAwaitingActivationCandidates(): Promise<number> {
+    const result = await db.execute(sql`
+      UPDATE candidates
+      SET status = 'inactive', updated_at = now()
+      WHERE status = 'awaiting_activation'
+        AND classification = 'smp'
+        AND user_id IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM candidate_activation_tokens t
+          WHERE t.candidate_id = candidates.id
+            AND t.consumed_at IS NULL
+            AND t.invalidated_at IS NULL
+            AND t.expires_at > now()
+        )
+      RETURNING id
+    `);
+    const rows = (result as any).rows ?? result;
+    return Array.isArray(rows) ? rows.length : 0;
   }
 
   async ageOutInactiveCandidates(): Promise<number> {
@@ -2095,7 +2119,7 @@ export class DatabaseStorage implements IStorage {
       if (rec.status !== "ready") throw new Error(`Cannot convert — status is "${rec.status}", must be "ready"`);
 
       const [cand] = await tx.select().from(candidates).where(eq(candidates.id, rec.candidateId));
-      const isSmpCandidate = cand?.source === "smp" || !rec.applicationId;
+      const isSmpCandidate = cand?.classification === "smp" || !rec.applicationId;
       if (!isSmpCandidate && !rec.hasSignedContract && !rec.contractSignedAt) {
         throw new Error("Contract must be signed before conversion. Generate and have the candidate sign the employment contract first.");
       }

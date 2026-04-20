@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
+import ActivatePage from "@/pages/activate";
 import Dashboard from "@/pages/dashboard";
 import TalentPage from "@/pages/talent";
 import EventsPage from "@/pages/events";
@@ -52,6 +53,7 @@ function Router() {
       {/* Public */}
       <Route path="/" component={AuthPage} />
       <Route path="/auth" component={AuthPage} />
+      <Route path="/activate" component={ActivatePage} />
       <Route path="/privacy-policy" component={() => <LegalPage type="privacy" />} />
       <Route path="/terms-conditions" component={() => <LegalPage type="terms" />} />
       <Route path="/jobs/:id" component={JobDetailPage} />
