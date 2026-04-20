@@ -605,14 +605,14 @@ export default function AuthPage() {
                     </div>
                   ));
                 return (
-                  <div className="mt-6 flex items-center justify-center gap-3" data-testid="text-powered-by">
+                  <div className="mt-6 flex flex-col items-center justify-center gap-3" data-testid="text-powered-by">
                     <span className={`text-muted-foreground/70 uppercase tracking-widest font-semibold ${isRtl ? "text-sm" : "text-xs"}`}>
                       {isRtl ? "مدعوم بواسطة" : "Powered by"}
                     </span>
                     <img
                       src="/logos/aws.svg"
                       alt="Amazon Web Services"
-                      className="h-7 w-auto opacity-70 hover:opacity-100 transition-opacity duration-200 select-none"
+                      className="h-14 w-auto opacity-70 hover:opacity-100 transition-opacity duration-200 select-none"
                       draggable={false}
                       data-testid="img-powered-by-logo"
                     />
