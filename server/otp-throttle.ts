@@ -15,6 +15,15 @@ const REQUEST_MAX_ATTEMPTS = 20;
 const VERIFY_SCOPE = "otp_verify_ip";
 const REQUEST_SCOPE = "otp_request_ip";
 
+// Task #107 — public /api/auth/activate throttle (anti-DoS for SMP activation
+// link). Window/lockout tuned looser than OTP verify because legitimate
+// activation traffic from a single shared NAT IP can be heavier (one SMP
+// company onboarding 200 workers from one office network).
+const ACTIVATE_WINDOW_MIN = 10;
+const ACTIVATE_LOCKOUT_MIN = 30;
+const ACTIVATE_MAX_ATTEMPTS = 30;
+const ACTIVATE_SCOPE = "activate_ip";
+
 export interface OtpThrottleDecision {
   allowed: boolean;
   retryAfterSec: number;
@@ -86,6 +95,13 @@ export async function checkOtpVerifyIp(req: Request): Promise<OtpThrottleDecisio
 }
 export async function recordOtpVerifyFailure(req: Request): Promise<void> {
   return bumpFailure(VERIFY_SCOPE, getClientIp(req), VERIFY_WINDOW_MIN, VERIFY_LOCKOUT_MIN, VERIFY_MAX_ATTEMPTS);
+}
+
+export async function checkActivateIp(req: Request): Promise<OtpThrottleDecision> {
+  return isLocked(ACTIVATE_SCOPE, getClientIp(req));
+}
+export async function recordActivateFailure(req: Request): Promise<void> {
+  return bumpFailure(ACTIVATE_SCOPE, getClientIp(req), ACTIVATE_WINDOW_MIN, ACTIVATE_LOCKOUT_MIN, ACTIVATE_MAX_ATTEMPTS);
 }
 
 /**

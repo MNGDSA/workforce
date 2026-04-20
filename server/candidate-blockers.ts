@@ -90,7 +90,7 @@ export async function getCandidateBlockers(
     .from(applications)
     .where(and(
       inArray(applications.candidateId, candidateIds),
-      sql`${applications.status} NOT IN ('rejected', 'withdrawn', 'hired')`,
+      sql`${applications.status} NOT IN ('rejected', 'withdrawn', 'hired', 'closed')`,
     ));
   const pendingAppSet = new Set(
     pendingApp.map((r) => r.candidateId).filter((id): id is string => !!id),

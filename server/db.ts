@@ -13,7 +13,7 @@ const isProduction = process.env.NODE_ENV === "production";
 
 const pool = new Pool({
   connectionString: getConnectionString(),
-  max: 20,
+  max: 40,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
   ssl: isProduction ? { rejectUnauthorized: false } : undefined,

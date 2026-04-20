@@ -159,7 +159,7 @@ import { z } from "zod";
 import bcrypt from "bcrypt";
 import { requireAuth, requirePermission, requireOwnership, markPublic, invalidateRoleCache, getAuthKind } from "./auth-middleware";
 import { checkLoginRateLimit, recordLoginFailure, recordLoginSuccess } from "./login-rate-limit";
-import { checkOtpVerifyIp, recordOtpVerifyFailure, tryReserveOtpRequest } from "./otp-throttle";
+import { checkOtpVerifyIp, recordOtpVerifyFailure, tryReserveOtpRequest, checkActivateIp, recordActivateFailure } from "./otp-throttle";
 import "./otp-maintenance";
 import { verifyOtpHash } from "./otp-hash";
 
@@ -1463,8 +1463,21 @@ export async function registerRoutes(
   // ─── SMP worker activation: consume token + create user (Task #107) ───────
   app.post("/api/auth/activate", markPublic, async (req: Request, res: Response) => {
     try {
+      // Per-IP throttle BEFORE any work — anti-DoS for the public endpoint.
+      // bcrypt is also deferred until after token validation inside
+      // consumeActivationToken (see activation-tokens.ts) so an invalid-token
+      // flood can't burn CPU.
+      const ipDecision = await checkActivateIp(req);
+      if (!ipDecision.allowed) {
+        res.setHeader("Retry-After", String(ipDecision.retryAfterSec));
+        return res.status(429).json({ message: tr(req, "activation.tooMany") });
+      }
+
       const { token, password } = req.body as { token?: string; password?: string };
-      if (!token) return res.status(400).json({ message: tr(req, "activation.invalid") });
+      if (!token) {
+        await recordActivateFailure(req);
+        return res.status(400).json({ message: tr(req, "activation.invalid") });
+      }
       if (!password || password.length < 8) {
         return res.status(400).json({ message: tr(req, "activation.passwordTooShort") });
       }
@@ -1478,6 +1491,7 @@ export async function registerRoutes(
         });
       } catch (e) {
         if (e instanceof ActivationError) {
+          await recordActivateFailure(req);
           const i18n = e.code === "EXPIRED"
             ? "activation.expired"
             : e.code === "CONSUMED"
@@ -2602,6 +2616,22 @@ export async function registerRoutes(
   app.patch("/api/applications/:id", requirePermission("applications:update"), async (req: Request, res: Response) => {
     try {
       const data = insertApplicationSchema.partial().parse(req.body);
+
+      // Task #107: if this PATCH mutates candidateId, the new candidate must
+      // be Individual-classified — SMP candidates are not allowed in the
+      // applications pipeline.
+      if ((data as any).candidateId) {
+        try {
+          const { assertIndividualPipelineEligible } = await import("./pipeline-eligibility");
+          await assertIndividualPipelineEligible([(data as any).candidateId]);
+        } catch (e: any) {
+          if (e?.code === "SMP_NOT_ELIGIBLE") {
+            return res.status(400).json({ message: tr(req, "pipeline.smpNotEligible"), blockedIds: e.blockedIds });
+          }
+          throw e;
+        }
+      }
+
       const app_ = await storage.updateApplication(req.params.id, data);
       if (!app_) return res.status(404).json({ message: tr(req, "application.notFound") });
       return res.json(app_);
@@ -2718,6 +2748,26 @@ export async function registerRoutes(
   app.patch("/api/interviews/:id", requirePermission("interviews:update"), async (req: Request, res: Response) => {
     try {
       const data = insertInterviewSchema.partial().parse(req.body);
+
+      // Task #107: scheduled-session pipeline is individual-only. If this
+      // PATCH mutates candidateId or invitedCandidateIds, every new id must
+      // be Individual-classified.
+      const inviteeIds: string[] = [
+        ...(Array.isArray((data as any).invitedCandidateIds) ? (data as any).invitedCandidateIds : []),
+        ...(((data as any).candidateId) ? [(data as any).candidateId] : []),
+      ];
+      if (inviteeIds.length > 0) {
+        try {
+          const { assertIndividualPipelineEligible } = await import("./pipeline-eligibility");
+          await assertIndividualPipelineEligible(inviteeIds);
+        } catch (e: any) {
+          if (e?.code === "SMP_NOT_ELIGIBLE") {
+            return res.status(400).json({ message: tr(req, "pipeline.smpNotEligible"), blockedIds: e.blockedIds });
+          }
+          throw e;
+        }
+      }
+
       const interview = await storage.updateInterview(req.params.id, data);
       if (!interview) return res.status(404).json({ message: tr(req, "interview.notFound") });
 

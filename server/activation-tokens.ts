@@ -124,11 +124,36 @@ export async function consumeActivationToken(
     throw new ActivationError("INVALID", "Password must be at least 8 characters.");
   }
   const tokenHash = hashToken(plainToken);
+
+  // ── Pre-validate the token row OUTSIDE the transaction and BEFORE bcrypt.
+  //    This protects the public endpoint from an invalid-token CPU flood
+  //    (each bcrypt hash is ~80ms on prod hardware; 30 concurrent floods
+  //    would saturate one core). Real-world race window between this check
+  //    and the atomic UPDATE below is harmless: the UPDATE is the source of
+  //    truth, this is just an early-exit for the obvious invalid cases.
+  {
+    const [row] = await db
+      .select({
+        id: candidateActivationTokens.id,
+        consumedAt: candidateActivationTokens.consumedAt,
+        invalidatedAt: candidateActivationTokens.invalidatedAt,
+        expiresAt: candidateActivationTokens.expiresAt,
+      })
+      .from(candidateActivationTokens)
+      .where(eq(candidateActivationTokens.tokenHash, tokenHash));
+    if (!row) throw new ActivationError("INVALID", "Activation link is invalid.");
+    if (row.consumedAt) throw new ActivationError("CONSUMED", "Activation link has already been used.");
+    if (row.invalidatedAt) throw new ActivationError("CONSUMED", "Activation link has been replaced.");
+    if (row.expiresAt < new Date()) throw new ActivationError("EXPIRED", "Activation link has expired.");
+  }
+
+  // Pay the bcrypt cost ONLY after the cheap pre-check passed.
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
   return await db.transaction(async (tx) => {
     // 1. Race-safe consume: single UPDATE that succeeds only if the row is
-    //    still live. Returning row tells us the candidate id.
+    //    still live. Returning row tells us the candidate id. This is the
+    //    real source of truth — the pre-check above is just a fast path.
     const [consumed] = await tx
       .update(candidateActivationTokens)
       .set({ consumedAt: new Date() })
