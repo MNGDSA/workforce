@@ -84,6 +84,7 @@ export async function enqueueActivationSms(
     .from(systemSettings)
     .where(eq(systemSettings.key, "public_app_url")))[0]?.value
     ?? process.env.PUBLIC_APP_URL
+    ?? (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
     ?? "https://workforce.tanaqolapp.com";
   const link = `${baseUrl.replace(/\/$/, "")}/activate?token=${encodeURIComponent(opts.plainToken)}`;
 
