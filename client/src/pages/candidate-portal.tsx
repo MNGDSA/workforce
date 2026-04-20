@@ -632,7 +632,7 @@ function ProfileCompletionCard({
     <Card className="bg-card border-border">
       <CardHeader className="pb-3">
         <CardTitle className="text-base font-display text-white">
-          {isSmp ? t("portal:docs.requiredDocs") : t("portal:docs.profileCompletion")}
+          {t("portal:docs.requiredDocs")}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
