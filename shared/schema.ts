@@ -325,11 +325,22 @@ export const smsOutbox = pgTable(
     lastError: text("last_error"),
     sentAt: timestamp("sent_at"),
     deadLetterAt: timestamp("dead_letter_at"),
+    nextAttemptAt: timestamp("next_attempt_at"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
   },
   (t) => ({
     pendingIdx: index("sms_outbox_pending_idx")
       .on(t.createdAt)
+      .where(sql`sent_at IS NULL AND dead_letter_at IS NULL`),
+    // Worker-oriented partial index. Matches the drainSmsOutbox claim
+    // predicate (sent_at IS NULL AND dead_letter_at IS NULL AND
+    // (next_attempt_at IS NULL OR next_attempt_at <= now())) so the
+    // "smallest pending row that is due now" lookup stays a single
+    // index scan as the queue grows. Backed by the boot-migrate
+    // ensureSmsOutboxNextAttempt for environments where drizzle-kit
+    // push has not yet run.
+    pendingDueIdx: index("sms_outbox_pending_due_idx")
+      .on(t.nextAttemptAt, t.createdAt)
       .where(sql`sent_at IS NULL AND dead_letter_at IS NULL`),
     dedupeIdx: uniqueIndex("sms_outbox_dedupe_idx").on(t.dedupeKey),
     candidateIdx: index("sms_outbox_candidate_idx").on(t.candidateId),

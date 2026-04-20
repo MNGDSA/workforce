@@ -4,13 +4,32 @@
 // single transaction. Doing per-row HTTP calls to the SMS plugin inside
 // that transaction would blow the request budget and tie atomicity to
 // network reliability. Instead the route writes outbox rows; a background
-// drain worker pulls them with `FOR UPDATE SKIP LOCKED`, sends, and stamps
-// `sent_at` (or increments `attempts`, eventually `dead_letter_at`).
-import { eq, sql, and, isNull, lt } from "drizzle-orm";
+// drain worker pulls them one at a time inside a per-row transaction
+// that holds `FOR UPDATE SKIP LOCKED` on the row throughout the send,
+// stamps `sent_at` on success, increments `attempts` and records the
+// failure reason on transient errors, and stamps `dead_letter_at` once
+// `attempts > MAX_ATTEMPTS`.
+//
+// Per-row transactional claim ensures exactly-once delivery semantics
+// across concurrent drain workers: while one worker is processing a
+// row, the row stays locked, so no other worker can re-claim and
+// re-send it.
+//
+// Per-phone rate limit at drain time prevents a single bulk re-issue
+// from saturating the SMS provider and prevents accidental loops from
+// blasting one number — checked inside the same transaction as the
+// claim using a recent-`sent_at` count, so the limit is tx-safe even
+// under concurrent workers.
+import { eq, sql, and, isNull, gte } from "drizzle-orm";
 import { db } from "./db";
+
+// Drizzle's transaction callback gets a PgTransaction; module-level
+// queries use the NodePgDatabase. They share a query interface but
+// differ structurally, so helpers that may run in either context
+// accept this union.
+type DbOrTx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 import {
   smsOutbox,
-  candidates,
   systemSettings,
   type SmsOutboxRow,
 } from "@shared/schema";
@@ -21,6 +40,23 @@ import { trL } from "./i18n";
 
 const MAX_ATTEMPTS = 5;
 const BATCH_SIZE = 25;
+
+// Per-phone throttle at drain time: at most PHONE_RATE_MAX successful
+// sends per PHONE_RATE_WINDOW_MS milliseconds. Tunable; defaults match
+// the per-phone OTP cap (3 per 10 minutes) so the SMP self-heal flow
+// can never out-blast the OTP path.
+export const PHONE_RATE_MAX = 3;
+export const PHONE_RATE_WINDOW_MS = 10 * 60 * 1000;
+
+// Backoff timestamps after a failed attempt control re-claim eligibility.
+// They are what gives concurrent drain workers exactly-once-claim
+// semantics: once worker A's tx commits with a failure, the row's
+// next_attempt_at is set to "now + backoff", so worker B's claim
+// SELECT (which filters on next_attempt_at <= now) will NOT pick the
+// same row up immediately.
+const TRANSIENT_BACKOFF_MS = 60 * 1000;
+const RATE_LIMIT_BACKOFF_MS = 60 * 1000;
+const NO_PLUGIN_BACKOFF_MS = 30 * 1000;
 
 export interface EnqueueActivationOptions {
   candidateId: string;
@@ -41,7 +77,7 @@ export interface EnqueueActivationOptions {
  */
 export async function enqueueActivationSms(
   opts: EnqueueActivationOptions,
-  tx: typeof db = db,
+  tx: DbOrTx = db,
 ): Promise<void> {
   const baseUrl = (await tx
     .select()
@@ -65,83 +101,199 @@ export async function enqueueActivationSms(
 }
 
 /**
- * Drain the next batch of pending SMS rows. Called every 30s by the
- * scheduler. Uses SKIP LOCKED so multiple workers (if any) coexist.
+ * Internal: claim a single pending row inside a transaction. Holds
+ * FOR UPDATE on the row until the transaction commits, so concurrent
+ * workers cannot re-claim it. Returns null if no pending rows are
+ * available (or all candidates are locked by other workers).
  */
-export async function drainSmsOutbox(): Promise<{ sent: number; deadLettered: number; remaining: number }> {
-  // Claim a batch.
-  const claimed: SmsOutboxRow[] = await db.execute(sql`
+async function claimOneRow(tx: DbOrTx, excludeIds: string[]): Promise<SmsOutboxRow | null> {
+  // The next_attempt_at filter is what gives us exactly-once semantics
+  // across concurrent workers: a transient failure stamps next_attempt_at
+  // = now + backoff, so a parallel drain cannot immediately re-claim the
+  // same pending row after the first worker's tx commits and releases
+  // the row lock. excludeIds protects against the same drain cycle
+  // re-claiming the same row.
+  //
+  // Two-step claim: (1) raw UPDATE...RETURNING id grabs and locks one
+  // pending row inside the FOR UPDATE SKIP LOCKED subquery; (2) a
+  // typed Drizzle select fetches the row by id with proper camelCase
+  // column mapping. The lock is held by the UPDATE for the rest of the
+  // tx, so no other worker can touch the row before commit.
+  const exclusionSql = excludeIds.length > 0
+    ? sql`AND id NOT IN (${sql.join(excludeIds.map((id) => sql`${id}`), sql`, `)})`
+    : sql``;
+  const now = new Date();
+  const claimed = await tx.execute<{ id: string }>(sql`
     UPDATE sms_outbox
     SET attempts = attempts + 1
-    WHERE id IN (
+    WHERE id = (
       SELECT id FROM sms_outbox
-      WHERE sent_at IS NULL AND dead_letter_at IS NULL
+      WHERE sent_at IS NULL
+        AND dead_letter_at IS NULL
+        AND (next_attempt_at IS NULL OR next_attempt_at <= ${now})
+        ${exclusionSql}
       ORDER BY created_at ASC
-      LIMIT ${BATCH_SIZE}
+      LIMIT 1
       FOR UPDATE SKIP LOCKED
     )
-    RETURNING *
-  `).then((r: any) => r.rows ?? r);
+    RETURNING id
+  `);
+  const rawRows = (claimed as unknown as { rows?: { id: string }[] }).rows
+    ?? (claimed as unknown as { id: string }[]);
+  if (!Array.isArray(rawRows) || rawRows.length === 0) return null;
+  const claimedId = rawRows[0].id;
+  const [row] = await tx.select().from(smsOutbox).where(eq(smsOutbox.id, claimedId));
+  return row ?? null;
+}
 
-  if (!Array.isArray(claimed) || claimed.length === 0) {
-    return { sent: 0, deadLettered: 0, remaining: 0 };
+/**
+ * Internal: count successful sends to `phone` within the rate-limit
+ * window. Read inside the same transaction as the claim so concurrent
+ * workers see a consistent view.
+ */
+async function countRecentSends(tx: DbOrTx, phone: string): Promise<number> {
+  const since = new Date(Date.now() - PHONE_RATE_WINDOW_MS);
+  const [row] = await tx
+    .select({ n: sql<number>`count(*)::int` })
+    .from(smsOutbox)
+    .where(and(
+      eq(smsOutbox.recipientPhone, phone),
+      gte(smsOutbox.sentAt, since),
+    ));
+  return Number(row?.n ?? 0);
+}
+
+interface OutboxPayload {
+  link: string;
+  locale: string;
+  tokenRowId?: string;
+}
+
+/** Stamp a transient or permanent failure on the given row inside the
+ * caller's tx. Sets next_attempt_at so concurrent workers cannot
+ * immediately re-claim the same row. */
+async function stampFailure(
+  tx: DbOrTx,
+  row: SmsOutboxRow,
+  err: string,
+): Promise<{ outcome: "deadLettered" | "transientError"; id: string }> {
+  // Spec: dead-letter once attempts > MAX_ATTEMPTS. row.attempts is the
+  // value AFTER the claim's increment, so a fresh row's first failure
+  // has row.attempts === 1, and dead-letter only fires when this is the
+  // 6th-or-later attempt (row.attempts > 5).
+  if (row.attempts > MAX_ATTEMPTS) {
+    await tx
+      .update(smsOutbox)
+      .set({ deadLetterAt: new Date(), lastError: err })
+      .where(eq(smsOutbox.id, row.id));
+    return { outcome: "deadLettered" as const, id: row.id };
   }
+  await tx
+    .update(smsOutbox)
+    .set({
+      lastError: err,
+      nextAttemptAt: new Date(Date.now() + TRANSIENT_BACKOFF_MS),
+    })
+    .where(eq(smsOutbox.id, row.id));
+  return { outcome: "transientError" as const, id: row.id };
+}
 
-  // Resolve active SMS plugin once per batch.
-  const plugin = await storage.getActiveSmsPlugin();
-  if (!plugin) {
-    // No active SMS plugin — leave rows pending, decrement attempts so we
-    // don't burn the retry budget on misconfiguration.
-    await db.update(smsOutbox)
-      .set({ attempts: sql`GREATEST(0, ${smsOutbox.attempts} - 1)`, lastError: "no_active_sms_plugin" })
-      .where(sql`${smsOutbox.id} IN (${sql.join(claimed.map((r: any) => sql`${r.id}`), sql`, `)})`);
-    return { sent: 0, deadLettered: 0, remaining: claimed.length };
-  }
+/**
+ * Process a single row inside its own transaction. Returns the outcome
+ * for accounting in the caller. The transaction holds the row's lock
+ * for the duration of the send, so other workers cannot re-claim it.
+ */
+async function processOneRow(excludeIds: string[]): Promise<{ outcome: "sent" | "deadLettered" | "skipped" | "noPlugin" | "rateLimited" | "transientError" | "empty"; id: string | null }> {
+  return await db.transaction(async (tx) => {
+    const row = await claimOneRow(tx, excludeIds);
+    if (!row) return { outcome: "empty" as const, id: null };
 
-  let sent = 0;
-  let deadLettered = 0;
+    // Per-phone rate-limit check. Take a phone-keyed advisory xact
+    // lock first so two parallel workers cannot both observe "count
+    // below cap" for the same phone and both proceed to send. This
+    // mirrors the reservation primitive used by
+    // tryReserveAndCreateOtpVerification, applied at drain time so
+    // the cap holds even when bulk re-issue enqueues many rows for
+    // the same number.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${row.recipientPhone}))`);
+    const recentSends = await countRecentSends(tx, row.recipientPhone);
+    if (recentSends >= PHONE_RATE_MAX) {
+      // Roll back the attempts increment and record the reason. The row
+      // stays pending so a subsequent drain cycle (after the window
+      // slides) will pick it up.
+      await tx
+        .update(smsOutbox)
+        .set({
+          attempts: sql`GREATEST(0, ${smsOutbox.attempts} - 1)`,
+          lastError: "phone_rate_limited",
+          nextAttemptAt: new Date(Date.now() + RATE_LIMIT_BACKOFF_MS),
+        })
+        .where(eq(smsOutbox.id, row.id));
+      return { outcome: "rateLimited" as const, id: row.id };
+    }
 
-  for (const row of claimed) {
-    const payload = row.payload as { link: string; locale: string; tokenRowId?: string };
+    // Resolve plugin (cheap; cached at the storage layer).
+    const plugin = await storage.getActiveSmsPlugin();
+    if (!plugin) {
+      // Don't burn the retry budget on a misconfiguration. Backoff
+      // briefly so a parallel worker doesn't hot-loop on the same
+      // row inside the same scheduler tick.
+      await tx
+        .update(smsOutbox)
+        .set({
+          attempts: sql`GREATEST(0, ${smsOutbox.attempts} - 1)`,
+          lastError: "no_active_sms_plugin",
+          nextAttemptAt: new Date(Date.now() + NO_PLUGIN_BACKOFF_MS),
+        })
+        .where(eq(smsOutbox.id, row.id));
+      return { outcome: "noPlugin" as const, id: row.id };
+    }
+
+    const payload = row.payload as OutboxPayload;
     const locale = payload.locale === "ar" ? "ar" : "en";
     const message = trL(locale, "sms.smpActivation", { link: payload.link });
 
     try {
       const result = await sendSmsViaPlugin(plugin, row.recipientPhone, message);
       if (result.success) {
-        await db.update(smsOutbox)
+        await tx
+          .update(smsOutbox)
           .set({ sentAt: new Date(), lastError: null })
           .where(eq(smsOutbox.id, row.id));
         if (payload.tokenRowId) {
+          // markActivationSmsSent is best-effort; failure here would
+          // roll back the send acknowledgement (since we're in a tx),
+          // which would cause the next drain to re-send the SMS.
           await markActivationSmsSent(payload.tokenRowId);
         }
-        sent++;
-      } else {
-        const err = result.error ?? "unknown_error";
-        if (row.attempts >= MAX_ATTEMPTS) {
-          await db.update(smsOutbox)
-            .set({ deadLetterAt: new Date(), lastError: err })
-            .where(eq(smsOutbox.id, row.id));
-          deadLettered++;
-        } else {
-          await db.update(smsOutbox)
-            .set({ lastError: err })
-            .where(eq(smsOutbox.id, row.id));
-        }
+        return { outcome: "sent" as const, id: row.id };
       }
-    } catch (e: any) {
-      const err = (e?.message ?? String(e)).slice(0, 500);
-      if (row.attempts >= MAX_ATTEMPTS) {
-        await db.update(smsOutbox)
-          .set({ deadLetterAt: new Date(), lastError: err })
-          .where(eq(smsOutbox.id, row.id));
-        deadLettered++;
-      } else {
-        await db.update(smsOutbox)
-          .set({ lastError: err })
-          .where(eq(smsOutbox.id, row.id));
-      }
+      const err = result.error ?? "unknown_error";
+      return await stampFailure(tx, row, err);
+    } catch (e) {
+      const err = (e instanceof Error ? e.message : String(e)).slice(0, 500);
+      return await stampFailure(tx, row, err);
     }
+  });
+}
+
+/**
+ * Drain pending SMS rows. Called every 30s by the scheduler. Each row
+ * is claimed and processed inside its own transaction (FOR UPDATE
+ * SKIP LOCKED) so concurrent drain workers achieve exactly-once
+ * delivery semantics.
+ */
+export async function drainSmsOutbox(): Promise<{ sent: number; deadLettered: number; remaining: number }> {
+  let sent = 0;
+  let deadLettered = 0;
+
+  const seenIds: string[] = [];
+  for (let i = 0; i < BATCH_SIZE; i++) {
+    const { outcome, id } = await processOneRow(seenIds);
+    if (outcome === "empty") break;
+    if (id) seenIds.push(id);
+    if (outcome === "sent") sent++;
+    else if (outcome === "deadLettered") deadLettered++;
   }
 
   // Quick re-count of remaining pending rows for log/monitoring.

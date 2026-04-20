@@ -92,6 +92,8 @@ app.use((req, res, next) => {
   try {
     const { ensureLocaleColumn } = await import("./migrations/ensure-locale-column");
     await ensureLocaleColumn(log);
+    const { ensureSmsOutboxNextAttempt } = await import("./migrations/ensure-sms-outbox-next-attempt");
+    await ensureSmsOutboxNextAttempt(log);
   } catch (err) {
     log(`boot migration failed: ${err}`, "boot-migrate");
   }

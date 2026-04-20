@@ -170,17 +170,36 @@ export async function sendSmsViaPlugin(
           : [k, v]
       )
     );
-    console.log(`[SMS Sender] ${sendConfig.method} ${url}`);
+    // Redact activation tokens (and any /activate?token=... URLs) from
+    // logs. Task #107 contract: the plaintext token only ever exists
+    // on the candidate's phone — never in server logs, never in the
+    // DB. The redaction is also defence-in-depth against any future
+    // SMS payload that happens to embed a credential-like value.
+    const redactStr = (s: string): string =>
+      s
+        // /activate?token=<...> in path or query (any field name token=)
+        .replace(/(\btoken=)[^\s"&'<>]+/gi, "$1***")
+        // any /activate/<rawToken> path style (defence-in-depth)
+        .replace(/(\/activate\/)[A-Za-z0-9_\-\.]+/gi, "$1***");
+    const redact = (v: unknown): unknown => {
+      if (typeof v === "string") return redactStr(v);
+      if (Array.isArray(v)) return v.map(redact);
+      if (v && typeof v === "object") {
+        return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, vv]) => [k, redact(vv)]));
+      }
+      return v;
+    };
+    console.log(`[SMS Sender] ${sendConfig.method} ${redactStr(url)}`);
     console.log(`[SMS Sender] Headers:`, JSON.stringify(safeHeaders));
     if (sendConfig.method !== "GET") {
-      console.log(`[SMS Sender] Body:`, JSON.stringify(resolvedBody));
+      console.log(`[SMS Sender] Body:`, JSON.stringify(redact(resolvedBody)));
     }
 
     const response = await fetch(url, fetchOptions);
     const successCodes = sendConfig.successStatusCodes ?? [200, 201];
 
     const rawText = await response.text();
-    console.log(`[SMS Sender] HTTP ${response.status} — raw response: ${rawText}`);
+    console.log(`[SMS Sender] HTTP ${response.status} — raw response: ${redactStr(rawText)}`);
     let responseData: unknown;
 
     const ct = response.headers.get("content-type") ?? "";
