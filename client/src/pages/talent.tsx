@@ -476,15 +476,75 @@ function CandidateProfileSheet({
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
 
+  // Phone-conflict state: when PATCH returns 409 because the new phone is
+  // already held by another candidate, surface a confirm dialog so the admin
+  // can either Cancel or Transfer the phone (which nulls it on the conflicting
+  // candidate). The pending payload is replayed with ?resolveConflict=transfer.
+  const [phoneConflict, setPhoneConflict] = useState<{
+    pendingPayload: Record<string, unknown>;
+    conflict: {
+      id: string;
+      fullNameEn: string;
+      classification: string;
+      status: string;
+      hasUserAccount: boolean;
+    };
+    newPhone: string;
+  } | null>(null);
+
+  async function patchCandidate(data: Record<string, unknown>, transfer: boolean): Promise<Candidate> {
+    const url = `/api/candidates/${candidate!.id}${transfer ? "?resolveConflict=transfer" : ""}`;
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+      credentials: "include",
+    });
+    if (res.status === 409) {
+      const body = await res.json().catch(() => ({}));
+      if (body?.conflict) {
+        const err: any = new Error(body.message || "Phone conflict");
+        err.kind = "phone_conflict";
+        err.conflict = body.conflict;
+        err.newPhone = (data.phone as string) ?? "";
+        throw err;
+      }
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`${res.status}: ${text || res.statusText}`);
+    }
+    return res.json();
+  }
+
   const saveMutation = useMutation({
-    mutationFn: async (data: Record<string, unknown>) =>
-      apiRequest("PATCH", `/api/candidates/${candidate!.id}`, data).then(r => r.json()),
+    mutationFn: (data: Record<string, unknown>) => patchCandidate(data, false),
     onSuccess: (updated) => {
       onSaved(updated);
       setEditing(false);
       toast({ title: t("toast.profileUpdated") });
     },
-    onError: () => toast({ title: t("toast.saveFailed"), variant: "destructive" }),
+    onError: (err: any, payload) => {
+      if (err?.kind === "phone_conflict") {
+        setPhoneConflict({ pendingPayload: payload, conflict: err.conflict, newPhone: err.newPhone });
+        return;
+      }
+      toast({ title: t("toast.saveFailed"), variant: "destructive" });
+    },
+  });
+
+  const transferMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => patchCandidate(data, true),
+    onSuccess: (updated) => {
+      setPhoneConflict(null);
+      onSaved(updated);
+      setEditing(false);
+      toast({ title: t("toast.profileUpdated") });
+    },
+    onError: () => {
+      setPhoneConflict(null);
+      toast({ title: t("toast.saveFailed"), variant: "destructive" });
+    },
   });
 
   function matchOption(val: string | null | undefined, options: string[]): string {
@@ -956,6 +1016,65 @@ function CandidateProfileSheet({
           )}
         </div>
       </SheetContent>
+      <AlertDialog open={!!phoneConflict} onOpenChange={(o) => { if (!o) setPhoneConflict(null); }}>
+        <AlertDialogContent data-testid="dialog-phone-conflict">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {String(t("profile.phoneConflict.title", { defaultValue: "Phone number already in use" } as any))}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  {String(t("profile.phoneConflict.body", {
+                    defaultValue: "The phone number {{phone}} is currently held by {{name}}.",
+                    phone: phoneConflict?.newPhone ?? "",
+                    name: phoneConflict?.conflict.fullNameEn ?? "",
+                  } as any))}
+                </p>
+                <div className="rounded-sm border border-border bg-muted/20 p-3 text-xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">{t("profile.phoneConflict.holderLabel", { defaultValue: "Current holder" } as any)}</span>
+                    <span className="text-white font-medium"><bdi>{phoneConflict?.conflict.fullNameEn}</bdi></span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">{t("profile.phoneConflict.classificationLabel", { defaultValue: "Type" } as any)}</span>
+                    <span className="text-white">
+                      {phoneConflict?.conflict.classification === "smp"
+                        ? String(t("classification.smp", { defaultValue: "SMP" } as any))
+                        : String(t("classification.individual", { defaultValue: "Individual" } as any))}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">{t("profile.phoneConflict.statusLabel", { defaultValue: "Status" } as any)}</span>
+                    <span className="text-white">{phoneConflict?.conflict.status}</span>
+                  </div>
+                </div>
+                <p className="text-amber-400 text-xs">
+                  {String(t("profile.phoneConflict.warning", {
+                    defaultValue: "If you transfer the phone, the current holder will be left without a phone number until a new one is added. Any pending activation links sent to that number will be invalidated.",
+                  } as any))}
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-phone-conflict-cancel">
+              {String(t("profile.cancel", { defaultValue: "Cancel" } as any))}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="button-phone-conflict-transfer"
+              onClick={() => {
+                if (phoneConflict) transferMutation.mutate(phoneConflict.pendingPayload);
+              }}
+              disabled={transferMutation.isPending}
+              className="bg-amber-600 hover:bg-amber-600/90 text-white"
+            >
+              {transferMutation.isPending ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : null}
+              {String(t("profile.phoneConflict.transferBtn", { defaultValue: "Transfer phone" } as any))}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   );
 }
@@ -998,12 +1117,26 @@ export default function TalentPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [smpValidating, setSmpValidating] = useState(false);
   const [smpValidationResults, setSmpValidationResults] = useState<{
-    status: "new" | "clean" | "blocked";
+    status: "new" | "clean" | "blocked" | "phone_conflict";
     row: Record<string, string>;
     candidate?: { id: string; fullNameEn: string; nationalId: string | null };
+    conflictCandidate?: {
+      id: string;
+      fullNameEn: string;
+      nationalId: string | null;
+      classification: string;
+      status: string;
+      hasUserAccount: boolean;
+    };
     blockedReason?: string;
   }[] | null>(null);
   const [smpConfirmedClean, setSmpConfirmedClean] = useState<Set<number>>(new Set());
+  // Per-row resolution for `phone_conflict` results. Key = index in
+  // smpValidationResults. Default policy is `skip` so admins must opt in
+  // to either reclassify the existing phone-owner or transfer the phone
+  // away from them.
+  const [smpConflictResolutions, setSmpConflictResolutions] =
+    useState<Map<number, "reclassify" | "transfer" | "skip">>(new Map());
   const [profileCandidate, setProfileCandidate] = useState<Candidate | null>(null);
   const [exporting, setExporting] = useState(false);
   const [blockCandidate, setBlockCandidate] = useState<Candidate | null>(null);
@@ -1164,10 +1297,14 @@ export default function TalentPage() {
       if (hasSmpRows && smpValidationResults) {
         const nonSmpRows = candidates.filter(r => (r.source || "").toLowerCase() !== "smp");
 
-        // Build results with per-row confirmed flag for CLEAN rows (server enforces this)
+        // Build results with per-row confirmed flag for CLEAN rows and the
+        // chosen resolution for PHONE_CONFLICT rows (server enforces both).
         const resultsWithConfirmation = smpValidationResults.map((r, idx) => ({
           ...r,
           confirmed: r.status === "clean" ? smpConfirmedClean.has(idx) : undefined,
+          resolution: r.status === "phone_conflict"
+            ? (smpConflictResolutions.get(idx) ?? "skip")
+            : undefined,
         }));
 
         // Commit SMP batch via dedicated endpoint
@@ -1243,7 +1380,7 @@ export default function TalentPage() {
         setUploadPreview(null);
         setUploadError(null);
         setSmpValidationResults(null);
-        setSmpConfirmedClean(new Set());
+        setSmpConfirmedClean(new Set()); setSmpConflictResolutions(new Map());
       } else {
         const indiv = data.individual;
         if (indiv.skipped > 0) {
@@ -1271,7 +1408,7 @@ export default function TalentPage() {
           setUploadPreview(null);
           setUploadError(null);
           setSmpValidationResults(null);
-          setSmpConfirmedClean(new Set());
+          setSmpConfirmedClean(new Set()); setSmpConflictResolutions(new Map());
         }
       }
     },
@@ -1325,7 +1462,7 @@ export default function TalentPage() {
     setUploadError(null);
     setUploadPreview(null);
     setSmpValidationResults(null);
-    setSmpConfirmedClean(new Set());
+    setSmpConfirmedClean(new Set()); setSmpConflictResolutions(new Map());
     try {
       const rows = await parseFileToRows(file);
       if (rows.length === 0) {
@@ -1336,7 +1473,12 @@ export default function TalentPage() {
         setUploadError(t("upload.tooManyRows", { n: formatNumber(rows.length), max: formatNumber(1000) }));
         return;
       }
-      setUploadPreview(rows);
+      // Task #107: this dialog is SMP-only since the template was trimmed to
+      // fullNameEn + nationalId + phone (no `source` column). Stamp every
+      // row as SMP so the downstream validate/commit and bucket-rendering
+      // logic — which all gate on `r.source === "smp"` — routes correctly.
+      const stamped = rows.map(r => ({ ...r, source: "smp" }));
+      setUploadPreview(stamped);
     } catch (err: any) {
       setUploadError(err.message || t("upload.parseFail"));
     }
@@ -1351,7 +1493,7 @@ export default function TalentPage() {
     }
     setSmpValidating(true);
     setSmpValidationResults(null);
-    setSmpConfirmedClean(new Set());
+    setSmpConfirmedClean(new Set()); setSmpConflictResolutions(new Map());
     try {
       const res = await apiRequest("POST", "/api/candidates/smp-validate", { candidates: smpRows });
       const data = await res.json();
@@ -2025,7 +2167,7 @@ export default function TalentPage() {
           setUploadPreview(null);
           setUploadError(null);
           setSmpValidationResults(null);
-          setSmpConfirmedClean(new Set());
+          setSmpConfirmedClean(new Set()); setSmpConflictResolutions(new Map());
         }
       }}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -2170,6 +2312,80 @@ export default function TalentPage() {
                         </div>
                       </div>
                     )}
+
+                    {/* PHONE_CONFLICT bucket */}
+                    {smpValidationResults.filter(r => r.status === "phone_conflict").map((result, i) => {
+                      const idx = smpValidationResults.indexOf(result);
+                      const resolution = smpConflictResolutions.get(idx) ?? "skip";
+                      const setRes = (v: "reclassify" | "transfer" | "skip") => {
+                        setSmpConflictResolutions(prev => {
+                          const next = new Map(prev);
+                          next.set(idx, v);
+                          return next;
+                        });
+                      };
+                      return (
+                        <div key={`pc-${i}`} className="bg-amber-500/10 border border-amber-500/30 rounded p-2 space-y-2" data-testid={`smp-phone-conflict-row-${i}`}>
+                          <div>
+                            <p className="text-xs font-semibold text-amber-400">
+                              {String(t("upload.phoneConflict.header", {
+                                defaultValue: "Phone {{phone}} already belongs to {{name}}",
+                                phone: result.row.phone || "",
+                                name: result.conflictCandidate?.fullNameEn || "",
+                              } as any))}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {String(t("upload.phoneConflict.body", {
+                                defaultValue: "Uploaded as {{newName}}{{idSuffix}}. Existing holder is {{existingType}} ({{existingStatus}}).",
+                                newName: result.row.fullNameEn || result.row.name || "—",
+                                idSuffix: result.row.nationalId ? ` · ${result.row.nationalId}` : "",
+                                existingType: result.conflictCandidate?.classification === "smp"
+                                  ? String(t("classification.smp", { defaultValue: "SMP" } as any))
+                                  : String(t("classification.individual", { defaultValue: "Individual" } as any)),
+                                existingStatus: result.conflictCandidate?.status || "—",
+                              } as any))}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            <Button
+                              size="sm"
+                              variant={resolution === "reclassify" ? "default" : "outline"}
+                              className={`text-xs h-6 ${resolution === "reclassify" ? "bg-blue-600 text-white" : "border-blue-500/40 text-blue-400"}`}
+                              onClick={() => setRes("reclassify")}
+                              data-testid={`button-pc-reclassify-${i}`}
+                            >
+                              {String(t("upload.phoneConflict.reclassify", { defaultValue: "Reclassify existing as SMP" } as any))}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={resolution === "transfer" ? "default" : "outline"}
+                              className={`text-xs h-6 ${resolution === "transfer" ? "bg-amber-600 text-white" : "border-amber-500/40 text-amber-400"}`}
+                              onClick={() => setRes("transfer")}
+                              data-testid={`button-pc-transfer-${i}`}
+                            >
+                              {String(t("upload.phoneConflict.transfer", { defaultValue: "Transfer phone to new SMP" } as any))}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={resolution === "skip" ? "default" : "outline"}
+                              className={`text-xs h-6 ${resolution === "skip" ? "bg-muted text-white" : "border-border text-muted-foreground"}`}
+                              onClick={() => setRes("skip")}
+                              data-testid={`button-pc-skip-${i}`}
+                            >
+                              {String(t("upload.phoneConflict.skip", { defaultValue: "Skip row" } as any))}
+                            </Button>
+                          </div>
+                          {resolution === "transfer" && (
+                            <p className="text-[11px] text-amber-400/80">
+                              {String(t("upload.phoneConflict.transferWarn", {
+                                defaultValue: "{{name}} will lose this phone number. Any pending activation links sent to it will be invalidated.",
+                                name: result.conflictCandidate?.fullNameEn || "",
+                              } as any))}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
 
                     {/* CLEAN bucket */}
                     {smpValidationResults.filter(r => r.status === "clean").map((result, i) => {

@@ -1795,18 +1795,84 @@ export async function registerRoutes(
       // outbox rows still pointed at the old phone (otherwise the worker
       // would deliver an activation link to a number the candidate no
       // longer owns).
+      const beforeUpdate = await storage.getCandidate(req.params.id);
+      if (!beforeUpdate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
       const phoneChanging =
         typeof data.phone === "string" &&
-        (await storage.getCandidate(req.params.id))?.phone !== data.phone;
+        beforeUpdate.phone !== data.phone;
 
-      const candidate = await storage.updateCandidate(req.params.id, data);
-      if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
+      // Phone uniqueness: if the new phone is non-empty and already held by
+      // another candidate, refuse with 409 unless the admin explicitly opts
+      // into ?resolveConflict=transfer (which nulls the other candidate's
+      // phone and invalidates their pending activation SMS).
+      let transferredFromId: string | null = null;
+      if (phoneChanging && data.phone) {
+        const other = await storage.getCandidateByPhone(data.phone);
+        if (other && other.id !== req.params.id) {
+          const resolveConflict = String(req.query.resolveConflict ?? "").toLowerCase();
+          if (resolveConflict !== "transfer") {
+            return res.status(409).json({
+              message: tr(req, "candidate.phoneExists", { phone: data.phone }),
+              conflict: {
+                id: other.id,
+                fullNameEn: other.fullNameEn,
+                classification: (other as any).classification ?? "individual",
+                status: other.status,
+                hasUserAccount: !!other.userId,
+              },
+            });
+          }
+          // Transfer requires admin perm — never allow a candidate self-edit
+          // to silently steal another worker's phone.
+          if (!isAdmin) {
+            return res.status(403).json({ message: tr(req, "candidate.phoneTransferAdminOnly") });
+          }
+          // Race-safe transfer: re-fetch the holder by id and verify the
+          // phone still matches what we just looked up. If it changed
+          // between the lookup and now (concurrent edit), refuse with 409
+          // and let the admin retry against the new state.
+          const reFetched = await storage.getCandidate(other.id);
+          if (!reFetched || reFetched.phone !== data.phone) {
+            return res.status(409).json({
+              message: tr(req, "candidate.phoneConflictStateChanged"),
+              conflict: { id: other.id, phoneStillHeld: reFetched?.phone === data.phone },
+            });
+          }
+          await storage.updateCandidate(other.id, { phone: null } as any);
+          transferredFromId = other.id;
+        }
+      }
+
+      let candidate;
+      try {
+        candidate = await storage.updateCandidate(req.params.id, data);
+      } catch (mainErr) {
+        // Compensating rollback: if the target update fails after we already
+        // nulled the previous holder's phone, restore the previous holder's
+        // phone so we don't leave a worker phone-less due to a partial write.
+        if (transferredFromId && data.phone) {
+          try { await storage.updateCandidate(transferredFromId, { phone: data.phone } as any); }
+          catch (rbErr) { console.error("[candidates:patch] phone-transfer rollback failed:", rbErr); }
+        }
+        throw mainErr;
+      }
+      if (!candidate) {
+        if (transferredFromId && data.phone) {
+          try { await storage.updateCandidate(transferredFromId, { phone: data.phone } as any); }
+          catch (rbErr) { console.error("[candidates:patch] phone-transfer rollback failed:", rbErr); }
+        }
+        return res.status(404).json({ message: tr(req, "candidate.notFound") });
+      }
 
       if (phoneChanging) {
         try {
           const { invalidatePendingActivationSms } = await import("./sms-outbox");
           const n = await invalidatePendingActivationSms(req.params.id);
           if (n > 0) console.log(`[candidates:patch] Phone changed → invalidated ${n} pending activation SMS for ${req.params.id}.`);
+          if (transferredFromId) {
+            const m = await invalidatePendingActivationSms(transferredFromId);
+            if (m > 0) console.log(`[candidates:patch] Phone transferred away → invalidated ${m} pending activation SMS for ${transferredFromId}.`);
+          }
         } catch (e) {
           console.error("[candidates:patch] phone-change invalidation failed:", e);
         }
@@ -1928,22 +1994,62 @@ export async function registerRoutes(
       }
 
       const results: {
-        status: "new" | "clean" | "blocked";
+        status: "new" | "clean" | "blocked" | "phone_conflict";
         row: Record<string, string>;
         candidate?: { id: string; fullNameEn: string; nationalId: string | null };
+        conflictCandidate?: {
+          id: string;
+          fullNameEn: string;
+          nationalId: string | null;
+          classification: string;
+          status: string;
+          hasUserAccount: boolean;
+        };
         blockedReason?: string;
       }[] = [];
+
+      // Helper: a row with no nationalId match still needs a phone-conflict
+      // check, otherwise we'd silently create a duplicate candidate that
+      // shares another worker's phone (the candidates table has a phone
+      // index but no unique constraint).
+      async function emitNewOrPhoneConflict(row: Record<string, string>) {
+        const phone = row.phone?.trim();
+        if (phone) {
+          const phoneOwner = await storage.getCandidateByPhone(phone);
+          // Only flag a conflict when the phone is held by an *active*
+          // candidate. If the holder is already inactive (terminated,
+          // soft-deactivated, etc.) the phone is effectively free — fall
+          // through to the NEW path so the row is created cleanly.
+          // (getCandidateByPhone already excludes archived rows.)
+          if (phoneOwner && phoneOwner.status !== "inactive") {
+            results.push({
+              status: "phone_conflict",
+              row,
+              conflictCandidate: {
+                id: phoneOwner.id,
+                fullNameEn: phoneOwner.fullNameEn,
+                nationalId: phoneOwner.nationalId ?? null,
+                classification: (phoneOwner as any).classification ?? "individual",
+                status: phoneOwner.status,
+                hasUserAccount: !!phoneOwner.userId,
+              },
+            });
+            return;
+          }
+        }
+        results.push({ status: "new", row });
+      }
 
       for (const row of rows) {
         const nationalId = row.nationalId?.trim();
         if (!nationalId) {
-          results.push({ status: "new", row });
+          await emitNewOrPhoneConflict(row);
           continue;
         }
 
         const existing = await storage.getCandidateByNationalId(nationalId);
         if (!existing) {
-          results.push({ status: "new", row });
+          await emitNewOrPhoneConflict(row);
           continue;
         }
 
@@ -2008,10 +2114,16 @@ export async function registerRoutes(
     try {
       const { results: validationResults, eventId, jobId } = req.body as {
         results: {
-          status: "new" | "clean" | "blocked";
+          status: "new" | "clean" | "blocked" | "phone_conflict";
           confirmed?: boolean;
+          // For phone_conflict rows: how the admin chose to resolve the conflict.
+          //   reclassify → flip the existing phone-owner to SMP (no new candidate)
+          //   transfer   → null phone on existing owner, create new SMP with phone
+          //   skip / undefined → drop the row from the batch
+          resolution?: "reclassify" | "transfer" | "skip";
           row: Record<string, string>;
           candidate?: { id: string; fullNameEn: string; nationalId: string | null };
+          conflictCandidate?: { id: string; fullNameEn: string; nationalId: string | null };
         }[];
         eventId?: string;
         jobId?: string;
@@ -2060,9 +2172,101 @@ export async function registerRoutes(
         });
       };
 
+      const { invalidatePendingActivationSms } = await import("./sms-outbox");
+
       for (const result of validationResults) {
         if (result.status === "blocked") {
           skipped.push(result.candidate?.id ?? result.row.nationalId ?? "?");
+          continue;
+        }
+
+        // Phone-conflict rows: admin must explicitly choose how to resolve.
+        if (result.status === "phone_conflict" && result.conflictCandidate) {
+          const resolution = result.resolution ?? "skip";
+          const ownerId = result.conflictCandidate.id;
+
+          if (resolution === "skip") {
+            skipped.push(ownerId);
+            continue;
+          }
+
+          // Re-check blockers on the existing phone-owner before either branch
+          // can act on them — same authority used by the clean path.
+          const [blockers] = await getCandidateBlockers([ownerId]);
+          if (blockers && blockers.reasons.length > 0) {
+            skipped.push(ownerId);
+            continue;
+          }
+
+          const owner = await storage.getCandidate(ownerId);
+          if (!owner) { skipped.push(ownerId); continue; }
+
+          if (resolution === "reclassify") {
+            // Treat exactly like CLEAN: flip the existing phone-owner to SMP.
+            const newStatus = owner.userId ? owner.status : "awaiting_activation";
+            await storage.updateCandidate(ownerId, {
+              classification: "smp",
+              status: newStatus as any,
+            } as any);
+            await enqueueIfPhoneOnFile(ownerId);
+            reclassified.push(ownerId);
+            continue;
+          }
+
+          if (resolution === "transfer") {
+            // Race-safe transfer: re-fetch the owner and confirm they still
+            // hold the phone we expect. If the phone changed since validate
+            // (concurrent edit or a prior commit row already moved it), skip
+            // the row defensively rather than nulling someone unrelated.
+            const expectedPhone = (result.row.phone || "").trim();
+            if (!expectedPhone || owner.phone !== expectedPhone) {
+              skipped.push(ownerId);
+              continue;
+            }
+            // Also re-check that the new row's phone isn't already held by
+            // a *different* candidate (another concurrent transfer could
+            // have re-assigned it between validate and now).
+            const currentHolder = await storage.getCandidateByPhone(expectedPhone);
+            if (!currentHolder || currentHolder.id !== ownerId) {
+              skipped.push(ownerId);
+              continue;
+            }
+
+            await storage.updateCandidate(ownerId, { phone: null } as any);
+            try {
+              await invalidatePendingActivationSms(ownerId);
+            } catch (e) {
+              console.error("[smp-commit] phone-transfer invalidation failed:", e);
+            }
+            try {
+              const row = result.row;
+              const parsed = insertCandidateSchema.parse({
+                fullNameEn: row.fullNameEn || row.name || "",
+                nationalId: row.nationalId || null,
+                phone:      row.phone || null,
+                classification: "smp",
+                status: "awaiting_activation",
+                profileCompleted: false,
+              });
+              const newCandidate = await storage.createCandidate(parsed);
+              await enqueueIfPhoneOnFile(newCandidate.id);
+              created.push(newCandidate.id);
+            } catch (parseErr) {
+              // Compensating rollback: createCandidate failed after we
+              // already nulled the previous holder's phone — restore it so
+              // the worker isn't left phone-less.
+              try {
+                await storage.updateCandidate(ownerId, { phone: expectedPhone } as any);
+              } catch (rbErr) {
+                console.error("[smp-commit] phone-transfer rollback failed:", rbErr);
+              }
+              skipped.push(result.row.nationalId ?? result.row.fullNameEn ?? "?");
+            }
+            continue;
+          }
+
+          // Unknown resolution → defensive skip
+          skipped.push(ownerId);
           continue;
         }
 
