@@ -59,6 +59,11 @@ import { eq, and, sql, desc, inArray, count } from "drizzle-orm";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
 import { trL, type ServerLocale } from "./i18n";
 import { validateFaceQuality } from "./rekognition";
+import {
+  recordRekognitionFallback,
+  getRekognitionFallbackSummary,
+  decideRekognitionFallbackAction,
+} from "./rekognition-telemetry";
 import XLSX from "xlsx";
 
 // Auth token signing/verification is centralized in `./auth-token` so this
@@ -426,6 +431,15 @@ export async function registerRoutes(
     }
   });
 
+  // Task #108 (Workstream 1) — admin telemetry: how often the
+  // photo-upload Rekognition fail-closed path has fired in the
+  // trailing 24 hours. A non-zero `firstUploadBlocked` count is the
+  // early signal that Rekognition is degraded and SMP activations
+  // are bouncing — see docs/rd/01-rekognition-resilience.md.
+  app.get("/api/admin/telemetry/rekognition-fallbacks", requirePermission("settings:read"), async (_req: Request, res: Response) => {
+    res.json(getRekognitionFallbackSummary());
+  });
+
   app.get("/api/ntp-health", requirePermission("system:ntp_check"), async (req: Request, res: Response) => {
     try {
       const server = (req.query.server as string) || "time.google.com";
@@ -567,12 +581,34 @@ export async function registerRoutes(
         const qualityResult = await validateFaceQuality(fileUrl);
         photoQualityResult = qualityResult;
 
-        if (isPhotoChange && qualityResult.qualityCheckSkipped) {
+        // Task #108 (Workstream 1) — fail-closed on first profile photo
+        // upload when Rekognition is unreachable. Previously we always
+        // accepted unverified first uploads. With SMP bulk activation
+        // arriving in Task #107 a multi-thousand-worker activation
+        // surge during a Rekognition outage would silently accumulate
+        // workers whose attendance CompareFaces will then fail every
+        // clock-in.
+        //
+        // Decision logic is centralized in
+        // `decideRekognitionFallbackAction` so it can be unit-tested
+        // without spinning up Express. See the truth table there for
+        // why active-employee re-uploads still fail-open during
+        // outages (HR review is the safety net).
+        const hasPreviouslyValidatedPhoto = !!(candidate.hasPhoto && candidate.photoUrl);
+        const fallbackDecision = decideRekognitionFallbackAction({
+          qualityCheckSkipped: !!qualityResult.qualityCheckSkipped,
+          hasPreviouslyValidatedPhoto,
+        });
+        if (fallbackDecision.kind === "block") {
+          recordRekognitionFallback(fallbackDecision.telemetry, id);
           try { await deleteFile(fileUrl); } catch {}
           return res.status(503).json({
             message: tr(req, "photo.verifyUnavailable"),
             qualityResult: { passed: false, checks: [{ name: "Face verification service", passed: false, tip: "The verification service is currently unreachable. Your photo cannot be processed until the service is available." }], qualityCheckSkipped: true },
           });
+        }
+        if (fallbackDecision.kind === "allow") {
+          recordRekognitionFallback(fallbackDecision.telemetry, id);
         }
 
         if (!qualityResult.passed && !qualityResult.qualityCheckSkipped) {

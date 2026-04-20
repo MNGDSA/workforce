@@ -26,6 +26,17 @@ For tooltip info icons, use Lucide's `Info` icon directly without wrapping it in
 
 ## Release & Operations
 
+- **Rekognition resilience (Task #108, Workstream 1):** profile-photo
+  upload fails closed with `503` + bilingual `photo.verifyUnavailable`
+  when AWS Rekognition is unreachable AND the candidate has no
+  previously-validated photo on file. Re-uploads from candidates with
+  an existing valid photo continue to fail open (the existing photo
+  vouches for them). Fallback events are tracked in a process-local
+  ring buffer (`server/rekognition-telemetry.ts`) and surfaced at
+  `GET /api/admin/telemetry/rekognition-fallbacks` for early outage
+  detection. R&D memos for the unshipped workstreams (attendance
+  cost reduction, SMP identity binding) live in `docs/rd/`.
+
 - **Android Play release readiness:** the workforce app's release-signing,
   crash-reporting, and Play Integrity wiring is scaffolded but the
   operational rollout is deferred until a Google Play Console account and a
