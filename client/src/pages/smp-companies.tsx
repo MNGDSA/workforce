@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState, useRef } from "react";
+import { useLocation } from "wouter";
 import {
   Search,
   Plus,
@@ -30,6 +31,7 @@ import {
   Banknote,
   ToggleLeft,
   ToggleRight,
+  Upload,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -511,6 +513,7 @@ function CompanySheet({
   const { t, i18n } = useTranslation(["smpCompanies"]);
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [, setLocation] = useLocation();
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState<Partial<SMPCompany>>({});
   const [activeTab, setActiveTab] = useState<"info" | "docs" | "workers">("info");
@@ -592,6 +595,16 @@ function CompanySheet({
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-blue-600/40 text-blue-400 hover:bg-blue-600/10 text-xs"
+                onClick={() => setLocation(`/talent?smpCompanyId=${company.id}&openBulkUpload=1`)}
+                data-testid="button-upload-workers"
+              >
+                <Upload className="h-3.5 w-3.5 me-1.5" />
+                {t("smpCompanies:sheet.uploadWorkers")}
+              </Button>
               <Button
                 size="icon"
                 variant="ghost"

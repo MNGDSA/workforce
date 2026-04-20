@@ -56,7 +56,7 @@ export async function getCandidateBlockers(
     .from(onboarding)
     .where(and(
       inArray(onboarding.candidateId, candidateIds),
-      sql`${onboarding.status} NOT IN ('converted', 'cancelled')`,
+      sql`${onboarding.status} NOT IN ('converted', 'rejected', 'terminated')`,
     ));
   const pendingOnbSet = new Set(pendingOnb.map((r) => r.candidateId));
 
@@ -70,10 +70,10 @@ export async function getCandidateBlockers(
     .from(interviews)
     .where(and(
       sql`${interviews.scheduledAt} > now()`,
-      sql`${interviews.status} IN ('scheduled', 'rescheduled')`,
+      sql`${interviews.status} IN ('scheduled')`,
       or(
         inArray(interviews.candidateId, candidateIds),
-        sql`${interviews.invitedCandidateIds} && ARRAY[${sql.join(candidateIds.map((id) => sql`${id}`), sql`, `)}]::varchar[]`,
+        sql`${interviews.invitedCandidateIds} && ARRAY[${sql.join(candidateIds.map((id) => sql`${id}`), sql`, `)}]::text[]`,
       ),
     ));
   const scheduledSet = new Set<string>();

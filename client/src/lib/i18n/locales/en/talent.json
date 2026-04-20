@@ -87,7 +87,11 @@
     "block": "Block",
     "unblock": "Unblock",
     "archive": "Archive",
-    "restore": "Restore"
+    "restore": "Restore",
+    "resendActivation": "Resend Activation SMS",
+    "sendToOnboarding": "Send to Onboarding",
+    "reclassifyToIndividual": "Reclassify to Individual",
+    "reclassifyToSmp": "Reclassify to SMP"
   },
   "bulkBar": {
     "selected": "{{n}} selected",
@@ -95,7 +99,16 @@
     "unblock": "Unblock",
     "export": "Export",
     "archive": "Archive",
-    "clear": "Clear"
+    "clear": "Clear",
+    "resendActivation": "Resend Activation",
+    "sendToOnboarding": "Send to Onboarding"
+  },
+  "smpToast": {
+    "reissued": "Re-issued activation SMS for {{n}} worker(s).",
+    "onboarded": "Sent {{n}} worker(s) to onboarding.",
+    "reclassified": "Reclassified candidate.",
+    "blockedByPipeline": "Blocked: candidate has active pipeline records.",
+    "noSmpSelected": "Select SMP candidates to use this action."
   },
   "bulkConfirm": {
     "titleArchive": "Archive {{n}} candidate(s)?",

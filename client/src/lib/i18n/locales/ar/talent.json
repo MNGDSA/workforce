@@ -96,7 +96,11 @@
     "block": "حظر",
     "unblock": "رفع الحظر",
     "archive": "أرشفة",
-    "restore": "استعادة"
+    "restore": "استعادة",
+    "resendActivation": "إعادة إرسال رسالة التفعيل",
+    "sendToOnboarding": "إرسال إلى التأهيل",
+    "reclassifyToIndividual": "تحويل إلى فردي",
+    "reclassifyToSmp": "تحويل إلى عمالة شركة"
   },
   "bulkBar": {
     "selected": "{{n}} محدد",
@@ -104,7 +108,16 @@
     "unblock": "رفع الحظر",
     "export": "تصدير",
     "archive": "أرشفة",
-    "clear": "مسح"
+    "clear": "مسح",
+    "resendActivation": "إعادة إرسال التفعيل",
+    "sendToOnboarding": "إرسال إلى التأهيل"
+  },
+  "smpToast": {
+    "reissued": "تم إعادة إرسال رسالة التفعيل لـ {{n}} عامل.",
+    "onboarded": "تم إرسال {{n}} عامل إلى التأهيل.",
+    "reclassified": "تم تغيير تصنيف المرشح.",
+    "blockedByPipeline": "محظور: لدى المرشح سجلات نشطة في خط المعالجة.",
+    "noSmpSelected": "اختر مرشحي عمالة الشركات لاستخدام هذا الإجراء."
   },
   "bulkConfirm": {
     "titleArchive": "أرشفة {{n}} مرشح؟",

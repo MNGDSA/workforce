@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { sanitizeSaMobileInput, normalizeSaMobileOnBlur, isValidSaMobile } from "@/lib/phone-input";
 import { useLocation } from "wouter";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -54,6 +54,9 @@ import {
   MinusSquare,
   Ban,
   Unlock,
+  Send,
+  UserPlus,
+  Repeat,
 } from "lucide-react";
 import {
   Table,
@@ -899,6 +902,24 @@ export default function TalentPage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(new Set(DEFAULT_VISIBLE));
   const [uploadOpen, setUploadOpen] = useState(false);
+
+  // Task #107: support deep-link from /smp-companies "Upload Workers" button
+  // (?openBulkUpload=1[&smpCompanyId=...]). Auto-opens the bulk upload dialog
+  // once on mount and strips the params from the URL so refreshes don't loop.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("openBulkUpload") === "1") {
+      setUploadOpen(true);
+      params.delete("openBulkUpload");
+      params.delete("smpCompanyId");
+      const remaining = params.toString();
+      const newUrl = window.location.pathname + (remaining ? `?${remaining}` : "");
+      window.history.replaceState({}, "", newUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadPreview, setUploadPreview] = useState<Record<string, string>[] | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -999,6 +1020,58 @@ export default function TalentPage() {
     onError: () => {
       toast({ title: t("toast.bulkActionFailed"), variant: "destructive" });
       setBulkConfirmAction(null);
+    },
+  });
+
+  const smpReissueMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      apiRequest("POST", "/api/candidates/smp-reissue-activation", { ids }).then(r => r.json()),
+    onSuccess: (data: { reissued?: number; skipped?: number }) => {
+      const n = data.reissued ?? 0;
+      const s = data.skipped ?? 0;
+      const title = t("smpToast.reissued", { n: formatNumber(n), count: n });
+      toast({
+        title,
+        description: s > 0 ? `${formatNumber(s)} skipped (already activated, blocked, or invalid).` : undefined,
+        variant: n === 0 && s > 0 ? "destructive" : undefined,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
+    },
+    onError: () => toast({ title: t("toast.bulkActionFailed"), variant: "destructive" }),
+  });
+
+  const smpOnboardingMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      apiRequest("POST", "/api/candidates/send-to-onboarding", { ids }).then(r => r.json()),
+    onSuccess: (data: { onboarded?: number; skipped?: number; skippedReasons?: { id: string; reason: string }[] }) => {
+      const n = data.onboarded ?? 0;
+      const s = data.skipped ?? 0;
+      const reasons = data.skippedReasons ?? [];
+      const title = t("smpToast.onboarded", { n: formatNumber(n), count: n });
+      const desc = s > 0
+        ? `${formatNumber(s)} skipped` + (reasons.length > 0 ? ` (${reasons.slice(0, 3).map(r => r.reason).join(", ")}${reasons.length > 3 ? "…" : ""})` : "")
+        : undefined;
+      toast({ title, description: desc, variant: n === 0 && s > 0 ? "destructive" : undefined });
+      setSelectedIds(new Set());
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] });
+    },
+    onError: () => toast({ title: t("toast.bulkActionFailed"), variant: "destructive" }),
+  });
+
+  const reclassifyMutation = useMutation({
+    mutationFn: ({ id, classification }: { id: string; classification: "individual" | "smp" }) =>
+      apiRequest("POST", `/api/candidates/${id}/reclassify`, { classification }).then(r => r.json()),
+    onSuccess: () => {
+      toast({ title: t("smpToast.reclassified") });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
+    },
+    onError: (err: any) => {
+      const msg = err?.message?.includes("blocker") || err?.message?.includes("pipeline")
+        ? t("smpToast.blockedByPipeline")
+        : t("toast.bulkActionFailed");
+      toast({ title: msg, variant: "destructive" });
     },
   });
 
@@ -1602,7 +1675,7 @@ export default function TalentPage() {
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuContent align="end" className="w-52">
                                 <DropdownMenuItem
                                   onClick={() => setProfileCandidate(candidate)}
                                   data-testid={`menu-view-profile-${candidate.id}`}
@@ -1610,6 +1683,48 @@ export default function TalentPage() {
                                   <UserCheck className="me-2 h-4 w-4" />
                                   {t("rowMenu.viewProfile")}
                                 </DropdownMenuItem>
+                                {(candidate as any).classification === "smp" && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    {candidate.status === "awaiting_activation" && (
+                                      <DropdownMenuItem
+                                        onClick={() => smpReissueMutation.mutate([candidate.id])}
+                                        data-testid={`menu-resend-activation-${candidate.id}`}
+                                      >
+                                        <Send className="me-2 h-4 w-4" />
+                                        {t("rowMenu.resendActivation")}
+                                      </DropdownMenuItem>
+                                    )}
+                                    {candidate.status !== "awaiting_activation" && (
+                                      <DropdownMenuItem
+                                        onClick={() => smpOnboardingMutation.mutate([candidate.id])}
+                                        data-testid={`menu-send-onboarding-${candidate.id}`}
+                                      >
+                                        <UserPlus className="me-2 h-4 w-4" />
+                                        {t("rowMenu.sendToOnboarding")}
+                                      </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuItem
+                                      onClick={() => reclassifyMutation.mutate({ id: candidate.id, classification: "individual" })}
+                                      data-testid={`menu-reclassify-individual-${candidate.id}`}
+                                    >
+                                      <Repeat className="me-2 h-4 w-4" />
+                                      {t("rowMenu.reclassifyToIndividual")}
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                {(candidate as any).classification === "individual" && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={() => reclassifyMutation.mutate({ id: candidate.id, classification: "smp" })}
+                                      data-testid={`menu-reclassify-smp-${candidate.id}`}
+                                    >
+                                      <Repeat className="me-2 h-4 w-4" />
+                                      {t("rowMenu.reclassifyToSmp")}
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   onClick={() => {
@@ -1688,8 +1803,13 @@ export default function TalentPage() {
           )}
         </Card>
 
-        {selectedIds.size > 0 && (
-          <div className="fixed bottom-6 start-1/2 -translate-x-1/2 z-50 bg-card border border-border rounded-lg shadow-2xl px-5 py-3 flex items-center gap-4 animate-in slide-in-from-bottom-4 duration-200" data-testid="bulk-action-bar">
+        {selectedIds.size > 0 && (() => {
+          const selectedCands = candidates.filter(c => selectedIds.has(c.id));
+          const allSmp = selectedCands.length > 0 && selectedCands.every(c => (c as any).classification === "smp");
+          const awaitingActIds = selectedCands.filter(c => (c as any).classification === "smp" && c.status === "awaiting_activation").map(c => c.id);
+          const onboardableIds = selectedCands.filter(c => (c as any).classification === "smp" && c.status !== "awaiting_activation").map(c => c.id);
+          return (
+          <div className="fixed bottom-6 start-1/2 -translate-x-1/2 z-50 bg-card border border-border rounded-lg shadow-2xl px-5 py-3 flex items-center gap-4 animate-in slide-in-from-bottom-4 duration-200 flex-wrap max-w-[95vw]" data-testid="bulk-action-bar">
             <span className="text-sm font-medium text-white">
               {t("bulkBar.selected", { n: formatNumber(selectedIds.size) })}
             </span>
@@ -1750,6 +1870,32 @@ export default function TalentPage() {
               <Archive className="h-3.5 w-3.5 me-1.5" />
               {t("bulkBar.archive")}
             </Button>
+            {allSmp && awaitingActIds.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-blue-600 text-blue-400 hover:bg-blue-600/10"
+                onClick={() => smpReissueMutation.mutate(awaitingActIds)}
+                disabled={smpReissueMutation.isPending}
+                data-testid="bulk-resend-activation"
+              >
+                <Send className="h-3.5 w-3.5 me-1.5" />
+                {t("bulkBar.resendActivation")}
+              </Button>
+            )}
+            {allSmp && onboardableIds.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-emerald-600 text-emerald-400 hover:bg-emerald-600/10"
+                onClick={() => smpOnboardingMutation.mutate(onboardableIds)}
+                disabled={smpOnboardingMutation.isPending}
+                data-testid="bulk-send-onboarding"
+              >
+                <UserPlus className="h-3.5 w-3.5 me-1.5" />
+                {t("bulkBar.sendToOnboarding")}
+              </Button>
+            )}
             <div className="h-5 w-px bg-border" />
             <Button
               size="sm"
@@ -1762,7 +1908,8 @@ export default function TalentPage() {
               {t("bulkBar.clear")}
             </Button>
           </div>
-        )}
+          );
+        })()}
       </div>
 
       <AlertDialog open={!!bulkConfirmAction} onOpenChange={(o) => !o && setBulkConfirmAction(null)}>

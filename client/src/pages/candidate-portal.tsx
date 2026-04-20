@@ -1792,8 +1792,15 @@ export default function CandidatePortal() {
 
   const portalMode = resolvePortalMode(candidateProfile, activeWorkforceRecord);
   const hasWorkHistory = allWorkforceRecords.length > 0;
-  const navItems = getNavItems(portalMode, hasWorkHistory);
-  const isSmp = portalMode === "employee_smp";
+  const isSmp = portalMode === "employee_smp"
+    || (candidateProfile as any)?.classification === "smp";
+  // SMP-classified candidates (pre-onboarding or activated) should not see the
+  // individual job-application surface or the contract widget — those belong
+  // to the individual track.
+  const navItemsRaw = getNavItems(portalMode, hasWorkHistory);
+  const navItems = isSmp
+    ? navItemsRaw.filter((n) => n !== "jobs" && n !== "contract")
+    : navItemsRaw;
   const isEmployee = portalMode === "employee_individual" || portalMode === "employee_smp";
   const mostRecentRecord = allWorkforceRecords[0] ?? null;
 
@@ -1828,13 +1835,13 @@ export default function CandidatePortal() {
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobPosting[]>({
     queryKey: ["/api/jobs", "active"],
     queryFn: () => apiRequest("GET", "/api/jobs?status=active").then(r => r.json()),
-    enabled: portalMode === "candidate",
+    enabled: portalMode === "candidate" && !isSmp,
   });
 
   const { data: myApplications = [], refetch: refetchApplications } = useQuery<{ jobId: string; status: string }[]>({
     queryKey: ["/api/applications/mine", candidateId],
     queryFn: () => apiRequest("GET", `/api/applications?candidateId=${candidateId}`).then(r => r.json()),
-    enabled: !!candidateId && portalMode === "candidate",
+    enabled: !!candidateId && portalMode === "candidate" && !isSmp,
     staleTime: 0,
     refetchOnMount: true,
   });
@@ -1842,7 +1849,7 @@ export default function CandidatePortal() {
   const { data: myInterviews = [] } = useQuery<{ id: string }[]>({
     queryKey: ["/api/interviews/mine", candidateId],
     queryFn: () => apiRequest("GET", `/api/interviews?candidateId=${candidateId}`).then(r => r.json()),
-    enabled: !!candidateId && portalMode === "candidate",
+    enabled: !!candidateId && portalMode === "candidate" && !isSmp,
   });
 
   const appliedIds = new Set(myApplications.map(a => a.jobId));
@@ -2624,7 +2631,7 @@ export default function CandidatePortal() {
 
             {/* Contract widget shown ONLY for candidates (pre-conversion).
                 After conversion to employee, the contract lives in the dedicated "My Contract" tab. */}
-            {portalMode === "candidate" && (
+            {portalMode === "candidate" && !isSmp && (
               <Card className="bg-card border-border">
                 <CardContent className="p-5">
                   <ContractSection candidateId={candidateId!} candidateName={displayName} readOnly={!canSignContract} onboardingId={currentOnboarding?.id} />
