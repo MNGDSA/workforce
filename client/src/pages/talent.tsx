@@ -139,23 +139,33 @@ const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
 
 const DEFAULT_VISIBLE: ColumnKey[] = ["id", "candidate", "classification", "status", "phone", "email", "city"];
 
+// Task #107: this dialog is SMP-only. The /api/candidates/smp-validate +
+// /api/candidates/smp-commit endpoints read exactly three fields per row:
+//   - fullNameEn  (required — used to create the candidate row)
+//   - nationalId  (recommended — drives dedupe against existing candidates;
+//                  rows without nationalId are always treated as NEW)
+//   - phone       (required — the activation SMS link is sent to this number;
+//                  rows without phone create the candidate but the worker
+//                  cannot activate until phone is added later)
+// Any other column is ignored by the server, so the template intentionally
+// omits city / nationality / gender / dob / source / email / SMP company.
+// SMP company linkage is set later when workers are converted to workforce.
 const BULK_TEMPLATE_HEADERS = [
-  "fullNameEn", "phone", "email", "nationalId",
-  "city", "nationality", "gender", "dateOfBirth", "source"
+  "fullNameEn", "nationalId", "phone",
 ];
 
 const TEMPLATE_SAMPLE_ROWS = [
-  ["John Doe", "0501234567", "john@example.com", "1234567890", "Makkah", "saudi", "male", "1990-01-15", "individual"],
-  ["Jane Smith", "جين سميث", "0559876543", "jane@example.com", "0987654321", "Jeddah", "non_saudi", "female", "1992-06-20", "smp"],
+  ["Mohammed Al-Qahtani", "1012345678", "0551234567"],
+  ["Abdullah Al-Harbi",   "1087654321", "0559876543"],
 ];
 
 function downloadTemplate(format: "csv" | "xlsx") {
   if (format === "xlsx") {
     const ws = XLSX.utils.aoa_to_sheet([BULK_TEMPLATE_HEADERS, ...TEMPLATE_SAMPLE_ROWS]);
-    ws["!cols"] = BULK_TEMPLATE_HEADERS.map(() => ({ wch: 18 }));
+    ws["!cols"] = BULK_TEMPLATE_HEADERS.map(() => ({ wch: 22 }));
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Candidates");
-    XLSX.writeFile(wb, "candidate_upload_template.xlsx");
+    XLSX.utils.book_append_sheet(wb, ws, "SMP Workers");
+    XLSX.writeFile(wb, "smp_workers_upload_template.xlsx");
   } else {
     const csv = BULK_TEMPLATE_HEADERS.join(",") + "\n" +
       TEMPLATE_SAMPLE_ROWS.map(r => r.join(",")).join("\n");
@@ -163,7 +173,7 @@ function downloadTemplate(format: "csv" | "xlsx") {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "candidate_upload_template.csv";
+    a.download = "smp_workers_upload_template.csv";
     a.click();
     URL.revokeObjectURL(url);
   }
