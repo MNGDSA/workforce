@@ -35,6 +35,7 @@
   },
   "actions": {
     "bulkContracts": "Bulk Generate Contracts",
+    "bulkGenerateContracts": "Bulk Generate Contracts",
     "convertAllReady": "Convert All Ready ({{count}})",
     "admit": "Admit Candidate",
     "checklist": "Checklist",

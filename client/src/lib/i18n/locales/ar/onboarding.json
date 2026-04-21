@@ -35,6 +35,7 @@
   },
   "actions": {
     "bulkContracts": "إنشاء عقود جماعية",
+    "bulkGenerateContracts": "إنشاء عقود جماعية",
     "convertAllReady": "تحويل جميع الجاهزين ({{count}})",
     "admit": "قبول مرشح",
     "checklist": "قائمة التحقق",
