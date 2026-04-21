@@ -2307,6 +2307,31 @@ export async function registerRoutes(
             } catch (e) {
               console.error("[smp-commit] phone-transfer invalidation failed:", e);
             }
+            // Audit the destructive mutation on the prior phone owner —
+            // their phone field was just nulled and any pending activation
+            // SMS invalidated. Without this entry, the only forensic trail
+            // for "why is this candidate's phone suddenly empty?" would be
+            // the new-candidate audit row, which doesn't reference them.
+            try {
+              await storage.createAuditLog({
+                actorId: req.authUserId ?? null,
+                action: "candidate.phone_transferred_out",
+                entityType: "candidate",
+                entityId: ownerId,
+                description: "smp-commit: phone nulled to make room for new SMP candidate (transfer resolution)",
+                metadata: {
+                  before: { phone: expectedPhone },
+                  after: { phone: null },
+                  source: "smp-commit",
+                  resolution: "phone_conflict_transfer",
+                  transferredToPhone: expectedPhone,
+                  eventId: eventId ?? null,
+                  jobId: jobId ?? null,
+                } as any,
+              } as any);
+            } catch (e) {
+              console.error("[smp-commit] audit log failed (phone_transferred_out):", e);
+            }
             try {
               const row = result.row;
               const parsed = insertCandidateSchema.parse({
@@ -2739,6 +2764,22 @@ export async function registerRoutes(
         await invalidatePendingActivationSms(req.params.id);
       } catch (e) {
         console.error("[reclassify-as-smp] outbox invalidation failed:", e);
+      }
+      // TOCTOU mitigation: re-check blockers immediately before the
+      // classification update. The first check above gates early-return
+      // (saves the token-invalidation work), but a workforce / onboarding
+      // / interview / application row could have been inserted in the
+      // window between then and now. The reverse endpoint has the same
+      // pattern; matching it here keeps the two paths symmetric. A full
+      // fix would require a single transaction that locks workforce +
+      // onboarding + interviews + applications by candidateId — deferred
+      // as a cross-cutting refactor for both directions.
+      const [b2] = await getCandidateBlockers([req.params.id]);
+      if (b2 && b2.reasons.length > 0) {
+        return res.status(409).json({
+          message: tr(req, "candidate.blockedByPipeline"),
+          blockers: b2.reasons,
+        });
       }
       // Flip classification. If the candidate has no user account yet,
       // also move them into awaiting_activation so the portal gates apply
