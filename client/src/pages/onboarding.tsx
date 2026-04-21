@@ -1337,6 +1337,23 @@ export default function OnboardingPage() {
     select: (r: any) => Array.isArray(r) ? r : [],
   });
 
+  // Lightweight jobs lookup so we can surface the job's minimum salary as a
+  // one-click prefill in the convert dialogs. Decoupled from the salary input
+  // itself — the box stays empty by default; the chip is just a shortcut.
+  const { data: jobsForSalary = [] } = useQuery<{ id: string; salaryMin: string | null }[]>({
+    queryKey: ["/api/jobs"],
+    queryFn: () => apiRequest("GET", "/api/jobs").then(r => r.json()),
+    select: (r: any) => Array.isArray(r) ? r.map((j: any) => ({ id: j.id, salaryMin: j.salaryMin ?? null })) : [],
+  });
+  const getJobMinForRecord = useCallback((rec: OnboardingRecord | null | undefined): number | null => {
+    if (!rec?.applicationId) return null;
+    const app = applications.find(a => a.id === rec.applicationId);
+    if (!app?.jobId) return null;
+    const job = jobsForSalary.find(j => j.id === app.jobId);
+    const n = job?.salaryMin != null ? Number(job.salaryMin) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [applications, jobsForSalary]);
+
   const { data: adminUsers = [] } = useQuery<{ id: string; fullName: string }[]>({
     queryKey: ["/api/users"],
     queryFn: () => apiRequest("GET", "/api/users").then(r => r.json()),
@@ -2275,6 +2292,20 @@ export default function OnboardingPage() {
                   onChange={e => setConvertForm(f => ({ ...f, salary: e.target.value }))}
                   className="bg-zinc-900 border-zinc-700 text-white"
                 />
+                {(() => {
+                  const min = getJobMinForRecord(convertRecord);
+                  if (min == null) return null;
+                  return (
+                    <button
+                      type="button"
+                      data-testid="chip-convert-use-job-min"
+                      onClick={() => setConvertForm(f => ({ ...f, salary: String(min) }))}
+                      className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border border-emerald-700/50 bg-emerald-900/20 text-emerald-300 hover:bg-emerald-900/40 transition"
+                    >
+                      {t("convert.useJobMin", { n: formatNumber(min) })}
+                    </button>
+                  );
+                })()}
               </div>
             </div>
 
@@ -2390,6 +2421,31 @@ export default function OnboardingPage() {
                       onChange={e => setBulkConvertForm(f => ({ ...f, salary: e.target.value }))}
                       className="bg-zinc-900 border-zinc-700 text-white mt-1"
                     />
+                    {(() => {
+                      // Surface one chip per distinct job-minimum across the
+                      // selected ready records. Click fills the single salary
+                      // input — admin keeps full control over what value is
+                      // actually applied to everyone.
+                      const mins = Array.from(new Set(
+                        readyRecords.map(r => getJobMinForRecord(r)).filter((n): n is number => n != null)
+                      )).sort((a, b) => a - b);
+                      if (mins.length === 0) return null;
+                      return (
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          {mins.map(m => (
+                            <button
+                              key={m}
+                              type="button"
+                              data-testid={`chip-bulk-use-job-min-${m}`}
+                              onClick={() => setBulkConvertForm(f => ({ ...f, salary: String(m) }))}
+                              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border border-emerald-700/50 bg-emerald-900/20 text-emerald-300 hover:bg-emerald-900/40 transition"
+                            >
+                              {t("convert.useJobMin", { n: formatNumber(m) })}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="flex justify-end gap-2 pt-2">
                     <Button variant="outline" onClick={() => setBulkConvertOpen(false)} className="border-zinc-700 text-zinc-300">

@@ -176,6 +176,7 @@
     "smpRequired": "Required — SMP workers must be linked to a company.",
     "salary": "Monthly Salary (SAR)",
     "salaryPlaceholder": "e.g. 4500",
+    "useJobMin": "Use job minimum: {{n}}",
     "cancel": "Cancel",
     "confirm": "Confirm & Convert"
   },
