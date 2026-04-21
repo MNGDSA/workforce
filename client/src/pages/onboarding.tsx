@@ -227,7 +227,10 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
 
   const { data: templates = [] } = useQuery<ContractTemplate[]>({
     queryKey: ["/api/contract-templates"],
-    select: (data: ContractTemplate[]) => data.filter(t => t.status === "active"),
+    // Show every non-archived template (draft + active) so newly created
+    // templates are immediately usable from the Stage 2 selector, matching
+    // the templates list page and the bulk-contracts dialog filter.
+    select: (data: ContractTemplate[]) => data.filter(t => t.status !== "archived"),
   });
 
   const { data: contracts = [] } = useQuery<CandidateContractRecord[]>({
