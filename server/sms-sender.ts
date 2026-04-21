@@ -110,6 +110,33 @@ export async function sendSmsViaPlugin(
   to: string,
   message: string
 ): Promise<SmsSendResult> {
+  // ───────────────────────────────────────────────────────────────────────
+  // Dev/test bypass — when the SMS gateway is unreachable (carrier or
+  // gateway outage), skip the HTTP call entirely and return success so
+  // OTP/activation flows complete locally. The plaintext code is already
+  // logged via logOtpForDev() at the call site, so the developer can copy
+  // it from the workflow log.
+  //
+  // SECURITY: same allow-list contract as logOtpForDev — only fires when
+  // NODE_ENV is exactly "development" or "test", or when the explicit
+  // ENABLE_DEV_OTP_LOG=true override is set. Any production deployment
+  // (NODE_ENV=production, unset, "prod", "Production", etc.) falls
+  // through to the real gateway. Fail-closed by design.
+  // ───────────────────────────────────────────────────────────────────────
+  const env = process.env.NODE_ENV;
+  const explicitOverride = process.env.ENABLE_DEV_OTP_LOG === "true";
+  const inDevOrTest = env === "development" || env === "test";
+  if (inDevOrTest || explicitOverride) {
+    const toE164Bypass = toE164SaPhone(to);
+    console.log(`[SMS Sender] DEV BYPASS — skipping gateway "${plugin.name ?? "unknown"}" for to=${toE164Bypass}. Code/message available in [DEV-OTP] log line above.`);
+    return {
+      success: true,
+      messageId: `dev-bypass-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      statusCode: 200,
+      rawResponse: { devBypass: true, gateway: plugin.name ?? null, to: toE164Bypass },
+    };
+  }
+
   const config = plugin.pluginConfig as SmsPluginConfig;
   const credentials = (plugin.credentials ?? {}) as Record<string, string>;
 
