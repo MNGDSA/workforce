@@ -575,7 +575,7 @@ function CompanySheet({
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) { setEditMode(false); setActiveTab("info"); } onOpenChange(v); }}>
       <SheetContent side={i18n.language.startsWith("ar") ? "left" : "right"} className="w-full sm:max-w-2xl bg-card border-border flex flex-col p-0 overflow-hidden">
-        <SheetHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
+        <SheetHeader className="px-6 pt-6 pb-4 pe-12 border-b border-border shrink-0">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
               <div className="h-10 w-10 rounded-sm bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
@@ -706,13 +706,17 @@ function CompanySheet({
               </div>
             ) : (
               <div className="space-y-4">
+                {/* Always render every field — empty values show an em-dash
+                    placeholder so the read-only Information view is never a
+                    blank pane (which previously made admins think the dialog
+                    was broken until they hit Edit). */}
                 <div className="grid grid-cols-2 gap-3">
-                  {company.contactPerson && <InfoRow icon={<Users className="h-4 w-4" />} label={t("smpCompanies:sheet.labelContactPerson")} value={company.contactPerson} />}
-                  {company.contactPhone && <InfoRow icon={<Phone className="h-4 w-4" />} label={t("smpCompanies:sheet.labelPhone")} value={company.contactPhone} ltr />}
-                  {company.contactEmail && <InfoRow icon={<Mail className="h-4 w-4" />} label={t("smpCompanies:sheet.labelEmail")} value={company.contactEmail} ltr />}
-                  {company.region && <InfoRow icon={<MapPin className="h-4 w-4" />} label={t("smpCompanies:sheet.labelRegion")} value={company.region} />}
-                  {company.bankName && <InfoRow icon={<Banknote className="h-4 w-4" />} label={t("smpCompanies:sheet.labelBank")} value={company.bankName} />}
-                  {company.bankIban && <InfoRow icon={<Banknote className="h-4 w-4" />} label={t("smpCompanies:sheet.labelIban")} value={company.bankIban} ltr />}
+                  <InfoRow icon={<Users className="h-4 w-4" />} label={t("smpCompanies:sheet.labelContactPerson")} value={company.contactPerson || "—"} />
+                  <InfoRow icon={<Phone className="h-4 w-4" />} label={t("smpCompanies:sheet.labelPhone")} value={company.contactPhone || "—"} ltr={!!company.contactPhone} />
+                  <InfoRow icon={<Mail className="h-4 w-4" />} label={t("smpCompanies:sheet.labelEmail")} value={company.contactEmail || "—"} ltr={!!company.contactEmail} />
+                  <InfoRow icon={<MapPin className="h-4 w-4" />} label={t("smpCompanies:sheet.labelRegion")} value={company.region || "—"} />
+                  <InfoRow icon={<Banknote className="h-4 w-4" />} label={t("smpCompanies:sheet.labelBank")} value={company.bankName || "—"} />
+                  <InfoRow icon={<Banknote className="h-4 w-4" />} label={t("smpCompanies:sheet.labelIban")} value={company.bankIban || "—"} ltr={!!company.bankIban} />
                 </div>
                 {company.notes && (
                   <div className="space-y-1">
