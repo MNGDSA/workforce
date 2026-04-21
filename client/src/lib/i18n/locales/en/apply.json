@@ -4,6 +4,9 @@
     "backPortal": "Back to portal",
     "signIn": "Sign In / Sign Up"
   },
+  "footer": {
+    "copyright": "© 2026 Luxury Cart Company. All rights reserved."
+  },
   "hero": {
     "applied": "You have applied for this position.",
     "notFound": "Job not found",
