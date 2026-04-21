@@ -408,7 +408,11 @@ export default function JobDetailPage() {
           <img src="/workforce-logo.svg" alt="Workforce" className="h-5 w-5" />
           <span className="font-display font-bold text-sm tracking-tight text-muted-foreground">{t("common:app.name")}</span>
         </div>
-        <p className="text-xs text-muted-foreground/70 text-center px-4" data-testid="text-footer-copyright">
+        <p
+          className="text-xs text-muted-foreground/70 text-center px-4"
+          dir={isRtl ? "rtl" : "ltr"}
+          data-testid="text-footer-copyright"
+        >
           {t("apply:footer.copyright")}
         </p>
       </footer>
