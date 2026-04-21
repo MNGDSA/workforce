@@ -62,13 +62,13 @@
     "withdrawn": "منسحب"
   },
   "toast": {
-    "scheduledTitle": "تمت جدولة المقابلة",
-    "scheduledDesc_zero": "تم إنشاء الجلسة بدعوة {{count}} مرشح.",
-    "scheduledDesc_one": "تم إنشاء الجلسة بدعوة مرشح واحد.",
-    "scheduledDesc_two": "تم إنشاء الجلسة بدعوة مرشحَين.",
-    "scheduledDesc_few": "تم إنشاء الجلسة بدعوة {{count}} مرشحين.",
-    "scheduledDesc_many": "تم إنشاء الجلسة بدعوة {{count}} مرشحاً.",
-    "scheduledDesc_other": "تم إنشاء الجلسة بدعوة {{count}} مرشح.",
+    "scheduledTitle": "تم الإرسال",
+    "scheduledDesc_zero": "تم الإبلاغ لـ {{count}} مرشح.",
+    "scheduledDesc_one": "تم الإبلاغ لمرشح واحد.",
+    "scheduledDesc_two": "تم الإبلاغ لمرشحَين.",
+    "scheduledDesc_few": "تم الإبلاغ لـ {{count}} مرشحين.",
+    "scheduledDesc_many": "تم الإبلاغ لـ {{count}} مرشحاً.",
+    "scheduledDesc_other": "تم الإبلاغ لـ {{count}} مرشح.",
     "failTitle": "فشل الجدولة",
     "failDesc": "يرجى التحقق من التفاصيل والمحاولة مرة أخرى."
   },
