@@ -108,10 +108,14 @@ export default function AuthPage() {
         password: values.password,
       });
       const data = await res.json();
-      // Drop any cached /api/me from a prior session in this browser. Without
-      // this, the route guards on the destination page read the stale role
-      // (e.g. an earlier admin) and bounce the user to the wrong shell.
-      await queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+      // Force a fresh /api/me fetch BEFORE navigating. invalidateQueries only
+      // marks the cache stale and refetches active subscribers — and on the
+      // auth page nobody is subscribed, so the stale `null` (from the boot
+      // 401) would still be served synchronously to the destination page's
+      // RequireAdmin/RequireCandidate guard, bouncing the user back to /auth.
+      // refetchQueries actually awaits a network refetch even when inactive,
+      // so the route guard sees the new session on the very first read.
+      await queryClient.refetchQueries({ queryKey: ["/api/me"] });
       if (data.user?.role === "candidate") {
         if (data.candidate) {
           localStorage.setItem("workforce_candidate", JSON.stringify(data.candidate));
@@ -189,10 +193,10 @@ export default function AuthPage() {
         otpId,
       });
       const data = await res.json();
-      // Drop any cached /api/me from a prior session so the candidate guard
-      // on /candidate-portal sees the freshly-registered candidate role
-      // instead of a stale admin role from an earlier login in this browser.
-      await queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+      // Force a fresh /api/me fetch BEFORE navigating (see onLogin for the
+      // full explanation — invalidateQueries doesn't refetch inactive caches,
+      // so the destination guard reads stale `null` and bounces to /auth).
+      await queryClient.refetchQueries({ queryKey: ["/api/me"] });
       if (data.candidate) {
         localStorage.setItem("workforce_candidate", JSON.stringify(data.candidate));
       }
