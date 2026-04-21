@@ -766,12 +766,43 @@ export class DatabaseStorage implements IStorage {
       .where(eq(candidates.id, id))
       .returning();
 
-    // Mirror phone changes to the linked login account so the candidate's
-    // self-edit (or an admin edit) keeps `users.phone` in sync with
-    // `candidates.phone`. Without this, an activated candidate would log in
-    // and receive password-reset OTPs at their old number after a phone
-    // change. Best-effort: if another user already holds that phone we skip
-    // the mirror and warn — the candidate-side write still stands.
+    // Phone-change side effects. Two things must happen when an admin or the
+    // candidate themselves changes the phone on a candidate row:
+    //
+    //   1. Invalidate any LIVE activation tokens (Task #107 step 15). The
+    //      activation SMS for the previous phone is now in the wrong hands;
+    //      a fresh re-issue MUST happen via /api/candidates/activation-tokens
+    //      /reissue. We invalidate even when the candidate already has a
+    //      `userId` — defence in depth, no live tokens for an activated user
+    //      should ever exist anyway.
+    //
+    //   2. Mirror to users.phone so the linked login keeps OTPs flowing to
+    //      the new number.
+    //
+    // Both are best-effort and never block the primary candidate update.
+    if (updated && Object.prototype.hasOwnProperty.call(data, "phone")) {
+      try {
+        const { invalidateAllTokensForCandidate } = await import("./activation-tokens");
+        const n = await invalidateAllTokensForCandidate(updated.id);
+        if (n > 0) {
+          console.warn(
+            `[updateCandidate] phone changed for ${updated.id} — invalidated ${n} live activation token(s).`,
+          );
+        }
+      } catch (e) {
+        console.error("[updateCandidate] activation-token invalidation on phone change failed:", e);
+      }
+      // Cancel any queued SMS that still carry the (now-invalidated) link to
+      // the OLD phone. Without this, the outbox worker would happily deliver
+      // them — the link itself is harmless (consume rejects an invalidated
+      // token), but it wastes SMS credits and confuses the recipient.
+      try {
+        const { invalidatePendingActivationSms } = await import("./sms-outbox");
+        await invalidatePendingActivationSms(updated.id);
+      } catch (e) {
+        console.error("[updateCandidate] outbox invalidation on phone change failed:", e);
+      }
+    }
     if (updated && updated.userId && Object.prototype.hasOwnProperty.call(data, "phone")) {
       const newPhone = (data as any).phone as string | null | undefined;
       try {

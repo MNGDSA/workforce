@@ -83,6 +83,32 @@ export async function mintActivationToken(
 }
 
 /**
+ * Invalidate every live activation token belonging to a candidate. Used by:
+ *   - Phone-change paths (storage.updateCandidate) — the SMS for the prior
+ *     phone could now be in the wrong hands.
+ *   - Reclassify smp → individual — the worker no longer needs an SMP-mode
+ *     activation; they'll register normally.
+ *   - Account deletion or any admin "burn the keys" flow.
+ *
+ * Idempotent: stamps invalidated_at only on rows that are still live. Returns
+ * the count of rows actually flipped (0 when nothing to invalidate).
+ */
+export async function invalidateAllTokensForCandidate(
+  candidateId: string,
+): Promise<number> {
+  const rows = await db
+    .update(candidateActivationTokens)
+    .set({ invalidatedAt: new Date() })
+    .where(and(
+      eq(candidateActivationTokens.candidateId, candidateId),
+      isNull(candidateActivationTokens.consumedAt),
+      isNull(candidateActivationTokens.invalidatedAt),
+    ))
+    .returning({ id: candidateActivationTokens.id });
+  return rows.length;
+}
+
+/**
  * Mark the prior live token row's smsSentAt timestamp — called by the
  * outbox worker on successful SMS delivery. Best-effort; never throws.
  */

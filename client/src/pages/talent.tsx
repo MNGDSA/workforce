@@ -97,6 +97,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1085,14 +1086,20 @@ function ReclassifyConfirmDialog({
   onConfirm,
   pending,
 }: {
-  state: { id: string; name: string; to: "individual" | "smp" } | null;
+  state: { id: string; name: string } | null;
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: (reason: string) => void;
   pending: boolean;
 }) {
   const { t } = useTranslation("talent");
   const open = !!state;
-  const toSmp = state?.to === "smp";
+  const [reason, setReason] = useState("");
+  // Reset the input every time the dialog re-opens for a fresh candidate so
+  // a previous candidate's reason is never accidentally re-submitted.
+  useEffect(() => {
+    if (open) setReason("");
+  }, [open, state?.id]);
+  const reasonValid = reason.trim().length >= 10;
   return (
     <AlertDialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
       <AlertDialogContent
@@ -1101,12 +1108,12 @@ function ReclassifyConfirmDialog({
       >
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {String(t(toSmp ? "reclassify.toSmp.title" : "reclassify.toIndividual.title"))}
+            {String(t("reclassify.toIndividual.title"))}
           </AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-2">
               <p>
-                {String(t(toSmp ? "reclassify.toSmp.body" : "reclassify.toIndividual.body", { name: state?.name ?? "" }))}
+                {String(t("reclassify.toIndividual.body", { name: state?.name ?? "" }))}
               </p>
               <p className="text-xs text-amber-400">
                 {String(t("reclassify.warning"))}
@@ -1114,19 +1121,36 @@ function ReclassifyConfirmDialog({
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <div className="space-y-1.5 py-2">
+          <Label htmlFor="reclassify-reason" className="text-sm">
+            {String(t("reclassify.reasonLabel"))}
+          </Label>
+          <Textarea
+            id="reclassify-reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder={String(t("reclassify.reasonPlaceholder"))}
+            rows={3}
+            className="bg-muted/30 border-border resize-none"
+            disabled={pending}
+            data-testid="input-reclassify-reason"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            {String(t("reclassify.reasonHint"))}
+          </p>
+        </div>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending} data-testid="button-reclassify-cancel">
             {String(t("reclassify.cancel"))}
           </AlertDialogCancel>
           <AlertDialogAction
-            disabled={pending}
-            onClick={onConfirm}
-            className={toSmp ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}
+            disabled={pending || !reasonValid}
+            onClick={() => onConfirm(reason.trim())}
             data-testid="button-reclassify-confirm"
           >
             {pending
               ? String(t("reclassify.working"))
-              : String(t(toSmp ? "reclassify.toSmp.cta" : "reclassify.toIndividual.cta"))}
+              : String(t("reclassify.toIndividual.cta"))}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -1203,7 +1227,6 @@ export default function TalentPage() {
   const [reclassifyConfirm, setReclassifyConfirm] = useState<{
     id: string;
     name: string;
-    to: "individual" | "smp";
   } | null>(null);
 
   function toggleColumn(key: ColumnKey) {
@@ -1293,7 +1316,7 @@ export default function TalentPage() {
 
   const smpReissueMutation = useMutation({
     mutationFn: (ids: string[]) =>
-      apiRequest("POST", "/api/candidates/smp-reissue-activation", { ids }).then(r => r.json()),
+      apiRequest("POST", "/api/candidates/activation-tokens/reissue", { ids }).then(r => r.json()),
     onSuccess: (data: { reissued?: number; skipped?: number }) => {
       const n = data.reissued ?? 0;
       const s = data.skipped ?? 0;
@@ -1328,8 +1351,11 @@ export default function TalentPage() {
   });
 
   const reclassifyMutation = useMutation({
-    mutationFn: ({ id, classification }: { id: string; classification: "individual" | "smp" }) =>
-      apiRequest("POST", `/api/candidates/${id}/reclassify`, { classification }).then(r => r.json()),
+    // Task #107 step 14 — locked to SMP → Individual; reverse direction is
+    // handled implicitly through the SMP bulk upload (smp-commit auto-flips
+    // matching NIDs). Reason is required server-side for the audit trail.
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      apiRequest("POST", `/api/candidates/${id}/reclassify-as-individual`, { reason }).then(r => r.json()),
     onSuccess: () => {
       toast({ title: t("smpToast.reclassified") });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
@@ -1982,7 +2008,7 @@ export default function TalentPage() {
                                       </DropdownMenuItem>
                                     )}
                                     <DropdownMenuItem
-                                      onClick={() => setReclassifyConfirm({ id: candidate.id, name: candidate.fullNameEn, to: "individual" })}
+                                      onClick={() => setReclassifyConfirm({ id: candidate.id, name: candidate.fullNameEn })}
                                       data-testid={`menu-reclassify-individual-${candidate.id}`}
                                     >
                                       <Repeat className="me-2 h-4 w-4" />
@@ -1990,18 +2016,12 @@ export default function TalentPage() {
                                     </DropdownMenuItem>
                                   </>
                                 )}
-                                {(candidate as any).classification === "individual" && (
-                                  <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      onClick={() => setReclassifyConfirm({ id: candidate.id, name: candidate.fullNameEn, to: "smp" })}
-                                      data-testid={`menu-reclassify-smp-${candidate.id}`}
-                                    >
-                                      <Repeat className="me-2 h-4 w-4" />
-                                      {t("rowMenu.reclassifyToSmp")}
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
+                                {/* Task #107: individual → SMP is intentionally
+                                    NOT a row action. The canonical path is the
+                                    SMP bulk upload — `smp-commit` auto-flips
+                                    matching NIDs and staples the company. A
+                                    button here would let admins shortcut the
+                                    company-stapling requirement. */}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   onClick={() => {
@@ -2226,10 +2246,10 @@ export default function TalentPage() {
         state={reclassifyConfirm}
         pending={reclassifyMutation.isPending}
         onCancel={() => setReclassifyConfirm(null)}
-        onConfirm={() => {
+        onConfirm={(reason) => {
           if (!reclassifyConfirm) return;
           reclassifyMutation.mutate(
-            { id: reclassifyConfirm.id, classification: reclassifyConfirm.to },
+            { id: reclassifyConfirm.id, reason },
             { onSettled: () => setReclassifyConfirm(null) },
           );
         }}

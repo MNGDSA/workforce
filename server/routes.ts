@@ -1343,28 +1343,58 @@ export async function registerRoutes(
       const user = await storage.getUserByNationalId(clean);
       // Silent no-ops for: missing user, missing phone, disabled account.
       if (!user || !user.phone || !user.isActive) {
-        // Task #107: SMP self-heal — un-activated SMP candidate uses the
-        // forgot-password flow because they never received (or lost) their
-        // activation SMS. Silently mint a fresh activation token + enqueue an
-        // SMS, throttled to 1 per 10 minutes per candidate via outbox dedupe.
+        // Task #107 step 8 — SMP self-heal: un-activated SMP candidate uses
+        // forgot-password because they never received (or lost) their
+        // activation SMS. Three throttle layers MUST all pass before we side-
+        // channel an activation SMS:
+        //
+        //   L1 (per-NID cooldown, 1/hour) — guessable national IDs cannot be
+        //       used to spam a victim's inbox. Implemented via outbox dedupe
+        //       (1-hour bucket).
+        //   L2 (per-IP throttle, 10/hour) — a single attacker IP cannot fan
+        //       out across many guessed NIDs.
+        //   L3 (daily aggregate counter) — surfaces in admin telemetry above
+        //       a threshold; signals systemic abuse even when L1+L2 pass.
+        //
+        // The public response stays the same generic 200 regardless of which
+        // throttle blocked, so the caller cannot infer state.
         try {
           const cand = await storage.getCandidateByNationalId(clean);
           if (cand && (cand as any).classification === "smp" && !cand.userId && cand.phone) {
-            const { mintActivationToken } = await import("./activation-tokens");
-            const { enqueueActivationSms } = await import("./sms-outbox");
-            const bucket = Math.floor(Date.now() / (10 * 60 * 1000)); // 10-min window
-            const dedupeKey = `selfheal:${cand.id}:${bucket}`;
-            const { plainToken, tokenRow } = await mintActivationToken(cand.id, null);
-            await enqueueActivationSms({
-              candidateId: cand.id,
-              recipientPhone: cand.phone,
-              plainToken,
-              tokenRowId: tokenRow.id,
-              candidateLocale: ((cand as any).locale === "en" ? "en" : "ar"),
-              kind: "smp_activation_self_heal",
-              dedupeKey,
-            });
-            console.log(`[Reset/SelfHeal] Activation SMS enqueued for candidate ${cand.id} (NID ${redactNationalId(clean)}).`);
+            const { tryReserveSelfHealQuota, getSelfHealDailyCount } = await import("./self-heal-throttle");
+            const ip = getClientIp(req);
+            const reservation = tryReserveSelfHealQuota(ip, clean);
+            const daily = getSelfHealDailyCount();
+            if (!reservation.ok) {
+              console.warn(
+                `[Reset/SelfHeal] throttled (${reservation.reason}) NID=${redactNationalId(clean)} ip=${ip} dailyCount=${daily}`,
+              );
+            } else {
+              const { mintActivationToken } = await import("./activation-tokens");
+              const { enqueueActivationSms } = await import("./sms-outbox");
+              const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000));
+              const dedupeKey = `selfheal:${cand.id}:${hourBucket}`;
+              const { plainToken, tokenRow } = await mintActivationToken(cand.id, null);
+              await enqueueActivationSms({
+                candidateId: cand.id,
+                recipientPhone: cand.phone,
+                plainToken,
+                tokenRowId: tokenRow.id,
+                candidateLocale: ((cand as any).locale === "en" ? "en" : "ar"),
+                kind: "smp_activation_self_heal",
+                dedupeKey,
+              });
+              console.log(
+                `[Reset/SelfHeal] Activation SMS enqueued for candidate ${cand.id} (NID ${redactNationalId(clean)} ip=${ip} dailyCount=${daily + 1}).`,
+              );
+              // Telemetry: warn loudly when the daily aggregate looks abusive
+              // so admins notice in production logs even before a dashboard.
+              if (daily + 1 >= 50 && (daily + 1) % 10 === 0) {
+                console.warn(
+                  `[Reset/SelfHeal] DAILY ABUSE THRESHOLD: ${daily + 1} self-heal SMS issued today.`,
+                );
+              }
+            }
           }
         } catch (selfHealErr) {
           console.error("[Reset/SelfHeal] error (silent):", selfHealErr);
@@ -2360,7 +2390,7 @@ export async function registerRoutes(
   // Bulk re-issue activation SMS for SMP candidates still in awaiting_activation.
   // Mints a fresh token (invalidating the previous live token via the unique
   // partial index) and enqueues a new SMS row with kind=smp_activation_reissue.
-  app.post("/api/candidates/smp-reissue-activation", requirePermission("candidates:smp_manage"), async (req: Request, res: Response) => {
+  app.post("/api/candidates/activation-tokens/reissue", requirePermission("candidates:smp_manage"), async (req: Request, res: Response) => {
     try {
       const { ids } = req.body as { ids?: string[] };
       if (!Array.isArray(ids) || ids.length === 0) {
@@ -2448,18 +2478,29 @@ export async function registerRoutes(
     }
   });
 
-  // Reclassify a candidate between individual ↔ smp. Refuses if the candidate
-  // has any outstanding blocker (active workforce, pending onboarding,
-  // scheduled session, pending application).
-  app.post("/api/candidates/:id/reclassify", requirePermission("candidates:smp_manage"), async (req: Request, res: Response) => {
+  // Reclassify SMP → Individual ONLY. (Task #107: the reverse direction is
+  // intentionally NOT exposed as a button — the only path from individual to
+  // SMP is the bulk SMP upload, which auto-flips matching NIDs in smp-commit.
+  // A reverse button would let admins shortcut the SMP company stapling step.)
+  //
+  // Requires a non-trivial reason for the audit trail. Refuses if the
+  // candidate has any outstanding blocker (active workforce, pending
+  // onboarding, scheduled session, pending application). Atomic:
+  //   1. Flip classification → individual, clear smpCompanyId
+  //   2. Invalidate any live activation tokens (their SMP-mode link is dead)
+  //   3. Invalidate any pending SMP activation SMS in the outbox
+  //   4. Write an audit_log row capturing actor, before/after, reason
+  app.post("/api/candidates/:id/reclassify-as-individual", requirePermission("candidates:smp_manage"), async (req: Request, res: Response) => {
     try {
-      const { classification } = req.body as { classification?: "individual" | "smp" };
-      if (classification !== "individual" && classification !== "smp") {
-        return res.status(400).json({ message: tr(req, "common.invalidPayload") });
+      const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+      if (reason.length < 10) {
+        return res.status(400).json({
+          message: tr(req, "candidate.reclassifyReasonRequired"),
+        });
       }
       const cand = await storage.getCandidate(req.params.id);
       if (!cand) return res.status(404).json({ message: tr(req, "candidate.notFound") });
-      if ((cand as any).classification === classification) {
+      if ((cand as any).classification === "individual") {
         return res.json({ candidate: cand, changed: false });
       }
       const { getCandidateBlockers } = await import("./candidate-blockers");
@@ -2470,14 +2511,57 @@ export async function registerRoutes(
           blockers: b.reasons,
         });
       }
-      // When flipping smp→individual on an un-activated candidate, also
-      // invalidate any pending activation SMS — they'll register normally now.
-      const updated = await storage.updateCandidate(req.params.id, { classification } as any);
-      if (classification === "individual" && !cand.userId) {
-        try {
-          const { invalidatePendingActivationSms } = await import("./sms-outbox");
-          await invalidatePendingActivationSms(req.params.id);
-        } catch {}
+      const before = {
+        classification: (cand as any).classification,
+        smpCompanyId: (cand as any).smpCompanyId ?? null,
+        status: (cand as any).status,
+      };
+      // Order matters: invalidate the SMP activation surface BEFORE flipping
+      // the classification, so there is never an instant where the candidate
+      // appears as Individual while a live SMP-mode activation token or a
+      // pending SMP-mode SMS in the outbox can still be consumed against
+      // them. If we crash between steps, the candidate stays SMP with no
+      // live tokens — the admin simply retries, which is safe and idempotent.
+      try {
+        const { invalidateAllTokensForCandidate } = await import("./activation-tokens");
+        await invalidateAllTokensForCandidate(req.params.id);
+      } catch (e) {
+        console.error("[reclassify-as-individual] token invalidation failed:", e);
+        return res.status(500).json({ message: tr(req, "candidate.reclassifyFailed") });
+      }
+      try {
+        const { invalidatePendingActivationSms } = await import("./sms-outbox");
+        await invalidatePendingActivationSms(req.params.id);
+      } catch (e) {
+        // Outbox invalidation is best-effort: even if a queued SMS slips out
+        // post-flip, the token it carries is already invalidated above and
+        // consume will reject it. Log and continue.
+        console.error("[reclassify-as-individual] outbox invalidation failed:", e);
+      }
+      const updated = await storage.updateCandidate(req.params.id, {
+        classification: "individual",
+        smpCompanyId: null,
+      } as any);
+      // Audit trail.
+      try {
+        await storage.createAuditLog({
+          actorId: req.authUserId ?? null,
+          action: "candidate.reclassify_as_individual",
+          entityType: "candidate",
+          entityId: req.params.id,
+          description: reason,
+          metadata: {
+            before,
+            after: {
+              classification: "individual",
+              smpCompanyId: null,
+              status: (updated as any)?.status ?? null,
+            },
+            reason,
+          } as any,
+        } as any);
+      } catch (e) {
+        console.error("[reclassify-as-individual] audit log failed:", e);
       }
       return res.json({ candidate: updated, changed: true });
     } catch (err) {

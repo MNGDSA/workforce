@@ -310,6 +310,9 @@
       "body": "{{name}} will be moved back to the Individual talent pool. They lose access to SMP-only flows and the SMP company linkage will be cleared on their next workforce deployment.",
       "cta": "Reclassify as Individual"
     },
+    "reasonLabel": "Reason for reclassification",
+    "reasonPlaceholder": "Explain why this worker is moving out of the SMP workforce…",
+    "reasonHint": "Required — recorded in the audit log (minimum 10 characters).",
     "cancel": "Cancel"
   }
 }
