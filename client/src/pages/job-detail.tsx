@@ -72,7 +72,7 @@ export default function JobDetailPage() {
     enabled: !!params.id,
   });
 
-  const { data: myApplications = [], refetch: refetchApplications } = useQuery<{ jobId: string }[]>({
+  const { data: myApplications = [], refetch: refetchApplications } = useQuery<{ jobId: string; status: string }[]>({
     queryKey: ["/api/applications/mine", candidateId],
     queryFn: () =>
       apiRequest("GET", `/api/applications?candidateId=${candidateId}`).then((r) => r.json()),
@@ -80,7 +80,9 @@ export default function JobDetailPage() {
     staleTime: 0,
     refetchOnMount: true,
   });
-  const applied = myApplications.some((a) => a.jobId === params.id);
+  const myApp = myApplications.find((a) => a.jobId === params.id);
+  const applied = !!myApp;
+  const myAppStatus = myApp?.status ?? null;
 
   function handleCopyLink() {
     navigator.clipboard.writeText(window.location.href);
@@ -247,16 +249,45 @@ export default function JobDetailPage() {
                 {job.department}
               </Badge>
             )}
-            <Badge
-              variant="outline"
-              className={
-                job.status === "active"
-                  ? "border-emerald-500/30 text-emerald-500 bg-emerald-500/10"
-                  : "border-border text-muted-foreground"
+            {(() => {
+              // If the candidate has applied, mirror the portal's 3-state badge
+              // (Hired / Not Open / Under Review) so the hero reflects their
+              // personal outcome instead of the generic job-open status.
+              if (applied) {
+                if (myAppStatus === "hired" || myAppStatus === "offered") {
+                  return (
+                    <Badge variant="outline" className="border-emerald-500/30 text-emerald-500 bg-emerald-500/10">
+                      {t("portal:appBadge.hired")}
+                    </Badge>
+                  );
+                }
+                if (myAppStatus === "rejected" || myAppStatus === "withdrawn" || myAppStatus === "closed") {
+                  return (
+                    <Badge variant="outline" className="border-border text-muted-foreground">
+                      {t("portal:appBadge.notOpen")}
+                    </Badge>
+                  );
+                }
+                return (
+                  <Badge variant="outline" className="border-amber-500/30 text-amber-400 bg-amber-500/10">
+                    {t("portal:appBadge.underReview")}
+                  </Badge>
+                );
               }
-            >
-              {job.status === "active" ? t("apply:hero.acceptingApplications") : job.status}
-            </Badge>
+              // Not applied: show the job posting status.
+              return (
+                <Badge
+                  variant="outline"
+                  className={
+                    job.status === "active"
+                      ? "border-emerald-500/30 text-emerald-500 bg-emerald-500/10"
+                      : "border-border text-muted-foreground"
+                  }
+                >
+                  {job.status === "active" ? t("apply:hero.acceptingApplications") : job.status}
+                </Badge>
+              );
+            })()}
           </div>
 
           <h1 className="font-display text-3xl lg:text-4xl font-bold text-white leading-tight" data-testid="text-job-title">
