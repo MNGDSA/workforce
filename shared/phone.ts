@@ -84,3 +84,22 @@ export const optionalContactPhoneSchema = z
   });
 
 export const SA_MOBILE_REGEX = /^05\d{8}$/;
+
+/**
+ * Convert a Saudi mobile to E.164 form (`966XXXXXXXXX`, no leading "+", no
+ * leading "0"). Required by international SMS gateways (e.g. GoInfinito) which
+ * accept local-format syntactically but the SMSC silently drops them.
+ *
+ * Idempotent — already-international numbers pass through unchanged.
+ * Returns the input unchanged if it can't be normalized so callers stay safe.
+ */
+export function toE164SaPhone(input: string): string {
+  if (!input) return input;
+  let s = toWesternDigits(stripFormatting(String(input).trim()));
+  if (s.startsWith("+")) s = s.slice(1);
+  if (s.startsWith("00966")) return s.slice(2); // 00966… → 966…
+  if (s.startsWith("966") && s.length === 12) return s;
+  if (s.startsWith("05") && s.length === 10) return "966" + s.slice(1);
+  if (s.startsWith("5") && s.length === 9) return "966" + s;
+  return input;
+}

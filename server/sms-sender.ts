@@ -1,4 +1,5 @@
 import type { SmsPlugin, SmsPluginConfig } from "@shared/schema";
+import { toE164SaPhone } from "@shared/phone";
 
 type VarMap = Record<string, string | number>;
 
@@ -114,9 +115,16 @@ export async function sendSmsViaPlugin(
 
   const isUnicode = requiresUnicode(message);
 
+  // International SMS gateways (e.g. GoInfinito) accept local-format Saudi
+  // numbers syntactically (HTTP 200 + status:Success) but the SMSC silently
+  // drops them — the carrier never receives the message. Convert to E.164
+  // (`966XXXXXXXXX`, no "+") at the sender boundary so the canonical DB
+  // format (`05XXXXXXXX`) stays intact for display.
+  const toE164 = toE164SaPhone(to);
+
   const vars: VarMap = {
     ...credentials,
-    to,
+    to: toE164,
     message,
     timestamp: Date.now().toString(),
     uuid: crypto.randomUUID(),
