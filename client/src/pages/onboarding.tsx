@@ -1470,19 +1470,18 @@ export default function OnboardingPage() {
     return true;
   });
 
-  // Candidates eligible for admission: must be explicitly moved forward by an
-  // admin — either shortlisted from the interviews page or already hired.
-  // Pure "interviewed" is intentionally excluded so that reversing a shortlist
-  // (which flips the application back to "interviewed") removes the candidate
-  // from the admit list, matching the natural reverse of the shortlist action.
-  const interviewedIds = new Set(
-    applications.filter(a => ["hired", "shortlisted"].includes(a.status)).map(a => a.candidateId)
+  // Candidates eligible for admission: ONLY those currently shortlisted from
+  // the interviews page. Reversing a shortlist must remove the candidate from
+  // this list, so neither plain "interviewed" nor "hired" qualifies on its
+  // own — the admin signals readiness to admit by shortlisting.
+  const shortlistedIds = new Set(
+    applications.filter(a => a.status === "shortlisted").map(a => a.candidateId)
   );
   const alreadyOnboarding = new Set(
     records.filter(r => r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated").map(r => r.candidateId)
   );
   const eligibleCandidates = candidates.filter(c =>
-    (interviewedIds.has(c.id) || c.status === "hired") && !alreadyOnboarding.has(c.id)
+    shortlistedIds.has(c.id) && !alreadyOnboarding.has(c.id)
   );
   const admitFiltered = eligibleCandidates.filter(c =>
     !admitSearch || c.fullNameEn.toLowerCase().includes(admitSearch.toLowerCase()) || (c.nationalId ?? "").toLowerCase().includes(admitSearch.toLowerCase()) || (c.phone ?? "").toLowerCase().includes(admitSearch.toLowerCase())
