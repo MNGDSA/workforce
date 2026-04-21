@@ -227,10 +227,7 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
 
   const { data: templates = [] } = useQuery<ContractTemplate[]>({
     queryKey: ["/api/contract-templates"],
-    // Show every non-archived template (draft + active) so newly created
-    // templates are immediately usable from the Stage 2 selector, matching
-    // the templates list page and the bulk-contracts dialog filter.
-    select: (data: ContractTemplate[]) => data.filter(t => t.status !== "archived"),
+    select: (data: ContractTemplate[]) => data.filter(t => t.status === "active"),
   });
 
   const { data: contracts = [] } = useQuery<CandidateContractRecord[]>({
@@ -866,15 +863,34 @@ function ContractTemplatesTab() {
                     </Button>
                   )}
                   {tpl.status === "draft" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-red-900/60 text-red-400 hover:bg-red-950/40 gap-1"
-                      onClick={() => deleteMutation.mutate(tpl.id)}
-                      data-testid={`button-delete-template-${tpl.id}`}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-emerald-700/70 text-emerald-400 hover:bg-emerald-950/40 gap-1"
+                        onClick={() => {
+                          if (window.confirm(t("templates.activateConfirm"))) {
+                            updateMutation.mutate(
+                              { id: tpl.id, data: { status: "active" } },
+                              { onSuccess: () => toast({ title: t("toasts.templateActivated") }) },
+                            );
+                          }
+                        }}
+                        data-testid={`button-activate-template-${tpl.id}`}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        {t("templates.activate")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-red-900/60 text-red-400 hover:bg-red-950/40 gap-1"
+                        onClick={() => deleteMutation.mutate(tpl.id)}
+                        data-testid={`button-delete-template-${tpl.id}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
