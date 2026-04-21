@@ -43,8 +43,8 @@ import BroadcastPage from "@/pages/broadcast";
 import OrgChartPage from "@/pages/org-chart";
 import { RequireAdmin, RequireCandidate } from "@/lib/auth-guard";
 
-const admin = (Component: React.ComponentType<any>) => () => (
-  <RequireAdmin><Component /></RequireAdmin>
+const admin = (Component: React.ComponentType<any>) => (props: any) => (
+  <RequireAdmin><Component {...props} /></RequireAdmin>
 );
 
 function Router() {
