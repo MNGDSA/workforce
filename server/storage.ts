@@ -765,6 +765,42 @@ export class DatabaseStorage implements IStorage {
       .set({ ...data, updatedAt: new Date() })
       .where(eq(candidates.id, id))
       .returning();
+
+    // Mirror phone changes to the linked login account so the candidate's
+    // self-edit (or an admin edit) keeps `users.phone` in sync with
+    // `candidates.phone`. Without this, an activated candidate would log in
+    // and receive password-reset OTPs at their old number after a phone
+    // change. Best-effort: if another user already holds that phone we skip
+    // the mirror and warn — the candidate-side write still stands.
+    if (updated && updated.userId && Object.prototype.hasOwnProperty.call(data, "phone")) {
+      const newPhone = (data as any).phone as string | null | undefined;
+      try {
+        if (newPhone) {
+          const [conflicting] = await db
+            .select({ id: users.id })
+            .from(users)
+            .where(and(eq(users.phone, newPhone), not(eq(users.id, updated.userId))));
+          if (conflicting) {
+            console.warn(
+              `[updateCandidate] phone-mirror skipped: user ${conflicting.id} already holds phone for candidate ${updated.id}`,
+            );
+          } else {
+            await db
+              .update(users)
+              .set({ phone: newPhone })
+              .where(eq(users.id, updated.userId));
+          }
+        } else {
+          await db
+            .update(users)
+            .set({ phone: null })
+            .where(eq(users.id, updated.userId));
+        }
+      } catch (e) {
+        console.error("[updateCandidate] phone-mirror to users failed:", e);
+      }
+    }
+
     return updated;
   }
 
