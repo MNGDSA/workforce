@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "@/component
 import { ArrowRight, Lock, CreditCard, Phone, AlertCircle, Loader2, CheckCircle2, RefreshCw, ShieldCheck } from "lucide-react";
 import meccaBg from "@assets/Destination_Mecca_14_1776015335379.jpg";
 import { useState, useRef, useEffect, useMemo } from "react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useTranslation } from "react-i18next";
 import { formatNumber } from "@/lib/format";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
@@ -108,6 +108,10 @@ export default function AuthPage() {
         password: values.password,
       });
       const data = await res.json();
+      // Drop any cached /api/me from a prior session in this browser. Without
+      // this, the route guards on the destination page read the stale role
+      // (e.g. an earlier admin) and bounce the user to the wrong shell.
+      await queryClient.invalidateQueries({ queryKey: ["/api/me"] });
       if (data.user?.role === "candidate") {
         if (data.candidate) {
           localStorage.setItem("workforce_candidate", JSON.stringify(data.candidate));
@@ -185,6 +189,10 @@ export default function AuthPage() {
         otpId,
       });
       const data = await res.json();
+      // Drop any cached /api/me from a prior session so the candidate guard
+      // on /candidate-portal sees the freshly-registered candidate role
+      // instead of a stale admin role from an earlier login in this browser.
+      await queryClient.invalidateQueries({ queryKey: ["/api/me"] });
       if (data.candidate) {
         localStorage.setItem("workforce_candidate", JSON.stringify(data.candidate));
       }
