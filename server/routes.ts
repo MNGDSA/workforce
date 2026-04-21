@@ -1206,15 +1206,28 @@ export async function registerRoutes(
             .limit(1);
           let createdCandidate;
           if (existingByNidRows[0]) {
+            // The NID matches a candidate row that an admin (or earlier
+            // bulk upload) pre-loaded. The registrant is "claiming" their
+            // own record — link the new login to it and refresh the phone,
+            // but DO NOT overwrite the on-file fullNameEn. Letting any
+            // anonymous registrant rewrite the admin-recorded name is a
+            // data-integrity hole (and a soft impersonation vector). We
+            // only fall back to the registrant-supplied name when the
+            // existing row truly has no name on file.
+            const existing = existingByNidRows[0];
+            const preservedName =
+              existing.fullNameEn && existing.fullNameEn.trim().length > 0
+                ? existing.fullNameEn
+                : fullName.trim();
             const [updated] = await tx
               .update(candidates)
               .set({
                 userId: createdUser.id,
                 phone: normalizedPhone,
-                fullNameEn: fullName.trim(),
+                fullNameEn: preservedName,
                 email: null,
               })
-              .where(eq(candidates.id, existingByNidRows[0].id))
+              .where(eq(candidates.id, existing.id))
               .returning();
             createdCandidate = updated;
           } else {
