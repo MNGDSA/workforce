@@ -156,7 +156,7 @@ export default function JobDetailPage() {
   const subtitle: string | undefined = undefined;
 
   return (
-    <div className="min-h-screen bg-background font-sans text-foreground">
+    <div className="min-h-screen bg-background font-sans text-foreground flex flex-col">
 
       <header className="sticky top-0 z-50 h-14 bg-background/90 backdrop-blur-md border-b border-border px-4 lg:px-8 flex items-center justify-between">
         {isLoggedIn ? (
@@ -235,7 +235,7 @@ export default function JobDetailPage() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 lg:px-8 py-8 space-y-8 animate-in fade-in duration-500">
+      <main className="max-w-3xl w-full mx-auto px-4 lg:px-8 py-8 space-y-8 animate-in fade-in duration-500 flex-1">
 
         <div className="space-y-4">
           <div className="flex items-center gap-2 flex-wrap">
