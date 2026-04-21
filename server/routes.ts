@@ -57,6 +57,7 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, desc, inArray, count } from "drizzle-orm";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
+import { logOtpForDev } from "./dev-otp-log";
 import { trL, type ServerLocale } from "./i18n";
 import { validateFaceQuality } from "./rekognition";
 import {
@@ -1005,6 +1006,7 @@ export async function registerRoutes(
 
       // Phone-only flow (no user record yet) — honour request locale.
       const message = tr(req, "sms.otpVerification", { code });
+      logOtpForDev(normalizedPhone, code, "registration");
       const result = await sendSmsViaPlugin(smsPlugin, normalizedPhone, message);
 
       if (!result.success) {
@@ -1421,6 +1423,7 @@ export async function registerRoutes(
         return res.json(generic);
       }
 
+      logOtpForDev(phone, code, "password_reset");
       const activePlugin = await storage.getActiveSmsPlugin();
       if (activePlugin) {
         const recipientLocale = (user as any)?.locale === "en" ? "en" : "ar";
@@ -7992,6 +7995,7 @@ export async function registerRoutes(
           metadata: { payRunLineId: line.id, trancheNumber: tranche, amount },
         });
 
+        logOtpForDev(cand.phone, code, "cash_payment");
         const { sendSmsViaPlugin } = await import("./sms-sender");
         const plugins = await storage.getSmsPlugins();
         const activePlugin = plugins.find((p: any) => p.isActive);
