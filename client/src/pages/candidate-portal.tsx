@@ -452,25 +452,18 @@ function typeLabel(type: string, t: (k: string) => string) {
   return known.includes(type) ? t(`portal:jobType.${type}`) : type;
 }
 
-function getApplicationBadge(deadline: string | undefined, status: string, t: (k: string) => string) {
-  const isBeforeDeadline = deadline ? new Date() < new Date(deadline) : true;
-  if (isBeforeDeadline) {
-    return { label: t("portal:appBadge.underReview"), className: "bg-amber-500/15 text-amber-400 border-amber-500/30 border" };
+function getApplicationBadge(_deadline: string | undefined, status: string, t: (k: string) => string) {
+  // Three-state badge driven purely by application status — no deadline override.
+  //   hired/offered                       → Hired
+  //   rejected/withdrawn/closed           → Not Open
+  //   anything else (new/reviewing/…)     → Under Review
+  if (status === "hired" || status === "offered") {
+    return { label: t("portal:appBadge.hired"), className: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 border" };
   }
-  switch (status) {
-    case "hired":
-      return { label: t("portal:appBadge.hired"), className: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 border" };
-    case "offered":
-      return { label: t("portal:appBadge.offered"), className: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30 border" };
-    case "shortlisted":
-      return { label: t("portal:appBadge.shortlisted"), className: "bg-blue-500/15 text-blue-400 border-blue-500/30 border" };
-    case "interviewed":
-      return { label: t("portal:appBadge.interviewed"), className: "bg-violet-500/15 text-violet-400 border-violet-500/30 border" };
-    case "rejected":
-      return { label: t("portal:appBadge.rejected"), className: "bg-muted/60 text-muted-foreground border-border border" };
-    default:
-      return { label: t("portal:appBadge.underReview"), className: "bg-amber-500/15 text-amber-400 border-amber-500/30 border" };
+  if (status === "rejected" || status === "withdrawn" || status === "closed") {
+    return { label: t("portal:appBadge.notOpen"), className: "bg-muted/60 text-muted-foreground border-border border" };
   }
+  return { label: t("portal:appBadge.underReview"), className: "bg-amber-500/15 text-amber-400 border-amber-500/30 border" };
 }
 
 // ─── Profile Completion Card ──────────────────────────────────────────────────

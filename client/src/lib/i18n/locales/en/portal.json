@@ -103,10 +103,7 @@
   "appBadge": {
     "underReview": "Under Review",
     "hired": "Hired",
-    "offered": "Offer Extended",
-    "shortlisted": "Shortlisted",
-    "interviewed": "Interviewed",
-    "rejected": "Not Shortlisted"
+    "notOpen": "Not Open"
   },
   "docs": {
     "requiredDocs": "Required Documents",

@@ -103,10 +103,7 @@
   "appBadge": {
     "underReview": "قيد المراجعة",
     "hired": "تم التعيين",
-    "offered": "تم تقديم عرض",
-    "shortlisted": "مرشح مبدئيًا",
-    "interviewed": "تمت المقابلة",
-    "rejected": "غير مرشح"
+    "notOpen": "انتهى التقديم"
   },
   "docs": {
     "requiredDocs": "المستندات المطلوبة",
