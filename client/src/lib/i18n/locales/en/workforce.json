@@ -37,7 +37,7 @@
   },
   "list": {
     "title": "Employee List",
-    "count": "({n})",
+    "count": " ({n})",
     "empty": "No employees found",
     "emptyHint": "Employees appear here after conversion from Onboarding."
   },
