@@ -660,7 +660,7 @@ function CandidateProfileSheet({
             {editing ? (
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <p className="text-[11px] text-muted-foreground">{t("profile.phone", { defaultValue: "Phone" } as any)}</p>
+                  <p className="text-[11px] text-muted-foreground">{t("profile:phone", { defaultValue: "Phone" } as any)}</p>
                   <div className="flex items-center gap-2">
                     <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
                     <Input
@@ -682,7 +682,7 @@ function CandidateProfileSheet({
                   )}
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] text-muted-foreground">{t("profile.email", { defaultValue: "Email" } as any)}</p>
+                  <p className="text-[11px] text-muted-foreground">{t("profile:email", { defaultValue: "Email" } as any)}</p>
                   <div className="flex items-center gap-2">
                     <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
                     <Input
