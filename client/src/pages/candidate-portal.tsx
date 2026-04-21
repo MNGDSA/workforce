@@ -1596,7 +1596,7 @@ function ContractSection({
                       preambleText = preambleText.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(val));
                     });
                   }
-                  return <div className="text-sm whitespace-pre-wrap leading-relaxed italic">{preambleText}</div>;
+                  return <div className="text-sm whitespace-pre-wrap leading-relaxed">{preambleText}</div>;
                 })()}
                 {Array.isArray(contractPreview.articles) && contractPreview.articles.map((article: any, idx: number) => {
                   let body = article.body || "";
@@ -1633,7 +1633,7 @@ function ContractSection({
                       footerText = footerText.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(val));
                     });
                   }
-                  return <div className="border-t pt-4 mt-6"><p className="text-sm whitespace-pre-wrap leading-relaxed italic">{footerText}</p></div>;
+                  return <div className="border-t pt-4 mt-6"><p className="text-sm whitespace-pre-wrap leading-relaxed">{footerText}</p></div>;
                 })()}
                 <div className="border-t pt-6 mt-8">
                   <div className="grid grid-cols-2 gap-8">

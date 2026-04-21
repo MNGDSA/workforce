@@ -372,7 +372,7 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
                 <p className="text-center text-xl font-bold border-b pb-4">{previewTpl.headerText}</p>
               )}
               {(previewTpl as any).preamble && (
-                <div className="text-sm whitespace-pre-wrap leading-relaxed italic">
+                <div className="text-sm whitespace-pre-wrap leading-relaxed">
                   {replaceVars((previewTpl as any).preamble, latestContract.snapshotVariables)}
                 </div>
               )}
@@ -390,7 +390,7 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
               ))}
               {previewTpl.footerText && (
                 <div className="border-t pt-4 mt-6">
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed italic">{replaceVars(previewTpl.footerText, latestContract.snapshotVariables)}</p>
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVars(previewTpl.footerText, latestContract.snapshotVariables)}</p>
                 </div>
               )}
               <div className="border-t pt-6 mt-8">
@@ -1189,7 +1189,7 @@ function ContractTemplatesTab() {
                   <p className="text-center text-xl font-bold border-b pb-4">{previewTemplate.headerText}</p>
                 )}
                 {(previewTemplate as any).preamble && (
-                  <div className="text-sm whitespace-pre-wrap leading-relaxed italic">
+                  <div className="text-sm whitespace-pre-wrap leading-relaxed">
                     {replaceVariables((previewTemplate as any).preamble)}
                   </div>
                 )}
@@ -1207,7 +1207,7 @@ function ContractTemplatesTab() {
                 ))}
                 {previewTemplate.footerText && (
                   <div className="border-t pt-4 mt-6">
-                    <p className="text-sm whitespace-pre-wrap leading-relaxed italic">{replaceVariables(previewTemplate.footerText)}</p>
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVariables(previewTemplate.footerText)}</p>
                   </div>
                 )}
                 <div className="border-t pt-6 mt-8">

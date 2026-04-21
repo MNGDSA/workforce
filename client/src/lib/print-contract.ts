@@ -38,7 +38,8 @@ export function printContract(title: string) {
     .text-sm { font-size: 0.875rem; }
     .text-xs { font-size: 0.75rem; }
     .font-bold { font-weight: 700; }
-    .italic { font-style: italic; }
+    .italic { font-style: normal; }
+    * { font-style: normal !important; }
     .whitespace-pre-wrap { white-space: pre-wrap; }
     .leading-relaxed { line-height: 1.625; }
     .border-b { border-bottom: 1px solid #d1d5db; }
