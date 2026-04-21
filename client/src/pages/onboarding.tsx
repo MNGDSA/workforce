@@ -362,7 +362,7 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
                 {t("contract.candidateContractDescription")}
               </DialogDescription>
             </DialogHeader>
-            <div className="contract-print-area mt-4 bg-white text-black rounded-lg p-8 space-y-6 font-serif">
+            <div className="contract-print-area mt-4 bg-white text-black rounded-lg p-8 space-y-6" style={{ fontFamily: "'Cairo', system-ui, -apple-system, 'Segoe UI', sans-serif" }}>
               {previewTpl.logoUrl && (
                 <div className={`flex ${(previewTpl as any).logoAlignment === "left" ? "justify-start" : (previewTpl as any).logoAlignment === "right" ? "justify-end" : "justify-center"}`}>
                   <img src={previewTpl.logoUrl} alt="Logo" className="h-16 object-contain" />
@@ -1179,7 +1179,7 @@ function ContractTemplatesTab() {
           </DialogHeader>
           {previewTemplate && (
             <>
-              <div className="contract-print-area mt-4 bg-white text-black rounded-lg p-8 space-y-6 font-serif">
+              <div className="contract-print-area mt-4 bg-white text-black rounded-lg p-8 space-y-6" style={{ fontFamily: "'Cairo', system-ui, -apple-system, 'Segoe UI', sans-serif" }}>
                 {previewTemplate.logoUrl && (
                   <div className={`flex ${(previewTemplate as any).logoAlignment === "left" ? "justify-start" : (previewTemplate as any).logoAlignment === "right" ? "justify-end" : "justify-center"}`}>
                     <img src={previewTemplate.logoUrl} alt="Logo" className="h-16 object-contain" />

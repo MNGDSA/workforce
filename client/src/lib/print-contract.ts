@@ -16,9 +16,10 @@ export function printContract(title: string) {
   const USABLE_HEIGHT_PX = CONTENT_HEIGHT_PX - FOOTER_RESERVE_PX;
 
   const styles = `
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
     @page { size: A4; margin: 0; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Times New Roman', Georgia, serif; color: #000; background: #fff; margin: 0; padding: 0; font-size: 14px; line-height: 1.6; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Cairo', system-ui, -apple-system, Segoe UI, sans-serif; }
+    body { font-family: 'Cairo', system-ui, -apple-system, Segoe UI, sans-serif; color: #000; background: #fff; margin: 0; padding: 0; font-size: 14px; line-height: 1.6; }
     .print-page { width: ${A4_WIDTH_MM}mm; min-height: ${A4_HEIGHT_MM}mm; padding: ${MARGIN_TOP_MM}mm ${MARGIN_SIDE_MM}mm ${MARGIN_BOTTOM_MM}mm ${MARGIN_SIDE_MM}mm; position: relative; page-break-after: always; overflow: hidden; }
     .print-page:last-child { page-break-after: auto; }
     .print-page-number { position: absolute; bottom: 10mm; right: ${MARGIN_SIDE_MM}mm; font-size: 9px; color: #888; }

@@ -1394,7 +1394,7 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
                     Object.entries(vars).forEach(([k, v]) => { b = b.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v as string); });
                     return `<h3>${i + 1}. ${a.title}</h3><p style="white-space:pre-wrap">${b}</p>`;
                   }).join("");
-                  printWindow.document.write(`<html><head><title>${t("portal:contract.printDocTitle")}</title><style>body{font-family:sans-serif;padding:2rem;max-width:700px;margin:auto}h3{margin-top:1.5em}</style></head><body>${html}</body></html>`);
+                  printWindow.document.write(`<html><head><title>${t("portal:contract.printDocTitle")}</title><style>@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');*{font-family:'Cairo',system-ui,-apple-system,'Segoe UI',sans-serif}body{padding:2rem;max-width:700px;margin:auto}h3{margin-top:1.5em}</style></head><body>${html}</body></html>`);
                   printWindow.document.close();
                   printWindow.print();
                 }}
@@ -1580,7 +1580,7 @@ function ContractSection({
           </DialogHeader>
           {contractPreview && (
             <>
-              <div className="contract-print-area mt-4 bg-white text-black rounded-lg p-8 space-y-6 font-serif" data-testid="contract-preview-content">
+              <div className="contract-print-area mt-4 bg-white text-black rounded-lg p-8 space-y-6" style={{ fontFamily: "'Cairo', system-ui, -apple-system, 'Segoe UI', sans-serif" }} data-testid="contract-preview-content">
                 {contractPreview.template?.logoUrl && (
                   <div className={`flex ${contractPreview.template?.logoAlignment === "left" ? "justify-start" : contractPreview.template?.logoAlignment === "right" ? "justify-end" : "justify-center"}`}>
                     <img src={contractPreview.template.logoUrl} alt="Company Logo" className="h-16 object-contain" />
