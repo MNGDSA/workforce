@@ -1470,9 +1470,13 @@ export default function OnboardingPage() {
     return true;
   });
 
-  // Candidates eligible for admission: active + has at least one interviewed/hired application
+  // Candidates eligible for admission: must be explicitly moved forward by an
+  // admin — either shortlisted from the interviews page or already hired.
+  // Pure "interviewed" is intentionally excluded so that reversing a shortlist
+  // (which flips the application back to "interviewed") removes the candidate
+  // from the admit list, matching the natural reverse of the shortlist action.
   const interviewedIds = new Set(
-    applications.filter(a => ["interviewed", "hired", "shortlisted"].includes(a.status)).map(a => a.candidateId)
+    applications.filter(a => ["hired", "shortlisted"].includes(a.status)).map(a => a.candidateId)
   );
   const alreadyOnboarding = new Set(
     records.filter(r => r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated").map(r => r.candidateId)
