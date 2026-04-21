@@ -1663,8 +1663,8 @@ export default function OnboardingPage() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Users className="h-12 w-12 text-zinc-700 mb-4" />
-            <p className="text-zinc-400 font-medium">{t("empty.records")}</p>
-            <p className="text-zinc-600 text-sm mt-1">{t("empty.recordsHint")}</p>
+            <p className="text-zinc-400 font-medium">{t("empty.noRecords")}</p>
+            <p className="text-zinc-600 text-sm mt-1">{t("empty.admitFirst")}</p>
           </div>
         ) : (
           <div className="space-y-3">
