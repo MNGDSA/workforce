@@ -2249,12 +2249,35 @@ export async function registerRoutes(
 
           if (resolution === "reclassify") {
             // Treat exactly like CLEAN: flip the existing phone-owner to SMP.
+            const beforeOwner = {
+              classification: (owner as any).classification,
+              status: (owner as any).status,
+            };
             const newStatus = owner.userId ? owner.status : "awaiting_activation";
             await storage.updateCandidate(ownerId, {
               classification: "smp",
               status: newStatus as any,
             } as any);
             await enqueueIfPhoneOnFile(ownerId);
+            try {
+              await storage.createAuditLog({
+                actorId: req.authUserId ?? null,
+                action: "candidate.reclassify_as_smp",
+                entityType: "candidate",
+                entityId: ownerId,
+                description: "smp-commit: phone-conflict resolved via reclassify",
+                metadata: {
+                  before: beforeOwner,
+                  after: { classification: "smp", status: newStatus },
+                  source: "smp-commit",
+                  resolution: "phone_conflict_reclassify",
+                  eventId: eventId ?? null,
+                  jobId: jobId ?? null,
+                } as any,
+              } as any);
+            } catch (e) {
+              console.error("[smp-commit] audit log failed (phone_conflict reclassify):", e);
+            }
             reclassified.push(ownerId);
             continue;
           }
@@ -2296,6 +2319,28 @@ export async function registerRoutes(
               });
               const newCandidate = await storage.createCandidate(parsed);
               await enqueueIfPhoneOnFile(newCandidate.id);
+              try {
+                await storage.createAuditLog({
+                  actorId: req.authUserId ?? null,
+                  action: "candidate.smp_created",
+                  entityType: "candidate",
+                  entityId: newCandidate.id,
+                  description: "smp-commit: phone-conflict resolved via transfer (new SMP candidate created, phone moved from prior owner)",
+                  metadata: {
+                    after: {
+                      classification: "smp",
+                      status: "awaiting_activation",
+                    },
+                    source: "smp-commit",
+                    resolution: "phone_conflict_transfer",
+                    transferredFromCandidateId: ownerId,
+                    eventId: eventId ?? null,
+                    jobId: jobId ?? null,
+                  } as any,
+                } as any);
+              } catch (e) {
+                console.error("[smp-commit] audit log failed (phone_conflict transfer):", e);
+              }
               created.push(newCandidate.id);
             } catch (parseErr) {
               // Compensating rollback: createCandidate failed after we
@@ -2328,12 +2373,35 @@ export async function registerRoutes(
           // only if the candidate has no user account (un-activated).
           const cand = await storage.getCandidate(candidateId);
           if (!cand) { skipped.push(candidateId); continue; }
+          const beforeClean = {
+            classification: (cand as any).classification,
+            status: (cand as any).status,
+          };
           const newStatus = cand.userId ? cand.status : "awaiting_activation";
           await storage.updateCandidate(candidateId, {
             classification: "smp",
             status: newStatus as any,
           } as any);
           await enqueueIfPhoneOnFile(candidateId);
+          try {
+            await storage.createAuditLog({
+              actorId: req.authUserId ?? null,
+              action: "candidate.reclassify_as_smp",
+              entityType: "candidate",
+              entityId: candidateId,
+              description: "smp-commit: clean row reclassified to SMP",
+              metadata: {
+                before: beforeClean,
+                after: { classification: "smp", status: newStatus },
+                source: "smp-commit",
+                resolution: "clean",
+                eventId: eventId ?? null,
+                jobId: jobId ?? null,
+              } as any,
+            } as any);
+          } catch (e) {
+            console.error("[smp-commit] audit log failed (clean):", e);
+          }
           reclassified.push(candidateId);
           continue;
         }
@@ -2349,12 +2417,35 @@ export async function registerRoutes(
                 skipped.push(row.nationalId);
                 continue;
               }
+              const beforeNidMatch = {
+                classification: (maybeExisting as any).classification,
+                status: (maybeExisting as any).status,
+              };
               const newStatus = maybeExisting.userId ? maybeExisting.status : "awaiting_activation";
               await storage.updateCandidate(maybeExisting.id, {
                 classification: "smp",
                 status: newStatus as any,
               } as any);
               await enqueueIfPhoneOnFile(maybeExisting.id);
+              try {
+                await storage.createAuditLog({
+                  actorId: req.authUserId ?? null,
+                  action: "candidate.reclassify_as_smp",
+                  entityType: "candidate",
+                  entityId: maybeExisting.id,
+                  description: "smp-commit: NEW row matched existing nationalId — reclassified",
+                  metadata: {
+                    before: beforeNidMatch,
+                    after: { classification: "smp", status: newStatus },
+                    source: "smp-commit",
+                    resolution: "new_matched_existing_nid",
+                    eventId: eventId ?? null,
+                    jobId: jobId ?? null,
+                  } as any,
+                } as any);
+              } catch (e) {
+                console.error("[smp-commit] audit log failed (new_matched_existing_nid):", e);
+              }
               reclassified.push(maybeExisting.id);
               continue;
             }
@@ -2370,6 +2461,27 @@ export async function registerRoutes(
             });
             const newCandidate = await storage.createCandidate(parsed);
             await enqueueIfPhoneOnFile(newCandidate.id);
+            try {
+              await storage.createAuditLog({
+                actorId: req.authUserId ?? null,
+                action: "candidate.smp_created",
+                entityType: "candidate",
+                entityId: newCandidate.id,
+                description: "smp-commit: NEW row created as SMP candidate",
+                metadata: {
+                  after: {
+                    classification: "smp",
+                    status: "awaiting_activation",
+                  },
+                  source: "smp-commit",
+                  resolution: "new",
+                  eventId: eventId ?? null,
+                  jobId: jobId ?? null,
+                } as any,
+              } as any);
+            } catch (e) {
+              console.error("[smp-commit] audit log failed (new):", e);
+            }
             created.push(newCandidate.id);
           } catch (parseErr) {
             skipped.push(row.nationalId ?? row.fullNameEn ?? "?");
@@ -2565,6 +2677,119 @@ export async function registerRoutes(
         } as any);
       } catch (e) {
         console.error("[reclassify-as-individual] audit log failed:", e);
+      }
+      return res.json({ candidate: updated, changed: true });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // Convert-to-SMP — mirror image of reclassify-as-individual. Flips a
+  // single individual candidate to SMP classification with the same
+  // safety envelope: hard precondition that the candidate has no active
+  // pipeline records (workforce / onboarding / scheduled session / open
+  // application), enforced via the single-source-of-truth blocker helper.
+  // If the candidate has no user account yet, status is moved to
+  // awaiting_activation and a fresh activation token + SMS is issued.
+  app.post("/api/candidates/:id/reclassify-as-smp", requirePermission("candidates:smp_manage"), async (req: Request, res: Response) => {
+    try {
+      const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+      if (reason.length < 10) {
+        return res.status(400).json({
+          message: tr(req, "candidate.reclassifyReasonRequired"),
+        });
+      }
+      const cand = await storage.getCandidate(req.params.id);
+      if (!cand) return res.status(404).json({ message: tr(req, "candidate.notFound") });
+      if ((cand as any).classification === "smp") {
+        return res.json({ candidate: cand, changed: false });
+      }
+      // Single source of truth for "is this candidate currently entangled
+      // with the individual workforce pipeline?". Refuse if anything is
+      // live — switching classification mid-flight would corrupt the
+      // employment record (a worker cannot be Individual-employed and
+      // SMP-classified at the same time).
+      const { getCandidateBlockers } = await import("./candidate-blockers");
+      const [b] = await getCandidateBlockers([req.params.id]);
+      if (b && b.reasons.length > 0) {
+        return res.status(409).json({
+          message: tr(req, "candidate.blockedByPipeline"),
+          blockers: b.reasons,
+        });
+      }
+      const before = {
+        classification: (cand as any).classification,
+        smpCompanyId: (cand as any).smpCompanyId ?? null,
+        status: (cand as any).status,
+      };
+      // Defense in depth: invalidate any stray live activation surface
+      // before flipping classification, identical to the reverse direction.
+      // For an individual→SMP flip this is normally a no-op (individuals
+      // don't have activation tokens), but it costs nothing and prevents
+      // a stale token surviving an admin who flipped back-and-forth.
+      try {
+        const { invalidateAllTokensForCandidate } = await import("./activation-tokens");
+        await invalidateAllTokensForCandidate(req.params.id);
+      } catch (e) {
+        console.error("[reclassify-as-smp] token invalidation failed:", e);
+        return res.status(500).json({ message: tr(req, "candidate.reclassifyFailed") });
+      }
+      try {
+        const { invalidatePendingActivationSms } = await import("./sms-outbox");
+        await invalidatePendingActivationSms(req.params.id);
+      } catch (e) {
+        console.error("[reclassify-as-smp] outbox invalidation failed:", e);
+      }
+      // Flip classification. If the candidate has no user account yet,
+      // also move them into awaiting_activation so the portal gates apply
+      // and the activation SMS we're about to enqueue has a target state.
+      const newStatus = (cand as any).userId ? (cand as any).status : "awaiting_activation";
+      const updated = await storage.updateCandidate(req.params.id, {
+        classification: "smp",
+        status: newStatus as any,
+      } as any);
+      // If the candidate is un-activated and has a phone on file, mint a
+      // fresh activation token and enqueue the SMS via the outbox — same
+      // path smp-commit uses for CLEAN rows.
+      if (!(cand as any).userId && (cand as any).phone) {
+        try {
+          const { mintActivationToken } = await import("./activation-tokens");
+          const { enqueueActivationSms } = await import("./sms-outbox");
+          const { plainToken, tokenRow } = await mintActivationToken(req.params.id, req.authUserId ?? null);
+          await enqueueActivationSms({
+            candidateId: req.params.id,
+            recipientPhone: (cand as any).phone,
+            plainToken,
+            tokenRowId: tokenRow.id,
+            candidateLocale: "ar",
+            kind: "smp_activation",
+            dedupeKey: `activation:${tokenRow.id}`,
+          });
+        } catch (e) {
+          // Best-effort: classification is already flipped. Admin can
+          // retry via the Resend Activation row action.
+          console.error("[reclassify-as-smp] activation SMS enqueue failed:", e);
+        }
+      }
+      try {
+        await storage.createAuditLog({
+          actorId: req.authUserId ?? null,
+          action: "candidate.reclassify_as_smp",
+          entityType: "candidate",
+          entityId: req.params.id,
+          description: reason,
+          metadata: {
+            before,
+            after: {
+              classification: "smp",
+              smpCompanyId: (updated as any)?.smpCompanyId ?? null,
+              status: (updated as any)?.status ?? null,
+            },
+            reason,
+          } as any,
+        } as any);
+      } catch (e) {
+        console.error("[reclassify-as-smp] audit log failed:", e);
       }
       return res.json({ candidate: updated, changed: true });
     } catch (err) {
