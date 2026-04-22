@@ -2272,7 +2272,7 @@ export default function WorkforcePage() {
                               onClick={() => setSelectedEmployee(emp)}
                               data-testid={`button-view-${emp.id}`}
                             >
-                              <ChevronRight className="h-4 w-4" />
+                              <ChevronRight className="h-4 w-4 rtl:rotate-180" />
                             </Button>
                           </div>
                         </TableCell>
