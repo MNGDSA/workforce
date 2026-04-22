@@ -4,6 +4,10 @@ export function printContract(title: string) {
   const printWin = window.open('', '_blank', 'width=800,height=1000');
   if (!printWin) return;
 
+  // Inherit document/element direction so an Arabic preview prints RTL.
+  const dir = (getComputedStyle(el).direction === 'rtl' || document.documentElement.dir === 'rtl') ? 'rtl' : 'ltr';
+  const lang = document.documentElement.lang || (dir === 'rtl' ? 'ar' : 'en');
+
   const A4_WIDTH_MM = 210;
   const A4_HEIGHT_MM = 297;
   const MARGIN_TOP_MM = 20;
@@ -22,7 +26,7 @@ export function printContract(title: string) {
     body { font-family: 'Cairo', system-ui, -apple-system, Segoe UI, sans-serif; color: #000; background: #fff; margin: 0; padding: 0; font-size: 14px; line-height: 1.6; }
     .print-page { width: ${A4_WIDTH_MM}mm; min-height: ${A4_HEIGHT_MM}mm; padding: ${MARGIN_TOP_MM}mm ${MARGIN_SIDE_MM}mm ${MARGIN_BOTTOM_MM}mm ${MARGIN_SIDE_MM}mm; position: relative; page-break-after: always; overflow: hidden; }
     .print-page:last-child { page-break-after: auto; }
-    .print-page-number { position: absolute; bottom: 10mm; right: ${MARGIN_SIDE_MM}mm; font-size: 9px; color: #888; }
+    .print-page-number { position: absolute; bottom: 10mm; ${dir === 'rtl' ? 'left' : 'right'}: ${MARGIN_SIDE_MM}mm; font-size: 9px; color: #888; }
     .print-doc-footer { position: absolute; bottom: 5mm; left: ${MARGIN_SIDE_MM}mm; right: ${MARGIN_SIDE_MM}mm; font-size: 8px; color: #999; text-align: center; white-space: pre-wrap; line-height: 1.4; }
     .page-content > * + * { margin-top: 1.5rem; }
     .flex { display: flex; }
@@ -65,10 +69,10 @@ export function printContract(title: string) {
     .no-print, .contract-page-footer { display: none !important; }
   `;
 
-  const measureHtml = `<!DOCTYPE html><html><head><style>${styles}
+  const measureHtml = `<!DOCTYPE html><html lang="${lang}" dir="${dir}"><head><style>${styles}
     .measure-container { width: ${A4_WIDTH_MM - MARGIN_SIDE_MM * 2}mm; padding: 0; position: absolute; left: -9999px; top: 0; }
     .measure-container > * + * { margin-top: 1.5rem; }
-  </style></head><body><div class="measure-container">${el.innerHTML}</div></body></html>`;
+  </style></head><body dir="${dir}"><div class="measure-container" dir="${dir}">${el.innerHTML}</div></body></html>`;
 
   printWin.document.write(measureHtml);
   printWin.document.close();
@@ -113,7 +117,7 @@ export function printContract(title: string) {
     });
 
     printWin.document.open();
-    printWin.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>${styles}</style></head><body>${bodyHtml}</body></html>`);
+    printWin.document.write(`<!DOCTYPE html><html lang="${lang}" dir="${dir}"><head><title>${title}</title><style>${styles}</style></head><body dir="${dir}">${bodyHtml}</body></html>`);
     printWin.document.close();
 
     setTimeout(() => { printWin.focus(); printWin.print(); printWin.close(); }, 300);
