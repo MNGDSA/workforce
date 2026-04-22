@@ -1136,12 +1136,12 @@ function EmployeeDetailDialog({
                     ) : null}
                     {(employee.ibanBankName || employee.ibanBankCode) ? (
                       <div className="grid grid-cols-2 gap-3">
-                        {employee.ibanBankName ? <InfoRow icon={<Building className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.bankName")} value={employee.ibanBankName} /> : null}
-                        {employee.ibanBankCode ? <InfoRow icon={<Hash className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.bankCode")} value={<span dir="ltr">{employee.ibanBankCode}</span>} mono /> : null}
+                        {employee.ibanBankName ? <InfoRow icon={<Building className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.bankName")} value={employee.ibanBankName} ltr /> : null}
+                        {employee.ibanBankCode ? <InfoRow icon={<Hash className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.bankCode")} value={employee.ibanBankCode} mono ltr /> : null}
                       </div>
                     ) : null}
                     {employee.ibanAccountFirstName ? (
-                      <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.accountHolder")} value={<bdi>{`${employee.ibanAccountFirstName} ${employee.ibanAccountLastName ?? ""}`.trim()}</bdi>} />
+                      <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.accountHolder")} value={<bdi>{`${employee.ibanAccountFirstName} ${employee.ibanAccountLastName ?? ""}`.trim()}</bdi>} ltr />
                     ) : null}
                     {!employee.iban && !employee.ibanBankName && <p className="text-zinc-500 text-sm">{t("dialog.financial.empty")}</p>}
                   </div>
@@ -1679,13 +1679,18 @@ function PaymentMethodToggle({ employee }: { employee: Employee }) {
   );
 }
 
-function InfoRow({ icon, label, value, mono }: { icon: React.ReactNode; label: string; value: React.ReactNode; mono?: boolean }) {
+function InfoRow({ icon, label, value, mono, ltr }: { icon: React.ReactNode; label: string; value: React.ReactNode; mono?: boolean; ltr?: boolean }) {
   return (
     <div className="bg-zinc-900/50 rounded-md p-3 border border-zinc-800/50">
       <div className="flex items-center gap-1.5 text-zinc-500 text-[10px] uppercase tracking-wider font-semibold mb-1">
         {icon} {label}
       </div>
-      <p className={`text-white text-sm font-medium ${mono ? "font-mono" : ""}`}>{value}</p>
+      <p
+        className={`text-white text-sm font-medium ${mono ? "font-mono" : ""} ${ltr ? "text-left" : ""}`}
+        {...(ltr ? { dir: "ltr" as const } : {})}
+      >
+        {value}
+      </p>
     </div>
   );
 }
