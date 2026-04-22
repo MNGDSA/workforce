@@ -1662,7 +1662,6 @@ function ContractSection({
                 )}
               </div>
               <div className="flex justify-end gap-3 mt-4 no-print">
-                <Button variant="outline" onClick={() => setContractPreviewOpen(false)} className="border-border">{t("common:actions.close")}</Button>
                 <Button
                   variant="outline"
                   className="border-border gap-2"
@@ -1672,6 +1671,7 @@ function ContractSection({
                   <Download className="h-3.5 w-3.5" />
                   {t("portal:contract.printPdf")}
                 </Button>
+                <Button variant="outline" onClick={() => setContractPreviewOpen(false)} className="border-border">{t("common:actions.close")}</Button>
                 {!contractIsSigned && !readOnly && (
                   <Button
                     onClick={() => { setContractPreviewOpen(false); setIsSignModalOpen(true); }}
