@@ -1077,12 +1077,12 @@ function EmployeeDetailDialog({
                       <Button size="sm" className="h-6 px-2 text-xs bg-emerald-700 hover:bg-emerald-600" data-testid="button-save-financial"
                         disabled={profileMutation.isPending}
                         onClick={() => {
-                          const iban = (financialForm.ibanNumber ?? "").trim().toUpperCase();
+                          const iban = (financialForm.ibanNumber ?? "").replace(/\s+/g, "").toUpperCase();
                           if (iban && !/^SA\d{22}$/.test(iban)) {
                             toast({ title: t("toast.invalidIban"), description: t("toast.invalidIbanDesc"), variant: "destructive" });
                             return;
                           }
-                          profileMutation.mutate(financialForm);
+                          profileMutation.mutate({ ...financialForm, ibanNumber: iban });
                         }}
                       ><Save className="h-3 w-3 me-1" /> {t("dialog.actions.save")}</Button>
                     </div>

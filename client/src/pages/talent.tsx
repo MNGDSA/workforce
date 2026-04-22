@@ -581,6 +581,7 @@ function CandidateProfileSheet({
   }
 
   function handleSave() {
+    form.ibanNumber = (form.ibanNumber || "").replace(/\s+/g, "").toUpperCase();
     if (form.ibanNumber && !/^SA\d{22}$/.test(form.ibanNumber)) {
       toast({ title: t("toast.invalidIban"), description: t("toast.invalidIbanDesc"), variant: "destructive" });
       return;
@@ -889,7 +890,10 @@ function CandidateProfileSheet({
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("profile.iban")}</h4>
             {editing ? (
               <div className="space-y-2">
-                <Input value={form.ibanNumber} onChange={e => setField("ibanNumber", e.target.value.toUpperCase())} placeholder={t("profile.ibanPh")} maxLength={24} dir="ltr" className="h-9 bg-muted/30 border-border text-sm font-mono" data-testid="edit-iban" />
+                <Input value={form.ibanNumber} onChange={e => {
+                  const cleaned = e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 24);
+                  setField("ibanNumber", cleaned.replace(/(.{4})/g, "$1 ").trim());
+                }} placeholder={t("profile.ibanPh")} maxLength={29} dir="ltr" className="h-9 bg-muted/30 border-border text-sm font-mono" data-testid="edit-iban" />
                 {form.ibanNumber && !form.ibanNumber.match(/^SA\d{22}$/) && (
                   <p className="text-[11px] text-amber-400">{t("profile.ibanInvalid")}</p>
                 )}

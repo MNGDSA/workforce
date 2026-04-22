@@ -2043,7 +2043,7 @@ export default function CandidatePortal() {
     }
 
     if (!isSmp) {
-      const iban = ibanValue.trim().toUpperCase();
+      const iban = ibanValue.replace(/\s+/g, "").toUpperCase();
       if (!iban) {
         toast({ title: t("portal:profile.ibanRequired"), description: t("portal:profile.ibanRequiredDesc"), variant: "destructive" });
         return;
@@ -2888,12 +2888,18 @@ export default function CandidatePortal() {
                     <label className="text-sm font-medium text-white">{t("portal:profile.iban")} <span className="text-red-400">*</span></label>
                     <Input
                       value={ibanValue}
-                      onChange={e => setIbanValue(e.target.value.toUpperCase())}
+                      onChange={e => {
+                        const cleaned = e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 24);
+                        const grouped = cleaned.replace(/(.{4})/g, "$1 ").trim();
+                        setIbanValue(grouped);
+                      }}
                       placeholder={t("portal:profile.ibanPlaceholder")}
-                      maxLength={24}
+                      maxLength={29}
                       className="bg-background border-border font-mono uppercase"
                       data-testid="input-iban"
                       dir="ltr"
+                      inputMode="text"
+                      autoComplete="off"
                     />
                     <p className="text-xs text-muted-foreground">{t("portal:profile.ibanHint")}</p>
                   </div>
