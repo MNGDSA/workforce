@@ -1,19 +1,21 @@
 config:
   target: "{{ $processEnvironment.TARGET_URL }}"
   phases:
+    # Targets ~40k arrivals to complement the parallel k6 'huge' profile
+    # (~60k flows) for a combined 100k-candidate burst.
     - name: warmup
       duration: 30
-      arrivalRate: 5
+      arrivalRate: 10
     - name: ramp
-      duration: 120
-      arrivalRate: 5
-      rampTo: 30
+      duration: 60
+      arrivalRate: 10
+      rampTo: 60
     - name: sustain
-      duration: 1800
-      arrivalRate: 30
+      duration: 600
+      arrivalRate: 60
     - name: cooldown
       duration: 60
-      arrivalRate: 5
+      arrivalRate: 10
   http:
     timeout: 30
     pool: 200
@@ -52,19 +54,17 @@ scenarios:
             code: "{{ otp }}"
             purpose: "register"
           capture:
-            - json: "$.token"
-              as: "verifyToken"
+            - json: "$.otpId"
+              as: "otpId"
           expect:
             - statusCode: 200
       - post:
           url: "/api/auth/register"
           json:
+            fullName: "Burst Tester {{ phone }}"
             phone: "{{ phone }}"
-            password: "LoadTest@2026!"
-            firstName: "Burst"
-            lastName: "Tester"
             nationalId: "{{ nid }}"
-            verifyToken: "{{ verifyToken }}"
-            roleSlug: "individual"
+            password: "LoadTest@2026!"
+            otpId: "{{ otpId }}"
           expect:
             - statusCode: [200, 201]

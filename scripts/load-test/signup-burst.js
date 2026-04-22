@@ -59,6 +59,10 @@ const NID_PREFIX   = "2900";      // 2900XXXXXX — synthetic test pool
 // smoke   ~  100 flows total. Validates the script + bypass before scaling.
 // burst   ~  6k flows.  ramp to 200 VUs / 2 min, sustain 5 min.
 // stress  ~ 30k flows.  ramp to 500 VUs / 5 min, sustain 10 min.
+// huge    ~ 60k flows.  ramp to 1000 VUs / 2 min, sustain 8 min.
+//                       Designed to drive the 100k-candidate burst together
+//                       with a parallel artillery scenario that contributes
+//                       ~40k more arrivals.
 const profiles = {
   smoke:  { stages: [{ duration: "30s", target:  10 }, { duration: "30s", target: 0 }] },
   burst:  { stages: [
@@ -70,6 +74,12 @@ const profiles = {
             { duration: "5m",  target: 500 },
             { duration: "10m", target: 500 },
             { duration: "2m",  target:   0 },
+          ] },
+  huge:   { stages: [
+            { duration: "1m",  target:  200 },
+            { duration: "1m",  target: 1000 },
+            { duration: "8m",  target: 1000 },
+            { duration: "1m",  target:    0 },
           ] },
 };
 
