@@ -87,17 +87,27 @@ export function isDevOtpGateOpen(): boolean {
 }
 
 /**
- * Load-test only: when NODE_ENV is "development" or "test" AND
- * LOAD_TEST_BYPASS_THROTTLE=1 is set, OTP request/verify/activate IP
- * throttles short-circuit to "allowed". This bypass is permanently
- * unavailable in production — even with ALLOW_DEV_BYPASS_IN_PROD set —
- * because removing throttles in front of real traffic is never a
- * legitimate operation, no matter how the env happens to be labelled.
+ * Load-test only: OTP request/verify/activate IP throttles short-circuit
+ * to "allowed" when LOAD_TEST_BYPASS_THROTTLE=1 is set AND the dev gate is
+ * open. Concretely:
+ *
+ *   NODE_ENV=development | test  → permitted (dev gate is unconditionally open)
+ *   NODE_ENV=production          → permitted ONLY when BOTH
+ *                                  ENABLE_DEV_OTP_LOG=true AND
+ *                                  ALLOW_DEV_BYPASS_IN_PROD=true are set.
+ *                                  This is the "deliberate staging mirror"
+ *                                  contract — same dual-flag opt-in that
+ *                                  unlocks the OTP peek endpoint. Without
+ *                                  this allowance a 100k synthetic burst
+ *                                  against a prod-shape staging environment
+ *                                  is impossible (20 OTP/IP/10min limit).
+ *   anything else                → permitted when ENABLE_DEV_OTP_LOG=true
+ *
+ * assertDevGateSafe() additionally hard-fails the process when this is
+ * combined with NODE_ENV=production WITHOUT the dual-flag opt-in.
  */
 export function isLoadTestThrottleBypassEnabled(): boolean {
-  const env = process.env.NODE_ENV;
-  const inDevOrTest = env === "development" || env === "test";
-  return inDevOrTest && process.env.LOAD_TEST_BYPASS_THROTTLE === "1";
+  return devGateOpen() && process.env.LOAD_TEST_BYPASS_THROTTLE === "1";
 }
 
 /**
