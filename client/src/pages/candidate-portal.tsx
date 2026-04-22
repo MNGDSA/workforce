@@ -1600,7 +1600,7 @@ function ContractSection({
                   }
                   return (
                     <div key={idx}>
-                      <h3 className="font-bold text-sm mb-1">{t("portal:contract.article", { n: formatNumber(idx + 1) })}: {String(article.title || "").replace(/\{\{title\}\}\s*:?\s*/g, "").trim()}</h3>
+                      <h3 className="font-bold text-sm mb-1">{t("portal:contract.article", { n: formatNumber(idx + 1), title: String(article.title || "").trim() })}</h3>
                       <p className="text-sm whitespace-pre-wrap leading-relaxed">{body}</p>
                       {Array.isArray(article.subArticles) && article.subArticles.map((sub: any, subIdx: number) => {
                         let subBody = sub.body || "";
