@@ -597,7 +597,7 @@ function EmployeeDetailDialog({
                     {articles.map((article: any, idx: number) => (
                       <div key={idx}>
                         <h3 className="font-bold text-sm mb-1">
-                          {t("onboarding:contract.articlePrefix", { n: formatNumber(idx + 1), title: article.title })}
+                          {t("onboarding:contract.articlePrefix", { n: formatNumber(idx + 1), title: String(article.title || "").replace(/\{\{title\}\}\s*:?\s*/g, "").trim() })}
                         </h3>
                         <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVars(article.body || "")}</p>
                         {Array.isArray(article.subArticles) && article.subArticles.map((sub: any, subIdx: number) => (

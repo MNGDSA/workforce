@@ -1365,7 +1365,7 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
                 return (
                   <div key={idx}>
                     <h4 className="text-sm font-semibold text-white mb-2">
-                      {idx + 1}. {article.title}
+                      {idx + 1}. {String(article.title || "").replace(/\{\{title\}\}\s*:?\s*/g, "").trim()}
                     </h4>
                     <div className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">{body}</div>
                   </div>
@@ -1600,7 +1600,7 @@ function ContractSection({
                   }
                   return (
                     <div key={idx}>
-                      <h3 className="font-bold text-sm mb-1">{t("portal:contract.article", { n: formatNumber(idx + 1) })}: {article.title}</h3>
+                      <h3 className="font-bold text-sm mb-1">{t("portal:contract.article", { n: formatNumber(idx + 1) })}: {String(article.title || "").replace(/\{\{title\}\}\s*:?\s*/g, "").trim()}</h3>
                       <p className="text-sm whitespace-pre-wrap leading-relaxed">{body}</p>
                       {Array.isArray(article.subArticles) && article.subArticles.map((sub: any, subIdx: number) => {
                         let subBody = sub.body || "";

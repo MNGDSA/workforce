@@ -378,7 +378,7 @@ function ContractPhaseSection({ onboardingRecord, candidate, docsComplete }: { o
               )}
               {Array.isArray(latestContract.snapshotArticles || previewTpl.articles) && (latestContract.snapshotArticles || previewTpl.articles).map((article: any, idx: number) => (
                 <div key={idx}>
-                  <h3 className="font-bold text-sm mb-1">{t("contract.articlePrefix", { n: formatNumber(idx + 1), title: article.title })}</h3>
+                  <h3 className="font-bold text-sm mb-1">{t("contract.articlePrefix", { n: formatNumber(idx + 1), title: String(article.title || "").replace(/\{\{title\}\}\s*:?\s*/g, "").trim() })}</h3>
                   <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVars(article.body || "", latestContract.snapshotVariables)}</p>
                   {Array.isArray(article.subArticles) && article.subArticles.map((sub: any, subIdx: number) => (
                     <div key={subIdx} className="ms-6 mt-2">
@@ -1214,7 +1214,7 @@ function ContractTemplatesTab() {
                 )}
                 {Array.isArray(previewTemplate.articles) && previewTemplate.articles.map((article: any, idx: number) => (
                   <div key={idx}>
-                    <h3 className="font-bold text-sm mb-1">{t("contract.articlePrefix", { n: formatNumber(idx + 1), title: article.title })}</h3>
+                    <h3 className="font-bold text-sm mb-1">{t("contract.articlePrefix", { n: formatNumber(idx + 1), title: String(article.title || "").replace(/\{\{title\}\}\s*:?\s*/g, "").trim() })}</h3>
                     <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVariables(article.body)}</p>
                     {Array.isArray(article.subArticles) && article.subArticles.map((sub: any, subIdx: number) => (
                       <div key={subIdx} className="ms-6 mt-2">
