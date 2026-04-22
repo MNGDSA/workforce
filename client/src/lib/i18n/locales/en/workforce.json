@@ -146,10 +146,12 @@
       "level": "Education Level",
       "levels": {
         "High School": "High School",
+        "High School and below": "High School and below",
         "Diploma": "Diploma",
         "Bachelor": "Bachelor",
         "Master": "Master",
         "PhD": "PhD",
+        "University and higher": "University and higher",
         "Other": "Other"
       },
       "empty": "No education or skills data"
@@ -190,13 +192,13 @@
     },
     "history": {
       "empty": "No work history found",
-      "records": "Employment Records ({n})",
+      "records": "Employment Records ({{n}})",
       "event": "Event",
       "jobTitle": "Job Title",
       "start": "Start",
       "end": "End",
       "viewContract": "View Contract",
-      "signedSuffix": "(signed {date})"
+      "signedSuffix": "(signed {{date}})"
     },
     "schedule": {
       "tab": "Schedule",

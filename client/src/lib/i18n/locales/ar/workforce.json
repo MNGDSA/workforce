@@ -146,10 +146,12 @@
       "level": "المستوى التعليمي",
       "levels": {
         "High School": "ثانوي",
+        "High School and below": "ثانوية عامة وأقل",
         "Diploma": "دبلوم",
         "Bachelor": "بكالوريوس",
         "Master": "ماجستير",
         "PhD": "دكتوراه",
+        "University and higher": "جامعي فأعلى",
         "Other": "أخرى"
       },
       "empty": "لا توجد بيانات تعليم أو مهارات"
@@ -190,13 +192,13 @@
     },
     "history": {
       "empty": "لا يوجد سجل عمل",
-      "records": "سجلات العمل ({n})",
+      "records": "سجلات العمل ({{n}})",
       "event": "الفعالية",
       "jobTitle": "المسمى الوظيفي",
       "start": "البدء",
       "end": "الانتهاء",
       "viewContract": "عرض العقد",
-      "signedSuffix": "(تم التوقيع {date})"
+      "signedSuffix": "(تم التوقيع {{date}})"
     },
     "schedule": {
       "tab": "الجدول",

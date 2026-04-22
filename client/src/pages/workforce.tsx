@@ -5,6 +5,7 @@ import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout";
 import { resolveSaudiBank } from "@/lib/saudi-banks";
+import { printContract } from "@/lib/print-contract";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -555,7 +556,8 @@ function EmployeeDetailDialog({
                   className="text-zinc-400 hover:text-white transition-colors"
                   data-testid="button-back-from-contract"
                 >
-                  <ChevronLeft className="h-5 w-5" />
+                  {/* RTL: chevron should point right (toward where you came from) */}
+                  <ChevronLeft className="h-5 w-5 rtl:rotate-180" />
                 </button>
                 <div>
                   <h3 className="text-base font-semibold text-white">{t("dialog.employmentContract")}</h3>
@@ -571,45 +573,92 @@ function EmployeeDetailDialog({
                   </p>
                 </div>
               </div>
-              <div className="space-y-6">
-                {Array.isArray(viewingAdminContract.snapshotArticles) && viewingAdminContract.snapshotArticles.map((article: any, idx: number) => {
-                  let body = article.body ?? "";
-                  if (viewingAdminContract.snapshotVariables) {
-                    Object.entries(viewingAdminContract.snapshotVariables).forEach(([key, val]) => {
-                      body = body.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), val as string);
-                    });
-                  }
-                  return (
-                    <div key={idx}>
-                      <h4 className="text-sm font-semibold text-white mb-2">
-                        {idx + 1}. {article.title}
-                      </h4>
-                      <div className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">{body}</div>
-                    </div>
+              {/* Mirror the signing-time contract template (same .contract-print-area
+                  wrapper + Cairo fonts) so the in-dialog preview AND the
+                  Print/Download output look identical to what the candidate
+                  signed — no more plain-text fallback PDF. */}
+              {(() => {
+                const articles = Array.isArray(viewingAdminContract.snapshotArticles) ? viewingAdminContract.snapshotArticles : [];
+                const vars: Record<string, string> = viewingAdminContract.snapshotVariables ?? {};
+                const replaceVars = (s: string) =>
+                  Object.entries(vars).reduce(
+                    (acc, [k, v]) => acc.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), String(v ?? "")),
+                    s ?? ""
                   );
-                })}
-              </div>
-              <div className="flex justify-end mt-4">
+                const signedAt = viewingAdminContract.signedAt;
+                const employeeName = vars.fullName || employee.fullNameEn || t("onboarding:contract.defaultName");
+                return (
+                  <div
+                    className="contract-print-area mt-2 bg-white text-black rounded-lg p-8 space-y-6"
+                    style={{ fontFamily: "'Cairo', system-ui, -apple-system, 'Segoe UI', sans-serif" }}
+                    data-testid="admin-contract-print-area"
+                  >
+                    {articles.map((article: any, idx: number) => (
+                      <div key={idx}>
+                        <h3 className="font-bold text-sm mb-1">
+                          {t("onboarding:contract.articlePrefix", { n: formatNumber(idx + 1), title: article.title })}
+                        </h3>
+                        <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVars(article.body || "")}</p>
+                        {Array.isArray(article.subArticles) && article.subArticles.map((sub: any, subIdx: number) => (
+                          <div key={subIdx} className="ms-6 mt-2">
+                            <h4 className="font-bold text-sm mb-0.5">
+                              {formatNumber(idx + 1)}.{formatNumber(subIdx + 1)} {sub.title}
+                            </h4>
+                            <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVars(sub.body || "")}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                    <div className="border-t pt-6 mt-8">
+                      <div className="grid grid-cols-2 gap-8">
+                        <div className="space-y-2">
+                          <p className="text-sm font-bold">{t("onboarding:contract.firstParty")}</p>
+                          <p className="text-xs text-gray-600"><bdi>{vars.companyName || t("onboarding:contract.defaultCompany")}</bdi></p>
+                          <div className="border-b border-gray-400 mt-8 pt-6"></div>
+                          <p className="text-xs text-gray-500">{t("onboarding:contract.authorizedSignature")}</p>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-sm font-bold">{t("onboarding:contract.secondParty")}</p>
+                          <p className="text-xs text-gray-600"><bdi>{employeeName}</bdi></p>
+                          {signedAt ? (
+                            <div className="mt-4 pt-2 text-center">
+                              <div className="inline-block border-2 border-emerald-600 rounded-md px-4 py-2">
+                                <p className="text-xs font-bold text-emerald-700">{t("onboarding:contract.digitallySigned")}</p>
+                                <p className="text-[10px] text-gray-500 mt-0.5" dir="ltr">
+                                  {t("onboarding:contract.digitallySignedAt", {
+                                    date: formatDateI18n(signedAt, i18n.language, { day: "numeric", month: "long", year: "numeric" }),
+                                    time: new Intl.DateTimeFormat("en-GB", { numberingSystem: "latn", hour: "2-digit", minute: "2-digit" }).format(new Date(signedAt)),
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="border-b border-gray-400 mt-8 pt-6"></div>
+                              <p className="text-xs text-gray-500">{t("onboarding:contract.employeeSignature")}</p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-6 text-center">
+                        <p className="text-xs text-gray-500" dir="ltr">
+                          {t("onboarding:contract.dateLabel", {
+                            date: signedAt
+                              ? formatDateI18n(signedAt, i18n.language, { day: "numeric", month: "long", year: "numeric" })
+                              : t("onboarding:contract.dateBlank"),
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+              <div className="flex justify-end mt-4 no-print">
                 <Button
                   size="sm"
                   variant="outline"
                   className="border-zinc-700 gap-1.5"
-                  onClick={() => {
-                    const printWindow = window.open("", "_blank");
-                    if (!printWindow) return;
-                    const articles = Array.isArray(viewingAdminContract.snapshotArticles) ? viewingAdminContract.snapshotArticles : [];
-                    const vars = viewingAdminContract.snapshotVariables ?? {};
-                    const html = articles.map((a: any, i: number) => {
-                      let b = a.body ?? "";
-                      Object.entries(vars).forEach(([k, v]) => { b = b.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v as string); });
-                      return `<h3>${i + 1}. ${a.title}</h3><p style="white-space:pre-wrap">${b}</p>`;
-                    }).join("");
-                    const dirAttr = i18n.language?.startsWith("ar") ? "rtl" : "ltr";
-                    const langAttr = i18n.language?.startsWith("ar") ? "ar" : "en";
-                    printWindow.document.write(`<html lang="${langAttr}" dir="${dirAttr}"><head><meta charset="utf-8"><title>${t("dialog.employmentContract")}</title><style>body{font-family:'Cairo',sans-serif;padding:2rem;max-width:700px;margin:auto}h3{margin-top:1.5em}</style></head><body>${html}</body></html>`);
-                    printWindow.document.close();
-                    printWindow.print();
-                  }}
+                  onClick={() => printContract(t("dialog.employmentContract"))}
                   data-testid="button-print-admin-contract"
                 >
                   <Printer className="h-3.5 w-3.5" />
@@ -1060,11 +1109,11 @@ function EmployeeDetailDialog({
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1">
                             <label className="text-zinc-500 text-xs">{t("dialog.financial.bankName")}</label>
-                            <Input className="h-8 text-sm bg-zinc-900/50 border-zinc-700 text-zinc-400 cursor-not-allowed" value={detected?.ibanBankName ?? financialForm.ibanBankName ?? ""} readOnly placeholder={t("dialog.financial.bankNamePlaceholder")} data-testid="input-financial-bankName" />
+                            <Input className="h-8 text-sm bg-zinc-900/50 border-zinc-700 text-zinc-400 cursor-not-allowed text-left" dir="ltr" value={detected?.ibanBankName ?? financialForm.ibanBankName ?? ""} readOnly placeholder={t("dialog.financial.bankNamePlaceholder")} data-testid="input-financial-bankName" />
                           </div>
                           <div className="space-y-1">
                             <label className="text-zinc-500 text-xs">{t("dialog.financial.bankCode")}</label>
-                            <Input className="h-8 text-sm bg-zinc-900/50 border-zinc-700 font-mono text-zinc-400 cursor-not-allowed" dir="ltr" value={detected?.ibanBankCode ?? financialForm.ibanBankCode ?? ""} readOnly placeholder={t("dialog.financial.bankCodePlaceholder")} data-testid="input-financial-bankCode" />
+                            <Input className="h-8 text-sm bg-zinc-900/50 border-zinc-700 font-mono text-zinc-400 cursor-not-allowed text-left" dir="ltr" value={detected?.ibanBankCode ?? financialForm.ibanBankCode ?? ""} readOnly placeholder={t("dialog.financial.bankCodePlaceholder")} data-testid="input-financial-bankCode" />
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
