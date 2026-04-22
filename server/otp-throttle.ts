@@ -3,6 +3,7 @@ import { db } from "./db";
 import { loginRateLimitBuckets } from "@shared/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { getClientIp } from "./client-ip";
+import { isLoadTestThrottleBypassEnabled } from "./dev-otp-log";
 
 const VERIFY_WINDOW_MIN = 5;
 const VERIFY_LOCKOUT_MIN = 15;
@@ -91,16 +92,20 @@ async function bumpFailure(
 }
 
 export async function checkOtpVerifyIp(req: Request): Promise<OtpThrottleDecision> {
+  if (isLoadTestThrottleBypassEnabled()) return { allowed: true, retryAfterSec: 0 };
   return isLocked(VERIFY_SCOPE, getClientIp(req));
 }
 export async function recordOtpVerifyFailure(req: Request): Promise<void> {
+  if (isLoadTestThrottleBypassEnabled()) return;
   return bumpFailure(VERIFY_SCOPE, getClientIp(req), VERIFY_WINDOW_MIN, VERIFY_LOCKOUT_MIN, VERIFY_MAX_ATTEMPTS);
 }
 
 export async function checkActivateIp(req: Request): Promise<OtpThrottleDecision> {
+  if (isLoadTestThrottleBypassEnabled()) return { allowed: true, retryAfterSec: 0 };
   return isLocked(ACTIVATE_SCOPE, getClientIp(req));
 }
 export async function recordActivateFailure(req: Request): Promise<void> {
+  if (isLoadTestThrottleBypassEnabled()) return;
   return bumpFailure(ACTIVATE_SCOPE, getClientIp(req), ACTIVATE_WINDOW_MIN, ACTIVATE_LOCKOUT_MIN, ACTIVATE_MAX_ATTEMPTS);
 }
 
@@ -113,6 +118,7 @@ export async function recordActivateFailure(req: Request): Promise<void> {
  * (scope,key) row so each request sees a unique post-increment count.
  */
 export async function tryReserveOtpRequest(req: Request): Promise<OtpThrottleDecision> {
+  if (isLoadTestThrottleBypassEnabled()) return { allowed: true, retryAfterSec: 0 };
   const ip = getClientIp(req);
   try {
     // nosemgrep: javascript.drizzle-orm.security.audit.ban-drizzle-sql-raw

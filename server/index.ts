@@ -86,6 +86,18 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // ─── Boot safety: refuse to start if dev OTP / throttle bypass flags are
+  // misconfigured for the current NODE_ENV. See server/dev-otp-log.ts for
+  // the full policy matrix. This MUST run before any traffic is served and
+  // before registerRoutes() exposes /api/_dev/last-otp/:phone.
+  try {
+    const { assertDevGateSafe } = await import("./dev-otp-log");
+    assertDevGateSafe(log);
+  } catch (err) {
+    console.error("Refusing to start:", err instanceof Error ? err.message : err);
+    process.exit(1);
+  }
+
   // Boot-time idempotent schema patches. Production deploys do not run
   // drizzle-kit push, so schema additions must self-heal here. Keep these
   // small and ADD COLUMN IF NOT EXISTS / CREATE INDEX IF NOT EXISTS only.

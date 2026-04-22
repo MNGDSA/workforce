@@ -57,7 +57,7 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, desc, inArray, count } from "drizzle-orm";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
-import { logOtpForDev } from "./dev-otp-log";
+import { logOtpForDev, peekLatestDevOtp, isDevOtpGateOpen } from "./dev-otp-log";
 import { trL, type ServerLocale } from "./i18n";
 import { validateFaceQuality } from "./rekognition";
 import {
@@ -806,6 +806,23 @@ export async function registerRoutes(
     } catch (err) {
       return handleError(res, err);
     }
+  });
+
+  // ─── Dev-only OTP peek ────────────────────────────────────────────────────
+  // Returns the latest plaintext OTP for a phone, used by e2e tests and the
+  // load-test script. Gated by the SAME allow-list as logOtpForDev — fails
+  // closed in any environment that isn't NODE_ENV=development|test (or has the
+  // explicit ENABLE_DEV_OTP_LOG=true override). Production returns 404 so the
+  // route's existence is not even discoverable.
+  app.get("/api/_dev/last-otp/:phone", markPublic, (req: Request, res: Response) => {
+    if (!isDevOtpGateOpen()) {
+      return res.status(404).json({ message: "Not found" });
+    }
+    const phone = String(req.params.phone || "").trim();
+    if (!phone) return res.status(400).json({ message: "phone required" });
+    const entry = peekLatestDevOtp(phone);
+    if (!entry) return res.status(404).json({ message: "No OTP on record" });
+    return res.json({ phone, ...entry });
   });
 
   // ─── Auth ─────────────────────────────────────────────────────────────────
