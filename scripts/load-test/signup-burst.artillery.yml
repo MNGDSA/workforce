@@ -1,0 +1,70 @@
+config:
+  target: "{{ $processEnvironment.TARGET_URL }}"
+  phases:
+    - name: warmup
+      duration: 30
+      arrivalRate: 5
+    - name: ramp
+      duration: 120
+      arrivalRate: 5
+      rampTo: 30
+    - name: sustain
+      duration: 1800
+      arrivalRate: 30
+    - name: cooldown
+      duration: 60
+      arrivalRate: 5
+  http:
+    timeout: 30
+    pool: 200
+  processor: "./signup-burst.artillery.helpers.cjs"
+  ensure:
+    thresholds:
+      - http.response_time.p95: 5000
+      - http.response_time.p99: 10000
+      - http.codes.500: 0
+scenarios:
+  - name: individual-signup-end-to-end
+    weight: 1
+    flow:
+      - function: "genIdentity"
+      - post:
+          url: "/api/auth/otp/request"
+          json:
+            phone: "{{ phone }}"
+            purpose: "register"
+          capture:
+            - json: "$.success"
+              as: "otpRequested"
+          expect:
+            - statusCode: [200, 201]
+      - get:
+          url: "/api/_dev/last-otp/{{ phone }}"
+          capture:
+            - json: "$.code"
+              as: "otp"
+          expect:
+            - statusCode: 200
+      - post:
+          url: "/api/auth/otp/verify"
+          json:
+            phone: "{{ phone }}"
+            code: "{{ otp }}"
+            purpose: "register"
+          capture:
+            - json: "$.token"
+              as: "verifyToken"
+          expect:
+            - statusCode: 200
+      - post:
+          url: "/api/auth/register"
+          json:
+            phone: "{{ phone }}"
+            password: "LoadTest@2026!"
+            firstName: "Burst"
+            lastName: "Tester"
+            nationalId: "{{ nid }}"
+            verifyToken: "{{ verifyToken }}"
+            roleSlug: "individual"
+          expect:
+            - statusCode: [200, 201]

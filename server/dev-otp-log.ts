@@ -118,8 +118,12 @@ export function isLoadTestThrottleBypassEnabled(): boolean {
  *   - If NODE_ENV=production and BOTH dual-flag opt-ins are set, log a
  *     CRITICAL warning (this should only ever be a deliberate staging
  *     deployment).
- *   - Always refuse to boot if LOAD_TEST_BYPASS_THROTTLE=1 is set with
- *     NODE_ENV=production (no legitimate reason).
+ *   - Refuse to boot if LOAD_TEST_BYPASS_THROTTLE=1 is set with
+ *     NODE_ENV=production UNLESS BOTH ENABLE_DEV_OTP_LOG=true AND
+ *     ALLOW_DEV_BYPASS_IN_PROD=true are also set (the deliberate
+ *     staging-mirror contract — same dual-flag opt-in that unlocks the
+ *     OTP peek endpoint). The CRITICAL warning at boot will mention all
+ *     three flags so misconfiguration is loud and obvious.
  */
 export function assertDevGateSafe(log: (msg: string, src?: string) => void): void {
   const env = process.env.NODE_ENV;
@@ -128,10 +132,11 @@ export function assertDevGateSafe(log: (msg: string, src?: string) => void): voi
   const loadBypass = process.env.LOAD_TEST_BYPASS_THROTTLE === "1";
 
   if (env === "production") {
-    if (loadBypass) {
+    if (loadBypass && !(enableOtp && allowProd)) {
       throw new Error(
-        "boot-safety: LOAD_TEST_BYPASS_THROTTLE=1 is set with NODE_ENV=production. " +
-          "OTP/activation throttles must NEVER be disabled in production. Refusing to start.",
+        "boot-safety: LOAD_TEST_BYPASS_THROTTLE=1 with NODE_ENV=production " +
+          "requires BOTH ENABLE_DEV_OTP_LOG=true AND ALLOW_DEV_BYPASS_IN_PROD=true. " +
+          "Throttles can ONLY be disabled in a deliberate staging-mirror process. Refusing to start.",
       );
     }
     // XOR — exactly one of the two prod-override flags is set.
