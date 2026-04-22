@@ -17,8 +17,9 @@ export const SAUDI_BANKS: Record<string, { name: string; code: string }> = {
 };
 
 export function resolveSaudiBank(iban: string): { ibanBankName: string; ibanBankCode: string } | null {
-  if (!iban || iban.length < 6 || !iban.startsWith("SA")) return null;
-  const code = iban.substring(4, 6);
+  const clean = (iban || "").replace(/\s+/g, "").toUpperCase();
+  if (clean.length < 6 || !clean.startsWith("SA")) return null;
+  const code = clean.substring(4, 6);
   const bank = SAUDI_BANKS[code];
   if (!bank) return null;
   return { ibanBankName: bank.name, ibanBankCode: bank.code };
