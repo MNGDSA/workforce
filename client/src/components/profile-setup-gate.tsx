@@ -792,9 +792,24 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
       });
     },
     onError: (err: any) => {
+      const raw: string = String(err?.message ?? "");
+      const errorCodes: Record<string, string> = {
+        invalid_contact_phone: t("profileSetup:common.errInvalidContactPhone"),
+        invalid_sa_mobile:     t("profileSetup:common.errInvalidSaMobile"),
+      };
+      let friendly = "";
+      try {
+        const m = raw.match(/\{[\s\S]*\}$/);
+        if (m) {
+          const body = JSON.parse(m[0]);
+          const errs: any[] = body?.errors ?? [];
+          const codes = errs.map(e => e?.message).filter(Boolean);
+          friendly = codes.map(c => errorCodes[c] ?? c).join("\n");
+        }
+      } catch { /* ignore */ }
       toast({
         title: t("profileSetup:common.saveFailed"),
-        description: err?.message || t("profileSetup:common.tryAgain"),
+        description: friendly || t("profileSetup:common.tryAgain"),
         variant: "destructive",
       });
     },

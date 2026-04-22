@@ -39,7 +39,14 @@ export function cleanContactPhone(input: unknown): string | null {
   if (input == null) return null;
   let s = String(input).trim();
   if (!s) return null;
-  s = toWesternDigits(stripFormatting(s));
+  // Convert Arabic-Indic digits, then aggressively strip every non-digit
+  // character except a single leading "+". This tolerates user input like
+  // "058-123 4567 (mom)", "+966 58 123 4567", or copy-pasted contacts that
+  // include name labels, dots, slashes, or stray punctuation.
+  s = toWesternDigits(s);
+  const hadPlus = s.trimStart().startsWith("+");
+  s = s.replace(/[^\d]/g, "");
+  if (hadPlus) s = "+" + s;
   if (!/^\+?\d{7,16}$/.test(s)) return null;
   return s;
 }

@@ -23,6 +23,8 @@
     "selectRegion": "Select region",
     "saveFailed": "Save failed",
     "tryAgain": "Please try again.",
+    "errInvalidContactPhone": "Emergency contact phone is invalid. Use digits only with an optional country code (e.g. 0581234567 or +966581234567).",
+    "errInvalidSaMobile": "Saudi mobile is invalid. It must start with 05 and be 10 digits long.",
     "profileCompleted": "Profile completed!",
     "profileCompletedDesc": "Your information has been saved."
   },
