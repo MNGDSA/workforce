@@ -119,3 +119,16 @@ The system employs a modern, full-stack architecture designed for scalability an
 - **AWS Rekognition**: Facial recognition for mobile attendance verification and photo quality checks.
 - **DigitalOcean Spaces**: S3-compatible object storage for file uploads in production (photos, documents, logos).
 - **Zebra Browser Print SDK and Evolis Premium Suite plugins**: Planned for direct printing in the Employee ID Cards feature.
+## Production Readiness Pass — April 2026
+
+End-to-end production-readiness sweep completed against `workforce.tanaqolapp.com`'s codebase. Deliverables:
+
+- **e2e (Playwright)** — Individual signup → Talent list passed; Recruitment flow (job → application → interview → onboarding hand-off, SMP excluded) passed. Both ran with the SMS gateway bypassed; zero real SMS fired.
+- **Architect review** — verdict NO-GO until two items addressed: (a) the dev OTP gate could open in production via a single env flag, (b) `server/db.ts` used `rejectUnauthorized:false` in production. Both fixed in this branch.
+- **Dev gate hardening** — `server/dev-otp-log.ts:devGateOpen()` now requires both `ENABLE_DEV_OTP_LOG=true` and `ALLOW_DEV_BYPASS_IN_PROD=true` when `NODE_ENV=production`; `LOAD_TEST_BYPASS_THROTTLE=1` is permanently rejected in prod; `assertDevGateSafe()` runs at boot in `server/index.ts` and fail-fasts the process on any misconfiguration.
+- **DB TLS** — `server/db.ts` now defaults to `rejectUnauthorized:true`; operators paste DigitalOcean's CA into `DATABASE_CA_CERT`. `INSECURE_DB_TLS=true` exists as an audited escape hatch only.
+- **Load test (Replit dev)** — measured 13–15 signups/sec end-to-end (single small dev container). Bottleneck is the `register` route: bcrypt cost-12 + atomic user/candidate insert tx (p95 ~5s under contention, ~3.4s steady-state). At concurrency 50 vs `pg.Pool` max=40, two flows hit the 2s connection-acquire timeout — confirms pool-size is the binding constraint, not raw concurrency.
+- **Load drivers** — `scripts/load-test/local-burst.mjs` (Node, runs against the dev container) and `scripts/load-test/signup-burst.js` (k6, for DO staging) with built-in SLO thresholds. README documents the safe synthetic phone (`057XXXXXXX`) and NID (`2900XXXXXX`) pools and cleanup SQL.
+- **Infra recommendation** — `docs/infra-recommendation.md` covers droplet sizing (2× CPU-Optimized 4 vCPU/8 GB behind a DO LB at launch), PgBouncer in transaction-pooling mode (server pool = 2 × droplets × app-pool-max = 160), `UV_THREADPOOL_SIZE=8` per droplet to widen the bcrypt thread pool, monitoring signals, and the deployment validation checklist.
+
+**Documented medium follow-ups (do not block launch):** SMS outbox is at-least-once; auth cookie has no per-token `jti` rotation; outbox drainer runs on every droplet — verify the `FOR UPDATE SKIP LOCKED` claim path under dual drainers during deploy validation, fall back to leader election if drift observed.
