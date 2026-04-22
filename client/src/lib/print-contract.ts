@@ -66,6 +66,16 @@ export function printContract(title: string) {
     .border-gray-300 { border-color: #d1d5db; }
     .border-gray-200 { border-color: #e5e7eb; }
     .text-emerald-700 { color: #047857; }
+    .border-emerald-600 { border-color: #059669; }
+    .border-2 { border-width: 2px; border-style: solid; }
+    .rounded-md { border-radius: 0.375rem; }
+    .inline-block { display: inline-block; }
+    .px-4 { padding-left: 1rem; padding-right: 1rem; }
+    .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+    .pt-2 { padding-top: 0.5rem; }
+    .mt-4 { margin-top: 1rem; }
+    .mt-0\\.5 { margin-top: 0.125rem; }
+    .text-\\[10px\\] { font-size: 10px; }
     .no-print, .contract-page-footer { display: none !important; }
   `;
 
