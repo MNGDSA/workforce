@@ -1662,7 +1662,7 @@ function ContractSection({
                 )}
               </div>
               <div className="flex justify-end gap-3 mt-4 no-print">
-                <Button variant="outline" onClick={() => setContractPreviewOpen(false)} className="border-border">{t("common:close")}</Button>
+                <Button variant="outline" onClick={() => setContractPreviewOpen(false)} className="border-border">{t("common:actions.close")}</Button>
                 <Button
                   variant="outline"
                   className="border-border gap-2"
