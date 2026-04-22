@@ -42,3 +42,9 @@ id = "suLLa3PNqTkSbVdKPSv04"
 uri = "file://.local/reports/android-prelaunch-review.md"
 type = "text"
 title = "WORKFORCE Android — Pre-Production Review for 10K Rollout"
+
+[[outputs]]
+id = "RTZ3BJNwhdNGrMMWCaO82"
+uri = "file://docs/staging-load-test-report.pdf"
+type = "pdf"
+title = "WORKFORCE — DigitalOcean Staging 100k Burst Report"
