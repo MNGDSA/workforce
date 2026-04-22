@@ -37,3 +37,17 @@
 - Pool size 22 in transaction mode is well-sized for 2 app instances × ~10 conns each.
 - DO managed-PG CA stored at docs/prod-secrets/workforce-db-ca.pem (valid Apr 2036)
 - Snapshot for rollback: .local/prod-snapshot/workforce-app-spec.before.json
+
+## Phase C — pgbouncer removal (12:15Z)
+- Swapped DATABASE_URL secret to direct postgresql://...:25060/defaultdb
+- Deploy 4156332a → ACTIVE on commit 9f8011b
+- Pre-delete health: 15/15 200 OK on direct connection
+- DELETE workforce-pool → HTTP 204
+- Post-delete health: 15/15 200 OK, 1-2 ms DB latency
+- Pools list: empty
+- Snapshot before: .local/prod-snapshot/workforce-app-spec.before-pool-removal.json
+
+## Final state
+- App: apps-d-2vcpu-4gb × 2 (autoscale 2-4)
+- DB:  db-s-2vcpu-4gb HA, pg16, direct connection only
+- Pool: none
