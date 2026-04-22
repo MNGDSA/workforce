@@ -1354,47 +1354,89 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {Array.isArray(viewingContract.snapshotArticles) && viewingContract.snapshotArticles.map((article: any, idx: number) => {
-                let body = article.body ?? "";
-                if (viewingContract.snapshotVariables) {
-                  Object.entries(viewingContract.snapshotVariables).forEach(([key, val]) => {
-                    body = body.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), val as string);
-                  });
-                }
+            <div className="flex-1 overflow-y-auto p-6">
+              {(() => {
+                const articles = Array.isArray(viewingContract.snapshotArticles) ? viewingContract.snapshotArticles : [];
+                const vars: Record<string, string> = viewingContract.snapshotVariables ?? {};
+                const replaceVars = (s: string) =>
+                  Object.entries(vars).reduce(
+                    (acc, [k, v]) => acc.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), String(v ?? "")),
+                    s ?? ""
+                  );
+                const signedAt = viewingContract.signedAt;
+                const employeeName = vars.fullName || displayName;
                 return (
-                  <div key={idx}>
-                    <h4 className="text-sm font-semibold text-white mb-2">
-                      {idx + 1}. {String(article.title || "").replace(/\{\{title\}\}\s*:?\s*/g, "").trim()}
-                    </h4>
-                    <div className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">{body}</div>
+                  <div
+                    className="contract-print-area bg-white text-black rounded-lg p-8 space-y-6"
+                    style={{ fontFamily: "'Cairo', system-ui, -apple-system, 'Segoe UI', sans-serif" }}
+                    data-testid="contract-history-print-area"
+                  >
+                    {articles.map((article: any, idx: number) => (
+                      <div key={idx}>
+                        <h3 className="font-bold text-sm mb-1">
+                          {t("portal:contract.article", { n: formatNumber(idx + 1), title: String(article.title || "").replace(/\{\{title\}\}\s*:?\s*/g, "").trim() })}
+                        </h3>
+                        <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVars(article.body || "")}</p>
+                        {Array.isArray(article.subArticles) && article.subArticles.map((sub: any, subIdx: number) => (
+                          <div key={subIdx} className="ms-6 mt-2">
+                            <h4 className="font-bold text-sm mb-0.5">
+                              {formatNumber(idx + 1)}.{formatNumber(subIdx + 1)} {sub.title}
+                            </h4>
+                            <p className="text-sm whitespace-pre-wrap leading-relaxed">{replaceVars(sub.body || "")}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                    <div className="border-t pt-6 mt-8">
+                      <div className="grid grid-cols-2 gap-8">
+                        <div className="space-y-2">
+                          <p className="text-sm font-bold">{t("portal:contract.firstParty")}</p>
+                          <p className="text-xs text-gray-600"><bdi>{vars.companyName || ""}</bdi></p>
+                          <div className="border-b border-gray-400 mt-8 pt-6"></div>
+                          <p className="text-xs text-gray-500">{t("portal:contract.authorizedSig")}</p>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-sm font-bold">{t("portal:contract.secondParty")}</p>
+                          <p className="text-xs text-gray-600"><bdi>{employeeName}</bdi></p>
+                          {signedAt ? (
+                            <div className="mt-4 pt-2 text-center">
+                              <div className="inline-block border-2 border-emerald-600 rounded-md px-4 py-2">
+                                <p className="text-xs font-bold text-emerald-700">{t("portal:contract.digitallySignedBadge")}</p>
+                                <p className="text-[10px] text-gray-500 mt-0.5" dir="ltr">{formatDate(signedAt)}</p>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="border-b border-gray-400 mt-8 pt-6"></div>
+                              <p className="text-xs text-gray-500">{t("portal:contract.employeeSig")}</p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 );
-              })}
+              })()}
             </div>
-            <div className="p-4 border-t border-border flex justify-end shrink-0">
+            <div className="p-4 border-t border-border flex justify-end gap-3 shrink-0 no-print">
               <Button
                 size="sm"
                 variant="outline"
                 className="border-zinc-700 gap-1.5"
-                onClick={() => {
-                  const printWindow = window.open("", "_blank");
-                  if (!printWindow) return;
-                  const articles = Array.isArray(viewingContract.snapshotArticles) ? viewingContract.snapshotArticles : [];
-                  const vars = viewingContract.snapshotVariables ?? {};
-                  const html = articles.map((a: any, i: number) => {
-                    let b = a.body ?? "";
-                    Object.entries(vars).forEach(([k, v]) => { b = b.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v as string); });
-                    return `<h3>${i + 1}. ${a.title}</h3><p style="white-space:pre-wrap">${b}</p>`;
-                  }).join("");
-                  printWindow.document.write(`<html><head><title>${t("portal:contract.printDocTitle")}</title><style>@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');*{font-family:'Cairo',system-ui,-apple-system,'Segoe UI',sans-serif}body{padding:2rem;max-width:700px;margin:auto}h3{margin-top:1.5em}</style></head><body>${html}</body></html>`);
-                  printWindow.document.close();
-                  printWindow.print();
-                }}
+                onClick={() => printContract(t("portal:history.contractTitle"))}
                 data-testid="button-print-contract"
               >
                 <Printer className="h-3.5 w-3.5" />
                 {t("portal:history.printDownload")}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setViewingContract(null)}
+                className="border-zinc-700"
+                data-testid="button-close-contract-history"
+              >
+                {t("common:actions.close")}
               </Button>
             </div>
           </div>
