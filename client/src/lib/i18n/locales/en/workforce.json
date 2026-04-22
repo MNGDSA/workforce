@@ -122,7 +122,7 @@
       "label": "Monthly Salary (SAR)",
       "placeholder": "e.g. 4500",
       "notSet": "Not set",
-      "amount": "{n} SAR"
+      "amount": "{{n}} SAR"
     },
     "notes": {
       "label": "Notes",
@@ -199,6 +199,7 @@
       "signedSuffix": "(signed {date})"
     },
     "schedule": {
+      "tab": "Schedule",
       "current": "Current Schedule",
       "reassign": "Reassign",
       "assign": "Assign Schedule",

@@ -663,7 +663,7 @@ function EmployeeDetailDialog({
               }`}
               data-testid="tab-employee-schedule"
             >
-              <Clock className="h-3.5 w-3.5" /> {t("dialog.schedule")}
+              <Clock className="h-3.5 w-3.5" /> {t("dialog.schedule.tab")}
             </button>
           </div>
 
@@ -915,7 +915,7 @@ function EmployeeDetailDialog({
                     {employee.dateOfBirth && <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.dateOfBirth")} value={formatDate(employee.dateOfBirth)} />}
                     {employee.gender && <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.gender")} value={t(`dialog.gender.${employee.gender}` as any, { defaultValue: employee.gender })} />}
                     {employee.nationalityText && <InfoRow icon={<Globe className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.nationality")} value={employee.nationalityText} />}
-                    {employee.maritalStatus && <InfoRow icon={<Heart className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.maritalStatus")} value={t(`dialog.marital.${employee.maritalStatus}` as any, { defaultValue: employee.maritalStatus })} />}
+                    {employee.maritalStatus && <InfoRow icon={<Heart className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.maritalStatus")} value={t(`dialog.marital.${employee.maritalStatus.toLowerCase()}` as any, { defaultValue: employee.maritalStatus })} />}
                     {employee.iqamaNumber && <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.iqama")} value={employee.iqamaNumber} mono />}
                     {(employee.city || employee.region) && <InfoRow icon={<MapPin className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.location")} value={[employee.city, employee.region].filter(Boolean).join(", ")} />}
                   </div>
