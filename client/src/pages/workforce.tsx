@@ -5,6 +5,7 @@ import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout";
 import { resolveSaudiBank } from "@/lib/saudi-banks";
+import { nationalityLabel } from "@/lib/i18n/nationalities";
 import { printContract } from "@/lib/print-contract";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -963,7 +964,7 @@ function EmployeeDetailDialog({
                     {employee.phone && <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.phone")} value={employee.phone} />}
                     {employee.dateOfBirth && <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.dateOfBirth")} value={formatDate(employee.dateOfBirth)} />}
                     {employee.gender && <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.gender")} value={t(`dialog.gender.${employee.gender}` as any, { defaultValue: employee.gender })} />}
-                    {employee.nationalityText && <InfoRow icon={<Globe className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.nationality")} value={employee.nationalityText} />}
+                    {employee.nationalityText && <InfoRow icon={<Globe className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.nationality")} value={nationalityLabel(employee.nationalityText, i18n.language)} />}
                     {employee.maritalStatus && <InfoRow icon={<Heart className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.maritalStatus")} value={t(`dialog.marital.${employee.maritalStatus.toLowerCase()}` as any, { defaultValue: employee.maritalStatus })} />}
                     {employee.iqamaNumber && <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.iqama")} value={employee.iqamaNumber} mono />}
                     {(employee.city || employee.region) && <InfoRow icon={<MapPin className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.location")} value={[employee.city, employee.region].filter(Boolean).join(", ")} />}
