@@ -1312,7 +1312,7 @@ export async function registerRoutes(
       const { candidateId, currentPassword, newPassword } = req.body as {
         candidateId?: string; currentPassword?: string; newPassword?: string;
       };
-      if (!candidateId || !currentPassword || !newPassword) {
+      if (!currentPassword || !newPassword) {
         return res.status(400).json({ message: tr(req, "common.allFieldsRequired") });
       }
       const pwRules = [
@@ -1326,15 +1326,27 @@ export async function registerRoutes(
       if (failed.length) {
         return res.status(400).json({ message: tr(req, "password.rules", { rules: failed.join(", ") }) });
       }
-      const candidate = await storage.getCandidate(candidateId);
-      if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
-      let user = candidate.userId
-        ? await storage.getUser(candidate.userId)
-        : undefined;
-      if (!user && candidate.nationalId) {
-        user = await storage.getUserByNationalId(candidate.nationalId);
+
+      // Resolve target user. Candidate portal sends candidateId; staff/admin
+      // pages omit it and we use the authenticated user directly.
+      let user;
+      if (candidateId) {
+        const candidate = await storage.getCandidate(candidateId);
+        if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
+        user = candidate.userId ? await storage.getUser(candidate.userId) : undefined;
+        if (!user && candidate.nationalId) {
+          user = await storage.getUserByNationalId(candidate.nationalId);
+        }
+        // Only allow the candidate themselves (or a super-admin) to change this password.
+        const ownsCandidate = user && req.authUserId === user.id;
+        if (!ownsCandidate && !req.authIsSuperAdmin) {
+          return res.status(403).json({ message: tr(req, "auth.forbidden") });
+        }
+      } else {
+        user = req.authUser ?? (req.authUserId ? await storage.getUser(req.authUserId) : undefined);
       }
       if (!user) return res.status(404).json({ message: tr(req, "user.notFound") });
+
       const valid = await bcrypt.compare(currentPassword, user.password ?? "");
       if (!valid) return res.status(401).json({ message: tr(req, "password.currentIncorrect") });
       const hashed = await bcrypt.hash(newPassword, 12);
