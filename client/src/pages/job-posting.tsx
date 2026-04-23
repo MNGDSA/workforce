@@ -423,24 +423,15 @@ function ApplicantsSheet({
   const { t, i18n } = useTranslation(["jobPosting"]);
   const isAr = i18n.language.startsWith("ar");
 
-  const { data: applications = [], isLoading } = useQuery<Application[]>({
+  const { data: applications = [], isLoading } = useQuery<(Application & { candidate?: CandidateInfo | null })[]>({
     queryKey: ["/api/applications", job?.id],
     queryFn: () => apiRequest("GET", `/api/applications?jobId=${job!.id}`).then((r) => r.json()),
     enabled: !!job && open,
   });
 
-  const candidateIds = applications.map(a => a.candidateId).filter(Boolean);
-  const { data: candidates = [] } = useQuery<CandidateInfo[]>({
-    queryKey: ["/api/candidates/by-ids", ...candidateIds],
-    queryFn: async () => {
-      if (candidateIds.length === 0) return [];
-      const params = new URLSearchParams();
-      candidateIds.forEach(id => params.append("ids", id));
-      const json = await fetch(`/api/candidates/by-ids?${params.toString()}`, { credentials: "include" }).then(r => r.json());
-      return Array.isArray(json) ? json : [];
-    },
-    enabled: !!job && open && applications.length > 0,
-  });
+  const candidates: CandidateInfo[] = applications
+    .map(a => a.candidate)
+    .filter((c): c is CandidateInfo => !!c);
   const candidateMap = Object.fromEntries(candidates.map((c) => [c.id, c]));
 
   const { data: questionSet } = useQuery<{ id: string; name: string; questions: ExportQuestion[] }>({

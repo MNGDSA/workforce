@@ -176,23 +176,15 @@ export default function JobPostingDetailPage() {
     enabled: !!params.id,
   });
 
-  const { data: applications = [], isLoading: appsLoading } = useQuery<Application[]>({
+  const { data: applications = [], isLoading: appsLoading } = useQuery<(Application & { candidate?: CandidateInfo | null })[]>({
     queryKey: ["/api/applications", params.id],
     queryFn: () => apiRequest("GET", `/api/applications?jobId=${params.id}`).then((r) => r.json()),
     enabled: !!params.id,
   });
 
-  const candidateIds = applications.map(a => a.candidateId).filter(Boolean);
-  const { data: candidates = [] } = useQuery<CandidateInfo[]>({
-    queryKey: ["/api/candidates/by-ids", ...candidateIds],
-    queryFn: async () => {
-      if (candidateIds.length === 0) return [];
-      const p = new URLSearchParams();
-      candidateIds.forEach(id => p.append("ids", id));
-      return fetch(`/api/candidates/by-ids?${p.toString()}`, { credentials: "include" }).then(r => r.json());
-    },
-    enabled: applications.length > 0,
-  });
+  const candidates: CandidateInfo[] = applications
+    .map(a => a.candidate)
+    .filter((c): c is CandidateInfo => !!c);
   const candidateMap = Object.fromEntries(candidates.map((c) => [c.id, c]));
 
   const { data: questionSet } = useQuery<{ id: string; name: string; questions: ExportQuestion[] }>({

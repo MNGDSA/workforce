@@ -140,6 +140,21 @@ function computeCandidateStatusFromLogin(lastLoginAt: Date | null): "available" 
   return lastLoginAt >= oneYearAgo ? "available" : "inactive";
 }
 
+export type ApplicationCandidateSummary = {
+  id: string;
+  fullNameEn: string;
+  nationalId: string | null;
+  phone: string | null;
+  email: string | null;
+  city: string | null;
+  nationality: string | null;
+  photoUrl: string | null;
+};
+
+export type ApplicationWithCandidate = Application & {
+  candidate?: ApplicationCandidateSummary | null;
+};
+
 export interface IStorage {
   // Global Search
   globalSearch(query: string): Promise<{
@@ -209,7 +224,7 @@ export interface IStorage {
   getJobStats(): Promise<{ total: number; active: number; draft: number; filled: number }>;
 
   // Applications
-  getApplications(params?: { jobId?: string; candidateId?: string; status?: string }): Promise<Application[]>;
+  getApplications(params?: { jobId?: string; candidateId?: string; status?: string; includeCandidate?: boolean }): Promise<ApplicationWithCandidate[]>;
   getApplicantsForJob(params: { jobId: string; page: number; limit: number; search?: string }): Promise<{ data: { candidateId: string; applicationId: string; fullNameEn: string; nationalId: string | null; applicationStatus: string; appliedAt: Date }[]; total: number }>;
   getApplication(id: string): Promise<Application | undefined>;
   createApplication(app: InsertApplication): Promise<Application>;
@@ -1257,13 +1272,37 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ─── Applications ───────────────────────────────────────────────────────────
-  async getApplications(params?: { jobId?: string; candidateId?: string; status?: string }): Promise<Application[]> {
+  async getApplications(params?: { jobId?: string; candidateId?: string; status?: string; includeCandidate?: boolean }): Promise<ApplicationWithCandidate[]> {
     const conditions = [];
     if (params?.jobId) conditions.push(eq(applications.jobId, params.jobId));
     if (params?.candidateId) conditions.push(eq(applications.candidateId, params.candidateId));
     if (params?.status) conditions.push(eq(applications.status, params.status as any));
     const where = conditions.length > 0 ? and(...conditions) : undefined;
-    return db.select().from(applications).where(where).orderBy(desc(applications.appliedAt));
+    if (!params?.includeCandidate) {
+      return db.select().from(applications).where(where).orderBy(desc(applications.appliedAt));
+    }
+    const rows = await db
+      .select({
+        application: applications,
+        candidate: {
+          id: candidates.id,
+          fullNameEn: candidates.fullNameEn,
+          nationalId: candidates.nationalId,
+          phone: candidates.phone,
+          email: candidates.email,
+          city: candidates.city,
+          nationality: candidates.nationality,
+          photoUrl: candidates.photoUrl,
+        },
+      })
+      .from(applications)
+      .leftJoin(candidates, eq(applications.candidateId, candidates.id))
+      .where(where)
+      .orderBy(desc(applications.appliedAt));
+    return rows.map((r): ApplicationWithCandidate => ({
+      ...r.application,
+      candidate: r.candidate && r.candidate.id ? (r.candidate as ApplicationCandidateSummary) : null,
+    }));
   }
 
   async getApplicantsForJob(params: { jobId: string; page: number; limit: number; search?: string }): Promise<{ data: { candidateId: string; applicationId: string; fullNameEn: string; nationalId: string | null; applicationStatus: string; appliedAt: Date }[]; total: number }> {

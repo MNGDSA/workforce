@@ -3111,7 +3111,7 @@ export async function registerRoutes(
           return res.status(403).json({ message: tr(req, "auth.noPermission"), required: "applications:read" });
         }
       }
-      const data = await storage.getApplications({ jobId, candidateId, status });
+      const data = await storage.getApplications({ jobId, candidateId, status, includeCandidate: isAdminReader });
       return res.json(data);
     } catch (err) {
       return handleError(res, err);
