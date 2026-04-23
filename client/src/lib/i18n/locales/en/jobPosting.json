@@ -55,7 +55,13 @@
     "viewApplicants": "View Applicants",
     "edit": "Edit Job",
     "publish": "Publish",
-    "archive": "Archive"
+    "archive": "Archive",
+    "copyPublicLink": "Copy public link",
+    "openPublicPage": "Open public page",
+    "linkCopied": "Link copied",
+    "linkCopiedDesc": "The public job link has been copied to your clipboard. You can share it now.",
+    "linkCopyFailed": "Copy failed",
+    "linkCopyFailedDesc": "Could not copy the link automatically. Please copy it manually."
   },
   "dialog": {
     "edit": "Edit Job",

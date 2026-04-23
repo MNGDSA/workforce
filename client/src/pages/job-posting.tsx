@@ -26,7 +26,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import {
   Briefcase, Plus, Search, MapPin, Building, MoreHorizontal, Loader2, Users,
-  FileDown, ChevronRight, Calendar, UserCheck, Save, Filter,
+  FileDown, ChevronRight, Calendar, UserCheck, Save, Filter, Share2, ExternalLink,
 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -236,7 +236,7 @@ function PostJobDialog({ open, onOpenChange, initialJob }: {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {KSA_REGIONS.map(r => <SelectItem key={r} value={r}><bdi>{r}</bdi></SelectItem>)}
+                      {KSA_REGIONS.map(r => <SelectItem key={r} value={r}><bdi>{t(`common:regionsKsa.${r}` as any, r)}</bdi></SelectItem>)}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -474,7 +474,7 @@ function ApplicantsSheet({
           <div>
             <SheetTitle className="font-display text-xl font-bold text-white"><bdi>{job.title}</bdi></SheetTitle>
             <div className="text-muted-foreground mt-1 flex items-center gap-3 flex-wrap text-sm">
-              {job.region && <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /><bdi>{job.region}</bdi></span>}
+              {job.region && <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /><bdi>{t(`common:regionsKsa.${job.region}` as any, job.region)}</bdi></span>}
               <Badge variant="outline" className={`border-0 text-xs ${statusStyles[job.status] ?? "bg-muted text-muted-foreground"}`}>
                 {t(`jobPosting:status.${job.status}`, { defaultValue: job.status })}
               </Badge>
@@ -940,6 +940,29 @@ export default function JobPostingPage() {
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => { setEditingJob(job); setPostJobOpen(true); }}>
                               {t("jobPosting:actions.edit")}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={async () => {
+                                const url = `${window.location.origin}/jobs/${job.id}`;
+                                try {
+                                  await navigator.clipboard.writeText(url);
+                                  toast({ title: t("jobPosting:actions.linkCopied"), description: t("jobPosting:actions.linkCopiedDesc") });
+                                } catch {
+                                  toast({ title: t("jobPosting:actions.linkCopyFailed"), description: url, variant: "destructive" });
+                                }
+                              }}
+                              data-testid={`button-copy-link-${job.id}`}
+                            >
+                              <Share2 className="h-4 w-4 me-2" />
+                              {t("jobPosting:actions.copyPublicLink")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => window.open(`/jobs/${job.id}`, "_blank", "noopener")}
+                              data-testid={`button-open-public-${job.id}`}
+                            >
+                              <ExternalLink className="h-4 w-4 me-2" />
+                              {t("jobPosting:actions.openPublicPage")}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {job.status === "draft" && (

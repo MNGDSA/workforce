@@ -3,6 +3,21 @@
     "name": "وورك فورس",
     "tagline": "إدارة التوظيف والقوى العاملة"
   },
+  "regionsKsa": {
+    "Riyadh": "الرياض",
+    "Makkah": "مكة المكرمة",
+    "Madinah": "المدينة المنورة",
+    "Eastern Province": "المنطقة الشرقية",
+    "Asir": "عسير",
+    "Tabuk": "تبوك",
+    "Hail": "حائل",
+    "Northern Borders": "الحدود الشمالية",
+    "Jazan": "جازان",
+    "Najran": "نجران",
+    "Al Bahah": "الباحة",
+    "Al Jawf": "الجوف",
+    "Qassim": "القصيم"
+  },
   "actions": {
     "save": "حفظ",
     "cancel": "إلغاء",

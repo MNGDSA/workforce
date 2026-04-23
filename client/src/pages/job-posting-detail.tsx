@@ -29,6 +29,8 @@ import {
   Banknote,
   Clock,
   Search,
+  Share2,
+  ExternalLink,
 } from "lucide-react";
 
 type JobPosting = {
@@ -236,7 +238,7 @@ export default function JobPostingDetailPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <Button
             variant="ghost"
             size="sm"
@@ -246,6 +248,35 @@ export default function JobPostingDetailPage() {
           >
             <ArrowLeft className="h-4 w-4" />
             {t("jobPosting:detail.backToJobs")}
+          </Button>
+          <div className="flex-1" />
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-border gap-1.5"
+            data-testid="button-copy-public-link"
+            onClick={async () => {
+              const url = `${window.location.origin}/jobs/${job.id}`;
+              try {
+                await navigator.clipboard.writeText(url);
+                toast({ title: t("jobPosting:actions.linkCopied"), description: t("jobPosting:actions.linkCopiedDesc") });
+              } catch {
+                toast({ title: t("jobPosting:actions.linkCopyFailed"), description: url, variant: "destructive" });
+              }
+            }}
+          >
+            <Share2 className="h-4 w-4" />
+            {t("jobPosting:actions.copyPublicLink")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-border gap-1.5"
+            data-testid="button-open-public-page"
+            onClick={() => window.open(`/jobs/${job.id}`, "_blank", "noopener")}
+          >
+            <ExternalLink className="h-4 w-4" />
+            {t("jobPosting:actions.openPublicPage")}
           </Button>
         </div>
 
@@ -269,7 +300,7 @@ export default function JobPostingDetailPage() {
                   {job.region && (
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <MapPin className="h-4 w-4 shrink-0" />
-                      <span>{job.region}</span>
+                      <span><bdi>{t(`common:regionsKsa.${job.region}` as any, job.region)}</bdi></span>
                     </div>
                   )}
                   {salary && (

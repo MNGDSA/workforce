@@ -55,7 +55,13 @@
     "viewApplicants": "عرض المتقدمين",
     "edit": "تعديل الوظيفة",
     "publish": "نشر",
-    "archive": "أرشفة"
+    "archive": "أرشفة",
+    "copyPublicLink": "نسخ الرابط العام",
+    "openPublicPage": "فتح صفحة الإعلان",
+    "linkCopied": "تم نسخ الرابط",
+    "linkCopiedDesc": "تم نسخ رابط الإعلان العام إلى الحافظة. يمكنك مشاركته الآن.",
+    "linkCopyFailed": "تعذّر النسخ",
+    "linkCopyFailedDesc": "تعذّر نسخ الرابط تلقائياً. الرجاء نسخه يدوياً."
   },
   "dialog": {
     "edit": "تعديل الوظيفة",

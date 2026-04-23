@@ -3,6 +3,21 @@
     "name": "WORKFORCE",
     "tagline": "Hiring & Workforce Management"
   },
+  "regionsKsa": {
+    "Riyadh": "Riyadh",
+    "Makkah": "Makkah",
+    "Madinah": "Madinah",
+    "Eastern Province": "Eastern Province",
+    "Asir": "Asir",
+    "Tabuk": "Tabuk",
+    "Hail": "Hail",
+    "Northern Borders": "Northern Borders",
+    "Jazan": "Jazan",
+    "Najran": "Najran",
+    "Al Bahah": "Al Bahah",
+    "Al Jawf": "Al Jawf",
+    "Qassim": "Qassim"
+  },
   "actions": {
     "save": "Save",
     "cancel": "Cancel",
