@@ -47,10 +47,38 @@ export type IbanValidationOk = {
 };
 export type IbanValidationFail = {
   ok: false;
-  reason: "empty" | "missing_prefix" | "wrong_length" | "non_digit";
+  reason: "empty" | "missing_prefix" | "wrong_length" | "non_digit" | "bad_checksum";
   length?: number;                                        // length of cleaned input (for wrong_length)
 };
 export type IbanValidationResult = IbanValidationOk | IbanValidationFail;
+
+// Standard IBAN mod-97 checksum. Expects an already-cleaned, uppercased IBAN
+// (no whitespace). Moves the first four characters (country + check digits) to
+// the end, replaces letters with their numeric equivalents (A=10..Z=35), then
+// computes the result modulo 97. A valid IBAN yields 1.
+export function validateIbanChecksum(iban: string): boolean {
+  const clean = (iban || "").replace(/\s+/g, "").toUpperCase();
+  if (clean.length < 5) return false;
+  const rearranged = clean.slice(4) + clean.slice(0, 4);
+  let numeric = "";
+  for (const ch of rearranged) {
+    const code = ch.charCodeAt(0);
+    if (code >= 48 && code <= 57) {
+      numeric += ch;
+    } else if (code >= 65 && code <= 90) {
+      numeric += (code - 55).toString();
+    } else {
+      return false;
+    }
+  }
+  // Process in chunks to avoid BigInt overhead for the typical 24-char IBAN.
+  let remainder = 0;
+  for (let i = 0; i < numeric.length; i += 7) {
+    const chunk = remainder.toString() + numeric.slice(i, i + 7);
+    remainder = Number(chunk) % 97;
+  }
+  return remainder === 1;
+}
 
 export function validateSaudiIban(input: string): IbanValidationResult {
   const clean = (input || "").replace(/\s+/g, "").toUpperCase();
@@ -58,6 +86,7 @@ export function validateSaudiIban(input: string): IbanValidationResult {
   if (!clean.startsWith("SA")) return { ok: false, reason: "missing_prefix" };
   if (clean.length !== 24) return { ok: false, reason: "wrong_length", length: clean.length };
   if (!/^SA\d{22}$/.test(clean)) return { ok: false, reason: "non_digit" };
+  if (!validateIbanChecksum(clean)) return { ok: false, reason: "bad_checksum" };
   const code = clean.substring(4, 6);
   const bank = SAUDI_BANKS[code];
   return {

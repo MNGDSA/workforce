@@ -108,6 +108,7 @@
     "ibanInvalidPrefix": "يجب أن يبدأ الآيبان بـ SA.",
     "ibanInvalidLength": "يتكون الآيبان السعودي من 24 خانة بالضبط؛ لقد أدخلت {{count}}.",
     "ibanInvalidChars": "لا يحتوي الآيبان إلا على أرقام بعد SA.",
+    "ibanInvalidChecksum": "الرقم التحققي للآيبان غير صحيح — يرجى إعادة الإدخال.",
     "educationRequired": "المستوى التعليمي مطلوب",
     "languagesRequired": "اختر لغة واحدة على الأقل",
     "majorRequired": "يرجى إدخال تخصصك / مجال الدراسة"

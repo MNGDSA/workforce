@@ -302,6 +302,7 @@
     "invalidIbanPrefixDesc": "IBAN must start with SA.",
     "invalidIbanLengthDesc": "Saudi IBANs are exactly 24 characters; you entered {{count}}.",
     "invalidIbanCharsDesc": "IBAN may only contain digits after SA.",
+    "invalidIbanChecksumDesc": "IBAN checksum is invalid — please re-enter.",
     "templateDownloaded": "Template downloaded",
     "templateDownloadedDesc": "Edit the file and upload it back to apply updates.",
     "uploadFailed": "Upload failed",

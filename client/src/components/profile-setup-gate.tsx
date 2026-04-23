@@ -25,7 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { resolveSaudiBank } from "@/lib/saudi-banks";
+import { resolveSaudiBank, validateIbanChecksum } from "@/lib/saudi-banks";
 import { formatNumber } from "@/lib/format";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -167,6 +167,8 @@ function buildSchemas(t: (key: string, opts?: Record<string, unknown>) => string
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("profileSetup:validation.ibanInvalidLength", { count: ibanClean.length }), path: ["ibanNumber"] });
     } else if (!/^SA\d{22}$/.test(ibanClean)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("profileSetup:validation.ibanInvalidChars"), path: ["ibanNumber"] });
+    } else if (!validateIbanChecksum(ibanClean)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("profileSetup:validation.ibanInvalidChecksum"), path: ["ibanNumber"] });
     }
   });
 

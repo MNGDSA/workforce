@@ -171,7 +171,8 @@
     "invalidIbanDesc": "يجب أن يبدأ IBAN بـ SA متبوعًا بـ 22 رقمًا (24 خانة)",
     "invalidIbanPrefixDesc": "يجب أن يبدأ الآيبان بـ SA.",
     "invalidIbanLengthDesc": "يتكون الآيبان السعودي من 24 خانة بالضبط؛ لقد أدخلت {{count}}.",
-    "invalidIbanCharsDesc": "لا يحتوي الآيبان إلا على أرقام بعد SA."
+    "invalidIbanCharsDesc": "لا يحتوي الآيبان إلا على أرقام بعد SA.",
+    "invalidIbanChecksumDesc": "الرقم التحققي للآيبان غير صحيح — يرجى إعادة الإدخال."
   },
   "block": {
     "title": "حظر المرشح",

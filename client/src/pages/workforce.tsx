@@ -1086,6 +1086,7 @@ function EmployeeDetailDialog({
                                 result.reason === "missing_prefix" ? t("toast.invalidIbanPrefixDesc") :
                                 result.reason === "wrong_length"   ? t("toast.invalidIbanLengthDesc", { count: result.length ?? 0 }) :
                                 result.reason === "non_digit"      ? t("toast.invalidIbanCharsDesc") :
+                                result.reason === "bad_checksum"   ? t("toast.invalidIbanChecksumDesc") :
                                                                       t("toast.invalidIbanDesc");
                               toast({ title: t("toast.invalidIban"), description: desc, variant: "destructive" });
                               return;

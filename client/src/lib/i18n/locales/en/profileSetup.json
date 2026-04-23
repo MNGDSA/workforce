@@ -108,6 +108,7 @@
     "ibanInvalidPrefix": "IBAN must start with SA.",
     "ibanInvalidLength": "Saudi IBANs are exactly 24 characters; you entered {{count}}.",
     "ibanInvalidChars": "IBAN may only contain digits after SA.",
+    "ibanInvalidChecksum": "IBAN checksum is invalid — please re-enter.",
     "educationRequired": "Education level is required",
     "languagesRequired": "Select at least one language",
     "majorRequired": "Please enter your major / field of study"

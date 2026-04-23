@@ -2051,6 +2051,8 @@ export default function CandidatePortal() {
           toast({ title: t("portal:profile.ibanInvalid"), description: t("portal:profile.ibanInvalidPrefixDesc"), variant: "destructive" });
         } else if (result.reason === "wrong_length") {
           toast({ title: t("portal:profile.ibanInvalid"), description: t("portal:profile.ibanInvalidLengthDesc", { count: result.length ?? 0 }), variant: "destructive" });
+        } else if (result.reason === "bad_checksum") {
+          toast({ title: t("portal:profile.ibanInvalid"), description: t("portal:profile.ibanInvalidChecksumDesc"), variant: "destructive" });
         } else {
           toast({ title: t("portal:profile.ibanInvalid"), description: t("portal:profile.ibanInvalidCharsDesc"), variant: "destructive" });
         }

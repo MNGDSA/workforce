@@ -433,7 +433,8 @@
     "ibanInvalidDesc": "IBAN must be SA followed by 22 digits (24 characters total)",
     "ibanInvalidPrefixDesc": "IBAN must start with SA.",
     "ibanInvalidLengthDesc": "Saudi IBANs are exactly 24 characters; you entered {{count}}.",
-    "ibanInvalidCharsDesc": "IBAN may only contain digits after SA."
+    "ibanInvalidCharsDesc": "IBAN may only contain digits after SA.",
+    "ibanInvalidChecksumDesc": "IBAN checksum is invalid — please re-enter."
   },
   "password": {
     "title": "Change Password",

@@ -433,7 +433,8 @@
     "ibanInvalidDesc": "يجب أن يبدأ الآيبان بـ SA متبوعًا بـ 22 رقمًا (24 خانة إجمالًا)",
     "ibanInvalidPrefixDesc": "يجب أن يبدأ الآيبان بـ SA.",
     "ibanInvalidLengthDesc": "يتكون الآيبان السعودي من 24 خانة بالضبط؛ لقد أدخلت {{count}}.",
-    "ibanInvalidCharsDesc": "لا يحتوي الآيبان إلا على أرقام بعد SA."
+    "ibanInvalidCharsDesc": "لا يحتوي الآيبان إلا على أرقام بعد SA.",
+    "ibanInvalidChecksumDesc": "الرقم التحققي للآيبان غير صحيح — يرجى إعادة الإدخال."
   },
   "password": {
     "title": "تغيير كلمة المرور",
