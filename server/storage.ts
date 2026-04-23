@@ -938,42 +938,83 @@ export class DatabaseStorage implements IStorage {
   }
 
   async exportCandidates(): Promise<{ headers: string[]; rows: any[][]; total: number }> {
-    const data = await db.select({
-      id: candidates.id,
-      fullNameEn: candidates.fullNameEn,
-      classification: candidates.classification,
-      status: candidates.status,
-      phone: candidates.phone,
-      email: candidates.email,
-      city: candidates.city,
-      region: candidates.region,
-      nationality: candidates.nationality,
-      nationalId: candidates.nationalId,
-      ibanNumber: candidates.ibanNumber,
-      ibanBankName: candidates.ibanBankName,
-      ibanBankCode: candidates.ibanBankCode,
-      ibanAccountFirstName: candidates.ibanAccountFirstName,
-      ibanAccountLastName: candidates.ibanAccountLastName,
-      gender: candidates.gender,
-      dateOfBirth: candidates.dateOfBirth,
-      educationLevel: candidates.educationLevel,
-      major: candidates.major,
-      createdAt: candidates.createdAt,
-    })
-      .from(candidates)
+    const data = await db.select().from(candidates)
       .where(isNull(candidates.archivedAt))
       .orderBy(desc(candidates.createdAt));
 
-    const headers = ["ID", "Full Name", "Classification", "Status", "Phone", "Email", "City", "Region", "Nationality", "National ID", "IBAN", "Bank Name", "Bank Code", "IBAN Account First Name", "IBAN Account Last Name", "Gender", "Date of Birth", "Education", "Major", "Created At"];
+    const headers = [
+      "ID", "Full Name", "Classification", "Status",
+      "Phone", "WhatsApp", "Email", "City", "Region", "Country",
+      "Nationality", "Nationality Text", "Gender", "Date of Birth", "Marital Status",
+      "National ID", "Iqama Number", "Passport Number",
+      "Education Level", "University", "Major",
+      "Skills", "Languages", "Certifications",
+      "Currently Employed Elsewhere", "Current Employer", "Current Role",
+      "Has Chronic Diseases", "Chronic Diseases",
+      "Emergency Contact Name", "Emergency Contact Phone",
+      "IBAN", "Bank Name", "Bank Code", "IBAN Account First Name", "IBAN Account Last Name",
+      "Expected Salary",
+      "Has Resume", "Has Photo", "Has National ID", "Has IBAN",
+      "Profile Completed", "Rating", "Total Ratings",
+      "Tags", "Notes",
+      "Last Login At", "Created At", "Updated At",
+    ];
+
+    const fmtDate = (d: any) => d ? new Date(d).toISOString().slice(0, 10) : "";
+    const fmtTs   = (d: any) => d ? new Date(d).toISOString() : "";
+    const fmtArr  = (a: any) => Array.isArray(a) ? a.join(", ") : "";
+    const fmtBool = (b: any) => b === true ? "Yes" : b === false ? "No" : "";
+
     const rows = data.map(r => [
-      r.id, r.fullNameEn || "",
-      r.classification || "individual", r.status, r.phone || "", r.email || "",
-      r.city || "", r.region || "", r.nationality || "", r.nationalId || "",
-      r.ibanNumber || "", r.ibanBankName || "", r.ibanBankCode || "",
-      r.ibanAccountFirstName || "", r.ibanAccountLastName || "",
-      r.gender || "", r.dateOfBirth || "",
-      r.educationLevel || "", r.major || "",
-      r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : "",
+      r.id,
+      r.fullNameEn || "",
+      r.classification || "individual",
+      r.status || "",
+      r.phone || "",
+      r.whatsapp || "",
+      r.email || "",
+      r.city || "",
+      r.region || "",
+      r.country || "",
+      r.nationality || "",
+      (r as any).nationalityText || "",
+      r.gender || "",
+      r.dateOfBirth || "",
+      (r as any).maritalStatus || "",
+      r.nationalId || "",
+      r.iqamaNumber || "",
+      r.passportNumber || "",
+      r.educationLevel || "",
+      r.university || "",
+      r.major || "",
+      fmtArr(r.skills),
+      fmtArr(r.languages),
+      fmtArr(r.certifications),
+      fmtBool(r.isEmployedElsewhere),
+      r.currentEmployer || "",
+      r.currentRole || "",
+      fmtBool((r as any).hasChronicDiseases),
+      (r as any).chronicDiseases || "",
+      r.emergencyContactName || "",
+      r.emergencyContactPhone || "",
+      r.ibanNumber || "",
+      r.ibanBankName || "",
+      r.ibanBankCode || "",
+      r.ibanAccountFirstName || "",
+      r.ibanAccountLastName || "",
+      r.expectedSalary != null ? String(r.expectedSalary) : "",
+      fmtBool(r.hasResume),
+      fmtBool(r.hasPhoto),
+      fmtBool(r.hasNationalId),
+      fmtBool(r.hasIban),
+      fmtBool((r as any).profileCompleted),
+      r.rating != null ? String(r.rating) : "",
+      r.totalRatings != null ? String(r.totalRatings) : "",
+      fmtArr(r.tags),
+      r.notes || "",
+      fmtTs(r.lastLoginAt),
+      fmtDate(r.createdAt),
+      fmtTs(r.updatedAt),
     ]);
 
     return { headers, rows, total: rows.length };
