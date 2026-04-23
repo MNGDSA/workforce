@@ -26,7 +26,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { resolveSaudiBank, validateIbanChecksum } from "@/lib/saudi-banks";
-import { validateIbanHolderName } from "@/lib/iban-holder-name";
+import { validateIbanHolderName, stripToIbanHolderName } from "@/lib/iban-holder-name";
 import { formatNumber } from "@/lib/format";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -598,9 +598,33 @@ function Step2Form({
 
           {/* First / Last name as on debit card */}
           <div className="grid grid-cols-2 gap-4">
+            {/* Task #138 — live-strip non-Latin chars so the user
+                physically can't type Arabic / digits / emoji into the
+                IBAN holder-name fields. Mirrors the server-side
+                validator's allow-list (A-Z, a-z, space, hyphen,
+                apostrophe, period). The validator still runs at submit
+                for paste-bypass + length checks. */}
             <FieldWrapper label={t("profileSetup:step2.ibanFirstName")} required error={errors.ibanAccountFirstName?.message}>
               <Input
-                {...register("ibanAccountFirstName")}
+                {...register("ibanAccountFirstName", {
+                  onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                    const el = e.target;
+                    const before = el.value;
+                    const stripped = stripToIbanHolderName(before);
+                    if (stripped !== before) {
+                      // Preserve the cursor position when we mutate the
+                      // value mid-edit. Without this, the caret jumps
+                      // to the end of the string after every stripped
+                      // character, breaking mid-string edits and pastes.
+                      const caret = el.selectionStart ?? stripped.length;
+                      const removed = before.length - stripped.length;
+                      const newCaret = Math.max(0, caret - removed);
+                      el.value = stripped;
+                      try { el.setSelectionRange(newCaret, newCaret); } catch { /* ignore for non-text inputs */ }
+                      setValue("ibanAccountFirstName", stripped, { shouldValidate: true });
+                    }
+                  },
+                })}
                 placeholder={t("profileSetup:step2.ibanFirstNamePh")}
                 className="bg-muted/30 border-border"
                 dir="ltr"
@@ -612,7 +636,21 @@ function Step2Form({
             </FieldWrapper>
             <FieldWrapper label={t("profileSetup:step2.ibanLastName")} required error={errors.ibanAccountLastName?.message}>
               <Input
-                {...register("ibanAccountLastName")}
+                {...register("ibanAccountLastName", {
+                  onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                    const el = e.target;
+                    const before = el.value;
+                    const stripped = stripToIbanHolderName(before);
+                    if (stripped !== before) {
+                      const caret = el.selectionStart ?? stripped.length;
+                      const removed = before.length - stripped.length;
+                      const newCaret = Math.max(0, caret - removed);
+                      el.value = stripped;
+                      try { el.setSelectionRange(newCaret, newCaret); } catch { /* ignore for non-text inputs */ }
+                      setValue("ibanAccountLastName", stripped, { shouldValidate: true });
+                    }
+                  },
+                })}
                 placeholder={t("profileSetup:step2.ibanLastNamePh")}
                 className="bg-muted/30 border-border"
                 dir="ltr"

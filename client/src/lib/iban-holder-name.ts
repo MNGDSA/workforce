@@ -46,3 +46,42 @@ export function hasNonLatinIbanHolderName(input: string | null | undefined): boo
   if (collapsed === "") return false;
   return !IBAN_HOLDER_NAME_ALLOWED_RE.test(collapsed);
 }
+
+// Task #138 — Strip every character that's not in the IBAN-holder-name
+// allow-list (A-Z, a-z, space, hyphen, apostrophe, period). Used as an
+// `onChange` transformer on the IBAN holder-name inputs so the user
+// physically can't type Arabic / digits / emoji / punctuation that the
+// validator would later reject. Saves a round-trip through the
+// "wrong characters" error message and prevents a candidate from
+// pasting an Arabic name they thought would be accepted.
+//
+// Notes:
+//   - Allow-listing rather than block-listing keeps us future-proof:
+//     anything new (Cyrillic, Devanagari, math-bold pseudo-Latin) is
+//     stripped without needing a new release.
+//   - We collapse runs of internal whitespace to ONE space but DO NOT
+//     trim trailing space — the user might be mid-typing a second word.
+//   - We do not enforce length here; the validator handles the 64-char
+//     limit at submit so the user gets the full error message.
+export function stripToIbanHolderName(input: string): string {
+  if (!input) return "";
+  // Step 1: drop everything that isn't a Latin letter, space, hyphen,
+  // apostrophe, or period. The validator's allow-list is "letters and
+  // [letters/space/-/'/.]"; while typing we accept the same set
+  // anywhere (the leading-letter rule is checked at submit so the user
+  // can paste/type freely without losing characters mid-edit).
+  const filtered = input.replace(/[^A-Za-z\s\-'.]/g, "");
+  // Step 2: normalise every whitespace variant (tab, NBSP, etc.) to a
+  // plain space, then collapse runs to ONE space, then drop leading
+  // whitespace. We keep a single trailing space so the user can finish
+  // typing a second word naturally.
+  return filtered
+    .replace(/\s/g, " ")
+    .replace(/ {2,}/g, " ")
+    .replace(/^ +/, "")
+    // Step 3 — match the validator's leading-letter requirement. The
+    // validator rejects "-Ahmed" / ".Ahmed" / "'Ahmed" with a confusing
+    // "non_latin" error; strip leading punctuation so the user never
+    // gets to type those characters first.
+    .replace(/^[-'.]+/, "");
+}
