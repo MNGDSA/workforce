@@ -3,8 +3,8 @@
 // but a NULL bank code, using the lookup table in client/src/lib/saudi-banks.ts.
 //
 // Usage:
-//   node .local/scripts/backfill-iban-bank-codes.mjs            # dry-run (no writes)
-//   node .local/scripts/backfill-iban-bank-codes.mjs --apply    # apply updates
+//   node scripts/backfill-iban-bank-codes.mjs            # dry-run (no writes)
+//   node scripts/backfill-iban-bank-codes.mjs --apply    # apply updates
 //
 // Connects via PROD_DATABASE_URL by default, or DATABASE_URL if PROD is unset.
 // SSL handling matches .local/prod-tools/audit.cjs (sslmode=no-verify, rejectUnauthorized:false).
