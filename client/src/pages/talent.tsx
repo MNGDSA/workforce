@@ -747,21 +747,21 @@ function CandidateProfileSheet({
                   <p className="text-[11px] text-muted-foreground">{t("profile.city")}</p>
                   <select value={form.city} onChange={e => setField("city", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none" data-testid="edit-city">
                     <option value="" className="bg-card text-muted-foreground">{t("profile.selectPh")}</option>
-                    {KSA_CITIES.map(city => <option key={city} value={city} className="bg-card text-white">{t(`citiesKsa.${city}` as any, city)}</option>)}
+                    {KSA_CITIES.map(city => <option key={city} value={city} className="bg-card text-white">{t(`profileSetup:cities.${city}` as any, city)}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1">
                   <p className="text-[11px] text-muted-foreground">{t("profile.region")}</p>
                   <select value={form.region} onChange={e => setField("region", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none" data-testid="edit-region">
                     <option value="" className="bg-card text-muted-foreground">{t("profile.selectPh")}</option>
-                    {KSA_REGIONS.map(r => <option key={r} value={r} className="bg-card text-white">{t(`regionsKsa.${r}` as any, r)}</option>)}
+                    {KSA_REGIONS.map(r => <option key={r} value={r} className="bg-card text-white">{t(`profileSetup:regions.${r}` as any, r)}</option>)}
                   </select>
                 </div>
               </div>
             ) : (
               <div className="flex items-center gap-3 text-sm">
                 <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span className="text-white">{[c.city, c.region].filter(Boolean).join(", ") || dash}</span>
+                <span className="text-white">{[c.city ? t(`profileSetup:cities.${c.city}` as any, c.city) : null, c.region ? t(`profileSetup:regions.${c.region}` as any, c.region) : null].filter(Boolean).join("، ") || dash}</span>
               </div>
             )}
           </div>
@@ -1981,7 +1981,7 @@ export default function TalentPage() {
                           {col("city") && (
                             <TableCell>
                               <span className="text-sm text-muted-foreground">
-                                {candidate.city || "—"}
+                                {candidate.city ? t(`profileSetup:cities.${candidate.city}` as any, candidate.city) : "—"}
                               </span>
                             </TableCell>
                           )}
