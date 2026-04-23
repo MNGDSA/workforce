@@ -2062,8 +2062,8 @@ export class DatabaseStorage implements IStorage {
   // ─── Dashboard ──────────────────────────────────────────────────────────────
   async getDashboardStats() {
     const [totalCandidates] = await db.select({ value: count() }).from(candidates).where(isNull(candidates.archivedAt));
-    const [openPositions] = await db.select({ value: count() }).from(jobPostings).where(eq(jobPostings.status, "active"));
-    const [activeEvents] = await db.select({ value: count() }).from(events).where(eq(events.status, "active"));
+    const [openPositions] = await db.select({ value: count() }).from(jobPostings).where(and(eq(jobPostings.status, "active"), isNull(jobPostings.archivedAt)));
+    const [activeEvents] = await db.select({ value: count() }).from(events).where(and(eq(events.status, "active"), isNull(events.archivedAt)));
     const [scheduledInterviews] = await db.select({ value: count() }).from(interviews).where(eq(interviews.status, "scheduled"));
 
     const recentApps = await db
