@@ -596,7 +596,7 @@ function ApplicantsSheet({
                               <div className="text-sm font-medium text-white truncate">
                                 <bdi>{candidate?.fullNameEn ?? t("jobPosting:applicants.unknown")}</bdi>
                               </div>
-                              <div className="text-xs text-muted-foreground font-mono" dir="ltr">{candidate?.nationalId ?? "—"}</div>
+                              <div className="text-xs text-muted-foreground font-mono text-start"><bdi>{candidate?.nationalId ?? "—"}</bdi></div>
                             </div>
                           </div>
                         </td>
