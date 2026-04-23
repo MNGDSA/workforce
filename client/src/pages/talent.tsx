@@ -126,7 +126,7 @@ const statusStyles: Record<string, string> = {
 
 type SortField = "createdAt" | "fullNameEn" | "city" | "classification" | "phone" | "email";
 
-type ColumnKey = "id" | "candidate" | "classification" | "status" | "phone" | "email" | "city";
+type ColumnKey = "id" | "candidate" | "classification" | "status" | "phone" | "email" | "city" | "iban" | "bank" | "emergency";
 
 const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "id", label: "ID" },
@@ -136,9 +136,12 @@ const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "phone", label: "Phone" },
   { key: "email", label: "Email" },
   { key: "city", label: "City" },
+  { key: "iban", label: "IBAN" },
+  { key: "bank", label: "Bank" },
+  { key: "emergency", label: "Emergency" },
 ];
 
-const DEFAULT_VISIBLE: ColumnKey[] = ["id", "candidate", "classification", "status", "phone", "email", "city"];
+const DEFAULT_VISIBLE: ColumnKey[] = ["id", "candidate", "classification", "status", "phone", "city", "iban", "bank", "emergency"];
 
 // Task #107: this dialog is SMP-only. The /api/candidates/smp-validate +
 // /api/candidates/smp-commit endpoints read exactly three fields per row:
@@ -1857,6 +1860,9 @@ export default function TalentPage() {
                           <span className="flex items-center">{t("col.city")} <SortIcon field="city" /></span>
                         </TableHead>
                       )}
+                      {col("iban") && <TableHead className="text-muted-foreground whitespace-nowrap">{t("col.iban")}</TableHead>}
+                      {col("bank") && <TableHead className="text-muted-foreground whitespace-nowrap">{t("col.bank")}</TableHead>}
+                      {col("emergency") && <TableHead className="text-muted-foreground whitespace-nowrap">{t("col.emergency")}</TableHead>}
                       <TableHead className="text-end text-muted-foreground">{t("col.actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1973,6 +1979,36 @@ export default function TalentPage() {
                               <span className="text-sm text-muted-foreground">
                                 {candidate.city || "—"}
                               </span>
+                            </TableCell>
+                          )}
+                          {col("iban") && (
+                            <TableCell>
+                              <span className="text-xs text-muted-foreground font-mono whitespace-nowrap" dir="ltr">
+                                {(candidate as any).ibanNumber || "—"}
+                              </span>
+                            </TableCell>
+                          )}
+                          {col("bank") && (
+                            <TableCell>
+                              <span className="text-sm text-muted-foreground whitespace-nowrap">
+                                {(candidate as any).ibanBankName || "—"}
+                              </span>
+                            </TableCell>
+                          )}
+                          {col("emergency") && (
+                            <TableCell>
+                              {(candidate as any).emergencyContactPhone || (candidate as any).emergencyContactName ? (
+                                <div className="flex flex-col leading-tight">
+                                  {(candidate as any).emergencyContactName && (
+                                    <span className="text-sm text-white truncate max-w-[160px]"><bdi>{(candidate as any).emergencyContactName}</bdi></span>
+                                  )}
+                                  {(candidate as any).emergencyContactPhone && (
+                                    <span className="text-xs text-muted-foreground font-mono" dir="ltr">{(candidate as any).emergencyContactPhone}</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">—</span>
+                              )}
                             </TableCell>
                           )}
                           <TableCell className="text-end" onClick={e => e.stopPropagation()}>

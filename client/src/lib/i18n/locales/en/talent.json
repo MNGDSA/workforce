@@ -45,6 +45,9 @@
     "phone": "Phone",
     "email": "Email",
     "city": "City",
+    "iban": "IBAN",
+    "bank": "Bank",
+    "emergency": "Emergency Contact",
     "actions": "Actions"
   },
   "statusDefs": {
