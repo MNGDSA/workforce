@@ -479,7 +479,7 @@ function CandidateProfileSheet({
   onSaved: (c: Candidate) => void;
 }) {
   const { toast } = useToast();
-  const { t } = useTranslation("talent");
+  const { t, i18n } = useTranslation("talent");
   const idLabel = useIdLabel();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
