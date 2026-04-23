@@ -22,6 +22,8 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Upload,
   RefreshCw,
   Users,
@@ -2118,6 +2120,16 @@ export default function TalentPage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={() => { setPage(1); setSelectedIds(new Set()); }}
+                  disabled={page === 1}
+                  data-testid="button-first-page"
+                  title={t("list.firstPage", { defaultValue: i18n.language === "ar" ? "الأولى" : "First" })}
+                >
+                  {i18n.language === "ar" ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => { setPage(p => Math.max(1, p - 1)); setSelectedIds(new Set()); }}
                   disabled={page === 1}
                   data-testid="button-prev-page"
@@ -2135,6 +2147,16 @@ export default function TalentPage() {
                   data-testid="button-next-page"
                 >
                   {i18n.language === "ar" ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setPage(totalPages); setSelectedIds(new Set()); }}
+                  disabled={page === totalPages}
+                  data-testid="button-last-page"
+                  title={t("list.lastPage", { defaultValue: i18n.language === "ar" ? "الأخيرة" : "Last" })}
+                >
+                  {i18n.language === "ar" ? <ChevronsLeft className="h-4 w-4" /> : <ChevronsRight className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
