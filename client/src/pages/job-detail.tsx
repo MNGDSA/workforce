@@ -301,7 +301,7 @@ export default function JobDetailPage() {
             {(job.region ?? job.location) && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <MapPin className="h-4 w-4 text-primary/70 shrink-0" />
-                <span><bdi>{job.region ?? job.location}</bdi></span>
+                <span><bdi>{job.region ? t(`common:regionsKsa.${job.region}` as any, job.region) : job.location}</bdi></span>
               </div>
             )}
             {salary && (
