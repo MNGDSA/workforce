@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/layout";
+import { nationalityLabel } from "@/lib/i18n/nationalities";
 import { resolveSaudiBank } from "@/lib/saudi-banks";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -667,7 +668,7 @@ function CandidateProfileSheet({
             {editing ? (
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <p className="text-[11px] text-muted-foreground">{t("profile:phone", { defaultValue: "Phone" } as any)}</p>
+                  <p className="text-[11px] text-muted-foreground">{t("profile.phone")}</p>
                   <div className="flex items-center gap-2">
                     <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
                     <Input
@@ -689,7 +690,7 @@ function CandidateProfileSheet({
                   )}
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] text-muted-foreground">{t("profile:email", { defaultValue: "Email" } as any)}</p>
+                  <p className="text-[11px] text-muted-foreground">{t("profile.email")}</p>
                   <div className="flex items-center gap-2">
                     <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
                     <Input
@@ -784,7 +785,7 @@ function CandidateProfileSheet({
                   <p className="text-[11px] text-muted-foreground">{t("profile.nationality")}</p>
                   <select value={form.nationalityText} onChange={e => setField("nationalityText", e.target.value)} className="w-full h-9 bg-muted/30 border border-border rounded-sm px-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none" data-testid="edit-nationality">
                     <option value="" className="bg-card text-muted-foreground">{t("profile.selectPh")}</option>
-                    {NATIONALITY_OPTIONS.map(n => <option key={n} value={n} className="bg-card text-white">{t(`nationality.${n}` as any, n)}</option>)}
+                    {NATIONALITY_OPTIONS.map(n => <option key={n} value={n} className="bg-card text-white">{nationalityLabel(n, i18n.language)}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -816,7 +817,7 @@ function CandidateProfileSheet({
                 {((c as any).nationalityText || c.nationality) && (
                   <div>
                     <p className="text-[11px] text-muted-foreground">{t("profile.nationality")}</p>
-                    <p className="text-sm text-white">{String(t(`nationality.${(c as any).nationalityText || c.nationality}` as any, ((c as any).nationalityText || c.nationality?.replace("_", " ")) ?? ""))}</p>
+                    <p className="text-sm text-white">{nationalityLabel((c as any).nationalityText || (c.nationality === "saudi" ? "Saudi Arabian" : (c.nationality?.replace("_", " ") ?? "")), i18n.language)}</p>
                   </div>
                 )}
                 {c.maritalStatus && (
