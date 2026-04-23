@@ -1,10 +1,8 @@
 // Saudi bank registry, keyed by SARIE bank identifier (positions 5-6 of an SA IBAN).
-// Source of truth: SAMA SARIE bank-identifier list. Codes flagged with "verify"
-// have been observed in real production IBANs but should be confirmed against the
-// latest SAMA reference before formal publication.
+// Source: SAMA SARIE bank-identifier list (publicly published bank assignments).
 export const SAUDI_BANKS: Record<string, { name: string; code: string }> = {
-  "01": { name: "Saudi Central Bank (SAMA)",       code: "SAMA"  },
-  "05": { name: "Saudi National Bank (SNB)",        code: "SNB"   }, // verify: legacy SAMBA-migration accounts
+  "01": { name: "Saudi Central Bank (SAMA)",        code: "SAMA"  },
+  "05": { name: "Saudi National Bank (SNB)",        code: "SNB"   }, // legacy SAMBA range, now SNB after merger
   "10": { name: "Saudi National Bank (SNB)",        code: "SNB"   },
   "15": { name: "Bank AlBilad",                     code: "ALBI"  },
   "20": { name: "Riyad Bank",                       code: "RIBL"  },
