@@ -5,7 +5,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
+import { useTranslation, Trans } from "react-i18next";
 import { nationalityLabel } from "@/lib/i18n/nationalities";
 import {
   Building2,
@@ -588,11 +588,17 @@ function Step2Form({
           </Label>
           <p className="text-xs text-muted-foreground mt-0.5">{t("profileSetup:step2.bankDesc")}</p>
 
-          {/* Account holder name warning */}
+          {/* Account holder name warning. The warning copy contains a
+              <strong> placeholder so the word "in English" / "بالإنجليزية"
+              renders bolder than the surrounding red text — it's the
+              single most missed instruction on this form. */}
           <div className="flex items-start gap-2 rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2.5">
             <span className="mt-0.5 text-red-400 shrink-0">⚠</span>
             <p className="text-xs text-red-400 leading-relaxed font-medium">
-              {t("profileSetup:step2.ibanWarning")}
+              <Trans
+                i18nKey="profileSetup:step2.ibanWarning"
+                components={{ strong: <strong className="font-extrabold text-red-500" /> }}
+              />
             </p>
           </div>
 

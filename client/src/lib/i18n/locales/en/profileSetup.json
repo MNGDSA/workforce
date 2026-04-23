@@ -57,7 +57,7 @@
     "positionPh": "e.g. Operations Manager",
     "bankDetails": "Bank Details",
     "bankDesc": "Your Saudi IBAN number for salary transfers.",
-    "ibanWarning": "Enter your first name and last name as shown on your debit card or funds transfer to your account will be blocked by the bank.",
+    "ibanWarning": "Enter your first name and last name <strong>in English</strong> as shown on your debit card or funds transfer to your account will be blocked by the bank.",
     "ibanFirstName": "First Name (as on debit card)",
     "ibanFirstNamePh": "e.g. Mohammed",
     "ibanLastName": "Last Name (as on debit card)",
