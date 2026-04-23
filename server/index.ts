@@ -287,6 +287,21 @@ app.use((req, res, next) => {
     }
   }
 
+  // Belt-and-suspenders sweep: catches any individual candidate that ended
+  // up flagged 'available' while their profile is still incomplete (e.g.
+  // because they registered during a deploy window before the
+  // pending_profile insert path was live). Cheap UPDATE; runs every 10 min.
+  async function runIncompleteProfileSweep() {
+    try {
+      const swept = await storage.sweepIncompleteProfilesToPending();
+      if (swept > 0) {
+        log(`Incomplete-profile sweep: demoted ${swept} candidate(s) → pending_profile`, "scheduler");
+      }
+    } catch (err) {
+      log(`Incomplete-profile sweep error: ${err}`, "scheduler");
+    }
+  }
+
   // Run all once at startup, then every 24 hours
   runAutoActivateUpcomingEvents();
   runAutoCloseExpiredEvents();
@@ -294,6 +309,7 @@ app.use((req, res, next) => {
   runCandidateAgeOut();
   runSmsOutboxDrain();
   runAwaitingActivationSweep();
+  runIncompleteProfileSweep();
   const schedulerTimers = [
     setInterval(runAutoActivateUpcomingEvents, 24 * 60 * 60 * 1000),
     setInterval(runAutoCloseExpiredEvents, 24 * 60 * 60 * 1000),
@@ -301,6 +317,7 @@ app.use((req, res, next) => {
     setInterval(runCandidateAgeOut, 24 * 60 * 60 * 1000),
     setInterval(runSmsOutboxDrain, 30 * 1000),
     setInterval(runAwaitingActivationSweep, 24 * 60 * 60 * 1000),
+    setInterval(runIncompleteProfileSweep, 10 * 60 * 1000),
   ];
 
   // ─── Graceful Shutdown ──────────────────────────────────────────────────────

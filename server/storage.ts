@@ -196,6 +196,7 @@ export interface IStorage {
   autoActivateUpcomingEvents(): Promise<{ count: number; names: string[] }>;
   ageOutInactiveCandidates(): Promise<number>;
   sweepStaleAwaitingActivationCandidates(): Promise<number>;
+  sweepIncompleteProfilesToPending(): Promise<number>;
   countJobPostingsByEvent(eventId: string): Promise<number>;
 
   // Job Postings
@@ -1149,6 +1150,28 @@ export class DatabaseStorage implements IStorage {
             AND t.invalidated_at IS NULL
             AND t.expires_at > now()
         )
+      RETURNING id
+    `);
+    const rows = (result as any).rows ?? result;
+    return Array.isArray(rows) ? rows.length : 0;
+  }
+
+  // Defensive sweep: any individual candidate that ended up flagged
+  // 'available' while their profile_completed flag is still false (e.g.
+  // because they registered during a deploy window when the registration
+  // insert hadn't yet been updated to use 'pending_profile') is demoted
+  // back to 'pending_profile'. The PATCH /api/candidates/:id handler will
+  // automatically re-promote them to 'available' the moment they finish
+  // the profile-setup wizard. SMP candidates are intentionally excluded
+  // because their lifecycle (awaiting_activation → inactive → active) is
+  // managed by separate flows.
+  async sweepIncompleteProfilesToPending(): Promise<number> {
+    const result = await db.execute(sql`
+      UPDATE candidates
+      SET status = 'pending_profile', updated_at = now()
+      WHERE classification = 'individual'
+        AND profile_completed = false
+        AND status = 'available'
       RETURNING id
     `);
     const rows = (result as any).rows ?? result;
