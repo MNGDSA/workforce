@@ -50,7 +50,10 @@ type AuditRecord = {
 function parseArgs(argv: string[]) {
   const limitIdx = argv.indexOf("--limit");
   const limit = limitIdx >= 0 ? Number(argv[limitIdx + 1]) : null;
-  return { limit };
+  const offsetIdx = argv.indexOf("--offset");
+  const offset = offsetIdx >= 0 ? Number(argv[offsetIdx + 1]) : 0;
+  const append = argv.includes("--append");
+  return { limit, offset, append };
 }
 
 function csvEscape(v: unknown): string {
@@ -60,7 +63,7 @@ function csvEscape(v: unknown): string {
 }
 
 async function main() {
-  const { limit } = parseArgs(process.argv.slice(2));
+  const { limit, offset, append } = parseArgs(process.argv.slice(2));
   const url = (process.env.PROD_DATABASE_URL || process.env.DATABASE_URL || "").replace("sslmode=require", "sslmode=no-verify");
   if (!url) { console.error("ERROR: PROD_DATABASE_URL (or DATABASE_URL) must be set."); process.exit(1); }
   if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
@@ -69,7 +72,16 @@ async function main() {
   }
 
   const { RekognitionClient, DetectFacesCommand } = await import("@aws-sdk/client-rekognition");
-  const { getFileBuffer } = await import("../server/file-storage");
+  // Photos in prod are stored on DigitalOcean Spaces and the column
+  // already holds the public URL, so we can just fetch over HTTPS.
+  // We deliberately don't use `server/file-storage#getFileBuffer`
+  // because it gates on NODE_ENV=production and would treat the URL
+  // as a local file path when this script runs in dev.
+  async function fetchBytes(url: string): Promise<Buffer> {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return Buffer.from(await resp.arrayBuffer());
+  }
 
   const awsRegion = process.env.AWS_REGION ?? "me-south-1";
   const rek = new RekognitionClient({
@@ -80,9 +92,10 @@ async function main() {
   const pg = new Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
   await pg.connect();
 
-  console.log(`[audit-sunglasses] mode=READ-ONLY limit=${limit ?? "ALL"} region=${awsRegion}`);
+  console.log(`[audit-sunglasses] mode=READ-ONLY limit=${limit ?? "ALL"} offset=${offset} append=${append} region=${awsRegion}`);
 
   const limitClause = limit ? `LIMIT ${Number(limit)}` : "";
+  const offsetClause = offset ? `OFFSET ${Number(offset)}` : "";
   const { rows } = await pg.query<Row>(
     `SELECT id, photo_url
        FROM candidates
@@ -90,7 +103,7 @@ async function main() {
         AND photo_url IS NOT NULL
         AND photo_url <> ''
       ORDER BY id
-      ${limitClause}`,
+      ${limitClause} ${offsetClause}`,
   );
   console.log(`[audit-sunglasses] inspecting ${rows.length} approved profile photos…`);
 
@@ -105,7 +118,7 @@ async function main() {
     }
     let bytes: Buffer;
     try {
-      bytes = await getFileBuffer(r.photo_url);
+      bytes = await fetchBytes(r.photo_url);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       records.push({
@@ -156,7 +169,11 @@ async function main() {
   fs.mkdirSync(path.dirname(reportPath), { recursive: true });
   const header = ["candidate_id", "photo_url", "sunglasses_value", "sunglasses_confidence", "would_reject", "error"].join(",");
   const lines = records.map((r) => [r.candidate_id, r.photo_url, r.sunglasses_value, r.sunglasses_confidence, r.would_reject ? "true" : "false", r.error].map(csvEscape).join(","));
-  fs.writeFileSync(reportPath, [header, ...lines].join("\n") + "\n");
+  if (append && fs.existsSync(reportPath)) {
+    fs.appendFileSync(reportPath, lines.join("\n") + (lines.length ? "\n" : ""));
+  } else {
+    fs.writeFileSync(reportPath, [header, ...lines].join("\n") + "\n");
+  }
 
   console.log("");
   console.log("[audit-sunglasses] ─────── SUMMARY ───────");
