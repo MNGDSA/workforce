@@ -2122,7 +2122,7 @@ export default function TalentPage() {
                   disabled={page === 1}
                   data-testid="button-prev-page"
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  {i18n.language === "ar" ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
                 </Button>
                 <span className="flex items-center text-xs text-muted-foreground px-2" dir="ltr">
                   {formatNumber(page)} / {formatNumber(totalPages)}
@@ -2134,7 +2134,7 @@ export default function TalentPage() {
                   disabled={page === totalPages}
                   data-testid="button-next-page"
                 >
-                  <ChevronRight className="h-4 w-4" />
+                  {i18n.language === "ar" ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
