@@ -79,6 +79,7 @@
     "rankingRemaining_few": "بقي {{count}} عناصر للترتيب",
     "rankingRemaining_many": "بقي {{count}} عنصراً للترتيب",
     "rankingRemaining_other": "بقي {{count}} عنصر للترتيب",
+    "rankingMustRankAll": "يرجى ترتيب جميع الخيارات حسب الأفضلية قبل الإرسال.",
     "successTitle": "تم إرسال طلبك!",
     "successDescription": "تم استلام طلبك لوظيفة \"{{title}}\".",
     "errorTitle": "تعذّر الإرسال",

@@ -116,8 +116,22 @@ function QuestionsView({ questionSet, onBack, onSubmit, isSubmitting, showBack }
   function handleSubmit() {
     const newErrors: Record<string, string> = {};
     for (const q of questions) {
-      if (q.required && !answers[q.id]?.trim()) {
+      const raw = answers[q.id]?.trim() ?? "";
+      if (q.required && !raw) {
         newErrors[q.id] = t("apply:dialog.questionRequired");
+        continue;
+      }
+      // job_ranking: every option must be ranked. Without this guard,
+      // candidates click one option and submit, leaving recruiters with
+      // a single value where a full ordering was expected.
+      if (q.type === "job_ranking" && raw) {
+        const optsCount = (q.options ?? []).length;
+        const rankedCount = raw.split(",").filter(Boolean).length;
+        if (optsCount > 0 && rankedCount < optsCount) {
+          newErrors[q.id] = t("apply:dialog.rankingMustRankAll", {
+            defaultValue: "Please rank all options in order of preference.",
+          });
+        }
       }
     }
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }

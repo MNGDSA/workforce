@@ -71,7 +71,20 @@ type CandidateInfo = {
   photoUrl?: string | null;
 };
 
-type ExportQuestion = { id: string; text: string };
+type ExportQuestion = { id: string; text: string; type?: string; options?: string[] };
+
+// Render a stored answer string for display. job_ranking answers are stored
+// as comma-joined option labels in preferred order; show them as a numbered
+// list ("1. سائق · 2. منظم · 3. خدمة عملاء") so recruiters can see the
+// candidate's full ranking instead of just the first item.
+function formatAnswerForDisplay(q: ExportQuestion, raw: string): string {
+  if (!raw) return "";
+  if (q.type === "job_ranking") {
+    const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    return parts.map((p, i) => `${i + 1}. ${p}`).join(" · ");
+  }
+  return raw;
+}
 
 const appStatusStyle: Record<string, string> = {
   new:         "bg-blue-500/10 text-blue-400",
@@ -127,7 +140,12 @@ function exportToExcel(
     const answers = app.questionSetAnswers?.answers ?? {};
     return [
       app.id, c?.fullNameEn ?? "Unknown", c?.nationalId ?? "", c?.email ?? "", c?.phone ?? "",
-      app.status, app.status, ...questions.map((q) => answers[q.id] ?? ""),
+      app.status, app.status,
+      // For job_ranking we expand the comma-joined answer into a numbered
+      // list inside the same cell ("1. سائق | 2. منظم | 3. خدمة عملاء").
+      // This keeps the column layout stable for the bulk-status-update flow
+      // while exposing every ranked option to the recruiter.
+      ...questions.map((q) => formatAnswerForDisplay(q, answers[q.id] ?? "")),
     ];
   });
   const instructionRow = [`# BULK STATUS UPDATE — Job: ${job.title} | Only edit the "New Status" column | Valid values: ${VALID_STATUSES.join(", ")} | Do NOT add/remove/reorder rows or columns`];
@@ -500,8 +518,10 @@ export default function JobPostingDetailPage() {
                                           <span className="text-xs font-bold text-primary/60 mt-0.5 shrink-0 w-5 text-end">{idx + 1}.</span>
                                           <div className="flex-1 min-w-0">
                                             <p className="text-muted-foreground text-xs">{q.text}</p>
-                                            <p className={`font-medium mt-0.5 ${answers[q.id] ? "text-white" : "text-muted-foreground/40 italic"}`}>
-                                              {answers[q.id] || t("jobPosting:detail.noAnswer")}
+                                            <p className={`font-medium mt-0.5 whitespace-pre-line ${answers[q.id] ? "text-white" : "text-muted-foreground/40 italic"}`}>
+                                              {answers[q.id]
+                                                ? formatAnswerForDisplay(q, answers[q.id])
+                                                : t("jobPosting:detail.noAnswer")}
                                             </p>
                                           </div>
                                         </div>

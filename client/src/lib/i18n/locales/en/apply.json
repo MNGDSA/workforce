@@ -75,6 +75,7 @@
     "rankingHelper": "Click to rank in order of preference (1st choice first)",
     "rankingRemaining_one": "{{count}} item left to rank",
     "rankingRemaining_other": "{{count}} items left to rank",
+    "rankingMustRankAll": "Please rank all options in order of preference before submitting.",
     "successTitle": "Application submitted!",
     "successDescription": "Your application for \"{{title}}\" has been received.",
     "errorTitle": "Failed to submit",
