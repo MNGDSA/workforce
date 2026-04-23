@@ -8,12 +8,13 @@
 
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
+import type { FaceDetail } from "@aws-sdk/client-rekognition";
 import { evaluateFaceDetails } from "../rekognition";
 
 // A face that passes every check EXCEPT whatever the test overrides.
 // All thresholds are pulled from the production gating logic so a
 // future tweak to e.g. minimum brightness will fail loudly here.
-function passingFace(overrides: Record<string, any> = {}) {
+function passingFace(overrides: Partial<FaceDetail> = {}): FaceDetail {
   return {
     Confidence: 99,
     BoundingBox: { Left: 0.3, Top: 0.2, Width: 0.4, Height: 0.5 },
@@ -71,7 +72,7 @@ describe("evaluateFaceDetails — Task #143 sunglasses gate", () => {
 
   it("passes when Sunglasses attribute is missing from the response", () => {
     const f = passingFace();
-    delete (f as any).Sunglasses;
+    delete f.Sunglasses;
     const result = evaluateFaceDetails([f]);
     assert.equal(findCheck(result, "No sunglasses").passed, true);
   });
