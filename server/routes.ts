@@ -9,7 +9,15 @@ import { storage, createInboxItem } from "./storage";
 import { db } from "./db";
 import { tr } from "./i18n";
 import { saPhoneSchema, patchSaPhoneSchema, normalizeSaPhone } from "@shared/phone";
-import { applyIbanBankResolution } from "./lib/candidate-iban-resolution";
+// Task #133 — IBAN write-time helpers consolidated. The pure auto-fill
+// wrapper `applyIbanBankResolution` (formerly in
+// `./lib/candidate-iban-resolution`, now deleted) was replaced by the
+// canonical `applyServerIbanFields` from `./lib/iban`, imported below.
+// One source of truth handles format/checksum validation,
+// canonicalisation, SARIE bank auto-fill, and `hasIban` mirroring at
+// every IBAN write endpoint. Wiring pinned by
+// `server/__tests__/candidate-iban-resolution.test.ts`; unit-level
+// behaviour by `server/__tests__/iban.test.ts`.
 import { uploadFile, deleteFile, getMimeType, getFileBuffer } from "./file-storage";
 import { getAuthenticatedUser, listUserRepos, getRepo, listRepoIssues, listRepoPullRequests } from "./github";
 import {
@@ -73,7 +81,7 @@ import XLSX from "xlsx";
 import { signAuthToken, verifyAuthToken } from "./auth-token";
 // Task #85 — canonical mobile error codes + HMAC submission tokens.
 import { MobileErrorCodes, mobileError } from "./lib/mobile-error-codes";
-import { IbanValidationError } from "./lib/iban";
+import { IbanValidationError, applyServerIbanFields } from "./lib/iban";
 import {
   issueSubmissionToken,
   verifySubmissionToken,
@@ -1818,12 +1826,15 @@ export async function registerRoutes(
   app.post("/api/candidates", requirePermission("candidates:create"), async (req: Request, res: Response) => {
     try {
       const data = insertCandidateSchema.parse(req.body);
-      // Task #121 — write-time IBAN -> bank resolution. Mirror the behaviour
-      // of the client form auto-fill so direct API writes (and the staff
-      // create flow) can never persist iban_number with a NULL bank code.
-      // Helper extracted in task #127 so the regression is unit-tested in
-      // server/__tests__/candidate-iban-resolution.test.ts.
-      applyIbanBankResolution(data);
+      // Task #133 — canonical write-time IBAN gate. Validates checksum
+      // (throws IbanValidationError → 400 via handleError),
+      // canonicalises the IBAN, fills bank name/code from the SARIE
+      // registry, and mirrors `hasIban`. Single source of truth shared
+      // with storage.ts so direct API callers, the staff create flow,
+      // and bulk paths all behave identically. Originally task #121's
+      // auto-fill helper; consolidated with the validating helper in
+      // task #133. Behaviour pinned by candidate-iban-resolution.test.ts.
+      applyServerIbanFields(data);
       if (data.nationalId) {
         const existing = await storage.getCandidateByNationalId(data.nationalId);
         if (existing) {
@@ -1871,14 +1882,13 @@ export async function registerRoutes(
 
       const data = insertCandidateSchema.partial().parse(req.body);
 
-      // Task #121 — write-time IBAN -> bank resolution on update. Whenever
-      // ibanNumber is part of the patch, re-derive ibanBankName/ibanBankCode
-      // from the new IBAN (or clear them when the IBAN is cleared) so the
-      // candidate row can never end up with iban_number set and bank code
-      // NULL even if the client omits those fields. Helper extracted in
-      // task #127 (see candidate-iban-resolution.test.ts); it is a no-op
-      // when ibanNumber is not part of the partial payload.
-      applyIbanBankResolution(data);
+      // Task #133 — canonical write-time IBAN gate (see POST handler
+      // above). When ibanNumber is part of the patch the helper
+      // validates + canonicalises it, re-derives bank name/code from
+      // the SARIE registry (or clears them when the IBAN is cleared),
+      // and mirrors `hasIban`. No-op when ibanNumber is not present
+      // on the partial payload.
+      applyServerIbanFields(data);
 
       if (data.profileCompleted === true) {
         const existing = await storage.getCandidate(req.params.id);
@@ -2066,10 +2076,11 @@ export async function registerRoutes(
       for (let i = 0; i < rawCandidates.length; i++) {
         try {
           const parsed = insertCandidateSchema.parse(rawCandidates[i]);
-          // Task #121 — same write-time IBAN resolution as the single-row
-          // create endpoint, so bulk uploads also persist bank name/code.
-          // Helper extracted in task #127 (candidate-iban-resolution.test.ts).
-          applyIbanBankResolution(parsed);
+          // Task #133 — canonical write-time IBAN gate (see POST handler).
+          // A malformed IBAN throws IbanValidationError which the catch
+          // block below records as a per-row validation error so the
+          // bulk import returns 400 with the offending row index.
+          applyServerIbanFields(parsed);
           if (parsed.profileCompleted) {
             const missing = validateProfileCompleteness(parsed);
             if (missing.length > 0) {
@@ -2079,7 +2090,18 @@ export async function registerRoutes(
           }
           validated.push(parsed);
         } catch (e) {
-          errors.push({ row: i + 1, message: e instanceof z.ZodError ? e.errors.map(er => `${er.path.join(".")}: ${er.message}`).join("; ") : tr(req, "import.invalidRow") });
+          // Task #133 — IbanValidationError thrown by applyServerIbanFields
+          // surfaces the offending row's IBAN problem (bad checksum,
+          // wrong length, etc.) instead of getting collapsed into a
+          // generic "invalid row" message.
+          errors.push({
+            row: i + 1,
+            message: e instanceof z.ZodError
+              ? e.errors.map(er => `${er.path.join(".")}: ${er.message}`).join("; ")
+              : e instanceof IbanValidationError
+                ? `ibanNumber: ${e.message}`
+                : tr(req, "import.invalidRow"),
+          });
         }
       }
       if (errors.length > 0) {
@@ -2411,13 +2433,11 @@ export async function registerRoutes(
                 status: "awaiting_activation",
                 profileCompleted: false,
               });
-              // Task #132 — defensive write-time IBAN -> bank resolution.
-              // Today the SMP upload columns rarely include an IBAN, but
-              // a future template change (or a non-browser caller) that
-              // adds one must not be able to persist iban_number without
-              // a matching bank code. Helper is a no-op when ibanNumber
-              // is not part of the parsed payload.
-              applyIbanBankResolution(parsed);
+              // Task #133 — canonical write-time IBAN gate. Same helper
+              // every other candidate write endpoint uses; validates,
+              // canonicalises, fills bank metadata, mirrors hasIban.
+              // No-op when the SMP row carries no IBAN.
+              applyServerIbanFields(parsed);
               const newCandidate = await storage.createCandidate(parsed);
               await enqueueIfPhoneOnFile(newCandidate.id);
               try {
@@ -2561,12 +2581,11 @@ export async function registerRoutes(
               status: "awaiting_activation",
               profileCompleted: false,
             });
-            // Task #132 — defensive write-time IBAN -> bank resolution
-            // (mirrors the phone-conflict NEW path above and the regular
-            // candidate write endpoints). No-op when the SMP row does not
-            // carry an IBAN, but pins the protection so a future template
-            // change cannot silently land iban_number without bank code.
-            applyIbanBankResolution(parsed);
+            // Task #133 — canonical write-time IBAN gate (mirrors the
+            // phone-conflict NEW path above and the regular candidate
+            // write endpoints). One source of truth shared with
+            // storage.ts; no-op when the SMP row carries no IBAN.
+            applyServerIbanFields(parsed);
             const newCandidate = await storage.createCandidate(parsed);
             await enqueueIfPhoneOnFile(newCandidate.id);
             try {
@@ -3900,18 +3919,13 @@ export async function registerRoutes(
 
       const data = insertCandidateSchema.partial().parse(filtered);
 
-      // Task #132 — write-time IBAN -> bank resolution on the workforce
-      // candidate-profile patch path. Without this, an admin editing a
-      // worker's IBAN through the workforce dialog could persist a new
-      // ibanNumber without bank name/code (the exact data-quality drift
-      // task #118 had to clean up). The helper is a no-op when the patch
-      // does not touch ibanNumber. Same call-site shape and rationale
-      // as the candidate write endpoints (see candidate-iban-resolution.test.ts).
-      applyIbanBankResolution(data);
-
-      if ("ibanNumber" in filtered) {
-        data.hasIban = !!data.ibanNumber;
-      }
+      // Task #133 — canonical write-time IBAN gate on the workforce
+      // candidate-profile patch path. Same helper as the candidate
+      // write endpoints; validates checksum, canonicalises, fills bank
+      // metadata, and mirrors `hasIban` automatically. The previous
+      // ad-hoc `data.hasIban = !!data.ibanNumber` block is no longer
+      // needed — the helper sets it from the canonicalised value.
+      applyServerIbanFields(data);
 
       const candidate = await storage.updateCandidate(candidateId, data);
       if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });

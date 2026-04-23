@@ -19,15 +19,19 @@ import {
 import { insertCandidateSchema } from "../../shared/schema";
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
-// Real-world bank prefixes drawn from SAMA's SARIE registry. The trailing
-// 20 digits are arbitrary placeholders; the validator is format-only and
-// does not check the IBAN check digits.
-const IBAN_SAMA      = "SA0301" + "0".repeat(18);                 // 01 → SAMA
-const IBAN_SNB       = "SA0310" + "1234567890123456789012".slice(0, 18); // 10 → SNB
-const IBAN_RAJHI     = "SA0380" + "1".repeat(18);                 // 80 → Al Rajhi
-const IBAN_ALINMA    = "SA0385" + "2".repeat(18);                 // 85 → Alinma
-const IBAN_RIYAD     = "SA0320" + "3".repeat(18);                 // 20 → Riyad Bank
-const IBAN_UNKNOWN   = "SA0399" + "9".repeat(18);                 // 99 → not in registry
+// Real-world bank prefixes drawn from SAMA's SARIE registry. Check digits
+// (positions 3-4) were computed offline so that each fixture passes the
+// ISO-13616 mod-97 checksum that `validateSaudiIban` enforces. Without
+// valid checksums these fixtures would be rejected before the
+// bank-resolution branch is exercised. (Task #133 — fixtures repaired
+// while consolidating the IBAN write helpers; the previous "03" check
+// digits in this file did not satisfy mod-97.)
+const IBAN_SAMA      = "SA3201" + "0".repeat(18);                 // 01 → SAMA
+const IBAN_SNB       = "SA1510" + "1234567890123456".padEnd(18, "0"); // 10 → SNB
+const IBAN_RAJHI     = "SA5180" + "1".repeat(18);                 // 80 → Al Rajhi
+const IBAN_ALINMA    = "SA9185" + "2".repeat(18);                 // 85 → Alinma
+const IBAN_RIYAD     = "SA4620" + "3".repeat(18);                 // 20 → Riyad Bank
+const IBAN_UNKNOWN   = "SA0699" + "9".repeat(18);                 // 99 → not in registry
 
 // ── canonicalizeIban ────────────────────────────────────────────────────────
 describe("canonicalizeIban", () => {
@@ -81,9 +85,9 @@ describe("validateSaudiIban", () => {
   });
 
   it("canonicalises whitespace + lowercase before validating", () => {
-    const r = validateSaudiIban("  sa03 8000 0000 0000 0000 0000  ");
+    const r = validateSaudiIban("  sa24 8000 0000 0000 0000 0000  ");
     assert.equal(r.ok, true);
-    if (r.ok) assert.equal(r.canonical, "SA0380000000000000000000");
+    if (r.ok) assert.equal(r.canonical, "SA2480000000000000000000");
   });
 
   it("returns ok=true with bank=null when prefix is unknown", () => {
@@ -147,12 +151,12 @@ describe("resolveSaudiBank", () => {
 describe("applyServerIbanFields", () => {
   it("canonicalises a whitespace+lowercase IBAN and fills bank fields + hasIban", () => {
     const out = applyServerIbanFields({
-      ibanNumber: "  sa03 8000 0000 0000 0000 0000  ",
+      ibanNumber: "  sa24 8000 0000 0000 0000 0000  ",
       ibanBankName: "wrong",
       ibanBankCode: "wrong",
       hasIban: false,
     });
-    assert.equal(out.ibanNumber, "SA0380000000000000000000");
+    assert.equal(out.ibanNumber, "SA2480000000000000000000");
     assert.equal(out.ibanBankName, "Al Rajhi Bank");
     assert.equal(out.ibanBankCode, "RJHI");
     assert.equal(out.hasIban, true);
@@ -241,7 +245,7 @@ describe("insertCandidateSchema IBAN refine", () => {
   });
 
   it("accepts a valid IBAN with whitespace + lowercase on .partial()", () => {
-    const r = partial.safeParse({ ibanNumber: "  sa03 8000 0000 0000 0000 0000  " });
+    const r = partial.safeParse({ ibanNumber: "  sa24 8000 0000 0000 0000 0000  " });
     assert.equal(r.success, true);
   });
 
