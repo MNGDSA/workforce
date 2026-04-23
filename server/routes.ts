@@ -1751,21 +1751,6 @@ export async function registerRoutes(
     }
   });
 
-  // Permission relaxed from candidates:read to applications:read: this endpoint
-  // is only used by the job-posting applicants list/detail pages to render the
-  // names/contact of people who applied. Any role authorized to triage
-  // applications must be able to see who applied. Superadmins still bypass.
-  app.get("/api/candidates/by-ids", requirePermission("applications:read"), async (req: Request, res: Response) => {
-    try {
-      const ids = Array.isArray(req.query.ids) ? req.query.ids as string[] : req.query.ids ? [req.query.ids as string] : [];
-      if (ids.length === 0) return res.json([]);
-      const result = await storage.getCandidatesByIds(ids);
-      return res.json(result);
-    } catch (err) {
-      return handleError(res, err);
-    }
-  });
-
   app.get("/api/candidates/export", requirePermission("candidates:export"), async (req: Request, res: Response) => {
     try {
       const result = await storage.exportCandidates();

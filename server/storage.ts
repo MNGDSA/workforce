@@ -194,7 +194,6 @@ export interface IStorage {
   bulkInsertCandidates(candidates: InsertCandidate[]): Promise<{ inserted: number; skipped: number; duplicates: { row: number; nationalId?: string; phone?: string; reason: string }[] }>;
   bulkUpdateCandidateStatus(ids: string[], status: string): Promise<number>;
   bulkArchiveCandidates(ids: string[]): Promise<number>;
-  getCandidatesByIds(ids: string[]): Promise<any[]>;
   exportCandidates(): Promise<{ headers: string[]; rows: any[][]; total: number }>;
   getCandidateStats(): Promise<{ total: number; active: number; hired: number; blocked: number; avgRating: number }>;
 
@@ -937,20 +936,6 @@ export class DatabaseStorage implements IStorage {
       .where(and(inArray(candidates.id, ids), isNull(candidates.archivedAt)))
       .returning({ id: candidates.id });
     return result.length;
-  }
-
-  async getCandidatesByIds(ids: string[]): Promise<any[]> {
-    if (ids.length === 0) return [];
-    return db.select({
-      id: candidates.id,
-      fullNameEn: candidates.fullNameEn,
-      nationalId: candidates.nationalId,
-      phone: candidates.phone,
-      email: candidates.email,
-      city: candidates.city,
-      nationality: candidates.nationality,
-      photoUrl: candidates.photoUrl,
-    }).from(candidates).where(inArray(candidates.id, ids));
   }
 
   async exportCandidates(): Promise<{ headers: string[]; rows: any[][]; total: number }> {
