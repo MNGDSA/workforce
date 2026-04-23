@@ -101,6 +101,8 @@
     "positionRequired": "يرجى إدخال مسماك الوظيفي",
     "emergencyNameRequired": "اسم جهة الاتصال للطوارئ مطلوب",
     "emergencyPhoneRequired": "رقم جهة الاتصال للطوارئ مطلوب",
+    "emergencyNameSameAsSelf": "اسم جهة الاتصال للطوارئ لا يمكن أن يكون نفس اسمك — الرجاء إدخال شخص آخر",
+    "emergencyPhoneSameAsSelf": "رقم جهة الاتصال للطوارئ لا يمكن أن يكون نفس رقم هاتفك الشخصي — الرجاء إدخال رقم مختلف",
     "ibanFirstNameRequired": "الاسم الأول كما في بطاقة الصراف مطلوب",
     "ibanLastNameRequired": "اسم العائلة كما في بطاقة الصراف مطلوب",
     "ibanHolderNameNonLatin": "اكتب الاسم بالإنجليزية كما هو مطبوع على بطاقة الصراف (حروف A-Z فقط — لا تستخدم العربية).",

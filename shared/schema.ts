@@ -15,6 +15,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { sanitizeHumanName } from "./name-sanitizer";
 
 // ─── Enums ─────────────────────────────────────────────────────────────────
 export const candidateStatusEnum = pgEnum("candidate_status", [
@@ -759,6 +760,35 @@ const ibanFormatSchema = z
     { message: "Invalid IBAN: failed bank checksum check (likely a typo)" },
   );
 
+// Snapchat-pollution defence — fullNameEn must be a real human name, not
+// an emoji-laden Snapchat display name. Mirrors `sanitizeHumanName` in
+// `shared/name-sanitizer.ts` so curl / mobile / bulk callers can't bypass
+// the apply-form sanitation. We accept the name *only after* sanitation
+// strips emoji + Unicode mathematical-bold pseudo-Latin + control chars
+// and confirms the residue is a real letter-bearing string.
+// (sanitizeHumanName imported at the top of the file alongside other
+// shared helpers — kept here in a comment for context.)
+const fullNameEnSchema = z
+  .string({ required_error: "Full name is required" })
+  .transform((v, ctx) => {
+    const r = sanitizeHumanName(v);
+    if (!r.ok) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          r.reason === "too_short"
+            ? "Full name is too short (minimum 2 letters)"
+            : r.reason === "too_long"
+              ? "Full name is too long (maximum 80 characters)"
+              : r.reason === "no_letters"
+                ? "Full name must contain letters, not only symbols or emoji"
+                : "Full name is required",
+      });
+      return z.NEVER;
+    }
+    return r.canonical;
+  });
+
 // Task #137 — IBAN holder name (account first/last name) must be English-only.
 // These names go straight onto payroll wire transfers and Saudi banks reject
 // the wire when the beneficiary name contains non-Latin characters that don't
@@ -794,6 +824,46 @@ export const insertCandidateSchema = createInsertSchema(candidates).omit({
   ibanNumber: ibanFormatSchema,
   ibanAccountFirstName: ibanHolderNameSchema,
   ibanAccountLastName: ibanHolderNameSchema,
+  // Snapchat-pollution defence — apply form + every other write path runs
+  // every value of `fullNameEn` through the sanitiser before it reaches
+  // the DB. Required (notNull on the column) so we keep the .pipe() chain
+  // tight: outer .string() rejects undefined, sanitiser handles content.
+  fullNameEn: fullNameEnSchema,
+}).superRefine((d, ctx) => {
+  // Snapchat-pollution defence — Snapchat's in-app browser autofills the
+  // same phone into both the personal-phone and emergency-phone tel
+  // inputs. We surface a hard validation error so the caller has to fix
+  // it instead of silently storing one phone twice (we observed 239
+  // such rows in a single day from one campaign).
+  if (
+    d.phone &&
+    d.emergencyContactPhone &&
+    String(d.phone).replace(/\D/g, "") ===
+      String(d.emergencyContactPhone).replace(/\D/g, "")
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["emergencyContactPhone"],
+      message:
+        "Emergency contact phone cannot be the same as your personal phone — please provide a different number",
+    });
+  }
+  // Same defence for the holder-name fields. If the candidate typed
+  // their own name as the emergency contact name (autofill or "I have
+  // nobody else"), we'd lose the safety-net the field exists to provide.
+  if (
+    d.fullNameEn &&
+    d.emergencyContactName &&
+    String(d.fullNameEn).trim().toLowerCase() ===
+      String(d.emergencyContactName).trim().toLowerCase()
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["emergencyContactName"],
+      message:
+        "Emergency contact name cannot be the same as your own name — please provide a different person",
+    });
+  }
 });
 
 export const insertEventSchema = createInsertSchema(events).omit({

@@ -101,6 +101,8 @@
     "positionRequired": "Please enter your position",
     "emergencyNameRequired": "Emergency contact name is required",
     "emergencyPhoneRequired": "Emergency contact phone is required",
+    "emergencyNameSameAsSelf": "Emergency contact name cannot be the same as your own name — please provide a different person",
+    "emergencyPhoneSameAsSelf": "Emergency contact phone cannot be the same as your personal phone — please provide a different number",
     "ibanFirstNameRequired": "First name as on debit card is required",
     "ibanLastNameRequired": "Last name as on debit card is required",
     "ibanHolderNameNonLatin": "Enter the name in English exactly as printed on the bank card (letters A-Z only — no Arabic).",

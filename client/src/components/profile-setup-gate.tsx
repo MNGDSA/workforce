@@ -118,7 +118,19 @@ const LANGUAGE_OPTIONS = [
 
 // ─── Zod Schema (validation messages resolved at submit via t()) ─────────────
 
-function buildSchemas(t: (key: string, opts?: Record<string, unknown>) => string) {
+// Snapchat-pollution defence — Step 2 needs to know the candidate's own
+// phone + name (set during apply / step 1) so the emergency-contact
+// validators can reject "same as personal phone" / "same as my own name".
+// Both are optional so older callers / unit tests still type-check.
+type Step2SelfReference = {
+  selfPhone?: string | null;
+  selfFullName?: string | null;
+};
+
+function buildSchemas(
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  selfRef: Step2SelfReference = {},
+) {
   const step1 = z.object({
     firstName:       z.string().min(2, t("profileSetup:validation.firstNameRequired")),
     lastName:        z.string().min(2, t("profileSetup:validation.lastNameRequired")),
@@ -185,6 +197,29 @@ function buildSchemas(t: (key: string, opts?: Record<string, unknown>) => string
             : t("profileSetup:validation.ibanHolderNameNonLatin");
         ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: [field] });
       }
+    }
+    // Snapchat-pollution defence — emergency contact phone must differ
+    // from the candidate's own phone (set during apply). We compare on
+    // digits-only so spaces / + / dashes don't sneak past the check.
+    const selfPhoneDigits = (selfRef.selfPhone || "").replace(/\D/g, "");
+    const emergencyDigits = (d.emergencyContactPhone || "").replace(/\D/g, "");
+    if (selfPhoneDigits && emergencyDigits && selfPhoneDigits === emergencyDigits) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: t("profileSetup:validation.emergencyPhoneSameAsSelf"),
+        path: ["emergencyContactPhone"],
+      });
+    }
+    // Same defence for the emergency contact name vs. the candidate's own
+    // full name (case-insensitive, whitespace-trimmed).
+    const selfName = (selfRef.selfFullName || "").trim().toLowerCase();
+    const emergencyName = (d.emergencyContactName || "").trim().toLowerCase();
+    if (selfName && emergencyName && selfName === emergencyName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: t("profileSetup:validation.emergencyNameSameAsSelf"),
+        path: ["emergencyContactName"],
+      });
     }
   });
 
@@ -339,10 +374,26 @@ function Step1Form({
     <form onSubmit={handleSubmit(onNext)} className="space-y-5">
       <div className="grid grid-cols-2 gap-4">
         <FieldWrapper label={t("profileSetup:step1.firstName")} required error={errors.firstName?.message}>
-          <Input {...register("firstName")} placeholder={t("profileSetup:step1.firstNamePh")} className="bg-muted/30 border-border" data-testid="input-firstName" />
+          <Input
+            {...register("firstName")}
+            placeholder={t("profileSetup:step1.firstNamePh")}
+            className="bg-muted/30 border-border"
+            autoComplete="given-name"
+            autoCapitalize="words"
+            spellCheck={false}
+            data-testid="input-firstName"
+          />
         </FieldWrapper>
         <FieldWrapper label={t("profileSetup:step1.lastName")} required error={errors.lastName?.message}>
-          <Input {...register("lastName")} placeholder={t("profileSetup:step1.lastNamePh")} className="bg-muted/30 border-border" data-testid="input-lastName" />
+          <Input
+            {...register("lastName")}
+            placeholder={t("profileSetup:step1.lastNamePh")}
+            className="bg-muted/30 border-border"
+            autoComplete="family-name"
+            autoCapitalize="words"
+            spellCheck={false}
+            data-testid="input-lastName"
+          />
         </FieldWrapper>
       </div>
 
@@ -435,12 +486,20 @@ function Step1Form({
 // ─── Step 2: Health & Employment ─────────────────────────────────────────────
 
 function Step2Form({
-  defaults, onNext, onBack, isSmp,
+  defaults, onNext, onBack, isSmp, selfPhone, selfFullName,
 }: {
   defaults: Partial<Step2>; onNext: (d: Step2) => void; onBack: () => void; isSmp: boolean;
+  // Snapchat-pollution defence — passed in from the gate so the schema's
+  // superRefine can reject "emergency phone == my own phone" / "emergency
+  // name == my own full name". Optional so existing tests don't break.
+  selfPhone?: string | null;
+  selfFullName?: string | null;
 }) {
   const { t } = useTranslation(["profileSetup"]);
-  const { step2: step2Schema } = useMemo(() => buildSchemas(t), [t]);
+  const { step2: step2Schema } = useMemo(
+    () => buildSchemas(t, { selfPhone, selfFullName }),
+    [t, selfPhone, selfFullName],
+  );
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<Step2>({
     resolver: zodResolver(step2Schema),
@@ -544,6 +603,10 @@ function Step2Form({
                 {...register("ibanAccountFirstName")}
                 placeholder={t("profileSetup:step2.ibanFirstNamePh")}
                 className="bg-muted/30 border-border"
+                dir="ltr"
+                autoComplete="off"
+                autoCapitalize="words"
+                spellCheck={false}
                 data-testid="input-iban-first-name"
               />
             </FieldWrapper>
@@ -552,6 +615,10 @@ function Step2Form({
                 {...register("ibanAccountLastName")}
                 placeholder={t("profileSetup:step2.ibanLastNamePh")}
                 className="bg-muted/30 border-border"
+                dir="ltr"
+                autoComplete="off"
+                autoCapitalize="words"
+                spellCheck={false}
                 data-testid="input-iban-last-name"
               />
             </FieldWrapper>
@@ -611,11 +678,20 @@ function Step2Form({
         </Label>
         <p className="text-xs text-muted-foreground mt-0.5">{t("profileSetup:step2.emergencyDesc")}</p>
         <div className="grid grid-cols-2 gap-4">
+          {/* Snapchat-pollution defence — these are the *emergency contact*
+              fields, not the candidate's own name/phone. We disable
+              browser autofill (autoComplete="off" + name attribute the
+              browser can't recognise) so iOS/Android don't paste the
+              user's own profile data here, then validate at submit that
+              the value differs from the personal phone / name. */}
           <FieldWrapper label={t("profileSetup:step2.emergencyName")} required error={errors.emergencyContactName?.message}>
             <Input
               {...register("emergencyContactName")}
               placeholder={t("profileSetup:step2.emergencyNamePh")}
               className="bg-muted/30 border-border"
+              autoComplete="off"
+              autoCapitalize="words"
+              spellCheck={false}
               data-testid="input-emergency-name"
             />
           </FieldWrapper>
@@ -624,6 +700,9 @@ function Step2Form({
               {...register("emergencyContactPhone")}
               placeholder={t("profileSetup:step2.emergencyPhonePh")}
               dir="ltr"
+              type="tel"
+              inputMode="tel"
+              autoComplete="off"
               className="bg-muted/30 border-border"
               data-testid="input-emergency-phone"
             />
@@ -985,7 +1064,14 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
               <Step1Form defaults={s1data} onNext={handleStep1} candidate={candidate} />
             )}
             {step === 2 && (
-              <Step2Form defaults={s2data} onNext={handleStep2} onBack={() => setStep(1)} isSmp={(candidate as any).classification === "smp"} />
+              <Step2Form
+                defaults={s2data}
+                onNext={handleStep2}
+                onBack={() => setStep(1)}
+                isSmp={(candidate as any).classification === "smp"}
+                selfPhone={candidate?.phone ?? null}
+                selfFullName={candidate?.fullNameEn ?? null}
+              />
             )}
             {step === 3 && (
               <Step3Form

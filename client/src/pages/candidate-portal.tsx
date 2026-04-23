@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { saPhoneSchema } from "@shared/phone";
+import { sanitizeHumanName } from "@shared/name-sanitizer";
 import { sanitizeSaMobileInput, normalizeSaMobileOnBlur, isValidSaMobile } from "@/lib/phone-input";
 import { createPortal } from "react-dom";
 import { printContract } from "@/lib/print-contract";
@@ -327,8 +328,35 @@ const NAV_LABELS: Record<NavKey, string> = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Snapchat-pollution defence (April 2026 incident) — the apply form is
+// the only public, unauthenticated write path into the candidate table.
+// One Snapchat campaign produced 1,708 polluted rows in a single day —
+// names like "𝚃𝚄𝚁𝙺𝚈 ابراهيم الحارثي 🍂" and emoji-only "Bandar 🌷" —
+// because the schema was just `.min(2)`. We now sanitise here AND on the
+// server (shared/schema.ts → fullNameEnSchema), so the same rule applies
+// no matter which path triggers the insert.
 const applySchema = z.object({
-  fullNameEn: z.string().min(2, "Full name is required"),
+  fullNameEn: z
+    .string()
+    .min(1, "Full name is required")
+    .transform((v, ctx) => {
+      const r = sanitizeHumanName(v);
+      if (!r.ok) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            r.reason === "too_short"
+              ? "Full name is too short"
+              : r.reason === "too_long"
+                ? "Full name is too long"
+                : r.reason === "no_letters"
+                  ? "Full name must contain letters, not only emoji or symbols"
+                  : "Full name is required",
+        });
+        return z.NEVER;
+      }
+      return r.canonical;
+    }),
   phone: saPhoneSchema,
   nationalId: z.string().min(5, "National ID or Iqama number is required"),
 });
@@ -396,11 +424,25 @@ function ApplyDialog({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit((d) => apply.mutate(d))} className="space-y-4 pt-1">
+            {/* Snapchat-pollution defence — explicit autocomplete hints
+                so the in-app browser maps each visible field to the
+                correct profile attribute instead of pasting the user's
+                Snapchat *display name* into "Full Name" and the *same
+                phone* into both phone slots. inputMode + name + type
+                cooperate with the autofill heuristic on iOS/Android. */}
             <FormField control={form.control} name="fullNameEn" render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("portal:apply.fullName")}</FormLabel>
                 <FormControl>
-                  <Input placeholder={t("portal:apply.fullNamePlaceholder")} className="bg-muted/30 border-border" dir="ltr" {...field} />
+                  <Input
+                    placeholder={t("portal:apply.fullNamePlaceholder")}
+                    className="bg-muted/30 border-border"
+                    dir="ltr"
+                    autoComplete="name"
+                    autoCapitalize="words"
+                    spellCheck={false}
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -410,7 +452,15 @@ function ApplyDialog({
               <FormItem>
                 <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("portal:apply.nationalId")}</FormLabel>
                 <FormControl>
-                  <Input placeholder={t("portal:apply.nationalIdPlaceholder")} className="bg-muted/30 border-border" dir="ltr" {...field} />
+                  <Input
+                    placeholder={t("portal:apply.nationalIdPlaceholder")}
+                    className="bg-muted/30 border-border"
+                    dir="ltr"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    spellCheck={false}
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -420,7 +470,15 @@ function ApplyDialog({
               <FormItem>
                 <FormLabel className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">{t("portal:apply.phone")}</FormLabel>
                 <FormControl>
-                  <Input placeholder={t("portal:apply.phonePlaceholder")} className="bg-muted/30 border-border" dir="ltr" {...field} />
+                  <Input
+                    placeholder={t("portal:apply.phonePlaceholder")}
+                    className="bg-muted/30 border-border"
+                    dir="ltr"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
