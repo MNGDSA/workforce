@@ -1,6 +1,6 @@
 import DashboardLayout from "@/components/layout";
 import { nationalityLabel } from "@/lib/i18n/nationalities";
-import { resolveSaudiBank } from "@/lib/saudi-banks";
+import { resolveSaudiBank, validateSaudiIban } from "@/lib/saudi-banks";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -588,10 +588,20 @@ function CandidateProfileSheet({
   }
 
   function handleSave() {
-    form.ibanNumber = (form.ibanNumber || "").replace(/\s+/g, "").toUpperCase();
-    if (form.ibanNumber && !/^SA\d{22}$/.test(form.ibanNumber)) {
-      toast({ title: t("toast.invalidIban"), description: t("toast.invalidIbanDesc"), variant: "destructive" });
-      return;
+    if (form.ibanNumber && form.ibanNumber.replace(/\s+/g, "").length > 0) {
+      const result = validateSaudiIban(form.ibanNumber);
+      if (!result.ok) {
+        const desc =
+          result.reason === "missing_prefix" ? t("toast.invalidIbanPrefixDesc") :
+          result.reason === "wrong_length"   ? t("toast.invalidIbanLengthDesc", { count: result.length ?? 0 }) :
+          result.reason === "non_digit"      ? t("toast.invalidIbanCharsDesc") :
+                                                t("toast.invalidIbanDesc");
+        toast({ title: t("toast.invalidIban"), description: desc, variant: "destructive" });
+        return;
+      }
+      form.ibanNumber = result.canonical;
+    } else {
+      form.ibanNumber = "";
     }
     if (form.phone && !isValidSaMobile(form.phone)) {
       toast({

@@ -85,7 +85,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { toProxiedFileUrl } from "@/lib/file-url";
 import { useToast } from "@/hooks/use-toast";
-import { resolveSaudiBank } from "@/lib/saudi-banks";
+import { resolveSaudiBank, validateSaudiIban } from "@/lib/saudi-banks";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
 
@@ -2043,18 +2043,22 @@ export default function CandidatePortal() {
     }
 
     if (!isSmp) {
-      const iban = ibanValue.replace(/\s+/g, "").toUpperCase();
-      if (!iban) {
-        toast({ title: t("portal:profile.ibanRequired"), description: t("portal:profile.ibanRequiredDesc"), variant: "destructive" });
+      const result = validateSaudiIban(ibanValue);
+      if (!result.ok) {
+        if (result.reason === "empty") {
+          toast({ title: t("portal:profile.ibanRequired"), description: t("portal:profile.ibanRequiredDesc"), variant: "destructive" });
+        } else if (result.reason === "missing_prefix") {
+          toast({ title: t("portal:profile.ibanInvalid"), description: t("portal:profile.ibanInvalidPrefixDesc"), variant: "destructive" });
+        } else if (result.reason === "wrong_length") {
+          toast({ title: t("portal:profile.ibanInvalid"), description: t("portal:profile.ibanInvalidLengthDesc", { count: result.length ?? 0 }), variant: "destructive" });
+        } else {
+          toast({ title: t("portal:profile.ibanInvalid"), description: t("portal:profile.ibanInvalidCharsDesc"), variant: "destructive" });
+        }
         return;
       }
-      if (!/^SA\d{22}$/.test(iban)) {
-        toast({ title: t("portal:profile.ibanInvalid"), description: t("portal:profile.ibanInvalidDesc"), variant: "destructive" });
-        return;
-      }
-      raw.ibanNumber   = iban;
-      raw.ibanBankName = detectedBank?.ibanBankName ?? null;
-      raw.ibanBankCode = detectedBank?.ibanBankCode ?? null;
+      raw.ibanNumber   = result.canonical;
+      raw.ibanBankName = result.bank?.ibanBankName ?? detectedBank?.ibanBankName ?? null;
+      raw.ibanBankCode = result.bank?.ibanBankCode ?? detectedBank?.ibanBankCode ?? null;
     }
     saveProfile.mutate(raw);
   }

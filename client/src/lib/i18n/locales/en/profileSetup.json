@@ -105,6 +105,9 @@
     "ibanLastNameRequired": "Last name as on debit card is required",
     "ibanRequired": "IBAN number is required",
     "ibanInvalid": "IBAN must be SA followed by 22 digits (24 characters total)",
+    "ibanInvalidPrefix": "IBAN must start with SA.",
+    "ibanInvalidLength": "Saudi IBANs are exactly 24 characters; you entered {{count}}.",
+    "ibanInvalidChars": "IBAN may only contain digits after SA.",
     "educationRequired": "Education level is required",
     "languagesRequired": "Select at least one language",
     "majorRequired": "Please enter your major / field of study"

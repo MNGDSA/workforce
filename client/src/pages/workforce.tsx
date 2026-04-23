@@ -4,7 +4,7 @@ import { sanitizeSaMobileInput, normalizeSaMobileOnBlur, isValidSaMobile } from 
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout";
-import { resolveSaudiBank } from "@/lib/saudi-banks";
+import { resolveSaudiBank, validateSaudiIban } from "@/lib/saudi-banks";
 import { nationalityLabel } from "@/lib/i18n/nationalities";
 import { printContract } from "@/lib/print-contract";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1077,12 +1077,22 @@ function EmployeeDetailDialog({
                       <Button size="sm" className="h-6 px-2 text-xs bg-emerald-700 hover:bg-emerald-600" data-testid="button-save-financial"
                         disabled={profileMutation.isPending}
                         onClick={() => {
-                          const iban = (financialForm.ibanNumber ?? "").replace(/\s+/g, "").toUpperCase();
-                          if (iban && !/^SA\d{22}$/.test(iban)) {
-                            toast({ title: t("toast.invalidIban"), description: t("toast.invalidIbanDesc"), variant: "destructive" });
-                            return;
+                          const rawIban = (financialForm.ibanNumber ?? "").replace(/\s+/g, "");
+                          let canonicalIban = "";
+                          if (rawIban.length > 0) {
+                            const result = validateSaudiIban(financialForm.ibanNumber ?? "");
+                            if (!result.ok) {
+                              const desc =
+                                result.reason === "missing_prefix" ? t("toast.invalidIbanPrefixDesc") :
+                                result.reason === "wrong_length"   ? t("toast.invalidIbanLengthDesc", { count: result.length ?? 0 }) :
+                                result.reason === "non_digit"      ? t("toast.invalidIbanCharsDesc") :
+                                                                      t("toast.invalidIbanDesc");
+                              toast({ title: t("toast.invalidIban"), description: desc, variant: "destructive" });
+                              return;
+                            }
+                            canonicalIban = result.canonical;
                           }
-                          profileMutation.mutate({ ...financialForm, ibanNumber: iban });
+                          profileMutation.mutate({ ...financialForm, ibanNumber: canonicalIban });
                         }}
                       ><Save className="h-3 w-3 me-1" /> {t("dialog.actions.save")}</Button>
                     </div>

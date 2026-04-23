@@ -105,6 +105,9 @@
     "ibanLastNameRequired": "اسم العائلة كما في بطاقة الصراف مطلوب",
     "ibanRequired": "رقم الآيبان مطلوب",
     "ibanInvalid": "يجب أن يبدأ الآيبان بـ SA متبوعة بـ 22 رقماً (24 حرفاً إجمالاً)",
+    "ibanInvalidPrefix": "يجب أن يبدأ الآيبان بـ SA.",
+    "ibanInvalidLength": "يتكون الآيبان السعودي من 24 خانة بالضبط؛ لقد أدخلت {{count}}.",
+    "ibanInvalidChars": "لا يحتوي الآيبان إلا على أرقام بعد SA.",
     "educationRequired": "المستوى التعليمي مطلوب",
     "languagesRequired": "اختر لغة واحدة على الأقل",
     "majorRequired": "يرجى إدخال تخصصك / مجال الدراسة"

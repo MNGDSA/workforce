@@ -430,7 +430,10 @@
     "ibanRequired": "IBAN Required",
     "ibanRequiredDesc": "Please enter your Saudi IBAN number for salary transfers.",
     "ibanInvalid": "Invalid IBAN",
-    "ibanInvalidDesc": "IBAN must be SA followed by 22 digits (24 characters total)"
+    "ibanInvalidDesc": "IBAN must be SA followed by 22 digits (24 characters total)",
+    "ibanInvalidPrefixDesc": "IBAN must start with SA.",
+    "ibanInvalidLengthDesc": "Saudi IBANs are exactly 24 characters; you entered {{count}}.",
+    "ibanInvalidCharsDesc": "IBAN may only contain digits after SA."
   },
   "password": {
     "title": "Change Password",

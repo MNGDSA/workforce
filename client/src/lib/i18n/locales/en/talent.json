@@ -147,7 +147,10 @@
     "exported_one": "Exported {{n}} candidate",
     "exported_other": "Exported {{n}} candidates",
     "invalidIban": "Invalid IBAN",
-    "invalidIbanDesc": "IBAN must be SA followed by 22 digits (24 characters total)"
+    "invalidIbanDesc": "IBAN must be SA followed by 22 digits (24 characters total)",
+    "invalidIbanPrefixDesc": "IBAN must start with SA.",
+    "invalidIbanLengthDesc": "Saudi IBANs are exactly 24 characters; you entered {{count}}.",
+    "invalidIbanCharsDesc": "IBAN may only contain digits after SA."
   },
   "block": {
     "title": "Block Candidate",

@@ -168,7 +168,10 @@
     "exported_many": "تم تصدير {{n}} مرشحًا",
     "exported_other": "تم تصدير {{n}} مرشح",
     "invalidIban": "IBAN غير صالح",
-    "invalidIbanDesc": "يجب أن يبدأ IBAN بـ SA متبوعًا بـ 22 رقمًا (24 خانة)"
+    "invalidIbanDesc": "يجب أن يبدأ IBAN بـ SA متبوعًا بـ 22 رقمًا (24 خانة)",
+    "invalidIbanPrefixDesc": "يجب أن يبدأ الآيبان بـ SA.",
+    "invalidIbanLengthDesc": "يتكون الآيبان السعودي من 24 خانة بالضبط؛ لقد أدخلت {{count}}.",
+    "invalidIbanCharsDesc": "لا يحتوي الآيبان إلا على أرقام بعد SA."
   },
   "block": {
     "title": "حظر المرشح",

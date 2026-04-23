@@ -117,7 +117,7 @@ const LANGUAGE_OPTIONS = [
 
 // ─── Zod Schema (validation messages resolved at submit via t()) ─────────────
 
-function buildSchemas(t: (key: string) => string) {
+function buildSchemas(t: (key: string, opts?: Record<string, unknown>) => string) {
   const step1 = z.object({
     firstName:       z.string().min(2, t("profileSetup:validation.firstNameRequired")),
     lastName:        z.string().min(2, t("profileSetup:validation.lastNameRequired")),
@@ -160,8 +160,13 @@ function buildSchemas(t: (key: string) => string) {
     if (d.isEmployedElsewhere && !d.currentRole?.trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("profileSetup:validation.positionRequired"), path: ["currentRole"] });
     }
-    if (!/^SA\d{22}$/.test(d.ibanNumber.trim())) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("profileSetup:validation.ibanInvalid"), path: ["ibanNumber"] });
+    const ibanClean = (d.ibanNumber || "").replace(/\s+/g, "").toUpperCase();
+    if (!ibanClean.startsWith("SA")) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("profileSetup:validation.ibanInvalidPrefix"), path: ["ibanNumber"] });
+    } else if (ibanClean.length !== 24) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("profileSetup:validation.ibanInvalidLength", { count: ibanClean.length }), path: ["ibanNumber"] });
+    } else if (!/^SA\d{22}$/.test(ibanClean)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("profileSetup:validation.ibanInvalidChars"), path: ["ibanNumber"] });
     }
   });
 
@@ -538,14 +543,18 @@ function Step2Form({
             <Input
               {...register("ibanNumber", {
                 onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
-                  e.target.value = e.target.value.toUpperCase();
-                  setValue("ibanNumber", e.target.value);
+                  const cleaned = e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 24);
+                  const grouped = cleaned.replace(/(.{4})/g, "$1 ").trim();
+                  e.target.value = grouped;
+                  setValue("ibanNumber", grouped, { shouldValidate: true });
                 },
               })}
-              placeholder="SA0000000000000000000000"
-              maxLength={24}
+              placeholder="SA00 0000 0000 0000 0000 0000"
+              maxLength={29}
               dir="ltr"
-              className="bg-muted/30 border-border uppercase"
+              inputMode="text"
+              autoComplete="off"
+              className="bg-muted/30 border-border font-mono uppercase"
               data-testid="input-iban"
             />
             <p className="text-[11px] text-muted-foreground mt-1">{t("profileSetup:step2.ibanFormat")}</p>
@@ -850,7 +859,7 @@ export default function ProfileSetupGate({ children }: { children: ReactNode }) 
       emergencyContactPhone: s2data.emergencyContactPhone,
       ibanAccountFirstName: s2data.ibanAccountFirstName || null,
       ibanAccountLastName:  s2data.ibanAccountLastName  || null,
-      ibanNumber:          s2data.ibanNumber || null,
+      ibanNumber:          s2data.ibanNumber ? s2data.ibanNumber.replace(/\s+/g, "").toUpperCase() : null,
       ibanBankName:        s2data.ibanBankName || null,
       ibanBankCode:        s2data.ibanBankCode || null,
       educationLevel:      d.educationLevel,
