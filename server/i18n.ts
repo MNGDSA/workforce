@@ -356,6 +356,10 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "iban.wrong_length"                   : "Invalid IBAN: must be 24 characters (SA + 22 digits)",
     "iban.non_digit"                      : "Invalid IBAN: must contain only digits after SA",
     "iban.bad_checksum"                   : "Invalid IBAN: failed bank checksum check. Please check for a typo.",
+    // Task #137 — IBAN holder-name (English-only) validation
+    "iban_holder_name.empty"              : "IBAN account holder name is required.",
+    "iban_holder_name.non_latin"          : "IBAN account holder name must be in English exactly as it appears on the bank card (letters A-Z only, no Arabic).",
+    "iban_holder_name.too_long"           : "IBAN account holder name is too long (max 64 characters).",
 
     // Final hardcoded message cleanup (Task #61)
     "common.jobIdRequired"                : "jobId is required",
@@ -719,6 +723,10 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "iban.wrong_length"                   : "آيبان غير صالح: يجب أن يتكون من 24 حرفًا (SA + 22 رقمًا)",
     "iban.non_digit"                      : "آيبان غير صالح: يجب أن يحتوي على أرقام فقط بعد SA",
     "iban.bad_checksum"                   : "آيبان غير صالح: فشل في التحقق من خانة المراجعة البنكية. يرجى التأكد من عدم وجود خطأ مطبعي.",
+    // Task #137 — IBAN holder-name (English-only) validation
+    "iban_holder_name.empty"              : "اسم صاحب حساب الآيبان مطلوب.",
+    "iban_holder_name.non_latin"          : "يجب إدخال اسم صاحب حساب الآيبان بالإنجليزية كما هو مطبوع على بطاقة الصراف (حروف A-Z فقط، بدون عربي).",
+    "iban_holder_name.too_long"           : "اسم صاحب حساب الآيبان طويل جدًا (حد أقصى 64 حرفًا).",
 
     // Final hardcoded message cleanup (Task #61)
     "common.jobIdRequired"                : "معرّف الوظيفة (jobId) مطلوب",

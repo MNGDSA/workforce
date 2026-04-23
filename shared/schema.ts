@@ -759,6 +759,31 @@ const ibanFormatSchema = z
     { message: "Invalid IBAN: failed bank checksum check (likely a typo)" },
   );
 
+// Task #137 — IBAN holder name (account first/last name) must be English-only.
+// These names go straight onto payroll wire transfers and Saudi banks reject
+// the wire when the beneficiary name contains non-Latin characters that don't
+// match the name on the account. Mirrors `validateIbanHolderName` in
+// server/lib/iban.ts so the rule cannot drift between client/server.
+const IBAN_HOLDER_NAME_MAX_LEN_SHARED = 64;
+const IBAN_HOLDER_NAME_RE_SHARED = /^[A-Za-z][A-Za-z\s\-'.]*$/;
+const ibanHolderNameSchema = z
+  .string()
+  .nullable()
+  .optional()
+  .refine(
+    (v) => {
+      if (v === null || v === undefined) return true;
+      const collapsed = v.replace(/\s+/g, " ").trim();
+      if (collapsed === "") return true; // empty = clear; required-ness handled separately
+      if (collapsed.length > IBAN_HOLDER_NAME_MAX_LEN_SHARED) return false;
+      return IBAN_HOLDER_NAME_RE_SHARED.test(collapsed);
+    },
+    {
+      message:
+        "IBAN holder name must contain English letters only (A-Z, a-z, space, hyphen, apostrophe, period) and be at most 64 characters",
+    },
+  );
+
 export const insertCandidateSchema = createInsertSchema(candidates).omit({
   id: true,
   createdAt: true,
@@ -767,6 +792,8 @@ export const insertCandidateSchema = createInsertSchema(candidates).omit({
   phone: optionalSaPhoneSchema,
   emergencyContactPhone: optionalContactPhoneSchema,
   ibanNumber: ibanFormatSchema,
+  ibanAccountFirstName: ibanHolderNameSchema,
+  ibanAccountLastName: ibanHolderNameSchema,
 });
 
 export const insertEventSchema = createInsertSchema(events).omit({

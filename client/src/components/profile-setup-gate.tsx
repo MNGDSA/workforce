@@ -26,6 +26,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { resolveSaudiBank, validateIbanChecksum } from "@/lib/saudi-banks";
+import { validateIbanHolderName } from "@/lib/iban-holder-name";
 import { formatNumber } from "@/lib/format";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -169,6 +170,21 @@ function buildSchemas(t: (key: string, opts?: Record<string, unknown>) => string
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("profileSetup:validation.ibanInvalidChars"), path: ["ibanNumber"] });
     } else if (!validateIbanChecksum(ibanClean)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("profileSetup:validation.ibanInvalidChecksum"), path: ["ibanNumber"] });
+    }
+    // Task #137 — IBAN holder name (account first/last) MUST be English-only.
+    // Saudi banks reject the wire transfer when the beneficiary name has
+    // Arabic letters that don't match the bank record.
+    for (const field of ["ibanAccountFirstName", "ibanAccountLastName"] as const) {
+      const value = (d as any)[field] as string | undefined;
+      if (!value || value.trim() === "") continue; // .min(1) refine reports empty
+      const result = validateIbanHolderName(value);
+      if (!result.ok) {
+        const message =
+          result.reason === "too_long"
+            ? t("profileSetup:validation.ibanHolderNameTooLong")
+            : t("profileSetup:validation.ibanHolderNameNonLatin");
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: [field] });
+      }
     }
   });
 

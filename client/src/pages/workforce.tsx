@@ -5,6 +5,7 @@ import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout";
 import { resolveSaudiBank, validateSaudiIban } from "@/lib/saudi-banks";
+import { validateIbanHolderName } from "@/lib/iban-holder-name";
 import { nationalityLabel } from "@/lib/i18n/nationalities";
 import { printContract } from "@/lib/print-contract";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1093,7 +1094,31 @@ function EmployeeDetailDialog({
                             }
                             canonicalIban = result.canonical;
                           }
-                          profileMutation.mutate({ ...financialForm, ibanNumber: canonicalIban });
+                          // Task #137 — Block Arabic in account holder names before save.
+                          let canonicalFirst = financialForm.ibanAccountFirstName ?? "";
+                          let canonicalLast  = financialForm.ibanAccountLastName  ?? "";
+                          for (const [field, value] of [
+                            ["ibanAccountFirstName", canonicalFirst],
+                            ["ibanAccountLastName",  canonicalLast],
+                          ] as const) {
+                            if (!value || value.trim() === "") continue;
+                            const r = validateIbanHolderName(value);
+                            if (!r.ok) {
+                              const desc = r.reason === "too_long"
+                                ? t("toast.invalidIbanHolderNameTooLongDesc")
+                                : t("toast.invalidIbanHolderNameDesc");
+                              toast({ title: t("toast.invalidIbanHolderName"), description: desc, variant: "destructive" });
+                              return;
+                            }
+                            if (field === "ibanAccountFirstName") canonicalFirst = r.canonical;
+                            else canonicalLast = r.canonical;
+                          }
+                          profileMutation.mutate({
+                            ...financialForm,
+                            ibanNumber: canonicalIban,
+                            ibanAccountFirstName: canonicalFirst,
+                            ibanAccountLastName: canonicalLast,
+                          });
                         }}
                       ><Save className="h-3 w-3 me-1" /> {t("dialog.actions.save")}</Button>
                     </div>

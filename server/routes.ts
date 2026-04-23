@@ -81,7 +81,7 @@ import XLSX from "xlsx";
 import { signAuthToken, verifyAuthToken } from "./auth-token";
 // Task #85 — canonical mobile error codes + HMAC submission tokens.
 import { MobileErrorCodes, mobileError } from "./lib/mobile-error-codes";
-import { IbanValidationError, applyServerIbanFields } from "./lib/iban";
+import { IbanValidationError, IbanHolderNameValidationError, applyServerIbanFields } from "./lib/iban";
 import {
   issueSubmissionToken,
   verifySubmissionToken,
@@ -222,6 +222,14 @@ function handleError(res: Response, err: unknown, req?: Request) {
       code: MobileErrorCodes.VALIDATION_FAILED,
       message: req ? tr(req, `iban.${err.reason}`) : err.message,
       errors: [{ path: ["ibanNumber"], message: err.message, reason: err.reason }],
+    });
+  }
+  // Task #137 — server-side IBAN holder name (English-only) validation.
+  if (err instanceof IbanHolderNameValidationError) {
+    return res.status(400).json({
+      code: MobileErrorCodes.VALIDATION_FAILED,
+      message: req ? tr(req, `iban_holder_name.${err.reason}`) : err.message,
+      errors: [{ path: [err.field], message: err.message, reason: err.reason, field: err.field }],
     });
   }
   if (err instanceof z.ZodError) {

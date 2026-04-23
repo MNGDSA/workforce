@@ -132,7 +132,7 @@ import {
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte, getTableColumns } from "drizzle-orm";
 import { countFilledForEvent, countFilledForEvents } from "./headcount";
-import { applyServerIbanFields } from "./lib/iban";
+import { applyServerIbanFields, applyServerIbanHolderNameFields } from "./lib/iban";
 
 function computeCandidateStatusFromLogin(lastLoginAt: Date | null): "available" | "inactive" {
   if (!lastLoginAt) return "inactive";
@@ -774,12 +774,16 @@ export class DatabaseStorage implements IStorage {
     // Task #120 — last-line-of-defence IBAN canonicalisation + auto-fill
     // of bank name/code so writes that bypass the route schema (or
     // future internal callers) cannot poison the column.
+    // Task #137 — same defence for the IBAN account holder first/last name
+    // (must be Latin-only English text; throws IbanHolderNameValidationError).
+    applyServerIbanHolderNameFields(candidate as any);
     applyServerIbanFields(candidate as any);
     const [created] = await db.insert(candidates).values(candidate).returning();
     return created;
   }
 
   async updateCandidate(id: string, data: Partial<InsertCandidate>): Promise<Candidate | undefined> {
+    applyServerIbanHolderNameFields(data as any);
     applyServerIbanFields(data as any);
     const [updated] = await db
       .update(candidates)
@@ -880,7 +884,10 @@ export class DatabaseStorage implements IStorage {
     // Task #120 — same canonicalisation + bank auto-fill as the single
     // insert path. Throws IbanValidationError if any row carries a
     // malformed IBAN, so the bulk endpoint returns 400 to the caller.
-    for (const row of data) applyServerIbanFields(row as any);
+    for (const row of data) {
+      applyServerIbanHolderNameFields(row as any);
+      applyServerIbanFields(row as any);
+    }
 
     const existingNatIds = new Set<string>();
     const existingPhones = new Set<string>();

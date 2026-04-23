@@ -131,24 +131,112 @@ export class IbanValidationError extends Error {
   }
 }
 
+// ── Task #137 — IBAN holder-name validation (English-only) ─────────────────
+// Saudi banks reject wire transfers when the beneficiary name on the wire
+// does not match the name on the account, so the IBAN account first/last
+// name must be entered in English exactly as it appears on the bank card.
+// Allowed characters: A-Z, a-z, space, hyphen, apostrophe, period.
+// Rejects: anything containing characters outside that set (Arabic, Hebrew,
+// CJK, digits, emoji, etc.) plus empty / whitespace-only strings.
+//
+// Length cap of 64 characters mirrors typical SAMA SARIE name field limits
+// and protects against accidental form-paste of the entire account profile.
+
+export const IBAN_HOLDER_NAME_MAX_LEN = 64;
+
+export type IbanHolderNameValidationOk = { ok: true; canonical: string };
+export type IbanHolderNameValidationFail = {
+  ok: false;
+  reason: "empty" | "non_latin" | "too_long";
+};
+export type IbanHolderNameValidationResult =
+  | IbanHolderNameValidationOk
+  | IbanHolderNameValidationFail;
+
+const IBAN_HOLDER_NAME_ALLOWED_RE = /^[A-Za-z][A-Za-z\s\-'.]*$/;
+
+export function validateIbanHolderName(
+  input: string | null | undefined,
+): IbanHolderNameValidationResult {
+  if (input === null || input === undefined) return { ok: false, reason: "empty" };
+  const collapsed = String(input).replace(/\s+/g, " ").trim();
+  if (collapsed === "") return { ok: false, reason: "empty" };
+  if (collapsed.length > IBAN_HOLDER_NAME_MAX_LEN) {
+    return { ok: false, reason: "too_long" };
+  }
+  if (!IBAN_HOLDER_NAME_ALLOWED_RE.test(collapsed)) {
+    return { ok: false, reason: "non_latin" };
+  }
+  return { ok: true, canonical: collapsed };
+}
+
+export class IbanHolderNameValidationError extends Error {
+  status = 400;
+  reason: IbanHolderNameValidationFail["reason"];
+  field: "ibanAccountFirstName" | "ibanAccountLastName";
+  constructor(
+    field: "ibanAccountFirstName" | "ibanAccountLastName",
+    fail: IbanHolderNameValidationFail,
+  ) {
+    super(
+      fail.reason === "empty"
+        ? `${field} is required`
+        : fail.reason === "too_long"
+          ? `${field} is too long (max ${IBAN_HOLDER_NAME_MAX_LEN} characters)`
+          : `${field} must contain English letters only (A-Z, a-z, space, hyphen, apostrophe, period)`,
+    );
+    this.name = "IbanHolderNameValidationError";
+    this.reason = fail.reason;
+    this.field = field;
+  }
+}
+
+// Last-line-of-defence helper invoked by the storage layer for every
+// candidate insert/update. For each of the two IBAN holder name fields:
+//   - If the key is not present on `data`, leave it alone (PATCH-safe).
+//   - If the value is null, allow it (clearing the field is fine).
+//   - If the value is a non-empty string, validate. Throws
+//     IbanHolderNameValidationError on failure (mapped to 400 by
+//     handleError in routes.ts). On success, write back the canonicalised
+//     (whitespace-collapsed, trimmed) form so the DB never stores two
+//     shapes of the same name.
+export function applyServerIbanHolderNameFields<
+  T extends {
+    ibanAccountFirstName?: string | null;
+    ibanAccountLastName?: string | null;
+  },
+>(data: T): T {
+  for (const field of ["ibanAccountFirstName", "ibanAccountLastName"] as const) {
+    if (!Object.prototype.hasOwnProperty.call(data, field)) continue;
+    const raw = data[field];
+    if (raw === null || raw === undefined) {
+      data[field] = null as any;
+      continue;
+    }
+    if (typeof raw === "string" && raw.trim() === "") {
+      // Treat whitespace-only as a clear (null) — same shape as the IBAN
+      // helper. Required-ness is enforced by the route Zod schema, not
+      // here, since some PATCH paths legitimately clear the field.
+      data[field] = null as any;
+      continue;
+    }
+    const result = validateIbanHolderName(raw);
+    if (!result.ok) throw new IbanHolderNameValidationError(field, result);
+    data[field] = result.canonical as any;
+  }
+  return data;
+}
+
 // Last-line-of-defence helper invoked by the storage layer for every
 // candidate insert/update. If an `ibanNumber` is present and non-empty
 // we:
-//   1. Canonicalize it (strip whitespace, uppercase) so the DB never
-//      stores two different shapes of the same IBAN.
-//   2. Validate format (SA + 22 digits). On failure throws
-//      IbanValidationError so the caller returns 400.
-//   3. Auto-fill ibanBankName / ibanBankCode from SAUDI_BANKS so future
-//      backfills stop being necessary. Caller-supplied values are
-//      overwritten — the SARIE registry is the source of truth.
-//   4. Mirror the (now non-empty) state into hasIban so the boolean
-//      flag stays consistent with the data.
-//
-// If `ibanNumber` is explicitly cleared (null or empty string) we
-// normalise to null and clear the bank metadata + hasIban flag.
-//
-// If `ibanNumber` is not present at all, the input is returned
-// unchanged.
+//   1. Canonicalize it (strip whitespace, uppercase).
+//   2. Validate format + checksum (throws IbanValidationError on fail).
+//   3. Auto-fill ibanBankName / ibanBankCode from SAUDI_BANKS.
+//   4. Mirror non-empty state into hasIban.
+// If `ibanNumber` is explicitly cleared (null or empty) we normalise to
+// null and clear the bank metadata + hasIban flag. If `ibanNumber` is
+// not present at all, input is returned unchanged.
 export function applyServerIbanFields<
   T extends {
     ibanNumber?: string | null;
