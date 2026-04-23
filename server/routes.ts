@@ -9,6 +9,7 @@ import { storage, createInboxItem } from "./storage";
 import { db } from "./db";
 import { tr } from "./i18n";
 import { saPhoneSchema, patchSaPhoneSchema, normalizeSaPhone } from "@shared/phone";
+import { resolveSaudiBank } from "@shared/saudi-banks";
 import { uploadFile, deleteFile, getMimeType, getFileBuffer } from "./file-storage";
 import { getAuthenticatedUser, listUserRepos, getRepo, listRepoIssues, listRepoPullRequests } from "./github";
 import {
@@ -1817,6 +1818,19 @@ export async function registerRoutes(
   app.post("/api/candidates", requirePermission("candidates:create"), async (req: Request, res: Response) => {
     try {
       const data = insertCandidateSchema.parse(req.body);
+      // Task #121 — write-time IBAN -> bank resolution. Mirror the behaviour
+      // of the client form auto-fill so direct API writes (and the staff
+      // create flow) can never persist iban_number with a NULL bank code.
+      if (typeof data.ibanNumber === "string" && data.ibanNumber.trim() !== "") {
+        const resolved = resolveSaudiBank(data.ibanNumber);
+        if (resolved) {
+          (data as any).ibanBankName = resolved.ibanBankName;
+          (data as any).ibanBankCode = resolved.ibanBankCode;
+        }
+      } else if (data.ibanNumber === null || data.ibanNumber === "") {
+        (data as any).ibanBankName = null;
+        (data as any).ibanBankCode = null;
+      }
       if (data.nationalId) {
         const existing = await storage.getCandidateByNationalId(data.nationalId);
         if (existing) {
@@ -1863,6 +1877,25 @@ export async function registerRoutes(
       }
 
       const data = insertCandidateSchema.partial().parse(req.body);
+
+      // Task #121 — write-time IBAN -> bank resolution on update. Whenever
+      // ibanNumber is part of the patch, re-derive ibanBankName/ibanBankCode
+      // from the new IBAN (or clear them when the IBAN is cleared) so the
+      // candidate row can never end up with iban_number set and bank code
+      // NULL even if the client omits those fields.
+      if ("ibanNumber" in data) {
+        const iban = data.ibanNumber;
+        if (typeof iban === "string" && iban.trim() !== "") {
+          const resolved = resolveSaudiBank(iban);
+          if (resolved) {
+            (data as any).ibanBankName = resolved.ibanBankName;
+            (data as any).ibanBankCode = resolved.ibanBankCode;
+          }
+        } else if (iban === null || iban === "") {
+          (data as any).ibanBankName = null;
+          (data as any).ibanBankCode = null;
+        }
+      }
 
       if (data.profileCompleted === true) {
         const existing = await storage.getCandidate(req.params.id);
@@ -2050,6 +2083,18 @@ export async function registerRoutes(
       for (let i = 0; i < rawCandidates.length; i++) {
         try {
           const parsed = insertCandidateSchema.parse(rawCandidates[i]);
+          // Task #121 — same write-time IBAN resolution as the single-row
+          // create endpoint, so bulk uploads also persist bank name/code.
+          if (typeof parsed.ibanNumber === "string" && parsed.ibanNumber.trim() !== "") {
+            const resolved = resolveSaudiBank(parsed.ibanNumber);
+            if (resolved) {
+              (parsed as any).ibanBankName = resolved.ibanBankName;
+              (parsed as any).ibanBankCode = resolved.ibanBankCode;
+            }
+          } else if (parsed.ibanNumber === null || parsed.ibanNumber === "") {
+            (parsed as any).ibanBankName = null;
+            (parsed as any).ibanBankCode = null;
+          }
           if (parsed.profileCompleted) {
             const missing = validateProfileCompleteness(parsed);
             if (missing.length > 0) {
