@@ -1158,13 +1158,18 @@ export class DatabaseStorage implements IStorage {
   async ageOutInactiveCandidates(): Promise<number> {
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    // A candidate is "aged out" only when they have been dormant for ≥1 year.
+    // For rows that have never logged in we used to flip purely on
+    // `lastLoginAt IS NULL`, which incorrectly swept brand-new signups whose
+    // lastLoginAt had not yet been stamped by the auto-login path. Require
+    // that the row itself is also older than one year before flipping.
     const result = await db.update(candidates)
       .set({ status: "inactive", updatedAt: new Date() })
       .where(and(
         eq(candidates.status, "available"),
         or(
           and(isNotNull(candidates.lastLoginAt), lt(candidates.lastLoginAt, oneYearAgo)),
-          isNull(candidates.lastLoginAt),
+          and(isNull(candidates.lastLoginAt), lt(candidates.createdAt, oneYearAgo)),
         )
       ))
       .returning({ id: candidates.id });

@@ -241,9 +241,11 @@ export async function consumeActivationToken(
       fullName: cand.fullNameEn ?? username,
     } as any).returning();
 
-    // 4. Link candidate → user, flip status, refresh lastLoginAt later.
+    // 4. Link candidate → user, flip status, and stamp lastLoginAt so the
+    //    daily age-out sweep does not immediately re-flag this fresh row.
+    const nowTs = new Date();
     await tx.update(candidates)
-      .set({ userId: createdUser.id, status: "available", updatedAt: new Date() })
+      .set({ userId: createdUser.id, status: "available", lastLoginAt: nowTs, updatedAt: nowTs } as any)
       .where(eq(candidates.id, cand.id));
 
     return { candidateId: cand.id, userId: createdUser.id };

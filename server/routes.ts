@@ -1223,6 +1223,7 @@ export async function registerRoutes(
             .from(candidates)
             .where(eq(candidates.nationalId, nationalId.trim()))
             .limit(1);
+          const nowTs = new Date();
           let createdCandidate;
           if (existingByNidRows[0]) {
             // The NID matches a candidate row that an admin (or earlier
@@ -1245,7 +1246,9 @@ export async function registerRoutes(
                 phone: normalizedPhone,
                 fullNameEn: preservedName,
                 email: null,
-              })
+                lastLoginAt: nowTs,
+                updatedAt: nowTs,
+              } as any)
               .where(eq(candidates.id, existing.id))
               .returning();
             createdCandidate = updated;
@@ -1260,6 +1263,7 @@ export async function registerRoutes(
                 status: "available",
                 country: "SA",
                 userId: createdUser.id,
+                lastLoginAt: nowTs,
               } as any)
               .returning();
             createdCandidate = inserted;
