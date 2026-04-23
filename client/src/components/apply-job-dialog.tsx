@@ -72,12 +72,12 @@ function ConfirmView({ job, candidate, onConfirm, onCancel, isSubmitting }: {
         {t("apply:dialog.confirmDescription", { title: job.title })}
       </p>
 
-      <div className="flex justify-end gap-3 pt-1">
-        <Button variant="outline" className="border-border" onClick={onCancel} data-testid="button-apply-cancel">
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 pt-1">
+        <Button variant="outline" className="border-border w-full sm:w-auto" onClick={onCancel} data-testid="button-apply-cancel">
           {t("apply:dialog.cancel")}
         </Button>
         <Button
-          className="bg-primary text-primary-foreground font-bold min-w-[160px] gap-2"
+          className="bg-primary text-primary-foreground font-bold w-full sm:w-auto sm:min-w-[160px] gap-2"
           disabled={isSubmitting}
           onClick={onConfirm}
           data-testid="button-apply-confirm"

@@ -172,30 +172,31 @@ export default function JobDetailPage() {
   return (
     <div className="min-h-screen bg-background font-sans text-foreground flex flex-col">
 
-      <header className="sticky top-0 z-50 h-14 bg-background/90 backdrop-blur-md border-b border-border px-4 lg:px-8 flex items-center justify-between">
+      <header className="sticky top-0 z-50 h-14 bg-background/90 backdrop-blur-md border-b border-border px-3 sm:px-4 lg:px-8 flex items-center justify-between gap-2">
         {isLoggedIn ? (
           <button
             type="button"
             onClick={() => setLocation("/candidate-portal")}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-white transition-colors"
+            className="flex items-center gap-1.5 sm:gap-2 text-sm text-muted-foreground hover:text-white transition-colors min-w-0"
             data-testid="button-back"
           >
-            <StartArrow className="h-4 w-4" />
-            {t("apply:header.back")}
+            <StartArrow className="h-4 w-4 shrink-0" />
+            <span className="truncate">{t("apply:header.back")}</span>
           </button>
         ) : (
-          <div className="flex items-center gap-2">
-            <img src="/workforce-logo.svg" alt="Workforce" className="h-7 w-7" />
-            <span className="font-display font-bold text-lg tracking-tight text-white">{t("common:app.name")}</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <img src="/workforce-logo.svg" alt="Workforce" className="h-7 w-7 shrink-0" />
+            <span className="font-display font-bold text-base sm:text-lg tracking-tight text-white truncate">{t("common:app.name")}</span>
           </div>
         )}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
           <LanguageSwitcher />
+          {/* Share icons in header are hidden on mobile — duplicated lower in the page. */}
           <Button
             variant="ghost"
             size="icon"
             onClick={handleCopyLink}
-            className="text-muted-foreground hover:text-white"
+            className="hidden sm:inline-flex text-muted-foreground hover:text-white"
             data-testid="button-copy-link"
             title={t("common:actions.copyLink")}
           >
@@ -205,7 +206,7 @@ export default function JobDetailPage() {
             variant="ghost"
             size="icon"
             onClick={handleWhatsAppShare}
-            className="text-muted-foreground hover:text-green-500"
+            className="hidden sm:inline-flex text-muted-foreground hover:text-green-500"
             data-testid="button-share-whatsapp"
             title={t("common:actions.shareWhatsApp")}
           >
@@ -214,31 +215,32 @@ export default function JobDetailPage() {
           {isLoggedIn ? (
             !applied ? (
               <Button
-                className="bg-primary text-primary-foreground font-bold h-9 px-5 text-sm"
+                className="bg-primary text-primary-foreground font-bold h-9 px-3 sm:px-5 text-xs sm:text-sm"
                 onClick={handleApplyClick}
                 data-testid="button-apply-header"
               >
                 {t("apply:cta.applyHeader")}
               </Button>
             ) : (
-              <Button variant="outline" disabled className="border-emerald-500/40 text-emerald-500 bg-emerald-500/10 font-bold h-9 px-5 text-sm">
+              <Button variant="outline" disabled className="border-emerald-500/40 text-emerald-500 bg-emerald-500/10 font-bold h-9 px-3 sm:px-5 text-xs sm:text-sm">
                 <CheckCircle2 className="me-1.5 h-3.5 w-3.5" /> {t("apply:cta.applied")}
               </Button>
             )
           ) : (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1 sm:gap-1.5">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setLocation("/auth")}
-                className="text-muted-foreground hover:text-white text-sm h-9"
+                className="text-muted-foreground hover:text-white text-xs sm:text-sm h-9 px-2 sm:px-3"
                 data-testid="button-login"
+                title={t("auth:tabs.login", { defaultValue: "Login", ns: "auth" })}
               >
-                <LogIn className="h-3.5 w-3.5 me-1.5" />
-                {t("auth:tabs.login", { defaultValue: "Login", ns: "auth" })}
+                <LogIn className="h-3.5 w-3.5 sm:me-1.5" />
+                <span className="hidden sm:inline">{t("auth:tabs.login", { defaultValue: "Login", ns: "auth" })}</span>
               </Button>
               <Button
-                className="bg-primary text-primary-foreground font-bold h-9 px-5 text-sm"
+                className="bg-primary text-primary-foreground font-bold h-9 px-3 sm:px-5 text-xs sm:text-sm"
                 onClick={handleApplyClick}
                 data-testid="button-apply-header"
               >
@@ -302,7 +304,7 @@ export default function JobDetailPage() {
             })()}
           </div>
 
-          <h1 className="font-display text-3xl lg:text-4xl font-bold text-white leading-tight" data-testid="text-job-title">
+          <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold text-white leading-tight break-words" data-testid="text-job-title">
             <bdi>{displayTitle}</bdi>
           </h1>
           {subtitle && (
