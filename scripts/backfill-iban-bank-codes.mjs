@@ -38,29 +38,35 @@ const url = DB_URL.replace("sslmode=require", "sslmode=no-verify");
 const client = new pg.Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
 await client.connect();
 
+// Pull every candidate with a non-null IBAN but a NULL bank code, regardless of
+// formatting; we normalize and resolve in JS so the script can also flag rows
+// the resolver cannot recognise (length mismatch, non-digit characters, or a
+// SARIE prefix that is not yet in the SAUDI_BANKS table).
 const { rows } = await client.query(`
   SELECT id, full_name_en, iban_number
   FROM candidates
   WHERE iban_number IS NOT NULL
     AND iban_bank_code IS NULL
-    AND length(regexp_replace(iban_number, '\\s', '', 'g')) = 24
-    AND regexp_replace(iban_number, '\\s', '', 'g') ~ '^SA[0-9]{22}$'
 `);
-console.log(`Found ${rows.length} candidate(s) with a valid IBAN but NULL bank code.`);
+console.log(`Scanning ${rows.length} candidate(s) with non-null IBAN and NULL bank code.`);
 
 const buckets = new Map(); // code -> { name, count, ids: [] }
-const unmatched = [];
+const malformed = [];      // wrong length / non-digit / wrong prefix
+const unmatched = [];      // valid SA IBAN but unknown SARIE prefix
 for (const r of rows) {
-  const clean = r.iban_number.replace(/\s+/g, "").toUpperCase();
+  const clean = (r.iban_number || "").replace(/\s+/g, "").toUpperCase();
+  if (!clean.startsWith("SA") || clean.length !== 24 || !/^SA\d{22}$/.test(clean)) {
+    malformed.push({ id: r.id, name: r.full_name_en, iban: clean });
+    continue;
+  }
   const code = clean.substring(4, 6);
   const bank = banks[code];
   if (!bank) {
     unmatched.push({ id: r.id, name: r.full_name_en, code, iban: clean });
     continue;
   }
-  const key = code;
-  if (!buckets.has(key)) buckets.set(key, { code, name: bank.name, bankCode: bank.code, count: 0, ids: [] });
-  const b = buckets.get(key);
+  if (!buckets.has(code)) buckets.set(code, { code, name: bank.name, bankCode: bank.code, count: 0, ids: [] });
+  const b = buckets.get(code);
   b.count++;
   b.ids.push(r.id);
 }
@@ -74,6 +80,11 @@ if (unmatched.length > 0) {
   const counts = {};
   for (const u of unmatched) counts[u.code] = (counts[u.code] ?? 0) + 1;
   for (const [code, cnt] of Object.entries(counts)) console.log(`  prefix=${code}  count=${cnt}`);
+}
+if (malformed.length > 0) {
+  console.log(`\nMalformed IBANs (${malformed.length} candidates) — left untouched, please review manually:`);
+  for (const m of malformed.slice(0, 10)) console.log(`  id=${m.id}  iban="${m.iban}"  name="${m.name ?? ""}"`);
+  if (malformed.length > 10) console.log(`  … and ${malformed.length - 10} more`);
 }
 
 if (!APPLY) {

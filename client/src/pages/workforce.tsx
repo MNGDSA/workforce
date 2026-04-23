@@ -1106,15 +1106,16 @@ function EmployeeDetailDialog({
                         <div className="space-y-1">
                           <label className="text-zinc-500 text-xs">{t("dialog.financial.iban")}</label>
                           <Input className="h-8 text-sm bg-zinc-900 border-zinc-700 font-mono uppercase" dir="ltr" value={financialForm.ibanNumber} onChange={e => {
-                            const val = e.target.value.toUpperCase();
-                            const bank = resolveSaudiBank(val);
+                            const cleaned = e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 24);
+                            const grouped = cleaned.replace(/(.{4})/g, "$1 ").trim();
+                            const bank = resolveSaudiBank(cleaned);
                             setFinancialForm(f => ({
                               ...f,
-                              ibanNumber: val,
+                              ibanNumber: grouped,
                               ibanBankName: bank?.ibanBankName ?? "",
                               ibanBankCode: bank?.ibanBankCode ?? "",
                             }));
-                          }} maxLength={24} placeholder={t("dialog.financial.ibanPlaceholder")} data-testid="input-financial-iban" />
+                          }} maxLength={29} placeholder={t("dialog.financial.ibanPlaceholder")} data-testid="input-financial-iban" />
                           <p className="text-[10px] text-zinc-600">{t("dialog.financial.ibanHint")}</p>
                         </div>
                         <div className="grid grid-cols-2 gap-3">

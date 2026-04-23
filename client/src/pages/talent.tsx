@@ -911,9 +911,17 @@ function CandidateProfileSheet({
                   const cleaned = e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 24);
                   setField("ibanNumber", cleaned.replace(/(.{4})/g, "$1 ").trim());
                 }} placeholder={t("profile.ibanPh")} maxLength={29} dir="ltr" className="h-9 bg-muted/30 border-border text-sm font-mono" data-testid="edit-iban" />
-                {form.ibanNumber && !form.ibanNumber.match(/^SA\d{22}$/) && (
-                  <p className="text-[11px] text-amber-400">{t("profile.ibanInvalid")}</p>
-                )}
+                {(() => {
+                  if (!form.ibanNumber) return null;
+                  const result = validateSaudiIban(form.ibanNumber);
+                  if (result.ok) return null;
+                  if (result.reason === "empty") return null;
+                  const msg =
+                    result.reason === "missing_prefix" ? t("toast.invalidIbanPrefixDesc") :
+                    result.reason === "wrong_length"   ? t("toast.invalidIbanLengthDesc", { count: result.length ?? 0 }) :
+                                                          t("toast.invalidIbanCharsDesc");
+                  return <p className="text-[11px] text-amber-400">{msg}</p>;
+                })()}
                 {(() => {
                   const bank = resolveSaudiBank(form.ibanNumber || "");
                   return bank ? (
