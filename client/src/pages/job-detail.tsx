@@ -215,7 +215,7 @@ export default function JobDetailPage() {
           {isLoggedIn ? (
             !applied ? (
               <Button
-                className="bg-primary text-primary-foreground font-bold h-9 px-3 sm:px-5 text-xs sm:text-sm"
+                className="hidden sm:inline-flex bg-primary text-primary-foreground font-bold h-9 px-5 text-sm"
                 onClick={handleApplyClick}
                 data-testid="button-apply-header"
               >
@@ -240,7 +240,7 @@ export default function JobDetailPage() {
                 <span className="hidden sm:inline">{t("auth:tabs.login", { defaultValue: "Login", ns: "auth" })}</span>
               </Button>
               <Button
-                className="bg-primary text-primary-foreground font-bold h-9 px-3 sm:px-5 text-xs sm:text-sm"
+                className="hidden sm:inline-flex bg-primary text-primary-foreground font-bold h-9 px-5 text-sm"
                 onClick={handleApplyClick}
                 data-testid="button-apply-header"
               >
