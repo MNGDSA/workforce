@@ -47,7 +47,7 @@ export type IbanValidationOk = {
 };
 export type IbanValidationFail = {
   ok: false;
-  reason: "missing_prefix" | "wrong_length" | "non_digit";
+  reason: "missing_prefix" | "wrong_length" | "non_digit" | "bad_checksum";
   length?: number;
 };
 export type IbanValidationResult = IbanValidationOk | IbanValidationFail;
@@ -56,11 +56,43 @@ export function canonicalizeIban(input: string): string {
   return (input || "").replace(/\s+/g, "").toUpperCase();
 }
 
+// Standard IBAN mod-97 checksum (ISO 13616). Move the first four characters
+// (country + check digits) to the end, replace letters with their numeric
+// equivalents (A=10..Z=35), then compute mod 97. A valid IBAN yields 1.
+// Expects an already-cleaned, uppercased IBAN. We process in 7-char chunks
+// so the running remainder fits a JS Number — no BigInt needed.
+export function validateIbanChecksum(iban: string): boolean {
+  const clean = canonicalizeIban(iban);
+  if (clean.length < 5) return false;
+  const rearranged = clean.slice(4) + clean.slice(0, 4);
+  let numeric = "";
+  for (const ch of rearranged) {
+    const code = ch.charCodeAt(0);
+    if (code >= 48 && code <= 57) {
+      numeric += ch;
+    } else if (code >= 65 && code <= 90) {
+      numeric += (code - 55).toString();
+    } else {
+      return false;
+    }
+  }
+  let remainder = 0;
+  for (let i = 0; i < numeric.length; i += 7) {
+    const chunk = remainder.toString() + numeric.slice(i, i + 7);
+    remainder = Number(chunk) % 97;
+  }
+  return remainder === 1;
+}
+
 export function validateSaudiIban(input: string): IbanValidationResult {
   const clean = canonicalizeIban(input);
   if (!clean.startsWith("SA")) return { ok: false, reason: "missing_prefix" };
   if (clean.length !== 24) return { ok: false, reason: "wrong_length", length: clean.length };
   if (!/^SA\d{22}$/.test(clean)) return { ok: false, reason: "non_digit" };
+  // Mod-97 catches typos (transposed digits, single-digit slips) that the
+  // format check above will happily pass. Banks reject these at payroll
+  // time; we want to reject them at API time instead.
+  if (!validateIbanChecksum(clean)) return { ok: false, reason: "bad_checksum" };
   const code = clean.substring(4, 6);
   const bank = SAUDI_BANKS[code];
   return {
@@ -89,7 +121,9 @@ export class IbanValidationError extends Error {
         ? "IBAN must start with SA"
         : fail.reason === "wrong_length"
           ? `IBAN must be 24 characters (got ${fail.length ?? 0})`
-          : "IBAN must contain only digits after SA",
+          : fail.reason === "non_digit"
+            ? "IBAN must contain only digits after SA"
+            : "IBAN failed bank checksum check (likely a typo)",
     );
     this.name = "IbanValidationError";
     this.reason = fail.reason;

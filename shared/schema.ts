@@ -712,9 +712,29 @@ export const insertUserSchema = createInsertSchema(users).omit({
 });
 
 // Task #120 — refuse malformed IBANs at the API boundary so non-browser
-// callers (curl, mobile imports) cannot persist garbage. Format-only:
-// SA + 22 digits, whitespace tolerated. The storage layer additionally
-// canonicalises and auto-fills bank name/code via server/lib/iban.ts.
+// callers (curl, mobile imports) cannot persist garbage. Format check
+// (SA + 22 digits, whitespace tolerated) plus the bank's own mod-97
+// checksum (Task #123) so a typo that swaps two digits is rejected at
+// API time instead of bouncing later from the bank. The storage layer
+// additionally canonicalises and auto-fills bank name/code via
+// server/lib/iban.ts.
+function ibanMod97(clean: string): boolean {
+  if (clean.length < 5) return false;
+  const rearranged = clean.slice(4) + clean.slice(0, 4);
+  let numeric = "";
+  for (const ch of rearranged) {
+    const code = ch.charCodeAt(0);
+    if (code >= 48 && code <= 57) numeric += ch;
+    else if (code >= 65 && code <= 90) numeric += (code - 55).toString();
+    else return false;
+  }
+  let remainder = 0;
+  for (let i = 0; i < numeric.length; i += 7) {
+    remainder = Number(remainder.toString() + numeric.slice(i, i + 7)) % 97;
+  }
+  return remainder === 1;
+}
+
 const ibanFormatSchema = z
   .string()
   .nullable()
@@ -727,6 +747,16 @@ const ibanFormatSchema = z
       return /^SA\d{22}$/.test(clean);
     },
     { message: "Invalid IBAN: must start with SA followed by 22 digits" },
+  )
+  .refine(
+    (v) => {
+      if (v === null || v === undefined) return true;
+      const clean = v.replace(/\s+/g, "").toUpperCase();
+      if (clean === "") return true;
+      if (!/^SA\d{22}$/.test(clean)) return true; // first refine reports format
+      return ibanMod97(clean);
+    },
+    { message: "Invalid IBAN: failed bank checksum check (likely a typo)" },
   );
 
 export const insertCandidateSchema = createInsertSchema(candidates).omit({

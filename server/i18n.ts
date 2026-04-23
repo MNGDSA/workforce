@@ -355,6 +355,7 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "iban.missing_prefix"                 : "Invalid IBAN: must start with SA",
     "iban.wrong_length"                   : "Invalid IBAN: must be 24 characters (SA + 22 digits)",
     "iban.non_digit"                      : "Invalid IBAN: must contain only digits after SA",
+    "iban.bad_checksum"                   : "Invalid IBAN: failed bank checksum check. Please check for a typo.",
 
     // Final hardcoded message cleanup (Task #61)
     "common.jobIdRequired"                : "jobId is required",
@@ -717,6 +718,7 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "iban.missing_prefix"                 : "آيبان غير صالح: يجب أن يبدأ بـ SA",
     "iban.wrong_length"                   : "آيبان غير صالح: يجب أن يتكون من 24 حرفًا (SA + 22 رقمًا)",
     "iban.non_digit"                      : "آيبان غير صالح: يجب أن يحتوي على أرقام فقط بعد SA",
+    "iban.bad_checksum"                   : "آيبان غير صالح: فشل في التحقق من خانة المراجعة البنكية. يرجى التأكد من عدم وجود خطأ مطبعي.",
 
     // Final hardcoded message cleanup (Task #61)
     "common.jobIdRequired"                : "معرّف الوظيفة (jobId) مطلوب",
