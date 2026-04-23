@@ -1,0 +1,25 @@
+Apr 23 19:51:09  TypeError: xc.partial is not a function
+Apr 23 19:51:09      at /workspace/dist/index.cjs:359:34007
+Apr 23 19:51:09      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Apr 23 19:51:09  7:51:09 PM [express] PATCH /api/candidates/71c7625e-a0a2-4ef0-a9cd-27f24d667c94 500 in 8ms
+Apr 23 19:51:09  [SMS Sender] HTTP 200 — raw response: {"status":"Success","statuscode":200,"statustext":"OK","messageack":{"guids":[{"guid":"kq4nm510951481f140a006o971TANAQOLHBD","submitdate":"2026-04-23 22:51:09","id":"1776973869303"}]}}
+Apr 23 19:51:09  [OTP] Sent to 05••••8102, expires 2026-04-23T19:56:09.294Z
+Apr 23 19:51:09  7:51:09 PM [express] POST /api/auth/otp/request 200 in 284ms
+Apr 23 19:51:10  7:51:10 PM [express] GET /api/settings/public 200 in 5ms
+Apr 23 19:51:11  TypeError: xc.partial is not a function
+Apr 23 19:51:11      at /workspace/dist/index.cjs:359:34007
+Apr 23 19:51:11      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Apr 23 19:51:11  7:51:11 PM [express] PATCH /api/candidates/32bfa080-b8ee-4c8d-a408-9dbfc127a743 500 in 10ms
+Apr 23 19:51:12  7:51:12 PM [express] POST /api/auth/otp/verify 200 in 8ms
+Apr 23 19:51:13  7:51:13 PM [express] GET /api/health 200 in 3ms
+Apr 23 19:51:14  7:51:14 PM [express] GET /api/workforce/all-by-candidate/88bfc0e2-06ad-42d8-ab4a-2582047eb78d 304 in 9ms
+Apr 23 19:51:14  7:51:14 PM [express] GET /api/workforce/by-candidate/88bfc0e2-06ad-42d8-ab4a-2582047eb78d 304 in 11ms
+Apr 23 19:51:16  7:51:16 PM [express] GET /api/me 200 in 11ms
+Apr 23 19:51:17  TypeError: xc.partial is not a function
+Apr 23 19:51:17      at /workspace/dist/index.cjs:359:34007
+Apr 23 19:51:17      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+Apr 23 19:51:17  7:51:17 PM [express] PATCH /api/candidates/ad13f661-66ad-4a99-93fb-8d10cdfead85 500 in 10ms
+Apr 23 19:51:17  7:51:17 PM [express] GET /api/health 200 in 3ms
+Apr 23 19:51:17  7:51:17 PM [express] GET /api/jobs/fc0f7238-bcee-4b11-8da0-e75149bcefea 304 in 4ms
+Apr 23 19:51:17  7:51:17 PM [express] GET /api/applications 304 in 11ms
+Apr 23 19:51:18  TypeError: xc.partial is not a function

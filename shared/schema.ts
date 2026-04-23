@@ -814,7 +814,13 @@ const ibanHolderNameSchema = z
     },
   );
 
-export const insertCandidateSchema = createInsertSchema(candidates).omit({
+// Base candidate-insert schema as a pure ZodObject so callers can still
+// use ZodObject-only methods like `.partial()` (used by PATCH routes).
+// The cross-field "same-value" defences live in `insertCandidateSchema`
+// below as a `superRefine`, which would otherwise turn this into a
+// ZodEffects and break `.partial()` at runtime — the cause of the
+// `xc.partial is not a function` 500 from PATCH /api/candidates/:id.
+export const candidateBaseSchema = createInsertSchema(candidates).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -829,7 +835,9 @@ export const insertCandidateSchema = createInsertSchema(candidates).omit({
   // the DB. Required (notNull on the column) so we keep the .pipe() chain
   // tight: outer .string() rejects undefined, sanitiser handles content.
   fullNameEn: fullNameEnSchema,
-}).superRefine((d, ctx) => {
+});
+
+export const insertCandidateSchema = candidateBaseSchema.superRefine((d, ctx) => {
   // Snapchat-pollution defence — Snapchat's in-app browser autofills the
   // same phone into both the personal-phone and emergency-phone tel
   // inputs. We surface a hard validation error so the caller has to fix

@@ -16,7 +16,7 @@ import {
   applyServerIbanFields,
   IbanValidationError,
 } from "../lib/iban";
-import { insertCandidateSchema } from "../../shared/schema";
+import { insertCandidateSchema, candidateBaseSchema } from "../../shared/schema";
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 // Real-world bank prefixes drawn from SAMA's SARIE registry. Check digits
@@ -237,7 +237,7 @@ describe("applyServerIbanFields", () => {
 
 // ── insertCandidateSchema Zod refine ────────────────────────────────────────
 describe("insertCandidateSchema IBAN refine", () => {
-  const partial = insertCandidateSchema.partial();
+  const partial = candidateBaseSchema.partial();
 
   it("accepts a valid IBAN on .partial()", () => {
     const r = partial.safeParse({ ibanNumber: IBAN_RAJHI });

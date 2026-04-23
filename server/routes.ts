@@ -23,6 +23,7 @@ import { getAuthenticatedUser, listUserRepos, getRepo, listRepoIssues, listRepoP
 import {
   inboxItems,
   insertCandidateSchema,
+  candidateBaseSchema,
   insertEventSchema,
   insertJobPostingSchema,
   insertApplicationSchema,
@@ -1888,7 +1889,7 @@ export async function registerRoutes(
         }
       }
 
-      const data = insertCandidateSchema.partial().parse(req.body);
+      const data = candidateBaseSchema.partial().parse(req.body);
 
       // Task #133 — canonical write-time IBAN gate (see POST handler
       // above). When ibanNumber is part of the patch the helper
@@ -3925,7 +3926,7 @@ export async function registerRoutes(
         if (key in filtered && filtered[key] === "") filtered[key] = null;
       }
 
-      const data = insertCandidateSchema.partial().parse(filtered);
+      const data = candidateBaseSchema.partial().parse(filtered);
 
       // Task #133 — canonical write-time IBAN gate on the workforce
       // candidate-profile patch path. Same helper as the candidate
