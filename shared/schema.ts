@@ -711,6 +711,24 @@ export const insertUserSchema = createInsertSchema(users).omit({
   phone: optionalSaPhoneSchema,
 });
 
+// Task #120 — refuse malformed IBANs at the API boundary so non-browser
+// callers (curl, mobile imports) cannot persist garbage. Format-only:
+// SA + 22 digits, whitespace tolerated. The storage layer additionally
+// canonicalises and auto-fills bank name/code via server/lib/iban.ts.
+const ibanFormatSchema = z
+  .string()
+  .nullable()
+  .optional()
+  .refine(
+    (v) => {
+      if (v === null || v === undefined) return true;
+      const clean = v.replace(/\s+/g, "").toUpperCase();
+      if (clean === "") return true;
+      return /^SA\d{22}$/.test(clean);
+    },
+    { message: "Invalid IBAN: must start with SA followed by 22 digits" },
+  );
+
 export const insertCandidateSchema = createInsertSchema(candidates).omit({
   id: true,
   createdAt: true,
@@ -718,6 +736,7 @@ export const insertCandidateSchema = createInsertSchema(candidates).omit({
 }).extend({
   phone: optionalSaPhoneSchema,
   emergencyContactPhone: optionalContactPhoneSchema,
+  ibanNumber: ibanFormatSchema,
 });
 
 export const insertEventSchema = createInsertSchema(events).omit({

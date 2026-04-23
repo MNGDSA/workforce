@@ -351,6 +351,10 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "doc.label.nationalId"                : "National ID / Iqama",
     "doc.label.iban"                      : "IBAN Certificate",
     "doc.label.document"                  : "document",
+    // Task #120 — server-side IBAN validation
+    "iban.missing_prefix"                 : "Invalid IBAN: must start with SA",
+    "iban.wrong_length"                   : "Invalid IBAN: must be 24 characters (SA + 22 digits)",
+    "iban.non_digit"                      : "Invalid IBAN: must contain only digits after SA",
 
     // Final hardcoded message cleanup (Task #61)
     "common.jobIdRequired"                : "jobId is required",
@@ -709,6 +713,10 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "doc.label.nationalId"                : "بطاقة الهوية / الإقامة",
     "doc.label.iban"                      : "شهادة الآيبان",
     "doc.label.document"                  : "المستند",
+    // Task #120 — server-side IBAN validation
+    "iban.missing_prefix"                 : "آيبان غير صالح: يجب أن يبدأ بـ SA",
+    "iban.wrong_length"                   : "آيبان غير صالح: يجب أن يتكون من 24 حرفًا (SA + 22 رقمًا)",
+    "iban.non_digit"                      : "آيبان غير صالح: يجب أن يحتوي على أرقام فقط بعد SA",
 
     // Final hardcoded message cleanup (Task #61)
     "common.jobIdRequired"                : "معرّف الوظيفة (jobId) مطلوب",

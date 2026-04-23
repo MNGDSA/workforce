@@ -72,6 +72,7 @@ import XLSX from "xlsx";
 import { signAuthToken, verifyAuthToken } from "./auth-token";
 // Task #85 — canonical mobile error codes + HMAC submission tokens.
 import { MobileErrorCodes, mobileError } from "./lib/mobile-error-codes";
+import { IbanValidationError } from "./lib/iban";
 import {
   issueSubmissionToken,
   verifySubmissionToken,
@@ -203,6 +204,17 @@ const uploadXlsx = multer({
 
 function handleError(res: Response, err: unknown, req?: Request) {
   console.error(err);
+  // Task #120 — IBAN format failures bubble out of the storage layer
+  // (last-line-of-defence canonicalisation). Surface them as 400 with
+  // the same shape as our other validation responses so the Android
+  // client and bulk importers behave consistently.
+  if (err instanceof IbanValidationError) {
+    return res.status(400).json({
+      code: MobileErrorCodes.VALIDATION_FAILED,
+      message: req ? tr(req, `iban.${err.reason}`) : err.message,
+      errors: [{ path: ["ibanNumber"], message: err.message, reason: err.reason }],
+    });
+  }
   if (err instanceof z.ZodError) {
     // Task #85: every error response on a mobile-consumed route must
     // include a stable `code` field so the Android client can route
