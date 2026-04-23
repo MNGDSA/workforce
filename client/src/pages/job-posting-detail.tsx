@@ -246,7 +246,7 @@ export default function JobPostingDetailPage() {
             className="text-muted-foreground hover:text-white gap-1.5"
             data-testid="button-back-to-jobs"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
             {t("jobPosting:detail.backToJobs")}
           </Button>
           <div className="flex-1" />
