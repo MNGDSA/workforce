@@ -47,6 +47,8 @@
     "applied": "تم التقديم",
     "appSubmitted": "تم إرسال طلبك",
     "appSubmittedDesc": "سنراجع طلبك وسنتواصل معك في حال اختيارك.",
+    "profileIncompleteTitle": "يرجى إكمال ملفك الشخصي أولاً",
+    "profileIncompleteDesc": "يرجى إكمال إعداد ملفك الشخصي قبل التقديم على الوظائف.",
     "submitDescription": "أرسل طلبك — لن يستغرق سوى دقيقة.",
     "signupDescription": "أنشئ حساباً وتقدّم — لن يستغرق سوى دقيقة."
   },

@@ -63,6 +63,9 @@ export default function JobDetailPage() {
   const candidateId: string | undefined = (() => {
     try { return JSON.parse(localStorage.getItem("workforce_candidate") || "{}").id; } catch { return undefined; }
   })();
+  const profileCompleted: boolean = (() => {
+    try { return JSON.parse(localStorage.getItem("workforce_candidate") || "{}").profileCompleted === true; } catch { return false; }
+  })();
 
   const isLoggedIn = !!candidateId;
 
@@ -98,11 +101,20 @@ export default function JobDetailPage() {
   }
 
   function handleApplyClick() {
-    if (isLoggedIn) {
-      setApplyOpen(true);
-    } else {
+    if (!isLoggedIn) {
       setLocation(`/auth?tab=signup&returnTo=${encodeURIComponent(`/jobs/${params.id}`)}`);
+      return;
     }
+    if (!profileCompleted) {
+      toast({
+        title: t("apply:cta.profileIncompleteTitle"),
+        description: t("apply:cta.profileIncompleteDesc"),
+        variant: "destructive",
+      });
+      setLocation("/candidate-portal");
+      return;
+    }
+    setApplyOpen(true);
   }
 
   function typeLabel(type: string) {

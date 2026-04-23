@@ -192,6 +192,7 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     // Application / job
     "job.notFoundOrArchived":           "Job not found or already archived",
     "application.ownOnly":              "You can only apply on your own behalf.",
+    "application.profileIncomplete":    "Please complete your profile before applying for jobs.",
     "application.notFound":             "Application not found",
     "onboarding.alreadyExists":         "Candidate is already in onboarding",
 
@@ -549,6 +550,7 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     // Application / job
     "job.notFoundOrArchived":           "الوظيفة غير موجودة أو مؤرشفة بالفعل",
     "application.ownOnly":              "يمكنك التقديم باسمك الشخصي فقط.",
+    "application.profileIncomplete":    "يرجى إكمال ملفك الشخصي قبل التقديم على الوظائف.",
     "application.notFound":             "الطلب غير موجود",
     "onboarding.alreadyExists":         "المرشح موجود في عملية التأهيل بالفعل",
 

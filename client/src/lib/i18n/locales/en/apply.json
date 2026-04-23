@@ -48,7 +48,9 @@
     "appSubmitted": "Application submitted",
     "appSubmittedDesc": "We'll review your application and be in touch.",
     "submitDescription": "Submit your application — it only takes a minute.",
-    "signupDescription": "Create an account and apply — it only takes a minute."
+    "signupDescription": "Create an account and apply — it only takes a minute.",
+    "profileIncompleteTitle": "Complete your profile first",
+    "profileIncompleteDesc": "Please finish setting up your profile before applying for jobs."
   },
   "types": {
     "seasonal_full_time": "Seasonal Full-Time",

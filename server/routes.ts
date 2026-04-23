@@ -3137,6 +3137,18 @@ export async function registerRoutes(
         if (!myCand || !data.candidateId || myCand.id !== data.candidateId) {
           return res.status(403).json({ message: tr(req, "application.ownOnly") });
         }
+        // Hard gate: a candidate may only apply once their profile is complete.
+        // Without this server-side check the only enforcement is the
+        // ProfileSetupGate component, which is trivially bypassed by closing
+        // the browser tab right after registration and navigating directly to
+        // a public job URL. Result was candidates landing in the recruiter's
+        // pipeline with no city / IBAN / emergency contact / etc.
+        if (!(myCand as any).profileCompleted) {
+          return res.status(412).json({
+            message: tr(req, "application.profileIncomplete"),
+            code: "PROFILE_INCOMPLETE",
+          });
+        }
       }
 
 
