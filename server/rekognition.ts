@@ -1,3 +1,5 @@
+import type { FaceDetail } from "@aws-sdk/client-rekognition";
+
 export interface FaceQualityCheck {
   name: string;
   passed: boolean;
@@ -77,10 +79,8 @@ export async function validateFaceQuality(photoPath: string): Promise<FaceQualit
 // Pure evaluator over Rekognition's FaceDetails — extracted from
 // validateFaceQuality so the gating logic (sizes, sharpness, sunglasses,
 // eyes-visible, etc.) can be unit-tested without spinning up an AWS
-// client. Type intentionally `any[]` to avoid pulling the AWS SDK
-// types into the test bundle; the AWS SDK guarantees these field
-// shapes (Confidence, Value, BoundingBox, etc.) at runtime.
-export function evaluateFaceDetails(faces: any[]): FaceQualityResult {
+// client.
+export function evaluateFaceDetails(faces: FaceDetail[]): FaceQualityResult {
   const checks: FaceQualityCheck[] = [];
 
   checks.push({
@@ -121,9 +121,9 @@ export function evaluateFaceDetails(faces: any[]): FaceQualityResult {
     });
 
     const landmarks = face.Landmarks ?? [];
-    const nose = landmarks.find((l: any) => l.Type === "nose");
-    const mouthLeft = landmarks.find((l: any) => l.Type === "mouthLeft");
-    const mouthRight = landmarks.find((l: any) => l.Type === "mouthRight");
+    const nose = landmarks.find((l) => l.Type === "nose");
+    const mouthLeft = landmarks.find((l) => l.Type === "mouthLeft");
+    const mouthRight = landmarks.find((l) => l.Type === "mouthRight");
     const boxBottom = (box?.Top ?? 0) + (box?.Height ?? 0);
     const noseInBox = nose && box ? (nose.Y! <= boxBottom + 0.02) : false;
     const mouthInBox = mouthLeft && mouthRight && box
