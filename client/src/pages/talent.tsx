@@ -118,6 +118,7 @@ import { KSA_REGIONS } from "@shared/schema";
 const statusStyles: Record<string, string> = {
   available: "bg-green-500/10 text-green-500",
   active: "bg-green-500/10 text-green-500",
+  pending_profile: "bg-amber-500/10 text-amber-400",
   inactive: "bg-gray-500/10 text-gray-400",
   archived: "bg-slate-500/10 text-slate-400",
   blocked: "bg-red-500/10 text-red-500",

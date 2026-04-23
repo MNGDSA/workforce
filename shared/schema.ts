@@ -24,6 +24,7 @@ export const candidateStatusEnum = pgEnum("candidate_status", [
   "blocked",
   "hired",
   "awaiting_activation",
+  "pending_profile",
 ]);
 
 // Task #107: Replaces the legacy free-text `candidates.source` column.

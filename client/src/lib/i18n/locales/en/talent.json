@@ -16,6 +16,7 @@
   "statusFilter": {
     "all": "All Status",
     "available": "Available",
+    "pending_profile": "Pending Profile",
     "inactive": "Inactive",
     "hired": "Hired",
     "blocked": "Blocked",
@@ -55,6 +56,8 @@
     "ariaLabel": "Status definitions",
     "active": "Active",
     "activeDesc": "Profile completed, account is live and ready.",
+    "pending_profile": "Pending Profile",
+    "pending_profileDesc": "Self-registered but has not yet finished the profile-setup wizard (city, IBAN, emergency contact). Cannot apply for jobs until completed.",
     "inactive": "Inactive",
     "inactiveDesc": "Account created but profile not yet completed (e.g. bulk-uploaded SMP staff who haven't activated via OTP).",
     "hired": "Hired",

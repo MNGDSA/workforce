@@ -1260,7 +1260,14 @@ export async function registerRoutes(
                 phone: normalizedPhone,
                 nationalId: nationalId.trim(),
                 email: null,
-                status: "available",
+                // New self-signups have not yet completed the post-registration
+                // profile-setup wizard (city, IBAN, emergency contact, etc.).
+                // Mark them pending_profile so they are clearly distinguished
+                // from fully active candidates in the Talent list and so any
+                // status-based filters/exports do not pick them up by mistake.
+                // The PATCH /api/candidates/:id handler flips this back to
+                // 'available' once profileCompleted=true is recorded.
+                status: "pending_profile",
                 country: "SA",
                 userId: createdUser.id,
                 lastLoginAt: nowTs,
@@ -1866,6 +1873,13 @@ export async function registerRoutes(
             message: tr(req, "candidate.profileMissingFields", { fields: missing.join(", ") }),
             missingFields: missing,
           });
+        }
+        // Promote 'pending_profile' candidates to 'available' the moment the
+        // profile-setup wizard succeeds. We deliberately do NOT touch any
+        // other status (inactive, blocked, hired, awaiting_activation), so
+        // admin-set states are preserved.
+        if (existing.status === "pending_profile" && data.status === undefined) {
+          (data as any).status = "available";
         }
       }
 
