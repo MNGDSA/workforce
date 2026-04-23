@@ -2406,10 +2406,18 @@ export async function registerRoutes(
                 fullNameEn: row.fullNameEn || row.name || "",
                 nationalId: row.nationalId || null,
                 phone:      row.phone || null,
+                ibanNumber: row.ibanNumber || row.iban || undefined,
                 classification: "smp",
                 status: "awaiting_activation",
                 profileCompleted: false,
               });
+              // Task #132 — defensive write-time IBAN -> bank resolution.
+              // Today the SMP upload columns rarely include an IBAN, but
+              // a future template change (or a non-browser caller) that
+              // adds one must not be able to persist iban_number without
+              // a matching bank code. Helper is a no-op when ibanNumber
+              // is not part of the parsed payload.
+              applyIbanBankResolution(parsed);
               const newCandidate = await storage.createCandidate(parsed);
               await enqueueIfPhoneOnFile(newCandidate.id);
               try {
@@ -2548,10 +2556,17 @@ export async function registerRoutes(
               fullNameEn: row.fullNameEn || row.name || "",
               nationalId:  row.nationalId || null,
               phone:        row.phone || null,
+              ibanNumber:  row.ibanNumber || row.iban || undefined,
               classification: "smp",
               status: "awaiting_activation",
               profileCompleted: false,
             });
+            // Task #132 — defensive write-time IBAN -> bank resolution
+            // (mirrors the phone-conflict NEW path above and the regular
+            // candidate write endpoints). No-op when the SMP row does not
+            // carry an IBAN, but pins the protection so a future template
+            // change cannot silently land iban_number without bank code.
+            applyIbanBankResolution(parsed);
             const newCandidate = await storage.createCandidate(parsed);
             await enqueueIfPhoneOnFile(newCandidate.id);
             try {
@@ -3884,6 +3899,15 @@ export async function registerRoutes(
       }
 
       const data = insertCandidateSchema.partial().parse(filtered);
+
+      // Task #132 — write-time IBAN -> bank resolution on the workforce
+      // candidate-profile patch path. Without this, an admin editing a
+      // worker's IBAN through the workforce dialog could persist a new
+      // ibanNumber without bank name/code (the exact data-quality drift
+      // task #118 had to clean up). The helper is a no-op when the patch
+      // does not touch ibanNumber. Same call-site shape and rationale
+      // as the candidate write endpoints (see candidate-iban-resolution.test.ts).
+      applyIbanBankResolution(data);
 
       if ("ibanNumber" in filtered) {
         data.hasIban = !!data.ibanNumber;

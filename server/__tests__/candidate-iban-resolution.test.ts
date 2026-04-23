@@ -230,6 +230,37 @@ describe("applyIbanBankResolution — wiring into routes.ts", () => {
     );
     assert.match(block, /applyIbanBankResolution\s*\(/);
   });
+
+  // Task #132 — extend wiring assertions to the remaining endpoints that
+  // also write `ibanNumber`. Without these, a future refactor could drop
+  // the helper from any of these handlers and the regression would only
+  // surface as the same data-quality drift task #118 had to clean up
+  // (rows with iban_number set and bank code NULL).
+
+  it("invokes the helper at the PATCH /api/workforce/:id/candidate-profile handler", () => {
+    const block = sliceBetween(
+      routesSrc,
+      'app.patch("/api/workforce/:id/candidate-profile"',
+      'app.post("/api/workforce/bulk-update"',
+    );
+    assert.match(block, /applyIbanBankResolution\s*\(/);
+  });
+
+  it("invokes the helper at the POST /api/candidates/smp-commit handler (both NEW-row create paths)", () => {
+    const block = sliceBetween(
+      routesSrc,
+      'app.post("/api/candidates/smp-commit",',
+      'app.post("/api/candidates/activation-tokens/reissue"',
+    );
+    // smp-commit has two `storage.createCandidate(parsed)` call sites
+    // (the phone_conflict→transfer branch and the plain NEW branch);
+    // both must be guarded.
+    const matches = block.match(/applyIbanBankResolution\s*\(/g) ?? [];
+    assert.ok(
+      matches.length >= 2,
+      `expected applyIbanBankResolution to be called at least twice in smp-commit, got ${matches.length}`,
+    );
+  });
 });
 
 function sliceBetween(haystack: string, startMarker: string, endMarker: string): string {
