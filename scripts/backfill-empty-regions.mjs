@@ -33,37 +33,62 @@ const url = DB_URL.replace("sslmode=require", "sslmode=no-verify");
 const client = new pg.Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
 await client.connect();
 
-const TABLES = ["job_postings", "smp_companies", "events"];
+// Each entry: { table, columns: [...] }. Task #182 covered the region
+// column on jobs/smp/events; Task #183 extends the same cleanup to the
+// candidate dropdown columns that also leaked empty-string values.
+const TABLE_FIELDS = [
+  { table: "job_postings", columns: ["region"] },
+  { table: "smp_companies", columns: ["region"] },
+  { table: "events", columns: ["region"] },
+  {
+    table: "candidates",
+    columns: [
+      "city",
+      "region",
+      "marital_status",
+      "education_level",
+      "date_of_birth",
+      "current_role",
+      "current_employer",
+      "university",
+      "major",
+      "nationality_text",
+    ],
+  },
+];
 
 let totalAffected = 0;
 try {
-  for (const table of TABLES) {
-    const { rows } = await client.query(
-      `SELECT id, region FROM ${table}
-       WHERE region IS NOT NULL AND btrim(region) = ''`
-    );
-    console.log(`[${table}] blank-region rows: ${rows.length}`);
-    if (rows.length > 0) {
-      for (const r of rows.slice(0, 5)) {
-        console.log(`  - id=${r.id} region=${JSON.stringify(r.region)}`);
-      }
-      if (rows.length > 5) console.log(`  ... (${rows.length - 5} more)`);
-    }
-    totalAffected += rows.length;
-
-    if (APPLY && rows.length > 0) {
-      const res = await client.query(
-        `UPDATE ${table} SET region = NULL
-         WHERE region IS NOT NULL AND btrim(region) = ''`
+  for (const { table, columns } of TABLE_FIELDS) {
+    for (const col of columns) {
+      const { rows } = await client.query(
+        `SELECT id, ${col} FROM ${table}
+         WHERE ${col} IS NOT NULL AND btrim(${col}) = ''`
       );
-      console.log(`[${table}] updated ${res.rowCount} row(s).`);
+      console.log(`[${table}.${col}] blank rows: ${rows.length}`);
+      if (rows.length > 0) {
+        for (const r of rows.slice(0, 5)) {
+          console.log(`  - id=${r.id} ${col}=${JSON.stringify(r[col])}`);
+        }
+        if (rows.length > 5) console.log(`  ... (${rows.length - 5} more)`);
+      }
+      totalAffected += rows.length;
+
+      if (APPLY && rows.length > 0) {
+        const res = await client.query(
+          `UPDATE ${table} SET ${col} = NULL
+           WHERE ${col} IS NOT NULL AND btrim(${col}) = ''`
+        );
+        console.log(`[${table}.${col}] updated ${res.rowCount} row(s).`);
+      }
     }
   }
 
+  const totalCols = TABLE_FIELDS.reduce((s, t) => s + t.columns.length, 0);
   console.log("");
   console.log(APPLY
-    ? `Done. Cleaned ${totalAffected} row(s) across ${TABLES.length} table(s).`
-    : `Dry-run complete. ${totalAffected} row(s) would be updated. Re-run with --apply to write.`);
+    ? `Done. Cleaned ${totalAffected} row(s) across ${totalCols} column(s).`
+    : `Dry-run complete. ${totalAffected} row(s) would be updated across ${totalCols} column(s). Re-run with --apply to write.`);
 } finally {
   await client.end();
 }

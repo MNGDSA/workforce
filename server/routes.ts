@@ -243,16 +243,36 @@ const uploadXlsx = multer({
 // value and hides the location fallback. Applied to job postings, SMP
 // companies, and events on POST and PATCH so the form-driven write
 // paths can never persist `region: ""` again.
-function normalizeBlankRegion<T>(body: T): T {
-  if (body !== null && typeof body === "object" && "region" in body) {
-    const target = body as { region?: unknown };
-    const v = target.region;
-    if (typeof v === "string" && v.trim() === "") {
-      target.region = null;
+function normalizeBlankFields<T>(body: T, fields: readonly string[]): T {
+  if (body === null || typeof body !== "object") return body;
+  const target = body as Record<string, unknown>;
+  for (const f of fields) {
+    if (f in target) {
+      const v = target[f];
+      if (typeof v === "string" && v.trim() === "") {
+        target[f] = null;
+      }
     }
   }
   return body;
 }
+
+const REGION_FIELDS = ["region"] as const;
+
+const CANDIDATE_BLANK_FIELDS = [
+  "city",
+  "region",
+  "maritalStatus",
+  "educationLevel",
+  "dateOfBirth",
+  "nationality",
+  "gender",
+  "currentRole",
+  "currentEmployer",
+  "university",
+  "major",
+  "nationalityText",
+] as const;
 
 function handleError(res: Response, err: unknown, req?: Request) {
   console.error(err);
@@ -1802,7 +1822,7 @@ export async function registerRoutes(
 
   app.post("/api/candidates", requirePermission("candidates:create"), async (req: Request, res: Response) => {
     try {
-      const data = insertCandidateSchema.parse(req.body);
+      const data = insertCandidateSchema.parse(normalizeBlankFields({ ...req.body }, CANDIDATE_BLANK_FIELDS));
       // Task #133 — canonical write-time IBAN gate. Validates checksum
       // (throws IbanValidationError → 400 via handleError),
       // canonicalises the IBAN, fills bank name/code from the SARIE
@@ -1857,7 +1877,7 @@ export async function registerRoutes(
         }
       }
 
-      const data = candidateBaseSchema.partial().parse(req.body);
+      const data = candidateBaseSchema.partial().parse(normalizeBlankFields({ ...req.body }, CANDIDATE_BLANK_FIELDS));
 
       // Task #133 — canonical write-time IBAN gate (see POST handler
       // above). When ibanNumber is part of the patch the helper
@@ -2052,7 +2072,9 @@ export async function registerRoutes(
       const validated: any[] = [];
       for (let i = 0; i < rawCandidates.length; i++) {
         try {
-          const parsed = insertCandidateSchema.parse(rawCandidates[i]);
+          const parsed = insertCandidateSchema.parse(
+            normalizeBlankFields({ ...(rawCandidates[i] as Record<string, unknown>) }, CANDIDATE_BLANK_FIELDS),
+          );
           // Task #133 — canonical write-time IBAN gate (see POST handler).
           // A malformed IBAN throws IbanValidationError which the catch
           // block below records as a per-row validation error so the
@@ -2940,7 +2962,7 @@ export async function registerRoutes(
 
   app.post("/api/events", requirePermission("events:create"), async (req: Request, res: Response) => {
     try {
-      const data = insertEventSchema.parse(normalizeBlankRegion({ ...req.body }));
+      const data = insertEventSchema.parse(normalizeBlankFields({ ...req.body }, REGION_FIELDS));
       const evt = await storage.createEvent(data);
       storage.createAdminAlert(
         "New event created",
@@ -2955,7 +2977,7 @@ export async function registerRoutes(
 
   app.patch("/api/events/:id", requirePermission("events:update"), async (req: Request, res: Response) => {
     try {
-      const data = insertEventSchema.partial().parse(normalizeBlankRegion({ ...req.body }));
+      const data = insertEventSchema.partial().parse(normalizeBlankFields({ ...req.body }, REGION_FIELDS));
       const evt = await storage.updateEvent(req.params.id, data);
       if (!evt) return res.status(404).json({ message: tr(req, "event.notFound") });
       return res.json(evt);
@@ -3082,7 +3104,7 @@ export async function registerRoutes(
 
   app.post("/api/jobs", requirePermission("jobs:create"), async (req: Request, res: Response) => {
     try {
-      const body = normalizeBlankRegion({ ...req.body });
+      const body = normalizeBlankFields({ ...req.body }, REGION_FIELDS);
       if (typeof body.salaryMin === "number") body.salaryMin = String(body.salaryMin);
       if (typeof body.salaryMax === "number") body.salaryMax = String(body.salaryMax);
       const data = insertJobPostingSchema.parse(body);
@@ -3095,7 +3117,7 @@ export async function registerRoutes(
 
   app.patch("/api/jobs/:id", requirePermission("jobs:update"), async (req: Request, res: Response) => {
     try {
-      const body = normalizeBlankRegion({ ...req.body });
+      const body = normalizeBlankFields({ ...req.body }, REGION_FIELDS);
       if (typeof body.salaryMin === "number") body.salaryMin = String(body.salaryMin);
       if (typeof body.salaryMax === "number") body.salaryMax = String(body.salaryMax);
       const data = insertJobPostingSchema.partial().parse(body);
@@ -5022,7 +5044,7 @@ export async function registerRoutes(
 
   app.post("/api/smp-companies", requirePermission("smp:create"), async (req: Request, res: Response) => {
     try {
-      const data = insertSMPCompanySchema.parse(normalizeBlankRegion({ ...req.body }));
+      const data = insertSMPCompanySchema.parse(normalizeBlankFields({ ...req.body }, REGION_FIELDS));
       const company = await storage.createSMPCompany(data);
       await logAudit(req, {
         action: "smp_company.created",
@@ -5038,7 +5060,7 @@ export async function registerRoutes(
 
   app.patch("/api/smp-companies/:id", requirePermission("smp:update"), async (req: Request, res: Response) => {
     try {
-      const data = insertSMPCompanySchema.partial().parse(normalizeBlankRegion({ ...req.body }));
+      const data = insertSMPCompanySchema.partial().parse(normalizeBlankFields({ ...req.body }, REGION_FIELDS));
       const company = await storage.updateSMPCompany(req.params.id, data);
       if (!company) return res.status(404).json({ message: tr(req, "company.notFound") });
       return res.json(company);
