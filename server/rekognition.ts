@@ -35,8 +35,11 @@ export interface FaceQualityResult {
 // the caller will have already run DetectFaces on rotated copies.
 //
 // Decision rules, in order:
-//   1. If the +90° (CW) copy passes evaluateFaceDetails → use it.
-//   2. Else if the -90° (CCW) copy passes → use it.
+//   1. If both +90° and -90° pass evaluateFaceDetails → keep the
+//      orientation Rekognition is more confident about (the highest
+//      face Confidence). Ties break to +90° (CW) since that matches
+//      the most common phone-EXIF failure mode.
+//   2. Else if only one passes → use that one.
 //   3. Else if either rotated copy at least *found* a face (even
 //      one that fails quality), the photo is almost certainly
 //      sideways. Keep rotation=0 (so the caller doesn't overwrite
@@ -50,16 +53,40 @@ export interface RotationDecision {
   suggestRotateTip: boolean;
 }
 
+// Highest face Confidence in a list. evaluateFaceDetails only
+// passes when there's exactly one face, so in the common pass-pass
+// tie-break case this reduces to faces[0].Confidence.
+function topConfidence(faces: FaceDetail[]): number {
+  let best = 0;
+  for (const f of faces) {
+    const c = f.Confidence ?? 0;
+    if (c > best) best = c;
+  }
+  return best;
+}
+
 export function decideRotationOutcome(
   originalFaces: FaceDetail[],
   rotatedCwFaces: FaceDetail[],
   rotatedCcwFaces: FaceDetail[],
 ): RotationDecision {
   const cw = evaluateFaceDetails(rotatedCwFaces);
+  const ccw = evaluateFaceDetails(rotatedCcwFaces);
+
+  // Both rotations pass — keep the more confident face. CW wins
+  // ties because it's the more common phone failure mode, so
+  // log volume stays predictable.
+  if (cw.passed && ccw.passed) {
+    const cwScore = topConfidence(rotatedCwFaces);
+    const ccwScore = topConfidence(rotatedCcwFaces);
+    if (ccwScore > cwScore) {
+      return { rotation: -90, faces: rotatedCcwFaces, suggestRotateTip: false };
+    }
+    return { rotation: 90, faces: rotatedCwFaces, suggestRotateTip: false };
+  }
   if (cw.passed) {
     return { rotation: 90, faces: rotatedCwFaces, suggestRotateTip: false };
   }
-  const ccw = evaluateFaceDetails(rotatedCcwFaces);
   if (ccw.passed) {
     return { rotation: -90, faces: rotatedCcwFaces, suggestRotateTip: false };
   }

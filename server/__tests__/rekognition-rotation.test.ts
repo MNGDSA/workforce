@@ -83,6 +83,26 @@ describe("decideRotationOutcome — orientation picker", () => {
   });
 });
 
+describe("decideRotationOutcome — tie-break when both rotations pass", () => {
+  it("picks the orientation with higher face Confidence", () => {
+    const lowConf = passingFace({ Confidence: 95 });
+    const highConf = passingFace({ Confidence: 99.8 });
+
+    const ccwWins = decideRotationOutcome([], [lowConf], [highConf]);
+    assert.equal(ccwWins.rotation, -90, "CCW had higher confidence so it should win");
+
+    const cwWins = decideRotationOutcome([], [highConf], [lowConf]);
+    assert.equal(cwWins.rotation, 90, "CW had higher confidence so it should win");
+  });
+
+  it("on equal confidence, defaults to CW (+90°)", () => {
+    const cw = passingFace({ Confidence: 99 });
+    const ccw = passingFace({ Confidence: 99 });
+    const decision = decideRotationOutcome([], [cw], [ccw]);
+    assert.equal(decision.rotation, 90, "CW wins ties");
+  });
+});
+
 describe("runRotationRescue — fall-open contract under partial failures", () => {
   const fakeBytes = Buffer.from([0xff, 0xd8, 0xff]);
 
