@@ -2390,10 +2390,7 @@ export default function CandidatePortal() {
                 jobs.map(job => {
                   const applied = appliedIds.has(job.id);
                   const salary = salaryLabel(job, t);
-                  const regionRaw = job.region ?? job.location;
-                  const regionLabel = regionRaw
-                    ? (i18n.exists(`portal:regions.${regionRaw}`) ? t(`portal:regions.${regionRaw}`) : regionRaw)
-                    : null;
+                  const regionLabelText = regionLabel(t, job.region) || job.location || null;
                   return (
                     <Card
                       key={job.id}
@@ -2414,8 +2411,8 @@ export default function CandidatePortal() {
                               )}
                             </div>
                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground" dir={dirAttr}>
-                              {regionLabel && (
-                                <span className="flex items-center gap-1" dir={dirAttr}><MapPin className="h-3.5 w-3.5" />{regionLabel}</span>
+                              {regionLabelText && (
+                                <span className="flex items-center gap-1" dir={dirAttr}><MapPin className="h-3.5 w-3.5" />{regionLabelText}</span>
                               )}
                               {salary && (
                                 <span className="flex items-center gap-1 text-white font-medium" dir={dirAttr}><Banknote className="h-3.5 w-3.5 text-muted-foreground" />{salary}</span>
