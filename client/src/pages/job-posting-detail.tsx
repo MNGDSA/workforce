@@ -7,6 +7,12 @@ import {
   type GenderValue,
   type ExportQuestion,
 } from "./job-posting-detail-export";
+import {
+  filterApplicants,
+  sortApplicants,
+  type SortKey,
+  type SortDir,
+} from "./job-posting-detail-filter-sort";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout";
@@ -119,36 +125,12 @@ function salaryLabel(job: JobPosting, t: TFunction) {
   return null;
 }
 
-// Pipeline order, not alphabetical, so asc/desc maps to recruiter intent.
-const STATUS_ORDER: Record<string, number> = {
-  new: 0,
-  reviewing: 1,
-  shortlisted: 2,
-  interviewed: 3,
-  offered: 4,
-  hired: 5,
-  rejected: 6,
-  withdrawn: 7,
-  closed: 8,
-};
-
-// Female first to match the pink/blue badge pairing.
-const GENDER_ORDER: Record<GenderValue, number> = {
-  female: 0,
-  male: 1,
-  other: 2,
-  prefer_not_to_say: 3,
-};
-
 // Pink = female, blue = male, muted dash for other / null.
 function genderBadgeClass(gender: GenderValue | null | undefined): string {
   if (gender === "female") return "bg-pink-500/10 text-pink-400";
   if (gender === "male")   return "bg-blue-500/10 text-blue-400";
   return "bg-muted text-muted-foreground";
 }
-
-type SortKey = "candidate" | "city" | "sex" | "status" | "applied";
-type SortDir = "asc" | "desc";
 
 function SortableHeader({
   label,
@@ -262,72 +244,9 @@ export default function JobPostingDetailPage() {
     onError: () => toast({ title: t("jobPosting:detail.updateFailed"), variant: "destructive" }),
   });
 
-  // Filter first, then sort. Order matters — sorting a 0-row list is cheap
-  // and the empty-state UI keys off `filteredApps.length`.
-  const filteredApps = applications.filter(a => {
-    const c = candidateMap[a.candidateId];
-    const q = appSearch.trim().toLowerCase();
-    const matchesSearch = !q
-      || c?.fullNameEn?.toLowerCase().includes(q)
-      || c?.nationalId?.includes(q)
-      || c?.phone?.includes(q)
-      || c?.email?.toLowerCase().includes(q);
-    const matchesStatus = statusFilter === "all" || a.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  // One comparator for every column. Using a stable shape (always returning
-  // a signed number) keeps the sort deterministic. Each branch handles its
-  // own missing-value semantics: blanks/nulls always sort to the bottom
-  // regardless of direction so empty rows don't surprise the recruiter.
-  const sortedApps = [...filteredApps].sort((a, b) => {
-    const ca = candidateMap[a.candidateId];
-    const cb = candidateMap[b.candidateId];
-    const dir = sortDir === "asc" ? 1 : -1;
-
-    // "Blank to bottom" helper: returns a non-zero number that places the
-    // empty side after the populated side, ignoring `dir` (so reversing sort
-    // direction doesn't suddenly hide blank rows at the top).
-    const blankCmp = (aBlank: boolean, bBlank: boolean): number | null => {
-      if (aBlank && bBlank) return 0;
-      if (aBlank) return 1;
-      if (bBlank) return -1;
-      return null;
-    };
-
-    switch (sortKey) {
-      case "candidate": {
-        const av = ca?.fullNameEn ?? "";
-        const bv = cb?.fullNameEn ?? "";
-        const blank = blankCmp(!av, !bv);
-        if (blank !== null) return blank;
-        return collator.compare(av, bv) * dir;
-      }
-      case "city": {
-        const av = ca?.city ?? "";
-        const bv = cb?.city ?? "";
-        const blank = blankCmp(!av, !bv);
-        if (blank !== null) return blank;
-        return collator.compare(av, bv) * dir;
-      }
-      case "sex": {
-        const av = ca?.gender;
-        const bv = cb?.gender;
-        const blank = blankCmp(!av, !bv);
-        if (blank !== null) return blank;
-        return ((GENDER_ORDER[av!] ?? 99) - (GENDER_ORDER[bv!] ?? 99)) * dir;
-      }
-      case "status": {
-        return ((STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99)) * dir;
-      }
-      case "applied":
-      default: {
-        const at = a.appliedAt ? new Date(a.appliedAt).getTime() : 0;
-        const bt = b.appliedAt ? new Date(b.appliedAt).getTime() : 0;
-        return (at - bt) * dir;
-      }
-    }
-  });
+  // Filter first, then sort — see job-posting-detail-filter-sort.ts.
+  const filteredApps = filterApplicants(applications, candidateMap, appSearch, statusFilter);
+  const sortedApps = sortApplicants(filteredApps, candidateMap, sortKey, sortDir, collator);
 
   const statusCounts = applications.reduce<Record<string, number>>((acc, a) => {
     acc[a.status] = (acc[a.status] ?? 0) + 1;
