@@ -112,14 +112,24 @@
   * {
     @apply border-border;
   }
-  /* Reserve a permanent gutter for the vertical scrollbar so opening
-     a Radix Select / DropdownMenu / Sheet (which calls
-     react-remove-scroll → `body { overflow: hidden }`) doesn't widen
-     the viewport. Without this, the fixed-position sidebar in RTL
-     (anchored to `inset-inline-start: 0` → right edge) jumps ~17px
-     every time a dropdown opens or closes — the "side menu shake"
-     reported on the candidates page in Arabic. */
+  /* Force the page scrollbar to always be visible AND reserve a
+     permanent gutter for it. Two complementary properties — both
+     are needed:
+       * `overflow-y: scroll` makes the html scrollbar always present
+         (visible track even on short pages) so when Radix opens a
+         Select / DropdownMenu / Sheet — which uses react-remove-scroll
+         to set `body { overflow: hidden }` — the visible scrollbar
+         doesn't blink in and out as the user opens/closes the menu.
+       * `scrollbar-gutter: stable` reserves the gutter space so that
+         the scrollbar appearing/disappearing on browsers that ignore
+         `overflow-y: scroll` for the root element (or when the
+         scrollbar is overlay-style) still doesn't shift the layout.
+     Without either, the fixed-position sidebar in RTL (anchored to
+     `inset-inline-start: 0` → right edge) shifts ~17px every time
+     a dropdown opens — the "side menu shake" reported on the
+     candidates page in Arabic. */
   html {
+    overflow-y: scroll;
     scrollbar-gutter: stable;
   }
   body {
