@@ -1925,7 +1925,7 @@ function ContractSection({
             </div>
           </div>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setIsSignModalOpen(false)} className="border-border">{t("common:cancel")}</Button>
+            <Button variant="outline" onClick={() => setIsSignModalOpen(false)} className="border-border">{t("common:actions.cancel")}</Button>
             <Button
               onClick={() => signContractMutation.mutate()}
               disabled={signContractMutation.isPending}

@@ -904,7 +904,7 @@ export default function AssetsPage() {
           </div>
 
           <DialogFooter className="pt-2">
-            <Button variant="outline" className="rounded-sm" onClick={() => setAssetDialog({ open: false })}>{t("common:cancel")}</Button>
+            <Button variant="outline" className="rounded-sm" onClick={() => setAssetDialog({ open: false })}>{t("common:actions.cancel")}</Button>
             <Button
               className="rounded-sm"
               onClick={submitAsset}
@@ -1022,7 +1022,7 @@ export default function AssetsPage() {
           </div>
 
           <DialogFooter className="pt-2">
-            <Button variant="outline" className="rounded-sm" onClick={() => setAssignDialog(false)}>{t("common:cancel")}</Button>
+            <Button variant="outline" className="rounded-sm" onClick={() => setAssignDialog(false)}>{t("common:actions.cancel")}</Button>
             <Button
               className="rounded-sm"
               onClick={submitAssign}
@@ -1220,7 +1220,7 @@ export default function AssetsPage() {
           </div>
 
           <DialogFooter className="pt-2">
-            <Button variant="outline" className="rounded-sm" onClick={() => setBulkAssignOpen(false)}>{t("common:cancel")}</Button>
+            <Button variant="outline" className="rounded-sm" onClick={() => setBulkAssignOpen(false)}>{t("common:actions.cancel")}</Button>
             <Button
               className="rounded-sm"
               disabled={!bulkAssetId || !bulkAssignDate || bulkSelectedIds.size === 0}
@@ -1253,7 +1253,7 @@ export default function AssetsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-sm">{t("common:cancel")}</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-sm">{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="rounded-sm bg-primary hover:bg-primary/90"
               disabled={bulkAssignMut.isPending}
@@ -1284,7 +1284,7 @@ export default function AssetsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-sm">{t("common:cancel")}</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-sm">{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="rounded-sm bg-destructive hover:bg-destructive/90 text-destructive-foreground"
               onClick={() => deleteAssetId && deleteAsset.mutate(deleteAssetId)}
@@ -1305,7 +1305,7 @@ export default function AssetsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-sm">{t("common:cancel")}</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-sm">{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="rounded-sm bg-destructive hover:bg-destructive/90 text-destructive-foreground"
               onClick={() => deleteAssignId && deleteAssignment.mutate(deleteAssignId)}
@@ -1326,7 +1326,7 @@ export default function AssetsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-sm">{t("common:cancel")}</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-sm">{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="rounded-sm bg-emerald-600 hover:bg-emerald-700 text-white"
               onClick={doMarkReturned}
@@ -1352,7 +1352,7 @@ export default function AssetsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-sm">{t("common:cancel")}</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-sm">{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="rounded-sm bg-destructive hover:bg-destructive/90 text-destructive-foreground"
               onClick={doMarkLost}
@@ -1384,7 +1384,7 @@ export default function AssetsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-sm">{t("common:cancel")}</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-sm">{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className={cn(
                 "rounded-sm",
