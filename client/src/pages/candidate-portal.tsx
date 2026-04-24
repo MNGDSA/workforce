@@ -478,7 +478,7 @@ function ApplyDialog({
           </DialogTitle>
           {job && (
             <DialogDescription className="text-muted-foreground">
-              <bdi>{job.title}</bdi> · {job.region ?? job.location ?? t("portal:apply.ksa")}
+              <bdi>{job.title}</bdi> · {job.region ? t(`common:regionsKsa.${job.region}` as any, job.region) : (job.location ?? t("portal:apply.ksa"))}
             </DialogDescription>
           )}
         </DialogHeader>
@@ -2461,7 +2461,11 @@ export default function CandidatePortal() {
                         <div>
                           <div className="font-bold text-white text-base group-hover:text-primary transition-colors"><bdi>{job.title}</bdi></div>
                           <div className="text-sm text-muted-foreground flex items-center gap-3 mt-1">
-                            {(job.region ?? job.location) && <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{job.region ?? job.location}</span>}
+                            {(() => {
+                              const regionLabel = job.region ? t(`common:regionsKsa.${job.region}` as any, job.region) : "";
+                              const loc = regionLabel || job.location || "";
+                              return loc ? <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{loc}</span> : null;
+                            })()}
                             <span className="flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" />{typeLabel(job.type, t)}</span>
                           </div>
                         </div>

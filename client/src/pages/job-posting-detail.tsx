@@ -553,7 +553,7 @@ export default function JobPostingDetailPage() {
                                 data-testid={`text-applicant-city-${app.id}`}
                               >
                                 {candidate?.city
-                                  ? <bdi>{candidate.city}</bdi>
+                                  ? <bdi>{t(`profileSetup:cities.${candidate.city}` as any, candidate.city)}</bdi>
                                   : <span className="text-muted-foreground/40">—</span>}
                               </td>
                               <td className="px-4 py-3" data-testid={`text-applicant-sex-${app.id}`}>

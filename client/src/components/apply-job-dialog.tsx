@@ -395,7 +395,7 @@ export default function ApplyJobDialog({
           </DialogTitle>
           {job && (
             <DialogDescription className="text-muted-foreground">
-              <bdi>{job.title}</bdi> · <bdi>{job.region ?? job.location ?? "KSA"}</bdi>
+              <bdi>{job.title}</bdi> · <bdi>{job.region ? t(`common:regionsKsa.${job.region}` as any, job.region) : (job.location ?? "KSA")}</bdi>
             </DialogDescription>
           )}
         </DialogHeader>

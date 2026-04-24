@@ -155,7 +155,7 @@ function CreateCompanyDialog({
                   <SelectValue placeholder={t("smpCompanies:create.regionPh")} />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  {KSA_REGIONS.map(r => <SelectItem key={r} value={r} className="text-white"><bdi>{r}</bdi></SelectItem>)}
+                  {KSA_REGIONS.map(r => <SelectItem key={r} value={r} className="text-white"><bdi>{t(`common:regionsKsa.${r}` as any, r)}</bdi></SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -587,7 +587,7 @@ function CompanySheet({
                   {company.crNumber && (
                     <span className="font-mono bg-muted/20 px-1.5 py-0.5 rounded text-[11px]" dir="ltr">{t("smpCompanies:card.crPrefix")} {company.crNumber}</span>
                   )}
-                  {company.region && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> <bdi>{company.region}</bdi></span>}
+                  {company.region && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> <bdi>{t(`common:regionsKsa.${company.region}` as any, company.region)}</bdi></span>}
                   <Badge className={`text-[10px] border-0 ${company.isActive ? "bg-emerald-900/40 text-emerald-400" : "bg-zinc-800 text-zinc-400"}`}>
                     {company.isActive ? t("smpCompanies:sheet.active") : t("smpCompanies:sheet.inactive")}
                   </Badge>
@@ -648,7 +648,7 @@ function CompanySheet({
                         <SelectValue placeholder={t("smpCompanies:create.regionPh")} />
                       </SelectTrigger>
                       <SelectContent className="bg-card border-border">
-                        {KSA_REGIONS.map(r => <SelectItem key={r} value={r} className="text-white"><bdi>{r}</bdi></SelectItem>)}
+                        {KSA_REGIONS.map(r => <SelectItem key={r} value={r} className="text-white"><bdi>{t(`common:regionsKsa.${r}` as any, r)}</bdi></SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -714,7 +714,7 @@ function CompanySheet({
                   <InfoRow icon={<Users className="h-4 w-4" />} label={t("smpCompanies:sheet.labelContactPerson")} value={company.contactPerson || "—"} />
                   <InfoRow icon={<Phone className="h-4 w-4" />} label={t("smpCompanies:sheet.labelPhone")} value={company.contactPhone || "—"} ltr={!!company.contactPhone} />
                   <InfoRow icon={<Mail className="h-4 w-4" />} label={t("smpCompanies:sheet.labelEmail")} value={company.contactEmail || "—"} ltr={!!company.contactEmail} />
-                  <InfoRow icon={<MapPin className="h-4 w-4" />} label={t("smpCompanies:sheet.labelRegion")} value={company.region || "—"} />
+                  <InfoRow icon={<MapPin className="h-4 w-4" />} label={t("smpCompanies:sheet.labelRegion")} value={company.region ? t(`common:regionsKsa.${company.region}` as any, company.region) : "—"} />
                   <InfoRow icon={<Banknote className="h-4 w-4" />} label={t("smpCompanies:sheet.labelBank")} value={company.bankName || "—"} />
                   <InfoRow icon={<Banknote className="h-4 w-4" />} label={t("smpCompanies:sheet.labelIban")} value={company.bankIban || "—"} ltr={!!company.bankIban} />
                 </div>
@@ -926,7 +926,7 @@ function CompanyCard({ company, onClick }: { company: SMPCompany; onClick: () =>
         {company.region && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <MapPin className="h-3.5 w-3.5 shrink-0" />
-            <span><bdi>{company.region}</bdi></span>
+            <span><bdi>{t(`common:regionsKsa.${company.region}` as any, company.region)}</bdi></span>
           </div>
         )}
         {company.bankName && (

@@ -96,7 +96,8 @@ export default function JobDetailPage() {
 
   function handleWhatsAppShare() {
     if (!job) return;
-    const text = `${job.title}${job.region ? ` — ${job.region}` : ""}\n\n${window.location.href}`;
+    const regionLabel = job.region ? t(`common:regionsKsa.${job.region}` as any, job.region) : "";
+    const text = `${job.title}${regionLabel ? ` — ${regionLabel}` : ""}\n\n${window.location.href}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
 

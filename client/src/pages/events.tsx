@@ -466,7 +466,7 @@ function ViewEventDialog({ event, open, onOpenChange }: { event: Event | null; o
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><MapPin className="h-3 w-3" /> {t("events:view.region")}</p>
-              <p className="text-white text-sm"><bdi>{event.region || "—"}</bdi></p>
+              <p className="text-white text-sm"><bdi>{event.region ? t(`common:regionsKsa.${event.region}` as any, event.region) : "—"}</bdi></p>
             </div>
             <div>
               <p className="text-muted-foreground text-xs uppercase tracking-wider font-semibold mb-1">{t("events:view.status")}</p>
@@ -891,7 +891,7 @@ export default function EventsPage() {
                           )}
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          <span className="text-sm text-muted-foreground"><bdi>{evt.region ?? "—"}</bdi></span>
+                          <span className="text-sm text-muted-foreground"><bdi>{evt.region ? t(`common:regionsKsa.${evt.region}` as any, evt.region) : "—"}</bdi></span>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell w-[200px]">
                           <div className="space-y-1.5">
