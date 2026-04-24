@@ -33,6 +33,7 @@ import {
   Loader2,
   AlertCircle,
   X,
+  Printer,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -434,6 +435,519 @@ function buildLayout(
   return { nodes, edges };
 }
 
+/* ── Print-to-PDF ──────────────────────────────────────────────────────
+   Renders the FULL org chart (everything expanded) as a static HTML/SVG
+   document inside a hidden iframe and triggers the browser's native
+   print dialog, where the user can pick "Save as PDF". The page CSS is
+   sized so the entire structure fits on a single A3 landscape sheet
+   regardless of the chart size — admins can then zoom into the PDF
+   without losing fidelity (the text is rendered as real text, not a
+   raster image). No new dependencies; uses pure HTML + inline SVG +
+   window.print(). Arabic renders correctly because the print document
+   re-loads the same Cairo web font we use in the app. */
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+interface PrintLabels {
+  documentTitle: string;
+  generated: string;
+  departments: string;
+  positions: string;
+  employees: string;
+  legendDepartment: string;
+  legendPosition: string;
+  legendUnassigned: string;
+  unassignedLabel: string;
+  employeesShort: string;
+}
+
+function buildPrintHtml(
+  data: OrgChartData,
+  labels: PrintLabels,
+  dir: "rtl" | "ltr",
+  generatedAt: string,
+): string | null {
+  // Force every department + position expanded so the printed copy
+  // shows the entire hierarchy.
+  const allDeptIds = new Set(data.departments.map(d => d.id));
+  const allPosIds = new Set(
+    data.departments.flatMap(d => d.positions.map(p => p.id)),
+  );
+  const { nodes, edges } = buildLayout(
+    data,
+    allDeptIds,
+    allPosIds,
+    null,
+    labels.unassignedLabel,
+  );
+
+  if (nodes.length === 0) return null;
+
+  // Compute bounding box of all nodes.
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const nodeHeights: Record<string, number> = {};
+  for (const n of nodes) {
+    const h = n.type === "department" ? DEPT_NODE_HEIGHT : POS_NODE_HEIGHT;
+    nodeHeights[n.id] = h;
+    minX = Math.min(minX, n.position.x);
+    minY = Math.min(minY, n.position.y);
+    maxX = Math.max(maxX, n.position.x + NODE_WIDTH);
+    maxY = Math.max(maxY, n.position.y + h);
+  }
+  // Pad the bounds so node borders / shadows aren't clipped.
+  const PAD = 24;
+  const contentW = (maxX - minX) + PAD * 2;
+  const contentH = (maxY - minY) + PAD * 2;
+
+  // Render each node as an absolutely-positioned div (translated so the
+  // top-left of the bounding box becomes (PAD, PAD) inside the canvas).
+  const nodeHtml = nodes.map(node => {
+    const left = node.position.x - minX + PAD;
+    const top = node.position.y - minY + PAD;
+    const h = nodeHeights[node.id];
+    const d = node.data as Record<string, unknown>;
+    const baseStyle = `left:${left}px;top:${top}px;width:${NODE_WIDTH}px;height:${h}px`;
+
+    if (node.type === "department") {
+      const label = String(d.label ?? "");
+      const total = Number(d.totalEmployees ?? 0);
+      return `<div class="node node-dept" style="${baseStyle}">
+        <div class="dept-stripe"></div>
+        <div class="node-inner">
+          <div class="node-title"><bdi>${escapeHtml(label)}</bdi></div>
+          <div class="node-meta">${total} ${escapeHtml(labels.employees)}</div>
+        </div>
+      </div>`;
+    }
+    if (node.type === "position") {
+      const label = String(d.label ?? "");
+      const code = String(d.code ?? "");
+      const grade = d.gradeLevel;
+      const count = Number(d.employeeCount ?? 0);
+      const gradeBadge = (grade !== null && grade !== undefined)
+        ? `<span class="badge badge-grade" dir="ltr">G${escapeHtml(String(grade))}</span>`
+        : "";
+      const codeBadge = code
+        ? `<span class="badge badge-code" dir="ltr">${escapeHtml(code)}</span>`
+        : "";
+      const empty = count === 0 ? " node-pos-empty" : "";
+      return `<div class="node node-pos${empty}" style="${baseStyle}">
+        <div class="node-inner">
+          <div class="node-title"><bdi>${escapeHtml(label)}</bdi></div>
+          <div class="node-meta">${gradeBadge}${codeBadge}<span class="badge badge-count">${count} ${escapeHtml(labels.employeesShort)}</span></div>
+        </div>
+      </div>`;
+    }
+    if (node.type === "unassigned") {
+      const label = String(d.label ?? "");
+      const count = Number(d.count ?? 0);
+      return `<div class="node node-un" style="${baseStyle}">
+        <div class="node-inner">
+          <div class="node-title"><bdi>${escapeHtml(label)}</bdi></div>
+          <div class="node-meta"><span class="badge badge-count badge-un">${count}</span></div>
+        </div>
+      </div>`;
+    }
+    return "";
+  }).join("");
+
+  // Render edges as orthogonal SVG paths (source bottom -> mid -> target top).
+  const edgeSvg = edges.map(edge => {
+    const src = nodes.find(n => n.id === edge.source);
+    const tgt = nodes.find(n => n.id === edge.target);
+    if (!src || !tgt) return "";
+    const srcH = nodeHeights[src.id];
+    const x1 = src.position.x - minX + PAD + NODE_WIDTH / 2;
+    const y1 = src.position.y - minY + PAD + srcH;
+    const x2 = tgt.position.x - minX + PAD + NODE_WIDTH / 2;
+    const y2 = tgt.position.y - minY + PAD;
+    const midY = (y1 + y2) / 2;
+    return `<path d="M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}" />`;
+  }).join("");
+
+  const totalDepts = data.departments.length;
+  const totalPositions = data.departments.reduce(
+    (s, dept) => s + dept.positions.length, 0,
+  );
+  const totalEmployees = data.totalEmployees;
+
+  // Print page sizing:
+  //   A3 landscape = 420mm × 297mm.
+  //   With 10mm margins on all sides (set via @page) the printable area is
+  //   400mm × 277mm. We let CSS scale the chart wrapper to fit that area
+  //   while preserving aspect ratio — entire structure on one page,
+  //   admins can zoom in their PDF viewer.
+  // (We keep the wrapper laid out in pixels — same coordinate system
+  //  dagre produced — and rely on `transform: scale()` to fit the page.)
+  return `<!DOCTYPE html>
+<html lang="${dir === "rtl" ? "ar" : "en"}" dir="${dir}">
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtml(labels.documentTitle)}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    @page { size: A3 landscape; margin: 10mm; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Cairo', system-ui, -apple-system, sans-serif;
+      background: #ffffff;
+      color: #0f1419;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .page {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8mm;
+      padding: 4mm;
+    }
+    .page-header {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #d4d8dd;
+      padding-bottom: 4mm;
+    }
+    .page-title {
+      font-size: 18pt;
+      font-weight: 800;
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+    .page-stats {
+      display: flex;
+      gap: 14px;
+      font-size: 9pt;
+      color: #4b5563;
+    }
+    .page-stats strong { color: #0f1419; font-weight: 700; }
+    .legend {
+      display: flex;
+      gap: 14px;
+      font-size: 8pt;
+      color: #4b5563;
+      align-items: center;
+    }
+    .legend-item { display: inline-flex; align-items: center; gap: 5px; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+    .dot-dept { background: #2c8a5f; }
+    .dot-pos { background: #0f1419; }
+    .dot-un { background: #c79a3a; }
+
+    .chart-wrapper {
+      /* We compute the scale at print time via CSS calc using the
+         intrinsic content size and a fixed printable area. Width and
+         height are explicitly sized here so the transform's scale
+         math is predictable. The transform-origin keeps the chart
+         anchored to the start of the wrapper. */
+      width: ${contentW}px;
+      height: ${contentH}px;
+      position: relative;
+      transform-origin: top left;
+    }
+    /* On screen, just show at native size with a scrollable area so the
+       user can sanity-check before printing. */
+    @media screen {
+      body { padding: 16px; }
+      .chart-wrapper {
+        border: 1px solid #e2e6ea;
+        border-radius: 4px;
+        background: #fafbfc;
+      }
+    }
+    /* On print, compute scale-to-fit. We use a wrapper with explicit
+       pixel dimensions and apply the scale via JS after load — avoids
+       any browser inconsistency with calc inside transform. */
+    @media print {
+      .page { padding: 0; gap: 4mm; }
+      .page-header { border-bottom-color: #9ca3af; }
+    }
+
+    .edges {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: visible;
+    }
+    .edges path {
+      stroke: #6b7280;
+      stroke-width: 1.5;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .node {
+      position: absolute;
+      border-radius: 4px;
+      overflow: hidden;
+      background: #ffffff;
+    }
+    .node-inner {
+      padding: 8px 12px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+    }
+    .node-title {
+      font-size: 11pt;
+      font-weight: 700;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .node-meta {
+      font-size: 8pt;
+      color: #4b5563;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .node-dept {
+      border: 1.5px solid #2c8a5f;
+      background: #f0f8f3;
+    }
+    .node-dept .dept-stripe {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      inset-inline-start: 0;
+      width: 4px;
+      background: #2c8a5f;
+    }
+    .node-dept .node-inner { padding-inline-start: 14px; }
+    .node-dept .node-title { color: #0f1419; }
+
+    .node-pos {
+      border: 1px solid #cbd5dc;
+      background: #ffffff;
+    }
+    .node-pos-empty {
+      border-style: dashed;
+      background: #fafbfc;
+    }
+    .node-pos-empty .node-title { color: #6b7280; font-weight: 600; }
+
+    .node-un {
+      border: 1px dashed #c79a3a;
+      background: #fdf6e6;
+    }
+    .node-un .node-title { color: #8a6914; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 7.5pt;
+      font-weight: 700;
+      line-height: 1.4;
+      white-space: nowrap;
+    }
+    .badge-grade { background: #e0f2fb; color: #0c5d8a; border: 1px solid #b8e0f1; }
+    .badge-code { background: transparent; color: #6b7280; font-family: ui-monospace, 'SF Mono', monospace; padding: 1px 0; font-weight: 600; font-size: 7pt; }
+    .badge-count { background: #e7f3ec; color: #1f6e44; border: 1px solid #b9dfc8; }
+    .node-pos-empty .badge-count { background: #f1f3f5; color: #6b7280; border-color: #d4d8dd; }
+    .badge-un { background: #f5e7c4; color: #8a6914; border: 1px solid #e1c98a; }
+
+    .page-footer {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      font-size: 8pt;
+      color: #6b7280;
+      padding-top: 4mm;
+      border-top: 1px solid #e2e6ea;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="page-header">
+      <h1 class="page-title">${escapeHtml(labels.documentTitle)}</h1>
+      <div class="page-stats">
+        <span><strong>${totalDepts}</strong> ${escapeHtml(labels.departments)}</span>
+        <span><strong>${totalPositions}</strong> ${escapeHtml(labels.positions)}</span>
+        <span><strong>${totalEmployees}</strong> ${escapeHtml(labels.employees)}</span>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span class="legend-item"><span class="legend-dot dot-dept"></span>${escapeHtml(labels.legendDepartment)}</span>
+      <span class="legend-item"><span class="legend-dot dot-pos"></span>${escapeHtml(labels.legendPosition)}</span>
+      <span class="legend-item"><span class="legend-dot dot-un"></span>${escapeHtml(labels.legendUnassigned)}</span>
+    </div>
+
+    <div class="chart-wrapper" id="chart-wrapper">
+      <svg class="edges" viewBox="0 0 ${contentW} ${contentH}" preserveAspectRatio="xMidYMid meet">
+        ${edgeSvg}
+      </svg>
+      ${nodeHtml}
+    </div>
+
+    <div class="page-footer">
+      <span>${escapeHtml(labels.generated)} ${escapeHtml(generatedAt)}</span>
+      <span>${escapeHtml(labels.documentTitle)}</span>
+    </div>
+  </div>
+
+  <script>
+    // Scale the chart to fit the printable area. We measure the
+    // available width inside .page (which expands to the page width
+    // minus @page margin) and the available height (page height minus
+    // header / legend / footer / gaps). Then apply a uniform scale so
+    // the whole structure fits on a single page regardless of size.
+    function fitChart() {
+      var wrapper = document.getElementById('chart-wrapper');
+      if (!wrapper) return;
+      var page = wrapper.parentElement;
+      if (!page) return;
+      // Reset before measuring so the wrapper's natural size is used.
+      wrapper.style.transform = '';
+      // Available width = page content width.
+      var pageRect = page.getBoundingClientRect();
+      var availW = pageRect.width;
+      // Available height = page content height - other children's heights - gaps.
+      var usedH = 0;
+      var gap = 0;
+      var styles = window.getComputedStyle(page);
+      gap = parseFloat(styles.rowGap || styles.gap || '0') || 0;
+      var children = page.children;
+      for (var i = 0; i < children.length; i++) {
+        if (children[i] !== wrapper) {
+          usedH += children[i].getBoundingClientRect().height;
+        }
+      }
+      var availH = pageRect.height - usedH - gap * (children.length - 1);
+      var natW = ${contentW};
+      var natH = ${contentH};
+      // Allow upscaling only modestly so a tiny chart isn't blurred up
+      // (it would still be vector — but huge text looks odd). Cap at 3x.
+      var scale = Math.min(availW / natW, availH / natH, 3);
+      if (!isFinite(scale) || scale <= 0) scale = 1;
+      // Center the scaled wrapper within the available width by adjusting
+      // its margin (transform doesn't reflow, so we have to compensate).
+      wrapper.style.transform = 'scale(' + scale + ')';
+      wrapper.style.height = (natH * scale) + 'px';
+      wrapper.style.width = (natW * scale) + 'px';
+      // Re-set the transform origin so scaling is from top-left of the
+      // (now-shrunk) box, keeping the layout predictable.
+      wrapper.style.transformOrigin = 'top ${dir === "rtl" ? "right" : "left"}';
+    }
+    // Fit once fonts are ready (Cairo affects measured heights).
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(fitChart);
+    } else {
+      window.addEventListener('load', fitChart);
+    }
+    window.addEventListener('beforeprint', fitChart);
+    window.addEventListener('resize', fitChart);
+  </script>
+</body>
+</html>`;
+}
+
+interface ExportOptions {
+  data: OrgChartData;
+  labels: PrintLabels;
+  dir: "rtl" | "ltr";
+  onPopupBlocked?: () => void;
+}
+
+function exportOrgChartToPdf({ data, labels, dir, onPopupBlocked }: ExportOptions): void {
+  const generatedAt = new Date().toLocaleString(dir === "rtl" ? "ar-SA" : "en-US");
+  const html = buildPrintHtml(data, labels, dir, generatedAt);
+  if (!html) return;
+
+  // Use a hidden iframe rather than window.open(): bypasses popup
+  // blockers, doesn't disturb the user's tab, and we can reliably
+  // remove it after the print dialog closes.
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.style.opacity = "0";
+  document.body.appendChild(iframe);
+
+  const cleanup = () => {
+    // Defer one tick so Safari has time to resolve print, then remove.
+    window.setTimeout(() => {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    }, 0);
+  };
+
+  const doc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!doc) {
+    cleanup();
+    onPopupBlocked?.();
+    return;
+  }
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  // Wait for the iframe's window to be ready, fonts loaded, and the
+  // chart auto-scaled by the inline script. Then trigger print.
+  const trigger = () => {
+    const win = iframe.contentWindow;
+    if (!win) {
+      cleanup();
+      return;
+    }
+    try {
+      win.focus();
+      win.print();
+    } catch {
+      /* ignore — some browsers throw if user dismisses */
+    }
+    // Most browsers fire `afterprint`; fall back to a timeout cleanup.
+    let cleaned = false;
+    const onAfter = () => {
+      if (cleaned) return;
+      cleaned = true;
+      cleanup();
+    };
+    win.addEventListener("afterprint", onAfter);
+    window.setTimeout(onAfter, 60_000);
+  };
+
+  // Fonts inside the iframe are what govern measured height; the inline
+  // script in the print HTML already waits for `document.fonts.ready`,
+  // so we only need to wait for the iframe to finish initial parsing.
+  if (iframe.contentWindow && iframe.contentDocument?.readyState === "complete") {
+    // Give the inline script a tick to run fitChart() once fonts resolve.
+    window.setTimeout(trigger, 250);
+  } else {
+    iframe.addEventListener("load", () => window.setTimeout(trigger, 250), { once: true });
+  }
+}
+
 function OrgChartCanvas() {
   const { t, i18n } = useTranslation(["orgChart"]);
   const lng = i18n.language;
@@ -501,6 +1015,30 @@ function OrgChartCanvas() {
     if (!data) return { nodes: [], edges: [] };
     return buildLayout(data, expandedDepts, expandedPositions, selectedPosId, unassignedLabel);
   }, [data, expandedDepts, expandedPositions, selectedPosId, unassignedLabel]);
+
+  const handlePrint = useCallback(() => {
+    if (!data || data.departments.length === 0) return;
+    exportOrgChartToPdf({
+      data,
+      dir: i18n.dir(lng) === "rtl" ? "rtl" : "ltr",
+      labels: {
+        documentTitle: t("orgChart:print.documentTitle"),
+        generated: t("orgChart:print.footerGenerated"),
+        departments: t("orgChart:print.footerDepartments"),
+        positions: t("orgChart:print.footerPositions"),
+        employees: t("orgChart:print.footerEmployees"),
+        legendDepartment: t("orgChart:print.legendDepartment"),
+        legendPosition: t("orgChart:print.legendPosition"),
+        legendUnassigned: t("orgChart:print.legendUnassigned"),
+        unassignedLabel,
+        employeesShort: t("orgChart:print.footerEmployees"),
+      },
+      onPopupBlocked: () => {
+        // eslint-disable-next-line no-alert -- intentional fallback when print iframe can't open
+        window.alert(t("orgChart:print.popupBlocked"));
+      },
+    });
+  }, [data, i18n, lng, t, unassignedLabel]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutEdges);
@@ -584,7 +1122,19 @@ function OrgChartCanvas() {
               <div className="w-7 h-7 rounded-sm bg-[hsl(155,45%,45%)]/15 flex items-center justify-center">
                 <Network className="w-4 h-4 text-[hsl(155,45%,55%)]" />
               </div>
-              <h2 className="font-display font-bold text-sm text-white tracking-tight">{t("orgChart:title")}</h2>
+              <h2 className="font-display font-bold text-sm text-white tracking-tight flex-1">{t("orgChart:title")}</h2>
+              <button
+                type="button"
+                onClick={handlePrint}
+                disabled={!data || data.departments.length === 0}
+                title={t("orgChart:print.aria")}
+                aria-label={t("orgChart:print.aria")}
+                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-sm text-[11px] font-semibold bg-[hsl(155,45%,45%)]/15 text-[hsl(155,45%,55%)] border border-[hsl(155,45%,45%)]/25 hover:bg-[hsl(155,45%,45%)]/25 hover:text-white hover:border-[hsl(155,45%,45%)]/45 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[hsl(155,45%,45%)]/15 disabled:hover:text-[hsl(155,45%,55%)]"
+                data-testid="btn-print-org-chart"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>{t("orgChart:print.button")}</span>
+              </button>
             </div>
             <div className="flex items-center gap-4 text-[11px]">
               <div className="flex items-center gap-1.5">
@@ -629,7 +1179,12 @@ export default function OrgChartPage() {
   const { t } = useTranslation(["orgChart"]);
   return (
     <Layout>
-      <div className="h-[calc(100vh-3.5rem)] w-full overflow-hidden" data-testid="page-org-chart">
+      {/* Height accounts for the layout's sticky header (h-16 = 4rem) plus
+          <main>'s vertical padding (p-6 = 3rem total mobile, lg:p-8 = 4rem
+          total desktop). Without subtracting both, the React Flow canvas
+          extends below the viewport and the bottom-anchored Controls /
+          MiniMap get clipped. */}
+      <div className="h-[calc(100vh-7rem)] lg:h-[calc(100vh-8rem)] w-full overflow-hidden" data-testid="page-org-chart">
         <OrgChartCanvas />
       </div>
     </Layout>

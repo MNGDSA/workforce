@@ -18,5 +18,19 @@
     "employeesCount": "{{n}} employees",
     "searchPh": "Search employees...",
     "noMatch": "No matching employees"
+  },
+  "print": {
+    "button": "Print PDF",
+    "aria": "Print the entire organizational chart to PDF",
+    "documentTitle": "Organization Chart",
+    "preparing": "Preparing print view...",
+    "popupBlocked": "Could not open the print view. Please allow popups and try again.",
+    "footerGenerated": "Generated",
+    "footerPositions": "positions",
+    "footerEmployees": "employees",
+    "footerDepartments": "departments",
+    "legendDepartment": "Department",
+    "legendPosition": "Position",
+    "legendUnassigned": "Unassigned"
   }
 }

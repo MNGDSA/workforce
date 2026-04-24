@@ -18,5 +18,19 @@
     "employeesCount": "{{n}} موظف",
     "searchPh": "بحث عن موظفين...",
     "noMatch": "لا يوجد موظفون مطابقون"
+  },
+  "print": {
+    "button": "طباعة PDF",
+    "aria": "طباعة كامل الهيكل التنظيمي بصيغة PDF",
+    "documentTitle": "الهيكل التنظيمي",
+    "preparing": "جارٍ تحضير المعاينة للطباعة...",
+    "popupBlocked": "تعذّر فتح نافذة الطباعة. يُرجى السماح بالنوافذ المنبثقة والمحاولة مجدداً.",
+    "footerGenerated": "أُنشئ في",
+    "footerPositions": "وظيفة",
+    "footerEmployees": "موظف",
+    "footerDepartments": "إدارة",
+    "legendDepartment": "إدارة",
+    "legendPosition": "وظيفة",
+    "legendUnassigned": "غير معيّن"
   }
 }
