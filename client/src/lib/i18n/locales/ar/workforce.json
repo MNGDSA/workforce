@@ -2,7 +2,7 @@
   "page": {
     "title": "إدارة القوى العاملة",
     "subtitle": "إدارة موظفيك وتفاصيلهم.",
-    "broadcast": "بث",
+    "broadcast": "إشعار",
     "massUpdate": "تحديث جماعي",
     "export": "تصدير",
     "exportWithCount": "تصدير ({n})",
