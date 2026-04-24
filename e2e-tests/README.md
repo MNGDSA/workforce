@@ -32,6 +32,29 @@ for (const s of suites) {
 | Super Admin | 1000000001 | password123 |
 | Candidate | 2000000002 | password123 |
 | Candidate (phone) | 0500000002 | password123 |
+| Recruiter | 1000000003 | password123 |
+
+## Seeding the demo accounts
+
+Every suite below signs in with one of the three demo accounts. They are
+**topped up automatically at server boot** in non-production environments
+(`NODE_ENV !== "production"`), so a freshly-checked-out dev DB is good to
+go after the first `npm run dev`. The boot-time top-up is non-destructive:
+it only restores the three demo users and never touches transactional
+tables (candidates, attendance records, photos, etc.).
+
+If you ever need to top them up without restarting the server, run:
+
+```bash
+npx tsx server/seed-demo-accounts.ts
+```
+
+To opt out of the boot-time seed (e.g. when reproducing a customer-facing
+bug), set `SEED_DEMO_ACCOUNTS=false`.
+
+> The full destructive reseed (`npx tsx server/reset.ts`) wipes
+> transactional tables and is **not** required for tests — only use it
+> when you genuinely want a clean slate.
 
 ## Suites
 

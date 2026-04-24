@@ -133,6 +133,24 @@ app.use((req, res, next) => {
     log(`RBAC seed failed: ${err}`, "rbac-seed");
   }
 
+  // Top-up the three e2e demo login accounts (super admin / candidate /
+  // recruiter) in non-production environments. Idempotent and surgical:
+  // never touches transactional tables, so casual test runs no longer have
+  // to invoke the destructive `server/reset.ts`. Production boots skip it
+  // so demo credentials never appear in real deployments. Set
+  // `SEED_DEMO_ACCOUNTS=false` to opt out locally.
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.SEED_DEMO_ACCOUNTS !== "false"
+  ) {
+    try {
+      const { seedDemoAccounts } = await import("./seed-demo-accounts");
+      await seedDemoAccounts(log);
+    } catch (err) {
+      log(`Demo accounts seed failed: ${err}`, "seed-demo");
+    }
+  }
+
   await registerRoutes(httpServer, app);
 
   // Boot-time RBAC linter — logs which /api/* routes are guarded by the
