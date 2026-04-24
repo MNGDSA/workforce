@@ -29,7 +29,9 @@ import {
   WifiOff,
   CheckCircle2,
   AlertCircle,
-  XCircle
+  XCircle,
+  RotateCw,
+  RefreshCw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation, Trans } from "react-i18next";
@@ -604,6 +606,13 @@ export default function SettingsPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Task #166 — admin-visible counter for the rotation rescue
+                that runs on every photo upload. Lets SRE notice if a
+                deploy disables it (rate→0), an iOS update spikes it
+                (cost), or persistence starts failing (rate→0% with
+                attempts climbing). */}
+            <PhotoRotationTelemetryCard />
           </TabsContent>
 
           <TabsContent value="admin-users" className="m-0 animate-in fade-in-50 duration-500">
@@ -638,5 +647,145 @@ export default function SettingsPage() {
         </Tabs>
       </div>
     </DashboardLayout>
+  );
+}
+
+// Task #166 — small SRE-facing card backed by the
+// `/api/admin/telemetry/rotation-rescue` endpoint. Polls every 30s so
+// it doubles as a live "is the rescue still firing?" indicator
+// without needing a refresh. Renders the success rate prominently
+// (success = persisted / persisted+failed); the per-bucket counts
+// underneath let an admin spot a one-sided regression (e.g. only
+// `+90°` rescues, suggesting a phone-OS-specific orientation bug).
+type PhotoRotationTelemetry = {
+  windowHours: number;
+  total: number;
+  persisted90: number;
+  persistedNeg90: number;
+  persistFailed: number;
+  attempts: number;
+  successRate: number | null;
+  oldestAt: string | null;
+  mostRecentAt: string | null;
+};
+
+function PhotoRotationTelemetryCard() {
+  const { t, i18n } = useTranslation(["settings", "common"]);
+  const lng = i18n.language;
+  const queryClient = useQueryClient();
+  const { data, isLoading, isFetching } = useQuery<PhotoRotationTelemetry>({
+    queryKey: ["/api/admin/telemetry/rotation-rescue"],
+    refetchInterval: 30_000,
+  });
+
+  const successPct =
+    data && data.successRate != null
+      ? `${formatNumber(Math.round(data.successRate * 1000) / 10, lng)}%`
+      : "—";
+  const lastEvent = data?.mostRecentAt
+    ? new Date(data.mostRecentAt).toLocaleString(lng)
+    : null;
+
+  return (
+    <Card className="bg-card border-border" data-testid="card-photo-rotation-telemetry">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <RotateCw className="h-5 w-5 text-primary" />
+            <CardTitle className="text-xl text-white">{t("settings:photoTelemetry.title")}</CardTitle>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/admin/telemetry/rotation-rescue"] })}
+            disabled={isFetching}
+            data-testid="button-refresh-photo-telemetry"
+          >
+            {isFetching ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <RefreshCw className="me-2 h-4 w-4" />}
+            {t("settings:photoTelemetry.refresh")}
+          </Button>
+        </div>
+        <CardDescription>{t("settings:photoTelemetry.desc")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {isLoading ? (
+          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>{t("common:loading", "Loading...")}</span>
+          </div>
+        ) : !data || data.attempts === 0 ? (
+          <p className="text-sm text-muted-foreground" data-testid="text-photo-telemetry-empty">
+            {t("settings:photoTelemetry.noData")}
+          </p>
+        ) : (
+          <>
+            <div className="flex items-baseline gap-3">
+              <span
+                className="text-4xl font-bold font-display text-white"
+                data-testid="stat-photo-rotation-success-rate"
+              >
+                <bdi>{successPct}</bdi>
+              </span>
+              <span className="text-sm text-muted-foreground">
+                {t("settings:photoTelemetry.successRate")}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <TelemetryStat
+                label={t("settings:photoTelemetry.attempts")}
+                value={formatNumber(data.attempts, lng)}
+                testId="stat-photo-rotation-attempts"
+              />
+              <TelemetryStat
+                label={t("settings:photoTelemetry.rotatedCw")}
+                value={formatNumber(data.persisted90, lng)}
+                testId="stat-photo-rotation-cw"
+              />
+              <TelemetryStat
+                label={t("settings:photoTelemetry.rotatedCcw")}
+                value={formatNumber(data.persistedNeg90, lng)}
+                testId="stat-photo-rotation-ccw"
+              />
+              <TelemetryStat
+                label={t("settings:photoTelemetry.failed")}
+                value={formatNumber(data.persistFailed, lng)}
+                tone={data.persistFailed > 0 ? "warn" : "default"}
+                testId="stat-photo-rotation-failed"
+              />
+            </div>
+            {lastEvent && (
+              <p className="text-xs text-muted-foreground" data-testid="text-photo-telemetry-last-event">
+                {t("settings:photoTelemetry.lastEventAt")} <bdi>{lastEvent}</bdi>
+              </p>
+            )}
+          </>
+        )}
+        <p className="text-xs text-muted-foreground">{t("settings:photoTelemetry.windowHint")}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TelemetryStat({
+  label,
+  value,
+  tone = "default",
+  testId,
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "warn";
+  testId?: string;
+}) {
+  return (
+    <div className="p-3 bg-muted/20 border border-border rounded-md">
+      <p className="text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
+      <p
+        className={`text-2xl font-bold font-display mt-1 ${tone === "warn" ? "text-amber-400" : "text-white"}`}
+        data-testid={testId}
+      >
+        <bdi>{value}</bdi>
+      </p>
+    </div>
   );
 }

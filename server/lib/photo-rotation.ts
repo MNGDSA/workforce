@@ -26,6 +26,17 @@
 
 import type { FaceQualityResult } from "../rekognition";
 
+// Task #166 — outcome the route layer pipes into the rolling
+// rotation-rescue counter (`server/rotation-rescue-telemetry.ts`).
+// Kept as a string union here (not an import) so the helper stays
+// dependency-free and trivially unit-testable. The string values are
+// the public telemetry kinds; do not rename without updating the
+// telemetry summary as well.
+export type RotationRescueRecordKind =
+  | "persisted_90"
+  | "persisted_-90"
+  | "persist_failed";
+
 export interface PhotoRotationDeps {
   overwriteFile: (
     fileUrl: string,
@@ -35,6 +46,13 @@ export interface PhotoRotationDeps {
   // Pluggable so tests don't pollute stdout.
   log?: (msg: string) => void;
   warn?: (msg: string, err: unknown) => void;
+  // Task #166 — optional metric sink. The route wires this to
+  // `recordRotationRescueOutcome` from the telemetry module; tests
+  // either omit it (most cases) or pass a spy to assert the kind.
+  // It is fired exactly once per call that actually attempted a
+  // persist (i.e. when both `rotatedBuffer` and `rotationApplied`
+  // are present). The "rescue not needed" path does NOT increment.
+  recordOutcome?: (kind: RotationRescueRecordKind) => void;
 }
 
 export interface PersistRotationRescueResult {
@@ -55,12 +73,16 @@ export async function persistRotationRescue(
     deps.log?.(
       `[photo-upload] Auto-rotated by ${qualityResult.rotationApplied}° for candidate ${candidateId}`,
     );
+    deps.recordOutcome?.(
+      qualityResult.rotationApplied === 90 ? "persisted_90" : "persisted_-90",
+    );
     return { rotationApplied: qualityResult.rotationApplied };
   } catch (rotErr) {
     deps.warn?.(
       `[photo-upload] Failed to persist rotated bytes for candidate ${candidateId}; original orientation will remain`,
       rotErr,
     );
+    deps.recordOutcome?.("persist_failed");
     return {};
   }
 }

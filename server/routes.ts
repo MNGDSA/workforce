@@ -91,6 +91,14 @@ import {
   getRekognitionFallbackSummary,
   decideRekognitionFallbackAction,
 } from "./rekognition-telemetry";
+// Task #166 — sibling counter to the rekognition-fallback ring buffer:
+// rolls up rotation-rescue persist outcomes (persisted_90 /
+// persisted_-90 / persist_failed) so admins can verify the auto-
+// rotation is firing and that S3 writes are succeeding.
+import {
+  recordRotationRescueOutcome,
+  getRotationRescueSummary,
+} from "./rotation-rescue-telemetry";
 import XLSX from "xlsx";
 
 // Auth token signing/verification is centralized in `./auth-token` so this
@@ -487,6 +495,19 @@ export async function registerRoutes(
     res.json(getRekognitionFallbackSummary());
   });
 
+  // Task #166 — admin telemetry: rotation-rescue persist outcomes
+  // over the trailing 24 hours. Lets SRE answer:
+  //   - "Is the auto-rotation actually firing?" (attempts > 0)
+  //   - "Did a recent deploy regress it?" (rate suddenly drops to 0)
+  //   - "Did an iOS update 10x our Rekognition spend?" (rate spikes)
+  //   - "Are S3 writes failing silently?" (persistFailed > 0 with
+  //     successful persists declining at the same time)
+  // Returned shape: { windowHours, total, persisted90, persistedNeg90,
+  // persistFailed, attempts, successRate, oldestAt, mostRecentAt }.
+  app.get("/api/admin/telemetry/rotation-rescue", requirePermission("settings:read"), async (_req: Request, res: Response) => {
+    res.json(getRotationRescueSummary());
+  });
+
   app.get("/api/ntp-health", requirePermission("system:ntp_check"), async (req: Request, res: Response) => {
     try {
       const server = (req.query.server as string) || "time.google.com";
@@ -620,6 +641,7 @@ export async function registerRoutes(
     decideRekognitionFallbackAction,
     recordRekognitionFallback,
     persistRotationRescue,
+    recordRotationRescueOutcome,
     tr,
     assertCandidateOwnerOrAdmin,
     handleError,

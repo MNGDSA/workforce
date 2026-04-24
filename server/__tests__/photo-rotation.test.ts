@@ -152,6 +152,65 @@ describe("persistRotationRescue — JSON response field for the rotation toast",
     assert.match(logs[0], new RegExp(CANDIDATE_ID));
   });
 
+  // Task #166 — the rolling rotation-rescue counter sees its inputs
+  // through the optional `recordOutcome` dep on `persistRotationRescue`.
+  // Lock the mapping here so a future refactor of the helper doesn't
+  // silently change the telemetry kinds the dashboard groups by.
+  it("emits recordOutcome=persisted_90 when a +90° rescue is persisted", async () => {
+    const overwrite = makeOverwriteSpy("ok");
+    const outcomes: string[] = [];
+    await persistRotationRescue(
+      { rotatedBuffer: ROTATED_BYTES, rotationApplied: 90 },
+      FILE_URL,
+      CANDIDATE_ID,
+      { overwriteFile: overwrite.fn, recordOutcome: (k) => outcomes.push(k) },
+    );
+    assert.deepEqual(outcomes, ["persisted_90"]);
+  });
+
+  it("emits recordOutcome=persisted_-90 when a -90° rescue is persisted", async () => {
+    const overwrite = makeOverwriteSpy("ok");
+    const outcomes: string[] = [];
+    await persistRotationRescue(
+      { rotatedBuffer: ROTATED_BYTES, rotationApplied: -90 },
+      FILE_URL,
+      CANDIDATE_ID,
+      { overwriteFile: overwrite.fn, recordOutcome: (k) => outcomes.push(k) },
+    );
+    assert.deepEqual(outcomes, ["persisted_-90"]);
+  });
+
+  it("emits recordOutcome=persist_failed when overwriteFile throws (and only once)", async () => {
+    const overwrite = makeOverwriteSpy("throw");
+    const outcomes: string[] = [];
+    await persistRotationRescue(
+      { rotatedBuffer: ROTATED_BYTES, rotationApplied: 90 },
+      FILE_URL,
+      CANDIDATE_ID,
+      { overwriteFile: overwrite.fn, recordOutcome: (k) => outcomes.push(k) },
+    );
+    assert.deepEqual(
+      outcomes,
+      ["persist_failed"],
+      "the rate denominator must include failures, but only one event per call",
+    );
+  });
+
+  it("does NOT call recordOutcome when there was nothing to rescue", async () => {
+    // The standard pass: rotation rescue wasn't needed. The counter
+    // tracks rescue *attempts*; calling it here would tank the
+    // success rate by inflating the denominator with non-events.
+    const overwrite = makeOverwriteSpy("ok");
+    const outcomes: string[] = [];
+    await persistRotationRescue(
+      { rotatedBuffer: undefined, rotationApplied: undefined },
+      FILE_URL,
+      CANDIDATE_ID,
+      { overwriteFile: overwrite.fn, recordOutcome: (k) => outcomes.push(k) },
+    );
+    assert.deepEqual(outcomes, []);
+  });
+
   it("does not throw when log/warn callbacks are not provided (route plumbing optional)", async () => {
     const overwrite = makeOverwriteSpy("ok");
     const result = await persistRotationRescue(

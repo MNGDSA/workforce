@@ -65,6 +65,17 @@ For tooltip info icons, use Lucide's `Info` icon directly without wrapping it in
   detection. R&D memos for the unshipped workstreams (attendance
   cost reduction, SMP identity binding) live in `docs/rd/`.
 
+- **Rotation rescue telemetry (Task #166):** the photo-upload auto-
+  rotation rescue (`server/lib/photo-rotation.ts`) increments a
+  process-local ring-buffer counter on every persist outcome
+  (`persisted_90`, `persisted_-90`, `persist_failed`). Surfaced to
+  admins at `GET /api/admin/telemetry/rotation-rescue` and rendered as
+  a 24h success-rate card in Settings → Security so SRE can detect
+  deploy regressions (rate→0 with attempts), iOS-OS-induced cost
+  spikes (attempts 10x baseline), and S3-write failures (rate→0%
+  with attempts climbing). Same per-instance trade-off as the
+  Rekognition fallback counter.
+
 - **Android Play release readiness:** the workforce app's release-signing,
   crash-reporting, and Play Integrity wiring is scaffolded but the
   operational rollout is deferred until a Google Play Console account and a

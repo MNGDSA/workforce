@@ -70,6 +70,20 @@
     "session": "Session Timeout",
     "sessionHint": "Automatically log users out after 30 minutes of inactivity."
   },
+  "photoTelemetry": {
+    "title": "Photo Verification Telemetry",
+    "desc": "Last 24 hours of auto-rotation rescues that corrected sideways portraits during photo upload.",
+    "successRate": "Success rate (last 24h)",
+    "noData": "No rotation rescues in the last 24 hours.",
+    "attempts": "Attempts",
+    "succeeded": "Succeeded",
+    "failed": "Persist failed",
+    "rotatedCw": "Corrected +90°",
+    "rotatedCcw": "Corrected -90°",
+    "lastEventAt": "Most recent event:",
+    "windowHint": "Counters reset every 24 hours and are per server instance.",
+    "refresh": "Refresh"
+  },
   "ntp": {
     "title": "Time & Clock Security",
     "desc": "Configure NTP server and organization timezone for clock tampering detection on mobile devices.",

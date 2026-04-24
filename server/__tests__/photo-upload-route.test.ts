@@ -120,6 +120,7 @@ async function startHarness(opts: HarnessOptions = {}): Promise<{
     },
     recordRekognitionFallback(_telemetry: any, _candidateId: string) {},
     persistRotationRescue,
+    recordRotationRescueOutcome(_kind) {},
     tr(_req, key: string) {
       return key;
     },

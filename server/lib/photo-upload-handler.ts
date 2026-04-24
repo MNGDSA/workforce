@@ -1,6 +1,9 @@
 import type { Request, Response, RequestHandler } from "express";
 import type { FaceQualityResult } from "../rekognition";
-import type { persistRotationRescue as PersistRotationRescue } from "./photo-rotation";
+import type {
+  persistRotationRescue as PersistRotationRescue,
+  RotationRescueRecordKind,
+} from "./photo-rotation";
 
 export type FallbackDecision =
   | { kind: "proceed" }
@@ -26,6 +29,10 @@ export interface PhotoUploadDeps {
   decideRekognitionFallbackAction(args: { qualityCheckSkipped: boolean; hasPreviouslyValidatedPhoto: boolean }): FallbackDecision;
   recordRekognitionFallback(telemetry: any, candidateId: string): void;
   persistRotationRescue: typeof PersistRotationRescue;
+  // Task #166 — sink for the rotation-rescue rolling counter. The
+  // route wires this to `recordRotationRescueOutcome`; callers in
+  // tests can pass a no-op or spy.
+  recordRotationRescueOutcome(kind: RotationRescueRecordKind): void;
   tr(req: Request, key: string): string;
   assertCandidateOwnerOrAdmin(req: Request, res: Response, candidateId: string): Promise<boolean>;
   handleError(res: Response, err: unknown): Response | void;
@@ -51,6 +58,7 @@ export function createUploadDocumentsHandler(deps: PhotoUploadDeps): RequestHand
     decideRekognitionFallbackAction,
     recordRekognitionFallback,
     persistRotationRescue,
+    recordRotationRescueOutcome,
     tr,
     assertCandidateOwnerOrAdmin,
     handleError,
@@ -127,6 +135,9 @@ export function createUploadDocumentsHandler(deps: PhotoUploadDeps): RequestHand
             overwriteFile,
             log: (msg) => console.log(msg),
             warn: (msg, err) => console.warn(msg, err),
+            // Task #166 — increments the rolling counter exposed by
+            // GET /api/admin/telemetry/rotation-rescue.
+            recordOutcome: recordRotationRescueOutcome,
           },
         );
         rotationApplied = rotationOutcome.rotationApplied;
