@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
 import { useTranslation } from "react-i18next";
+import { cityLabel } from "@/lib/i18n/labels";
 import { formatDate, formatNumber } from "@/lib/format";
 import type { TFunction } from "i18next";
 import {
@@ -553,7 +554,7 @@ export default function JobPostingDetailPage() {
                                 data-testid={`text-applicant-city-${app.id}`}
                               >
                                 {candidate?.city
-                                  ? <bdi>{t(`profileSetup:cities.${candidate.city}` as any, candidate.city)}</bdi>
+                                  ? <bdi>{cityLabel(t, candidate.city)}</bdi>
                                   : <span className="text-muted-foreground/40">—</span>}
                               </td>
                               <td className="px-4 py-3" data-testid={`text-applicant-sex-${app.id}`}>

@@ -18,6 +18,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { regionLabel } from "@/lib/i18n/labels";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/queryClient";
@@ -96,8 +97,8 @@ export default function JobDetailPage() {
 
   function handleWhatsAppShare() {
     if (!job) return;
-    const regionLabel = job.region ? t(`common:regionsKsa.${job.region}` as any, job.region) : "";
-    const text = `${job.title}${regionLabel ? ` — ${regionLabel}` : ""}\n\n${window.location.href}`;
+    const region = regionLabel(t, job.region);
+    const text = `${job.title}${region ? ` — ${region}` : ""}\n\n${window.location.href}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
 

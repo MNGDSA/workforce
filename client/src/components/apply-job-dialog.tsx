@@ -6,6 +6,7 @@ import {
   CheckCircle2, ClipboardList, AlignLeft, Hash, ToggleLeft, ListChecks, User, ListOrdered,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { regionLabel } from "@/lib/i18n/labels";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -395,7 +396,7 @@ export default function ApplyJobDialog({
           </DialogTitle>
           {job && (
             <DialogDescription className="text-muted-foreground">
-              <bdi>{job.title}</bdi> · <bdi>{job.region ? t(`common:regionsKsa.${job.region}` as any, job.region) : (job.location ?? "KSA")}</bdi>
+              <bdi>{job.title}</bdi> · <bdi>{job.region ? regionLabel(t, job.region) : (job.location ?? "KSA")}</bdi>
             </DialogDescription>
           )}
         </DialogHeader>
