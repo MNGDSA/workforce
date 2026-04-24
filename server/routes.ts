@@ -2039,6 +2039,9 @@ export async function registerRoutes(
       } else if (action === "archive") {
         const affected = await storage.bulkArchiveCandidates(ids);
         return res.json({ affected, action });
+      } else if (action === "unarchive") {
+        const affected = await storage.bulkUnarchiveCandidates(ids);
+        return res.json({ affected, action });
       } else {
         return res.status(400).json({ message: tr(req, "candidate.bulkActionInvalid") });
       }

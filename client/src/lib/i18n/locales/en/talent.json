@@ -105,6 +105,7 @@
     "unblock": "Unblock",
     "export": "Export",
     "archive": "Archive",
+    "unarchive": "Restore",
     "clear": "Clear",
     "resendActivation": "Resend Activation",
     "sendToOnboarding": "Send to Onboarding"
@@ -118,13 +119,16 @@
   },
   "bulkConfirm": {
     "titleArchive": "Archive {{n}} candidate(s)?",
+    "titleUnarchive": "Restore {{n}} candidate(s)?",
     "titleBlock": "Block {{n}} candidate(s)?",
     "titleUnblock": "Unblock {{n}} candidate(s)?",
     "descArchive": "This will archive {{n}} candidate(s). They will be hidden from active listings but all their records (applications, interviews, onboarding) will be preserved. Archived candidates can be restored later.",
+    "descUnarchive": "This will restore {{n}} archived candidate(s) and return them to active listings.",
     "descBlock": "This will block {{n}} candidate(s) from applying or being processed.",
     "descUnblock": "This will unblock {{n}} candidate(s), restoring their active status.",
     "cancel": "Cancel",
     "btnArchive": "Archive",
+    "btnUnarchive": "Restore",
     "btnBlock": "Block",
     "btnUnblock": "Unblock"
   },
@@ -141,6 +145,8 @@
     "bulkUnblocked_other": "{{n}} candidates unblocked",
     "bulkArchived_one": "{{n}} candidate archived",
     "bulkArchived_other": "{{n}} candidates archived",
+    "bulkUnarchived_one": "{{n}} candidate restored",
+    "bulkUnarchived_other": "{{n}} candidates restored",
     "bulkActionFailed": "Bulk action failed",
     "exportFailed": "Export failed",
     "exportFailedDesc": "Could not export candidates.",

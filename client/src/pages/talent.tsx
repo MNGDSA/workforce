@@ -1252,7 +1252,7 @@ export default function TalentPage() {
   const [blockCandidate, setBlockCandidate] = useState<Candidate | null>(null);
   const [archiveCandidate, setArchiveCandidate] = useState<Candidate | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkConfirmAction, setBulkConfirmAction] = useState<"block" | "unblock" | "archive" | null>(null);
+  const [bulkConfirmAction, setBulkConfirmAction] = useState<"block" | "unblock" | "archive" | "unarchive" | null>(null);
   // Reclassify confirm: row-menu reclassify actions stage their intent here
   // so an AlertDialog can ask the admin to confirm before mutating.
   const [reclassifyConfirm, setReclassifyConfirm] = useState<{
@@ -1329,10 +1329,14 @@ export default function TalentPage() {
   });
 
   const bulkAction = useMutation({
-    mutationFn: ({ ids, action }: { ids: string[]; action: "block" | "unblock" | "archive" }) =>
+    mutationFn: ({ ids, action }: { ids: string[]; action: "block" | "unblock" | "archive" | "unarchive" }) =>
       apiRequest("POST", "/api/candidates/bulk-action", { ids, action }).then(r => r.json()),
     onSuccess: (data) => {
-      const key = data.action === "block" ? "toast.bulkBlocked" : data.action === "unblock" ? "toast.bulkUnblocked" : "toast.bulkArchived";
+      const key =
+        data.action === "block" ? "toast.bulkBlocked"
+        : data.action === "unblock" ? "toast.bulkUnblocked"
+        : data.action === "unarchive" ? "toast.bulkUnarchived"
+        : "toast.bulkArchived";
       toast({ title: t(key, { count: data.affected, n: formatNumber(data.affected) }) });
       setSelectedIds(new Set());
       setBulkConfirmAction(null);
@@ -2282,17 +2286,31 @@ export default function TalentPage() {
               <Download className="h-3.5 w-3.5 me-1.5" />
               {t("bulkBar.export")}
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-amber-600 text-amber-500 hover:bg-amber-600/10"
-              onClick={() => setBulkConfirmAction("archive")}
-              disabled={overLimit}
-              data-testid="bulk-archive"
-            >
-              <Archive className="h-3.5 w-3.5 me-1.5" />
-              {t("bulkBar.archive")}
-            </Button>
+            {status === "archived" ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-emerald-600 text-emerald-500 hover:bg-emerald-600/10"
+                onClick={() => setBulkConfirmAction("unarchive")}
+                disabled={overLimit}
+                data-testid="bulk-unarchive"
+              >
+                <ArchiveRestore className="h-3.5 w-3.5 me-1.5" />
+                {t("bulkBar.unarchive")}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-600 text-amber-500 hover:bg-amber-600/10"
+                onClick={() => setBulkConfirmAction("archive")}
+                disabled={overLimit}
+                data-testid="bulk-archive"
+              >
+                <Archive className="h-3.5 w-3.5 me-1.5" />
+                {t("bulkBar.archive")}
+              </Button>
+            )}
             {allSmp && awaitingActIds.length > 0 && (
               <Button
                 size="sm"
@@ -2341,6 +2359,8 @@ export default function TalentPage() {
             <AlertDialogTitle className="text-white font-display">
               {bulkConfirmAction === "archive"
                 ? t("bulkConfirm.titleArchive", { n: formatNumber(selectedIds.size) })
+                : bulkConfirmAction === "unarchive"
+                ? t("bulkConfirm.titleUnarchive", { n: formatNumber(selectedIds.size) })
                 : bulkConfirmAction === "block"
                 ? t("bulkConfirm.titleBlock", { n: formatNumber(selectedIds.size) })
                 : t("bulkConfirm.titleUnblock", { n: formatNumber(selectedIds.size) })}
@@ -2348,6 +2368,8 @@ export default function TalentPage() {
             <AlertDialogDescription className="text-muted-foreground">
               {bulkConfirmAction === "archive"
                 ? t("bulkConfirm.descArchive", { n: formatNumber(selectedIds.size) })
+                : bulkConfirmAction === "unarchive"
+                ? t("bulkConfirm.descUnarchive", { n: formatNumber(selectedIds.size) })
                 : bulkConfirmAction === "block"
                 ? t("bulkConfirm.descBlock", { n: formatNumber(selectedIds.size) })
                 : t("bulkConfirm.descUnblock", { n: formatNumber(selectedIds.size) })}
@@ -2356,13 +2378,20 @@ export default function TalentPage() {
           <AlertDialogFooter>
             <AlertDialogCancel className="border-border" data-testid="bulk-confirm-cancel">{t("bulkConfirm.cancel")}</AlertDialogCancel>
             <AlertDialogAction
-              className={bulkConfirmAction === "archive" ? "bg-amber-600 hover:bg-amber-700" : bulkConfirmAction === "block" ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"}
+              className={
+                bulkConfirmAction === "archive" ? "bg-amber-600 hover:bg-amber-700"
+                : bulkConfirmAction === "block" ? "bg-red-600 hover:bg-red-700"
+                : "bg-green-600 hover:bg-green-700"
+              }
               onClick={() => bulkConfirmAction && bulkAction.mutate({ ids: [...selectedIds], action: bulkConfirmAction })}
               disabled={bulkAction.isPending}
               data-testid="bulk-confirm-action"
             >
               {bulkAction.isPending ? <Loader2 className="h-4 w-4 animate-spin me-2" /> : null}
-              {bulkConfirmAction === "archive" ? t("bulkConfirm.btnArchive") : bulkConfirmAction === "block" ? t("bulkConfirm.btnBlock") : t("bulkConfirm.btnUnblock")}
+              {bulkConfirmAction === "archive" ? t("bulkConfirm.btnArchive")
+                : bulkConfirmAction === "unarchive" ? t("bulkConfirm.btnUnarchive")
+                : bulkConfirmAction === "block" ? t("bulkConfirm.btnBlock")
+                : t("bulkConfirm.btnUnblock")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
