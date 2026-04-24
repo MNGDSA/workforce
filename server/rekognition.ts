@@ -232,9 +232,19 @@ export async function validateFaceQuality(photoPath: string): Promise<FaceQualit
     // mode) before giving up. We only do this when the first call
     // returned zero faces, so the extra cost is bounded to "one
     // upload that probably won't pass anyway." `runRotationRescue`
-    // owns the fall-open behaviour — see its docstring.
+    // owns the fall-open behaviour for sharp/detect throws — see
+    // its docstring. We also wrap the dynamic sharp import itself
+    // so a missing native binary (rare, but possible after a
+    // platform swap) degrades to the standard no-face result
+    // rather than escalating to invalid_image via the outer catch.
     console.log("[Rekognition] No face on first pass — attempting ±90° rotation rescue");
-    const sharp = (await import("sharp")).default;
+    let sharp: typeof import("sharp").default;
+    try {
+      sharp = (await import("sharp")).default;
+    } catch (sharpImportErr) {
+      console.warn("[Rekognition] sharp module unavailable — skipping rotation rescue", sharpImportErr);
+      return evaluateFaceDetails(originalFaces);
+    }
     const rescueResult = await runRotationRescue(originalFaces, imageBytes, {
       rotate: (bytes, degrees) => sharp(bytes).rotate(degrees).jpeg({ quality: 92 }).toBuffer(),
       detect,

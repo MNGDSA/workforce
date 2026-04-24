@@ -64,5 +64,3 @@ export async function normalizePhotoOrientation(file: File): Promise<File> {
 export function _isSupported(): boolean {
   return typeof createImageBitmap === "function" && typeof document !== "undefined";
 }
-
-export const _ORIENTED_TAG = ORIENTED_FROM_EXIF;
