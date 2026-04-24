@@ -41,7 +41,11 @@ const extraArgs = process.argv.slice(2);
 console.log(`Running ${files.length} test file(s):`);
 for (const f of files) console.log(`  - ${f}`);
 
-const child = spawn("tsx", ["--test", ...extraArgs, ...files], {
+// Task #161 — `--experimental-test-module-mocks` enables `mock.module()`
+// inside test files. Currently used by
+// `server/__tests__/photo-upload-route.test.ts` to stub heavy upload
+// dependencies; harmless for tests that don't invoke `mock.module`.
+const child = spawn("tsx", ["--test", "--experimental-test-module-mocks", ...extraArgs, ...files], {
   cwd: projectRoot,
   stdio: "inherit",
   env: process.env,

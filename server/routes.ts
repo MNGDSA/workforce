@@ -32,6 +32,8 @@ import { saPhoneSchema, patchSaPhoneSchema, normalizeSaPhone } from "@shared/pho
 // `server/__tests__/candidate-iban-resolution.test.ts`; unit-level
 // behaviour by `server/__tests__/iban.test.ts`.
 import { uploadFile, deleteFile, getMimeType, getFileBuffer, overwriteFile } from "./file-storage";
+import { persistRotationRescue } from "./lib/photo-rotation";
+import { createUploadDocumentsHandler } from "./lib/photo-upload-handler";
 import { getClientIp } from "./client-ip";
 import { getAuthenticatedUser, listUserRepos, getRepo, listRepoIssues, listRepoPullRequests } from "./github";
 import {
@@ -594,216 +596,71 @@ export async function registerRoutes(
   });
 
   // ─── Document Upload ───────────────────────────────────────────────────────
-  app.post("/api/candidates/:id/documents", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      // Authorization: admin with candidates:update OR candidate uploading
-      // their own document. Without this check any authenticated user could
-      // overwrite another candidate's photo / national ID / IBAN / CV by
-      // guessing the UUID (classic IDOR).
-      if (!(await assertCandidateOwnerOrAdmin(req, res, id))) return;
-      const docType = req.body.docType as string;
-      if (!req.file) return res.status(400).json({ message: tr(req, "file.noUpload") });
-      if (!["photo", "nationalId", "iban", "resume"].includes(docType)) {
-        return res.status(400).json({ message: tr(req, "file.invalidDocType") });
-      }
-      const localPath = req.file.path;
-      const fileUrl = await uploadFile(localPath, req.file.filename, getMimeType(req.file.filename), { isPublic: docType === "photo" });
-      let photoQualityResult: import("./rekognition").FaceQualityResult | undefined;
-      // Task #155 — captured when the rotation rescue's rotated bytes
-      // were successfully persisted to S3. Surfaced on the upload
-      // response so the candidate portal can show a confirmation
-      // toast and re-open the cropper with the saved upright copy.
-      // We deliberately surface this as a top-level field rather than
-      // letting the client read it off `qualityResult.rotationApplied`
-      // because the qualityResult buffer is stripped before send (see
-      // `serializeQualityResult` below) — the buffer would balloon the
-      // JSON response by ~100KB for no client-side benefit.
-      let rotationApplied: 90 | -90 | undefined;
-
-      if (docType === "photo") {
-        const allowedPhotoMimes = ["image/jpeg", "image/jpg", "image/png"];
-        if (!allowedPhotoMimes.includes(req.file.mimetype.toLowerCase())) {
-          try { await deleteFile(fileUrl); } catch {}
-          return res.status(400).json({ message: tr(req, "file.photoFormat") });
-        }
-        const candidate = await storage.getCandidate(id);
-        if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
-        const activeRecord = await storage.getWorkforceByCandidateId(id);
-        const isActiveEmployee = activeRecord && activeRecord.isActive;
-        const isPhotoChange = isActiveEmployee && candidate.hasPhoto && candidate.photoUrl;
-
-        const qualityResult = await validateFaceQuality(fileUrl);
-        photoQualityResult = qualityResult;
-
-        // Task #108 (Workstream 1) — fail-closed on first profile photo
-        // upload when Rekognition is unreachable. Previously we always
-        // accepted unverified first uploads. With SMP bulk activation
-        // arriving in Task #107 a multi-thousand-worker activation
-        // surge during a Rekognition outage would silently accumulate
-        // workers whose attendance CompareFaces will then fail every
-        // clock-in.
-        //
-        // Decision logic is centralized in
-        // `decideRekognitionFallbackAction` so it can be unit-tested
-        // without spinning up Express. See the truth table there for
-        // why active-employee re-uploads still fail-open during
-        // outages (HR review is the safety net).
-        //
-        // INTERIM PROXY (Task #108): we treat
-        // `candidate.hasPhoto && candidate.photoUrl` as "previously
-        // validated photo on file." This is correct under current
-        // upload paths because the only way `candidate.hasPhoto`
-        // becomes true is via a successful Rekognition pass earlier
-        // in this same handler. If a future caller sets
-        // `hasPhoto=true` without going through this validation
-        // (e.g. a back-office import), it will incorrectly count as
-        // "validated." The follow-up identity-binding work will
-        // introduce an explicit `photoValidatedAt` column and this
-        // proxy can be replaced.
-        const hasPreviouslyValidatedPhoto = !!(candidate.hasPhoto && candidate.photoUrl);
-        const fallbackDecision = decideRekognitionFallbackAction({
-          qualityCheckSkipped: !!qualityResult.qualityCheckSkipped,
-          hasPreviouslyValidatedPhoto,
+  // Task #161 — handler body lives in `./lib/photo-upload-handler` so it can
+  // be exercised by a route-level test harness with stub deps (no AWS,
+  // no DB, no auth gateway). Keep the route definition itself here so
+  // the URL → middleware chain stays grep-able.
+  //
+  // Task #155 / #161 — when the rotation rescue's rotated bytes were
+  // successfully persisted to S3, the response carries a top-level
+  // `rotationApplied: 90 | -90` field so the candidate portal can show
+  // a confirmation toast and re-open the cropper with the saved
+  // upright copy. We surface it as a top-level field rather than
+  // letting the client read it off `qualityResult.rotationApplied`
+  // because the qualityResult buffer is stripped before send — the
+  // buffer would balloon the JSON response by ~100KB for no
+  // client-side benefit.
+  const uploadDocumentsHandler = createUploadDocumentsHandler({
+    storage,
+    uploadFile,
+    deleteFile,
+    overwriteFile,
+    getMimeType,
+    validateFaceQuality,
+    decideRekognitionFallbackAction,
+    recordRekognitionFallback,
+    persistRotationRescue,
+    tr,
+    assertCandidateOwnerOrAdmin,
+    handleError,
+    computeOnboardingStatus,
+    supersedePendingPhotoChanges: async (candidateId: string) => {
+      const olderPending = await db.select({ id: photoChangeRequests.id })
+        .from(photoChangeRequests)
+        .where(and(
+          eq(photoChangeRequests.candidateId, candidateId),
+          eq(photoChangeRequests.status, "pending"),
+        ));
+      for (const old of olderPending) {
+        await storage.updatePhotoChangeRequest(old.id, {
+          status: "rejected",
+          reviewedAt: new Date(),
+          reviewNotes: "Superseded by a newer photo submission",
         });
-        if (fallbackDecision.kind === "block") {
-          recordRekognitionFallback(fallbackDecision.telemetry, id);
-          try { await deleteFile(fileUrl); } catch {}
-          return res.status(503).json({
-            message: tr(req, "photo.verifyUnavailable"),
-            qualityResult: { passed: false, checks: [{ code: "service_unavailable", name: "Face verification service", passed: false, tipReason: "service_unavailable", tip: "The verification service is currently unreachable. Your photo cannot be processed until the service is available." }], qualityCheckSkipped: true },
-          });
-        }
-        if (fallbackDecision.kind === "allow") {
-          recordRekognitionFallback(fallbackDecision.telemetry, id);
-          // Task #154 — surface a friendlier "service was busy" notice on
-          // the fail-open re-upload path. Previously this branch returned
-          // a generic "photo verified" toast even though we never actually
-          // verified the photo (Rekognition was unreachable). The payload
-          // attaches a localized message the candidate portal can show as
-          // an info toast, while still accepting the upload — the HR
-          // review queue remains the safety net per the truth table in
-          // `decideRekognitionFallbackAction`.
-          qualityResult.serviceUnavailableNotice = tr(req, "photo.verifySkipped");
-        }
-
-        if (!qualityResult.passed && !qualityResult.qualityCheckSkipped) {
-          try { await deleteFile(fileUrl); } catch {}
-          // Task #155 — strip the rotation rescue buffer (a Buffer
-          // serialises as `{ type: "Buffer", data: [...] }` and would
-          // bloat the failure response by ~100KB for no client value).
-          const { rotatedBuffer: _rb0, ...qualityResultForClient } = qualityResult;
-          return res.status(422).json({
-            message: tr(req, "photo.qualityFailed"),
-            qualityResult: qualityResultForClient,
-          });
-        }
-
-        // Task #153 — rotation rescue. If validateFaceQuality
-        // auto-corrected a sideways photo, overwrite the stored
-        // bytes at the same URL so every downstream consumer
-        // (cropper, attendance compare, HR review) sees the upright
-        // version. Only fires when validation passed; the
-        // 422-handler above wins if the photo failed.
-        //
-        // Task #155 — surface the applied rotation back to the
-        // client so the candidate portal can show a confirmation
-        // toast ("we rotated your photo, looks good?") and re-open
-        // the cropper with the saved upright copy. Only marked when
-        // the overwrite actually succeeded; if persistence failed,
-        // the file on S3 is still the original, so we don't claim
-        // we rotated anything.
-        if (qualityResult.rotatedBuffer && qualityResult.rotationApplied) {
-          try {
-            await overwriteFile(fileUrl, qualityResult.rotatedBuffer, "image/jpeg");
-            rotationApplied = qualityResult.rotationApplied;
-            console.log(
-              `[photo-upload] Auto-rotated by ${qualityResult.rotationApplied}° for candidate ${id}`,
-            );
-          } catch (rotErr) {
-            console.warn(
-              `[photo-upload] Failed to persist rotated bytes for candidate ${id}; original orientation will remain`,
-              rotErr,
-            );
-          }
-        }
-
-        if (isPhotoChange) {
-          const olderPending = await db.select({ id: photoChangeRequests.id })
-            .from(photoChangeRequests)
-            .where(and(
-              eq(photoChangeRequests.candidateId, id),
-              eq(photoChangeRequests.status, "pending"),
-            ));
-          for (const old of olderPending) {
-            await storage.updatePhotoChangeRequest(old.id, {
-              status: "rejected",
-              reviewedAt: new Date(),
-              reviewNotes: "Superseded by a newer photo submission",
-            });
-            await db.update(inboxItems)
-              .set({ status: "resolved", resolvedAt: new Date(), resolutionNotes: "Superseded by a newer photo submission" })
-              .where(and(eq(inboxItems.entityType, "photo_change_request"), eq(inboxItems.entityId, old.id), eq(inboxItems.status, "pending")));
-          }
-
-          const changeRequest = await storage.createPhotoChangeRequest({
-            candidateId: id,
-            newPhotoUrl: fileUrl,
-            previousPhotoUrl: candidate.photoUrl,
-            status: "pending",
-          });
-          await createInboxItem(
-            "photo_change_request",
-            `Photo change request — ${candidate.fullNameEn ?? "Unknown"}`,
-            `Employee has submitted a new profile photo for review. The previous photo remains active until this request is approved.`,
-            {
-              candidateId: id,
-              changeRequestId: changeRequest.id,
-              candidateName: candidate.fullNameEn,
-              employeeNumber: activeRecord!.employeeNumber ?? null,
-              newPhotoUrl: fileUrl,
-              previousPhotoUrl: candidate.photoUrl,
-            },
-            "high",
-            { entityType: "photo_change_request", entityId: changeRequest.id }
-          );
-          const { rotatedBuffer: _rb1, ...qualityResultForClient } = qualityResult;
-          return res.json({ url: fileUrl, docType, pendingReview: true, changeRequestId: changeRequest.id, qualityResult: qualityResultForClient, rotationApplied, message: tr(req, "photo.submittedForReview") });
-        }
+        await db.update(inboxItems)
+          .set({ status: "resolved", resolvedAt: new Date(), resolutionNotes: "Superseded by a newer photo submission" })
+          .where(and(eq(inboxItems.entityType, "photo_change_request"), eq(inboxItems.entityId, old.id), eq(inboxItems.status, "pending")));
       }
-
-      const updatePayload: Record<string, any> = {};
-      if (docType === "photo") { updatePayload.photoUrl = fileUrl; updatePayload.hasPhoto = true; }
-      if (docType === "nationalId") { updatePayload.hasNationalId = true; updatePayload.nationalIdFileUrl = fileUrl; }
-      if (docType === "iban") { updatePayload.hasIban = true; updatePayload.ibanFileUrl = fileUrl; }
-      if (docType === "resume") { updatePayload.resumeUrl = fileUrl; updatePayload.hasResume = true; }
-      const updated = await storage.updateCandidate(id, updatePayload);
-      if (!updated) return res.status(404).json({ message: tr(req, "candidate.notFound") });
-      const onboardingRecords = await storage.getOnboardingRecords({ candidateId: id });
-      for (const rec of onboardingRecords) {
-        if (rec.status === "converted" || rec.status === "rejected" || rec.status === "terminated") continue;
-        const isSmpRec = !rec.applicationId;
-        const syncPayload: Record<string, any> = {};
-        if (docType === "photo") syncPayload.hasPhoto = true;
-        if (docType === "nationalId") syncPayload.hasNationalId = true;
-        if (docType === "iban") syncPayload.hasIban = true;
-        if (Object.keys(syncPayload).length > 0) {
-          const merged = { ...rec, ...syncPayload };
-          syncPayload.status = computeOnboardingStatus(merged, isSmpRec);
-          await storage.updateOnboardingRecord(rec.id, syncPayload);
-        }
-      }
-      const response: Record<string, any> = { url: fileUrl, docType, candidate: updated };
-      if (photoQualityResult) {
-        const { rotatedBuffer: _rb2, ...qualityResultForClient } = photoQualityResult;
-        response.qualityResult = qualityResultForClient;
-      }
-      if (rotationApplied) response.rotationApplied = rotationApplied;
-      return res.json(response);
-    } catch (err) {
-      return handleError(res, err);
-    }
+    },
+    createPhotoChangeInboxItem: async ({ candidate, activeRecord, changeRequest, fileUrl, candidateId }) => {
+      await createInboxItem(
+        "photo_change_request",
+        `Photo change request — ${candidate.fullNameEn ?? "Unknown"}`,
+        `Employee has submitted a new profile photo for review. The previous photo remains active until this request is approved.`,
+        {
+          candidateId,
+          changeRequestId: changeRequest.id,
+          candidateName: candidate.fullNameEn,
+          employeeNumber: activeRecord!.employeeNumber ?? null,
+          newPhotoUrl: fileUrl,
+          previousPhotoUrl: candidate.photoUrl,
+        },
+        "high",
+        { entityType: "photo_change_request", entityId: changeRequest.id }
+      );
+    },
   });
+  app.post("/api/candidates/:id/documents", requireAuth, upload.single("file"), uploadDocumentsHandler);
 
   // ─── Document Deletion ───────────────────────────────────────────────────
   app.delete("/api/candidates/:id/documents/:docType", requireAuth, async (req: Request, res: Response) => {

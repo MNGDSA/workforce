@@ -5,6 +5,7 @@ import * as candidatePortalMainView from "./candidate-portal-main-view";
 import * as candidatePortalFlow from "./candidate-portal-flow";
 import * as candidatePhotoManagement from "./candidate-photo-management";
 import * as photoUploadOutageToast from "./photo-upload-outage-toast";
+import * as candidatePhotoRotationToast from "./candidate-photo-rotation-toast";
 import * as inboxAttendanceReview from "./inbox-attendance-review";
 import * as geofenceManagement from "./geofence-management";
 import * as jobPostingImportRemoved from "./job-posting-import-removed";
@@ -23,6 +24,7 @@ export const allSuites: TestSuite[] = [
   candidatePortalFlow,
   candidatePhotoManagement,
   photoUploadOutageToast,
+  candidatePhotoRotationToast,
   inboxAttendanceReview,
   geofenceManagement,
   jobPostingImportRemoved,
@@ -36,6 +38,7 @@ export {
   candidatePortalFlow,
   candidatePhotoManagement,
   photoUploadOutageToast,
+  candidatePhotoRotationToast,
   inboxAttendanceReview,
   geofenceManagement,
   jobPostingImportRemoved,
