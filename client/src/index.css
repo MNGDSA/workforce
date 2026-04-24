@@ -132,6 +132,35 @@
     overflow-y: scroll;
     scrollbar-gutter: stable;
   }
+  /* react-remove-scroll-bar (used by Radix Select / DropdownMenu / Sheet
+     portals) injects this rule into the page when a portal opens:
+       body[data-scroll-locked] {
+         overflow: hidden !important;
+         margin-right: 17px !important;
+       }
+     The `margin-right` is the library's compensation for the page
+     scrollbar that it ASSUMES disappears when it sets overflow:hidden
+     on the body. But we've already pinned the page scrollbar to be
+     permanently visible via `html { overflow-y: scroll }` above, so
+     no compensation is needed — and in RTL it actually pushes the
+     navbar / main content ~17px away from the right edge (where the
+     fixed sidebar sits), visible as a navbar shake/gap every time
+     the user opens a Select on the candidates page.
+
+     Override the margin/padding compensation. We KEEP the
+     `overflow: hidden` from the library — that's how it actually
+     locks background scroll, which is desirable. We only zero out
+     the (now-unnecessary) gap compensation.
+
+     Selector specificity: `html body[data-scroll-locked]` (0,1,2)
+     beats the library's `body[data-scroll-locked]` (0,1,1), so this
+     wins regardless of stylesheet insertion order. */
+  html body[data-scroll-locked] {
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+    padding-right: 0 !important;
+    padding-left: 0 !important;
+  }
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
