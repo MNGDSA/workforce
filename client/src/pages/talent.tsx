@@ -2190,7 +2190,7 @@ export default function TalentPage() {
           const awaitingActIds = selectedCands.filter(c => (c as any).classification === "smp" && c.status === "awaiting_activation").map(c => c.id);
           const onboardableIds = selectedCands.filter(c => (c as any).classification === "smp" && c.status !== "awaiting_activation").map(c => c.id);
           return (
-          <div className="fixed bottom-6 start-1/2 -translate-x-1/2 z-50 bg-card border border-border rounded-lg shadow-2xl px-5 py-3 flex items-center gap-4 animate-in slide-in-from-bottom-4 duration-200 flex-wrap max-w-[95vw]" data-testid="bulk-action-bar">
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-card border border-border rounded-lg shadow-2xl px-5 py-3 flex items-center gap-4 animate-in slide-in-from-bottom-4 duration-200 flex-wrap max-w-[95vw]" data-testid="bulk-action-bar">
             <span className="text-sm font-medium text-white">
               {t("bulkBar.selected", { n: formatNumber(selectedIds.size) })}
             </span>
