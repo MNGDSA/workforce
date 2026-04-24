@@ -40,3 +40,6 @@ for (const s of suites) {
 3. **Candidate Portal Flow** - Profile setup wizard, portal navigation, photo management
 4. **Inbox Attendance Review** - Inbox filters, attendance/photo review, approve/reject
 5. **Geofence Management** - Zone CRUD, map display, zone details
+6. **Photo Upload Outage Toast** - Verifies the friendlier "Photo accepted —
+   verification skipped" toast renders during a Rekognition outage on both
+   the standard upload path and the photo-change dialog (locks Task #154)

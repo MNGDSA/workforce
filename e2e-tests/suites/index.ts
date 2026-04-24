@@ -4,6 +4,7 @@ import * as profileSetupGate from "./profile-setup-gate";
 import * as candidatePortalMainView from "./candidate-portal-main-view";
 import * as candidatePortalFlow from "./candidate-portal-flow";
 import * as candidatePhotoManagement from "./candidate-photo-management";
+import * as photoUploadOutageToast from "./photo-upload-outage-toast";
 import * as inboxAttendanceReview from "./inbox-attendance-review";
 import * as geofenceManagement from "./geofence-management";
 import * as jobPostingImportRemoved from "./job-posting-import-removed";
@@ -21,6 +22,7 @@ export const allSuites: TestSuite[] = [
   candidatePortalMainView,
   candidatePortalFlow,
   candidatePhotoManagement,
+  photoUploadOutageToast,
   inboxAttendanceReview,
   geofenceManagement,
   jobPostingImportRemoved,
@@ -33,6 +35,7 @@ export {
   candidatePortalMainView,
   candidatePortalFlow,
   candidatePhotoManagement,
+  photoUploadOutageToast,
   inboxAttendanceReview,
   geofenceManagement,
   jobPostingImportRemoved,
