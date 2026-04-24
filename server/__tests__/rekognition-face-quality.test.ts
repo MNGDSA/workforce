@@ -4,7 +4,9 @@
 // extracted so we can drive it with synthetic Rekognition responses
 // and lock the gating thresholds without burning live AWS calls.
 //
-// Run with: `npx tsx --test server/__tests__/rekognition-face-quality.test.ts`
+// Run with: `npm test` (primary entry point — runs every suite),
+// or target this file alone via
+// `npx tsx --test server/__tests__/rekognition-face-quality.test.ts`.
 
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";

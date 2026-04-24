@@ -6,7 +6,9 @@
 // landmarks) at their just-passes / just-fails boundaries so a
 // future refactor can't silently move them.
 //
-// Run with: `npx tsx --test server/__tests__/rekognition-face-quality-thresholds.test.ts`
+// Run with: `npm test` (primary entry point — runs every suite),
+// or target this file alone via
+// `npx tsx --test server/__tests__/rekognition-face-quality-thresholds.test.ts`.
 
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
