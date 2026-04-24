@@ -112,6 +112,16 @@
   * {
     @apply border-border;
   }
+  /* Reserve a permanent gutter for the vertical scrollbar so opening
+     a Radix Select / DropdownMenu / Sheet (which calls
+     react-remove-scroll → `body { overflow: hidden }`) doesn't widen
+     the viewport. Without this, the fixed-position sidebar in RTL
+     (anchored to `inset-inline-start: 0` → right edge) jumps ~17px
+     every time a dropdown opens or closes — the "side menu shake"
+     reported on the candidates page in Arabic. */
+  html {
+    scrollbar-gutter: stable;
+  }
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }

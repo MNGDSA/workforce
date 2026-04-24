@@ -238,17 +238,25 @@ export async function validateFaceQuality(photoPath: string): Promise<FaceQualit
     // platform swap) degrades to the standard no-face result
     // rather than escalating to invalid_image via the outer catch.
     console.log("[Rekognition] No face on first pass — attempting ±90° rotation rescue");
-    let sharp: typeof import("sharp").default;
+    // Lazy-load sharp so a missing native binary (rare, but possible
+    // after a platform swap) doesn't take down the rest of the
+    // photo-quality pipeline. `runRotationRescue` already
+    // swallows rotate/detect throws and never re-raises, so the
+    // only thing this outer catch handles is the dynamic import
+    // itself failing — in which case we fall back to the standard
+    // no-face result rather than escalating to invalid_image via
+    // the outer try/catch.
+    let rescueResult: FaceQualityResult;
     try {
-      sharp = (await import("sharp")).default;
+      const sharp = (await import("sharp")).default;
+      rescueResult = await runRotationRescue(originalFaces, imageBytes, {
+        rotate: (bytes, degrees) => sharp(bytes).rotate(degrees).jpeg({ quality: 92 }).toBuffer(),
+        detect,
+      });
     } catch (sharpImportErr) {
       console.warn("[Rekognition] sharp module unavailable — skipping rotation rescue", sharpImportErr);
       return evaluateFaceDetails(originalFaces);
     }
-    const rescueResult = await runRotationRescue(originalFaces, imageBytes, {
-      rotate: (bytes, degrees) => sharp(bytes).rotate(degrees).jpeg({ quality: 92 }).toBuffer(),
-      detect,
-    });
     if (rescueResult.rotationApplied) {
       console.log(`[Rekognition] Rotation rescue succeeded with ${rescueResult.rotationApplied}°`);
     }
