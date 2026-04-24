@@ -136,6 +136,12 @@ export async function overwriteFile(
   }));
 }
 
+// Task #160 — route deletes through `extractStorageKeyFromUrl` so a
+// CDN swap / custom domain / signed-URL change throws loudly instead
+// of silently no-op'ing. Without this, a "delete" on a drifted URL
+// would return success while the bytes remain in storage — a
+// privacy and storage-bloat hazard if the candidate later requests
+// deletion under their data rights.
 export async function deleteFile(fileUrl: string): Promise<void> {
   if (!isProduction) {
     if (fileUrl.startsWith("/uploads/")) {
@@ -147,18 +153,19 @@ export async function deleteFile(fileUrl: string): Promise<void> {
     return;
   }
 
-  if (fileUrl.includes(spacesEndpoint)) {
-    const key = fileUrl.split(`${spacesEndpoint}/`)[1];
-    if (key) {
-      const client = getS3Client();
-      await client.send(new DeleteObjectCommand({
-        Bucket: spacesBucket,
-        Key: key,
-      }));
-    }
-  }
+  const key = extractStorageKeyFromUrl(fileUrl);
+  const client = getS3Client();
+  await client.send(new DeleteObjectCommand({
+    Bucket: spacesBucket,
+    Key: key,
+  }));
 }
 
+// Task #160 — route downloads through `extractStorageKeyFromUrl` for
+// the same reason as `deleteFile`. The previous `fetch(fileUrl)`
+// fallback would happen to succeed for public CDN URLs and fail in
+// a confusing way (far from the root cause) for private paths. A
+// loud throw at the parser surfaces URL drift at the first request.
 export async function getFileBuffer(fileUrl: string): Promise<Buffer> {
   if (!isProduction || fileUrl.startsWith("/uploads/")) {
     const localPath = fileUrl.startsWith("/uploads/")
@@ -167,25 +174,17 @@ export async function getFileBuffer(fileUrl: string): Promise<Buffer> {
     return fs.readFileSync(localPath);
   }
 
-  if (fileUrl.includes(spacesEndpoint)) {
-    const key = fileUrl.split(`${spacesEndpoint}/`)[1];
-    if (key) {
-      const client = getS3Client();
-      const resp = await client.send(new GetObjectCommand({
-        Bucket: spacesBucket,
-        Key: key,
-      }));
-      const chunks: Buffer[] = [];
-      for await (const chunk of resp.Body as any) {
-        chunks.push(Buffer.from(chunk));
-      }
-      return Buffer.concat(chunks);
-    }
+  const key = extractStorageKeyFromUrl(fileUrl);
+  const client = getS3Client();
+  const resp = await client.send(new GetObjectCommand({
+    Bucket: spacesBucket,
+    Key: key,
+  }));
+  const chunks: Buffer[] = [];
+  for await (const chunk of resp.Body as any) {
+    chunks.push(Buffer.from(chunk));
   }
-
-  const resp = await fetch(fileUrl);
-  if (!resp.ok) throw new Error(`Failed to fetch file: ${resp.status}`);
-  return Buffer.from(await resp.arrayBuffer());
+  return Buffer.concat(chunks);
 }
 
 export function getPublicUrl(storedUrl: string): string {
