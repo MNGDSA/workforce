@@ -31,6 +31,9 @@ import {
   Search,
   Share2,
   ExternalLink,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from "lucide-react";
 
 type JobPosting = {
@@ -60,6 +63,8 @@ type Application = {
   questionSetAnswers?: { questionSetId?: string; answers?: Record<string, string> } | null;
 };
 
+type GenderValue = "male" | "female" | "other" | "prefer_not_to_say";
+
 type CandidateInfo = {
   id: string;
   fullNameEn: string;
@@ -68,6 +73,7 @@ type CandidateInfo = {
   email?: string;
   city?: string;
   nationality?: string;
+  gender?: GenderValue | null;
   photoUrl?: string | null;
 };
 
@@ -124,31 +130,154 @@ function salaryLabel(job: JobPosting, t: TFunction) {
 }
 
 const VALID_STATUSES = ["new", "shortlisted", "interviewed", "offered", "hired", "rejected"] as const;
-const BULK_FIXED_COLS = ["__app_id", "Candidate Name", "National ID", "Email", "Phone", "Current Status", "New Status"];
+
+// Status sort order — follows the recruiting pipeline rather than alphabetical
+// so ascending/descending sort tells a meaningful story to recruiters.
+const STATUS_ORDER: Record<string, number> = {
+  new: 0,
+  reviewing: 1,
+  shortlisted: 2,
+  interviewed: 3,
+  offered: 4,
+  hired: 5,
+  rejected: 6,
+  withdrawn: 7,
+  closed: 8,
+};
+
+// Sex sort order — alphabetical-by-meaning for stable grouping.
+// Female first matches the pink-then-blue colour pairing used in badges.
+const GENDER_ORDER: Record<GenderValue, number> = {
+  female: 0,
+  male: 1,
+  other: 2,
+  prefer_not_to_say: 3,
+};
+
+// Maps a candidate's gender enum value to a Tailwind badge style.
+// Pink for female / blue for male as requested. Other / prefer-not-to-say /
+// missing render as a neutral muted dash so we never assume on the candidate's
+// behalf. Colours mirror the existing status-badge palette
+// (`bg-X-500/10 text-X-400`) so they stay readable in dark mode.
+function genderBadgeClass(gender: GenderValue | null | undefined): string {
+  if (gender === "female") return "bg-pink-500/10 text-pink-400";
+  if (gender === "male")   return "bg-blue-500/10 text-blue-400";
+  return "bg-muted text-muted-foreground";
+}
+
+function genderLabel(gender: GenderValue | null | undefined, t: TFunction): string {
+  if (gender === "female") return t("jobPosting:detail.sexFemale");
+  if (gender === "male")   return t("jobPosting:detail.sexMale");
+  if (gender === "other" || gender === "prefer_not_to_say") return t("jobPosting:detail.sexOther");
+  return "—";
+}
+
+// Columns the user can sort by. Keep this in sync with the sortable headers
+// rendered in the table — adding a new sort key here without rendering a
+// header for it (or vice versa) is a silent bug.
+type SortKey = "candidate" | "city" | "sex" | "status" | "applied";
+type SortDir = "asc" | "desc";
+
+// Sortable column header. Renders a button inside a <th> so keyboard / screen
+// reader users can activate sort just like a mouse click. The icon switches
+// from the neutral "double arrow" (column not active) to a single arrow that
+// reflects the current direction (column active). Default-export styling
+// (uppercase, muted text) is preserved so this looks identical to the
+// existing static headers when not active.
+function SortableHeader({
+  label,
+  sortKey,
+  activeKey,
+  dir,
+  onSort,
+  ariaLabel,
+  className = "",
+  testId,
+}: {
+  label: string;
+  sortKey: SortKey;
+  activeKey: SortKey;
+  dir: SortDir;
+  onSort: (key: SortKey) => void;
+  ariaLabel: string;
+  className?: string;
+  testId?: string;
+}) {
+  const isActive = activeKey === sortKey;
+  const Icon = !isActive ? ArrowUpDown : dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <th
+      scope="col"
+      aria-sort={isActive ? (dir === "asc" ? "ascending" : "descending") : "none"}
+      className={`px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground ${className}`}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        aria-label={ariaLabel}
+        className={`inline-flex items-center gap-1 hover:text-white transition-colors ${
+          isActive ? "text-white" : ""
+        }`}
+        data-testid={testId}
+      >
+        <span>{label}</span>
+        <Icon className="h-3 w-3 opacity-70" />
+      </button>
+    </th>
+  );
+}
 
 function exportToExcel(
   job: JobPosting,
   applications: Application[],
   candidates: CandidateInfo[],
   questions: ExportQuestion[] = [],
+  t: TFunction,
 ) {
   const candidateMap = Object.fromEntries(candidates.map((c) => [c.id, c]));
   const questionHeaders = questions.map((q, i) => `Q${i + 1}: ${q.text}`);
-  const headers = [...BULK_FIXED_COLS, ...questionHeaders];
+  // City and Sex are inserted right after Phone so the human-identifying
+  // columns cluster together before the status columns. The recruiter
+  // workflow is "export → triage offline → come back to the app to update
+  // statuses" — there is no server-side import path that would break from
+  // adding columns (see task #173 plan for verification).
+  const fixedHeaders = [
+    t("jobPosting:detail.exportColAppId"),
+    t("jobPosting:detail.exportColName"),
+    t("jobPosting:detail.exportColNationalId"),
+    t("jobPosting:detail.exportColEmail"),
+    t("jobPosting:detail.exportColPhone"),
+    t("jobPosting:detail.colCity"),
+    t("jobPosting:detail.colSex"),
+    t("jobPosting:detail.exportColCurrentStatus"),
+    t("jobPosting:detail.exportColNewStatus"),
+  ];
+  const headers = [...fixedHeaders, ...questionHeaders];
   const rows = applications.map((app) => {
     const c = candidateMap[app.candidateId];
     const answers = app.questionSetAnswers?.answers ?? {};
     return [
-      app.id, c?.fullNameEn ?? "Unknown", c?.nationalId ?? "", c?.email ?? "", c?.phone ?? "",
-      app.status, app.status,
+      app.id,
+      c?.fullNameEn ?? t("jobPosting:detail.unknownCandidate"),
+      c?.nationalId ?? "",
+      c?.email ?? "",
+      c?.phone ?? "",
+      c?.city ?? "",
+      genderLabel(c?.gender, t),
+      app.status,
+      app.status,
       // For job_ranking we expand the comma-joined answer into a numbered
-      // list inside the same cell ("1. سائق | 2. منظم | 3. خدمة عملاء").
-      // This keeps the column layout stable for the bulk-status-update flow
-      // while exposing every ranked option to the recruiter.
+      // list inside the same cell ("1. سائق | 2. منظم | 3. خدمة عملاء")
+      // so recruiters see the full ranking, not just the first preference.
       ...questions.map((q) => formatAnswerForDisplay(q, answers[q.id] ?? "")),
     ];
   });
-  const instructionRow = [`# BULK STATUS UPDATE — Job: ${job.title} | Only edit the "New Status" column | Valid values: ${VALID_STATUSES.join(", ")} | Do NOT add/remove/reorder rows or columns`];
+  const instructionRow = [
+    t("jobPosting:detail.exportInstruction", {
+      title: job.title,
+      validStatuses: VALID_STATUSES.join(", "),
+    }),
+  ];
   const ws = XLSX.utils.aoa_to_sheet([instructionRow, headers, ...rows]);
   const colWidths = headers.map((h, i) => ({
     wch: Math.max(h.length, ...rows.map((r) => String(r[i] ?? "").length), 14),
@@ -169,6 +298,27 @@ export default function JobPostingDetailPage() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [appSearch, setAppSearch] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("applied");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  // Active language drives the locale-aware string compare so Arabic city
+  // and candidate names sort in their own collation order rather than by
+  // raw code-point. `undefined` falls back to the browser default.
+  const { i18n } = useTranslation();
+  const collator = new Intl.Collator(i18n.language || undefined, { sensitivity: "base" });
+
+  // Click a header → toggle direction if it's already the active column,
+  // otherwise switch to that column with a sensible default direction
+  // (descending for "applied" so newest stays on top, ascending for everything
+  // else so the alphabet/order makes sense at a glance).
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(key === "applied" ? "desc" : "asc");
+    }
+  };
 
   const { data: job, isLoading: jobLoading } = useQuery<JobPosting>({
     queryKey: ["/api/jobs", params.id],
@@ -202,6 +352,8 @@ export default function JobPostingDetailPage() {
     onError: () => toast({ title: t("jobPosting:detail.updateFailed"), variant: "destructive" }),
   });
 
+  // Filter first, then sort. Order matters — sorting a 0-row list is cheap
+  // and the empty-state UI keys off `filteredApps.length`.
   const filteredApps = applications.filter(a => {
     const c = candidateMap[a.candidateId];
     const q = appSearch.trim().toLowerCase();
@@ -212,6 +364,59 @@ export default function JobPostingDetailPage() {
       || c?.email?.toLowerCase().includes(q);
     const matchesStatus = statusFilter === "all" || a.status === statusFilter;
     return matchesSearch && matchesStatus;
+  });
+
+  // One comparator for every column. Using a stable shape (always returning
+  // a signed number) keeps the sort deterministic. Each branch handles its
+  // own missing-value semantics: blanks/nulls always sort to the bottom
+  // regardless of direction so empty rows don't surprise the recruiter.
+  const sortedApps = [...filteredApps].sort((a, b) => {
+    const ca = candidateMap[a.candidateId];
+    const cb = candidateMap[b.candidateId];
+    const dir = sortDir === "asc" ? 1 : -1;
+
+    // "Blank to bottom" helper: returns a non-zero number that places the
+    // empty side after the populated side, ignoring `dir` (so reversing sort
+    // direction doesn't suddenly hide blank rows at the top).
+    const blankCmp = (aBlank: boolean, bBlank: boolean): number | null => {
+      if (aBlank && bBlank) return 0;
+      if (aBlank) return 1;
+      if (bBlank) return -1;
+      return null;
+    };
+
+    switch (sortKey) {
+      case "candidate": {
+        const av = ca?.fullNameEn ?? "";
+        const bv = cb?.fullNameEn ?? "";
+        const blank = blankCmp(!av, !bv);
+        if (blank !== null) return blank;
+        return collator.compare(av, bv) * dir;
+      }
+      case "city": {
+        const av = ca?.city ?? "";
+        const bv = cb?.city ?? "";
+        const blank = blankCmp(!av, !bv);
+        if (blank !== null) return blank;
+        return collator.compare(av, bv) * dir;
+      }
+      case "sex": {
+        const av = ca?.gender;
+        const bv = cb?.gender;
+        const blank = blankCmp(!av, !bv);
+        if (blank !== null) return blank;
+        return ((GENDER_ORDER[av!] ?? 99) - (GENDER_ORDER[bv!] ?? 99)) * dir;
+      }
+      case "status": {
+        return ((STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99)) * dir;
+      }
+      case "applied":
+      default: {
+        const at = a.appliedAt ? new Date(a.appliedAt).getTime() : 0;
+        const bt = b.appliedAt ? new Date(b.appliedAt).getTime() : 0;
+        return (at - bt) * dir;
+      }
+    }
   });
 
   const statusCounts = applications.reduce<Record<string, number>>((acc, a) => {
@@ -393,7 +598,7 @@ export default function JobPostingDetailPage() {
                   size="sm"
                   variant="outline"
                   className="border-border gap-1.5"
-                  onClick={() => exportToExcel(job, applications, candidates, questions)}
+                  onClick={() => exportToExcel(job, applications, candidates, questions, t)}
                   disabled={applications.length === 0}
                   data-testid="button-export-applicants"
                 >
@@ -423,17 +628,62 @@ export default function JobPostingDetailPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-border text-start">
-                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("jobPosting:detail.colCandidate")}</th>
+                        <SortableHeader
+                          label={t("jobPosting:detail.colCandidate")}
+                          sortKey="candidate"
+                          activeKey={sortKey}
+                          dir={sortDir}
+                          onSort={handleSort}
+                          ariaLabel={t("jobPosting:detail.sortBy", { col: t("jobPosting:detail.colCandidate") })}
+                          className="px-6"
+                          testId="header-sort-candidate"
+                        />
                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">{t("jobPosting:detail.colContact")}</th>
-                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("jobPosting:detail.colStatus")}</th>
-                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden sm:table-cell">{t("jobPosting:detail.colApplied")}</th>
+                        <SortableHeader
+                          label={t("jobPosting:detail.colCity")}
+                          sortKey="city"
+                          activeKey={sortKey}
+                          dir={sortDir}
+                          onSort={handleSort}
+                          ariaLabel={t("jobPosting:detail.sortBy", { col: t("jobPosting:detail.colCity") })}
+                          className="hidden sm:table-cell"
+                          testId="header-sort-city"
+                        />
+                        <SortableHeader
+                          label={t("jobPosting:detail.colSex")}
+                          sortKey="sex"
+                          activeKey={sortKey}
+                          dir={sortDir}
+                          onSort={handleSort}
+                          ariaLabel={t("jobPosting:detail.sortBy", { col: t("jobPosting:detail.colSex") })}
+                          testId="header-sort-sex"
+                        />
+                        <SortableHeader
+                          label={t("jobPosting:detail.colStatus")}
+                          sortKey="status"
+                          activeKey={sortKey}
+                          dir={sortDir}
+                          onSort={handleSort}
+                          ariaLabel={t("jobPosting:detail.sortBy", { col: t("jobPosting:detail.colStatus") })}
+                          testId="header-sort-status"
+                        />
+                        <SortableHeader
+                          label={t("jobPosting:detail.colApplied")}
+                          sortKey="applied"
+                          activeKey={sortKey}
+                          dir={sortDir}
+                          onSort={handleSort}
+                          ariaLabel={t("jobPosting:detail.sortBy", { col: t("jobPosting:detail.colApplied") })}
+                          className="hidden sm:table-cell"
+                          testId="header-sort-applied"
+                        />
                         {hasQuestions && (
                           <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("jobPosting:detail.colAnswers")}</th>
                         )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {filteredApps.map((app) => {
+                      {sortedApps.map((app) => {
                         const candidate = candidateMap[app.candidateId];
                         const answers = app.questionSetAnswers?.answers ?? {};
                         const hasAnswers = Object.keys(answers).length > 0;
@@ -463,6 +713,26 @@ export default function JobPostingDetailPage() {
                                   {candidate?.phone && <div dir="ltr">{candidate.phone}</div>}
                                   {!candidate?.email && !candidate?.phone && <span>—</span>}
                                 </div>
+                              </td>
+                              <td
+                                className="px-4 py-3 hidden sm:table-cell text-xs text-muted-foreground max-w-[12rem] truncate"
+                                data-testid={`text-applicant-city-${app.id}`}
+                              >
+                                {candidate?.city
+                                  ? <bdi>{candidate.city}</bdi>
+                                  : <span className="text-muted-foreground/40">—</span>}
+                              </td>
+                              <td className="px-4 py-3" data-testid={`text-applicant-sex-${app.id}`}>
+                                {candidate?.gender === "male" || candidate?.gender === "female" ? (
+                                  <Badge
+                                    variant="outline"
+                                    className={`border-0 text-xs ${genderBadgeClass(candidate.gender)}`}
+                                  >
+                                    {genderLabel(candidate.gender, t)}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground/40">—</span>
+                                )}
                               </td>
                               <td className="px-4 py-3">
                                 <Badge variant="outline" className={`border-0 text-xs capitalize ${appStatusStyle[app.status] ?? "bg-muted text-muted-foreground"}`}>
@@ -499,7 +769,10 @@ export default function JobPostingDetailPage() {
                             </tr>
                             {isExpanded && hasAnswers && (
                               <tr key={`${app.id}-answers`} className="bg-muted/5">
-                                <td colSpan={hasQuestions ? 5 : 4} className="px-6 pb-4 pt-2">
+                                {/* Columns now: Candidate · Contact · City · Sex · Status · Applied · (Answers).
+                                    colSpan must always cover every header rendered above so the
+                                    expanded answers panel spans the full table width. */}
+                                <td colSpan={hasQuestions ? 7 : 6} className="px-6 pb-4 pt-2">
                                   <div className="border border-border rounded-md p-4 space-y-3 bg-muted/10">
                                     <p className="text-xs text-primary font-semibold uppercase tracking-wider">
                                       {t("jobPosting:detail.screeningAnswers", { name: questionSet?.name ?? "" })}

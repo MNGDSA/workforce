@@ -149,6 +149,7 @@ export type ApplicationCandidateSummary = {
   email: string | null;
   city: string | null;
   nationality: string | null;
+  gender: "male" | "female" | "other" | "prefer_not_to_say" | null;
   photoUrl: string | null;
 };
 
@@ -1295,6 +1296,7 @@ export class DatabaseStorage implements IStorage {
           email: candidates.email,
           city: candidates.city,
           nationality: candidates.nationality,
+          gender: candidates.gender,
           photoUrl: candidates.photoUrl,
         },
       })
