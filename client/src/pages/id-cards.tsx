@@ -959,7 +959,7 @@ function TemplateDesigner() {
                     {currentPlacements.map((fp) => {
                       const sampleVal = fp.key === "photo"
                         ? (SAMPLE_EMPLOYEE.fullName?.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase() ?? "")
-                        : (SAMPLE_EMPLOYEE as Record<string, unknown>)[fp.key] as string || "";
+                        : (SAMPLE_EMPLOYEE as unknown as Record<string, unknown>)[fp.key] as string || "";
                       return (
                         <DraggableField
                           key={fp.key}
@@ -1260,7 +1260,7 @@ function PrinterPluginManager() {
                     return (
                       <div key={field.key} className="space-y-1">
                         <Label className="text-zinc-400 text-xs">{fLabel}</Label>
-                        {field.type === "select" && "options" in field ? (
+                        {(field.type as string) === "select" && "options" in field ? (
                           <Select
                             value={form.config[field.key] || ""}
                             onValueChange={(v) => setForm((f) => ({ ...f, config: { ...f.config, [field.key]: v } }))}

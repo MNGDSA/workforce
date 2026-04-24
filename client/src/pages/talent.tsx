@@ -1065,11 +1065,11 @@ function CandidateProfileSheet({
                 </p>
                 <div className="rounded-sm border border-border bg-muted/20 p-3 text-xs space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">{t("profile.phoneConflict.holderLabel", { defaultValue: "Current holder" } as any)}</span>
+                    <span className="text-muted-foreground">{String(t("profile.phoneConflict.holderLabel", { defaultValue: "Current holder" } as any))}</span>
                     <span className="text-white font-medium"><bdi>{phoneConflict?.conflict.fullNameEn}</bdi></span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">{t("profile.phoneConflict.classificationLabel", { defaultValue: "Type" } as any)}</span>
+                    <span className="text-muted-foreground">{String(t("profile.phoneConflict.classificationLabel", { defaultValue: "Type" } as any))}</span>
                     <span className="text-white">
                       {phoneConflict?.conflict.classification === "smp"
                         ? String(t("classification.smp", { defaultValue: "SMP" } as any))
@@ -1077,7 +1077,7 @@ function CandidateProfileSheet({
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">{t("profile.phoneConflict.statusLabel", { defaultValue: "Status" } as any)}</span>
+                    <span className="text-muted-foreground">{String(t("profile.phoneConflict.statusLabel", { defaultValue: "Status" } as any))}</span>
                     <span className="text-white">{phoneConflict?.conflict.status}</span>
                   </div>
                 </div>

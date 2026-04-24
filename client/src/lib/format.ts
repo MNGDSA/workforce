@@ -24,10 +24,16 @@ const BASE_FORMATTER_LOCALE = "en-US";
 
 export function formatNumber(
   value: number | string,
-  opts?: Intl.NumberFormatOptions,
+  optsOrLocale?: Intl.NumberFormatOptions | string,
 ): string {
   const num = typeof value === "string" ? Number(value) : value;
   if (!Number.isFinite(num)) return "";
+  // Per the module rule above, the locale never changes the digit glyphs
+  // (we always force Latin via numberingSystem). When callers pass a locale
+  // string instead of NumberFormatOptions we accept and ignore it so the
+  // call sites stay clean.
+  const opts =
+    optsOrLocale && typeof optsOrLocale === "object" ? optsOrLocale : undefined;
   return new Intl.NumberFormat(BASE_FORMATTER_LOCALE, {
     numberingSystem: NUMBERING_SYSTEM,
     ...opts,

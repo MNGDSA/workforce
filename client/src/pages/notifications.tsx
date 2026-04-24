@@ -724,7 +724,7 @@ function SmsPluginManager() {
                           )}
                         </div>
                       </div>
-                      {testResult.rawResponse && (
+                      {Boolean(testResult.rawResponse) && (
                         <details className="text-muted-foreground">
                           <summary className="cursor-pointer hover:text-white select-none">{t("notifications:sms.configurePanel.rawResponse")}</summary>
                           <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-[10px] bg-muted/20 p-2 rounded">

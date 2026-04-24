@@ -172,7 +172,7 @@ export async function sendSmsViaPlugin(
   }
 
   const sendConfig = config.send;
-  const endpoint = (sendConfig.endpoint ?? "").replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? "");
+  const endpoint = (sendConfig.endpoint ?? "").replace(/\{\{(\w+)\}\}/g, (_, k) => String(vars[k] ?? ""));
   const headers = resolvePlaceholders(sendConfig.headers ?? {}, vars) as Record<string, string>;
   const resolvedBody = resolvePlaceholders(sendConfig.body ?? {}, vars);
   const resolvedQueryParams = resolvePlaceholders(sendConfig.queryParams ?? {}, vars) as Record<string, string>;

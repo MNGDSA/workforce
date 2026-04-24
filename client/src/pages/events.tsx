@@ -78,7 +78,8 @@ import {
 } from "@/components/ui/form";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import type { Event } from "@shared/schema";
+import type { Event as DbEvent } from "@shared/schema";
+type Event = DbEvent & { filledPositions: number };
 import { useTranslation, Trans } from "react-i18next";
 import { formatNumber } from "@/lib/format";
 

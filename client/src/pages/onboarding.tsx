@@ -1809,6 +1809,7 @@ export default function OnboardingPage() {
                               startDate: rec.startDate ?? "",
                               salary: "",
                               eventId: rec.eventId ?? "",
+                              smpCompanyId: "",
                             });
                           }}
                         >

@@ -679,6 +679,7 @@ function ApplicantsSheet({
 export default function JobPostingPage() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { t, i18n } = useTranslation(["jobPosting"]);
   const isAr = i18n.language.startsWith("ar");
   const [search, setSearch] = useState("");

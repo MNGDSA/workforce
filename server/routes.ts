@@ -1,4 +1,17 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request as ExpressRequest, Response } from "express";
+
+// Narrow Request typing for this module: routes.ts defines all our REST
+// handlers and never relies on `:foo*` style array params or repeated
+// query keys. Casting `req.params` and `req.query` away from
+// Express's permissive `string | string[]` defaults keeps each handler
+// free of `String(req.params.id)` boilerplate while remaining a faithful
+// reflection of how the API is actually exercised in production.
+type Request = ExpressRequest<
+  Record<string, string>,
+  any,
+  any,
+  Record<string, string | undefined>
+>;
 import { createServer, type Server } from "http";
 import express from "express";
 import multer from "multer";
@@ -19,6 +32,7 @@ import { saPhoneSchema, patchSaPhoneSchema, normalizeSaPhone } from "@shared/pho
 // `server/__tests__/candidate-iban-resolution.test.ts`; unit-level
 // behaviour by `server/__tests__/iban.test.ts`.
 import { uploadFile, deleteFile, getMimeType, getFileBuffer, overwriteFile } from "./file-storage";
+import { getClientIp } from "./client-ip";
 import { getAuthenticatedUser, listUserRepos, getRepo, listRepoIssues, listRepoPullRequests } from "./github";
 import {
   inboxItems,
@@ -424,7 +438,7 @@ export async function registerRoutes(
     if (status === "missing") {
       // Session points to a user that no longer exists (e.g. deleted/re-registered).
       // Force the client to clear the bad session and log in again.
-      try { (req.session as any)?.destroy?.(() => undefined); } catch {}
+      try { ((req as any).session)?.destroy?.(() => undefined); } catch {}
       const isProd = process.env.NODE_ENV === "production";
       res.clearCookie("wf_auth",     { path: "/", httpOnly: true, sameSite: "lax", secure: isProd });
       res.clearCookie("connect.sid", { path: "/", httpOnly: true, sameSite: "lax", secure: isProd });
@@ -924,7 +938,7 @@ export async function registerRoutes(
       }
     }
     // 2. Destroy the legacy express-session if present.
-    try { (req.session as any)?.destroy?.(() => undefined); } catch {}
+    try { ((req as any).session)?.destroy?.(() => undefined); } catch {}
     // 3. Tell the browser to drop both cookies (web logouts only need
     //    this — mobile clients don't store cookies — but it's harmless
     //    on a Bearer-only request and keeps the response idempotent).
@@ -3429,14 +3443,14 @@ export async function registerRoutes(
             const date = at.toLocaleDateString("en-SA", { day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Riyadh" });
             const time = at.toLocaleTimeString("en-SA", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Riyadh" });
 
-            const resolved = interview.notes
+            const resolved = (interview.notes ?? "")
               .replace(/\{\{batch\}\}/g,    interview.groupName   ?? "")
               .replace(/\{\{date\}\}/g,     date)
               .replace(/\{\{time\}\}/g,     time)
               .replace(/\{\{venue\}\}/g,    interview.type        ?? "")
               .replace(/\{\{location\}\}/g, interview.meetingUrl  ?? "");
 
-            for (const candidateId of interview.invitedCandidateIds) {
+            for (const candidateId of interview.invitedCandidateIds ?? []) {
               const candidate = await storage.getCandidate(candidateId);
               if (!candidate?.phone) { console.warn(`[SMS] Candidate ${candidateId} has no phone — skipped`); continue; }
               const result = await sendSmsViaPlugin(smsPlugin, candidate.phone, resolved);
@@ -4964,8 +4978,8 @@ export async function registerRoutes(
         }
         if (result.reason === "in_use") {
           return res.status(409).json({
-            message: tr(req, "role.assignedToUsers", { count: result.userCount }),
-            userCount: result.userCount,
+            message: tr(req, "role.assignedToUsers", { count: result.userCount ?? 0 }),
+            userCount: result.userCount ?? 0,
           });
         }
         return res.status(404).json({ message: tr(req, "role.notFound") });
@@ -5279,7 +5293,7 @@ export async function registerRoutes(
       if (pending) {
         const updated = await storage.updateCandidateContract(pending.id, {
           templateId: template.id,
-          snapshotArticles: template.articles,
+          snapshotArticles: template.articles as any,
           snapshotVariables: buildVariableSnapshot(candidate, template, ob),
           status: "awaiting_signing",
         });
@@ -5301,7 +5315,7 @@ export async function registerRoutes(
         onboardingId: ob.id,
         templateId: template.id,
         status: "awaiting_signing",
-        snapshotArticles: template.articles,
+        snapshotArticles: template.articles as any,
         snapshotVariables: buildVariableSnapshot(candidate, template, ob),
       });
 
@@ -5347,7 +5361,7 @@ export async function registerRoutes(
           if (pending) {
             await storage.updateCandidateContract(pending.id, {
               templateId: template.id,
-              snapshotArticles: template.articles,
+              snapshotArticles: template.articles as any,
               snapshotVariables: buildVariableSnapshot(candidate, template, ob),
               status: "awaiting_signing",
             });
@@ -5357,7 +5371,7 @@ export async function registerRoutes(
               onboardingId: ob.id,
               templateId: template.id,
               status: "awaiting_signing",
-              snapshotArticles: template.articles,
+              snapshotArticles: template.articles as any,
               snapshotVariables: buildVariableSnapshot(candidate, template, ob),
             });
             await storage.updateOnboardingRecord(ob.id, { hasSignedContract: false });
@@ -5515,7 +5529,7 @@ export async function registerRoutes(
         name: config.name,
         version: config.version,
         description: config.description ?? null,
-        pluginConfig: config as Record<string, unknown>,
+        pluginConfig: config as unknown as Record<string, unknown>,
         credentials: (credentials ?? {}) as Record<string, unknown>,
         isActive: false,
       });
@@ -5651,7 +5665,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.get("/api/printer-plugins/active", requireAuth, async (_req: Request, res: Response) => {
+  app.get("/api/printer-plugins/active", requireAuth, async (req: Request, res: Response) => {
     try {
       const plugin = await storage.getActivePrinterPlugin();
       if (!plugin) return res.status(404).json({ message: tr(req, "plugin.noActivePrinter") });
@@ -6135,7 +6149,7 @@ export async function registerRoutes(
         const user = await storage.getUser(authUserId);
         const isAdmin = req.authIsSuperAdmin || req.authRoleSlug !== "candidate";
         if (!isAdmin) {
-          const candidate = user ? await storage.getCandidateByNationalId(user.nationalId) : null;
+          const candidate = user?.nationalId ? await storage.getCandidateByNationalId(user.nationalId) : null;
           if (!candidate || wfRecord.candidateId !== candidate.id) {
             return res.status(403).json({ message: tr(req, "common.accessDenied") });
           }
@@ -6811,7 +6825,7 @@ export async function registerRoutes(
   const inboxBulkSchema = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) });
   const BULK_PROTECTED_TYPES = ["photo_change_request", "attendance_verification", "excuse_request"];
 
-  async function rejectIfProtectedTypes(ids: string[], res: Response): Promise<boolean> {
+  async function rejectIfProtectedTypes(req: Request, res: Response, ids: string[]): Promise<boolean> {
     const items = await Promise.all(ids.map(id => storage.getInboxItem(id)));
     const protected_ = items.filter(i => i && BULK_PROTECTED_TYPES.includes(i.type));
     if (protected_.length > 0) {
@@ -6828,7 +6842,7 @@ export async function registerRoutes(
   app.post("/api/inbox/bulk-resolve", requirePermission("inbox:manage"), async (req: Request, res: Response) => {
     try {
       const { ids } = inboxBulkSchema.parse(req.body);
-      if (await rejectIfProtectedTypes(ids, res)) return;
+      if (await rejectIfProtectedTypes(req, res, ids)) return;
       const resolvedBy = (req as any).userId ?? "system";
       const count = await storage.bulkResolveInboxItems(ids, resolvedBy);
       return res.json({ resolved: count });
@@ -6838,7 +6852,7 @@ export async function registerRoutes(
   app.post("/api/inbox/bulk-dismiss", requirePermission("inbox:manage"), async (req: Request, res: Response) => {
     try {
       const { ids } = inboxBulkSchema.parse(req.body);
-      if (await rejectIfProtectedTypes(ids, res)) return;
+      if (await rejectIfProtectedTypes(req, res, ids)) return;
       const resolvedBy = (req as any).userId ?? "system";
       const count = await storage.bulkDismissInboxItems(ids, resolvedBy);
       return res.json({ dismissed: count });
@@ -6866,7 +6880,7 @@ export async function registerRoutes(
       const user = await storage.getUser(authUserId);
       const isAdmin = req.authIsSuperAdmin || req.authRoleSlug !== "candidate";
       if (!isAdmin) {
-        const candidate = user ? await storage.getCandidateByNationalId(user.nationalId) : null;
+        const candidate = user?.nationalId ? await storage.getCandidateByNationalId(user.nationalId) : null;
         if (!candidate || wf.candidateId !== candidate.id) {
           return res.status(403).json({ message: tr(req, "common.accessDenied") });
         }
@@ -6939,7 +6953,7 @@ export async function registerRoutes(
       if (workforceId && !isAdmin) {
         const wf = await storage.getWorkforceEmployee(workforceId);
         if (wf) {
-          const candidate = user ? await storage.getCandidateByNationalId(user.nationalId) : null;
+          const candidate = user?.nationalId ? await storage.getCandidateByNationalId(user.nationalId) : null;
           if (!candidate || wf.candidateId !== candidate.id) {
             return res.status(403).json({ message: tr(req, "common.accessDenied") });
           }
@@ -6964,10 +6978,9 @@ export async function registerRoutes(
     try {
       const reviewedBy = getAuthUserId(req);
       if (!reviewedBy) return res.status(401).json({ message: tr(req, "auth.requiredShort") });
-      const reviewer = await storage.getUser(reviewedBy);
-      if (reviewer?.role !== "admin" && reviewer?.role !== "super_admin") {
-        return res.status(403).json({ message: tr(req, "auth.adminRequired") });
-      }
+      // Authorization is handled by requirePermission("excuse_requests:approve") above —
+      // any further role check here would be dead (the `users` table no longer carries a
+      // string `role` column; permissions are resolved through the role/permissions tables).
       const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() || null : null;
       const excuse = await storage.getExcuseRequest(req.params.id);
       if (!excuse) return res.status(404).json({ message: tr(req, "excuse.notFound") });
@@ -7004,10 +7017,9 @@ export async function registerRoutes(
     try {
       const reviewedBy = getAuthUserId(req);
       if (!reviewedBy) return res.status(401).json({ message: tr(req, "auth.requiredShort") });
-      const reviewer = await storage.getUser(reviewedBy);
-      if (reviewer?.role !== "admin" && reviewer?.role !== "super_admin") {
-        return res.status(403).json({ message: tr(req, "auth.adminRequired") });
-      }
+      // Authorization is handled by requirePermission("excuse_requests:reject") above —
+      // any further role check here would be dead (the `users` table no longer carries a
+      // string `role` column; permissions are resolved through the role/permissions tables).
       const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() || null : null;
       const excuse = await storage.getExcuseRequest(req.params.id);
       if (!excuse) return res.status(404).json({ message: tr(req, "excuse.notFound") });
@@ -8405,7 +8417,6 @@ export async function registerRoutes(
           code,
           purpose: "cash_payment",
           expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-          metadata: { payRunLineId: line.id, trancheNumber: tranche, amount },
         });
 
         logOtpForDev(cand.phone, code, "cash_payment");
@@ -8433,7 +8444,7 @@ export async function registerRoutes(
       if (verification.expiresAt && verification.expiresAt < new Date()) return res.status(400).json({ error: tr(req, "error.otpExpired") });
       if ((verification.attempts ?? 0) >= 3) return res.status(429).json({ error: tr(req, "error.tooManyOtpAttempts") });
 
-      await db.update(otpVerifications).set({ isVerified: true }).where(eq(otpVerifications.id, verification.id));
+      await db.update(otpVerifications).set({ verifiedAt: new Date() }).where(eq(otpVerifications.id, verification.id));
 
       const receiptSeq = await db.select({ value: count() }).from(payrollTransactions).where(eq(payrollTransactions.paymentMethod, "cash"));
       const receiptNumber = `CR-${new Date().getFullYear()}-${String((receiptSeq[0]?.value ?? 0) + 1).padStart(5, "0")}`;

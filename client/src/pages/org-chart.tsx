@@ -628,7 +628,7 @@ function OrgChartCanvas() {
 export default function OrgChartPage() {
   const { t } = useTranslation(["orgChart"]);
   return (
-    <Layout title={t("orgChart:pageTitle")}>
+    <Layout>
       <div className="h-[calc(100vh-3.5rem)] w-full overflow-hidden" data-testid="page-org-chart">
         <OrgChartCanvas />
       </div>

@@ -1443,7 +1443,7 @@ function WorkHistorySection({ candidateId }: { candidateId: string }) {
                     s ?? ""
                   );
                 const signedAt = viewingContract.signedAt;
-                const employeeName = vars.fullName || displayName;
+                const employeeName = vars.fullName || "Employee";
                 return (
                   <div
                     className="contract-print-area bg-white text-black rounded-lg p-8 space-y-6"

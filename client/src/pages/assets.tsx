@@ -113,8 +113,8 @@ function localDate() {
 
 const TH = "text-xs font-medium uppercase tracking-wider text-muted-foreground";
 
-function fmtMoney(n: number, lang: string) {
-  return formatNumber(n, lang, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function fmtMoney(n: number, _lang: string) {
+  return formatNumber(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default function AssetsPage() {
