@@ -95,10 +95,11 @@ Sex badge colour contract:
 - Other / prefer_not_to_say / null → cell renders a muted dash, NO badge
 
 Sort behaviour contract:
-- aria-sort starts at "none" on every header on first render.
-- Default sort is "applied desc" (set in component state) — this is not
-  reflected in aria-sort until the user clicks a header, by design, so
-  Test 3 may see all headers reporting "none" before any click.
+- Default sort state is sortKey="applied", sortDir="desc". The applied
+  header therefore renders aria-sort="descending" on first paint; all
+  other headers render aria-sort="none". The component renders aria-sort
+  directly from state — there is no special "neutral on first render"
+  mode.
 - Clicking the active column toggles asc <-> desc.
 - Clicking a different column switches to it; "applied" defaults to
   "desc", every other column defaults to "asc".

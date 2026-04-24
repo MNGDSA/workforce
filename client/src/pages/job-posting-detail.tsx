@@ -131,8 +131,7 @@ function salaryLabel(job: JobPosting, t: TFunction) {
 
 const VALID_STATUSES = ["new", "shortlisted", "interviewed", "offered", "hired", "rejected"] as const;
 
-// Status sort order — follows the recruiting pipeline rather than alphabetical
-// so ascending/descending sort tells a meaningful story to recruiters.
+// Pipeline order, not alphabetical, so asc/desc maps to recruiter intent.
 const STATUS_ORDER: Record<string, number> = {
   new: 0,
   reviewing: 1,
@@ -145,8 +144,7 @@ const STATUS_ORDER: Record<string, number> = {
   closed: 8,
 };
 
-// Sex sort order — alphabetical-by-meaning for stable grouping.
-// Female first matches the pink-then-blue colour pairing used in badges.
+// Female first to match the pink/blue badge pairing.
 const GENDER_ORDER: Record<GenderValue, number> = {
   female: 0,
   male: 1,
@@ -154,11 +152,7 @@ const GENDER_ORDER: Record<GenderValue, number> = {
   prefer_not_to_say: 3,
 };
 
-// Maps a candidate's gender enum value to a Tailwind badge style.
-// Pink for female / blue for male as requested. Other / prefer-not-to-say /
-// missing render as a neutral muted dash so we never assume on the candidate's
-// behalf. Colours mirror the existing status-badge palette
-// (`bg-X-500/10 text-X-400`) so they stay readable in dark mode.
+// Pink = female, blue = male, muted dash for other / null.
 function genderBadgeClass(gender: GenderValue | null | undefined): string {
   if (gender === "female") return "bg-pink-500/10 text-pink-400";
   if (gender === "male")   return "bg-blue-500/10 text-blue-400";
@@ -172,18 +166,9 @@ function genderLabel(gender: GenderValue | null | undefined, t: TFunction): stri
   return "—";
 }
 
-// Columns the user can sort by. Keep this in sync with the sortable headers
-// rendered in the table — adding a new sort key here without rendering a
-// header for it (or vice versa) is a silent bug.
 type SortKey = "candidate" | "city" | "sex" | "status" | "applied";
 type SortDir = "asc" | "desc";
 
-// Sortable column header. Renders a button inside a <th> so keyboard / screen
-// reader users can activate sort just like a mouse click. The icon switches
-// from the neutral "double arrow" (column not active) to a single arrow that
-// reflects the current direction (column active). Default-export styling
-// (uppercase, muted text) is preserved so this looks identical to the
-// existing static headers when not active.
 function SortableHeader({
   label,
   sortKey,
@@ -236,11 +221,6 @@ function exportToExcel(
 ) {
   const candidateMap = Object.fromEntries(candidates.map((c) => [c.id, c]));
   const questionHeaders = questions.map((q, i) => `Q${i + 1}: ${q.text}`);
-  // City and Sex are inserted right after Phone so the human-identifying
-  // columns cluster together before the status columns. The recruiter
-  // workflow is "export → triage offline → come back to the app to update
-  // statuses" — there is no server-side import path that would break from
-  // adding columns (see task #173 plan for verification).
   const fixedHeaders = [
     t("jobPosting:detail.exportColAppId"),
     t("jobPosting:detail.exportColName"),
