@@ -138,10 +138,48 @@ interface QualityResult {
   serviceUnavailableNotice?: string;
 }
 
+// Task #155 — shape of the result returned by the upload helpers to
+// the cropper. `rotationApplied` is set when the server's rotation
+// rescue corrected a sideways photo and persisted the upright copy.
+// The cropper uses it to decide whether to close (no rotation) or to
+// reload itself with the saved upright bytes (rotation happened).
+type UploadResult = {
+  ok: boolean;
+  qualityResult?: QualityResult;
+  error?: string;
+  rotationApplied?: 90 | -90;
+  url?: string;
+};
+
+// Task #155 — fetch the saved upright copy from the server and turn
+// it into a data URL the cropper can display. We use a data URL
+// (rather than the raw S3/uploads URL) so the canvas in
+// `createCroppedImage` can re-read the bytes without tripping CORS,
+// and so we don't have to worry about revoking object URLs on
+// unmount. Returns null on any error so the caller can fall back to
+// just closing the cropper — the toast still tells the candidate
+// what happened.
+async function loadServerPhotoForCropper(url: string): Promise<string | null> {
+  try {
+    const cacheBuster = url.includes("?") ? `&t=${Date.now()}` : `?t=${Date.now()}`;
+    const resp = await fetch(`${url}${cacheBuster}`, { cache: "no-store" });
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    return await new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
 function PhotoCropDialog({ open, imageSrc, onCrop, onClose, onRetry }: {
   open: boolean;
   imageSrc: string | null;
-  onCrop: (file: File) => Promise<{ ok: boolean; qualityResult?: QualityResult; error?: string }>;
+  onCrop: (file: File) => Promise<UploadResult>;
   onClose: () => void;
   onRetry: () => void;
 }) {
@@ -643,7 +681,7 @@ function ProfileCompletionCard({
 
   const hasPendingPhotoChange = pendingPhotoRequestsInCard.length > 0 || photoPendingReview;
 
-  const uploadFile = useCallback(async (key: DocKey, file: File): Promise<{ ok: boolean; qualityResult?: QualityResult; error?: string }> => {
+  const uploadFile = useCallback(async (key: DocKey, file: File): Promise<UploadResult> => {
     setUploading((p) => ({ ...p, [key]: true }));
     try {
       const formData = new FormData();
@@ -672,6 +710,19 @@ function ProfileCompletionCard({
       const skippedDescription: string | undefined = photoSkipped
         ? (body.qualityResult?.serviceUnavailableNotice ?? t("portal:docs.photoAcceptedUnverifiedDesc"))
         : undefined;
+      // Task #155 — when the server's rotation rescue corrected a
+      // sideways photo, surface a confirmation toast so the candidate
+      // knows their photo was auto-rotated. The toast title/desc are
+      // i18n'd (EN+AR) and the cropper reload (handled by the caller)
+      // shows the saved upright copy so they can re-crop or accept.
+      // Fired in addition to (not instead of) the verified/unverified
+      // toast below — they convey distinct information.
+      if (key === "photo" && body.rotationApplied) {
+        toast({
+          title: t("portal:docs.photoAutoRotatedTitle"),
+          description: t("portal:docs.photoAutoRotatedDesc"),
+        });
+      }
       if (key === "photo" && body.pendingReview) {
         setPhotoPendingReview(true);
         queryClient.invalidateQueries({ queryKey: ["/api/photo-change-requests", candidateId, "pending"] });
@@ -692,7 +743,7 @@ function ProfileCompletionCard({
           description: skippedDescription ?? t("portal:docs.fileSaved", { name: file.name }),
         });
       }
-      return { ok: true };
+      return { ok: true, rotationApplied: body.rotationApplied, url: body.url };
     } catch (err: any) {
       toast({ title: t("portal:docs.uploadFailed"), description: err?.message || t("portal:docs.tryAgain"), variant: "destructive" });
       return { ok: false, error: err?.message };
@@ -700,7 +751,7 @@ function ProfileCompletionCard({
       setUploading((p) => ({ ...p, [key]: false }));
       if (inputRefs[key].current) inputRefs[key].current!.value = "";
     }
-  }, [toast, candidateId, queryClient]);
+  }, [toast, candidateId, queryClient, t]);
 
   const handleFile = useCallback(async (key: DocKey, file: File | null) => {
     if (!file) return;
@@ -826,6 +877,19 @@ function ProfileCompletionCard({
         onCrop={async (croppedFile) => {
           const result = await uploadFile("photo", croppedFile);
           if (result.ok) {
+            // Task #155 — when the server's rotation rescue
+            // corrected a sideways photo and persisted the upright
+            // copy, reload the cropper with the saved bytes so the
+            // candidate sees what was saved and can either close
+            // (accept) or re-crop & re-upload. Otherwise close as
+            // before.
+            if (result.rotationApplied && result.url) {
+              const reloaded = await loadServerPhotoForCropper(result.url);
+              if (reloaded) {
+                setCropImageSrc(reloaded);
+                return result;
+              }
+            }
             setShowCropDialog(false);
             setCropImageSrc(null);
           }
@@ -2091,7 +2155,7 @@ export default function CandidatePortal() {
     e.target.value = "";
   };
 
-  const handlePhotoChangeUpload = async (croppedFile: File): Promise<{ ok: boolean; qualityResult?: QualityResult; error?: string }> => {
+  const handlePhotoChangeUpload = async (croppedFile: File): Promise<UploadResult> => {
     setPhotoChangeUploading(true);
     try {
       const formData = new FormData();
@@ -2118,6 +2182,17 @@ export default function CandidatePortal() {
       const skippedDescription: string | undefined = skipped
         ? (body.qualityResult?.serviceUnavailableNotice ?? t("portal:photoChange.uploadedUnverifiedDesc"))
         : undefined;
+      // Task #155 — surface the rotation rescue confirmation toast
+      // before the pending-review/uploaded toast so the candidate
+      // sees both pieces of context. The cropper reload (handled by
+      // the PhotoCropDialog onCrop wrapper below) lets them inspect
+      // the saved upright copy.
+      if (body.rotationApplied) {
+        toast({
+          title: t("portal:docs.photoAutoRotatedTitle"),
+          description: t("portal:docs.photoAutoRotatedDesc"),
+        });
+      }
       if (body.pendingReview) {
         queryClient.invalidateQueries({ queryKey: ["/api/photo-change-requests", candidateId, "pending"] });
         toast({
@@ -2131,8 +2206,15 @@ export default function CandidatePortal() {
           description: skippedDescription,
         });
       }
-      setPhotoChangeCropSrc(null);
-      return { ok: true };
+      // Note: we no longer auto-clear photoChangeCropSrc here when a
+      // rotation was applied — the dialog wrapper (see render) will
+      // reload the cropper with the saved upright copy so the user
+      // can verify or re-crop. When no rotation, the wrapper closes
+      // the cropper as before.
+      if (!body.rotationApplied) {
+        setPhotoChangeCropSrc(null);
+      }
+      return { ok: true, rotationApplied: body.rotationApplied, url: body.url };
     } catch (err: any) {
       toast({ title: t("portal:docs.uploadFailed"), description: err.message, variant: "destructive" });
       return { ok: false, error: err?.message };
@@ -2870,7 +2952,22 @@ export default function CandidatePortal() {
         open={!!photoChangeCropSrc}
         imageSrc={photoChangeCropSrc}
         onClose={() => setPhotoChangeCropSrc(null)}
-        onCrop={handlePhotoChangeUpload}
+        onCrop={async (croppedFile) => {
+          const result = await handlePhotoChangeUpload(croppedFile);
+          // Task #155 — when the server's rotation rescue corrected
+          // a sideways photo, reload the cropper with the saved
+          // upright copy so the candidate sees what was saved (and
+          // can re-crop or close to accept).
+          if (result.ok && result.rotationApplied && result.url) {
+            const reloaded = await loadServerPhotoForCropper(result.url);
+            if (reloaded) {
+              setPhotoChangeCropSrc(reloaded);
+            } else {
+              setPhotoChangeCropSrc(null);
+            }
+          }
+          return result;
+        }}
         onRetry={() => photoChangeInputRef.current?.click()}
       />
 

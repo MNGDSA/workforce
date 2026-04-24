@@ -165,6 +165,8 @@
     "photoVerified": "Photo uploaded and verified",
     "photoAcceptedUnverified": "Photo accepted — verification skipped",
     "photoAcceptedUnverifiedDesc": "The verification service was busy, so we couldn't double-check this photo. It was accepted — please retry later if it doesn't look right.",
+    "photoAutoRotatedTitle": "We rotated your photo to fit upright",
+    "photoAutoRotatedDesc": "Your camera uploaded the photo sideways, so we auto-corrected the orientation. If it still doesn't look right, you can re-crop or upload a new photo.",
     "fileUploaded": "File uploaded",
     "fileSaved": "\"{{name}}\" saved successfully."
   },

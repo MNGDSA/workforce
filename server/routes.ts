@@ -610,6 +610,16 @@ export async function registerRoutes(
       const localPath = req.file.path;
       const fileUrl = await uploadFile(localPath, req.file.filename, getMimeType(req.file.filename), { isPublic: docType === "photo" });
       let photoQualityResult: import("./rekognition").FaceQualityResult | undefined;
+      // Task #155 — captured when the rotation rescue's rotated bytes
+      // were successfully persisted to S3. Surfaced on the upload
+      // response so the candidate portal can show a confirmation
+      // toast and re-open the cropper with the saved upright copy.
+      // We deliberately surface this as a top-level field rather than
+      // letting the client read it off `qualityResult.rotationApplied`
+      // because the qualityResult buffer is stripped before send (see
+      // `serializeQualityResult` below) — the buffer would balloon the
+      // JSON response by ~100KB for no client-side benefit.
+      let rotationApplied: 90 | -90 | undefined;
 
       if (docType === "photo") {
         const allowedPhotoMimes = ["image/jpeg", "image/jpg", "image/png"];
@@ -679,9 +689,13 @@ export async function registerRoutes(
 
         if (!qualityResult.passed && !qualityResult.qualityCheckSkipped) {
           try { await deleteFile(fileUrl); } catch {}
+          // Task #155 — strip the rotation rescue buffer (a Buffer
+          // serialises as `{ type: "Buffer", data: [...] }` and would
+          // bloat the failure response by ~100KB for no client value).
+          const { rotatedBuffer: _rb0, ...qualityResultForClient } = qualityResult;
           return res.status(422).json({
             message: tr(req, "photo.qualityFailed"),
-            qualityResult,
+            qualityResult: qualityResultForClient,
           });
         }
 
@@ -691,9 +705,18 @@ export async function registerRoutes(
         // (cropper, attendance compare, HR review) sees the upright
         // version. Only fires when validation passed; the
         // 422-handler above wins if the photo failed.
+        //
+        // Task #155 — surface the applied rotation back to the
+        // client so the candidate portal can show a confirmation
+        // toast ("we rotated your photo, looks good?") and re-open
+        // the cropper with the saved upright copy. Only marked when
+        // the overwrite actually succeeded; if persistence failed,
+        // the file on S3 is still the original, so we don't claim
+        // we rotated anything.
         if (qualityResult.rotatedBuffer && qualityResult.rotationApplied) {
           try {
             await overwriteFile(fileUrl, qualityResult.rotatedBuffer, "image/jpeg");
+            rotationApplied = qualityResult.rotationApplied;
             console.log(
               `[photo-upload] Auto-rotated by ${qualityResult.rotationApplied}° for candidate ${id}`,
             );
@@ -744,7 +767,8 @@ export async function registerRoutes(
             "high",
             { entityType: "photo_change_request", entityId: changeRequest.id }
           );
-          return res.json({ url: fileUrl, docType, pendingReview: true, changeRequestId: changeRequest.id, qualityResult, message: tr(req, "photo.submittedForReview") });
+          const { rotatedBuffer: _rb1, ...qualityResultForClient } = qualityResult;
+          return res.json({ url: fileUrl, docType, pendingReview: true, changeRequestId: changeRequest.id, qualityResult: qualityResultForClient, rotationApplied, message: tr(req, "photo.submittedForReview") });
         }
       }
 
@@ -770,7 +794,11 @@ export async function registerRoutes(
         }
       }
       const response: Record<string, any> = { url: fileUrl, docType, candidate: updated };
-      if (photoQualityResult) response.qualityResult = photoQualityResult;
+      if (photoQualityResult) {
+        const { rotatedBuffer: _rb2, ...qualityResultForClient } = photoQualityResult;
+        response.qualityResult = qualityResultForClient;
+      }
+      if (rotationApplied) response.rotationApplied = rotationApplied;
       return res.json(response);
     } catch (err) {
       return handleError(res, err);
