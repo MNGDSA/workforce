@@ -236,42 +236,91 @@ const uploadXlsx = multer({
   },
 });
 
-// Task #182 — normalize blank/whitespace-only `region` to null at the
-// write boundary so every consumer can rely on `region` being either a
-// non-empty KSA region key or null. Several display sites use
-// `job.region ?? job.location` which treats empty string as a present
-// value and hides the location fallback. Applied to job postings, SMP
-// companies, and events on POST and PATCH so the form-driven write
-// paths can never persist `region: ""` again.
+// Task #182 / #183 — normalize blank/whitespace-only string entries to
+// null at the write boundary so every downstream consumer can rely on
+// optional text columns being either a non-empty value or null. Many
+// display sites use `x ?? fallback` which treats an empty string as a
+// present value and hides the fallback (the original symptom on
+// `job.region ?? job.location`). Several Zod-derived insert schemas
+// also reject `""` for nullable enum-like text columns (e.g. gender,
+// nationality, maritalStatus, region) where the form sends "" for an
+// unselected dropdown. Applied to every form-driven create/edit
+// handler that touches optional text columns on job_postings,
+// smp_companies, events, workforce, applications, and candidates.
 function normalizeBlankFields<T>(body: T, fields: readonly string[]): T {
   if (body === null || typeof body !== "object") return body;
   const target = body as Record<string, unknown>;
-  for (const f of fields) {
-    if (f in target) {
-      const v = target[f];
+  for (const key of fields) {
+    if (key in target) {
+      const v = target[key];
       if (typeof v === "string" && v.trim() === "") {
-        target[f] = null;
+        target[key] = null;
       }
     }
   }
   return body;
 }
 
-const REGION_FIELDS = ["region"] as const;
-
-const CANDIDATE_BLANK_FIELDS = [
-  "city",
+// Per-model lists of optional text/varchar columns whose form values
+// may legitimately be left empty. Kept narrow on purpose: only fields
+// that are nullable in shared/schema.ts AND are surfaced through a
+// form input or dropdown on the admin/candidate UIs. Required columns
+// (e.g. event.name, job.title) are intentionally absent — clearing
+// them to null is a validation error, not a normalization.
+const EVENT_BLANK_FIELDS = ["region", "description", "endDate"] as const;
+const JOB_BLANK_FIELDS = [
   "region",
-  "maritalStatus",
-  "educationLevel",
+  "location",
+  "department",
+  "deadline",
+  "description",
+  "requirements",
+] as const;
+const SMP_COMPANY_BLANK_FIELDS = [
+  "region",
+  "crNumber",
+  "contactPerson",
+  "contactPhone",
+  "contactEmail",
+  "bankName",
+  "bankIban",
+  "notes",
+] as const;
+const WORKFORCE_BLANK_FIELDS = [
+  "endDate",
+  "terminationReason",
+  "terminationCategory",
+  "notes",
+  "offboardingStatus",
+  "settlementPaidBy",
+  "settlementReference",
+  "paymentMethodReason",
+] as const;
+const APPLICATION_BLANK_FIELDS = ["notes"] as const;
+const CANDIDATE_BLANK_FIELDS = [
+  "candidateCode",
+  "gender",
   "dateOfBirth",
   "nationality",
-  "gender",
+  "email",
+  "phone",
+  "whatsapp",
+  "city",
+  "region",
+  "nationalId",
+  "iqamaNumber",
+  "passportNumber",
   "currentRole",
   "currentEmployer",
+  "educationLevel",
   "university",
   "major",
   "nationalityText",
+  "maritalStatus",
+  "chronicDiseases",
+  "emergencyContactName",
+  "emergencyContactPhone",
+  "notes",
 ] as const;
 
 function handleError(res: Response, err: unknown, req?: Request) {
@@ -2965,7 +3014,7 @@ export async function registerRoutes(
 
   app.post("/api/events", requirePermission("events:create"), async (req: Request, res: Response) => {
     try {
-      const data = insertEventSchema.parse(normalizeBlankFields({ ...req.body }, REGION_FIELDS));
+      const data = insertEventSchema.parse(normalizeBlankFields({ ...req.body }, EVENT_BLANK_FIELDS));
       const evt = await storage.createEvent(data);
       storage.createAdminAlert(
         "New event created",
@@ -2980,7 +3029,7 @@ export async function registerRoutes(
 
   app.patch("/api/events/:id", requirePermission("events:update"), async (req: Request, res: Response) => {
     try {
-      const data = insertEventSchema.partial().parse(normalizeBlankFields({ ...req.body }, REGION_FIELDS));
+      const data = insertEventSchema.partial().parse(normalizeBlankFields({ ...req.body }, EVENT_BLANK_FIELDS));
       const evt = await storage.updateEvent(req.params.id, data);
       if (!evt) return res.status(404).json({ message: tr(req, "event.notFound") });
       return res.json(evt);
@@ -3107,7 +3156,7 @@ export async function registerRoutes(
 
   app.post("/api/jobs", requirePermission("jobs:create"), async (req: Request, res: Response) => {
     try {
-      const body = normalizeBlankFields({ ...req.body }, REGION_FIELDS);
+      const body = normalizeBlankFields({ ...req.body }, JOB_BLANK_FIELDS);
       if (typeof body.salaryMin === "number") body.salaryMin = String(body.salaryMin);
       if (typeof body.salaryMax === "number") body.salaryMax = String(body.salaryMax);
       const data = insertJobPostingSchema.parse(body);
@@ -3120,7 +3169,7 @@ export async function registerRoutes(
 
   app.patch("/api/jobs/:id", requirePermission("jobs:update"), async (req: Request, res: Response) => {
     try {
-      const body = normalizeBlankFields({ ...req.body }, REGION_FIELDS);
+      const body = normalizeBlankFields({ ...req.body }, JOB_BLANK_FIELDS);
       if (typeof body.salaryMin === "number") body.salaryMin = String(body.salaryMin);
       if (typeof body.salaryMax === "number") body.salaryMax = String(body.salaryMax);
       const data = insertJobPostingSchema.partial().parse(body);
@@ -3199,7 +3248,7 @@ export async function registerRoutes(
 
   app.post("/api/applications", requireAuth, async (req: Request, res: Response) => {
     try {
-      const data = insertApplicationSchema.parse(req.body);
+      const data = insertApplicationSchema.parse(normalizeBlankFields({ ...req.body }, APPLICATION_BLANK_FIELDS));
 
       // Authorization: admin with applications:create OR candidate applying on own behalf.
       const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("applications:create");
@@ -3301,7 +3350,7 @@ export async function registerRoutes(
 
   app.patch("/api/applications/:id", requirePermission("applications:update"), async (req: Request, res: Response) => {
     try {
-      const data = insertApplicationSchema.partial().parse(req.body);
+      const data = insertApplicationSchema.partial().parse(normalizeBlankFields({ ...req.body }, APPLICATION_BLANK_FIELDS));
 
       // Task #107: if this PATCH mutates candidateId, the new candidate must
       // be Individual-classified — SMP candidates are not allowed in the
@@ -3810,7 +3859,7 @@ export async function registerRoutes(
 
   app.post("/api/workforce", requirePermission("workforce:create"), async (req: Request, res: Response) => {
     try {
-      const data = insertWorkforceSchema.parse(req.body);
+      const data = insertWorkforceSchema.parse(normalizeBlankFields({ ...req.body }, WORKFORCE_BLANK_FIELDS));
       const record = await storage.createWorkforceRecord(data);
       if (data.candidateId && data.isActive !== false) {
         await storage.updateCandidate(data.candidateId, { status: "hired" });
@@ -3824,9 +3873,10 @@ export async function registerRoutes(
   app.patch("/api/workforce/:id", requirePermission("workforce:update"), async (req: Request, res: Response) => {
     try {
       const allowed = ["salary", "notes", "endDate", "supervisorId", "performanceScore", "isActive", "eventId", "positionId"];
+      const body = normalizeBlankFields({ ...req.body }, WORKFORCE_BLANK_FIELDS);
       const data: Record<string, any> = {};
       for (const key of allowed) {
-        if (key in req.body) data[key] = req.body[key];
+        if (key in body) data[key] = body[key];
       }
       const before = await storage.getWorkforceEmployee(req.params.id);
       const record = await storage.updateWorkforceRecord(req.params.id, data);
@@ -3905,19 +3955,22 @@ export async function registerRoutes(
         "ibanAccountFirstName", "ibanAccountLastName",
         "emergencyContactName", "emergencyContactPhone",
       ];
+      // Task #183 — use the generic helper for empty-string → null
+      // normalization. Same write-boundary defence applied across all
+      // form-driven routes; replaces the bespoke nullableFields loop.
+      const normalized = normalizeBlankFields({ ...req.body }, [
+        ...CANDIDATE_BLANK_FIELDS,
+        "ibanNumber",
+        "ibanBankName",
+        "ibanBankCode",
+        "ibanAccountFirstName",
+        "ibanAccountLastName",
+      ]);
       const filtered: Record<string, any> = {};
       for (const key of allowed) {
-        if (key in req.body) filtered[key] = req.body[key] ?? null;
+        if (key in normalized) filtered[key] = normalized[key] ?? null;
       }
       if (Object.keys(filtered).length === 0) return res.status(400).json({ message: tr(req, "common.noFieldsToUpdate") });
-
-      const nullableFields = ["email", "phone", "dateOfBirth", "gender", "nationalityText",
-        "maritalStatus", "iqamaNumber", "city", "region", "educationLevel", "university", "major",
-        "ibanNumber", "ibanBankName", "ibanBankCode", "ibanAccountFirstName", "ibanAccountLastName",
-        "emergencyContactName", "emergencyContactPhone"];
-      for (const key of nullableFields) {
-        if (key in filtered && filtered[key] === "") filtered[key] = null;
-      }
 
       const data = candidateBaseSchema.partial().parse(filtered);
 
@@ -4082,7 +4135,17 @@ export async function registerRoutes(
 
   app.post("/api/workforce/:id/terminate", requirePermission("workforce:terminate"), async (req: Request, res: Response) => {
     try {
-      const { endDate, terminationReason, terminationCategory } = req.body as { endDate: string; terminationReason?: string; terminationCategory?: string };
+      // Task #183 — normalise blank dropdown selections (reason, category)
+      // to null so the audit log and downstream consumers don't see empty
+      // strings stamped against terminated workforce rows.
+      const body = normalizeBlankFields({ ...req.body }, WORKFORCE_BLANK_FIELDS) as {
+        endDate?: string;
+        terminationReason?: string | null;
+        terminationCategory?: string | null;
+      };
+      const endDate = body.endDate ?? "";
+      const terminationReason = body.terminationReason ?? undefined;
+      const terminationCategory = body.terminationCategory ?? undefined;
       if (!endDate) return res.status(400).json({ message: tr(req, "common.endDateRequired") });
       const validCategories = ["end_of_season", "resignation", "performance", "disciplinary", "contract_expiry", "other"];
       if (terminationCategory && !validCategories.includes(terminationCategory)) {
@@ -5047,7 +5110,7 @@ export async function registerRoutes(
 
   app.post("/api/smp-companies", requirePermission("smp:create"), async (req: Request, res: Response) => {
     try {
-      const data = insertSMPCompanySchema.parse(normalizeBlankFields({ ...req.body }, REGION_FIELDS));
+      const data = insertSMPCompanySchema.parse(normalizeBlankFields({ ...req.body }, SMP_COMPANY_BLANK_FIELDS));
       const company = await storage.createSMPCompany(data);
       await logAudit(req, {
         action: "smp_company.created",
@@ -5063,7 +5126,7 @@ export async function registerRoutes(
 
   app.patch("/api/smp-companies/:id", requirePermission("smp:update"), async (req: Request, res: Response) => {
     try {
-      const data = insertSMPCompanySchema.partial().parse(normalizeBlankFields({ ...req.body }, REGION_FIELDS));
+      const data = insertSMPCompanySchema.partial().parse(normalizeBlankFields({ ...req.body }, SMP_COMPANY_BLANK_FIELDS));
       const company = await storage.updateSMPCompany(req.params.id, data);
       if (!company) return res.status(404).json({ message: tr(req, "company.notFound") });
       return res.json(company);
@@ -8600,11 +8663,16 @@ export async function registerRoutes(
   app.post("/api/workforce/:id/mark-settlement-paid", requirePermission("payroll:pay_runs_record_payment"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
-      const { reference } = req.body;
+      // Task #183 — coerce blank/whitespace-only reference to null so the
+      // payroll audit and exports don't carry empty strings. The form
+      // field is named `reference`; it maps to settlementReference on
+      // the workforce row.
+      const body = normalizeBlankFields({ ...req.body }, ["reference"]) as { reference?: string | null };
+      const reference = body.reference ?? null;
       const updated = await storage.updateWorkforceRecord(req.params.id, {
         settlementPaidAt: new Date() as any,
         settlementPaidBy: userId,
-        settlementReference: reference ?? null,
+        settlementReference: reference,
       } as any);
       if (!updated) return res.status(404).json({ error: tr(req, "error.employeeNotFound") });
       await logAudit(req, { action: "mark_settlement_paid", entityType: "workforce", entityId: req.params.id, description: `Settlement marked as paid${reference ? ` (ref: ${reference})` : ""}` });
@@ -8616,7 +8684,15 @@ export async function registerRoutes(
   app.patch("/api/workforce/:id/payment-method", requirePermission("workforce:payment_method"), async (req: Request, res: Response) => {
     try {
       const userId = getAuthUserId(req);
-      const { paymentMethod, reason } = req.body;
+      // Task #183 — normalise blank/whitespace-only `reason` to null so a
+      // form that submits "  " can't bypass the cash-reason guard or
+      // persist an empty string into paymentMethodReason.
+      const body = normalizeBlankFields({ ...req.body }, ["reason"]) as {
+        paymentMethod?: string;
+        reason?: string | null;
+      };
+      const paymentMethod = body.paymentMethod;
+      const reason = body.reason ?? null;
       if (!paymentMethod || !["bank_transfer", "cash"].includes(paymentMethod)) {
         return res.status(400).json({ error: tr(req, "workforce.paymentMethodInvalid") });
       }
