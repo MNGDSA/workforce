@@ -71,15 +71,18 @@ function collectEmittedKeys(): { codes: Set<string>; tipReasons: Set<string> } {
       if (c.tipReason) tipReasons.add(c.tipReason);
     }
   }
-  // These two codes/tipReasons are emitted by callers OUTSIDE
+  // These codes/tipReasons are emitted by callers OUTSIDE
   // evaluateFaceDetails (the Rekognition catch-block in
-  // validateFaceQuality and the service-unavailable branch in
-  // server/routes.ts). Add them by hand so this parity check covers
-  // every code that can reach the candidate portal.
+  // validateFaceQuality, the service-unavailable branch in
+  // server/routes.ts, and the Task #153 rotation rescue that swaps
+  // the face_detected tip when a sideways photo is detected). Add
+  // them by hand so this parity check covers every code that can
+  // reach the candidate portal.
   codes.add("photo_validation");
   tipReasons.add("invalid_image");
   codes.add("service_unavailable");
   tipReasons.add("service_unavailable");
+  tipReasons.add("rotate_photo");
   return { codes, tipReasons };
 }
 

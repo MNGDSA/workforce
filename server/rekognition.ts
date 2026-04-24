@@ -18,6 +18,140 @@ export interface FaceQualityResult {
   passed: boolean;
   checks: FaceQualityCheck[];
   qualityCheckSkipped?: boolean;
+  // Task #153 — rotation rescue. When the first DetectFaces pass on
+  // the original image found zero faces, we retry on copies rotated
+  // 90° CW and 90° CCW (via sharp) and, if one of those passes, we
+  // attach the rotated bytes here so the caller can overwrite the
+  // stored file. `rotationApplied` records which rotation we kept so
+  // it shows up in logs and gives downstream code a way to audit
+  // how often we're correcting orientation.
+  rotatedBuffer?: Buffer;
+  rotationApplied?: 90 | -90;
+}
+
+// Pure orientation-picker — exported so it can be unit-tested
+// without spinning up an AWS client or sharp. Called only when the
+// first DetectFaces pass on the original image returned zero faces;
+// the caller will have already run DetectFaces on rotated copies.
+//
+// Decision rules, in order:
+//   1. If the +90° (CW) copy passes evaluateFaceDetails → use it.
+//   2. Else if the -90° (CCW) copy passes → use it.
+//   3. Else if either rotated copy at least *found* a face (even
+//      one that fails quality), the photo is almost certainly
+//      sideways. Keep rotation=0 (so the caller doesn't overwrite
+//      the file) but ask the caller to swap the "no face found"
+//      tip for "rotate photo" — that's the actionable hint.
+//   4. Otherwise no orientation found anything; return rotation=0
+//      with the standard "no face found" tip.
+export interface RotationDecision {
+  rotation: 0 | 90 | -90;
+  faces: FaceDetail[];
+  suggestRotateTip: boolean;
+}
+
+export function decideRotationOutcome(
+  originalFaces: FaceDetail[],
+  rotatedCwFaces: FaceDetail[],
+  rotatedCcwFaces: FaceDetail[],
+): RotationDecision {
+  const cw = evaluateFaceDetails(rotatedCwFaces);
+  if (cw.passed) {
+    return { rotation: 90, faces: rotatedCwFaces, suggestRotateTip: false };
+  }
+  const ccw = evaluateFaceDetails(rotatedCcwFaces);
+  if (ccw.passed) {
+    return { rotation: -90, faces: rotatedCcwFaces, suggestRotateTip: false };
+  }
+  // No rotation gives a clean pass. If a face appeared in any
+  // rotated copy, the photo is rotated — surface that to the user.
+  const someRotatedHadFace = rotatedCwFaces.length > 0 || rotatedCcwFaces.length > 0;
+  return {
+    rotation: 0,
+    faces: originalFaces,
+    suggestRotateTip: someRotatedHadFace,
+  };
+}
+
+// Replace the `face_detected` tip on a failing result so it points
+// the candidate at orientation rather than presence. We only swap
+// the tip — `passed` stays false — because we still want the photo
+// to be rejected; the user must retake or upload a fresh, upright
+// photo.
+function applyRotateTip(result: FaceQualityResult): FaceQualityResult {
+  const rotateTip = "Photo appears to be rotated. Hold the phone upright and retake the photo.";
+  return {
+    ...result,
+    checks: result.checks.map((c) =>
+      c.code === "face_detected"
+        ? { ...c, tipReason: "rotate_photo", tip: rotateTip }
+        : c,
+    ),
+  };
+}
+
+// Orchestrates the rotation rescue with injected `rotate` and
+// `detect` dependencies so it can be unit-tested without real
+// sharp / AWS calls. Exported only for tests.
+//
+// Failure contract:
+//   * `rotate` throws (sharp pipeline broke) → return the original
+//     no-face result. The candidate still sees the standard
+//     `no_face` tip; we never block the upload because of a
+//     rotation pipeline bug.
+//   * `detect` on a rotated copy throws (timeout / throttle on
+//     the rescue-only call) → return the original no-face result.
+//     Crucially we do NOT escalate to `qualityCheckSkipped: true`,
+//     because the first DetectFaces already succeeded — flipping
+//     to "service unavailable" here would change first-upload
+//     candidates from a 422 (retry with a better photo) to a 503
+//     (fail-closed) and active-employee photo changes from a 422
+//     to an unintended fail-open.
+export async function runRotationRescue(
+  originalFaces: FaceDetail[],
+  imageBytes: Buffer,
+  deps: {
+    rotate: (bytes: Buffer, degrees: 90 | -90) => Promise<Buffer>;
+    detect: (bytes: Buffer) => Promise<FaceDetail[]>;
+  },
+): Promise<FaceQualityResult> {
+  let cwBuffer: Buffer;
+  let ccwBuffer: Buffer;
+  try {
+    [cwBuffer, ccwBuffer] = await Promise.all([
+      deps.rotate(imageBytes, 90),
+      deps.rotate(imageBytes, -90),
+    ]);
+  } catch (rotateErr) {
+    console.warn("[Rekognition] sharp rotation failed — returning original no-face result", rotateErr);
+    return evaluateFaceDetails(originalFaces);
+  }
+
+  let cwFaces: FaceDetail[];
+  let ccwFaces: FaceDetail[];
+  try {
+    [cwFaces, ccwFaces] = await Promise.all([deps.detect(cwBuffer), deps.detect(ccwBuffer)]);
+  } catch (rescueErr) {
+    console.warn(
+      "[Rekognition] Rescue DetectFaces call failed — keeping original no-face result",
+      rescueErr,
+    );
+    return evaluateFaceDetails(originalFaces);
+  }
+
+  const decision = decideRotationOutcome(originalFaces, cwFaces, ccwFaces);
+
+  if (decision.rotation === 90) {
+    const result = evaluateFaceDetails(cwFaces);
+    return { ...result, rotatedBuffer: cwBuffer, rotationApplied: 90 };
+  }
+  if (decision.rotation === -90) {
+    const result = evaluateFaceDetails(ccwFaces);
+    return { ...result, rotatedBuffer: ccwBuffer, rotationApplied: -90 };
+  }
+
+  const baseResult = evaluateFaceDetails(originalFaces);
+  return decision.suggestRotateTip ? applyRotateTip(baseResult) : baseResult;
 }
 
 export async function validateFaceQuality(photoPath: string): Promise<FaceQualityResult> {
@@ -41,24 +175,47 @@ export async function validateFaceQuality(photoPath: string): Promise<FaceQualit
       credentials: { accessKeyId: accessKey, secretAccessKey: secretKey },
     });
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    // Single-shot DetectFaces helper with a 5s timeout. Reused for
+    // the original image and for the rotated rescue copies.
+    const detect = async (bytes: Buffer): Promise<FaceDetail[]> => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      try {
+        const command = new DetectFacesCommand({
+          Image: { Bytes: bytes },
+          Attributes: ["ALL"],
+        });
+        const response = await client.send(command, { abortSignal: controller.signal });
+        return response.FaceDetails ?? [];
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
 
-    const command = new DetectFacesCommand({
-      Image: { Bytes: imageBytes },
-      Attributes: ["ALL"],
-    });
+    const originalFaces = await detect(imageBytes);
+    console.log("[Rekognition] DetectFaces returned", originalFaces.length, "face(s)");
 
-    let response;
-    try {
-      response = await client.send(command, { abortSignal: controller.signal });
-    } finally {
-      clearTimeout(timeout);
+    // Fast path: original had at least one face, evaluate as before.
+    if (originalFaces.length >= 1) {
+      return evaluateFaceDetails(originalFaces);
     }
 
-    const faces = response.FaceDetails ?? [];
-    console.log("[Rekognition] DetectFaces returned", faces.length, "face(s)");
-    return evaluateFaceDetails(faces);
+    // Task #153 — rotation rescue. The original found nothing.
+    // Try ±90° rotations (the common phone-EXIF-stripped failure
+    // mode) before giving up. We only do this when the first call
+    // returned zero faces, so the extra cost is bounded to "one
+    // upload that probably won't pass anyway." `runRotationRescue`
+    // owns the fall-open behaviour — see its docstring.
+    console.log("[Rekognition] No face on first pass — attempting ±90° rotation rescue");
+    const sharp = (await import("sharp")).default;
+    const rescueResult = await runRotationRescue(originalFaces, imageBytes, {
+      rotate: (bytes, degrees) => sharp(bytes).rotate(degrees).jpeg({ quality: 92 }).toBuffer(),
+      detect,
+    });
+    if (rescueResult.rotationApplied) {
+      console.log(`[Rekognition] Rotation rescue succeeded with ${rescueResult.rotationApplied}°`);
+    }
+    return rescueResult;
   } catch (err: any) {
     const errMsg = err instanceof Error ? err.message : "unknown";
     const errName = err?.name ?? "";

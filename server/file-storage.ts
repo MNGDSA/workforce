@@ -65,6 +65,44 @@ export async function uploadFile(
   }
 }
 
+// Task #153 — overwrite the bytes at an existing storage URL in
+// place, preserving the same key/path so URLs already handed out
+// (e.g. a candidate's photoUrl) continue to resolve. Used by the
+// rotation rescue to replace a sideways upload with the
+// auto-corrected version. Photos are public by default; we keep
+// the same ACL and cache-control we use in `uploadFile`.
+export async function overwriteFile(
+  fileUrl: string,
+  bytes: Buffer,
+  contentType: string,
+  opts: { isPublic?: boolean } = { isPublic: true },
+): Promise<void> {
+  if (!isProduction || fileUrl.startsWith("/uploads/")) {
+    const localPath = fileUrl.startsWith("/uploads/")
+      ? path.join(path.resolve("uploads"), path.basename(fileUrl))
+      : fileUrl;
+    fs.writeFileSync(localPath, bytes);
+    return;
+  }
+
+  if (fileUrl.includes(spacesEndpoint)) {
+    const key = fileUrl.split(`${spacesEndpoint}/`)[1];
+    if (key) {
+      const client = getS3Client();
+      await client.send(new PutObjectCommand({
+        Bucket: spacesBucket,
+        Key: key,
+        Body: bytes,
+        ContentType: contentType,
+        ACL: opts.isPublic ? "public-read" : "private",
+        CacheControl: opts.isPublic
+          ? "private, max-age=86400, must-revalidate"
+          : "private, max-age=300",
+      }));
+    }
+  }
+}
+
 export async function deleteFile(fileUrl: string): Promise<void> {
   if (!isProduction) {
     if (fileUrl.startsWith("/uploads/")) {

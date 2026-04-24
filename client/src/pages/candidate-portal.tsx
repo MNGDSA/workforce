@@ -87,6 +87,7 @@ import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { toProxiedFileUrl } from "@/lib/file-url";
 import { useToast } from "@/hooks/use-toast";
 import { resolveSaudiBank, validateSaudiIban } from "@/lib/saudi-banks";
+import { normalizePhotoOrientation } from "@/lib/image-orientation";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
 
@@ -683,12 +684,16 @@ function ProfileCompletionCard({
       return;
     }
     if (key === "photo") {
+      // Task #153 — bake any EXIF orientation into pixels before
+      // the cropper sees the image, so portrait phone shots don't
+      // arrive at the canvas crop helper sideways.
+      const oriented = await normalizePhotoOrientation(file);
       const reader = new FileReader();
       reader.onload = () => {
         setCropImageSrc(reader.result as string);
         setShowCropDialog(true);
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(oriented);
       if (inputRefs[key].current) inputRefs[key].current!.value = "";
       return;
     }
@@ -2045,15 +2050,18 @@ export default function CandidatePortal() {
     }
   };
 
-  const handlePhotoChangeFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChangeFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Task #153 — same EXIF normalisation as the first-upload path,
+    // so HR's photo-change cropper never sees a sideways portrait.
+    const oriented = await normalizePhotoOrientation(file);
     const reader = new FileReader();
     reader.onload = () => {
       setPhotoChangeCropSrc(reader.result as string);
       setPhotoChangeOpen(false);
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(oriented);
     e.target.value = "";
   };
 

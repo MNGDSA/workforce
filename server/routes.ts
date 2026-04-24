@@ -18,7 +18,7 @@ import { saPhoneSchema, patchSaPhoneSchema, normalizeSaPhone } from "@shared/pho
 // every IBAN write endpoint. Wiring pinned by
 // `server/__tests__/candidate-iban-resolution.test.ts`; unit-level
 // behaviour by `server/__tests__/iban.test.ts`.
-import { uploadFile, deleteFile, getMimeType, getFileBuffer } from "./file-storage";
+import { uploadFile, deleteFile, getMimeType, getFileBuffer, overwriteFile } from "./file-storage";
 import { getAuthenticatedUser, listUserRepos, getRepo, listRepoIssues, listRepoPullRequests } from "./github";
 import {
   inboxItems,
@@ -660,6 +660,26 @@ export async function registerRoutes(
             message: tr(req, "photo.qualityFailed"),
             qualityResult,
           });
+        }
+
+        // Task #153 — rotation rescue. If validateFaceQuality
+        // auto-corrected a sideways photo, overwrite the stored
+        // bytes at the same URL so every downstream consumer
+        // (cropper, attendance compare, HR review) sees the upright
+        // version. Only fires when validation passed; the
+        // 422-handler above wins if the photo failed.
+        if (qualityResult.rotatedBuffer && qualityResult.rotationApplied) {
+          try {
+            await overwriteFile(fileUrl, qualityResult.rotatedBuffer, "image/jpeg");
+            console.log(
+              `[photo-upload] Auto-rotated by ${qualityResult.rotationApplied}° for candidate ${id}`,
+            );
+          } catch (rotErr) {
+            console.warn(
+              `[photo-upload] Failed to persist rotated bytes for candidate ${id}; original orientation will remain`,
+              rotErr,
+            );
+          }
         }
 
         if (isPhotoChange) {

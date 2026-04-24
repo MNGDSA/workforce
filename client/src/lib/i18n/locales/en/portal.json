@@ -101,7 +101,8 @@
         "remove_sunglasses": "Remove sunglasses and retake the photo.",
         "eyes_not_visible": "Eyes should be clearly open and visible. Remove sunglasses if worn.",
         "invalid_image": "Could not validate photo. Please ensure the file is a valid image (JPG or PNG).",
-        "service_unavailable": "The verification service is currently unreachable. Your photo cannot be processed until the service is available."
+        "service_unavailable": "The verification service is currently unreachable. Your photo cannot be processed until the service is available.",
+        "rotate_photo": "Photo appears to be rotated. Hold the phone upright and retake the photo."
       }
     }
   },
