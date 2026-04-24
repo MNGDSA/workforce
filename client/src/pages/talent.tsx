@@ -1541,20 +1541,34 @@ export default function TalentPage() {
   const PAGE_SIZE = 100;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
+  const visibleIds = candidates.map(c => c.id);
+  const visibleSelectedCount = visibleIds.reduce((n, id) => n + (selectedIds.has(id) ? 1 : 0), 0);
+  const allVisibleSelected = candidates.length > 0 && visibleSelectedCount === candidates.length;
+  const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
+
   const toggleSelectAll = useCallback(() => {
-    if (selectedIds.size === candidates.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(candidates.map(c => c.id)));
-    }
-  }, [candidates, selectedIds.size]);
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      const allOnPage = candidates.length > 0 && candidates.every(c => next.has(c.id));
+      if (allOnPage) {
+        for (const c of candidates) next.delete(c.id);
+      } else {
+        for (const c of candidates) next.add(c.id);
+      }
+      return next;
+    });
+  }, [candidates]);
+
+  const candidateCacheRef = useRef<Map<string, CandidateWithWorkforce>>(new Map());
+  useEffect(() => {
+    for (const c of candidates) candidateCacheRef.current.set(c.id, c);
+  }, [candidates]);
 
   const stats = statsData as { total: number; active: number; hired: number; blocked: number; avgRating: number } | undefined;
 
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
     setPage(1);
-    setSelectedIds(new Set());
   }, []);
 
   function handleColumnSort(field: SortField) {
@@ -1732,7 +1746,7 @@ export default function TalentPage() {
             />
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); setSelectedIds(new Set()); }}>
+            <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
               <SelectTrigger className="h-10 w-36 border-border bg-background" data-testid="select-status-filter">
                 <Filter className="me-2 h-4 w-4" />
                 <SelectValue placeholder={t("statusFilter.all")} />
@@ -1746,7 +1760,7 @@ export default function TalentPage() {
                 <SelectItem value="archived">{t("statusFilter.archived")}</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); setSelectedIds(new Set()); }}>
+            <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); }}>
               <SelectTrigger className="h-10 w-40 border-border bg-background" data-testid="select-source-filter">
                 <SelectValue placeholder={t("sourceFilter.all")} />
               </SelectTrigger>
@@ -1760,7 +1774,7 @@ export default function TalentPage() {
               variant={formerEmployeeFilter ? "default" : "outline"}
               size="sm"
               className={`h-10 gap-1.5 ${formerEmployeeFilter ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "border-border"}`}
-              onClick={() => { setFormerEmployeeFilter(!formerEmployeeFilter); setPage(1); setSelectedIds(new Set()); }}
+              onClick={() => { setFormerEmployeeFilter(!formerEmployeeFilter); setPage(1); }}
               data-testid="filter-former-employees"
             >
               <UserCheck className="h-3.5 w-3.5" />
@@ -1828,9 +1842,9 @@ export default function TalentPage() {
                           className="text-muted-foreground hover:text-white transition-colors"
                           data-testid="checkbox-select-all"
                         >
-                          {selectedIds.size === 0 ? (
+                          {visibleSelectedCount === 0 ? (
                             <Square className="h-4 w-4" />
-                          ) : selectedIds.size === candidates.length ? (
+                          ) : allVisibleSelected ? (
                             <CheckSquare className="h-4 w-4 text-primary" />
                           ) : (
                             <MinusSquare className="h-4 w-4 text-primary" />
@@ -2141,7 +2155,7 @@ export default function TalentPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => { setPage(1); setSelectedIds(new Set()); }}
+                  onClick={() => { setPage(1); }}
                   disabled={page === 1}
                   data-testid="button-first-page"
                   title={t("list.firstPage", { defaultValue: i18n.language === "ar" ? "الأولى" : "First" })}
@@ -2151,7 +2165,7 @@ export default function TalentPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => { setPage(p => Math.max(1, p - 1)); setSelectedIds(new Set()); }}
+                  onClick={() => { setPage(p => Math.max(1, p - 1)); }}
                   disabled={page === 1}
                   data-testid="button-prev-page"
                 >
@@ -2163,7 +2177,7 @@ export default function TalentPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => { setPage(p => Math.min(totalPages, p + 1)); setSelectedIds(new Set()); }}
+                  onClick={() => { setPage(p => Math.min(totalPages, p + 1)); }}
                   disabled={page === totalPages}
                   data-testid="button-next-page"
                 >
@@ -2172,7 +2186,7 @@ export default function TalentPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => { setPage(totalPages); setSelectedIds(new Set()); }}
+                  onClick={() => { setPage(totalPages); }}
                   disabled={page === totalPages}
                   data-testid="button-last-page"
                   title={t("list.lastPage", { defaultValue: i18n.language === "ar" ? "الأخيرة" : "Last" })}
@@ -2185,8 +2199,12 @@ export default function TalentPage() {
         </Card>
 
         {selectedIds.size > 0 && (() => {
-          const selectedCands = candidates.filter(c => selectedIds.has(c.id));
-          const allSmp = selectedCands.length > 0 && selectedCands.every(c => (c as any).classification === "smp");
+          const MAX_BULK = 500;
+          const overLimit = selectedIds.size > MAX_BULK;
+          const selectedCands = [...selectedIds]
+            .map(id => candidateCacheRef.current.get(id))
+            .filter((c): c is CandidateWithWorkforce => !!c);
+          const allSmp = selectedCands.length > 0 && selectedCands.length === selectedIds.size && selectedCands.every(c => (c as any).classification === "smp");
           const awaitingActIds = selectedCands.filter(c => (c as any).classification === "smp" && c.status === "awaiting_activation").map(c => c.id);
           const onboardableIds = selectedCands.filter(c => (c as any).classification === "smp" && c.status !== "awaiting_activation").map(c => c.id);
           return (
@@ -2194,12 +2212,20 @@ export default function TalentPage() {
             <span className="text-sm font-medium text-white">
               {t("bulkBar.selected", { n: formatNumber(selectedIds.size) })}
             </span>
+            {overLimit && (
+              <span className="text-xs text-amber-400 font-medium" data-testid="bulk-over-limit">
+                {i18n.language === "ar"
+                  ? `الحد الأقصى ${formatNumber(MAX_BULK)} لكل عملية`
+                  : `Max ${formatNumber(MAX_BULK)} per action`}
+              </span>
+            )}
             <div className="h-5 w-px bg-border" />
             <Button
               size="sm"
               variant="outline"
               className="border-border text-muted-foreground hover:text-red-400 hover:border-red-400/50"
               onClick={() => setBulkConfirmAction("block")}
+              disabled={overLimit}
               data-testid="bulk-block"
             >
               <Ban className="h-3.5 w-3.5 me-1.5" />
@@ -2210,6 +2236,7 @@ export default function TalentPage() {
               variant="outline"
               className="border-border text-muted-foreground hover:text-green-400 hover:border-green-400/50"
               onClick={() => setBulkConfirmAction("unblock")}
+              disabled={overLimit}
               data-testid="bulk-unblock"
             >
               <Unlock className="h-3.5 w-3.5 me-1.5" />
@@ -2220,7 +2247,13 @@ export default function TalentPage() {
               variant="outline"
               className="border-border text-muted-foreground hover:text-orange-400 hover:border-orange-400/50"
               onClick={() => {
-                const selected = candidates.filter(c => selectedIds.has(c.id));
+                const selected = [...selectedIds]
+                  .map(id => candidateCacheRef.current.get(id))
+                  .filter((c): c is CandidateWithWorkforce => !!c);
+                if (selected.length === 0) {
+                  toast({ title: t("toast.bulkActionFailed"), variant: "destructive" });
+                  return;
+                }
                 const ws = XLSX.utils.json_to_sheet(selected.map(c => ({
                   ID: c.nationalId ?? "—",
                   Name: c.fullNameEn,
@@ -2233,8 +2266,16 @@ export default function TalentPage() {
                 })));
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Selected Candidates");
-                XLSX.writeFile(wb, `selected-candidates-${selectedIds.size}.xlsx`);
-                toast({ title: t("toast.exported", { count: selectedIds.size, n: formatNumber(selectedIds.size) }) });
+                XLSX.writeFile(wb, `selected-candidates-${selected.length}.xlsx`);
+                const missing = selectedIds.size - selected.length;
+                toast({
+                  title: t("toast.exported", { count: selected.length, n: formatNumber(selected.length) }),
+                  description: missing > 0
+                    ? (i18n.language === "ar"
+                        ? `تم تخطي ${formatNumber(missing)} لعدم توفر بياناتها محلياً`
+                        : `${formatNumber(missing)} skipped (not loaded on this client)`)
+                    : undefined,
+                });
               }}
               data-testid="bulk-export"
             >
@@ -2246,6 +2287,7 @@ export default function TalentPage() {
               variant="outline"
               className="border-amber-600 text-amber-500 hover:bg-amber-600/10"
               onClick={() => setBulkConfirmAction("archive")}
+              disabled={overLimit}
               data-testid="bulk-archive"
             >
               <Archive className="h-3.5 w-3.5 me-1.5" />
@@ -2257,7 +2299,7 @@ export default function TalentPage() {
                 variant="outline"
                 className="border-blue-600 text-blue-400 hover:bg-blue-600/10"
                 onClick={() => smpReissueMutation.mutate(awaitingActIds)}
-                disabled={smpReissueMutation.isPending}
+                disabled={smpReissueMutation.isPending || awaitingActIds.length > MAX_BULK}
                 data-testid="bulk-resend-activation"
               >
                 <Send className="h-3.5 w-3.5 me-1.5" />
@@ -2270,7 +2312,7 @@ export default function TalentPage() {
                 variant="outline"
                 className="border-emerald-600 text-emerald-400 hover:bg-emerald-600/10"
                 onClick={() => smpOnboardingMutation.mutate(onboardableIds)}
-                disabled={smpOnboardingMutation.isPending}
+                disabled={smpOnboardingMutation.isPending || onboardableIds.length > MAX_BULK}
                 data-testid="bulk-send-onboarding"
               >
                 <UserPlus className="h-3.5 w-3.5 me-1.5" />
