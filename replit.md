@@ -73,6 +73,16 @@ For tooltip info icons, use Lucide's `Info` icon directly without wrapping it in
   Play Integrity device + server wire-up, staged rollout — lives in
   `docs/android-release-runbook.md`. Tracked under issue ISSUE-007.
 
+- **CI test gate (Task #148):** every push (any branch) and every
+  pull request triggers `.github/workflows/test.yml`, which runs
+  `npm install` followed by `npm test` (the unified suite covering
+  `server/__tests__`, `shared/__tests__`, and
+  `client/src/lib/__tests__`). Configure the `Test suite / npm test`
+  check as a required status check on the `main` branch in GitHub →
+  Settings → Branches so a red suite blocks merges. Contributors should
+  run `npm test` locally before opening a PR; the same command is what
+  CI executes, so green locally means green in CI.
+
 ## System Architecture
 
 The system employs a modern, full-stack architecture designed for scalability and maintainability.
