@@ -114,6 +114,12 @@ function createCroppedImage(imageSrc: string, crop: Area, minSize = 400): Promis
 }
 
 interface QualityCheck {
+  // `code`/`tipReason` are sent by the server (rekognition.ts) so the
+  // client can render translated copy via portal:photoCrop.checks.
+  // `name`/`tip` remain as a defensive English fallback if a future
+  // server adds a check the client doesn't know about yet.
+  code?: string;
+  tipReason?: string;
   name: string;
   passed: boolean;
   tip?: string;
@@ -174,21 +180,31 @@ function PhotoCropDialog({ open, imageSrc, onCrop, onClose, onRetry }: {
               {t("portal:photoCrop.qualityFailed")}
             </p>
             <div className="space-y-1.5">
-              {qualityChecks.map((check, i) => (
-                <div key={i} className="flex items-start gap-2" data-testid={`quality-check-${i}`}>
-                  {check.passed ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                  ) : (
-                    <X className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-                  )}
-                  <div className="min-w-0">
-                    <span className={`text-xs font-medium ${check.passed ? "text-emerald-400" : "text-red-400"}`}>{check.name}</span>
-                    {!check.passed && check.tip && (
-                      <p className="text-[11px] text-zinc-500 mt-0.5">{check.tip}</p>
+              {qualityChecks.map((check, i) => {
+                // Prefer translated copy via the stable `code` / `tipReason`
+                // the server now sends. Fall back to the English `name`/`tip`
+                // if the server adds a check this client doesn't yet have a
+                // translation for.
+                const labelKey = check.code ? `portal:photoCrop.checks.labels.${check.code}` : "";
+                const tipKey   = check.tipReason ? `portal:photoCrop.checks.tips.${check.tipReason}` : "";
+                const label = check.code ? t(labelKey, { defaultValue: check.name }) : check.name;
+                const tipText = check.tipReason ? t(tipKey, { defaultValue: check.tip ?? "" }) : check.tip;
+                return (
+                  <div key={i} className="flex items-start gap-2" data-testid={`quality-check-${i}`}>
+                    {check.passed ? (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                    ) : (
+                      <X className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
                     )}
+                    <div className="min-w-0">
+                      <span className={`text-xs font-medium ${check.passed ? "text-emerald-400" : "text-red-400"}`}>{label}</span>
+                      {!check.passed && tipText && (
+                        <p className="text-[11px] text-zinc-500 mt-0.5">{tipText}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <Button
               size="sm"

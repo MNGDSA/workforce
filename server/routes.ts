@@ -647,7 +647,7 @@ export async function registerRoutes(
           try { await deleteFile(fileUrl); } catch {}
           return res.status(503).json({
             message: tr(req, "photo.verifyUnavailable"),
-            qualityResult: { passed: false, checks: [{ name: "Face verification service", passed: false, tip: "The verification service is currently unreachable. Your photo cannot be processed until the service is available." }], qualityCheckSkipped: true },
+            qualityResult: { passed: false, checks: [{ code: "service_unavailable", name: "Face verification service", passed: false, tipReason: "service_unavailable", tip: "The verification service is currently unreachable. Your photo cannot be processed until the service is available." }], qualityCheckSkipped: true },
           });
         }
         if (fallbackDecision.kind === "allow") {

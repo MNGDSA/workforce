@@ -1,8 +1,16 @@
 import type { FaceDetail } from "@aws-sdk/client-rekognition";
 
+// `code` is a stable machine identifier the client uses to look up
+// translated copy from `portal:photoCrop.checks.labels.<code>`.
+// `tipReason`, when present, indexes into
+// `portal:photoCrop.checks.tips.<tipReason>` for the failure hint.
+// `name` and `tip` are kept as the English fallback so any older
+// client that hasn't been updated still shows readable text.
 export interface FaceQualityCheck {
+  code: string;
   name: string;
   passed: boolean;
+  tipReason?: string;
   tip?: string;
 }
 
@@ -68,8 +76,10 @@ export async function validateFaceQuality(photoPath: string): Promise<FaceQualit
     return {
       passed: false,
       checks: [{
+        code: "photo_validation",
         name: "Photo validation",
         passed: false,
+        tipReason: "invalid_image",
         tip: "Could not validate photo. Please ensure the file is a valid image (JPG or PNG).",
       }],
     };
@@ -84,14 +94,18 @@ export function evaluateFaceDetails(faces: FaceDetail[]): FaceQualityResult {
   const checks: FaceQualityCheck[] = [];
 
   checks.push({
+    code: "face_detected",
     name: "Face detected",
     passed: faces.length >= 1,
+    tipReason: faces.length === 0 ? "no_face" : undefined,
     tip: faces.length === 0 ? "No face found. Make sure your face is clearly visible in the photo." : undefined,
   });
 
   checks.push({
+    code: "single_face",
     name: "Single face",
     passed: faces.length === 1,
+    tipReason: faces.length > 1 ? "multiple_faces" : faces.length === 0 ? "no_face" : undefined,
     tip: faces.length > 1 ? "Multiple faces detected. Use a photo with only your face." : faces.length === 0 ? "No face detected." : undefined,
   });
 
@@ -99,24 +113,30 @@ export function evaluateFaceDetails(faces: FaceDetail[]): FaceQualityResult {
     const face = faces[0];
     const faceConf = face.Confidence ?? 0;
     checks.push({
+      code: "face_confidence",
       name: "Face confidence",
       passed: faceConf >= 90,
+      tipReason: faceConf < 90 ? "low_confidence" : undefined,
       tip: faceConf < 90 ? "Face is not clearly recognisable. Use a well-lit photo showing your full face." : undefined,
     });
 
     const box = face.BoundingBox;
     const boxArea = (box?.Width ?? 0) * (box?.Height ?? 0);
     checks.push({
+      code: "face_size",
       name: "Face size sufficient",
       passed: boxArea >= 0.04,
+      tipReason: boxArea < 0.04 ? "too_small" : undefined,
       tip: boxArea < 0.04 ? "Face is too small. Move closer to the camera or crop tighter." : undefined,
     });
 
     const yaw = Math.abs(face.Pose?.Yaw ?? 0);
     const pitch = Math.abs(face.Pose?.Pitch ?? 0);
     checks.push({
+      code: "face_pose",
       name: "Face facing forward",
       passed: yaw <= 30 && pitch <= 25,
+      tipReason: yaw > 30 || pitch > 25 ? "bad_pose" : undefined,
       tip: yaw > 30 || pitch > 25 ? "Face the camera directly. Avoid turning or tilting your head." : undefined,
     });
 
@@ -130,22 +150,28 @@ export function evaluateFaceDetails(faces: FaceDetail[]): FaceQualityResult {
       ? (mouthLeft.Y! <= boxBottom + 0.05 && mouthRight.Y! <= boxBottom + 0.05)
       : false;
     checks.push({
+      code: "full_face",
       name: "Full face visible",
       passed: noseInBox && mouthInBox,
+      tipReason: !(noseInBox && mouthInBox) ? "partial_face" : undefined,
       tip: !(noseInBox && mouthInBox) ? "Your entire face must be visible — forehead to chin. Do not crop or cut off any part." : undefined,
     });
 
     const sharpness = face.Quality?.Sharpness ?? 0;
     checks.push({
+      code: "sharpness",
       name: "Sharpness acceptable",
       passed: sharpness >= 40,
+      tipReason: sharpness < 40 ? "too_blurry" : undefined,
       tip: sharpness < 40 ? "Photo is too blurry. Hold steady and ensure good focus." : undefined,
     });
 
     const brightness = face.Quality?.Brightness ?? 0;
     checks.push({
+      code: "brightness",
       name: "Brightness acceptable",
       passed: brightness >= 30,
+      tipReason: brightness < 30 ? "too_dark" : undefined,
       tip: brightness < 30 ? "Photo is too dark. Retake in better lighting." : undefined,
     });
 
@@ -161,8 +187,10 @@ export function evaluateFaceDetails(faces: FaceDetail[]): FaceQualityResult {
     const sunglassesConf = face.Sunglasses?.Confidence ?? 0;
     const sunglassesDetected = sunglassesValue && sunglassesConf >= 80;
     checks.push({
+      code: "no_sunglasses",
       name: "No sunglasses",
       passed: !sunglassesDetected,
+      tipReason: sunglassesDetected ? "remove_sunglasses" : undefined,
       tip: sunglassesDetected ? "Remove sunglasses and retake the photo." : undefined,
     });
 
@@ -176,19 +204,25 @@ export function evaluateFaceDetails(faces: FaceDetail[]): FaceQualityResult {
     const eyesConf = face.EyesOpen?.Confidence ?? 0;
     const eyesPassed = eyesOpen && eyesConf >= 70 && !sunglassesDetected;
     checks.push({
+      code: "eyes_visible",
       name: "Eyes visible",
       passed: eyesPassed,
+      tipReason: !eyesPassed ? "eyes_not_visible" : undefined,
       tip: !eyesPassed ? "Eyes should be clearly open and visible. Remove sunglasses if worn." : undefined,
     });
   } else {
-    checks.push({ name: "Face confidence", passed: false, tip: "Cannot evaluate — no single face detected." });
-    checks.push({ name: "Face size sufficient", passed: false, tip: "Cannot evaluate — no single face detected." });
-    checks.push({ name: "Face facing forward", passed: false, tip: "Cannot evaluate — no single face detected." });
-    checks.push({ name: "Full face visible", passed: false, tip: "Cannot evaluate — no single face detected." });
-    checks.push({ name: "Sharpness acceptable", passed: false, tip: "Cannot evaluate — no single face detected." });
-    checks.push({ name: "Brightness acceptable", passed: false, tip: "Cannot evaluate — no single face detected." });
-    checks.push({ name: "No sunglasses", passed: false, tip: "Cannot evaluate — no single face detected." });
-    checks.push({ name: "Eyes visible", passed: false, tip: "Cannot evaluate — no single face detected." });
+    const noSingleTip = "Cannot evaluate — no single face detected.";
+    const noSingle = (code: string, name: string): FaceQualityCheck => ({
+      code, name, passed: false, tipReason: "no_single_face", tip: noSingleTip,
+    });
+    checks.push(noSingle("face_confidence", "Face confidence"));
+    checks.push(noSingle("face_size", "Face size sufficient"));
+    checks.push(noSingle("face_pose", "Face facing forward"));
+    checks.push(noSingle("full_face", "Full face visible"));
+    checks.push(noSingle("sharpness", "Sharpness acceptable"));
+    checks.push(noSingle("brightness", "Brightness acceptable"));
+    checks.push(noSingle("no_sunglasses", "No sunglasses"));
+    checks.push(noSingle("eyes_visible", "Eyes visible"));
   }
 
   const allPassed = checks.every(c => c.passed);

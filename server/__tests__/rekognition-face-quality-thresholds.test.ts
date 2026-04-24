@@ -1,6 +1,6 @@
 // Task #145 — regression tests that lock the *legacy* photo-quality
 // thresholds in `evaluateFaceDetails`. Task #143 already covers the
-// new sunglasses gate and the tightened "Eyes visible" rule. These
+// new sunglasses gate and the tightened "eyes_visible" rule. These
 // tests pin the older checks (face confidence, face size, pose
 // pitch/yaw, sharpness, brightness, eyes-open confidence, full-face
 // landmarks) at their just-passes / just-fails boundaries so a
@@ -35,14 +35,16 @@ function passingFace(overrides: Partial<FaceDetail> = {}): FaceDetail {
   };
 }
 
+// Look up by stable `code` rather than English `name` so these
+// threshold tests survive any future copy reword.
 function findCheck(
-  result: { checks: { name: string; passed: boolean; tip?: string }[] },
-  name: string,
+  result: { checks: { code: string; name: string; passed: boolean; tipReason?: string; tip?: string }[] },
+  code: string,
 ) {
-  const c = result.checks.find((x) => x.name === name);
+  const c = result.checks.find((x) => x.code === code);
   if (!c) {
     throw new Error(
-      `check "${name}" missing from result; got: ${result.checks.map((x) => x.name).join(", ")}`,
+      `check code "${code}" missing from result; got: ${result.checks.map((x) => x.code).join(", ")}`,
     );
   }
   return c;
@@ -51,12 +53,12 @@ function findCheck(
 describe("evaluateFaceDetails — Face confidence threshold (>= 90)", () => {
   it("passes at exactly 90", () => {
     const result = evaluateFaceDetails([passingFace({ Confidence: 90 })]);
-    assert.equal(findCheck(result, "Face confidence").passed, true);
+    assert.equal(findCheck(result, "face_confidence").passed, true);
   });
 
   it("fails just below 90", () => {
     const result = evaluateFaceDetails([passingFace({ Confidence: 89.999 })]);
-    const c = findCheck(result, "Face confidence");
+    const c = findCheck(result, "face_confidence");
     assert.equal(c.passed, false);
     assert.match(c.tip ?? "", /clearly recognisable|well-lit/i);
     assert.equal(result.passed, false);
@@ -69,7 +71,7 @@ describe("evaluateFaceDetails — Face size threshold (boxArea >= 0.04)", () => 
     const result = evaluateFaceDetails([
       passingFace({ BoundingBox: { Left: 0.4, Top: 0.4, Width: 0.2, Height: 0.2 } }),
     ]);
-    assert.equal(findCheck(result, "Face size sufficient").passed, true);
+    assert.equal(findCheck(result, "face_size").passed, true);
   });
 
   it("fails just below area = 0.04", () => {
@@ -77,7 +79,7 @@ describe("evaluateFaceDetails — Face size threshold (boxArea >= 0.04)", () => 
     const result = evaluateFaceDetails([
       passingFace({ BoundingBox: { Left: 0.4, Top: 0.4, Width: 0.2, Height: 0.19 } }),
     ]);
-    const c = findCheck(result, "Face size sufficient");
+    const c = findCheck(result, "face_size");
     assert.equal(c.passed, false);
     assert.match(c.tip ?? "", /too small|move closer/i);
   });
@@ -88,7 +90,7 @@ describe("evaluateFaceDetails — Face size threshold (boxArea >= 0.04)", () => 
     // Without a box, the landmarks-vs-box check also fails — we only
     // assert the size check here because that's what this suite locks.
     const result = evaluateFaceDetails([f]);
-    assert.equal(findCheck(result, "Face size sufficient").passed, false);
+    assert.equal(findCheck(result, "face_size").passed, false);
   });
 });
 
@@ -97,21 +99,21 @@ describe("evaluateFaceDetails — Pose threshold (|yaw| <= 30 AND |pitch| <= 25)
     const result = evaluateFaceDetails([
       passingFace({ Pose: { Yaw: 30, Pitch: 25, Roll: 0 } }),
     ]);
-    assert.equal(findCheck(result, "Face facing forward").passed, true);
+    assert.equal(findCheck(result, "face_pose").passed, true);
   });
 
   it("passes at the negative boundary too (yaw=-30, pitch=-25)", () => {
     const result = evaluateFaceDetails([
       passingFace({ Pose: { Yaw: -30, Pitch: -25, Roll: 0 } }),
     ]);
-    assert.equal(findCheck(result, "Face facing forward").passed, true);
+    assert.equal(findCheck(result, "face_pose").passed, true);
   });
 
   it("fails just past yaw boundary (yaw=30.01)", () => {
     const result = evaluateFaceDetails([
       passingFace({ Pose: { Yaw: 30.01, Pitch: 0, Roll: 0 } }),
     ]);
-    const c = findCheck(result, "Face facing forward");
+    const c = findCheck(result, "face_pose");
     assert.equal(c.passed, false);
     assert.match(c.tip ?? "", /face the camera|turning|tilting/i);
   });
@@ -120,7 +122,7 @@ describe("evaluateFaceDetails — Pose threshold (|yaw| <= 30 AND |pitch| <= 25)
     const result = evaluateFaceDetails([
       passingFace({ Pose: { Yaw: 0, Pitch: 25.01, Roll: 0 } }),
     ]);
-    assert.equal(findCheck(result, "Face facing forward").passed, false);
+    assert.equal(findCheck(result, "face_pose").passed, false);
   });
 
   it("does NOT gate on Roll — heavy roll alone still passes the pose check", () => {
@@ -130,7 +132,7 @@ describe("evaluateFaceDetails — Pose threshold (|yaw| <= 30 AND |pitch| <= 25)
     const result = evaluateFaceDetails([
       passingFace({ Pose: { Yaw: 0, Pitch: 0, Roll: 89 } }),
     ]);
-    assert.equal(findCheck(result, "Face facing forward").passed, true);
+    assert.equal(findCheck(result, "face_pose").passed, true);
   });
 });
 
@@ -139,14 +141,14 @@ describe("evaluateFaceDetails — Sharpness threshold (>= 40)", () => {
     const result = evaluateFaceDetails([
       passingFace({ Quality: { Sharpness: 40, Brightness: 70 } }),
     ]);
-    assert.equal(findCheck(result, "Sharpness acceptable").passed, true);
+    assert.equal(findCheck(result, "sharpness").passed, true);
   });
 
   it("fails just below 40", () => {
     const result = evaluateFaceDetails([
       passingFace({ Quality: { Sharpness: 39.999, Brightness: 70 } }),
     ]);
-    const c = findCheck(result, "Sharpness acceptable");
+    const c = findCheck(result, "sharpness");
     assert.equal(c.passed, false);
     assert.match(c.tip ?? "", /blurry|focus/i);
   });
@@ -157,14 +159,14 @@ describe("evaluateFaceDetails — Brightness threshold (>= 30)", () => {
     const result = evaluateFaceDetails([
       passingFace({ Quality: { Sharpness: 90, Brightness: 30 } }),
     ]);
-    assert.equal(findCheck(result, "Brightness acceptable").passed, true);
+    assert.equal(findCheck(result, "brightness").passed, true);
   });
 
   it("fails just below 30", () => {
     const result = evaluateFaceDetails([
       passingFace({ Quality: { Sharpness: 90, Brightness: 29.999 } }),
     ]);
-    const c = findCheck(result, "Brightness acceptable");
+    const c = findCheck(result, "brightness");
     assert.equal(c.passed, false);
     assert.match(c.tip ?? "", /dark|lighting/i);
   });
@@ -175,21 +177,21 @@ describe("evaluateFaceDetails — EyesOpen threshold (>= 70 confidence)", () => 
     const result = evaluateFaceDetails([
       passingFace({ EyesOpen: { Value: true, Confidence: 70 } }),
     ]);
-    assert.equal(findCheck(result, "Eyes visible").passed, true);
+    assert.equal(findCheck(result, "eyes_visible").passed, true);
   });
 
   it("fails just below 70 even with EyesOpen=true", () => {
     const result = evaluateFaceDetails([
       passingFace({ EyesOpen: { Value: true, Confidence: 69.999 } }),
     ]);
-    assert.equal(findCheck(result, "Eyes visible").passed, false);
+    assert.equal(findCheck(result, "eyes_visible").passed, false);
   });
 });
 
 describe("evaluateFaceDetails — Full face visibility (nose & mouth landmarks within bounding box)", () => {
   it("passes when nose and both mouth corners are inside the box", () => {
     const result = evaluateFaceDetails([passingFace()]);
-    assert.equal(findCheck(result, "Full face visible").passed, true);
+    assert.equal(findCheck(result, "full_face").passed, true);
   });
 
   it("fails when the nose lands well below the bounding box (chin cropped)", () => {
@@ -205,7 +207,7 @@ describe("evaluateFaceDetails — Full face visibility (nose & mouth landmarks w
         ],
       }),
     ]);
-    const c = findCheck(result, "Full face visible");
+    const c = findCheck(result, "full_face");
     assert.equal(c.passed, false);
     assert.match(c.tip ?? "", /entire face|forehead to chin|cut off/i);
   });
@@ -216,14 +218,14 @@ describe("evaluateFaceDetails — Full face visibility (nose & mouth landmarks w
         Landmarks: [{ Type: "nose", X: 0.5, Y: 0.5 }],
       }),
     ]);
-    assert.equal(findCheck(result, "Full face visible").passed, false);
+    assert.equal(findCheck(result, "full_face").passed, false);
   });
 
   it("fails when landmarks array is missing", () => {
     const f = passingFace();
     delete f.Landmarks;
     const result = evaluateFaceDetails([f]);
-    assert.equal(findCheck(result, "Full face visible").passed, false);
+    assert.equal(findCheck(result, "full_face").passed, false);
   });
 });
 
@@ -234,7 +236,7 @@ describe("evaluateFaceDetails — overall pass requires every check", () => {
     ]);
     assert.equal(result.passed, false);
     // Sanity: only the brightness check should be the one failing.
-    const failing = result.checks.filter((c) => !c.passed).map((c) => c.name);
-    assert.deepEqual(failing, ["Brightness acceptable"]);
+    const failing = result.checks.filter((c) => !c.passed).map((c) => c.code);
+    assert.deepEqual(failing, ["brightness"]);
   });
 });

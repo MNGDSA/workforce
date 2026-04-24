@@ -72,7 +72,38 @@
     "tryDifferent": "Try Different Photo",
     "zoom": "Zoom",
     "save": "Save Photo",
-    "checking": "Checking quality…"
+    "checking": "Checking quality…",
+    "checks": {
+      "labels": {
+        "face_detected": "Face detected",
+        "single_face": "Single face",
+        "face_confidence": "Face confidence",
+        "face_size": "Face size sufficient",
+        "face_pose": "Face facing forward",
+        "full_face": "Full face visible",
+        "sharpness": "Sharpness acceptable",
+        "brightness": "Brightness acceptable",
+        "no_sunglasses": "No sunglasses",
+        "eyes_visible": "Eyes visible",
+        "photo_validation": "Photo validation",
+        "service_unavailable": "Face verification service"
+      },
+      "tips": {
+        "no_face": "No face found. Make sure your face is clearly visible in the photo.",
+        "multiple_faces": "Multiple faces detected. Use a photo with only your face.",
+        "no_single_face": "Cannot evaluate — no single face detected.",
+        "low_confidence": "Face is not clearly recognisable. Use a well-lit photo showing your full face.",
+        "too_small": "Face is too small. Move closer to the camera or crop tighter.",
+        "bad_pose": "Face the camera directly. Avoid turning or tilting your head.",
+        "partial_face": "Your entire face must be visible — forehead to chin. Do not crop or cut off any part.",
+        "too_blurry": "Photo is too blurry. Hold steady and ensure good focus.",
+        "too_dark": "Photo is too dark. Retake in better lighting.",
+        "remove_sunglasses": "Remove sunglasses and retake the photo.",
+        "eyes_not_visible": "Eyes should be clearly open and visible. Remove sunglasses if worn.",
+        "invalid_image": "Could not validate photo. Please ensure the file is a valid image (JPG or PNG).",
+        "service_unavailable": "The verification service is currently unreachable. Your photo cannot be processed until the service is available."
+      }
+    }
   },
   "apply": {
     "title": "Apply for Position",
