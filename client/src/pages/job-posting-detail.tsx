@@ -178,6 +178,7 @@ function SortableHeader({
   ariaLabel,
   className = "",
   testId,
+  t,
 }: {
   label: string;
   sortKey: SortKey;
@@ -187,9 +188,14 @@ function SortableHeader({
   ariaLabel: string;
   className?: string;
   testId?: string;
+  t: TFunction;
 }) {
   const isActive = activeKey === sortKey;
   const Icon = !isActive ? ArrowUpDown : dir === "asc" ? ArrowUp : ArrowDown;
+  const directionLabel = isActive
+    ? t(dir === "asc" ? "jobPosting:detail.sortAsc" : "jobPosting:detail.sortDesc")
+    : "";
+  const buttonLabel = directionLabel ? `${ariaLabel} — ${directionLabel}` : ariaLabel;
   return (
     <th
       scope="col"
@@ -199,7 +205,7 @@ function SortableHeader({
       <button
         type="button"
         onClick={() => onSort(sortKey)}
-        aria-label={ariaLabel}
+        aria-label={buttonLabel}
         className={`inline-flex items-center gap-1 hover:text-white transition-colors ${
           isActive ? "text-white" : ""
         }`}
@@ -617,6 +623,7 @@ export default function JobPostingDetailPage() {
                           ariaLabel={t("jobPosting:detail.sortBy", { col: t("jobPosting:detail.colCandidate") })}
                           className="px-6"
                           testId="header-sort-candidate"
+                          t={t}
                         />
                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">{t("jobPosting:detail.colContact")}</th>
                         <SortableHeader
@@ -628,6 +635,7 @@ export default function JobPostingDetailPage() {
                           ariaLabel={t("jobPosting:detail.sortBy", { col: t("jobPosting:detail.colCity") })}
                           className="hidden sm:table-cell"
                           testId="header-sort-city"
+                          t={t}
                         />
                         <SortableHeader
                           label={t("jobPosting:detail.colSex")}
@@ -637,6 +645,7 @@ export default function JobPostingDetailPage() {
                           onSort={handleSort}
                           ariaLabel={t("jobPosting:detail.sortBy", { col: t("jobPosting:detail.colSex") })}
                           testId="header-sort-sex"
+                          t={t}
                         />
                         <SortableHeader
                           label={t("jobPosting:detail.colStatus")}
@@ -646,6 +655,7 @@ export default function JobPostingDetailPage() {
                           onSort={handleSort}
                           ariaLabel={t("jobPosting:detail.sortBy", { col: t("jobPosting:detail.colStatus") })}
                           testId="header-sort-status"
+                          t={t}
                         />
                         <SortableHeader
                           label={t("jobPosting:detail.colApplied")}
@@ -656,6 +666,7 @@ export default function JobPostingDetailPage() {
                           ariaLabel={t("jobPosting:detail.sortBy", { col: t("jobPosting:detail.colApplied") })}
                           className="hidden sm:table-cell"
                           testId="header-sort-applied"
+                          t={t}
                         />
                         {hasQuestions && (
                           <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("jobPosting:detail.colAnswers")}</th>
