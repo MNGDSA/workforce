@@ -666,6 +666,15 @@ export async function registerRoutes(
         }
         if (fallbackDecision.kind === "allow") {
           recordRekognitionFallback(fallbackDecision.telemetry, id);
+          // Task #154 — surface a friendlier "service was busy" notice on
+          // the fail-open re-upload path. Previously this branch returned
+          // a generic "photo verified" toast even though we never actually
+          // verified the photo (Rekognition was unreachable). The payload
+          // attaches a localized message the candidate portal can show as
+          // an info toast, while still accepting the upload — the HR
+          // review queue remains the safety net per the truth table in
+          // `decideRekognitionFallbackAction`.
+          qualityResult.serviceUnavailableNotice = tr(req, "photo.verifySkipped");
         }
 
         if (!qualityResult.passed && !qualityResult.qualityCheckSkipped) {

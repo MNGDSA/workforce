@@ -130,6 +130,12 @@ interface QualityResult {
   passed: boolean;
   checks: QualityCheck[];
   qualityCheckSkipped?: boolean;
+  // Task #154 — set by the routes layer when the photo was accepted
+  // even though Rekognition was unreachable (active-employee re-upload
+  // fail-open path). The candidate portal surfaces this as a friendly
+  // info toast so the user knows verification was skipped instead of
+  // seeing a misleading "Photo verified" success message.
+  serviceUnavailableNotice?: string;
 }
 
 function PhotoCropDialog({ open, imageSrc, onCrop, onClose, onRetry }: {
@@ -656,15 +662,35 @@ function ProfileCompletionCard({
         throw new Error(err.message);
       }
       const body = await res.json();
+      // Task #154 — when the photo upload fell open because
+      // Rekognition was unreachable (active-employee re-upload path),
+      // swap the success toast for an "accepted but unverified" one so
+      // the candidate doesn't see a misleading "Photo verified"
+      // message. Prefer the server's localized notice, with a local
+      // fallback for older deploys that don't send the field yet.
+      const photoSkipped = key === "photo" && !!body.qualityResult?.qualityCheckSkipped;
+      const skippedDescription: string | undefined = photoSkipped
+        ? (body.qualityResult?.serviceUnavailableNotice ?? t("portal:docs.photoAcceptedUnverifiedDesc"))
+        : undefined;
       if (key === "photo" && body.pendingReview) {
         setPhotoPendingReview(true);
         queryClient.invalidateQueries({ queryKey: ["/api/photo-change-requests", candidateId, "pending"] });
-        toast({ title: t("portal:docs.photoSubmitted"), description: t("portal:docs.photoSubmittedDesc") });
+        toast({
+          title: t("portal:docs.photoSubmitted"),
+          description: skippedDescription ?? t("portal:docs.photoSubmittedDesc"),
+        });
       } else {
         setJustUploaded((p) => ({ ...p, [key]: file.name }));
         queryClient.invalidateQueries({ queryKey: ["/api/candidates/profile", candidateId] });
-        const title = key === "photo" ? t("portal:docs.photoVerified") : t("portal:docs.fileUploaded");
-        toast({ title, description: t("portal:docs.fileSaved", { name: file.name }) });
+        const title = photoSkipped
+          ? t("portal:docs.photoAcceptedUnverified")
+          : key === "photo"
+            ? t("portal:docs.photoVerified")
+            : t("portal:docs.fileUploaded");
+        toast({
+          title,
+          description: skippedDescription ?? t("portal:docs.fileSaved", { name: file.name }),
+        });
       }
       return { ok: true };
     } catch (err: any) {
@@ -2084,15 +2110,26 @@ export default function CandidatePortal() {
         throw new Error(err.message);
       }
       const body = await res.json();
+      // Task #154 — surface the "verification was busy" notice on the
+      // photo-change path too. Otherwise an active employee re-uploading
+      // during a Rekognition outage sees "Photo uploaded and verified"
+      // even though we never actually verified it.
+      const skipped = !!body.qualityResult?.qualityCheckSkipped;
+      const skippedDescription: string | undefined = skipped
+        ? (body.qualityResult?.serviceUnavailableNotice ?? t("portal:photoChange.uploadedUnverifiedDesc"))
+        : undefined;
       if (body.pendingReview) {
         queryClient.invalidateQueries({ queryKey: ["/api/photo-change-requests", candidateId, "pending"] });
         toast({
           title: t("portal:photoChange.submitted"),
-          description: t("portal:photoChange.submittedDesc"),
+          description: skippedDescription ?? t("portal:photoChange.submittedDesc"),
         });
       } else {
         queryClient.invalidateQueries({ queryKey: ["/api/candidates/profile", candidateId] });
-        toast({ title: t("portal:photoChange.uploaded") });
+        toast({
+          title: skipped ? t("portal:photoChange.uploadedUnverified") : t("portal:photoChange.uploaded"),
+          description: skippedDescription,
+        });
       }
       setPhotoChangeCropSrc(null);
       return { ok: true };

@@ -27,6 +27,13 @@ export interface FaceQualityResult {
   // how often we're correcting orientation.
   rotatedBuffer?: Buffer;
   rotationApplied?: 90 | -90;
+  // Task #154 — friendly notice for the active-employee fail-open
+  // path. Set by the routes layer (NOT by `validateFaceQuality`)
+  // when the photo is accepted despite Rekognition being unreachable
+  // at upload time. The candidate portal renders this as an info
+  // toast so the user knows their photo was accepted but not
+  // verified, instead of seeing a misleading "Photo verified" toast.
+  serviceUnavailableNotice?: string;
 }
 
 // Pure orientation-picker — exported so it can be unit-tested
@@ -262,15 +269,50 @@ export async function validateFaceQuality(photoPath: string): Promise<FaceQualit
     }
     return rescueResult;
   } catch (err: any) {
+    // ─────────────────────────────────────────────────────────────────
+    // Outer-catch behaviour (Task #154 — documentation pass).
+    //
+    // This catch covers any failure of the FIRST DetectFaces call on
+    // the original (un-rotated) image, plus any failure in the
+    // surrounding setup (sharp dynamic import, bytes read, AWS SDK
+    // import). The rotation-rescue path has its own narrower catches
+    // inside `runRotationRescue` and never reaches here.
+    //
+    // We classify the error into two buckets:
+    //
+    //   * "transient" — Rekognition is briefly unavailable (timeout,
+    //     5xx, throttling, network unreachable). We FAIL OPEN by
+    //     returning `qualityCheckSkipped: true` with no failing
+    //     checks. This is the "service is busy" signal the routes
+    //     layer (server/routes.ts) translates into either:
+    //       - 503 + a friendly "verification temporarily unavailable"
+    //         message for FIRST-time uploads (no previously-validated
+    //         photo on file). The candidate is asked to retry.
+    //       - 200 + a "photo accepted, verification was busy" tip
+    //         for ACTIVE-EMPLOYEE re-uploads (a previously-validated
+    //         photo exists). The HR review queue is the safety net.
+    //     The full truth table lives in
+    //     `decideRekognitionFallbackAction` — see the docstring there.
+    //
+    //   * "non_transient" — the request itself is bad (corrupt image,
+    //     unsupported format, validation error from Rekognition). We
+    //     FAIL CLOSED by returning a failing `photo_validation`
+    //     check; the routes layer turns this into a 422 with the
+    //     standard quality-failed UI. There is no "retry the same
+    //     bytes and it'll work" outcome here.
+    //
+    // The classifier is extracted as a pure function so the
+    // boundaries can be unit-tested without mocking the AWS SDK —
+    // see `server/__tests__/rekognition-outer-catch.test.ts`.
+    // ─────────────────────────────────────────────────────────────────
     const errMsg = err instanceof Error ? err.message : "unknown";
     const errName = err?.name ?? "";
-    const httpCode = err?.$metadata?.httpStatusCode;
+    const classification = classifyDetectFacesError(err);
 
-    const isTimeout = errMsg.includes("aborted") || errMsg.includes("AbortError") || errName === "AbortError";
-    const isServiceError = httpCode >= 500 || errName === "ThrottlingException" || errName === "ProvisionedThroughputExceededException" || errMsg.includes("ECONNREFUSED") || errMsg.includes("ENOTFOUND") || errMsg.includes("ETIMEDOUT") || errMsg.includes("NetworkingError");
-
-    if (isTimeout || isServiceError) {
-      console.warn(`[Rekognition] DetectFaces unavailable (${isTimeout ? "timeout" : errName || errMsg}) — allowing photo through`);
+    if (classification === "transient") {
+      console.warn(
+        `[Rekognition] DetectFaces unavailable (${errName || errMsg}) — allowing photo through (routes layer decides fail-open vs fail-closed based on prior photo state)`,
+      );
       return { passed: true, checks: [], qualityCheckSkipped: true };
     }
 
@@ -286,6 +328,44 @@ export async function validateFaceQuality(photoPath: string): Promise<FaceQualit
       }],
     };
   }
+}
+
+// Pure error classifier for the `validateFaceQuality` outer catch.
+// Exported so the transient/non-transient boundaries can be unit
+// tested without spinning up an AWS client. The two-bucket return
+// type is intentional — the caller should not branch on a free-form
+// reason string. If a new transient class shows up (e.g. a future
+// AWS-side retryable status code), add it here so every test that
+// pins the contract sees it.
+export type DetectFacesErrorClass = "transient" | "non_transient";
+
+export function classifyDetectFacesError(err: any): DetectFacesErrorClass {
+  const errMsg = err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  const errName = err?.name ?? "";
+  const httpCode: number | undefined = err?.$metadata?.httpStatusCode;
+
+  // Our own AbortController fires on the 5s timeout in `detect`. The
+  // SDK can also surface this as a TimeoutError on slower paths.
+  const isTimeout =
+    errName === "AbortError" ||
+    errName === "TimeoutError" ||
+    errMsg.includes("aborted") ||
+    errMsg.includes("AbortError");
+
+  // Server-side or transport-level "try again later" signals.
+  const isServiceError =
+    (typeof httpCode === "number" && httpCode >= 500) ||
+    errName === "ThrottlingException" ||
+    errName === "ProvisionedThroughputExceededException" ||
+    errName === "ServiceUnavailableException" ||
+    errName === "InternalServerError" ||
+    errMsg.includes("ECONNREFUSED") ||
+    errMsg.includes("ENOTFOUND") ||
+    errMsg.includes("ETIMEDOUT") ||
+    errMsg.includes("EAI_AGAIN") ||
+    errMsg.includes("NetworkingError");
+
+  return isTimeout || isServiceError ? "transient" : "non_transient";
 }
 
 // Pure evaluator over Rekognition's FaceDetails — extracted from

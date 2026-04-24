@@ -163,6 +163,8 @@
     "photoSubmitted": "Photo submitted for review",
     "photoSubmittedDesc": "Your new photo has been sent to HR for approval. Your current photo remains active.",
     "photoVerified": "Photo uploaded and verified",
+    "photoAcceptedUnverified": "Photo accepted — verification skipped",
+    "photoAcceptedUnverifiedDesc": "The verification service was busy, so we couldn't double-check this photo. It was accepted — please retry later if it doesn't look right.",
     "fileUploaded": "File uploaded",
     "fileSaved": "\"{{name}}\" saved successfully."
   },
@@ -389,7 +391,9 @@
     "selectNew": "Select New Photo",
     "submitted": "Photo submitted for review",
     "submittedDesc": "Your new photo has been sent to HR for approval. Your current photo remains active until approved.",
-    "uploaded": "Photo uploaded and verified"
+    "uploaded": "Photo uploaded and verified",
+    "uploadedUnverified": "Photo accepted — verification skipped",
+    "uploadedUnverifiedDesc": "The verification service was busy, so we couldn't double-check this photo. It was accepted — please retry later if it doesn't look right."
   },
   "profile": {
     "title": "My Profile",
