@@ -106,7 +106,7 @@
     "export": "Export",
     "archive": "Archive",
     "unarchive": "Restore",
-    "clear": "Clear",
+    "clear": "Cancel",
     "resendActivation": "Resend Activation",
     "sendToOnboarding": "Send to Onboarding"
   },
