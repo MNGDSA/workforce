@@ -1,11 +1,15 @@
-// Task #173 wiring test — pins the City + Sex columns into both the rendered
-// applicants table AND the Excel export on /job-posting/:id.
+// Task #173 wiring test — pins UI surface contracts on the applicants
+// table that aren't naturally covered by the behavioural workbook test
+// (`applicants-export.test.ts`):
+//   - sortable header testids exist for every sort key
+//   - the female / male badge colour pairing is intact
+//   - default sort is "applied desc"
+//   - i18n keys exist in both en/jobPosting.json and ar/jobPosting.json
 //
-// Source-level checks (same style as the IBAN wiring tests in
-// server/__tests__/) because the export function lives inside a React page
-// module that imports browser-only deps (xlsx, lucide-react) — pulling it
-// into a node:test runtime would require a heavy mock of the React module
-// graph for a payoff this test already delivers cheaply.
+// Source-level checks because the surrounding component module (job-
+// posting-detail.tsx) imports React + Tailwind + a query client; pulling
+// the whole module into `tsx --test` for one element-level assertion
+// would cost more than the wiring catches it gives us.
 
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
@@ -24,50 +28,6 @@ const arLocalePath = path.join(
 const pageSource = readFileSync(pagePath, "utf8");
 const enLocale = JSON.parse(readFileSync(enLocalePath, "utf8"));
 const arLocale = JSON.parse(readFileSync(arLocalePath, "utf8"));
-
-describe("Applicants table — Excel export wiring (task #173)", () => {
-  it("exportToExcel header list includes City and Sex columns", () => {
-    const fnMatch = pageSource.match(/function\s+exportToExcel\([\s\S]*?\n\}\n/);
-    assert.ok(fnMatch, "exportToExcel function not found in job-posting-detail.tsx");
-    const fnBody = fnMatch[0];
-    assert.match(
-      fnBody,
-      /jobPosting:detail\.colCity/,
-      "Export headers must include the City column (i18n key jobPosting:detail.colCity)",
-    );
-    assert.match(
-      fnBody,
-      /jobPosting:detail\.colSex/,
-      "Export headers must include the Sex column (i18n key jobPosting:detail.colSex)",
-    );
-  });
-
-  it("exportToExcel writes city and gender values into each row", () => {
-    const fnMatch = pageSource.match(/function\s+exportToExcel\([\s\S]*?\n\}\n/);
-    assert.ok(fnMatch);
-    const fnBody = fnMatch[0];
-    assert.match(
-      fnBody,
-      /\?\.city\b/,
-      "Each exported row must read the candidate's city (look for `c?.city` or `candidate?.city`)",
-    );
-    assert.match(
-      fnBody,
-      /genderLabel\(/,
-      "Each exported row must localise gender via genderLabel(...)",
-    );
-  });
-
-  it("exportToExcel takes a t() translator (no hardcoded English headers)", () => {
-    const sigMatch = pageSource.match(/function\s+exportToExcel\([\s\S]*?\)\s*{/);
-    assert.ok(sigMatch, "exportToExcel signature not found");
-    assert.match(
-      sigMatch[0],
-      /t:\s*TFunction/,
-      "exportToExcel must accept a TFunction `t` so headers and the instruction row are localised",
-    );
-  });
-});
 
 describe("Applicants table — City/Sex i18n key parity (task #173)", () => {
   const requiredKeys = [
@@ -108,7 +68,7 @@ describe("Applicants table — City/Sex i18n key parity (task #173)", () => {
 describe("Applicants table — sortable headers + sex badge wiring (task #173)", () => {
   it("renders sortable headers for candidate, city, sex, status, applied", () => {
     for (const key of ["candidate", "city", "sex", "status", "applied"]) {
-      const re = new RegExp(`data-testid="header-sort-${key}"|testId="header-sort-${key}"|sortKey="${key}"`);
+      const re = new RegExp(`testId="header-sort-${key}"|sortKey="${key}"`);
       assert.match(
         pageSource,
         re,

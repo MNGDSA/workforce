@@ -1,5 +1,12 @@
-import * as XLSX from "xlsx";
 import { useState, Fragment } from "react";
+import {
+  exportApplicantsToFile,
+  formatAnswerForDisplay,
+  genderLabel,
+  VALID_STATUSES,
+  type GenderValue,
+  type ExportQuestion,
+} from "./job-posting-detail-export";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout";
@@ -63,8 +70,6 @@ type Application = {
   questionSetAnswers?: { questionSetId?: string; answers?: Record<string, string> } | null;
 };
 
-type GenderValue = "male" | "female" | "other" | "prefer_not_to_say";
-
 type CandidateInfo = {
   id: string;
   fullNameEn: string;
@@ -76,21 +81,6 @@ type CandidateInfo = {
   gender?: GenderValue | null;
   photoUrl?: string | null;
 };
-
-type ExportQuestion = { id: string; text: string; type?: string; options?: string[] };
-
-// Render a stored answer string for display. job_ranking answers are stored
-// as comma-joined option labels in preferred order; show them as a numbered
-// list ("1. سائق · 2. منظم · 3. خدمة عملاء") so recruiters can see the
-// candidate's full ranking instead of just the first item.
-function formatAnswerForDisplay(q: ExportQuestion, raw: string): string {
-  if (!raw) return "";
-  if (q.type === "job_ranking") {
-    const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
-    return parts.map((p, i) => `${i + 1}. ${p}`).join(" · ");
-  }
-  return raw;
-}
 
 const appStatusStyle: Record<string, string> = {
   new:         "bg-blue-500/10 text-blue-400",
@@ -129,8 +119,6 @@ function salaryLabel(job: JobPosting, t: TFunction) {
   return null;
 }
 
-const VALID_STATUSES = ["new", "shortlisted", "interviewed", "offered", "hired", "rejected"] as const;
-
 // Pipeline order, not alphabetical, so asc/desc maps to recruiter intent.
 const STATUS_ORDER: Record<string, number> = {
   new: 0,
@@ -157,13 +145,6 @@ function genderBadgeClass(gender: GenderValue | null | undefined): string {
   if (gender === "female") return "bg-pink-500/10 text-pink-400";
   if (gender === "male")   return "bg-blue-500/10 text-blue-400";
   return "bg-muted text-muted-foreground";
-}
-
-function genderLabel(gender: GenderValue | null | undefined, t: TFunction): string {
-  if (gender === "female") return t("jobPosting:detail.sexFemale");
-  if (gender === "male")   return t("jobPosting:detail.sexMale");
-  if (gender === "other" || gender === "prefer_not_to_say") return t("jobPosting:detail.sexOther");
-  return "—";
 }
 
 type SortKey = "candidate" | "city" | "sex" | "status" | "applied";
@@ -216,63 +197,6 @@ function SortableHeader({
       </button>
     </th>
   );
-}
-
-function exportToExcel(
-  job: JobPosting,
-  applications: Application[],
-  candidates: CandidateInfo[],
-  questions: ExportQuestion[] = [],
-  t: TFunction,
-) {
-  const candidateMap = Object.fromEntries(candidates.map((c) => [c.id, c]));
-  const questionHeaders = questions.map((q, i) => `Q${i + 1}: ${q.text}`);
-  const fixedHeaders = [
-    t("jobPosting:detail.exportColAppId"),
-    t("jobPosting:detail.exportColName"),
-    t("jobPosting:detail.exportColNationalId"),
-    t("jobPosting:detail.exportColEmail"),
-    t("jobPosting:detail.exportColPhone"),
-    t("jobPosting:detail.colCity"),
-    t("jobPosting:detail.colSex"),
-    t("jobPosting:detail.exportColCurrentStatus"),
-    t("jobPosting:detail.exportColNewStatus"),
-  ];
-  const headers = [...fixedHeaders, ...questionHeaders];
-  const rows = applications.map((app) => {
-    const c = candidateMap[app.candidateId];
-    const answers = app.questionSetAnswers?.answers ?? {};
-    return [
-      app.id,
-      c?.fullNameEn ?? t("jobPosting:detail.unknownCandidate"),
-      c?.nationalId ?? "",
-      c?.email ?? "",
-      c?.phone ?? "",
-      c?.city ?? "",
-      genderLabel(c?.gender, t),
-      app.status,
-      app.status,
-      // For job_ranking we expand the comma-joined answer into a numbered
-      // list inside the same cell ("1. سائق | 2. منظم | 3. خدمة عملاء")
-      // so recruiters see the full ranking, not just the first preference.
-      ...questions.map((q) => formatAnswerForDisplay(q, answers[q.id] ?? "")),
-    ];
-  });
-  const instructionRow = [
-    t("jobPosting:detail.exportInstruction", {
-      title: job.title,
-      validStatuses: VALID_STATUSES.join(", "),
-    }),
-  ];
-  const ws = XLSX.utils.aoa_to_sheet([instructionRow, headers, ...rows]);
-  const colWidths = headers.map((h, i) => ({
-    wch: Math.max(h.length, ...rows.map((r) => String(r[i] ?? "").length), 14),
-  }));
-  ws["!cols"] = colWidths;
-  ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Applicants");
-  XLSX.writeFile(wb, `applicants-${job.title.replace(/\s+/g, "-")}.xlsx`);
 }
 
 export default function JobPostingDetailPage() {
@@ -584,7 +508,7 @@ export default function JobPostingDetailPage() {
                   size="sm"
                   variant="outline"
                   className="border-border gap-1.5"
-                  onClick={() => exportToExcel(job, applications, candidates, questions, t)}
+                  onClick={() => exportApplicantsToFile(job, applications, candidates, questions, t)}
                   disabled={applications.length === 0}
                   data-testid="button-export-applicants"
                 >
