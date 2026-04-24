@@ -65,12 +65,49 @@ export async function uploadFile(
   }
 }
 
+// Task #156 — parse an S3-style storage URL back into the object
+// key we wrote at upload time. This is exported so the rotation
+// rescue (and any other in-place writer) can fail loudly at the
+// first deploy where the URL format drifts (CDN swap, custom
+// domain, signed URLs, …) instead of silently dropping the write
+// and leaving the candidate's photo sideways. The contract is:
+// either return a non-empty key, or throw a descriptive error —
+// never return `undefined` / empty string.
+export function extractStorageKeyFromUrl(fileUrl: string): string {
+  if (!spacesEndpoint) {
+    throw new Error(
+      `Cannot extract storage key from URL "${fileUrl}": SPACES_ENDPOINT is not configured`,
+    );
+  }
+  const marker = `${spacesEndpoint}/`;
+  const idx = fileUrl.indexOf(marker);
+  if (idx === -1) {
+    throw new Error(
+      `Cannot extract storage key from URL "${fileUrl}": expected endpoint "${spacesEndpoint}" to appear in the URL`,
+    );
+  }
+  const rawKey = fileUrl.slice(idx + marker.length);
+  const key = rawKey.split("?")[0].split("#")[0];
+  if (!key) {
+    throw new Error(
+      `Cannot extract storage key from URL "${fileUrl}": URL contains the endpoint but no object key`,
+    );
+  }
+  return key;
+}
+
 // Task #153 — overwrite the bytes at an existing storage URL in
 // place, preserving the same key/path so URLs already handed out
 // (e.g. a candidate's photoUrl) continue to resolve. Used by the
 // rotation rescue to replace a sideways upload with the
 // auto-corrected version. Photos are public by default; we keep
 // the same ACL and cache-control we use in `uploadFile`.
+//
+// Task #156 — refuse to silently no-op when the URL doesn't match
+// the expected `<bucket>.<endpoint>/<key>` shape. If the production
+// URL format ever drifts, the rotation rescue would otherwise run,
+// log success, and leave the bad bytes in place. We throw a loud,
+// descriptive error so the first occurrence surfaces in logs.
 export async function overwriteFile(
   fileUrl: string,
   bytes: Buffer,
@@ -85,22 +122,18 @@ export async function overwriteFile(
     return;
   }
 
-  if (fileUrl.includes(spacesEndpoint)) {
-    const key = fileUrl.split(`${spacesEndpoint}/`)[1];
-    if (key) {
-      const client = getS3Client();
-      await client.send(new PutObjectCommand({
-        Bucket: spacesBucket,
-        Key: key,
-        Body: bytes,
-        ContentType: contentType,
-        ACL: opts.isPublic ? "public-read" : "private",
-        CacheControl: opts.isPublic
-          ? "private, max-age=86400, must-revalidate"
-          : "private, max-age=300",
-      }));
-    }
-  }
+  const key = extractStorageKeyFromUrl(fileUrl);
+  const client = getS3Client();
+  await client.send(new PutObjectCommand({
+    Bucket: spacesBucket,
+    Key: key,
+    Body: bytes,
+    ContentType: contentType,
+    ACL: opts.isPublic ? "public-read" : "private",
+    CacheControl: opts.isPublic
+      ? "private, max-age=86400, must-revalidate"
+      : "private, max-age=300",
+  }));
 }
 
 export async function deleteFile(fileUrl: string): Promise<void> {
