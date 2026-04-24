@@ -236,6 +236,24 @@ const uploadXlsx = multer({
   },
 });
 
+// Task #182 — normalize blank/whitespace-only `region` to null at the
+// write boundary so every consumer can rely on `region` being either a
+// non-empty KSA region key or null. Several display sites use
+// `job.region ?? job.location` which treats empty string as a present
+// value and hides the location fallback. Applied to job postings, SMP
+// companies, and events on POST and PATCH so the form-driven write
+// paths can never persist `region: ""` again.
+function normalizeBlankRegion<T>(body: T): T {
+  if (body !== null && typeof body === "object" && "region" in body) {
+    const target = body as { region?: unknown };
+    const v = target.region;
+    if (typeof v === "string" && v.trim() === "") {
+      target.region = null;
+    }
+  }
+  return body;
+}
+
 function handleError(res: Response, err: unknown, req?: Request) {
   console.error(err);
   // Task #120 — IBAN format failures bubble out of the storage layer
@@ -2922,7 +2940,7 @@ export async function registerRoutes(
 
   app.post("/api/events", requirePermission("events:create"), async (req: Request, res: Response) => {
     try {
-      const data = insertEventSchema.parse(req.body);
+      const data = insertEventSchema.parse(normalizeBlankRegion({ ...req.body }));
       const evt = await storage.createEvent(data);
       storage.createAdminAlert(
         "New event created",
@@ -2937,7 +2955,7 @@ export async function registerRoutes(
 
   app.patch("/api/events/:id", requirePermission("events:update"), async (req: Request, res: Response) => {
     try {
-      const data = insertEventSchema.partial().parse(req.body);
+      const data = insertEventSchema.partial().parse(normalizeBlankRegion({ ...req.body }));
       const evt = await storage.updateEvent(req.params.id, data);
       if (!evt) return res.status(404).json({ message: tr(req, "event.notFound") });
       return res.json(evt);
@@ -3064,7 +3082,7 @@ export async function registerRoutes(
 
   app.post("/api/jobs", requirePermission("jobs:create"), async (req: Request, res: Response) => {
     try {
-      const body = { ...req.body };
+      const body = normalizeBlankRegion({ ...req.body });
       if (typeof body.salaryMin === "number") body.salaryMin = String(body.salaryMin);
       if (typeof body.salaryMax === "number") body.salaryMax = String(body.salaryMax);
       const data = insertJobPostingSchema.parse(body);
@@ -3077,7 +3095,7 @@ export async function registerRoutes(
 
   app.patch("/api/jobs/:id", requirePermission("jobs:update"), async (req: Request, res: Response) => {
     try {
-      const body = { ...req.body };
+      const body = normalizeBlankRegion({ ...req.body });
       if (typeof body.salaryMin === "number") body.salaryMin = String(body.salaryMin);
       if (typeof body.salaryMax === "number") body.salaryMax = String(body.salaryMax);
       const data = insertJobPostingSchema.partial().parse(body);
@@ -5004,7 +5022,7 @@ export async function registerRoutes(
 
   app.post("/api/smp-companies", requirePermission("smp:create"), async (req: Request, res: Response) => {
     try {
-      const data = insertSMPCompanySchema.parse(req.body);
+      const data = insertSMPCompanySchema.parse(normalizeBlankRegion({ ...req.body }));
       const company = await storage.createSMPCompany(data);
       await logAudit(req, {
         action: "smp_company.created",
@@ -5020,7 +5038,7 @@ export async function registerRoutes(
 
   app.patch("/api/smp-companies/:id", requirePermission("smp:update"), async (req: Request, res: Response) => {
     try {
-      const data = insertSMPCompanySchema.partial().parse(req.body);
+      const data = insertSMPCompanySchema.partial().parse(normalizeBlankRegion({ ...req.body }));
       const company = await storage.updateSMPCompany(req.params.id, data);
       if (!company) return res.status(404).json({ message: tr(req, "company.notFound") });
       return res.json(company);
