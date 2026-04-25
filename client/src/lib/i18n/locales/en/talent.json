@@ -220,6 +220,8 @@
     "emergencyPhonePh": "05xxxxxxxx",
     "healthNotes": "Health Notes",
     "healthDefault": "Chronic condition noted",
+    "documents": "Documents",
+    "viewCv": "View CV",
     "notes": "Notes",
     "save": "Save Changes",
     "cancel": "Cancel",

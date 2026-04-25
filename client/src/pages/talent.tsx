@@ -61,6 +61,7 @@ import {
   UserPlus,
   Repeat,
   Pencil,
+  FileText,
 } from "lucide-react";
 import {
   Table,
@@ -115,6 +116,7 @@ import {
 import type { Candidate } from "@shared/schema";
 import { useTranslation } from "react-i18next";
 import { formatNumber, formatDate, formatCurrency } from "@/lib/format";
+import { toProxiedFileUrl } from "@/lib/file-url";
 
 type CandidateWithWorkforce = Candidate & { workforceRecordCount: number; workforceSeasonCount: number; completedStints: number; unpaidSettlements: number };
 import { KSA_REGIONS } from "@shared/schema";
@@ -1199,6 +1201,25 @@ function CandidateProfileSheet({
                 <AlertTriangle className="h-3.5 w-3.5 text-amber-400" /> {t("profile.healthNotes")}
               </h4>
               <p className="text-sm text-amber-200/80">{c.chronicDiseases || t("profile.healthDefault")}</p>
+            </div>
+          )}
+
+          {(c as any).hasResume && toProxiedFileUrl((c as any).resumeUrl) && (
+            <div>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("profile.documents")}</h4>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-border"
+                onClick={() => {
+                  const url = toProxiedFileUrl((c as any).resumeUrl);
+                  if (url) window.open(url, "_blank", "noopener,noreferrer");
+                }}
+                data-testid="button-view-cv"
+              >
+                <FileText className="me-2 h-4 w-4" />
+                {t("profile.viewCv")}
+              </Button>
             </div>
           )}
 
