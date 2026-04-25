@@ -1947,7 +1947,6 @@ function EmployeeDetailDialog({
 // human-readable `description` when needed.
 type PaymentMethodHistoryRow = {
   id: string;
-  actorId: string | null;
   actorName: string | null;
   createdAt: string;
   metadata: { from?: string | null; to?: string | null; reason?: string | null } | null;
@@ -2026,8 +2025,14 @@ function PaymentMethodToggle({
   // Fall back to the raw column timestamp for the rare case where the
   // record was seeded before any audit entry exists.
   const lastChange = history[0];
-  const setByName = lastChange?.actorName ?? null;
+  // Fall back to the localized "Unknown user" label when the audit row
+  // exists (so we have a real timestamp) but the actor name didn't get
+  // captured. Avoids silently dropping the entire "Set by …" line just
+  // because the snapshot column was null on an older entry.
   const setAt = lastChange?.createdAt ?? employee.paymentMethodSetAt ?? null;
+  const setByName = setAt
+    ? (lastChange?.actorName ?? t("dialog.payment.unknownActor"))
+    : null;
 
   const methodLabel = (m?: string | null) =>
     m === "cash" ? t("dialog.payment.cash") : t("dialog.payment.bankTransfer");
