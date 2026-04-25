@@ -238,90 +238,21 @@ const uploadXlsx = multer({
 
 // Task #182 / #183 — normalize blank/whitespace-only string entries to
 // null at the write boundary so every downstream consumer can rely on
-// optional text columns being either a non-empty value or null. Many
-// display sites use `x ?? fallback` which treats an empty string as a
-// present value and hides the fallback (the original symptom on
-// `job.region ?? job.location`). Several Zod-derived insert schemas
-// also reject `""` for nullable enum-like text columns (e.g. gender,
-// nationality, maritalStatus, region) where the form sends "" for an
-// unselected dropdown. Applied to every form-driven create/edit
-// handler that touches optional text columns on job_postings,
-// smp_companies, events, workforce, applications, and candidates.
-function normalizeBlankFields<T>(body: T, fields: readonly string[]): T {
-  if (body === null || typeof body !== "object") return body;
-  const target = body as Record<string, unknown>;
-  for (const key of fields) {
-    if (key in target) {
-      const v = target[key];
-      if (typeof v === "string" && v.trim() === "") {
-        target[key] = null;
-      }
-    }
-  }
-  return body;
-}
-
-// Per-model lists of optional text/varchar columns whose form values
-// may legitimately be left empty. Kept narrow on purpose: only fields
-// that are nullable in shared/schema.ts AND are surfaced through a
-// form input or dropdown on the admin/candidate UIs. Required columns
-// (e.g. event.name, job.title) are intentionally absent — clearing
-// them to null is a validation error, not a normalization.
-const EVENT_BLANK_FIELDS = ["region", "description", "endDate"] as const;
-const JOB_BLANK_FIELDS = [
-  "region",
-  "location",
-  "department",
-  "deadline",
-  "description",
-  "requirements",
-] as const;
-const SMP_COMPANY_BLANK_FIELDS = [
-  "region",
-  "crNumber",
-  "contactPerson",
-  "contactPhone",
-  "contactEmail",
-  "bankName",
-  "bankIban",
-  "notes",
-] as const;
-const WORKFORCE_BLANK_FIELDS = [
-  "endDate",
-  "terminationReason",
-  "terminationCategory",
-  "notes",
-  "offboardingStatus",
-  "settlementPaidBy",
-  "settlementReference",
-  "paymentMethodReason",
-] as const;
-const APPLICATION_BLANK_FIELDS = ["notes"] as const;
-const CANDIDATE_BLANK_FIELDS = [
-  "candidateCode",
-  "gender",
-  "dateOfBirth",
-  "nationality",
-  "email",
-  "phone",
-  "whatsapp",
-  "city",
-  "region",
-  "nationalId",
-  "iqamaNumber",
-  "passportNumber",
-  "currentRole",
-  "currentEmployer",
-  "educationLevel",
-  "university",
-  "major",
-  "nationalityText",
-  "maritalStatus",
-  "chronicDiseases",
-  "emergencyContactName",
-  "emergencyContactPhone",
-  "notes",
-] as const;
+// optional text columns being either a non-empty value or null. The
+// helper and the per-model `*_BLANK_FIELDS` constants live in
+// `./lib/normalize-blank-fields` so that
+// `server/__tests__/normalize-blank-fields*.test.ts` (task #184) can
+// import them without dragging in this file's full dependency graph
+// (db, storage, auth, file storage, etc).
+import {
+  normalizeBlankFields,
+  EVENT_BLANK_FIELDS,
+  JOB_BLANK_FIELDS,
+  SMP_COMPANY_BLANK_FIELDS,
+  WORKFORCE_BLANK_FIELDS,
+  APPLICATION_BLANK_FIELDS,
+  CANDIDATE_BLANK_FIELDS,
+} from "./lib/normalize-blank-fields";
 
 function handleError(res: Response, err: unknown, req?: Request) {
   console.error(err);
