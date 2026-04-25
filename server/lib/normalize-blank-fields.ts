@@ -97,3 +97,35 @@ export const CANDIDATE_BLANK_FIELDS = [
   "emergencyContactPhone",
   "notes",
 ] as const;
+
+// Task #185 — the workforce candidate-profile patch route accepts the
+// CANDIDATE columns plus the IBAN overlay introduced in task #133.
+// Keeping the merged list as a single named constant in this module
+// (rather than an inline `[...CANDIDATE_BLANK_FIELDS, "ibanNumber", …]`
+// at the call site) means the wiring test can match the route by name
+// instead of by multi-line-array regex, and a future audit of "which
+// fields can the API normalise on workforce candidate-profile?" is a
+// one-file read.
+export const WORKFORCE_PROFILE_BLANK_FIELDS = [
+  ...CANDIDATE_BLANK_FIELDS,
+  "ibanNumber",
+  "ibanBankName",
+  "ibanBankCode",
+  "ibanAccountFirstName",
+  "ibanAccountLastName",
+] as const;
+
+// Task #185 — the settlement payment-tracking route only normalises
+// the `reference` field on the payload. Promoted from an inline
+// `["reference"]` literal so the per-model surface lives entirely in
+// this module.
+export const PAYROLL_SETTLEMENT_BLANK_FIELDS = ["reference"] as const;
+
+// Task #185 — the workforce payment-method route normalises the cash
+// `reason` field on the payload (the cash-reason guard depends on
+// "  " being coerced to null before validation, otherwise a form
+// submitting whitespace would silently bypass the guard). Promoted
+// from an inline `["reason"]` literal for the same reason as above.
+// Named for the route surface (payment-method), not the field, since
+// other future routes may also normalise a `reason` column.
+export const WORKFORCE_PAYMENT_METHOD_BLANK_FIELDS = ["reason"] as const;

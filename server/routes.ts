@@ -252,6 +252,13 @@ import {
   WORKFORCE_BLANK_FIELDS,
   APPLICATION_BLANK_FIELDS,
   CANDIDATE_BLANK_FIELDS,
+  // Task #185 — the remaining inline blank-field lists were promoted
+  // to named constants in `./lib/normalize-blank-fields` so the entire
+  // per-model surface lives in one module and the wiring test can
+  // assert on names instead of multi-line array literals.
+  WORKFORCE_PROFILE_BLANK_FIELDS,
+  PAYROLL_SETTLEMENT_BLANK_FIELDS,
+  WORKFORCE_PAYMENT_METHOD_BLANK_FIELDS,
 } from "./lib/normalize-blank-fields";
 
 function handleError(res: Response, err: unknown, req?: Request) {
@@ -3889,14 +3896,9 @@ export async function registerRoutes(
       // Task #183 — use the generic helper for empty-string → null
       // normalization. Same write-boundary defence applied across all
       // form-driven routes; replaces the bespoke nullableFields loop.
-      const normalized = normalizeBlankFields({ ...req.body }, [
-        ...CANDIDATE_BLANK_FIELDS,
-        "ibanNumber",
-        "ibanBankName",
-        "ibanBankCode",
-        "ibanAccountFirstName",
-        "ibanAccountLastName",
-      ]);
+      // Task #185 — the merged CANDIDATE + IBAN-overlay list is now a
+      // single named constant so the wiring stays in one module.
+      const normalized = normalizeBlankFields({ ...req.body }, WORKFORCE_PROFILE_BLANK_FIELDS);
       const filtered: Record<string, any> = {};
       for (const key of allowed) {
         if (key in normalized) filtered[key] = normalized[key] ?? null;
@@ -8598,7 +8600,9 @@ export async function registerRoutes(
       // payroll audit and exports don't carry empty strings. The form
       // field is named `reference`; it maps to settlementReference on
       // the workforce row.
-      const body = normalizeBlankFields({ ...req.body }, ["reference"]) as { reference?: string | null };
+      // Task #185 — promoted from inline `["reference"]` to a named
+      // constant in `./lib/normalize-blank-fields`.
+      const body = normalizeBlankFields({ ...req.body }, PAYROLL_SETTLEMENT_BLANK_FIELDS) as { reference?: string | null };
       const reference = body.reference ?? null;
       const updated = await storage.updateWorkforceRecord(req.params.id, {
         settlementPaidAt: new Date() as any,
@@ -8618,7 +8622,9 @@ export async function registerRoutes(
       // Task #183 — normalise blank/whitespace-only `reason` to null so a
       // form that submits "  " can't bypass the cash-reason guard or
       // persist an empty string into paymentMethodReason.
-      const body = normalizeBlankFields({ ...req.body }, ["reason"]) as {
+      // Task #185 — promoted from inline `["reason"]` to a named
+      // constant in `./lib/normalize-blank-fields`.
+      const body = normalizeBlankFields({ ...req.body }, WORKFORCE_PAYMENT_METHOD_BLANK_FIELDS) as {
         paymentMethod?: string;
         reason?: string | null;
       };

@@ -38,6 +38,13 @@ import {
   WORKFORCE_BLANK_FIELDS,
   APPLICATION_BLANK_FIELDS,
   CANDIDATE_BLANK_FIELDS,
+  // Task #185 — the remaining inline blank-field lists were promoted
+  // to named constants. The harness and wiring assertions below both
+  // import them by name so a future regression that drops the constant
+  // (or replaces it with a different inline literal) is caught.
+  WORKFORCE_PROFILE_BLANK_FIELDS,
+  PAYROLL_SETTLEMENT_BLANK_FIELDS,
+  WORKFORCE_PAYMENT_METHOD_BLANK_FIELDS,
 } from "../lib/normalize-blank-fields";
 
 // ─── Harness ────────────────────────────────────────────────────────────
@@ -64,6 +71,10 @@ async function startHarness(): Promise<Harness> {
     workforceProfile: null,
     workforceTerminate: null,
     smpCompany: null,
+    // Task #185 — new constants get their own capture slots so the
+    // tests below can inspect what each route handed to storage.
+    settlementPaid: null,
+    paymentMethod: null,
   };
 
   // Each route mirrors the production call site:
@@ -132,18 +143,13 @@ async function startHarness(): Promise<Harness> {
     res.json(data);
   });
 
-  // Workforce candidate-profile route — combines CANDIDATE + IBAN-overlay
-  // fields, matching the production wiring at the line tagged
-  // "Task #183" in `server/routes.ts`.
+  // Workforce candidate-profile route — uses the merged CANDIDATE +
+  // IBAN-overlay constant promoted in task #185. Importing the same
+  // constant the production route imports keeps the harness honest:
+  // shrinking either list (CANDIDATE_BLANK_FIELDS or the IBAN tail)
+  // immediately breaks the assertion for the matching column below.
   app.patch("/api/workforce/:id/candidate-profile", (req, res) => {
-    const data = normalizeBlankFields({ ...req.body }, [
-      ...CANDIDATE_BLANK_FIELDS,
-      "ibanNumber",
-      "ibanBankName",
-      "ibanBankCode",
-      "ibanAccountFirstName",
-      "ibanAccountLastName",
-    ]) as Record<string, unknown>;
+    const data = normalizeBlankFields({ ...req.body }, WORKFORCE_PROFILE_BLANK_FIELDS) as Record<string, unknown>;
     lastInsert.workforceProfile = data;
     res.json(data);
   });
@@ -151,6 +157,24 @@ async function startHarness(): Promise<Harness> {
   app.post("/api/workforce/:id/terminate", (req, res) => {
     const data = normalizeBlankFields({ ...req.body }, WORKFORCE_BLANK_FIELDS) as Record<string, unknown>;
     lastInsert.workforceTerminate = data;
+    res.json(data);
+  });
+
+  // Task #185 — settlement payment-tracking route uses the dedicated
+  // PAYROLL_SETTLEMENT_BLANK_FIELDS constant (just `["reference"]`).
+  app.post("/api/workforce/:id/mark-settlement-paid", (req, res) => {
+    const data = normalizeBlankFields({ ...req.body }, PAYROLL_SETTLEMENT_BLANK_FIELDS) as Record<string, unknown>;
+    lastInsert.settlementPaid = data;
+    res.json(data);
+  });
+
+  // Task #185 — workforce payment-method route uses the dedicated
+  // WORKFORCE_PAYMENT_METHOD_BLANK_FIELDS constant (just `["reason"]`).
+  // The production route depends on this normalisation to stop a "  "
+  // submission silently bypassing the cash-reason guard.
+  app.patch("/api/workforce/:id/payment-method", (req, res) => {
+    const data = normalizeBlankFields({ ...req.body }, WORKFORCE_PAYMENT_METHOD_BLANK_FIELDS) as Record<string, unknown>;
+    lastInsert.paymentMethod = data;
     res.json(data);
   });
 
@@ -372,6 +396,28 @@ describe("normalizeBlankFields — per-route integration (task #184)", () => {
     assert.equal(body.terminationCategory, null);
   });
 
+  // ── settlement payment tracking (task #185) ──────────────────────────
+  it("POST /api/workforce/:id/mark-settlement-paid: blank reference is persisted as null", async () => {
+    const { status, body } = await postJson(
+      `${h.baseUrl}/api/workforce/wf-1/mark-settlement-paid`,
+      { reference: "  " },
+    );
+    assert.equal(status, 200);
+    assert.equal(body.reference, null);
+  });
+
+  // ── workforce payment-method (task #185) ─────────────────────────────
+  it("PATCH /api/workforce/:id/payment-method: blank cash `reason` is persisted as null", async () => {
+    const { status, body } = await patchJson(
+      `${h.baseUrl}/api/workforce/wf-1/payment-method`,
+      { paymentMethod: "cash", reason: "   " },
+    );
+    assert.equal(status, 200);
+    // paymentMethod is required and NOT in WORKFORCE_PAYMENT_METHOD_BLANK_FIELDS
+    assert.equal(body.paymentMethod, "cash");
+    assert.equal(body.reason, null);
+  });
+
   // ── smp-companies ────────────────────────────────────────────────────
   it("POST /api/smp-companies: blank SMP dropdowns are persisted as null", async () => {
     const { status, body } = await postJson(`${h.baseUrl}/api/smp-companies`, {
@@ -442,18 +488,45 @@ describe("normalizeBlankFields — per-route integration (task #184)", () => {
         pattern: /insertWorkforceSchema\.parse\(normalizeBlankFields\(\{ \.\.\.req\.body \}, WORKFORCE_BLANK_FIELDS\)\)/ },
       { desc: "Workforce PATCH/terminate use WORKFORCE_BLANK_FIELDS",
         pattern: /normalizeBlankFields\(\{ \.\.\.req\.body \}, WORKFORCE_BLANK_FIELDS\)/ },
-      // Workforce candidate-profile (CANDIDATE + IBAN overlay)
-      { desc: "Workforce candidate-profile uses CANDIDATE_BLANK_FIELDS + IBAN overlay",
-        pattern: /normalizeBlankFields\([\s\S]{0,80}\.\.\.CANDIDATE_BLANK_FIELDS,[\s\S]{0,200}"ibanNumber"/ },
+      // Workforce candidate-profile (CANDIDATE + IBAN overlay) — task
+      // #185 promoted the inline `[...CANDIDATE_BLANK_FIELDS, "ibanNumber", …]`
+      // literal to the merged `WORKFORCE_PROFILE_BLANK_FIELDS` constant,
+      // so this assertion matches the named constant exactly instead of
+      // a multi-line array regex.
+      { desc: "Workforce candidate-profile uses WORKFORCE_PROFILE_BLANK_FIELDS",
+        pattern: /normalizeBlankFields\(\{ \.\.\.req\.body \}, WORKFORCE_PROFILE_BLANK_FIELDS\)/ },
+      // Settlement payment tracking (task #185) — promoted from inline
+      // `["reference"]` to `PAYROLL_SETTLEMENT_BLANK_FIELDS`.
+      { desc: "POST /api/workforce/:id/mark-settlement-paid uses PAYROLL_SETTLEMENT_BLANK_FIELDS",
+        pattern: /normalizeBlankFields\(\{ \.\.\.req\.body \}, PAYROLL_SETTLEMENT_BLANK_FIELDS\)/ },
+      // Workforce payment-method (task #185) — promoted from inline
+      // `["reason"]` to `WORKFORCE_PAYMENT_METHOD_BLANK_FIELDS`.
+      { desc: "PATCH /api/workforce/:id/payment-method uses WORKFORCE_PAYMENT_METHOD_BLANK_FIELDS",
+        pattern: /normalizeBlankFields\(\{ \.\.\.req\.body \}, WORKFORCE_PAYMENT_METHOD_BLANK_FIELDS\)/ },
       // SMP companies
       { desc: "POST /api/smp-companies uses SMP_COMPANY_BLANK_FIELDS",
         pattern: /insertSMPCompanySchema\.parse\(normalizeBlankFields\(\{ \.\.\.req\.body \}, SMP_COMPANY_BLANK_FIELDS\)\)/ },
       { desc: "PATCH /api/smp-companies/:id uses SMP_COMPANY_BLANK_FIELDS",
         pattern: /insertSMPCompanySchema\.partial\(\)\.parse\(normalizeBlankFields\(\{ \.\.\.req\.body \}, SMP_COMPANY_BLANK_FIELDS\)\)/ },
+      // Task #185 — guard that no inline blank-field literals creep
+      // back into routes.ts. Every `normalizeBlankFields({ ...req.body }, …)`
+      // call must use a named constant, not an inline array literal
+      // like `["reference"]` or `[...CANDIDATE_BLANK_FIELDS, "ibanNumber"]`.
     ];
 
     for (const { desc, pattern } of checks) {
       assert.match(routesSrc, pattern, `wiring regressed: ${desc}`);
     }
+
+    // Task #185 — defence-in-depth: scan for any `normalizeBlankFields(`
+    // call whose second argument starts with `[` (an inline array
+    // literal). Every such call site should now use a named constant
+    // exported from `./lib/normalize-blank-fields`.
+    const inlineLiteralCalls = routesSrc.match(/normalizeBlankFields\([^,]+,\s*\[/g) ?? [];
+    assert.equal(
+      inlineLiteralCalls.length,
+      0,
+      `routes.ts contains ${inlineLiteralCalls.length} inline blank-field array(s) — promote to named constants in ./lib/normalize-blank-fields: ${JSON.stringify(inlineLiteralCalls)}`,
+    );
   });
 });
