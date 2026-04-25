@@ -5644,15 +5644,6 @@ export async function registerRoutes(
   app.post("/api/id-card-templates/:id/background", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) return res.status(400).json({ message: tr(req, "file.noUpload") });
-      // Task #198 — ID card backgrounds are template assets that the browser
-      // loads directly via `<div style="background-image:url(...)">` in the
-      // designer preview and the print window (see
-      // `client/src/lib/id-card-renderer.ts`). In production they live in DO
-      // Spaces; without `isPublic:true` the bucket ACL defaults to "private"
-      // and the browser receives 403 on every reload, making the saved
-      // background appear to vanish even though the URL persists in
-      // `id_card_templates.background_image_url`. The candidate-photo flow
-      // already does this in `server/lib/photo-upload-handler.ts`.
       const imageUrl = await uploadFile(
         req.file.path,
         req.file.filename,
