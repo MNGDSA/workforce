@@ -187,7 +187,7 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     // Photo / verification
     "photo.verifyUnavailable":          "Photo verification is temporarily unavailable. Please try again in a few minutes.",
     "photo.verifySkipped":              "Verification service was busy, so we couldn't double-check this photo. Your photo was accepted — please retry later if it doesn't look right.",
-    "photo.qualityFailed":              "Photo quality check failed",
+    "photo.qualityFailed":              "Photo not accepted, please upload another image",
     "photo.submittedForReview":         "Photo submitted for HR review. Your current photo remains active.",
 
     // Application / job
@@ -555,7 +555,7 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     // Photo / verification
     "photo.verifyUnavailable":          "خدمة التحقق من الصور غير متوفرة مؤقتاً. يرجى المحاولة بعد دقائق.",
     "photo.verifySkipped":              "كانت خدمة التحقق مشغولة، لذا لم نتمكن من فحص هذه الصورة. تم قبول صورتك — يرجى المحاولة لاحقًا إذا بدت غير صحيحة.",
-    "photo.qualityFailed":              "فشل التحقق من جودة الصورة",
+    "photo.qualityFailed":              "لم يتم قبول الصورة، الرجاء رفع صورة أخرى",
     "photo.submittedForReview":         "تم إرسال الصورة لمراجعة الموارد البشرية. صورتك الحالية لا تزال نشطة.",
 
     // Application / job
