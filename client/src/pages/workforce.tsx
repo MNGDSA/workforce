@@ -756,7 +756,11 @@ function EmployeeDetailDialog({
           {!viewingAdminContract && (
           <>
           <DialogHeader>
-            <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-3">
+            {/* pe-10 reserves space at the inline-end edge so the inline
+                name-edit Cancel button never sits behind the sheet's
+                top-corner close X (which is top-left in RTL, top-right
+                in LTR). */}
+            <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-3 pe-10">
               {/* Task #187 — Avatar doubles as a "Change Photo" target.
                   The hidden file input is gated by `workforce:update`
                   on the server; only image/jpeg + image/png are

@@ -725,7 +725,10 @@ function CandidateProfileSheet({
     <Sheet open={!!candidate} onOpenChange={(o) => { if (!o) { setEditing(false); onClose(); } }}>
       <SheetContent side="right" className="w-full sm:max-w-lg bg-card border-border overflow-y-auto p-0">
         <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
-          <div className="flex items-center gap-4">
+          {/* pe-10 reserves space at the inline-end edge so the inline
+              name-edit Cancel button never sits behind the sheet's
+              top-corner close X (top-left in RTL, top-right in LTR). */}
+          <div className="flex items-center gap-4 pe-10">
             {/* Task #187 — Avatar doubles as a "Change Photo" target.
                 Hover overlay reveals a pencil; click triggers the
                 hidden file input. The new admin endpoint runs the
