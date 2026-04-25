@@ -7690,18 +7690,16 @@ export async function registerRoutes(
       const noShiftAssigned = !shiftInfo;
       // ── End pre-pipeline gate ──
 
-      // Task #200 — KNOWN ISSUE (deferred decision). This upload has the
-      // same shape as the bug fixed for ID card backgrounds (#198) and
-      // contract template logos (#200): in production it lands in DO
-      // Spaces with the default "private" ACL, but the admin inbox UI at
-      // `client/src/pages/inbox.tsx` renders it via plain
-      // `<img src={item.metadata.submittedPhotoUrl}>` with no proxy or
-      // signed URL, so reviewers will see a broken image on every flagged
-      // submission. We are NOT flipping it to public-read in this task on
-      // purpose: attendance selfies are more sensitive than template
-      // assets and the privacy-vs-convenience tradeoff deserves an
-      // explicit decision (admin-only proxy/signed URL vs. public-read
-      // with opaque random filenames). Tracked in KNOWN_ISSUES.md.
+      // Task #201 — Attendance selfies are biometric data, so we keep
+      // the upload private (default ACL on DO Spaces). The admin inbox
+      // does NOT render these via the raw Spaces URL — it goes through
+      // the admin-only proxy `GET /api/attendance-mobile/submissions/:id/photo`
+      // defined below, which is gated on `attendance_mobile:review_read`
+      // and streams bytes from `getFileBuffer(...)`. This closes
+      // ISSUE-008 (admin inbox showed broken images in production for
+      // every flagged review) without weakening the ACL the way we did
+      // for the lower-sensitivity contract logos (#200) and ID-card
+      // backgrounds (#198).
       const photoUrl = await uploadFile(req.file.path, req.file.filename, getMimeType(req.file.filename));
       const serverReceivedAt = new Date();
       // Task #85 step 6 — the server's wall clock at the moment the
@@ -7904,6 +7902,31 @@ export async function registerRoutes(
       if (!sub) return res.status(404).json({ message: tr(req, "submission.notFound") });
       return res.json(sub);
     } catch (err) { return handleError(res, err); }
+  });
+
+  // Task #201 — Admin-only image proxy for the worker selfie attached to
+  // a flagged attendance submission. The bytes live on DO Spaces with
+  // the default "private" ACL (see the comment at the upload site in
+  // POST /api/attendance-mobile/submit), so the admin inbox cannot
+  // render them via the raw `submission.photoUrl`. This route streams
+  // the bytes through the server, gated on the same permission used by
+  // the rest of the review surface (`attendance_mobile:review_read`),
+  // so reviewers never need direct Spaces credentials and the photo URL
+  // is never handed out to anything other than an authenticated admin
+  // session. In dev (no NODE_ENV=production) `getFileBuffer` reads from
+  // local /uploads, so this works end-to-end in dev too.
+  app.get("/api/attendance-mobile/submissions/:id/photo", requirePermission("attendance_mobile:review_read"), async (req: Request, res: Response) => {
+    try {
+      const sub = await storage.getAttendanceSubmission(req.params.id);
+      if (!sub) return res.status(404).json({ message: tr(req, "submission.notFound") });
+      if (!sub.photoUrl) return res.status(404).json({ message: tr(req, "submission.notFound") });
+      const buffer = await getFileBuffer(sub.photoUrl);
+      res.setHeader("Content-Type", getMimeType(sub.photoUrl));
+      res.setHeader("Cache-Control", "private, max-age=300");
+      return res.send(buffer);
+    } catch (err) {
+      return handleError(res, err);
+    }
   });
 
   app.post("/api/attendance-mobile/submissions/:id/approve", requirePermission("attendance_mobile:approve"), async (req: Request, res: Response) => {

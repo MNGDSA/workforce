@@ -640,10 +640,17 @@ export default function InboxPage() {
                               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                                 <Camera className="h-3.5 w-3.5" /> {t("inbox:detail.submittedPhoto")}
                               </span>
-                              {item.metadata.submittedPhotoUrl ? (
+                              {item.metadata.submittedPhotoUrl && item.entityId ? (
+                                /*
+                                 * Task #201 — attendance selfies are biometric data and stay
+                                 * private at rest on object storage. We do NOT render the raw
+                                 * `submittedPhotoUrl` (a private DO Spaces URL → 403 in prod);
+                                 * we render through the admin-only proxy gated on
+                                 * `attendance_mobile:review_read`.
+                                 */
                                 <div className="relative rounded-md overflow-hidden border border-border bg-muted/20 aspect-[3/4] max-w-[200px]">
                                   <img
-                                    src={item.metadata.submittedPhotoUrl}
+                                    src={`/api/attendance-mobile/submissions/${item.entityId}/photo`}
                                     alt={t("inbox:detail.submittedPhoto")}
                                     className="w-full h-full object-cover"
                                     data-testid={`img-submitted-photo-${item.id}`}

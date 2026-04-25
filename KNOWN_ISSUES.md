@@ -70,17 +70,7 @@ Do *not* log here: feature requests, design questions, performance optimization 
 
 Issues that have been logged but no one is actively investigating yet.
 
-### ISSUE-008 — Attendance selfies upload to private DO Spaces ACL but admin UI renders them as plain `<img>` (403 in production)
-
-- **Logged:** 2026-04-25
-- **Severity:** High
-- **Component:** Backend + Admin Panel
-- **Description:** `POST /api/attendance-mobile/submit` (server/routes.ts:7717) calls `uploadFile(...)` without `{ isPublic: true }`. In production this stores the worker selfie on DigitalOcean Spaces with the default "private" ACL. The admin inbox at `client/src/pages/inbox.tsx` renders the photo via plain `<img src={item.metadata.submittedPhotoUrl}>` with no proxy or signed URL — so every flagged attendance review shows a broken image. Same root-cause class as ISSUE-009 (contract template logos) and Task #198 (ID card backgrounds), but explicitly *not* fixed in Task #200 because attendance selfies are more sensitive than template assets and the privacy-vs-convenience tradeoff deserves an explicit decision.
-- **Impact:** Reviewers cannot see the submitted selfie when triaging flagged attendance submissions in production. Approve/reject decisions are made blind. Dev is unaffected because dev serves files from local disk via `/uploads`.
-- **Workaround:** Approve/reject without visual confirmation (not safe), or reviewers temporarily generate a presigned URL out-of-band.
-- **Related Tasks:** #200 (decision deferred — flagged here for follow-up).
-- **Status notes:**
-  - 2026-04-25 — Logged. Decision pending between (a) flipping the upload to public-read with opaque random filenames (matches the existing candidate-photo pattern in `server/lib/photo-upload-handler.ts:80` for `docType === "photo"`, lowest-effort fix), or (b) keeping ACL private and adding a server-side admin-only image proxy (or short-lived presigned URL) that requires `attendance_mobile:review_read`. Option (b) is the privacy-correct choice but requires both backend and frontend work.
+_None at the moment._
 
 ---
 
@@ -105,6 +95,19 @@ Issues that someone has picked up and is actively diagnosing or working on a fix
 ## Resolved
 
 Issues that have been fixed and verified. Kept for historical reference. Each entry should end with a dated note describing what fixed it.
+
+### ISSUE-008 — Attendance selfies upload to private DO Spaces ACL but admin UI renders them as plain `<img>` (403 in production)
+
+- **Logged:** 2026-04-25
+- **Severity:** High
+- **Component:** Backend + Admin Panel
+- **Description:** `POST /api/attendance-mobile/submit` (server/routes.ts:7715) called `uploadFile(...)` without `{ isPublic: true }`. In production this stored the worker selfie on DigitalOcean Spaces with the default "private" ACL. The admin inbox at `client/src/pages/inbox.tsx` rendered the photo via plain `<img src={item.metadata.submittedPhotoUrl}>` with no proxy or signed URL — so every flagged attendance review showed a broken image. Same root-cause class as ISSUE-009 (contract template logos) and Task #198 (ID card backgrounds), but explicitly *not* fixed in Task #200 because attendance selfies are more sensitive than template assets and the privacy-vs-convenience tradeoff deserved an explicit decision.
+- **Impact:** Reviewers could not see the submitted selfie when triaging flagged attendance submissions in production. Approve/reject decisions were made blind. Dev was unaffected because dev serves files from local disk via `/uploads`.
+- **Workaround:** Approve/reject without visual confirmation (not safe), or reviewers temporarily generate a presigned URL out-of-band.
+- **Related Tasks:** #200, #201
+- **Status notes:**
+  - 2026-04-25 — Logged. Decision pending between (a) flipping the upload to public-read with opaque random filenames (matches the existing candidate-photo pattern in `server/lib/photo-upload-handler.ts:80` for `docType === "photo"`, lowest-effort fix), or (b) keeping ACL private and adding a server-side admin-only image proxy (or short-lived presigned URL) that requires `attendance_mobile:review_read`. Option (b) is the privacy-correct choice but requires both backend and frontend work.
+  - 2026-04-25 — Resolved under task #201 with **option (b)** — privacy-correct. Attendance selfies are biometric/PII and stay private at rest on DO Spaces (default ACL — deliberately *not* flipped to `public-read`). Added a new admin-only image proxy `GET /api/attendance-mobile/submissions/:id/photo` in `server/routes.ts`, gated on the existing `attendance_mobile:review_read` permission (same gate already used by `GET /api/attendance-mobile/submissions/:id`), which streams bytes via `getFileBuffer(submission.photoUrl)` with `Content-Type` derived from `getMimeType(...)` and `Cache-Control: private, max-age=300`. The admin inbox at `client/src/pages/inbox.tsx` now renders the submitted-photo `<img>` from `/api/attendance-mobile/submissions/${item.entityId}/photo` (which falls under the inbox item's `entityType === "attendance_submission"` / `entityId === submissionId` set by `server/verification-pipeline.ts`) instead of the raw private Spaces URL. The reference (candidate) photo URL still renders directly because candidate photos are already uploaded with `{ isPublic: true }` (see `server/lib/photo-upload-handler.ts:80`). **No backfill needed** — already-uploaded photos remain private and are served through the new proxy. Updated the explanatory comment at the upload site to point at the new proxy. In dev (no `NODE_ENV=production`) `getFileBuffer` reads from local `/uploads`, so this works end-to-end in dev too.
 
 ### ISSUE-009 — Contract template logos upload to private DO Spaces ACL — invisible on contract preview / PDF in production
 
