@@ -1005,11 +1005,15 @@ function TemplateDesigner() {
             <Button
               className="bg-primary text-primary-foreground"
               onClick={handleSave}
-              disabled={saveMutation.isPending}
+              disabled={saveMutation.isPending || uploading}
               data-testid="button-save-template"
             >
-              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin me-1" /> : null}
-              {editId ? t("idCards:designer.btnUpdate") : t("idCards:designer.btnCreate")}
+              {(saveMutation.isPending || uploading) ? <Loader2 className="h-4 w-4 animate-spin me-1" /> : null}
+              {uploading
+                ? t("idCards:designer.btnUploading", "Uploading...")
+                : editId
+                  ? t("idCards:designer.btnUpdate")
+                  : t("idCards:designer.btnCreate")}
             </Button>
           </div>
         </DialogContent>
