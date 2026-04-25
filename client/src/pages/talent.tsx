@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { sanitizeSaMobileInput, normalizeSaMobileOnBlur, isValidSaMobile } from "@/lib/phone-input";
 import { useLocation } from "wouter";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -62,6 +62,8 @@ import {
   Repeat,
   Pencil,
   FileText,
+  Hash,
+  Copy,
 } from "lucide-react";
 import {
   Table,
@@ -114,6 +116,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { Candidate } from "@shared/schema";
+import { parseSearchTokens, MAX_SEARCH_TOKENS, type CandidateSearchMeta } from "@shared/candidate-search";
 import { useTranslation } from "react-i18next";
 import { formatNumber, formatDate, formatCurrency } from "@/lib/format";
 import { toProxiedFileUrl } from "@/lib/file-url";
@@ -1548,6 +1551,12 @@ export default function TalentPage() {
 
   const debouncedSearch = useDebounce(search, 300);
 
+  // Task #195 — parse the search box client-side so the "Searching N
+  // IDs" pill renders immediately on type/paste; the server uses the
+  // same parser so the pill, query, and missing-IDs report agree.
+  const parsedSearch = useMemo(() => parseSearchTokens(debouncedSearch), [debouncedSearch]);
+  const liveParsedSearch = useMemo(() => parseSearchTokens(search), [search]);
+
   const queryParams = new URLSearchParams({
     page: String(page),
     limit: "100",
@@ -1564,6 +1573,8 @@ export default function TalentPage() {
     queryKey: ["/api/candidates", page, debouncedSearch, status, sourceFilter, formerEmployeeFilter, sortBy, sortOrder],
     queryFn: () => apiRequest("GET", `/api/candidates?${queryParams.toString()}`).then(r => r.json()),
   });
+
+  const searchMeta: CandidateSearchMeta | undefined = data?.searchMeta;
 
   const { data: statsData } = useQuery({
     queryKey: ["/api/candidates/stats"],
@@ -1846,6 +1857,57 @@ export default function TalentPage() {
     setPage(1);
   }, []);
 
+  // Task #195 — single-line `<input>` strips newlines on paste, which
+  // would collapse a pasted column of IDs into one continuous string.
+  // Intercept the paste, normalise CRLF/LF/tab to commas (which the
+  // shared parser already splits on) and inject the cleaned string at
+  // the caret position. Pastes without those separators fall through
+  // to the browser's default behaviour.
+  const handleSearchPaste = useCallback((e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData("text");
+    if (!text || !/[\n\r\t]/.test(text)) return;
+    e.preventDefault();
+    const normalized = text
+      .replace(/\r\n?/g, "\n")
+      .replace(/[\n\t]+/g, ", ")
+      .replace(/\s*,\s*,+\s*/g, ", ");
+    const input = e.currentTarget;
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    const next = input.value.slice(0, start) + normalized + input.value.slice(end);
+    setSearch(next);
+    setPage(1);
+  }, []);
+
+  const handleCopyMissingIds = useCallback(async () => {
+    if (!searchMeta || searchMeta.missingIds.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(searchMeta.missingIds.join("\n"));
+      toast({
+        title: t("multiSearch.copied", {
+          n: formatNumber(searchMeta.missingIds.length),
+          count: searchMeta.missingIds.length,
+        }),
+      });
+    } catch {
+      toast({ title: t("multiSearch.copyFailed"), variant: "destructive" });
+    }
+  }, [searchMeta, toast, t]);
+
+  const handleDownloadMissingIds = useCallback(() => {
+    if (!searchMeta || searchMeta.missingIds.length === 0) return;
+    const csv = "id\n" + searchMeta.missingIds.map((id) => `"${id.replace(/"/g, '""')}"`).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `missing_ids_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [searchMeta]);
+
   function handleColumnSort(field: SortField) {
     if (sortBy === field) {
       setSortOrder(prev => prev === "asc" ? "desc" : "asc");
@@ -1917,7 +1979,13 @@ export default function TalentPage() {
     if (exporting) return;
     setExporting(true);
     try {
-      const res = await fetch("/api/candidates/export", { credentials: "include" });
+      // Task #195 — export reflects the current filtered view
+      // (including a multi-ID paste in the search box) instead of
+      // dumping the whole talent pool.
+      const exportParams = new URLSearchParams(queryParams);
+      exportParams.delete("page");
+      exportParams.delete("limit");
+      const res = await fetch(`/api/candidates/export?${exportParams.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error("Export request failed");
       const data = await res.json();
       const rows: any[][] = data.rows || [];
@@ -2017,8 +2085,35 @@ export default function TalentPage() {
               className="ps-10 h-10 bg-muted/30 border-border focus-visible:ring-primary/20"
               value={search}
               onChange={handleSearchChange}
+              onPaste={handleSearchPaste}
               data-testid="input-search-candidates"
+              spellCheck={false}
+              autoComplete="off"
             />
+            {liveParsedSearch.isMulti && (
+              <div
+                className={`absolute end-3 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[11px] font-medium ${
+                  liveParsedSearch.truncated
+                    ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                    : "bg-primary/15 text-primary border border-primary/30"
+                }`}
+                data-testid="badge-search-token-count"
+                title={liveParsedSearch.truncated
+                  ? t("multiSearch.pillTruncatedTitle", { n: formatNumber(MAX_SEARCH_TOKENS) })
+                  : undefined}
+              >
+                <Hash className="h-3 w-3" />
+                {liveParsedSearch.truncated
+                  ? t("multiSearch.pillTruncated", {
+                      n: formatNumber(MAX_SEARCH_TOKENS),
+                      count: MAX_SEARCH_TOKENS,
+                    })
+                  : t("multiSearch.pill", {
+                      n: formatNumber(liveParsedSearch.tokens.length),
+                      count: liveParsedSearch.tokens.length,
+                    })}
+              </div>
+            )}
           </div>
           <div className="flex gap-2 flex-wrap">
             <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
@@ -2057,6 +2152,94 @@ export default function TalentPage() {
             </Button>
           </div>
         </div>
+
+        {/* Task #195 — multi-ID search outcome banners. Renders only when
+            the user has pasted 2+ identifiers. Three states:
+              · some IDs missing → amber panel with Copy + Download
+              · all IDs matched   → green confirmation strip
+              · only free-text dropped → soft hint                                     */}
+        {parsedSearch.isMulti && searchMeta && searchMeta.missingIds.length > 0 && (
+          <Card className="bg-amber-500/5 border-amber-500/30" data-testid="panel-missing-ids">
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <AlertTriangle className="h-5 w-5 text-amber-400 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold text-amber-100" data-testid="text-missing-title">
+                      {t("multiSearch.missingTitle", {
+                        n: formatNumber(searchMeta.missingIds.length),
+                        count: searchMeta.missingIds.length,
+                      })}
+                    </h3>
+                    <p className="text-xs text-amber-100/70 mt-1">
+                      {t("multiSearch.missingDesc")}
+                      {searchMeta.droppedFreeText > 0 && (
+                        <> {t("multiSearch.droppedFreeText", {
+                          n: formatNumber(searchMeta.droppedFreeText),
+                          count: searchMeta.droppedFreeText,
+                        })}</>
+                      )}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pe-1">
+                      {searchMeta.missingIds.map((id, idx) => (
+                        <span
+                          key={`${id}-${idx}`}
+                          className="inline-flex items-center px-2 py-0.5 text-xs font-mono bg-amber-500/10 text-amber-50 border border-amber-500/20 rounded"
+                          dir="ltr"
+                          data-testid={`missing-id-${idx}`}
+                        >
+                          {id}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 shrink-0 self-end sm:self-start">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 border-amber-500/40 bg-transparent text-amber-100 hover:bg-amber-500/10 hover:text-amber-50"
+                    onClick={handleCopyMissingIds}
+                    data-testid="button-copy-missing-ids"
+                  >
+                    <Copy className="me-1.5 h-3 w-3" />
+                    {t("multiSearch.copy")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 border-amber-500/40 bg-transparent text-amber-100 hover:bg-amber-500/10 hover:text-amber-50"
+                    onClick={handleDownloadMissingIds}
+                    data-testid="button-download-missing-ids"
+                  >
+                    <Download className="me-1.5 h-3 w-3" />
+                    {t("multiSearch.download")}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        {parsedSearch.isMulti && searchMeta && searchMeta.missingIds.length === 0 && (
+          <div
+            className="flex items-center gap-2 text-xs px-3 py-2 rounded-sm bg-emerald-500/5 border border-emerald-500/30 text-emerald-300"
+            data-testid="status-all-matched"
+          >
+            <CheckSquare className="h-3.5 w-3.5" />
+            <span>
+              {t("multiSearch.allMatched", {
+                n: formatNumber(searchMeta.tokenCount),
+                count: searchMeta.tokenCount,
+              })}
+              {searchMeta.droppedFreeText > 0 && (
+                <> · {t("multiSearch.droppedFreeText", {
+                  n: formatNumber(searchMeta.droppedFreeText),
+                  count: searchMeta.droppedFreeText,
+                })}</>
+              )}
+            </span>
+          </div>
+        )}
 
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between py-3 px-4">
@@ -2103,7 +2286,11 @@ export default function TalentPage() {
                 <Users className="h-12 w-12 text-muted-foreground/30 mb-4" />
                 <p className="text-muted-foreground font-medium">{t("list.empty")}</p>
                 <p className="text-muted-foreground/60 text-sm mt-1">
-                  {search ? t("list.emptyHintSearch") : t("list.emptyHintUpload")}
+                  {search
+                    ? (parsedSearch.isMulti
+                        ? t("list.emptyHintMultiSearch")
+                        : t("list.emptyHintSearch"))
+                    : t("list.emptyHintUpload")}
                 </p>
               </div>
             ) : (

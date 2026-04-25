@@ -1759,7 +1759,12 @@ export async function registerRoutes(
 
   app.get("/api/candidates/export", requirePermission("candidates:export"), async (req: Request, res: Response) => {
     try {
-      const result = await storage.exportCandidates();
+      // Task #195 — accept the same filter shape as /api/candidates so
+      // the CSV mirrors what's on screen (including a multi-ID paste
+      // in the search box). Falls back to "everything not archived"
+      // when no filters are supplied.
+      const query = candidateQuerySchema.partial().parse(req.query);
+      const result = await storage.exportCandidates(query);
       return res.json(result);
     } catch (err) {
       return handleError(res, err);

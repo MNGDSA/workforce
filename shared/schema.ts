@@ -1821,7 +1821,10 @@ export type Position = typeof positions.$inferSelect;
 export const candidateQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(1000).default(100),
-  search: z.string().optional(),
+  // Task #195 — search may be a multi-line/comma/semicolon/tab paste
+  // of up to 200 identifiers; cap raw input at 20k chars to avoid
+  // pathological payloads while leaving plenty of headroom.
+  search: z.string().max(20000).optional(),
   status: z.enum(["available", "active", "inactive", "blocked", "hired", "awaiting_activation"]).optional(),
   archived: z.enum(["true"]).optional(),
   city: z.string().optional(),

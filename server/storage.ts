@@ -130,7 +130,8 @@ import {
   type InsertPayrollAdjustment,
   type PayrollTransaction,
 } from "@shared/schema";
-import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte, getTableColumns } from "drizzle-orm";
+import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte, getTableColumns, type SQL } from "drizzle-orm";
+import { parseSearchTokens, looksLikeId, type CandidateSearchMeta } from "@shared/candidate-search";
 import { countFilledForEvent, countFilledForEvents, activeWorkforceFilter } from "./headcount";
 import { applyServerIbanFields, applyServerIbanHolderNameFields } from "./lib/iban";
 
@@ -197,7 +198,7 @@ export interface IStorage {
   bulkUpdateCandidateStatus(ids: string[], status: string): Promise<number>;
   bulkArchiveCandidates(ids: string[]): Promise<number>;
   bulkUnarchiveCandidates(ids: string[]): Promise<number>;
-  exportCandidates(): Promise<{ headers: string[]; rows: any[][]; total: number }>;
+  exportCandidates(query?: Partial<CandidateQuery>): Promise<{ headers: string[]; rows: any[][]; total: number }>;
   getCandidateStats(): Promise<{ total: number; active: number; hired: number; blocked: number; avgRating: number }>;
 
   // Events
@@ -576,6 +577,125 @@ export interface IStorage {
   getEffectivePermissionsForRole(roleId: string): Promise<{ isSuperAdmin: boolean; keys: string[] }>;
 }
 
+// ─── Task #195: candidate search helpers ────────────────────────────────────
+//
+// Extracted so `getCandidates` and `exportCandidates` build identical
+// WHERE clauses, and the multi-token "which IDs did not match?"
+// companion query can re-use the same non-search filters without
+// drift.
+
+function buildCandidateOtherConditions(query: Partial<CandidateQuery>): SQL[] {
+  const conditions: SQL[] = [];
+  const { status, city, nationality, gender } = query;
+  if (status) conditions.push(eq(candidates.status, status as any));
+  if (city) conditions.push(ilike(candidates.city, `%${city}%`));
+  if (nationality) conditions.push(eq(candidates.nationality, nationality as any));
+  if (gender) conditions.push(eq(candidates.gender, gender as any));
+  if ((query as any).classification) {
+    conditions.push(eq(candidates.classification, (query as any).classification));
+  }
+  if ((query as any).archived === "true") {
+    conditions.push(isNotNull(candidates.archivedAt));
+  } else {
+    conditions.push(isNull(candidates.archivedAt));
+  }
+  if ((query as any).region) {
+    conditions.push(eq(candidates.region, (query as any).region));
+  }
+  if ((query as any).formerEmployee === "true") {
+    conditions.push(
+      sql`EXISTS (SELECT 1 FROM workforce WHERE workforce.candidate_id = candidates.id AND workforce.is_active = false)`
+    );
+  }
+  return conditions;
+}
+
+// UUID detection mirrors looksLikeId's UUID branch — used to add an
+// exact-match on candidates.id (varchar) when the token is a canonical
+// UUID. Without this, pasted candidate UUIDs (the front-end can copy
+// these from the table) would never resolve and would always be
+// reported as missing.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function buildCandidateSearchCondition(parsed: ReturnType<typeof parseSearchTokens>): SQL | undefined {
+  if (parsed.tokens.length === 0) return undefined;
+
+  if (!parsed.isMulti) {
+    const token = parsed.tokens[0];
+    const term = `%${token}%`;
+    const clauses: SQL[] = [
+      ilike(candidates.fullNameEn, term)!,
+      ilike(candidates.email, term)!,
+      ilike(candidates.phone, term)!,
+      ilike(candidates.currentRole, term)!,
+      ilike(candidates.nationalId, term)!,
+      ilike(candidates.city, term)!,
+    ];
+    if (UUID_RE.test(token)) clauses.push(eq(candidates.id, token.toLowerCase()));
+    return or(...clauses);
+  }
+
+  const tokenClauses = parsed.tokens.map((token) => {
+    const term = `%${token}%`;
+    const clauses: SQL[] = [
+      ilike(candidates.fullNameEn, term)!,
+      ilike(candidates.email, term)!,
+      ilike(candidates.phone, term)!,
+      ilike(candidates.currentRole, term)!,
+      ilike(candidates.nationalId, term)!,
+      ilike(candidates.city, term)!,
+      sql`EXISTS (SELECT 1 FROM workforce WHERE workforce.candidate_id = ${candidates.id} AND workforce.employee_number = ${token})`,
+    ];
+    if (UUID_RE.test(token)) clauses.push(eq(candidates.id, token.toLowerCase()));
+    return or(...clauses);
+  });
+  return or(...tokenClauses);
+}
+
+async function fetchMatchedSearchTokens(
+  tokens: string[],
+  otherWhere: SQL | undefined,
+): Promise<Set<string>> {
+  if (tokens.length === 0) return new Set();
+
+  // VALUES-list parameterised through Drizzle's sql template. Each
+  // token becomes a bound parameter (no SQL injection surface), and
+  // the planner can use existing ILIKE/employee_number indexes via
+  // the EXISTS subquery.
+  const valuesList = sql.join(tokens.map((t) => sql`(${t})`), sql`, `);
+  const filterClause = otherWhere ? sql` AND (${otherWhere})` : sql``;
+
+  const result = await db.execute(sql`
+    SELECT DISTINCT t.token::text AS token
+    FROM (VALUES ${valuesList}) AS t(token)
+    WHERE EXISTS (
+      SELECT 1 FROM ${candidates}
+      WHERE (
+        ${candidates.fullNameEn} ILIKE '%' || t.token || '%'
+        OR ${candidates.email} ILIKE '%' || t.token || '%'
+        OR ${candidates.phone} ILIKE '%' || t.token || '%'
+        OR ${candidates.currentRole} ILIKE '%' || t.token || '%'
+        OR ${candidates.nationalId} ILIKE '%' || t.token || '%'
+        OR ${candidates.city} ILIKE '%' || t.token || '%'
+        -- UUID-shaped tokens hit the candidate primary key directly
+        -- (lower-cased to match storage convention).
+        OR (
+          t.token ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          AND ${candidates.id} = lower(t.token)
+        )
+        OR EXISTS (
+          SELECT 1 FROM workforce w
+          WHERE w.candidate_id = ${candidates.id}
+            AND w.employee_number = t.token
+        )
+      )${filterClause}
+    )
+  `);
+
+  const rows = (result as any).rows ?? (result as any);
+  return new Set((rows as Array<{ token: string }>).map((r) => r.token));
+}
+
 export class DatabaseStorage implements IStorage {
   // ─── Users ─────────────────────────────────────────────────────────────────
   async getUser(id: string): Promise<User | undefined> {
@@ -657,47 +777,34 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ─── Candidates (MAANG-scale: cursor-based pagination + full-text) ─────────
+  //
+  // Task #195 — the search box accepts a pasted list of identifiers
+  // (national IDs, UUIDs, phone numbers, employee numbers) using
+  // newline / comma / semicolon / tab / 2+ space separators, capped
+  // at 200 tokens. When more than one token is detected we OR the
+  // existing six-column ILIKE match across every token, plus an
+  // exact match against `workforce.employee_number`, then run a
+  // companion query that reports which tokens did not match so HR
+  // can chase them down. A single-token paste behaves exactly as
+  // before (no behaviour change), keeping every existing call site
+  // safe. See `shared/candidate-search.ts` for the parser shared
+  // with the front-end pill.
   async getCandidates(query: CandidateQuery): Promise<{
     data: Candidate[];
     total: number;
     page: number;
     limit: number;
+    searchMeta?: CandidateSearchMeta;
   }> {
-    const { page, limit, search, status, city, nationality, gender, sortBy, sortOrder } = query;
+    const { page, limit, sortBy, sortOrder } = query;
     const offset = (page - 1) * limit;
 
-    const conditions = [];
+    const otherConditions = buildCandidateOtherConditions(query);
+    const parsed = parseSearchTokens(query.search);
+    const searchCondition = buildCandidateSearchCondition(parsed);
 
-    if (search && search.trim()) {
-      const term = `%${search.trim()}%`;
-      conditions.push(
-        or(
-          ilike(candidates.fullNameEn, term),
-          ilike(candidates.email, term),
-          ilike(candidates.phone, term),
-          ilike(candidates.currentRole, term),
-          ilike(candidates.nationalId, term),
-          ilike(candidates.city, term),
-        )
-      );
-    }
-
-    if (status) conditions.push(eq(candidates.status, status as any));
-    if (city) conditions.push(ilike(candidates.city, `%${city}%`));
-    if (nationality) conditions.push(eq(candidates.nationality, nationality as any));
-    if (gender) conditions.push(eq(candidates.gender, gender as any));
-    if ((query as any).classification) conditions.push(eq(candidates.classification, (query as any).classification));
-    if ((query as any).archived === "true") {
-      conditions.push(isNotNull(candidates.archivedAt));
-    } else {
-      conditions.push(isNull(candidates.archivedAt));
-    }
-    if ((query as any).region) conditions.push(eq(candidates.region, (query as any).region));
-    if ((query as any).formerEmployee === "true") {
-      conditions.push(sql`EXISTS (SELECT 1 FROM workforce WHERE workforce.candidate_id = candidates.id AND workforce.is_active = false)`);
-    }
-
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const allConditions = searchCondition ? [...otherConditions, searchCondition] : otherConditions;
+    const where = allConditions.length > 0 ? and(...allConditions) : undefined;
 
     const orderFn = sortOrder === "asc" ? asc : desc;
     const orderCol =
@@ -714,7 +821,10 @@ export class DatabaseStorage implements IStorage {
     const completedStintsSq = sql<number>`(SELECT count(*)::int FROM workforce WHERE workforce.candidate_id = candidates.id AND workforce.is_active = false)`;
     const unpaidSettlementsSq = sql<number>`(SELECT count(*)::int FROM workforce WHERE workforce.candidate_id = candidates.id AND workforce.offboarding_status = 'completed' AND workforce.settlement_paid_at IS NULL)`;
 
-    const [data, [{ value: total }]] = await Promise.all([
+    const otherWhere = otherConditions.length > 0 ? and(...otherConditions) : undefined;
+    const wantsSearchMeta = parsed.isMulti;
+
+    const [data, [{ value: total }], matchedTokens] = await Promise.all([
       db
         .select({
           ...getTableColumns(candidates),
@@ -732,9 +842,23 @@ export class DatabaseStorage implements IStorage {
         .select({ value: count() })
         .from(candidates)
         .where(where),
+      wantsSearchMeta ? fetchMatchedSearchTokens(parsed.tokens, otherWhere) : Promise.resolve(new Set<string>()),
     ]);
 
-    return { data, total: Number(total), page, limit };
+    let searchMeta: CandidateSearchMeta | undefined;
+    if (wantsSearchMeta) {
+      const unmatched = parsed.tokens.filter(t => !matchedTokens.has(t));
+      const missingIds = unmatched.filter(looksLikeId);
+      const droppedFreeText = unmatched.length - missingIds.length;
+      searchMeta = {
+        tokenCount: parsed.tokens.length,
+        truncated: parsed.truncated,
+        missingIds,
+        droppedFreeText,
+      };
+    }
+
+    return { data, total: Number(total), page, limit, ...(searchMeta ? { searchMeta } : {}) };
   }
 
   async getCandidate(id: string): Promise<Candidate | undefined> {
@@ -968,9 +1092,27 @@ export class DatabaseStorage implements IStorage {
     return result.length;
   }
 
-  async exportCandidates(): Promise<{ headers: string[]; rows: any[][]; total: number }> {
+  async exportCandidates(query?: Partial<CandidateQuery>): Promise<{ headers: string[]; rows: any[][]; total: number }> {
+    // Task #195 — when the user has filters applied (including a
+    // multi-ID paste in the search box), the CSV export reflects the
+    // exact same filtered set so what they download matches what is
+    // on screen. Calling with no filters keeps the legacy "everything
+    // not archived" behaviour.
+    const fullQuery: CandidateQuery = {
+      page: 1,
+      limit: 1,
+      sortBy: "createdAt",
+      sortOrder: "desc",
+      ...(query ?? {}),
+    } as CandidateQuery;
+    const otherConditions = buildCandidateOtherConditions(fullQuery);
+    const parsed = parseSearchTokens(fullQuery.search);
+    const searchCondition = buildCandidateSearchCondition(parsed);
+    const allConditions = searchCondition ? [...otherConditions, searchCondition] : otherConditions;
+    const where = allConditions.length > 0 ? and(...allConditions) : undefined;
+
     const data = await db.select().from(candidates)
-      .where(isNull(candidates.archivedAt))
+      .where(where)
       .orderBy(desc(candidates.createdAt));
 
     const headers = [
