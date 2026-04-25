@@ -393,10 +393,37 @@ function EmployeeDetailDialog({
   const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
   // The component stays mounted across employee selections (parent passes a
   // new `employee` prop; we only return null when there's none). Without an
-  // explicit reset, an open preview from employee A would re-open over
-  // employee B's avatar. Tie the preview to the current employee id and the
-  // parent open flag so it auto-closes on either change.
-  useEffect(() => { setPhotoPreviewOpen(false); }, [employee?.id, open]);
+  // explicit reset, transient per-employee UI state from employee A leaks
+  // into employee B's view — e.g. the inline name editor stays open
+  // showing A's name (which then overwrites B's name on save), the photo
+  // lightbox re-opens over B's avatar, or a half-filled section editor
+  // (salary/notes/personal/etc.) stays expanded with A's draft values. Tie
+  // every piece of transient selection-scoped state to the current
+  // employee id and the parent open flag so it auto-resets on either
+  // change.
+  useEffect(() => {
+    setPhotoPreviewOpen(false);
+    setEditName(false);
+    setNameValue("");
+    setEditSalary(false);
+    setSalaryValue("");
+    setEditNotes(false);
+    setNotesValue("");
+    setEditEvent(false);
+    setEventValue("");
+    setEditPosition(false);
+    setPositionValue("");
+    setEditPersonal(false);
+    setPersonalForm({});
+    setEditFinancial(false);
+    setFinancialForm({});
+    setEditEmergency(false);
+    setEmergencyForm({});
+    setEditEducation(false);
+    setEducationForm({});
+    setPhotoUploading(false);
+    if (photoFileRef.current) photoFileRef.current.value = "";
+  }, [employee?.id, open]);
 
   const { data: history = [], isLoading: historyLoading } = useQuery<WorkHistory[]>({
     queryKey: ["/api/workforce/history", employee?.nationalId],

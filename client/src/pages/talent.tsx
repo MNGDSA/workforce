@@ -500,10 +500,23 @@ function CandidateProfileSheet({
   const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
   // The component stays mounted across candidate selections (parent passes a
   // new `candidate` prop; we only return null when there's none). Without an
-  // explicit reset, an open preview from candidate A would re-open over
-  // candidate B's avatar. Tie the preview to the current candidate id so it
-  // auto-closes whenever the selection changes or clears.
-  useEffect(() => { setPhotoPreviewOpen(false); }, [candidate?.id]);
+  // explicit reset, transient per-candidate UI state from candidate A leaks
+  // into candidate B's view — e.g. the photo lightbox re-opens over B's
+  // avatar, the inline name editor stays open showing A's name (which then
+  // overwrites B's name on save), or the global edit form stays open
+  // pre-filled with A's field values. Tie every piece of transient
+  // selection-scoped state to the current candidate id so it auto-resets
+  // whenever the selection changes or clears.
+  useEffect(() => {
+    setPhotoPreviewOpen(false);
+    setEditName(false);
+    setNameValue("");
+    setEditing(false);
+    setForm({});
+    setPhoneConflict(null);
+    setPhotoUploading(false);
+    if (photoFileRef.current) photoFileRef.current.value = "";
+  }, [candidate?.id]);
   const qc = useQueryClient();
 
   // Phone-conflict state: when PATCH returns 409 because the new phone is
