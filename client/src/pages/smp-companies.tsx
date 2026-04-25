@@ -768,7 +768,10 @@ export default function SMPCompaniesPage() {
     queryFn: () => apiRequest("GET", "/api/events").then(r => r.json()),
   });
 
-  const { data: workforceStats } = useQuery<{ total: number; active: number; terminated: number; smpWorkers: number }>({
+  // Task #192 — stats response now includes `inOffboarding`. This page
+  // only renders smpWorkers, but the type is kept in sync with the server
+  // contract so future fields appear without a stale type masking them.
+  const { data: workforceStats } = useQuery<{ total: number; active: number; inOffboarding: number; terminated: number; smpWorkers: number }>({
     queryKey: ["/api/workforce/stats"],
     queryFn: () => apiRequest("GET", "/api/workforce/stats").then(r => r.json()),
   });

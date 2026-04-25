@@ -16,8 +16,28 @@
     "totalDesc": "جميع سجلات الموظفين",
     "active": "نشط",
     "activeDesc": "موظفون حاليون",
+    "inOffboarding": "قيد إنهاء الخدمة",
+    "inOffboardingDesc": "بانتظار التسوية النهائية",
     "terminated": "منتهية خدمته",
     "terminatedDesc": "موظفون سابقون"
+  },
+  "export": {
+    "col": {
+      "employeeNumber": "رقم الموظف",
+      "fullName": "الاسم الكامل",
+      "nationalId": "رقم الهوية",
+      "phone": "الجوال",
+      "position": "المسمى الوظيفي",
+      "event": "الحدث",
+      "salary": "الراتب (ر.س)",
+      "iban": "الآيبان",
+      "bankName": "اسم البنك",
+      "bankCode": "رمز البنك",
+      "startDate": "تاريخ البدء",
+      "endDate": "تاريخ الانتهاء",
+      "status": "الحالة",
+      "terminationReason": "سبب إنهاء الخدمة"
+    }
   },
   "filter": {
     "searchPlaceholder": "ابحث برقم الموظف أو الهوية أو الاسم أو الجوال",

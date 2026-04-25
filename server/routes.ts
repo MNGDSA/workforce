@@ -7061,6 +7061,17 @@ export async function registerRoutes(
 
   app.post("/api/geofence-zones", requirePermission("geofence:write"), async (req: Request, res: Response) => {
     try {
+      // Task #192 — fail-loud guard against the dormant `polygon` column.
+      // The schema reserves a JSONB polygon for future support, but the
+      // verification pipeline (server/verification-pipeline.ts) and the
+      // admin map UI both implement circles only. Accepting a polygon
+      // here would silently break attendance verification: the worker
+      // appears inside the polygon on the admin map but the server only
+      // ever checks the centre/radius circle. Reject explicitly until
+      // polygon support is built end-to-end.
+      if (req.body && req.body.polygon != null) {
+        return res.status(400).json({ message: tr(req, "geofence.polygonNotSupported") });
+      }
       const data = insertGeofenceZoneSchema.parse(req.body);
       const zone = await storage.createGeofenceZone(data);
       await logAudit(req, { action: "create_geofence_zone", entityType: "geofence_zone", entityId: zone.id, description: `Created geofence zone "${zone.name}"` });
@@ -7070,12 +7081,15 @@ export async function registerRoutes(
 
   app.patch("/api/geofence-zones/:id", requirePermission("geofence:write"), async (req: Request, res: Response) => {
     try {
+      // Task #192 — same polygon guard as the POST handler. See note above.
+      if (req.body && req.body.polygon != null) {
+        return res.status(400).json({ message: tr(req, "geofence.polygonNotSupported") });
+      }
       const updateSchema = z.object({
         name: z.string().min(1).optional(),
         centerLat: z.string().optional(),
         centerLng: z.string().optional(),
         radiusMeters: z.coerce.number().int().min(1).optional(),
-        polygon: z.array(z.object({ lat: z.number(), lng: z.number() })).nullable().optional(),
         isActive: z.boolean().optional(),
       });
       const data = updateSchema.parse(req.body);
@@ -8892,7 +8906,10 @@ export async function registerRoutes(
       // Task #189 — capture the previous method so the audit log carries a
       // structured `from → to` payload that the inline history view can
       // render without parsing free-text descriptions.
-      const previous = await storage.getWorkforceRecord(req.params.id);
+      // Task #192 — fix runtime crash: storage exposes `getWorkforceEmployee`,
+      // not `getWorkforceRecord`. The old call would throw a TypeError on
+      // every payment-method change in production.
+      const previous = await storage.getWorkforceEmployee(req.params.id);
       const previousMethod = previous?.paymentMethod ?? "bank_transfer";
       const updated = await storage.updateWorkforceRecord(req.params.id, {
         paymentMethod,

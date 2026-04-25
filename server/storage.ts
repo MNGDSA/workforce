@@ -131,7 +131,7 @@ import {
   type PayrollTransaction,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte, getTableColumns } from "drizzle-orm";
-import { countFilledForEvent, countFilledForEvents } from "./headcount";
+import { countFilledForEvent, countFilledForEvents, activeWorkforceFilter } from "./headcount";
 import { applyServerIbanFields, applyServerIbanHolderNameFields } from "./lib/iban";
 
 function computeCandidateStatusFromLogin(lastLoginAt: Date | null): "available" | "inactive" {
@@ -252,7 +252,7 @@ export interface IStorage {
   updateWorkforceRecord(id: string, data: Partial<InsertWorkforce>): Promise<WorkforceRecord | undefined>;
   terminateEmployee(id: string, data: { endDate: string; terminationReason?: string; terminationCategory?: string }): Promise<WorkforceRecord | undefined>;
   reinstateEmployee(nationalId: string, data: { startDate: string; eventId?: string; salary?: string; jobId?: string; employmentType?: "individual" | "smp"; smpCompanyId?: string }): Promise<WorkforceRecord>;
-  getWorkforceStats(): Promise<{ total: number; active: number; terminated: number; smpWorkers: number }>;
+  getWorkforceStats(): Promise<{ total: number; active: number; inOffboarding: number; terminated: number; smpWorkers: number }>;
   generateEmployeeNumber(tx?: any): Promise<string>;
 
   // Offboarding
@@ -1855,16 +1855,43 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getWorkforceStats(): Promise<{ total: number; active: number; terminated: number; smpWorkers: number }> {
+  async getWorkforceStats(): Promise<{ total: number; active: number; inOffboarding: number; terminated: number; smpWorkers: number }> {
+    // Task #192 — align the dashboard stats with the Golden Rule from
+    // server/headcount.ts so the workforce page tiles agree with the
+    // per-event headcount and the offboarding queue. Previously `active`
+    // was a raw `isActive = true` count which over-reported by including
+    // workers in offboarding and back-dated terminations whose endDate
+    // had already passed. Now:
+    //   • active         = Golden Rule (isActive=true, no offboarding,
+    //                      endDate null or in the future)
+    //   • inOffboarding  = isActive=true AND offboardingStatus IS NOT NULL
+    //   • terminated     = total - active - inOffboarding
+    //
+    // Computing terminated as the complement (rather than `isActive=false`)
+    // guarantees `active + inOffboarding + terminated == total` even when
+    // a row is in the in-between state of `isActive=true` with no
+    // offboarding but a back-dated `endDate` that has already passed.
+    // That state is reachable today: PATCH /api/workforce/:id allows
+    // editing endDate and isActive independently. Code review caught
+    // this gap during the Task #192 audit.
     const [total] = await db.select({ value: count() }).from(workforce);
-    const [activeRow] = await db.select({ value: count() }).from(workforce).where(eq(workforce.isActive, true));
-    const [terminatedRow] = await db.select({ value: count() }).from(workforce).where(eq(workforce.isActive, false));
+    const [activeRow] = await db.select({ value: count() }).from(workforce).where(activeWorkforceFilter());
+    const [offboardingRow] = await db
+      .select({ value: count() })
+      .from(workforce)
+      .where(and(eq(workforce.isActive, true), sql`${workforce.offboardingStatus} IS NOT NULL`));
     const [smpRow] = await db.select({ value: count() }).from(workforce).where(eq(workforce.employmentType, "smp"));
 
+    const totalN = Number(total.value);
+    const activeN = Number(activeRow.value);
+    const offboardingN = Number(offboardingRow.value);
+    const terminatedN = Math.max(0, totalN - activeN - offboardingN);
+
     return {
-      total: Number(total.value),
-      active: Number(activeRow.value),
-      terminated: Number(terminatedRow.value),
+      total: totalN,
+      active: activeN,
+      inOffboarding: offboardingN,
+      terminated: terminatedN,
       smpWorkers: Number(smpRow.value),
     };
   }

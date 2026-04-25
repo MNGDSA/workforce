@@ -16,8 +16,28 @@
     "totalDesc": "All-time employee records",
     "active": "Active",
     "activeDesc": "Currently employed",
+    "inOffboarding": "In Offboarding",
+    "inOffboardingDesc": "Pending final settlement",
     "terminated": "Terminated",
     "terminatedDesc": "Past employees"
+  },
+  "export": {
+    "col": {
+      "employeeNumber": "Employee #",
+      "fullName": "Full Name",
+      "nationalId": "National ID",
+      "phone": "Phone",
+      "position": "Position",
+      "event": "Event",
+      "salary": "Salary (SAR)",
+      "iban": "IBAN",
+      "bankName": "Bank Name",
+      "bankCode": "Bank Code",
+      "startDate": "Start Date",
+      "endDate": "End Date",
+      "status": "Status",
+      "terminationReason": "Termination Reason"
+    }
   },
   "filter": {
     "searchPlaceholder": "Search by Employee ID, ID Number, Name, Phone",

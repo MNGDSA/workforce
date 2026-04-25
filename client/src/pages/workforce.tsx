@@ -197,10 +197,32 @@ function formatDate(iso: string | null | undefined) {
   return formatDateI18n(iso, "en", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function exportToCSV(employees: Employee[]) {
+// Task #192 — exports now take a translator so the column headers and
+// the Active/Terminated status string match the user's chosen language.
+// Previously the CSV/Excel were hardcoded English even when the rest of
+// the back-office was running in Arabic, which made the report unusable
+// for Arabic-speaking admins.
+type ExportT = (key: string, opts?: any) => string;
+
+function exportToCSV(employees: Employee[], t: ExportT) {
   // Task #187 — replaced the dummy free-text "Job Title" column with the
   // canonical Position assignment so exports match what the dialog shows.
-  const headers = ["Employee #", "Full Name", "National ID", "Phone", "Position", "Event", "Salary (SAR)", "IBAN", "Bank Name", "Bank Code", "Start Date", "End Date", "Status", "Termination Reason"];
+  const headers = [
+    t("export.col.employeeNumber"),
+    t("export.col.fullName"),
+    t("export.col.nationalId"),
+    t("export.col.phone"),
+    t("export.col.position"),
+    t("export.col.event"),
+    t("export.col.salary"),
+    t("export.col.iban"),
+    t("export.col.bankName"),
+    t("export.col.bankCode"),
+    t("export.col.startDate"),
+    t("export.col.endDate"),
+    t("export.col.status"),
+    t("export.col.terminationReason"),
+  ];
   const rows = employees.map(e => [
     e.employeeNumber,
     e.fullNameEn ?? "",
@@ -214,7 +236,7 @@ function exportToCSV(employees: Employee[]) {
     e.ibanBankCode ?? "",
     e.startDate ?? "",
     e.endDate ?? "",
-    e.isActive ? "Active" : "Terminated",
+    e.isActive ? t("status.active") : t("status.terminated"),
     e.terminationReason ?? "",
   ]);
   const csv = [headers.join(","), ...rows.map(r => r.map(c => `"${(c ?? "").replace(/"/g, '""')}"`).join(","))].join("\n");
@@ -227,24 +249,26 @@ function exportToCSV(employees: Employee[]) {
   URL.revokeObjectURL(url);
 }
 
-async function exportToExcel(employees: Employee[]) {
+async function exportToExcel(employees: Employee[], t: ExportT) {
   const XLSX = await import("xlsx");
+  // Use the same translation keys as the CSV path so a workbook opened in
+  // Excel matches the on-screen language and the CSV report column-for-column.
   const data = employees.map(e => ({
-    "Employee #": e.employeeNumber,
-    "Full Name": e.fullNameEn ?? "",
-    "National ID": e.nationalId ?? "",
-    "Phone": e.phone ?? "",
+    [t("export.col.employeeNumber")]: e.employeeNumber,
+    [t("export.col.fullName")]: e.fullNameEn ?? "",
+    [t("export.col.nationalId")]: e.nationalId ?? "",
+    [t("export.col.phone")]: e.phone ?? "",
     // Task #187 — see exportToCSV note above.
-    "Position": e.positionTitle ?? "",
-    "Event": e.eventName ?? "",
-    "Salary (SAR)": e.salary ? Number(e.salary) : "",
-    "IBAN": e.iban ?? "",
-    "Bank Name": e.ibanBankName ?? "",
-    "Bank Code": e.ibanBankCode ?? "",
-    "Start Date": e.startDate ?? "",
-    "End Date": e.endDate ?? "",
-    "Status": e.isActive ? "Active" : "Terminated",
-    "Termination Reason": e.terminationReason ?? "",
+    [t("export.col.position")]: e.positionTitle ?? "",
+    [t("export.col.event")]: e.eventName ?? "",
+    [t("export.col.salary")]: e.salary ? Number(e.salary) : "",
+    [t("export.col.iban")]: e.iban ?? "",
+    [t("export.col.bankName")]: e.ibanBankName ?? "",
+    [t("export.col.bankCode")]: e.ibanBankCode ?? "",
+    [t("export.col.startDate")]: e.startDate ?? "",
+    [t("export.col.endDate")]: e.endDate ?? "",
+    [t("export.col.status")]: e.isActive ? t("status.active") : t("status.terminated"),
+    [t("export.col.terminationReason")]: e.terminationReason ?? "",
   }));
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
@@ -2271,7 +2295,11 @@ export default function WorkforcePage() {
     refetchInterval: 15000,
   });
 
-  const { data: stats } = useQuery<{ total: number; active: number; terminated: number }>({
+  // Task #192 — stats now include `inOffboarding` so active + inOffboarding
+  // + terminated reconciles to total. Previously `active` quietly included
+  // workers in offboarding, which made the workforce page disagree with
+  // the per-event headcount and the offboarding queue counts.
+  const { data: stats } = useQuery<{ total: number; active: number; inOffboarding: number; terminated: number }>({
     queryKey: ["/api/workforce/stats"],
     queryFn: () => apiRequest("GET", "/api/workforce/stats").then(r => r.json()),
     refetchInterval: 15000,
@@ -2431,13 +2459,13 @@ export default function WorkforcePage() {
 
   function handleExportCSV() {
     const data = selectedIds.size > 0 ? selectedEmployees : sortedEmployees;
-    exportToCSV(data);
+    exportToCSV(data, tt);
     toast({ title: tt("toast.exportedCsv", { count: data.length, n: formatNumber(data.length) }) });
   }
 
   async function handleExportExcel() {
     const data = selectedIds.size > 0 ? selectedEmployees : sortedEmployees;
-    await exportToExcel(data);
+    await exportToExcel(data, tt);
     toast({ title: tt("toast.exportedExcel", { count: data.length, n: formatNumber(data.length) }) });
   }
 
@@ -2590,7 +2618,7 @@ export default function WorkforcePage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="bg-card border-border shadow-sm border-s-4 border-s-primary">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{tt("stats.total")}</CardTitle>
@@ -2608,6 +2636,16 @@ export default function WorkforcePage() {
             <CardContent>
               <div className="text-4xl font-bold font-display text-emerald-400" data-testid="stat-active-employees">{formatNumber(stats?.active ?? 0)}</div>
               <p className="text-xs text-muted-foreground mt-1">{tt("stats.activeDesc")}</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card border-border shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{tt("stats.inOffboarding")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-4xl font-bold font-display text-amber-400" data-testid="stat-offboarding-employees">{formatNumber(stats?.inOffboarding ?? 0)}</div>
+              <p className="text-xs text-muted-foreground mt-1">{tt("stats.inOffboardingDesc")}</p>
             </CardContent>
           </Card>
 
