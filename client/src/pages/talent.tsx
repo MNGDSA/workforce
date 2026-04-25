@@ -1884,10 +1884,7 @@ export default function TalentPage() {
     try {
       await navigator.clipboard.writeText(searchMeta.missingIds.join("\n"));
       toast({
-        title: t("multiSearch.copied", {
-          n: formatNumber(searchMeta.missingIds.length),
-          count: searchMeta.missingIds.length,
-        }),
+        title: t("multiSearch.copied", { n: formatNumber(searchMeta.missingIds.length) }),
       });
     } catch {
       toast({ title: t("multiSearch.copyFailed"), variant: "destructive" });
@@ -2082,7 +2079,9 @@ export default function TalentPage() {
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
               placeholder={t("search.ph")}
-              className="ps-10 h-10 bg-muted/30 border-border focus-visible:ring-primary/20"
+              className={`ps-10 h-10 bg-muted/30 border-border focus-visible:ring-primary/20 ${
+                liveParsedSearch.isMulti ? "pe-44" : ""
+              }`}
               value={search}
               onChange={handleSearchChange}
               onPaste={handleSearchPaste}
@@ -2092,7 +2091,7 @@ export default function TalentPage() {
             />
             {liveParsedSearch.isMulti && (
               <div
-                className={`absolute end-3 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[11px] font-medium ${
+                className={`pointer-events-none absolute end-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[11px] font-medium whitespace-nowrap ${
                   liveParsedSearch.truncated
                     ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
                     : "bg-primary/15 text-primary border border-primary/30"
@@ -2104,14 +2103,8 @@ export default function TalentPage() {
               >
                 <Hash className="h-3 w-3" />
                 {liveParsedSearch.truncated
-                  ? t("multiSearch.pillTruncated", {
-                      n: formatNumber(MAX_SEARCH_TOKENS),
-                      count: MAX_SEARCH_TOKENS,
-                    })
-                  : t("multiSearch.pill", {
-                      n: formatNumber(liveParsedSearch.tokens.length),
-                      count: liveParsedSearch.tokens.length,
-                    })}
+                  ? t("multiSearch.pillTruncated", { n: formatNumber(MAX_SEARCH_TOKENS) })
+                  : t("multiSearch.pill", { n: formatNumber(liveParsedSearch.tokens.length) })}
               </div>
             )}
           </div>
@@ -2166,18 +2159,12 @@ export default function TalentPage() {
                   <AlertTriangle className="h-5 w-5 text-amber-400 mt-0.5 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <h3 className="text-sm font-semibold text-amber-100" data-testid="text-missing-title">
-                      {t("multiSearch.missingTitle", {
-                        n: formatNumber(searchMeta.missingIds.length),
-                        count: searchMeta.missingIds.length,
-                      })}
+                      {t("multiSearch.missingTitle", { n: formatNumber(searchMeta.missingIds.length) })}
                     </h3>
                     <p className="text-xs text-amber-100/70 mt-1">
                       {t("multiSearch.missingDesc")}
                       {searchMeta.droppedFreeText > 0 && (
-                        <> {t("multiSearch.droppedFreeText", {
-                          n: formatNumber(searchMeta.droppedFreeText),
-                          count: searchMeta.droppedFreeText,
-                        })}</>
+                        <> {t("multiSearch.droppedFreeText", { n: formatNumber(searchMeta.droppedFreeText) })}</>
                       )}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pe-1">
@@ -2227,15 +2214,9 @@ export default function TalentPage() {
           >
             <CheckSquare className="h-3.5 w-3.5" />
             <span>
-              {t("multiSearch.allMatched", {
-                n: formatNumber(searchMeta.tokenCount),
-                count: searchMeta.tokenCount,
-              })}
+              {t("multiSearch.allMatched", { n: formatNumber(searchMeta.tokenCount) })}
               {searchMeta.droppedFreeText > 0 && (
-                <> · {t("multiSearch.droppedFreeText", {
-                  n: formatNumber(searchMeta.droppedFreeText),
-                  count: searchMeta.droppedFreeText,
-                })}</>
+                <> · {t("multiSearch.droppedFreeText", { n: formatNumber(searchMeta.droppedFreeText) })}</>
               )}
             </span>
           </div>

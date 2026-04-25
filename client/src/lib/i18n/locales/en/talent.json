@@ -14,21 +14,16 @@
     "ph": "Search by ID, name, phone, email — or paste a list of IDs"
   },
   "multiSearch": {
-    "pill_one": "Searching {{n}} ID",
-    "pill_other": "Searching {{n}} IDs",
+    "pill": "Searching {{n}} IDs",
     "pillTruncated": "Only first {{n}} used",
     "pillTruncatedTitle": "You pasted more than {{n}} identifiers — only the first {{n}} are searched.",
-    "missingTitle_one": "{{n}} ID not found",
-    "missingTitle_other": "{{n}} IDs not found",
+    "missingTitle": "{{n}} not found",
     "missingDesc": "These identifiers do not match any candidate in the current view. Adjust your filters or chase them down.",
-    "droppedFreeText_one": "{{n}} pasted entry was treated as a free-text search and ignored from the missing list.",
-    "droppedFreeText_other": "{{n}} pasted entries were treated as free-text searches and ignored from the missing list.",
-    "allMatched_one": "All {{n}} pasted ID matched a candidate.",
-    "allMatched_other": "All {{n}} pasted IDs matched a candidate.",
+    "droppedFreeText": "{{n}} non-ID entries were treated as free-text and ignored from the missing list.",
+    "allMatched": "All {{n}} pasted IDs matched a candidate.",
     "copy": "Copy",
     "download": "Download CSV",
-    "copied_one": "Copied {{n}} missing ID",
-    "copied_other": "Copied {{n}} missing IDs",
+    "copied": "Copied {{n}} missing IDs",
     "copyFailed": "Could not copy to clipboard"
   },
   "statusFilter": {
