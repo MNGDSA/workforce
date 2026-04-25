@@ -382,6 +382,17 @@ function EmployeeDetailDialog({
   const [nameValue, setNameValue] = useState("");
   const photoFileRef = useRef<HTMLInputElement | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
+  // Click on the avatar opens a lightbox with the full-size image so admins
+  // can actually see what got uploaded; the lightbox carries its own
+  // "Change Photo" action so the edit affordance is preserved without
+  // forcing the avatar itself to be a dual-purpose target.
+  const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
+  // The component stays mounted across employee selections (parent passes a
+  // new `employee` prop; we only return null when there's none). Without an
+  // explicit reset, an open preview from employee A would re-open over
+  // employee B's avatar. Tie the preview to the current employee id and the
+  // parent open flag so it auto-closes on either change.
+  useEffect(() => { setPhotoPreviewOpen(false); }, [employee?.id, open]);
 
   const { data: history = [], isLoading: historyLoading } = useQuery<WorkHistory[]>({
     queryKey: ["/api/workforce/history", employee?.nationalId],
@@ -761,12 +772,18 @@ function EmployeeDetailDialog({
                 top-corner close X (which is top-left in RTL, top-right
                 in LTR). */}
             <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-3 pe-10">
-              {/* Task #187 — Avatar doubles as a "Change Photo" target.
+              {/* Task #187 — Avatar is now a click-to-preview target.
+                  Clicking it opens a lightbox at the natural image
+                  size (capped to 80vh / 90vw). The lightbox carries
+                  the "Change Photo" action so the edit affordance is
+                  preserved. If there is no photo yet, the click falls
+                  through to the file picker so admins can upload the
+                  first one without an empty preview step.
                   The hidden file input is gated by `workforce:update`
                   on the server; only image/jpeg + image/png are
                   accepted. We disable the trigger while a request is
                   in-flight so admins don't queue duplicate uploads. */}
-              <div className="relative group">
+              <div className="relative group shrink-0">
                 <Avatar className="h-10 w-10 border border-zinc-700">
                   <AvatarImage src={employee.photoUrl ?? undefined} />
                   <AvatarFallback className="bg-zinc-800 text-zinc-300 text-sm font-bold">{initials}</AvatarFallback>
@@ -775,10 +792,13 @@ function EmployeeDetailDialog({
                   type="button"
                   className="absolute inset-0 rounded-full bg-black/0 hover:bg-black/60 transition-colors flex items-center justify-center text-white opacity-0 group-hover:opacity-100 disabled:cursor-not-allowed"
                   disabled={photoUploading}
-                  onClick={() => photoFileRef.current?.click()}
-                  title={t("dialog.photo.changePhoto")}
-                  aria-label={t("dialog.photo.changePhoto")}
-                  data-testid="button-change-photo"
+                  onClick={() => {
+                    if (employee.photoUrl) setPhotoPreviewOpen(true);
+                    else photoFileRef.current?.click();
+                  }}
+                  title={employee.photoUrl ? t("dialog.photo.viewPhoto") : t("dialog.photo.changePhoto")}
+                  aria-label={employee.photoUrl ? t("dialog.photo.viewPhoto") : t("dialog.photo.changePhoto")}
+                  data-testid="button-view-photo"
                 >
                   {photoUploading
                     ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -1827,6 +1847,55 @@ function EmployeeDetailDialog({
       </Dialog>
           </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Task #189 — Photo preview lightbox.
+          Opens when the avatar is clicked (and a photo exists). Click
+          outside the panel to close (Radix's onOpenChange fires for
+          backdrop clicks and Escape). The "Change Photo" button reuses
+          the same hidden file input as the avatar overlay so the upload
+          path / Rekognition validation is identical.
+          The DialogContent here is intentionally borderless and
+          background-less so the image itself is the visual focus. */}
+      <Dialog open={photoPreviewOpen} onOpenChange={setPhotoPreviewOpen}>
+        <DialogContent
+          className="max-w-[90vw] sm:max-w-2xl bg-zinc-950 border-zinc-800 p-4"
+          data-testid="dialog-photo-preview"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-white text-base font-display pe-10">
+              {t("dialog.photo.previewTitle")}
+            </DialogTitle>
+            <DialogDescription className="sr-only">{t("dialog.photo.previewTitle")}</DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center justify-center bg-black/40 rounded-md overflow-hidden">
+            {employee.photoUrl ? (
+              <img
+                src={employee.photoUrl}
+                alt={employee.fullNameEn ?? ""}
+                className="max-h-[70vh] max-w-full object-contain"
+                data-testid="img-photo-preview"
+              />
+            ) : (
+              <div className="h-40 w-full flex items-center justify-center text-zinc-500 text-sm">—</div>
+            )}
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-zinc-700 gap-2"
+              disabled={photoUploading}
+              onClick={() => photoFileRef.current?.click()}
+              data-testid="button-change-photo-from-preview"
+            >
+              {photoUploading
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <Pencil className="h-3.5 w-3.5" />}
+              {t("dialog.photo.changePhoto")}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>

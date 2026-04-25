@@ -493,6 +493,17 @@ function CandidateProfileSheet({
   const [nameValue, setNameValue] = useState("");
   const photoFileRef = useRef<HTMLInputElement | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
+  // Click on the avatar opens a lightbox with the full-size image so admins
+  // can actually see what got uploaded; the lightbox carries its own
+  // "Change Photo" action so the edit affordance is preserved without
+  // forcing the avatar itself to be a dual-purpose target.
+  const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
+  // The component stays mounted across candidate selections (parent passes a
+  // new `candidate` prop; we only return null when there's none). Without an
+  // explicit reset, an open preview from candidate A would re-open over
+  // candidate B's avatar. Tie the preview to the current candidate id so it
+  // auto-closes whenever the selection changes or clears.
+  useEffect(() => { setPhotoPreviewOpen(false); }, [candidate?.id]);
   const qc = useQueryClient();
 
   // Phone-conflict state: when PATCH returns 409 because the new phone is
@@ -729,11 +740,16 @@ function CandidateProfileSheet({
               name-edit Cancel button never sits behind the sheet's
               top-corner close X (top-left in RTL, top-right in LTR). */}
           <div className="flex items-center gap-4 pe-10">
-            {/* Task #187 — Avatar doubles as a "Change Photo" target.
-                Hover overlay reveals a pencil; click triggers the
-                hidden file input. The new admin endpoint runs the
-                same Rekognition pipeline as the candidate portal so
-                a non-face photo is still rejected. */}
+            {/* Task #187 — Avatar is now a click-to-preview target.
+                Clicking it opens a lightbox at the natural image size
+                (capped to 70vh). The lightbox carries the "Change
+                Photo" action so the edit affordance is preserved.
+                If there is no photo yet, the click falls through to
+                the file picker so admins can upload the first one
+                without an empty preview step.
+                The new admin endpoint runs the same Rekognition
+                pipeline as the candidate portal so a non-face photo
+                is still rejected. */}
             <div className="relative group shrink-0">
               <Avatar className="h-14 w-14 border-2 border-border">
                 {(c as any).photoUrl && <AvatarImage src={(c as any).photoUrl} alt={c.fullNameEn} className="object-cover" />}
@@ -743,10 +759,17 @@ function CandidateProfileSheet({
                 type="button"
                 className="absolute inset-0 rounded-full bg-black/0 hover:bg-black/60 transition-colors flex items-center justify-center text-white opacity-0 group-hover:opacity-100 disabled:cursor-not-allowed"
                 disabled={photoUploading}
-                onClick={() => photoFileRef.current?.click()}
-                title={String(t("profile.changePhoto", { defaultValue: "Change photo" } as any))}
-                aria-label={String(t("profile.changePhoto", { defaultValue: "Change photo" } as any))}
-                data-testid="button-change-photo"
+                onClick={() => {
+                  if ((c as any).photoUrl) setPhotoPreviewOpen(true);
+                  else photoFileRef.current?.click();
+                }}
+                title={String((c as any).photoUrl
+                  ? t("profile.viewPhoto", { defaultValue: "View photo" } as any)
+                  : t("profile.changePhoto", { defaultValue: "Change photo" } as any))}
+                aria-label={String((c as any).photoUrl
+                  ? t("profile.viewPhoto", { defaultValue: "View photo" } as any)
+                  : t("profile.changePhoto", { defaultValue: "Change photo" } as any))}
+                data-testid="button-view-photo"
               >
                 {photoUploading
                   ? <Loader2 className="h-5 w-5 animate-spin" />
@@ -1263,6 +1286,57 @@ function CandidateProfileSheet({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Task #189 — Photo preview lightbox.
+          Opens when the avatar is clicked (and a photo exists). Click
+          outside the panel to close (Radix's onOpenChange fires for
+          backdrop clicks and Escape). The "Change Photo" button reuses
+          the same hidden file input as the avatar overlay so the upload
+          path / Rekognition validation is identical.
+          The DialogContent here is intentionally borderless and
+          background-less so the image itself is the visual focus. */}
+      <Dialog open={photoPreviewOpen} onOpenChange={setPhotoPreviewOpen}>
+        <DialogContent
+          className="max-w-[90vw] sm:max-w-2xl bg-card border-border p-4"
+          data-testid="dialog-photo-preview"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-base font-display pe-10">
+              {String(t("profile.photoPreviewTitle", { defaultValue: "Profile photo" } as any))}
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              {String(t("profile.photoPreviewTitle", { defaultValue: "Profile photo" } as any))}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center justify-center bg-black/40 rounded-md overflow-hidden">
+            {(c as any).photoUrl ? (
+              <img
+                src={(c as any).photoUrl}
+                alt={c.fullNameEn}
+                className="max-h-[70vh] max-w-full object-contain"
+                data-testid="img-photo-preview"
+              />
+            ) : (
+              <div className="h-40 w-full flex items-center justify-center text-muted-foreground text-sm">—</div>
+            )}
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-border gap-2"
+              disabled={photoUploading}
+              onClick={() => photoFileRef.current?.click()}
+              data-testid="button-change-photo-from-preview"
+            >
+              {photoUploading
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <Pencil className="h-3.5 w-3.5" />}
+              {String(t("profile.changePhoto", { defaultValue: "Change photo" } as any))}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }

@@ -80,7 +80,9 @@
       "placeholder": "Full name (English)"
     },
     "photo": {
-      "changePhoto": "Change photo"
+      "changePhoto": "Change photo",
+      "viewPhoto": "View photo",
+      "previewTitle": "Profile photo"
     },
     "infoLabels": {
       "empNumber": "Employee #",

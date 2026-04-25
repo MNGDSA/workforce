@@ -178,6 +178,8 @@
     "editName": "Edit name",
     "namePlaceholder": "Full name (English)",
     "changePhoto": "Change photo",
+    "viewPhoto": "View photo",
+    "photoPreviewTitle": "Profile photo",
     "save": "Save",
     "cancel": "Cancel",
     "contact": "Contact",

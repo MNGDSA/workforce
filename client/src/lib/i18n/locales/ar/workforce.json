@@ -80,7 +80,9 @@
       "placeholder": "الاسم الكامل (إنجليزي)"
     },
     "photo": {
-      "changePhoto": "تغيير الصورة"
+      "changePhoto": "تغيير الصورة",
+      "viewPhoto": "عرض الصورة",
+      "previewTitle": "صورة الملف الشخصي"
     },
     "infoLabels": {
       "empNumber": "رقم الموظف",
