@@ -236,6 +236,8 @@
     "healthDefault": "Chronic condition noted",
     "documents": "Documents",
     "viewCv": "View CV",
+    "viewNationalId": "View ID",
+    "viewIban": "View IBAN Certificate",
     "notes": "Notes",
     "save": "Save Changes",
     "cancel": "Cancel",

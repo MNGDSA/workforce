@@ -1207,24 +1207,55 @@ function CandidateProfileSheet({
             </div>
           )}
 
-          {(c as any).hasResume && toProxiedFileUrl((c as any).resumeUrl) && (
-            <div>
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("profile.documents")}</h4>
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-border"
-                onClick={() => {
-                  const url = toProxiedFileUrl((c as any).resumeUrl);
-                  if (url) window.open(url, "_blank", "noopener,noreferrer");
-                }}
-                data-testid="button-view-cv"
-              >
-                <FileText className="me-2 h-4 w-4" />
-                {t("profile.viewCv")}
-              </Button>
-            </div>
-          )}
+          {(() => {
+            const cvUrl = (c as any).hasResume ? toProxiedFileUrl((c as any).resumeUrl) : null;
+            const idUrl = (c as any).hasNationalId ? toProxiedFileUrl((c as any).nationalIdFileUrl) : null;
+            const ibanUrl = (c as any).hasIban ? toProxiedFileUrl((c as any).ibanFileUrl) : null;
+            if (!cvUrl && !idUrl && !ibanUrl) return null;
+            return (
+              <div>
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("profile.documents")}</h4>
+                <div className="flex flex-wrap gap-2">
+                  {cvUrl && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-border"
+                      onClick={() => window.open(cvUrl, "_blank", "noopener,noreferrer")}
+                      data-testid="button-view-cv"
+                    >
+                      <FileText className="me-2 h-4 w-4" />
+                      {t("profile.viewCv")}
+                    </Button>
+                  )}
+                  {idUrl && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-border"
+                      onClick={() => window.open(idUrl, "_blank", "noopener,noreferrer")}
+                      data-testid="button-view-national-id"
+                    >
+                      <FileText className="me-2 h-4 w-4" />
+                      {t("profile.viewNationalId")}
+                    </Button>
+                  )}
+                  {ibanUrl && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-border"
+                      onClick={() => window.open(ibanUrl, "_blank", "noopener,noreferrer")}
+                      data-testid="button-view-iban"
+                    >
+                      <FileText className="me-2 h-4 w-4" />
+                      {t("profile.viewIban")}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           <WorkforceHistorySection candidateId={c.id} />
 
