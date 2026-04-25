@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { sanitizeSaMobileInput, normalizeSaMobileOnBlur, isValidSaMobile } from "@/lib/phone-input";
 import { DatePickerField } from "@/components/ui/date-picker-field";
@@ -194,13 +194,15 @@ function formatDate(iso: string | null | undefined) {
 }
 
 function exportToCSV(employees: Employee[]) {
-  const headers = ["Employee #", "Full Name", "National ID", "Phone", "Job Title", "Event", "Salary (SAR)", "IBAN", "Bank Name", "Bank Code", "Start Date", "End Date", "Status", "Termination Reason"];
+  // Task #187 — replaced the dummy free-text "Job Title" column with the
+  // canonical Position assignment so exports match what the dialog shows.
+  const headers = ["Employee #", "Full Name", "National ID", "Phone", "Position", "Event", "Salary (SAR)", "IBAN", "Bank Name", "Bank Code", "Start Date", "End Date", "Status", "Termination Reason"];
   const rows = employees.map(e => [
     e.employeeNumber,
     e.fullNameEn ?? "",
     e.nationalId ?? "",
     e.phone ?? "",
-    e.jobTitle ?? "",
+    e.positionTitle ?? "",
     e.eventName ?? "",
     e.salary ? Number(e.salary).toString() : "",
     e.iban ?? "",
@@ -228,7 +230,8 @@ async function exportToExcel(employees: Employee[]) {
     "Full Name": e.fullNameEn ?? "",
     "National ID": e.nationalId ?? "",
     "Phone": e.phone ?? "",
-    "Job Title": e.jobTitle ?? "",
+    // Task #187 — see exportToCSV note above.
+    "Position": e.positionTitle ?? "",
     "Event": e.eventName ?? "",
     "Salary (SAR)": e.salary ? Number(e.salary) : "",
     "IBAN": e.iban ?? "",
@@ -367,6 +370,19 @@ function EmployeeDetailDialog({
   const [editEducation, setEditEducation] = useState(false);
   const [educationForm, setEducationForm] = useState<Record<string, string>>({});
 
+  // Task #187 — inline header editing.
+  // `editName` toggles a 1-line input next to the displayed name; the
+  // submit hits PATCH /api/candidates/:id (NOT the workforce PATCH —
+  // workforce records carry a *snapshot* of the name only, the actual
+  // record lives on the candidate row keyed by `candidateId`).
+  // `photoFileRef` triggers an admin-only direct photo replace that
+  // skips the inbox queue but still runs the same Rekognition pipeline
+  // candidates use on the portal — see /api/admin/candidates/:id/photo.
+  const [editName, setEditName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const photoFileRef = useRef<HTMLInputElement | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+
   const { data: history = [], isLoading: historyLoading } = useQuery<WorkHistory[]>({
     queryKey: ["/api/workforce/history", employee?.nationalId],
     queryFn: () => apiRequest("GET", `/api/workforce/history/${employee!.nationalId}`).then(r => r.json()),
@@ -487,6 +503,74 @@ function EmployeeDetailDialog({
       toast({ title: t("toast.employeeUpdated") });
     },
     onError: (e: Error) => toast({ title: t("toast.error"), description: e.message, variant: "destructive" }),
+  });
+
+  // Task #187 — name edits go to the candidate row (not workforce). The
+  // server's `fullNameEnSchema` will trim and case-validate; we surface
+  // any 4xx as a generic toast since the constraints are documented in
+  // the i18n placeholder/help text.
+  const nameMutation = useMutation({
+    mutationFn: async (newName: string) => {
+      const res = await fetch(`/api/candidates/${employee!.candidateId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fullNameEn: newName }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        let message = text;
+        try { message = JSON.parse(text).message ?? message; } catch {}
+        throw new Error(message || `${res.status}`);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/workforce"] });
+      setEditName(false);
+      onUpdated();
+      toast({ title: t("toast.nameUpdated") });
+    },
+    onError: (e: Error) => toast({ title: t("toast.error"), description: e.message, variant: "destructive" }),
+  });
+
+  // Task #187 — admin direct photo replace. Mirrors the candidate
+  // portal upload contract (multipart `file` field) so backend errors
+  // (Rekognition 422 / service-down 503 / format 400) come back with
+  // the same shape the portal handles.
+  const photoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/admin/candidates/${employee!.candidateId}/photo`, {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const err: any = new Error(body.message || `Upload failed (${res.status})`);
+        err.status = res.status;
+        err.qualityResult = body.qualityResult;
+        throw err;
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/workforce"] });
+      onUpdated();
+      toast({ title: t("toast.photoReplaced") });
+      setPhotoUploading(false);
+      if (photoFileRef.current) photoFileRef.current.value = "";
+    },
+    onError: (e: any) => {
+      // Rekognition reject envelope includes per-check tips; surface the
+      // top-level message for the admin and rely on the candidate's
+      // detail view if they want the granular check breakdown.
+      toast({ title: t("toast.photoReplaceFailed"), description: e.message, variant: "destructive" });
+      setPhotoUploading(false);
+      if (photoFileRef.current) photoFileRef.current.value = "";
+    },
   });
 
   const profileMutation = useMutation({
@@ -673,16 +757,103 @@ function EmployeeDetailDialog({
           <>
           <DialogHeader>
             <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-3">
-              <Avatar className="h-10 w-10 border border-zinc-700">
-                <AvatarImage src={employee.photoUrl ?? undefined} />
-                <AvatarFallback className="bg-zinc-800 text-zinc-300 text-sm font-bold">{initials}</AvatarFallback>
-              </Avatar>
-              <div>
-                <div className="flex items-center gap-2">
-                  <bdi>{employee.fullNameEn ?? t("dialog.unknownEmployee")}</bdi>
-                  <Badge variant="outline" className={`text-[10px] font-mono ${st.className}`}>{st.label}</Badge>
-                </div>
-                <div className="text-xs text-zinc-500 font-mono font-normal" dir="ltr">{employee.employeeNumber}</div>
+              {/* Task #187 — Avatar doubles as a "Change Photo" target.
+                  The hidden file input is gated by `workforce:update`
+                  on the server; only image/jpeg + image/png are
+                  accepted. We disable the trigger while a request is
+                  in-flight so admins don't queue duplicate uploads. */}
+              <div className="relative group">
+                <Avatar className="h-10 w-10 border border-zinc-700">
+                  <AvatarImage src={employee.photoUrl ?? undefined} />
+                  <AvatarFallback className="bg-zinc-800 text-zinc-300 text-sm font-bold">{initials}</AvatarFallback>
+                </Avatar>
+                <button
+                  type="button"
+                  className="absolute inset-0 rounded-full bg-black/0 hover:bg-black/60 transition-colors flex items-center justify-center text-white opacity-0 group-hover:opacity-100 disabled:cursor-not-allowed"
+                  disabled={photoUploading}
+                  onClick={() => photoFileRef.current?.click()}
+                  title={t("dialog.photo.changePhoto")}
+                  aria-label={t("dialog.photo.changePhoto")}
+                  data-testid="button-change-photo"
+                >
+                  {photoUploading
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : <Pencil className="h-3.5 w-3.5" />}
+                </button>
+                <input
+                  ref={photoFileRef}
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png"
+                  className="hidden"
+                  data-testid="input-photo-file"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setPhotoUploading(true);
+                    photoMutation.mutate(file);
+                  }}
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                {editName ? (
+                  <div className="flex items-center gap-2">
+                    {/* Inline name editor — pressing Enter saves, Escape
+                        cancels. Constrained to 120 chars to align with
+                        the database column + Excel export width. */}
+                    <Input
+                      autoFocus
+                      value={nameValue}
+                      onChange={(e) => setNameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && nameValue.trim().length > 0) nameMutation.mutate(nameValue.trim());
+                        if (e.key === "Escape") { setEditName(false); setNameValue(""); }
+                      }}
+                      placeholder={t("dialog.name.placeholder")}
+                      maxLength={120}
+                      className="h-8 bg-zinc-900 border-zinc-700 text-white text-sm flex-1 min-w-0"
+                      data-testid="input-edit-name"
+                    />
+                    <Button
+                      size="sm"
+                      className="h-8 bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white shrink-0"
+                      disabled={nameMutation.isPending || nameValue.trim().length === 0}
+                      onClick={() => nameMutation.mutate(nameValue.trim())}
+                      data-testid="button-save-name"
+                    >
+                      {nameMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("dialog.actions.save")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 border-zinc-700 shrink-0"
+                      onClick={() => { setEditName(false); setNameValue(""); }}
+                      data-testid="button-cancel-name"
+                    >
+                      {t("dialog.actions.cancel")}
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <bdi className="truncate">{employee.fullNameEn ?? t("dialog.unknownEmployee")}</bdi>
+                      <Badge variant="outline" className={`text-[10px] font-mono ${st.className}`}>{st.label}</Badge>
+                      <button
+                        type="button"
+                        className="text-zinc-500 hover:text-white transition-colors p-1 -m-1"
+                        onClick={() => { setNameValue(employee.fullNameEn ?? ""); setEditName(true); }}
+                        title={t("dialog.name.edit")}
+                        aria-label={t("dialog.name.edit")}
+                        data-testid="button-edit-name"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    </div>
+                    {/* Task #187 — Employee number is locked. We surface
+                        a tooltip on the badge so an admin who clicks
+                        expecting an editor sees *why* it can't change. */}
+                    <div className="text-xs text-zinc-500 font-mono font-normal" dir="ltr" title={t("dialog.empNumberLocked")}>{employee.employeeNumber}</div>
+                  </>
+                )}
               </div>
             </DialogTitle>
             <DialogDescription className="sr-only">{t("dialog.infoSheetSr")}</DialogDescription>
@@ -724,7 +895,9 @@ function EmployeeDetailDialog({
                 <InfoRow icon={<Hash className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.empNumber")} value={employee.employeeNumber} mono />
                 <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.nationalId")} value={employee.nationalId ?? "—"} mono />
                 <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.phone")} value={employee.phone ?? "—"} />
-                <InfoRow icon={<Briefcase className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.jobTitle")} value={employee.jobTitle ?? "—"} />
+                {/* Task #187 — the dummy free-text "Job Title" InfoRow used
+                    to live here; the canonical Position picker (next
+                    sibling) is now the single source of truth. */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-500 text-xs flex items-center gap-1"><Building2 className="h-3 w-3" /> {t("dialog.infoLabels.position")}</span>
@@ -1739,7 +1912,11 @@ function employeeToCardData(emp: Employee): EmployeeCardData {
     photoUrl: emp.photoUrl,
     employeeNumber: emp.employeeNumber,
     nationalId: emp.nationalId,
-    position: emp.jobTitle,
+    // Task #187 — ID cards now show the canonical Position assignment
+    // instead of the dummy free-text job title that the dialog no
+    // longer surfaces. Falls back to the employee's event when no
+    // position is assigned, matching the dialog's empty-state copy.
+    position: emp.positionTitle ?? emp.jobTitle ?? null,
     eventName: emp.eventName,
     phone: emp.phone,
   };
@@ -1795,6 +1972,15 @@ export default function WorkforcePage() {
     queryFn: () => apiRequest("GET", "/api/smp-companies").then(r => r.json()),
   });
 
+  // Task #187 — Position is now an editable column on the bulk update
+  // template (mirrors the Event / SMP catalog pattern). The reference
+  // sheet ships the same active list the dialog dropdown shows so the
+  // titles match exactly and the server-side resolver accepts them.
+  const { data: allPositionsForBulk = [] } = useQuery<{ id: string; title: string; departmentName?: string | null; isActive: boolean }[]>({
+    queryKey: ["/api/positions"],
+    queryFn: () => apiRequest("GET", "/api/positions").then(r => r.json()),
+  });
+
   async function downloadBulkTemplate() {
     const XLSX = await import("xlsx");
     const source = employees.length > 0 ? employees : [];
@@ -1806,21 +1992,37 @@ export default function WorkforcePage() {
       "Salary (SAR)": e.salary ? Number(e.salary) : "",
       "Start Date": e.startDate ?? "",
       "Event": e.eventName ?? "",
+      // Task #187 — Position writes through to workforce.positionId. Pre
+      // -fill with the current title so admins editing other columns
+      // don't accidentally clear the assignment by leaving the cell blank.
+      "Position": e.positionTitle ?? "",
       "SMP Company Name": e.employmentType === "smp" ? (e.smpCompanyName ?? "") : "",
       "Notes": "",
     }));
     if (rows.length === 0) {
-      rows.push({ "Employee #": "C000001", "Full Name": "Example Name", "National ID/Iqama (read-only)": "1000000000", "Phone (read-only)": "0500000000", "Salary (SAR)": 4000, "Start Date": "2026-01-01", "Event": "", "SMP Company Name": "", "Notes": "" });
+      rows.push({ "Employee #": "C000001", "Full Name": "Example Name", "National ID/Iqama (read-only)": "1000000000", "Phone (read-only)": "0500000000", "Salary (SAR)": 4000, "Start Date": "2026-01-01", "Event": "", "Position": "", "SMP Company Name": "", "Notes": "" });
     }
     const ws = XLSX.utils.json_to_sheet(rows);
-    // Set column widths
-    ws["!cols"] = [{ wch: 12 }, { wch: 28 }, { wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 24 }, { wch: 28 }, { wch: 32 }];
+    // Set column widths — Position column (8th, 26ch) sits between
+    // Event and SMP Company Name to mirror the dialog's field order.
+    ws["!cols"] = [{ wch: 12 }, { wch: 28 }, { wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 24 }, { wch: 26 }, { wch: 28 }, { wch: 32 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Employees");
     // Add Events reference sheet
     if (allEventsForBulk.length > 0) {
       const evSheet = XLSX.utils.json_to_sheet(allEventsForBulk.map(ev => ({ "Event Name": ev.name })));
       XLSX.utils.book_append_sheet(wb, evSheet, "Events (Reference)");
+    }
+    // Add Positions reference sheet — same active filter the dialog
+    // dropdown uses, so anything an admin types into the Position cell
+    // can be copy/pasted from this sheet.
+    const activePositionsForBulk = allPositionsForBulk.filter(p => p.isActive);
+    if (activePositionsForBulk.length > 0) {
+      const posSheet = XLSX.utils.json_to_sheet(activePositionsForBulk.map(p => ({
+        "Position Title": p.title,
+        "Department": p.departmentName ?? "",
+      })));
+      XLSX.utils.book_append_sheet(wb, posSheet, "Positions (Reference)");
     }
     // Add SMP Companies reference sheet
     if (allSmpCompaniesForBulk.length > 0) {
@@ -2255,14 +2457,20 @@ export default function WorkforcePage() {
                           {emp.phone ?? "—"}
                         </TableCell>
                         <TableCell className="hidden xl:table-cell" onClick={() => setSelectedEmployee(emp)}>
+                          {/* Task #187 — Position is the primary line; the
+                              dummy free-text job title sub-line was removed
+                              along with the dialog InfoRow. */}
                           <div className="space-y-0.5">
-                            <div className="text-sm text-white"><bdi>{emp.jobTitle ?? "—"}</bdi></div>
-                            {emp.positionTitle && (
-                              <div className="text-xs text-emerald-400/70">
-                                <bdi>{emp.positionTitle}</bdi>
-                                {emp.positionIsActive === false && <span className="text-amber-400 ms-1">{tt("columns.inactiveSuffix")}</span>}
-                              </div>
-                            )}
+                            <div className="text-sm text-white">
+                              {emp.positionTitle ? (
+                                <>
+                                  <bdi>{emp.positionTitle}</bdi>
+                                  {emp.positionIsActive === false && <span className="text-amber-400 text-xs ms-1">{tt("columns.inactiveSuffix")}</span>}
+                                </>
+                              ) : (
+                                <span className="text-zinc-500">—</span>
+                              )}
+                            </div>
                             {emp.eventName && <div className="text-xs text-primary/70"><bdi>{emp.eventName}</bdi></div>}
                           </div>
                         </TableCell>

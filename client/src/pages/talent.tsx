@@ -60,6 +60,7 @@ import {
   Send,
   UserPlus,
   Repeat,
+  Pencil,
 } from "lucide-react";
 import {
   Table,
@@ -484,6 +485,16 @@ function CandidateProfileSheet({
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
 
+  // Task #187 — inline header edits independent of the global edit
+  // mode. Name writes through the candidate row directly; photo
+  // replace hits the new admin-only endpoint that runs the same
+  // Rekognition pipeline as the candidate portal.
+  const [editName, setEditName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const photoFileRef = useRef<HTMLInputElement | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const qc = useQueryClient();
+
   // Phone-conflict state: when PATCH returns 409 because the new phone is
   // already held by another candidate, surface a confirm dialog so the admin
   // can either Cancel or Transfer the phone (which nulls it on the conflicting
@@ -552,6 +563,67 @@ function CandidateProfileSheet({
     onError: () => {
       setPhoneConflict(null);
       toast({ title: t("toast.saveFailed"), variant: "destructive" });
+    },
+  });
+
+  // Task #187 — inline name edit. Reuses the same PATCH /api/candidates/:id
+  // endpoint the rest of the form uses, just scoped to the single
+  // `fullNameEn` field so we don't accidentally touch the phone-conflict
+  // path (no phone in the payload → no 409 possible).
+  const nameMutation = useMutation({
+    mutationFn: (newName: string) => patchCandidate({ fullNameEn: newName }, false),
+    onSuccess: (updated) => {
+      onSaved(updated);
+      setEditName(false);
+      toast({ title: String(t("toast.nameUpdated", { defaultValue: "Name updated" } as any)) });
+    },
+    onError: (err: any) => {
+      toast({
+        title: t("toast.saveFailed"),
+        description: err?.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Task #187 — admin direct photo replace. The backend re-runs the
+  // candidate-portal Rekognition pipeline so a non-face photo is
+  // refused with a structured 422 envelope. We surface the top-level
+  // message via toast.
+  const photoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/admin/candidates/${candidate!.id}/photo`, {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const err: any = new Error(body.message || `Upload failed (${res.status})`);
+        err.status = res.status;
+        throw err;
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["/api/candidates"] });
+      // Optimistically merge the new photo URL into the open sheet so
+      // the avatar updates without a refetch lag.
+      onSaved({ ...(candidate as any), photoUrl: data?.url ?? data?.candidate?.photoUrl ?? null, hasPhoto: true } as any);
+      toast({ title: String(t("toast.photoReplaced", { defaultValue: "Photo replaced" } as any)) });
+      setPhotoUploading(false);
+      if (photoFileRef.current) photoFileRef.current.value = "";
+    },
+    onError: (err: any) => {
+      toast({
+        title: String(t("toast.photoReplaceFailed", { defaultValue: "Photo replace failed" } as any)),
+        description: err?.message,
+        variant: "destructive",
+      });
+      setPhotoUploading(false);
+      if (photoFileRef.current) photoFileRef.current.value = "";
     },
   });
 
@@ -654,12 +726,93 @@ function CandidateProfileSheet({
       <SheetContent side="right" className="w-full sm:max-w-lg bg-card border-border overflow-y-auto p-0">
         <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
           <div className="flex items-center gap-4">
-            <Avatar className="h-14 w-14 border-2 border-border">
-              {(c as any).photoUrl && <AvatarImage src={(c as any).photoUrl} alt={c.fullNameEn} className="object-cover" />}
-              <AvatarFallback className="bg-primary/10 text-primary font-display text-lg">{initials}</AvatarFallback>
-            </Avatar>
+            {/* Task #187 — Avatar doubles as a "Change Photo" target.
+                Hover overlay reveals a pencil; click triggers the
+                hidden file input. The new admin endpoint runs the
+                same Rekognition pipeline as the candidate portal so
+                a non-face photo is still rejected. */}
+            <div className="relative group shrink-0">
+              <Avatar className="h-14 w-14 border-2 border-border">
+                {(c as any).photoUrl && <AvatarImage src={(c as any).photoUrl} alt={c.fullNameEn} className="object-cover" />}
+                <AvatarFallback className="bg-primary/10 text-primary font-display text-lg">{initials}</AvatarFallback>
+              </Avatar>
+              <button
+                type="button"
+                className="absolute inset-0 rounded-full bg-black/0 hover:bg-black/60 transition-colors flex items-center justify-center text-white opacity-0 group-hover:opacity-100 disabled:cursor-not-allowed"
+                disabled={photoUploading}
+                onClick={() => photoFileRef.current?.click()}
+                title={String(t("profile.changePhoto", { defaultValue: "Change photo" } as any))}
+                aria-label={String(t("profile.changePhoto", { defaultValue: "Change photo" } as any))}
+                data-testid="button-change-photo"
+              >
+                {photoUploading
+                  ? <Loader2 className="h-5 w-5 animate-spin" />
+                  : <Pencil className="h-4 w-4" />}
+              </button>
+              <input
+                ref={photoFileRef}
+                type="file"
+                accept="image/jpeg,image/jpg,image/png"
+                className="hidden"
+                data-testid="input-photo-file"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setPhotoUploading(true);
+                  photoMutation.mutate(file);
+                }}
+              />
+            </div>
             <div className="flex-1 min-w-0">
-              <SheetTitle className="font-display text-xl font-bold text-white truncate"><bdi>{c.fullNameEn}</bdi></SheetTitle>
+              {editName ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    autoFocus
+                    value={nameValue}
+                    onChange={(e) => setNameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && nameValue.trim().length > 0) nameMutation.mutate(nameValue.trim());
+                      if (e.key === "Escape") { setEditName(false); setNameValue(""); }
+                    }}
+                    placeholder={String(t("profile.namePlaceholder", { defaultValue: "Full name (English)" } as any))}
+                    maxLength={120}
+                    className="h-9 bg-muted/30 border-border text-sm flex-1 min-w-0"
+                    data-testid="input-edit-name"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-9 shrink-0"
+                    disabled={nameMutation.isPending || nameValue.trim().length === 0}
+                    onClick={() => nameMutation.mutate(nameValue.trim())}
+                    data-testid="button-save-name"
+                  >
+                    {nameMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : String(t("profile.save", { defaultValue: "Save" } as any))}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 border-border shrink-0"
+                    onClick={() => { setEditName(false); setNameValue(""); }}
+                    data-testid="button-cancel-name"
+                  >
+                    {String(t("profile.cancel", { defaultValue: "Cancel" } as any))}
+                  </Button>
+                </div>
+              ) : (
+                <SheetTitle className="font-display text-xl font-bold text-white truncate flex items-center gap-2">
+                  <bdi className="truncate">{c.fullNameEn}</bdi>
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-white transition-colors p-1 -m-1 shrink-0"
+                    onClick={() => { setNameValue(c.fullNameEn ?? ""); setEditName(true); }}
+                    title={String(t("profile.editName", { defaultValue: "Edit name" } as any))}
+                    aria-label={String(t("profile.editName", { defaultValue: "Edit name" } as any))}
+                    data-testid="button-edit-name"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                </SheetTitle>
+              )}
               <SheetDescription asChild>
                 <div className="text-muted-foreground text-sm flex items-center gap-2 mt-0.5">
                   {c.nationalId && <span dir="ltr">{c.nationalId}</span>}

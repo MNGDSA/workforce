@@ -3810,6 +3810,15 @@ export async function registerRoutes(
 
   app.patch("/api/workforce/:id", requirePermission("workforce:update"), async (req: Request, res: Response) => {
     try {
+      // Task #187 — Employee numbers are auto-generated (`C######`) and
+      // immutable for the life of the record. The allowed-fields filter
+      // below already drops any unexpected keys silently, but we fail
+      // loud here so a misbehaving client (custom HR script, mass-edit
+      // tool, etc.) can't *think* it edited the number and discover
+      // hours later that the change was dropped.
+      if ("employeeNumber" in (req.body ?? {})) {
+        return res.status(400).json({ message: tr(req, "employee.numberImmutable") });
+      }
       const allowed = ["salary", "notes", "endDate", "supervisorId", "performanceScore", "isActive", "eventId", "positionId"];
       const body = normalizeBlankFields({ ...req.body }, WORKFORCE_BLANK_FIELDS);
       const data: Record<string, any> = {};
@@ -3948,7 +3957,7 @@ export async function registerRoutes(
       if (rows.length === 0) return res.status(400).json({ message: tr(req, "import.excelEmpty") });
       if (rows.length > 5000) return res.status(400).json({ message: tr(req, "import.rowLimit") });
 
-      // Fetch all workforce records, events, and SMP companies for lookups
+      // Fetch all workforce records, events, SMP companies, and positions for lookups
       const allWorkers = await storage.getWorkforce({});
       const allEvents = await storage.getEvents({});
       const eventsByName: Record<string, string> = {};
@@ -3956,6 +3965,17 @@ export async function registerRoutes(
       const allSmpCompanies = await storage.getSMPCompanies();
       const smpByName: Record<string, string> = {};
       for (const c of allSmpCompanies) smpByName[c.name.trim().toLowerCase()] = c.id;
+      // Task #187 — Position is now the canonical role field on the
+      // workforce dialog. Mirror the Event / SMP resolver pattern: case
+      // -fold the title, only accept active positions (matches the
+      // dropdown the dialog itself shows), and surface unknowns as row
+      // errors so the admin can pick one from the "Positions
+      // (Reference)" sheet on the same workbook.
+      const allPositionsForBulk = await storage.getAllPositions(false);
+      const positionsByTitle: Record<string, string> = {};
+      for (const p of allPositionsForBulk) {
+        positionsByTitle[p.title.trim().toLowerCase()] = p.id;
+      }
 
       const results: { employeeNumber: string; status: "updated" | "skipped" | "error"; reason?: string }[] = [];
 
@@ -4003,6 +4023,20 @@ export async function registerRoutes(
             const eventId = eventsByName[eventName.toLowerCase()];
             if (eventId) wfUpdate.eventId = eventId;
             else rowErrors.push(`Event "${eventName}" does not match any existing event. Check the "Events (Reference)" sheet for valid names.`);
+          }
+
+          // Position — case-insensitive title match against the active
+          // positions catalog (Task #187). Empty cell = no change.
+          // Pass `null` is not supported here — use the per-employee
+          // dialog to clear a position.
+          const positionTitleCell = String(row["Position"] ?? "").trim();
+          if (positionTitleCell !== "") {
+            const positionId = positionsByTitle[positionTitleCell.toLowerCase()];
+            if (positionId) {
+              if (positionId !== (worker.positionId ?? "")) wfUpdate.positionId = positionId;
+            } else {
+              rowErrors.push(`Position "${positionTitleCell}" does not match any active position. Check the "Positions (Reference)" sheet for valid titles.`);
+            }
           }
 
           // SMP Company — link by name (for SMP employment type workers only).
@@ -7972,6 +8006,224 @@ export async function registerRoutes(
       return res.json(updated);
     } catch (err) { return handleError(res, err); }
   });
+
+  // ─── Admin direct photo replace (Task #187) ──────────────────────────────
+  // Back-office admins can replace a candidate / employee photo without
+  // routing through the candidate-portal pending-review queue. The flow
+  // still runs the *same* AWS Rekognition pipeline used by the portal
+  // (`validateFaceQuality` + the rotation-rescue ladder + the
+  // fail-open / fail-closed telemetry from `decideRekognitionFallback
+  // Action`) so an admin uploading a non-face photo gets refused with
+  // the same bilingual error envelope. On success we write the new
+  // URL straight to `candidate.photoUrl`, supersede any pending
+  // `photoChangeRequest` rows for the same candidate, and stamp a
+  // closed `approved` row + an audit-log entry so the change is still
+  // visible in the photo-change history view.
+  app.post(
+    "/api/admin/candidates/:id/photo",
+    requirePermission("workforce:update"),
+    upload.single("file"),
+    async (req: Request, res: Response) => {
+      const candidateId = req.params.id;
+      let uploadedFileUrl: string | null = null;
+      let candidateUpdateCommitted = false;
+      let prePatchPhotoUrl: string | null = null;
+      let prePatchHasPhoto: boolean = false;
+      try {
+        if (!req.file) return res.status(400).json({ message: tr(req, "file.noUpload") });
+        const allowedPhotoMimes = ["image/jpeg", "image/jpg", "image/png"];
+        if (!allowedPhotoMimes.includes(req.file.mimetype.toLowerCase())) {
+          return res.status(400).json({ message: tr(req, "file.photoFormat") });
+        }
+        const candidate = await storage.getCandidate(candidateId);
+        if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
+
+        // Upload first so Rekognition can fetch the bytes from S3 (matches
+        // the portal flow in createUploadDocumentsHandler).
+        const fileUrl = await uploadFile(
+          req.file.path,
+          req.file.filename,
+          getMimeType(req.file.filename),
+          { isPublic: true },
+        );
+        uploadedFileUrl = fileUrl;
+
+        const qualityResult = await validateFaceQuality(fileUrl);
+        const hasPreviouslyValidatedPhoto = !!(candidate.hasPhoto && candidate.photoUrl);
+        const fallbackDecision = decideRekognitionFallbackAction({
+          qualityCheckSkipped: !!qualityResult.qualityCheckSkipped,
+          hasPreviouslyValidatedPhoto,
+        });
+        if (fallbackDecision.kind === "block") {
+          recordRekognitionFallback(fallbackDecision.telemetry, candidateId);
+          try { await deleteFile(fileUrl); } catch {}
+          uploadedFileUrl = null;
+          return res.status(503).json({
+            message: tr(req, "photo.verifyUnavailable"),
+            qualityResult: {
+              passed: false,
+              checks: [{
+                code: "service_unavailable",
+                name: "Face verification service",
+                passed: false,
+                tipReason: "service_unavailable",
+                tip: "The verification service is currently unreachable. Your photo cannot be processed until the service is available.",
+              }],
+              qualityCheckSkipped: true,
+            },
+          });
+        }
+        if (fallbackDecision.kind === "allow") {
+          recordRekognitionFallback(fallbackDecision.telemetry, candidateId);
+          (qualityResult as any).serviceUnavailableNotice = tr(req, "photo.verifySkipped");
+        }
+
+        if (!qualityResult.passed && !qualityResult.qualityCheckSkipped) {
+          try { await deleteFile(fileUrl); } catch {}
+          uploadedFileUrl = null;
+          const { rotatedBuffer: _rb, ...qualityResultForClient } = qualityResult;
+          return res.status(422).json({
+            message: tr(req, "photo.qualityFailed"),
+            qualityResult: qualityResultForClient,
+          });
+        }
+
+        // Run the same rotation rescue helper the portal uses so a
+        // sideways portrait shot gets re-uploaded upright.
+        const rotationOutcome = await persistRotationRescue(
+          qualityResult,
+          fileUrl,
+          candidateId,
+          {
+            overwriteFile,
+            log: (msg: string) => console.log(msg),
+            warn: (msg: string, err: unknown) => console.warn(msg, err),
+            recordOutcome: recordRotationRescueOutcome,
+          },
+        );
+        const rotationApplied = rotationOutcome.rotationApplied;
+
+        // Resolve the reviewer id the same way the /approve route does
+        // — prefer the auth-user, fall back to the seeded `admin` user
+        // so the closed audit row always has a non-null reviewer.
+        let reviewerId: string | null = req.authUserId ?? null;
+        if (!reviewerId) {
+          const adminUser = await storage.getUserByUsername("admin");
+          reviewerId = adminUser?.id ?? null;
+        }
+
+        const previousPhotoUrl = candidate.photoUrl;
+        prePatchPhotoUrl = candidate.photoUrl ?? null;
+        prePatchHasPhoto = !!candidate.hasPhoto;
+
+        // Supersede any *pending* photo-change-requests for this
+        // candidate so the inbox doesn't keep stale review tasks
+        // pointing at an old URL the admin has already overridden.
+        const olderPending = await db.select({ id: photoChangeRequests.id })
+          .from(photoChangeRequests)
+          .where(and(
+            eq(photoChangeRequests.candidateId, candidateId),
+            eq(photoChangeRequests.status, "pending"),
+          ));
+        for (const old of olderPending) {
+          await storage.updatePhotoChangeRequest(old.id, {
+            status: "rejected",
+            ...(reviewerId ? { reviewedBy: reviewerId } : {}),
+            reviewedAt: new Date(),
+            reviewNotes: "Superseded by admin direct photo replacement",
+          });
+          await db.update(inboxItems)
+            .set({
+              status: "resolved",
+              resolvedBy: reviewerId,
+              resolvedAt: new Date(),
+              resolutionNotes: "Superseded by admin direct photo replacement",
+            })
+            .where(and(
+              eq(inboxItems.entityType, "photo_change_request"),
+              eq(inboxItems.entityId, old.id),
+              eq(inboxItems.status, "pending"),
+            ));
+        }
+
+        // Write the new photo straight to the candidate.
+        const updatedCandidate = await storage.updateCandidate(candidateId, {
+          photoUrl: fileUrl,
+          hasPhoto: true,
+        });
+        candidateUpdateCommitted = true;
+
+        // Audit-history continuity — even though the admin skipped the
+        // queue, we still log a `photoChangeRequest` row in `approved`
+        // state so the photo-history view shows a complete picture.
+        const approvedRequest = await storage.createPhotoChangeRequest({
+          candidateId,
+          newPhotoUrl: fileUrl,
+          previousPhotoUrl,
+          status: "approved",
+          reviewedBy: reviewerId,
+          reviewedAt: new Date(),
+          reviewNotes: "Admin direct replacement (Rekognition-validated)",
+        } as any);
+
+        // Resolve employee number for the audit log when this candidate
+        // is currently an active employee — helps cross-reference the
+        // change in the workforce timeline.
+        const activeEmployee = await storage.getWorkforceByCandidateId(candidateId);
+        const empNum = activeEmployee?.employeeNumber ?? null;
+        const subjectName = candidate.fullNameEn ?? null;
+
+        await logAudit(req, {
+          action: "candidate.photo_replaced_by_admin",
+          entityType: "candidate",
+          entityId: candidateId,
+          employeeNumber: empNum ?? undefined,
+          subjectName: subjectName ?? undefined,
+          description: `Admin replaced photo for ${subjectName ?? candidateId}${empNum ? ` (${empNum})` : ""}`,
+          metadata: {
+            previousPhotoUrl,
+            newPhotoUrl: fileUrl,
+            rotationApplied: rotationApplied ?? null,
+            rekognition: {
+              passed: qualityResult.passed,
+              skipped: !!qualityResult.qualityCheckSkipped,
+              fallback: fallbackDecision.kind,
+            },
+            photoChangeRequestId: approvedRequest.id,
+          },
+        });
+
+        const { rotatedBuffer: _rb, ...qualityResultForClient } = qualityResult;
+        return res.json({
+          url: fileUrl,
+          candidate: updatedCandidate,
+          qualityResult: qualityResultForClient,
+          rotationApplied,
+          photoChangeRequestId: approvedRequest.id,
+        });
+      } catch (err) {
+        // Compensating cleanup: if the candidate row was already updated
+        // to point at the new file, revert it back to the previous photo
+        // first so the avatar isn't left dangling at a soon-to-be-deleted URL.
+        if (candidateUpdateCommitted) {
+          try {
+            await storage.updateCandidate(candidateId, {
+              photoUrl: prePatchPhotoUrl,
+              hasPhoto: prePatchHasPhoto,
+            } as any);
+          } catch (revertErr) {
+            console.error("[admin-photo-replace] failed to revert candidate photo on rollback", revertErr);
+          }
+        }
+        // Best-effort cleanup of the uploaded blob if anything after the
+        // upload threw — otherwise we'd leave an orphan in S3.
+        if (uploadedFileUrl) {
+          try { await deleteFile(uploadedFileUrl); } catch {}
+        }
+        return handleError(res, err);
+      }
+    },
+  );
 
   // ─── SMS Broadcasts ──────────────────────────────────────────────────────────
 

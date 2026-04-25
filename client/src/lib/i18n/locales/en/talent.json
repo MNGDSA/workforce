@@ -175,6 +175,11 @@
   },
   "profile": {
     "smpBadge": "SMP",
+    "editName": "Edit name",
+    "namePlaceholder": "Full name (English)",
+    "changePhoto": "Change photo",
+    "save": "Save",
+    "cancel": "Cancel",
     "contact": "Contact",
     "whatsapp": "WhatsApp:",
     "location": "Location",

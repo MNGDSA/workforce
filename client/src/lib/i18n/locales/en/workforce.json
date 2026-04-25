@@ -46,7 +46,7 @@
     "employee": "Employee",
     "nationalId": "National ID",
     "phone": "Phone",
-    "jobEvent": "Job / Event",
+    "jobEvent": "Position / Event",
     "salary": "Salary",
     "lastPrinted": "Last Printed",
     "startDate": "Start Date",
@@ -74,11 +74,18 @@
     "signed": "Signed {date}",
     "printDownload": "Print / Download",
     "infoSheetSr": "Employee details and work history",
+    "empNumberLocked": "Employee number is auto-generated and cannot be changed.",
+    "name": {
+      "edit": "Edit name",
+      "placeholder": "Full name (English)"
+    },
+    "photo": {
+      "changePhoto": "Change photo"
+    },
     "infoLabels": {
       "empNumber": "Employee #",
       "nationalId": "National ID",
       "phone": "Phone",
-      "jobTitle": "Job Title",
       "position": "Position",
       "event": "Event",
       "startDate": "Start Date",
@@ -266,7 +273,7 @@
     "title": "Mass Employee Update",
     "description": "Download the template, edit employee data in Excel, then upload to apply changes in bulk.",
     "step1": "Download Template",
-    "step1Desc": "The template is pre-filled with all current employees. Editable columns: <b>Full Name, National ID/Iqama, Phone, Salary, Start Date, Event, Notes</b>. A second sheet lists valid Event names.",
+    "step1Desc": "The template is pre-filled with all current employees. Editable columns: <b>Full Name, National ID/Iqama, Phone, Salary, Start Date, Event, Position, Notes</b>. Reference sheets list valid Event names and Position titles.",
     "downloadButton": "Download Bulk Update Template (.xlsx)",
     "step2": "Upload Modified File",
     "uploadHint": "Click to select your modified Excel file",
@@ -293,6 +300,9 @@
     "scheduleEnded": "Schedule assignment ended",
     "employeeUpdated": "Employee updated",
     "profileUpdated": "Profile updated",
+    "nameUpdated": "Name updated",
+    "photoReplaced": "Photo replaced",
+    "photoReplaceFailed": "Photo replace failed",
     "sentToOffboarding": "Employee sent to offboarding pipeline",
     "reinstated": "Employee reinstated",
     "paymentUpdated": "Payment method updated",

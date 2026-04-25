@@ -199,6 +199,11 @@
   },
   "profile": {
     "smpBadge": "مزوّد قوى",
+    "editName": "تعديل الاسم",
+    "namePlaceholder": "الاسم الكامل (إنجليزي)",
+    "changePhoto": "تغيير الصورة",
+    "save": "حفظ",
+    "cancel": "إلغاء",
     "contact": "التواصل",
     "whatsapp": "واتساب:",
     "location": "الموقع",
