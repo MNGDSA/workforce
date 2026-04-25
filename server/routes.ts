@@ -79,6 +79,7 @@ import {
   attendanceSubmissions,
   otpVerifications,
   users,
+  auditLogs,
   type InsertPayrollAdjustment,
 } from "@shared/schema";
 import { eq, and, sql, desc, inArray, count } from "drizzle-orm";
@@ -8888,6 +8889,11 @@ export async function registerRoutes(
       if (paymentMethod === "cash" && !reason) {
         return res.status(400).json({ error: tr(req, "error.cashReasonRequired") });
       }
+      // Task #189 — capture the previous method so the audit log carries a
+      // structured `from → to` payload that the inline history view can
+      // render without parsing free-text descriptions.
+      const previous = await storage.getWorkforceRecord(req.params.id);
+      const previousMethod = previous?.paymentMethod ?? "bank_transfer";
       const updated = await storage.updateWorkforceRecord(req.params.id, {
         paymentMethod,
         paymentMethodReason: paymentMethod === "cash" ? reason : null,
@@ -8895,8 +8901,68 @@ export async function registerRoutes(
         paymentMethodSetAt: new Date() as any,
       } as any);
       if (!updated) return res.status(404).json({ error: tr(req, "error.employeeNotFound") });
-      await logAudit(req, { action: "update_payment_method", entityType: "workforce", entityId: req.params.id, description: `Payment method changed to ${paymentMethod}${reason ? `: ${reason}` : ""}` });
-      return res.json(updated);
+      await logAudit(req, {
+        action: "update_payment_method",
+        entityType: "workforce",
+        entityId: req.params.id,
+        employeeNumber: updated.employeeNumber ?? undefined,
+        description: `Payment method changed from ${previousMethod} to ${paymentMethod}${reason ? `: ${reason}` : ""}`,
+        metadata: { from: previousMethod, to: paymentMethod, reason: reason ?? null },
+      });
+      // Task #189 — return the joined Employee shape (matches the
+      // `/candidate-profile` PATCH pattern) so the open profile dialog
+      // can refresh in place without losing candidate fields like
+      // fullNameEn/photoUrl that the raw workforce row doesn't carry.
+      const refreshed = await storage.getWorkforceEmployee(req.params.id);
+      return res.json(refreshed ?? updated);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // Task #189 — inline payment-method history for the employee profile.
+  // Returns the most-recent N audit entries with action `update_payment_method`
+  // for this workforce record. Permission-gated identically to the PATCH
+  // route. We expose only the fields the UI renders (no metadata leakage).
+  app.get("/api/workforce/:id/payment-method-history", requirePermission("workforce:payment_method"), async (req: Request, res: Response) => {
+    try {
+      const limit = Math.min(parseInt(String(req.query.limit ?? "10"), 10) || 10, 50);
+      const rows = await db
+        .select({
+          id: auditLogs.id,
+          actorName: auditLogs.actorName,
+          createdAt: auditLogs.createdAt,
+          metadata: auditLogs.metadata,
+          description: auditLogs.description,
+        })
+        .from(auditLogs)
+        .where(and(
+          eq(auditLogs.action, "update_payment_method"),
+          eq(auditLogs.entityType, "workforce"),
+          eq(auditLogs.entityId, req.params.id),
+        ))
+        .orderBy(desc(auditLogs.createdAt))
+        .limit(limit);
+      // Task #189 — explicit response contract. Whitelist `metadata`
+      // down to {from, to, reason} so unrelated keys (added later by
+      // any caller of logAudit, e.g. ip/user-agent helpers) cannot
+      // leak through this read endpoint. Drop `actorId` for the same
+      // reason — the UI only renders `actorName`.
+      const sanitized = rows.map((r) => {
+        const m = (r.metadata ?? null) as Record<string, unknown> | null;
+        return {
+          id: r.id,
+          actorName: r.actorName,
+          createdAt: r.createdAt,
+          description: r.description,
+          metadata: m
+            ? {
+                from: typeof m.from === "string" ? m.from : null,
+                to: typeof m.to === "string" ? m.to : null,
+                reason: typeof m.reason === "string" ? m.reason : null,
+              }
+            : null,
+        };
+      });
+      return res.json(sanitized);
     } catch (err) { return handleError(res, err); }
   });
 

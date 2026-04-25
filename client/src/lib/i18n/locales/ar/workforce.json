@@ -184,9 +184,17 @@
       "cash": "نقدًا",
       "cashReasonLabel": "سبب الدفع نقدًا",
       "cashReasonPlaceholder": "مثال: لا يوجد حساب بنكي",
+      "cashWpsWarning": "سيُستثنى المدفوع لهم نقدًا من ملف تصدير البنك (WPS) ويجب صرف رواتبهم يدويًا.",
+      "bankConfirmPrompt": "تأكيد التحويل إلى الدفع عبر التحويل البنكي؟ سيُدرج الموظف في ملف تصدير البنك التالي.",
       "confirmCash": "تأكيد النقد",
+      "confirmBank": "تأكيد التحويل البنكي",
       "saving": "جاري الحفظ…",
-      "reasonLine": "السبب: {reason}"
+      "saved": "تم الحفظ",
+      "reasonLine": "السبب: {reason}",
+      "setByLine": "تم التحديد بواسطة {name} · {date}",
+      "unknownActor": "مستخدم غير معروف",
+      "historyToggle": "سجل التغييرات ({n})",
+      "historyLoading": "جاري تحميل السجل…"
     },
     "emergency": {
       "title": "جهة الاتصال للطوارئ",

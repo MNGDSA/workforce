@@ -184,9 +184,17 @@
       "cash": "Cash",
       "cashReasonLabel": "Reason for cash payment",
       "cashReasonPlaceholder": "e.g. No bank account",
+      "cashWpsWarning": "Cash payees are excluded from the bank export (WPS) and must be paid manually.",
+      "bankConfirmPrompt": "Switch this employee back to Bank Transfer? They'll be included in the next bank export file.",
       "confirmCash": "Confirm Cash",
+      "confirmBank": "Confirm Bank Transfer",
       "saving": "Saving…",
-      "reasonLine": "Reason: {reason}"
+      "saved": "Saved",
+      "reasonLine": "Reason: {reason}",
+      "setByLine": "Set by {name} · {date}",
+      "unknownActor": "Unknown user",
+      "historyToggle": "Change history ({n})",
+      "historyLoading": "Loading history…"
     },
     "emergency": {
       "title": "Emergency Contact",

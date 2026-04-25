@@ -81,6 +81,8 @@ import {
   Banknote,
   Landmark,
   Coins,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import {
   Table,
@@ -122,6 +124,8 @@ type Employee = {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  paymentMethodSetBy?: string | null;
+  paymentMethodSetAt?: string | null;
   fullNameEn: string | null;
   nationalId: string | null;
   phone: string | null;
@@ -1395,7 +1399,7 @@ function EmployeeDetailDialog({
                 <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-3">
                   <Banknote className="h-3.5 w-3.5" /> {t("dialog.payment.title")}
                 </Label>
-                <PaymentMethodToggle employee={employee} />
+                <PaymentMethodToggle employee={employee} onEmployeeRefreshed={onEmployeeRefreshed} />
               </div>
 
               <Separator className="bg-zinc-800" />
@@ -1909,27 +1913,104 @@ function EmployeeDetailDialog({
   );
 }
 
-function PaymentMethodToggle({ employee }: { employee: Employee }) {
+// Task #189 — payment-method history row shape returned by
+// GET /api/workforce/:id/payment-method-history. Older rows logged
+// before the structured-metadata switch may carry a null `metadata`
+// or omit `from`; the UI tolerates both and falls back to the
+// human-readable `description` when needed.
+type PaymentMethodHistoryRow = {
+  id: string;
+  actorId: string | null;
+  actorName: string | null;
+  createdAt: string;
+  metadata: { from?: string | null; to?: string | null; reason?: string | null } | null;
+  description: string;
+};
+
+function PaymentMethodToggle({
+  employee,
+  onEmployeeRefreshed,
+}: {
+  employee: Employee;
+  onEmployeeRefreshed?: (emp: Employee) => void;
+}) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const { t } = useTranslation("workforce");
-  const [showCashReason, setShowCashReason] = useState(false);
+  const { t, i18n } = useTranslation("workforce");
+  // `pendingSwitch` drives the inline confirmation panels: when set to
+  // "cash" we render the WPS-impact warning and reason input; when set
+  // to "bank_transfer" we render a small confirm/cancel pair (no
+  // reason). The Cash button no longer fires the request directly —
+  // both directions now require an explicit confirmation step so a
+  // misplaced click cannot silently flip a payee.
+  const [pendingSwitch, setPendingSwitch] = useState<"cash" | "bank_transfer" | null>(null);
   const [reason, setReason] = useState("");
+  // Transient "just saved" check — separate from `toggleMut.isPending`
+  // so it can outlive the mutation's own lifecycle (~2s after success).
+  const [justSavedAt, setJustSavedAt] = useState<number | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  // Reset transient UI when the parent swaps to a different employee
+  // so a half-open confirm panel from employee A doesn't leak into
+  // employee B's profile.
+  useEffect(() => {
+    setPendingSwitch(null);
+    setReason("");
+    setJustSavedAt(null);
+    setHistoryOpen(false);
+  }, [employee.id]);
+
+  // Auto-clear the green check after 2s. Keying on the timestamp lets
+  // back-to-back saves restart the countdown cleanly.
+  useEffect(() => {
+    if (!justSavedAt) return;
+    const tid = setTimeout(() => setJustSavedAt(null), 2000);
+    return () => clearTimeout(tid);
+  }, [justSavedAt]);
 
   const toggleMut = useMutation({
     mutationFn: (data: { paymentMethod: string; reason: string }) =>
       apiRequest("PATCH", `/api/workforce/${employee.id}/payment-method`, data).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/workforce"] }); toast({ title: t("toast.paymentUpdated") }); setShowCashReason(false); setReason(""); },
+    onSuccess: (updated: Employee) => {
+      qc.invalidateQueries({ queryKey: ["/api/workforce"] });
+      qc.invalidateQueries({ queryKey: ["/api/workforce/payment-method-history", employee.id] });
+      // Push the freshly-saved record back to the parent dialog so the
+      // active/inactive button colours and reason line refresh without
+      // reopening the profile. Mirrors the pattern profileMutation
+      // already uses elsewhere in EmployeeDetailDialog.
+      if (onEmployeeRefreshed) onEmployeeRefreshed(updated);
+      toast({ title: t("toast.paymentUpdated") });
+      setPendingSwitch(null);
+      setReason("");
+      setJustSavedAt(Date.now());
+    },
     onError: (e: any) => toast({ title: t("toast.error"), description: e.message, variant: "destructive" }),
   });
 
+  const { data: history = [], isLoading: historyLoading } = useQuery<PaymentMethodHistoryRow[]>({
+    queryKey: ["/api/workforce/payment-method-history", employee.id],
+    queryFn: () => apiRequest("GET", `/api/workforce/${employee.id}/payment-method-history?limit=10`).then(r => r.json()),
+    enabled: !!employee.id,
+  });
+
   const current = employee.paymentMethod ?? "bank_transfer";
+  // Prefer the audit-log derived "set by/at" because it carries the
+  // setter's display name as a snapshot (no extra user fetch needed).
+  // Fall back to the raw column timestamp for the rare case where the
+  // record was seeded before any audit entry exists.
+  const lastChange = history[0];
+  const setByName = lastChange?.actorName ?? null;
+  const setAt = lastChange?.createdAt ?? employee.paymentMethodSetAt ?? null;
+
+  const methodLabel = (m?: string | null) =>
+    m === "cash" ? t("dialog.payment.cash") : t("dialog.payment.bankTransfer");
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-center">
         <button
-          onClick={() => current !== "bank_transfer" && toggleMut.mutate({ paymentMethod: "bank_transfer", reason: "" })}
+          onClick={() => { if (current !== "bank_transfer") setPendingSwitch("bank_transfer"); }}
+          disabled={toggleMut.isPending}
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-sm border text-xs font-medium transition-colors ${
             current === "bank_transfer"
               ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400"
@@ -1940,7 +2021,8 @@ function PaymentMethodToggle({ employee }: { employee: Employee }) {
           <Landmark className="h-3.5 w-3.5" /> {t("dialog.payment.bankTransfer")}
         </button>
         <button
-          onClick={() => { if (current !== "cash") setShowCashReason(true); }}
+          onClick={() => { if (current !== "cash") setPendingSwitch("cash"); }}
+          disabled={toggleMut.isPending}
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-sm border text-xs font-medium transition-colors ${
             current === "cash"
               ? "border-amber-500/50 bg-amber-500/10 text-amber-400"
@@ -1950,21 +2032,142 @@ function PaymentMethodToggle({ employee }: { employee: Employee }) {
         >
           <Coins className="h-3.5 w-3.5" /> {t("dialog.payment.cash")}
         </button>
+        {justSavedAt && (
+          <span className="flex items-center gap-1 text-emerald-400 text-[11px] font-medium" data-testid="text-payment-saved">
+            <CheckCircle2 className="h-3.5 w-3.5" /> {t("dialog.payment.saved")}
+          </span>
+        )}
       </div>
-      {showCashReason && (
+
+      {pendingSwitch === "cash" && (
         <div className="space-y-2 p-3 bg-amber-500/5 border border-amber-500/20 rounded-sm">
-          <label className="text-zinc-400 text-xs">{t("dialog.payment.cashReasonLabel")}</label>
-          <Input value={reason} onChange={e => setReason(e.target.value)} placeholder={t("dialog.payment.cashReasonPlaceholder")} className="h-7 text-xs bg-zinc-900 border-zinc-700" data-testid="input-cash-reason" />
+          <div className="flex items-start gap-2 text-amber-300 text-[11px]" data-testid="text-cash-wps-warning">
+            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <p>{t("dialog.payment.cashWpsWarning")}</p>
+          </div>
+          <label className="text-zinc-400 text-xs block">{t("dialog.payment.cashReasonLabel")}</label>
+          <Input
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder={t("dialog.payment.cashReasonPlaceholder")}
+            className="h-7 text-xs bg-zinc-900 border-zinc-700"
+            data-testid="input-cash-reason"
+          />
           <div className="flex gap-2">
-            <Button size="sm" className="h-6 text-xs bg-amber-600 hover:bg-amber-700" disabled={!reason.trim() || toggleMut.isPending} onClick={() => toggleMut.mutate({ paymentMethod: "cash", reason })} data-testid="button-confirm-cash">
+            <Button
+              size="sm"
+              className="h-6 text-xs bg-amber-600 hover:bg-amber-700"
+              disabled={!reason.trim() || toggleMut.isPending}
+              onClick={() => toggleMut.mutate({ paymentMethod: "cash", reason })}
+              data-testid="button-confirm-cash"
+            >
               {toggleMut.isPending ? t("dialog.payment.saving") : t("dialog.payment.confirmCash")}
             </Button>
-            <Button size="sm" variant="ghost" className="h-6 text-xs text-zinc-500" onClick={() => { setShowCashReason(false); setReason(""); }} data-testid="button-cancel-cash">{t("dialog.actions.cancel")}</Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-xs text-zinc-500"
+              onClick={() => { setPendingSwitch(null); setReason(""); }}
+              data-testid="button-cancel-cash"
+            >
+              {t("dialog.actions.cancel")}
+            </Button>
           </div>
         </div>
       )}
-      {employee.paymentMethodReason && !showCashReason && (
-        <p className="text-[10px] text-zinc-500">{t("dialog.payment.reasonLine", { reason: employee.paymentMethodReason })}</p>
+
+      {pendingSwitch === "bank_transfer" && (
+        <div className="space-y-2 p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-sm">
+          <p className="text-emerald-300 text-[11px]" data-testid="text-bank-confirm-prompt">
+            {t("dialog.payment.bankConfirmPrompt")}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="h-6 text-xs bg-emerald-600 hover:bg-emerald-700"
+              disabled={toggleMut.isPending}
+              onClick={() => toggleMut.mutate({ paymentMethod: "bank_transfer", reason: "" })}
+              data-testid="button-confirm-bank"
+            >
+              {toggleMut.isPending ? t("dialog.payment.saving") : t("dialog.payment.confirmBank")}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-xs text-zinc-500"
+              onClick={() => setPendingSwitch(null)}
+              data-testid="button-cancel-bank"
+            >
+              {t("dialog.actions.cancel")}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {employee.paymentMethodReason && !pendingSwitch && (
+        <p className="text-[10px] text-zinc-500" data-testid="text-payment-reason-line">
+          {t("dialog.payment.reasonLine", { reason: employee.paymentMethodReason })}
+        </p>
+      )}
+
+      {setByName && setAt && !pendingSwitch && (
+        <p className="text-[10px] text-zinc-500" data-testid="text-payment-set-by">
+          {t("dialog.payment.setByLine", {
+            name: setByName,
+            date: formatDateI18n(setAt, i18n.language, {
+              day: "numeric", month: "short", year: "numeric",
+              hour: "2-digit", minute: "2-digit", hour12: false,
+            }),
+          })}
+        </p>
+      )}
+
+      {history.length > 0 && (
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={() => setHistoryOpen(o => !o)}
+            className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+            data-testid="button-toggle-payment-history"
+          >
+            {historyOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            {t("dialog.payment.historyToggle", { n: history.length })}
+          </button>
+          {historyOpen && (
+            <div className="mt-2 space-y-1.5 border-s border-zinc-800 ps-3" data-testid="list-payment-history">
+              {historyLoading && <p className="text-[10px] text-zinc-600">{t("dialog.payment.historyLoading")}</p>}
+              {history.map(row => {
+                const fromLabel = methodLabel(row.metadata?.from);
+                const toLabel = methodLabel(row.metadata?.to);
+                const reasonText = row.metadata?.reason ?? null;
+                return (
+                  <div
+                    key={row.id}
+                    className="text-[10px] text-zinc-500 leading-relaxed"
+                    data-testid={`row-payment-history-${row.id}`}
+                  >
+                    <div className="text-zinc-400">
+                      <span className="text-zinc-300">{row.actorName ?? t("dialog.payment.unknownActor")}</span>
+                      <span className="mx-1">·</span>
+                      <span dir="ltr">{formatDateI18n(row.createdAt, i18n.language, {
+                        day: "numeric", month: "short", year: "numeric",
+                        hour: "2-digit", minute: "2-digit", hour12: false,
+                      })}</span>
+                    </div>
+                    <div>
+                      {row.metadata?.from && row.metadata?.to ? (
+                        <span>{fromLabel} → {toLabel}</span>
+                      ) : (
+                        <span>{row.description}</span>
+                      )}
+                      {reasonText && <span className="text-zinc-600"> · {reasonText}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
