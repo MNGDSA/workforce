@@ -144,6 +144,8 @@
   "toast": {
     "profileUpdated": "تم تحديث الملف",
     "saveFailed": "فشل الحفظ",
+    "photoReplaced": "تم استبدال الصورة",
+    "photoReplaceFailed": "فشل استبدال الصورة",
     "candidateArchived": "تمت أرشفة المرشح",
     "candidateRestored": "تمت استعادة المرشح",
     "archiveFailed": "تعذرت أرشفة المرشح",

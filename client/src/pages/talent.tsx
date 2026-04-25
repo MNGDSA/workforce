@@ -605,10 +605,17 @@ function CandidateProfileSheet({
     mutationFn: async (file: File) => {
       const fd = new FormData();
       fd.append("file", file);
+      // Pass the active UI locale so the server's localized error messages
+      // (e.g. "photo.qualityFailed") come back in the language the admin
+      // is currently looking at — without this header the browser sends
+      // its OS default and the server replies in English even when the
+      // workspace is in Arabic. Don't set Content-Type — the browser
+      // sets it (with the multipart boundary) for FormData uploads.
       const res = await fetch(`/api/admin/candidates/${candidate!.id}/photo`, {
         method: "POST",
         body: fd,
         credentials: "include",
+        headers: { "Accept-Language": i18n.language || "ar" },
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));

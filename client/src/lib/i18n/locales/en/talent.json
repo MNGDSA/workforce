@@ -135,6 +135,8 @@
   "toast": {
     "profileUpdated": "Profile updated",
     "saveFailed": "Save failed",
+    "photoReplaced": "Photo replaced",
+    "photoReplaceFailed": "Photo replace failed",
     "candidateArchived": "Candidate archived",
     "candidateRestored": "Candidate restored",
     "archiveFailed": "Failed to archive candidate",
