@@ -182,3 +182,30 @@ Issues that have been fixed and verified. Kept for historical reference. Each en
 - **Related Tasks:** #69
 - **Status notes:**
   - 2026-04-19 — Fixed via task #69. Added Excel/CSV export endpoint at `/api/audit-logs?format=csv|xlsx&export=true` (server-side keyset pagination, streamed CSV, chunked XLSX, capped at 500K rows). Replaced page-based pagination with `useInfiniteQuery` + `@tanstack/react-virtual` virtualized infinite scroll keyed by `createdAt` cursor with an IntersectionObserver sentinel. The existing `audit_logs_created_at_idx` index already supports the keyset pagination path.
+
+---
+
+## Audits
+
+Standing reference notes from systematic codebase sweeps. These are not bugs — they document what *was already true* after a sweep so a future engineer can extend or verify without redoing the whole search.
+
+### AUDIT-001 — File-upload ACL intent for every `uploadFile(...)` call site (Task #202)
+
+- **Audited:** 2026-04-25
+- **Trigger:** Same private-ACL upload bug hit three times in a row — Task #198 (ID card backgrounds), Task #200 (contract template logos), and ISSUE-008 (attendance selfies, deferred). The pattern is always identical: `uploadFile(...)` is called without `{ isPublic: true }`, the URL is then rendered directly by the browser via `<img>` (or fetched cross-origin), and the bug is invisible in dev because dev serves `/uploads` from local disk.
+- **Scope:** Every call site of `uploadFile(...)` under `server/`. Re-find with `rg -n "uploadFile\(" server/`.
+
+| # | Call site | Asset | Intent | Why | Status |
+|---|---|---|---|---|---|
+| 1a | `server/lib/photo-upload-handler.ts` (`POST /api/candidates/:id/documents`, `docType === "photo"`) | Candidate photo | **public-read** | Rendered directly via plain `<img src={photoUrl}>` across the admin panel (talent, workforce, dashboard, org-chart, job-posting-detail, schedules) and the candidate portal, and embedded in printed ID cards (`client/src/lib/id-card-renderer.ts`, `client/src/lib/card-renderer.tsx`). Random filenames, low enumeration risk. | OK — passes `{ isPublic: docType === "photo" }`. |
+| 1b | `server/lib/photo-upload-handler.ts` (same route, `docType ∈ {nationalId, iban, resume}`) | Candidate PII attachments (national ID copy, IBAN certificate, resume) | **private** | PII; must never be served from a public CDN. Every consumer routes through `toProxiedFileUrl(...)` → `GET /api/files/uploads/...` (`server/routes.ts:609`), which is gated by `requireAuth` + an owner-or-`candidates:read` check. Flipping these to public-read would silently leak ID copies / bank certificates. | OK — passes `{ isPublic: false }` via the same ternary. |
+| 2 | `server/routes.ts:5240` (`POST /api/contract-templates/:id/logo`) | Contract template logo | **public-read** | Rendered directly via `<img src={template.logoUrl}>` in onboarding contract preview, candidate portal, and embedded in generated contract PDFs. | OK — fixed in Task #200; see ISSUE-009. |
+| 3 | `server/routes.ts:5671` (`POST /api/id-card-templates/:id/background`) | ID card template background image | **public-read** | Rendered via CSS `background-image: url(...)` in the card designer preview and the print window (`client/src/lib/id-card-renderer.ts`). | OK — fixed in Task #198. |
+| 4 | `server/routes.ts:7719` (`POST /api/attendance-mobile/submit`) | Worker attendance selfie | **private** | Biometric / PII; must stay private at rest on DO Spaces. Admin reviewers fetch the photo through the admin-only proxy `GET /api/attendance-mobile/submissions/:id/photo` (gated on `attendance_mobile:review_read`), which streams bytes via `getFileBuffer(...)`. The admin inbox at `client/src/pages/inbox.tsx` renders the proxy URL, never the raw Spaces URL. | OK — fixed in Task #201; see ISSUE-008 (Resolved). |
+| 5 | `server/routes.ts:8104` (`POST /api/admin/candidates/:id/photo`) | Admin-side candidate photo replacement | **public-read** | Same end-state as 1a — writes to `candidates.photo_url`, which is rendered directly via `<img>` in every admin/portal screen above. Flipping this to private would re-introduce the bug for any photo replaced by an admin. | OK — passes `{ isPublic: true }`. |
+
+- **Routes that take a multipart upload but DO NOT call `uploadFile(...)`** (intentionally — bytes are parsed in-memory and discarded, so there is no ACL to set):
+  - `server/routes.ts:3954` — `POST /api/workforce/bulk-update` (XLSX is parsed via `uploadXlsx` for bulk row updates).
+  - `server/routes.ts:8583` — `POST /api/pay-runs/:id/import-bank-response` (bank response file is parsed into rows, not stored as an asset).
+- **Backfill posture:** Every public-read site has either an existing one-off backfill (e.g. `scripts/backfill-public-logos.ts` for ISSUE-009) or is fed by a write path that produces fresh URLs each upload. The previously deferred attendance selfies (ISSUE-008) needed no backfill because Task #201 chose to keep them private and added an admin-only proxy — already-uploaded selfies remain valid through the new proxy.
+- **How to extend this audit if you add a new `uploadFile(...)` call site:** add a row above with the same shape, add a one-line comment at the call site referencing this audit, and confirm whether the URL is consumed via direct `<img>` / `<a href>` (→ public-read) or via the authenticated `/api/files/...` proxy (→ private).

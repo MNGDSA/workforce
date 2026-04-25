@@ -5227,6 +5227,7 @@ export async function registerRoutes(
   app.post("/api/contract-templates/:id/logo", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) return res.status(400).json({ message: tr(req, "file.noUpload") });
+      // ACL intent: **public-read** (Task #202 audit row 2 in KNOWN_ISSUES.md).
       // Task #200 — same root cause as Task #198 (ID card backgrounds).
       // The contract logo is rendered directly by the browser via plain
       // `<img src={template.logoUrl}>` in `client/src/pages/onboarding.tsx`
@@ -5659,6 +5660,17 @@ export async function registerRoutes(
   app.post("/api/id-card-templates/:id/background", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) return res.status(400).json({ message: tr(req, "file.noUpload") });
+      // ACL intent: **public-read** (Task #202 audit row 3 in KNOWN_ISSUES.md).
+      // Task #198 — ID card backgrounds are template assets that the browser
+      // loads directly via `<div style="background-image:url(...)">` in the
+      // designer preview and the print window (see
+      // `client/src/lib/id-card-renderer.ts`). In production they live in DO
+      // Spaces; without `isPublic:true` the bucket ACL defaults to "private"
+      // and the browser receives 403 on every reload, making the saved
+      // background appear to vanish even though the URL persists in
+      // `id_card_templates.background_image_url`. Mirrors the candidate-photo
+      // flow in `server/lib/photo-upload-handler.ts` and the contract-logo
+      // flow at `POST /api/contract-templates/:id/logo` (Task #200).
       const imageUrl = await uploadFile(
         req.file.path,
         req.file.filename,
@@ -7690,6 +7702,7 @@ export async function registerRoutes(
       const noShiftAssigned = !shiftInfo;
       // ── End pre-pipeline gate ──
 
+      // ACL intent: **private** (Task #202 audit row 4 in KNOWN_ISSUES.md).
       // Task #201 — Attendance selfies are biometric data, so we keep
       // the upload private (default ACL on DO Spaces). The admin inbox
       // does NOT render these via the raw Spaces URL — it goes through
@@ -8113,8 +8126,18 @@ export async function registerRoutes(
         const candidate = await storage.getCandidate(candidateId);
         if (!candidate) return res.status(404).json({ message: tr(req, "candidate.notFound") });
 
+        // ACL intent: **public-read** (Task #202 audit row 5 in KNOWN_ISSUES.md).
         // Upload first so Rekognition can fetch the bytes from S3 (matches
         // the portal flow in createUploadDocumentsHandler).
+        // Task #202 — `isPublic: true` is REQUIRED here, not optional. The
+        // resulting URL is written to `candidates.photo_url` and is then
+        // rendered directly via plain `<img src={photoUrl}>` across the
+        // admin panel (talent, workforce, dashboard, org-chart,
+        // job-posting-detail, schedules) and the candidate portal, and is
+        // also embedded in printed ID cards. Without public-read the DO
+        // Spaces bucket defaults to "private" and every browser load 403s
+        // — same regression class as Task #198 / Task #200 / ISSUE-008.
+        // Mirrors `server/lib/photo-upload-handler.ts` for `docType === "photo"`.
         const fileUrl = await uploadFile(
           req.file.path,
           req.file.filename,

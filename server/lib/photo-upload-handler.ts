@@ -77,6 +77,28 @@ export function createUploadDocumentsHandler(deps: PhotoUploadDeps): RequestHand
         return res.status(400).json({ message: tr(req, "file.invalidDocType") });
       }
       const localPath = req.file.path;
+      // ACL intent: **mixed by docType** — public-read for `photo`, private
+      // for `nationalId` / `iban` / `resume` (Task #202 audit rows 1a + 1b
+      // in KNOWN_ISSUES.md).
+      // Task #202 — per-doc-type ACL is intentional and is the canonical
+      // pattern referenced by sibling upload routes:
+      //   • `photo` is **public-read** because the candidate photo is rendered
+      //     directly via plain `<img src={photoUrl}>` across the admin panel
+      //     (talent, workforce, dashboard, org-chart, job-posting-detail,
+      //     schedules) and the candidate portal, and is also embedded in
+      //     printed ID cards (`client/src/lib/id-card-renderer.ts`,
+      //     `client/src/lib/card-renderer.tsx`). Without `isPublic:true` the
+      //     DO Spaces bucket defaults to "private" and every browser load
+      //     403s — same regression class as Task #198 / Task #200 / ISSUE-008.
+      //     Filenames are random per upload so enumeration is not a concern.
+      //   • `nationalId`, `iban`, `resume` are **private** because they are
+      //     PII attachments that must never be served from a public CDN.
+      //     The client never embeds them directly: every consumer (candidate
+      //     portal, talent grid, onboarding checklist) routes them through
+      //     `toProxiedFileUrl(...)` → `GET /api/files/uploads/...`, which is
+      //     gated by `requireAuth` + an owner-or-`candidates:read` check (see
+      //     route at `server/routes.ts:609`). Flipping these to public-read
+      //     would silently leak ID copies / bank certificates.
       const fileUrl = await uploadFile(localPath, req.file.filename, getMimeType(req.file.filename), { isPublic: docType === "photo" });
       let photoQualityResult: FaceQualityResult | undefined;
       let rotationApplied: 90 | -90 | undefined;
