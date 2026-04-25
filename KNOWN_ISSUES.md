@@ -70,17 +70,17 @@ Do *not* log here: feature requests, design questions, performance optimization 
 
 Issues that have been logged but no one is actively investigating yet.
 
-### ISSUE-001 — [EXAMPLE — delete once first real entry is added] Sample entry showing the template
+### ISSUE-008 — Attendance selfies upload to private DO Spaces ACL but admin UI renders them as plain `<img>` (403 in production)
 
-- **Logged:** 2026-04-18
-- **Severity:** Low
-- **Component:** Documentation
-- **Description:** This is a placeholder entry that demonstrates the format every issue should follow. Delete it as soon as the first real issue is logged.
-- **Impact:** None — example only.
-- **Workaround:** None needed.
-- **Related Tasks:** #63
+- **Logged:** 2026-04-25
+- **Severity:** High
+- **Component:** Backend + Admin Panel
+- **Description:** `POST /api/attendance-mobile/submit` (server/routes.ts:7717) calls `uploadFile(...)` without `{ isPublic: true }`. In production this stores the worker selfie on DigitalOcean Spaces with the default "private" ACL. The admin inbox at `client/src/pages/inbox.tsx` renders the photo via plain `<img src={item.metadata.submittedPhotoUrl}>` with no proxy or signed URL — so every flagged attendance review shows a broken image. Same root-cause class as ISSUE-009 (contract template logos) and Task #198 (ID card backgrounds), but explicitly *not* fixed in Task #200 because attendance selfies are more sensitive than template assets and the privacy-vs-convenience tradeoff deserves an explicit decision.
+- **Impact:** Reviewers cannot see the submitted selfie when triaging flagged attendance submissions in production. Approve/reject decisions are made blind. Dev is unaffected because dev serves files from local disk via `/uploads`.
+- **Workaround:** Approve/reject without visual confirmation (not safe), or reviewers temporarily generate a presigned URL out-of-band.
+- **Related Tasks:** #200 (decision deferred — flagged here for follow-up).
 - **Status notes:**
-  - 2026-04-18 — Created alongside the KNOWN_ISSUES.md scaffold.
+  - 2026-04-25 — Logged. Decision pending between (a) flipping the upload to public-read with opaque random filenames (matches the existing candidate-photo pattern in `server/lib/photo-upload-handler.ts:80` for `docType === "photo"`, lowest-effort fix), or (b) keeping ACL private and adding a server-side admin-only image proxy (or short-lived presigned URL) that requires `attendance_mobile:review_read`. Option (b) is the privacy-correct choice but requires both backend and frontend work.
 
 ---
 
@@ -105,6 +105,19 @@ Issues that someone has picked up and is actively diagnosing or working on a fix
 ## Resolved
 
 Issues that have been fixed and verified. Kept for historical reference. Each entry should end with a dated note describing what fixed it.
+
+### ISSUE-009 — Contract template logos upload to private DO Spaces ACL — invisible on contract preview / PDF in production
+
+- **Logged:** 2026-04-25
+- **Severity:** High
+- **Component:** Backend + Admin Panel
+- **Description:** `POST /api/contract-templates/:id/logo` (server/routes.ts:5230) called `uploadFile(...)` without `{ isPublic: true }`. In production the logo file landed on DigitalOcean Spaces with the default "private" ACL, so the browser got 403 every time it tried to render `template.logoUrl` in the onboarding contract preview, the candidate portal, and embedded contract PDFs. The URL persisted in `contract_templates.logo_url`, so the admin saw "logo saved" but it never appeared anywhere downstream. Dev was unaffected because dev serves files from local disk via `/uploads`. Same root-cause class as Task #198 (ID card backgrounds).
+- **Impact:** Every contract template uploaded in production had a broken logo on the preview screen, the candidate portal preview, and the generated PDF. Branding-critical defect for any operator who set a logo since DO Spaces was wired up.
+- **Workaround:** None.
+- **Related Tasks:** #200
+- **Status notes:**
+  - 2026-04-25 — Logged.
+  - 2026-04-25 — Fixed in task #200. Forward fix: `POST /api/contract-templates/:id/logo` now passes `{ isPublic: true }` to `uploadFile`, mirroring the existing fix in `POST /api/id-card-templates/:id/background` and the candidate-photo upload in `server/lib/photo-upload-handler.ts:80`. Backfill: added `scripts/backfill-public-logos.ts` (dry-run by default, `--apply` flips ACLs in place via `PutObjectAclCommand` so existing URLs keep resolving — no re-upload needed). Operator runs the backfill once on production to recover already-uploaded logos. Verified: type-check clean (`npx tsc --noEmit`); inline code comment at the upload site documents the dev-vs-prod ACL drift to prevent regressions.
 
 ### ISSUE-002 — Job posting applicants import — hard drop
 

@@ -5227,7 +5227,22 @@ export async function registerRoutes(
   app.post("/api/contract-templates/:id/logo", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) return res.status(400).json({ message: tr(req, "file.noUpload") });
-      const logoUrl = await uploadFile(req.file.path, req.file.filename, getMimeType(req.file.filename));
+      // Task #200 — same root cause as Task #198 (ID card backgrounds).
+      // The contract logo is rendered directly by the browser via plain
+      // `<img src={template.logoUrl}>` in `client/src/pages/onboarding.tsx`
+      // and `client/src/pages/candidate-portal.tsx`, and is also embedded
+      // in generated contract PDFs. In production those URLs point at DO
+      // Spaces; without `isPublic:true` the bucket ACL defaults to "private"
+      // and every logo request 403s — the saved logo silently disappears
+      // from the preview / PDF even though the URL persists in
+      // `contract_templates.logo_url`. Dev still works because dev serves
+      // files from local disk via the `/uploads` static handler.
+      const logoUrl = await uploadFile(
+        req.file.path,
+        req.file.filename,
+        getMimeType(req.file.filename),
+        { isPublic: true },
+      );
       const updated = await storage.updateContractTemplate(req.params.id, { logoUrl });
       if (!updated) return res.status(404).json({ message: tr(req, "template.notFound") });
       return res.json(updated);
@@ -7675,6 +7690,18 @@ export async function registerRoutes(
       const noShiftAssigned = !shiftInfo;
       // ── End pre-pipeline gate ──
 
+      // Task #200 — KNOWN ISSUE (deferred decision). This upload has the
+      // same shape as the bug fixed for ID card backgrounds (#198) and
+      // contract template logos (#200): in production it lands in DO
+      // Spaces with the default "private" ACL, but the admin inbox UI at
+      // `client/src/pages/inbox.tsx` renders it via plain
+      // `<img src={item.metadata.submittedPhotoUrl}>` with no proxy or
+      // signed URL, so reviewers will see a broken image on every flagged
+      // submission. We are NOT flipping it to public-read in this task on
+      // purpose: attendance selfies are more sensitive than template
+      // assets and the privacy-vs-convenience tradeoff deserves an
+      // explicit decision (admin-only proxy/signed URL vs. public-read
+      // with opaque random filenames). Tracked in KNOWN_ISSUES.md.
       const photoUrl = await uploadFile(req.file.path, req.file.filename, getMimeType(req.file.filename));
       const serverReceivedAt = new Date();
       // Task #85 step 6 — the server's wall clock at the moment the
