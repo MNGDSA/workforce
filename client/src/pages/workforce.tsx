@@ -2287,6 +2287,13 @@ export default function WorkforcePage() {
   const [printProgress, setPrintProgress] = useState<{ total: number; done: number } | null>(null);
   const [pickupSmsDialog, setPickupSmsDialog] = useState<{ open: boolean; employeeIds: string[] }>({ open: false, employeeIds: [] });
   const [pickupSmsSending, setPickupSmsSending] = useState(false);
+  const { data: pickupSmsStatus } = useQuery<{ active: boolean }>({
+    queryKey: ["/api/id-card-pickup-sms/status"],
+    queryFn: () => apiRequest("GET", "/api/id-card-pickup-sms/status").then(r => r.json()),
+    enabled: pickupSmsDialog.open,
+    staleTime: 0,
+  });
+  const pickupPluginActive = pickupSmsStatus?.active ?? true;
   const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false);
   const [bulkUpdateFile, setBulkUpdateFile] = useState<File | null>(null);
   const [bulkUpdateLoading, setBulkUpdateLoading] = useState(false);
@@ -3061,12 +3068,21 @@ export default function WorkforcePage() {
               <span className="text-xs text-muted-foreground">{tt("pickupSms.dialogHint")}</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {!pickupPluginActive && (
+            <div
+              className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-start gap-2"
+              data-testid="text-pickup-sms-no-plugin"
+            >
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>{tt("pickupSms.noPluginNote")}</span>
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pickupSmsSending} data-testid="button-pickup-sms-skip">
               {tt("pickupSms.skip")}
             </AlertDialogCancel>
             <AlertDialogAction
-              disabled={pickupSmsSending}
+              disabled={pickupSmsSending || !pickupPluginActive}
               data-testid="button-pickup-sms-send"
               onClick={async (e) => {
                 e.preventDefault();

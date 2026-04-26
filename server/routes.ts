@@ -1792,6 +1792,16 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
+  // Lightweight check used by the workforce print dialog to disable the Send
+  // button (and show an inline configure-gateway hint) when no SMS plugin is active.
+  // Uses workforce:update so the same admin who can print can also see the status.
+  app.get("/api/id-card-pickup-sms/status", requirePermission("workforce:update"), async (_req: Request, res: Response) => {
+    try {
+      const plugin = await storage.getActiveSmsPlugin();
+      return res.json({ active: !!plugin });
+    } catch (err) { return handleError(res, err); }
+  });
+
   app.post("/api/id-card-pickup-sms/send", requirePermission("workforce:update"), async (req: Request, res: Response) => {
     try {
       const { employeeIds } = req.body as { employeeIds?: unknown };
