@@ -387,6 +387,7 @@
     "sentToastDesc": "{skipped} skipped (no phone), {failed} failed.",
     "sendFailedToast": "Pickup SMS could not be sent",
     "noActivePluginToast": "No active SMS gateway configured",
-    "noPluginNote": "No active SMS gateway is configured. Set one up in Settings → Notifications → SMS Gateway."
+    "noPluginNote": "No active SMS gateway is configured. Set one up in Settings → Notifications → SMS Gateway.",
+    "statusErrorNote": "Could not check the SMS gateway status. Please try again."
   }
 }

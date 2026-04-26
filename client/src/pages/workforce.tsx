@@ -2287,11 +2287,12 @@ export default function WorkforcePage() {
   const [printProgress, setPrintProgress] = useState<{ total: number; done: number } | null>(null);
   const [pickupSmsDialog, setPickupSmsDialog] = useState<{ open: boolean; employeeIds: string[] }>({ open: false, employeeIds: [] });
   const [pickupSmsSending, setPickupSmsSending] = useState(false);
-  const { data: pickupSmsStatus, isLoading: pickupStatusLoading } = useQuery<{ active: boolean }>({
+  const { data: pickupSmsStatus, isError: pickupStatusError } = useQuery<{ active: boolean }>({
     queryKey: ["/api/id-card-pickup-sms/status"],
     queryFn: () => apiRequest("GET", "/api/id-card-pickup-sms/status").then(r => r.json()),
     enabled: pickupSmsDialog.open,
     staleTime: 0,
+    retry: 1,
   });
   // Default to "no plugin" until the status query resolves so Send is never
   // enabled in a no-plugin tenant during the loading window.
@@ -3077,6 +3078,15 @@ export default function WorkforcePage() {
             >
               <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
               <span>{tt("pickupSms.noPluginNote")}</span>
+            </div>
+          )}
+          {pickupStatusError && (
+            <div
+              className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-start gap-2"
+              data-testid="text-pickup-sms-status-error"
+            >
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>{tt("pickupSms.statusErrorNote")}</span>
             </div>
           )}
           <AlertDialogFooter>
