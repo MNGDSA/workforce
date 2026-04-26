@@ -54,3 +54,9 @@ id = "04PhoTeMKs10huAMqXdIr"
 uri = "file://exports/org-chart.tsx.txt"
 type = "text"
 title = "Org Chart — full source export (1,192 lines)"
+
+[[outputs]]
+id = "bAfMjYS5N366Cvl7jxJ52"
+uri = "file://exports/digitalocean-lessons-learned.md"
+type = "text"
+title = "DigitalOcean — Lessons Learned (full field-notes)"
