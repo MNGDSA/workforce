@@ -1756,6 +1756,16 @@ export async function registerRoutes(
         storage.getSystemSetting("id_card_pickup_venue"),
         storage.getSystemSetting("id_card_pickup_location_url"),
       ]);
+      // Persist defaults on first read so the tenant has explicit, editable
+      // rows in system_settings (true seed-on-first-read semantics).
+      const seeds: Promise<unknown>[] = [];
+      if (ar === undefined || ar === null) seeds.push(storage.setSystemSetting("id_card_pickup_sms_template_ar", ID_CARD_PICKUP_DEFAULT_AR));
+      if (en === undefined || en === null) seeds.push(storage.setSystemSetting("id_card_pickup_sms_template_en", ID_CARD_PICKUP_DEFAULT_EN));
+      if (venue === undefined || venue === null) seeds.push(storage.setSystemSetting("id_card_pickup_venue", ID_CARD_PICKUP_DEFAULT_VENUE));
+      if (locationUrl === undefined || locationUrl === null) seeds.push(storage.setSystemSetting("id_card_pickup_location_url", ""));
+      if (seeds.length > 0) {
+        try { await Promise.all(seeds); } catch { /* non-fatal: defaults still served via fallback below */ }
+      }
       return res.json({
         template_ar: ar ?? ID_CARD_PICKUP_DEFAULT_AR,
         template_en: en ?? ID_CARD_PICKUP_DEFAULT_EN,
