@@ -293,6 +293,9 @@ export default function SettingsPage() {
       attendance_min_shift_duration_minutes: String(attMinDuration),
       attendance_max_daily_submissions: String(attMaxSubmissions),
     });
+  };
+
+  const handleSavePickupSms = () => {
     savePickupSms.mutate({
       template_ar: pickupTplAr,
       template_en: pickupTplEn,
@@ -677,6 +680,18 @@ export default function SettingsPage() {
                       </p>
                     </div>
                   </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleSavePickupSms}
+                    disabled={savePickupSms.isPending}
+                    className="h-11 bg-primary text-primary-foreground font-bold uppercase tracking-wide text-xs"
+                    data-testid="button-save-pickup-sms"
+                  >
+                    {savePickupSms.isPending ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <Save className="me-2 h-4 w-4" />}
+                    {t("settings:save")}
+                  </Button>
                 </div>
               </CardContent>
             </Card>

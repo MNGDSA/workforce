@@ -1864,7 +1864,7 @@ export async function registerRoutes(
             ? await storage.getCandidate(employee.candidateId)
             : null;
           const locale = await getCandidateLocale(candidate, "ar");
-          const template = templates[locale];
+          const template = templates[locale] ?? templates.ar;
           const message = template
             .replace(/\{\{employeeName\}\}/g, employee.fullNameEn ?? "")
             .replace(/\{\{employeeNumber\}\}/g, employee.employeeNumber ?? "")
