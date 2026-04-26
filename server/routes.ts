@@ -1811,7 +1811,7 @@ export async function registerRoutes(
           || !employeeIds.every(id => typeof id === "string")) {
         return res.status(400).json({ message: tr(req, "common.employeeIdsRequired") });
       }
-      const ids = employeeIds as string[];
+      const ids = Array.from(new Set(employeeIds as string[]));
       const smsPlugin = await storage.getActiveSmsPlugin();
       if (!smsPlugin) {
         return res.status(400).json({
