@@ -48,3 +48,9 @@ id = "RTZ3BJNwhdNGrMMWCaO82"
 uri = "file://docs/staging-load-test-report.pdf"
 type = "pdf"
 title = "WORKFORCE — DigitalOcean Staging 100k Burst Report"
+
+[[outputs]]
+id = "04PhoTeMKs10huAMqXdIr"
+uri = "file://exports/org-chart.tsx.txt"
+type = "text"
+title = "Org Chart — full source export (1,192 lines)"
