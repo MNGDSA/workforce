@@ -1820,24 +1820,35 @@ export async function registerRoutes(
       };
       const venue = venueRaw ?? ID_CARD_PICKUP_DEFAULT_VENUE;
       const locationUrl = locationRawUrl ?? "";
-      const orgTz = orgTzRaw ?? "Asia/Riyadh";
+      // Guard: invalid tz strings throw RangeError from Intl.DateTimeFormat — fall back to Asia/Riyadh.
+      let orgTz = orgTzRaw ?? "Asia/Riyadh";
       const now = new Date();
-      const dateStr = new Intl.DateTimeFormat("en-CA", {
-        timeZone: orgTz, year: "numeric", month: "2-digit", day: "2-digit",
-      }).format(now);
-      const timeStr = new Intl.DateTimeFormat("en-GB", {
-        timeZone: orgTz, hour: "2-digit", minute: "2-digit", hour12: false,
-      }).format(now);
+      let dateStr: string;
+      let timeStr: string;
+      const buildDateTime = (tz: string) => {
+        dateStr = new Intl.DateTimeFormat("en-CA", {
+          timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+        }).format(now);
+        timeStr = new Intl.DateTimeFormat("en-GB", {
+          timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false,
+        }).format(now);
+      };
+      try {
+        buildDateTime(orgTz);
+      } catch {
+        orgTz = "Asia/Riyadh";
+        buildDateTime(orgTz);
+      }
 
       let sent = 0, skipped = 0, failed = 0;
       const errors: { employeeId: string; reason: string }[] = [];
 
-      for (const empId of ids) {
+      const sendOne = async (empId: string) => {
         try {
           const employee = await storage.getWorkforceEmployee(empId);
           if (!employee || !employee.phone) {
             skipped++;
-            continue;
+            return;
           }
           const candidate = employee.candidateId
             ? await storage.getCandidate(employee.candidateId)
@@ -1849,8 +1860,8 @@ export async function registerRoutes(
             .replace(/\{\{employeeNumber\}\}/g, employee.employeeNumber ?? "")
             .replace(/\{\{venue\}\}/g, venue)
             .replace(/\{\{location\}\}/g, locationUrl)
-            .replace(/\{\{date\}\}/g, dateStr)
-            .replace(/\{\{time\}\}/g, timeStr);
+            .replace(/\{\{date\}\}/g, dateStr!)
+            .replace(/\{\{time\}\}/g, timeStr!);
           const result = await sendSmsViaPlugin(smsPlugin, employee.phone, message);
           if (result.success) {
             sent++;
@@ -1865,6 +1876,13 @@ export async function registerRoutes(
             reason: (e instanceof Error ? e.message : String(e)).slice(0, 200),
           });
         }
+      };
+
+      // Bounded parallel batches: 10 concurrent per batch keeps DB + plugin gateway happy.
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        const batch = ids.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(sendOne));
       }
       return res.json({ sent, skipped, failed, total: ids.length, errors });
     } catch (err) { return handleError(res, err); }
