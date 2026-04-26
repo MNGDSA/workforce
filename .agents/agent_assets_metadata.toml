@@ -60,3 +60,9 @@ id = "bAfMjYS5N366Cvl7jxJ52"
 uri = "file://exports/digitalocean-lessons-learned.md"
 type = "text"
 title = "DigitalOcean — Lessons Learned (full field-notes)"
+
+[[outputs]]
+id = "Ny_mo3Xl5VZmlBAgulDl7"
+uri = "file://exports/sop-remove-replit-branding-before-do-deploy.md"
+type = "text"
+title = "SOP — Remove Replit Branding Before DigitalOcean Deploy"
