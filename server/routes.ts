@@ -1875,13 +1875,22 @@ export async function registerRoutes(
             : null;
           const locale = await getCandidateLocale(candidate, "ar");
           const template = templates[locale] ?? templates.ar;
-          const message = template
+          let message = template
             .replace(/\{\{employeeName\}\}/g, employee.fullNameEn ?? "")
             .replace(/\{\{employeeNumber\}\}/g, employee.employeeNumber ?? "")
             .replace(/\{\{venue\}\}/g, venue)
             .replace(/\{\{location\}\}/g, locationUrl)
             .replace(/\{\{date\}\}/g, dateStr!)
             .replace(/\{\{time\}\}/g, timeStr!);
+          // When the tenant left location URL blank, strip any dangling
+          // "Location:" / "الموقع:" label (with optional trailing punctuation)
+          // so the recipient never sees an empty label.
+          if (!locationUrl) {
+            message = message
+              .replace(/[\s]*(?:Location|الموقع)\s*[:：][\s.,]*$/i, "")
+              .replace(/[\s]*(?:Location|الموقع)\s*[:：]\s*([.,!؟?])/gi, "$1")
+              .trim();
+          }
           const result = await sendSmsViaPlugin(smsPlugin, employee.phone, message);
           if (result.success) {
             sent++;
