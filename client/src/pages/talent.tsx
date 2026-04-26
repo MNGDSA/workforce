@@ -2003,26 +2003,52 @@ export default function TalentPage() {
     }
   }
 
-  async function handleExport() {
+  async function handleExport(filterIds?: string[]) {
     if (exporting) return;
     setExporting(true);
     try {
       // Task #195 — export reflects the current filtered view
       // (including a multi-ID paste in the search box) instead of
       // dumping the whole talent pool.
+      // When `filterIds` is provided (bulk-export from the selection
+      // bar), we hit the same endpoint and then narrow the rows down
+      // to the selected candidate UUIDs (the first column of every
+      // row in the export payload is the candidate id). This keeps
+      // the workbook format — headers, column widths, sheet name —
+      // identical to "Export All" so downstream consumers don't
+      // need to special-case the selection-export file.
       const exportParams = new URLSearchParams(queryParams);
       exportParams.delete("page");
       exportParams.delete("limit");
       const res = await fetch(`/api/candidates/export?${exportParams.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error("Export request failed");
       const data = await res.json();
-      const rows: any[][] = data.rows || [];
       const headers: string[] = data.headers || [];
+      let rows: any[][] = data.rows || [];
+      if (filterIds && filterIds.length > 0) {
+        const wanted = new Set(filterIds);
+        rows = rows.filter((r) => wanted.has(r[0]));
+      }
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
       ws["!cols"] = headers.map(() => ({ wch: 20 }));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Candidates");
-      XLSX.writeFile(wb, `candidates_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const filename = filterIds && filterIds.length > 0
+        ? `candidates_export_selected_${rows.length}_${dateStr}.xlsx`
+        : `candidates_export_${dateStr}.xlsx`;
+      XLSX.writeFile(wb, filename);
+      if (filterIds && filterIds.length > 0) {
+        const missing = filterIds.length - rows.length;
+        toast({
+          title: t("toast.exported", { count: rows.length, n: formatNumber(rows.length) }),
+          description: missing > 0
+            ? (i18n.language === "ar"
+                ? `تم تخطي ${formatNumber(missing)} لعدم تطابقها مع الفلاتر الحالية`
+                : `${formatNumber(missing)} skipped — not in the current filtered view`)
+            : undefined,
+        });
+      }
     } catch {
       toast({ title: t("toast.exportFailed"), description: t("toast.exportFailedDesc"), variant: "destructive" });
     } finally {
@@ -2721,36 +2747,17 @@ export default function TalentPage() {
               variant="outline"
               className="border-border text-muted-foreground hover:text-orange-400 hover:border-orange-400/50"
               onClick={() => {
-                const selected = [...selectedIds]
-                  .map(id => candidateCacheRef.current.get(id))
-                  .filter((c): c is CandidateWithWorkforce => !!c);
-                if (selected.length === 0) {
+                if (selectedIds.size === 0) {
                   toast({ title: t("toast.bulkActionFailed"), variant: "destructive" });
                   return;
                 }
-                const ws = XLSX.utils.json_to_sheet(selected.map(c => ({
-                  ID: c.nationalId ?? "—",
-                  Name: c.fullNameEn,
-                  Phone: c.phone,
-                  Email: c.email,
-                  City: c.city,
-                  Region: c.region,
-                  Status: c.status,
-                  Source: (c as any).source,
-                })));
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Selected Candidates");
-                XLSX.writeFile(wb, `selected-candidates-${selected.length}.xlsx`);
-                const missing = selectedIds.size - selected.length;
-                toast({
-                  title: t("toast.exported", { count: selected.length, n: formatNumber(selected.length) }),
-                  description: missing > 0
-                    ? (i18n.language === "ar"
-                        ? `تم تخطي ${formatNumber(missing)} لعدم توفر بياناتها محلياً`
-                        : `${formatNumber(missing)} skipped (not loaded on this client)`)
-                    : undefined,
-                });
+                // Reuses the same code path as the top-bar "Export All"
+                // so the workbook (headers, columns, sheet name, file
+                // naming) is identical — just narrowed to the selected
+                // candidate IDs.
+                void handleExport([...selectedIds]);
               }}
+              disabled={exporting}
               data-testid="bulk-export"
             >
               <Download className="h-3.5 w-3.5 me-1.5" />
