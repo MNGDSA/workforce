@@ -1736,6 +1736,140 @@ export async function registerRoutes(
     }
   });
 
+  // ─── ID Card Pickup SMS (Task #207) ──────────────────────────────────────
+  // Per-tenant editable SMS template that admins trigger from the workforce
+  // print flow. Templates support {{employeeName}}, {{employeeNumber}},
+  // {{venue}}, {{location}}, {{date}}, {{time}} placeholders. Defaults are
+  // baked in here so a fresh tenant works without touching settings.
+  const ID_CARD_PICKUP_DEFAULT_AR =
+    "تمت طباعة بطاقة الهوية الخاصة بك بتاريخ {{date}} الساعة {{time}}. يرجى التوجه إلى {{venue}} لاستلامها. الموقع: {{location}}";
+  const ID_CARD_PICKUP_DEFAULT_EN =
+    "Your ID card was printed on {{date}} at {{time}}. Please come to {{venue}} to pick it up. Location: {{location}}";
+  const ID_CARD_PICKUP_DEFAULT_VENUE =
+    "شركة مشارق، الطابق السادس / Mashareq Company, 6th Floor";
+
+  app.get("/api/settings/id-card-pickup-sms", requirePermission("settings:read"), async (_req: Request, res: Response) => {
+    try {
+      const [ar, en, venue, locationUrl] = await Promise.all([
+        storage.getSystemSetting("id_card_pickup_sms_template_ar"),
+        storage.getSystemSetting("id_card_pickup_sms_template_en"),
+        storage.getSystemSetting("id_card_pickup_venue"),
+        storage.getSystemSetting("id_card_pickup_location_url"),
+      ]);
+      return res.json({
+        template_ar: ar ?? ID_CARD_PICKUP_DEFAULT_AR,
+        template_en: en ?? ID_CARD_PICKUP_DEFAULT_EN,
+        venue: venue ?? ID_CARD_PICKUP_DEFAULT_VENUE,
+        location_url: locationUrl ?? "",
+      });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.put("/api/settings/id-card-pickup-sms", requirePermission("settings:write"), async (req: Request, res: Response) => {
+    try {
+      const { template_ar, template_en, venue, location_url } = req.body as Record<string, unknown>;
+      if (typeof template_ar !== "string" || !template_ar.trim()) {
+        return res.status(400).json({ message: tr(req, "common.invalidPayload") });
+      }
+      if (typeof template_en !== "string" || !template_en.trim()) {
+        return res.status(400).json({ message: tr(req, "common.invalidPayload") });
+      }
+      if (typeof venue !== "string" || !venue.trim()) {
+        return res.status(400).json({ message: tr(req, "common.invalidPayload") });
+      }
+      if (typeof location_url !== "string") {
+        return res.status(400).json({ message: tr(req, "common.invalidPayload") });
+      }
+      const trimmedUrl = location_url.trim();
+      if (trimmedUrl && !/^https?:\/\//i.test(trimmedUrl)) {
+        return res.status(400).json({ message: tr(req, "common.invalidPayload") });
+      }
+      await storage.setSystemSetting("id_card_pickup_sms_template_ar", template_ar);
+      await storage.setSystemSetting("id_card_pickup_sms_template_en", template_en);
+      await storage.setSystemSetting("id_card_pickup_venue", venue);
+      await storage.setSystemSetting("id_card_pickup_location_url", trimmedUrl);
+      return res.json({ success: true });
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/id-card-pickup-sms/send", requirePermission("workforce:update"), async (req: Request, res: Response) => {
+    try {
+      const { employeeIds } = req.body as { employeeIds?: unknown };
+      if (!Array.isArray(employeeIds) || employeeIds.length === 0
+          || !employeeIds.every(id => typeof id === "string")) {
+        return res.status(400).json({ message: tr(req, "common.employeeIdsRequired") });
+      }
+      const ids = employeeIds as string[];
+      const smsPlugin = await storage.getActiveSmsPlugin();
+      if (!smsPlugin) {
+        return res.status(400).json({
+          message: tr(req, "sms.notConfigured"),
+          sent: 0, skipped: 0, failed: ids.length, total: ids.length,
+        });
+      }
+      const [tplAr, tplEn, venueRaw, locationRawUrl, orgTzRaw] = await Promise.all([
+        storage.getSystemSetting("id_card_pickup_sms_template_ar"),
+        storage.getSystemSetting("id_card_pickup_sms_template_en"),
+        storage.getSystemSetting("id_card_pickup_venue"),
+        storage.getSystemSetting("id_card_pickup_location_url"),
+        storage.getSystemSetting("organization_timezone"),
+      ]);
+      const templates = {
+        ar: tplAr ?? ID_CARD_PICKUP_DEFAULT_AR,
+        en: tplEn ?? ID_CARD_PICKUP_DEFAULT_EN,
+      };
+      const venue = venueRaw ?? ID_CARD_PICKUP_DEFAULT_VENUE;
+      const locationUrl = locationRawUrl ?? "";
+      const orgTz = orgTzRaw ?? "Asia/Riyadh";
+      const now = new Date();
+      const dateStr = new Intl.DateTimeFormat("en-CA", {
+        timeZone: orgTz, year: "numeric", month: "2-digit", day: "2-digit",
+      }).format(now);
+      const timeStr = new Intl.DateTimeFormat("en-GB", {
+        timeZone: orgTz, hour: "2-digit", minute: "2-digit", hour12: false,
+      }).format(now);
+
+      let sent = 0, skipped = 0, failed = 0;
+      const errors: { employeeId: string; reason: string }[] = [];
+
+      for (const empId of ids) {
+        try {
+          const employee = await storage.getWorkforceEmployee(empId);
+          if (!employee || !employee.phone) {
+            skipped++;
+            continue;
+          }
+          const candidate = employee.candidateId
+            ? await storage.getCandidate(employee.candidateId)
+            : null;
+          const locale = await getCandidateLocale(candidate, "ar");
+          const template = templates[locale];
+          const message = template
+            .replace(/\{\{employeeName\}\}/g, employee.fullNameEn ?? "")
+            .replace(/\{\{employeeNumber\}\}/g, employee.employeeNumber ?? "")
+            .replace(/\{\{venue\}\}/g, venue)
+            .replace(/\{\{location\}\}/g, locationUrl)
+            .replace(/\{\{date\}\}/g, dateStr)
+            .replace(/\{\{time\}\}/g, timeStr);
+          const result = await sendSmsViaPlugin(smsPlugin, employee.phone, message);
+          if (result.success) {
+            sent++;
+          } else {
+            failed++;
+            errors.push({ employeeId: empId, reason: result.error ?? "send_failed" });
+          }
+        } catch (e) {
+          failed++;
+          errors.push({
+            employeeId: empId,
+            reason: (e instanceof Error ? e.message : String(e)).slice(0, 200),
+          });
+        }
+      }
+      return res.json({ sent, skipped, failed, total: ids.length, errors });
+    } catch (err) { return handleError(res, err); }
+  });
+
   // ─── Dashboard ───────────────────────────────────────────────────────────
   app.get("/api/dashboard/stats", requireAuth, async (_req: Request, res: Response) => {
     try {

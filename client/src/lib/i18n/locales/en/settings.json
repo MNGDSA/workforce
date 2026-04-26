@@ -5,12 +5,37 @@
   "tabs": {
     "general": "General",
     "attendance": "Attendance Rules",
+    "idCardPickup": "ID Card Pickup",
     "security": "Security",
     "adminUsers": "Admin Users",
     "roles": "Roles & Access",
     "notifications": "Notifications",
     "integrations": "APIs & Webhooks",
     "advanced": "Advanced"
+  },
+  "idCardPickup": {
+    "title": "ID Card Pickup SMS",
+    "desc": "Configure the SMS sent to employees after their ID card is printed, telling them where and when to pick it up. Use the placeholder chips to insert dynamic values.",
+    "venue": "Pickup Venue",
+    "venueHint": "The location where employees come to collect their printed ID card. Inserted via {{venue}}.",
+    "venuePh": "e.g. Mashareq Company, 6th Floor",
+    "locationUrl": "Pickup Location URL",
+    "locationUrlHint": "A Google Maps link (or similar) for the pickup venue. Inserted via {{location}}. Leave blank to omit.",
+    "locationUrlPh": "https://maps.app.goo.gl/...",
+    "templateAr": "Arabic Template",
+    "templateEn": "English Template",
+    "templateHint": "Click a placeholder chip to insert it into the active template at the cursor.",
+    "previewLabel": "Preview",
+    "vars": {
+      "employeeName": "Employee full name",
+      "employeeNumber": "Employee number",
+      "venue": "Pickup venue (from above)",
+      "location": "Google Maps URL (from above)",
+      "date": "Date the card was printed",
+      "time": "Time the card was printed"
+    },
+    "savedToast": "ID card pickup SMS settings saved",
+    "saveFailedToast": "Could not save ID card pickup SMS settings"
   },
   "org": {
     "title": "Organization Profile",

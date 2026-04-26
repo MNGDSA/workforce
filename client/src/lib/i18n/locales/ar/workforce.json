@@ -371,5 +371,21 @@
     "printingCount_few": "جاري طباعة {n} بطاقات",
     "printingCount_many": "جاري طباعة {n} بطاقة",
     "printingCount_other": "جاري طباعة {n} بطاقة"
+  },
+  "pickupSms": {
+    "dialogTitle": "إرسال رسالة استلام البطاقة؟",
+    "dialogDescOne": "إخطار موظف واحد بمكان استلام بطاقة الهوية المطبوعة.",
+    "dialogDescOther": "إخطار {n} موظفًا بمكان استلام بطاقات الهوية المطبوعة.",
+    "dialogHint": "تستخدم الرسالة قالب المؤسسة القابل للتعديل (الإعدادات ← استلام بطاقة الهوية).",
+    "send": "إرسال رسالة الاستلام",
+    "skip": "تخطّي",
+    "sentToast_one": "تم إرسال {n} رسالة استلام",
+    "sentToast_two": "تم إرسال {n} رسائل استلام",
+    "sentToast_few": "تم إرسال {n} رسائل استلام",
+    "sentToast_many": "تم إرسال {n} رسالة استلام",
+    "sentToast_other": "تم إرسال {n} رسالة استلام",
+    "sentToastDesc": "تم تخطّي {skipped} (لا يوجد هاتف)، فشل {failed}.",
+    "sendFailedToast": "تعذّر إرسال رسائل الاستلام",
+    "noActivePluginToast": "لا توجد بوابة رسائل قصيرة نشطة"
   }
 }

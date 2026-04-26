@@ -23,6 +23,16 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -2275,6 +2285,8 @@ export default function WorkforcePage() {
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [printingIds, setPrintingIds] = useState<Set<string>>(new Set());
   const [printProgress, setPrintProgress] = useState<{ total: number; done: number } | null>(null);
+  const [pickupSmsDialog, setPickupSmsDialog] = useState<{ open: boolean; employeeIds: string[] }>({ open: false, employeeIds: [] });
+  const [pickupSmsSending, setPickupSmsSending] = useState(false);
   const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false);
   const [bulkUpdateFile, setBulkUpdateFile] = useState<File | null>(null);
   const [bulkUpdateLoading, setBulkUpdateLoading] = useState(false);
@@ -2550,6 +2562,12 @@ export default function WorkforcePage() {
       }
 
       qc.invalidateQueries({ queryKey: ["/api/workforce/last-printed-bulk"] });
+
+      // Task #207 — prompt admin to send pickup SMS for eligible (success/pending) employees
+      const eligibleIds = statuses.filter(s => s.status !== "failed").map(s => s.employeeId);
+      if (eligibleIds.length > 0) {
+        setPickupSmsDialog({ open: true, employeeIds: eligibleIds });
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
       toast({ title: tt("toast.printFailed"), description: message, variant: "destructive" });
@@ -3023,6 +3041,77 @@ export default function WorkforcePage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={pickupSmsDialog.open}
+        onOpenChange={(open) => {
+          if (!pickupSmsSending) {
+            setPickupSmsDialog((prev) => ({ ...prev, open }));
+          }
+        }}
+      >
+        <AlertDialogContent data-testid="dialog-pickup-sms">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{tt("pickupSms.dialogTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pickupSmsDialog.employeeIds.length === 1
+                ? tt("pickupSms.dialogDescOne")
+                : tt("pickupSms.dialogDescOther", { n: formatNumber(pickupSmsDialog.employeeIds.length) })}
+              <br />
+              <span className="text-xs text-muted-foreground">{tt("pickupSms.dialogHint")}</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pickupSmsSending} data-testid="button-pickup-sms-skip">
+              {tt("pickupSms.skip")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={pickupSmsSending}
+              data-testid="button-pickup-sms-send"
+              onClick={async (e) => {
+                e.preventDefault();
+                const ids = pickupSmsDialog.employeeIds;
+                setPickupSmsSending(true);
+                try {
+                  const res = await apiRequest("POST", "/api/id-card-pickup-sms/send", { employeeIds: ids });
+                  const json = await res.json();
+                  const sent = Number(json?.sent ?? 0);
+                  const skipped = Number(json?.skipped ?? 0);
+                  const failed = Number(json?.failed ?? 0);
+                  if (sent === 0 && failed > 0) {
+                    toast({
+                      title: tt("pickupSms.sendFailedToast"),
+                      description: tt("pickupSms.sentToastDesc", { skipped: formatNumber(skipped), failed: formatNumber(failed) }),
+                      variant: "destructive",
+                    });
+                  } else {
+                    toast({
+                      title: tt("pickupSms.sentToast", { count: sent, n: formatNumber(sent) }),
+                      description: skipped + failed > 0
+                        ? tt("pickupSms.sentToastDesc", { skipped: formatNumber(skipped), failed: formatNumber(failed) })
+                        : undefined,
+                    });
+                  }
+                  setPickupSmsDialog({ open: false, employeeIds: [] });
+                } catch (err: unknown) {
+                  const message = err instanceof Error ? err.message : "Unknown error";
+                  const isNoPlugin = /plugin|gateway|notConfigured/i.test(message);
+                  toast({
+                    title: isNoPlugin ? tt("pickupSms.noActivePluginToast") : tt("pickupSms.sendFailedToast"),
+                    description: isNoPlugin ? undefined : message,
+                    variant: "destructive",
+                  });
+                } finally {
+                  setPickupSmsSending(false);
+                }
+              }}
+            >
+              {pickupSmsSending ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : null}
+              {tt("pickupSms.send")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

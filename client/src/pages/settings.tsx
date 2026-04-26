@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import DashboardLayout from "@/components/layout";
@@ -31,7 +31,9 @@ import {
   AlertCircle,
   XCircle,
   RotateCw,
-  RefreshCw
+  RefreshCw,
+  IdCard,
+  Plus
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation, Trans } from "react-i18next";
@@ -156,6 +158,40 @@ interface SystemSettings {
   attendance_max_daily_submissions: number;
 }
 
+interface IdCardPickupSmsSettings {
+  template_ar: string;
+  template_en: string;
+  venue: string;
+  location_url: string;
+}
+
+const ID_CARD_PICKUP_VARS: { key: string; placeholder: string }[] = [
+  { key: "employeeName", placeholder: "{{employeeName}}" },
+  { key: "employeeNumber", placeholder: "{{employeeNumber}}" },
+  { key: "venue", placeholder: "{{venue}}" },
+  { key: "location", placeholder: "{{location}}" },
+  { key: "date", placeholder: "{{date}}" },
+  { key: "time", placeholder: "{{time}}" },
+];
+
+function resolveIdCardPickupPreview(
+  template: string,
+  venue: string,
+  locationUrl: string,
+): string {
+  const sample = {
+    employeeName: "Mohammed Al-Saud",
+    employeeNumber: "C000123",
+    date: "2026-04-26",
+    time: "14:32",
+    venue,
+    location: locationUrl,
+  };
+  return template.replace(/\{\{(\w+)\}\}/g, (_m, k) =>
+    (sample as Record<string, string>)[k] ?? `{{${k}}}`,
+  );
+}
+
 export default function SettingsPage() {
   const { t, i18n } = useTranslation(["settings", "common"]);
   const lng = i18n.language;
@@ -174,9 +210,23 @@ export default function SettingsPage() {
   const [attMinDuration, setAttMinDuration] = useState(30);
   const [attMaxSubmissions, setAttMaxSubmissions] = useState(2);
 
+  // Task #207 — ID card pickup SMS settings
+  const [pickupTplAr, setPickupTplAr] = useState("");
+  const [pickupTplEn, setPickupTplEn] = useState("");
+  const [pickupVenue, setPickupVenue] = useState("");
+  const [pickupLocationUrl, setPickupLocationUrl] = useState("");
+  const pickupTplArRef = useRef<HTMLTextAreaElement | null>(null);
+  const pickupTplEnRef = useRef<HTMLTextAreaElement | null>(null);
+  const [pickupActiveField, setPickupActiveField] = useState<"ar" | "en">("ar");
+
   const { data: systemSettings } = useQuery<SystemSettings>({
     queryKey: ["/api/settings/system"],
     queryFn: () => apiRequest("GET", "/api/settings/system").then(r => r.json()),
+  });
+
+  const { data: pickupSmsSettings } = useQuery<IdCardPickupSmsSettings>({
+    queryKey: ["/api/settings/id-card-pickup-sms"],
+    queryFn: () => apiRequest("GET", "/api/settings/id-card-pickup-sms").then(r => r.json()),
   });
 
   useEffect(() => {
@@ -201,6 +251,15 @@ export default function SettingsPage() {
     }
   }, [systemSettings]);
 
+  useEffect(() => {
+    if (pickupSmsSettings) {
+      setPickupTplAr(pickupSmsSettings.template_ar ?? "");
+      setPickupTplEn(pickupSmsSettings.template_en ?? "");
+      setPickupVenue(pickupSmsSettings.venue ?? "");
+      setPickupLocationUrl(pickupSmsSettings.location_url ?? "");
+    }
+  }, [pickupSmsSettings]);
+
   const saveSettings = useMutation({
     mutationFn: (data: Record<string, string>) =>
       apiRequest("PATCH", "/api/settings/system", data).then(r => r.json()),
@@ -209,6 +268,16 @@ export default function SettingsPage() {
       toast({ title: t("settings:toasts.saved"), description: t("settings:toasts.savedDesc") });
     },
     onError: () => toast({ title: t("settings:toasts.saveFailed"), variant: "destructive" }),
+  });
+
+  const savePickupSms = useMutation({
+    mutationFn: (data: IdCardPickupSmsSettings) =>
+      apiRequest("PUT", "/api/settings/id-card-pickup-sms", data).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/id-card-pickup-sms"] });
+      toast({ title: t("settings:idCardPickup.savedToast") });
+    },
+    onError: () => toast({ title: t("settings:idCardPickup.saveFailedToast"), variant: "destructive" }),
   });
 
   const handleSave = () => {
@@ -223,6 +292,32 @@ export default function SettingsPage() {
       attendance_late_buffer_minutes: String(attLateBuffer),
       attendance_min_shift_duration_minutes: String(attMinDuration),
       attendance_max_daily_submissions: String(attMaxSubmissions),
+    });
+    savePickupSms.mutate({
+      template_ar: pickupTplAr,
+      template_en: pickupTplEn,
+      venue: pickupVenue,
+      location_url: pickupLocationUrl,
+    });
+  };
+
+  const insertPickupPlaceholder = (placeholder: string) => {
+    const ref = pickupActiveField === "ar" ? pickupTplArRef : pickupTplEnRef;
+    const setter = pickupActiveField === "ar" ? setPickupTplAr : setPickupTplEn;
+    const current = pickupActiveField === "ar" ? pickupTplAr : pickupTplEn;
+    const ta = ref.current;
+    if (!ta) {
+      setter(current + placeholder);
+      return;
+    }
+    const start = ta.selectionStart ?? current.length;
+    const end = ta.selectionEnd ?? current.length;
+    const next = current.slice(0, start) + placeholder + current.slice(end);
+    setter(next);
+    requestAnimationFrame(() => {
+      ta.focus();
+      const cursor = start + placeholder.length;
+      ta.setSelectionRange(cursor, cursor);
     });
   };
 
@@ -247,7 +342,7 @@ export default function SettingsPage() {
         </div>
 
         <Tabs defaultValue="general" className="w-full">
-          <TabsList className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 w-full h-auto gap-2 bg-transparent p-0 mb-6">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 w-full h-auto gap-2 bg-transparent p-0 mb-6">
             <TabsTrigger 
               value="general" 
               className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
@@ -259,6 +354,13 @@ export default function SettingsPage() {
               className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
             >
               {t("settings:tabs.attendance")}
+            </TabsTrigger>
+            <TabsTrigger 
+              value="id-cards" 
+              className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20 bg-card rounded-md h-12"
+              data-testid="tab-id-cards"
+            >
+              {t("settings:tabs.idCardPickup")}
             </TabsTrigger>
             <TabsTrigger 
               value="security" 
@@ -472,6 +574,109 @@ export default function SettingsPage() {
                     <li><Trans i18nKey="settings:attendance.how.max" values={{ n: formatNumber(attMaxSubmissions, lng) }} components={[<strong className="text-white" />]} /></li>
                     <li>{t("settings:attendance.how.noShift")}</li>
                   </ul>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="id-cards" className="space-y-6 m-0 animate-in fade-in-50 duration-500">
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <IdCard className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-xl text-white">{t("settings:idCardPickup.title")}</CardTitle>
+                </div>
+                <CardDescription>{t("settings:idCardPickup.desc")}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="pickup-venue" className="text-white">{t("settings:idCardPickup.venue")}</Label>
+                    <Input
+                      id="pickup-venue"
+                      value={pickupVenue}
+                      onChange={(e) => setPickupVenue(e.target.value)}
+                      placeholder={t("settings:idCardPickup.venuePh")}
+                      data-testid="input-pickup-venue"
+                    />
+                    <p className="text-xs text-muted-foreground">{t("settings:idCardPickup.venueHint")}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pickup-location-url" className="text-white">{t("settings:idCardPickup.locationUrl")}</Label>
+                    <Input
+                      id="pickup-location-url"
+                      value={pickupLocationUrl}
+                      onChange={(e) => setPickupLocationUrl(e.target.value)}
+                      placeholder={t("settings:idCardPickup.locationUrlPh")}
+                      dir="ltr"
+                      data-testid="input-pickup-location-url"
+                    />
+                    <p className="text-xs text-muted-foreground">{t("settings:idCardPickup.locationUrlHint")}</p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-3">
+                  <Label className="text-white">{t("settings:idCardPickup.templateHint")}</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {ID_CARD_PICKUP_VARS.map((v) => (
+                      <button
+                        key={v.key}
+                        type="button"
+                        onClick={() => insertPickupPlaceholder(v.placeholder)}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono bg-primary/15 text-primary hover-elevate active-elevate-2 border border-primary/20"
+                        data-testid={`chip-pickup-var-${v.key}`}
+                        title={t(`settings:idCardPickup.vars.${v.key}`)}
+                      >
+                        <Plus className="h-3 w-3" />
+                        {v.placeholder}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="pickup-tpl-ar" className="text-white">{t("settings:idCardPickup.templateAr")}</Label>
+                    <textarea
+                      id="pickup-tpl-ar"
+                      ref={pickupTplArRef}
+                      value={pickupTplAr}
+                      onChange={(e) => setPickupTplAr(e.target.value)}
+                      onFocus={() => setPickupActiveField("ar")}
+                      dir="rtl"
+                      rows={5}
+                      className="w-full rounded-md bg-background border border-input px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      data-testid="textarea-pickup-tpl-ar"
+                    />
+                    <div className="rounded-md border border-border bg-muted/30 px-3 py-2" dir="rtl">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">{t("settings:idCardPickup.previewLabel")}</p>
+                      <p className="text-sm text-white whitespace-pre-wrap" data-testid="text-pickup-preview-ar">
+                        {resolveIdCardPickupPreview(pickupTplAr, pickupVenue, pickupLocationUrl)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pickup-tpl-en" className="text-white">{t("settings:idCardPickup.templateEn")}</Label>
+                    <textarea
+                      id="pickup-tpl-en"
+                      ref={pickupTplEnRef}
+                      value={pickupTplEn}
+                      onChange={(e) => setPickupTplEn(e.target.value)}
+                      onFocus={() => setPickupActiveField("en")}
+                      dir="ltr"
+                      rows={5}
+                      className="w-full rounded-md bg-background border border-input px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      data-testid="textarea-pickup-tpl-en"
+                    />
+                    <div className="rounded-md border border-border bg-muted/30 px-3 py-2" dir="ltr">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">{t("settings:idCardPickup.previewLabel")}</p>
+                      <p className="text-sm text-white whitespace-pre-wrap" data-testid="text-pickup-preview-en">
+                        {resolveIdCardPickupPreview(pickupTplEn, pickupVenue, pickupLocationUrl)}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
