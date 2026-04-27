@@ -67,6 +67,19 @@ The system employs a modern, full-stack architecture designed for scalability an
 **Mobile App (Android Native)**:
 - Developed in Kotlin with Jetpack Compose, offering selfie check-in with CameraX, GPS verification, offline-first Room DB, encrypted data storage, auto-sync, and Google Maps geofence zones. Includes `DeviceTrustManager` for emulator and mock GPS detection. Supports excuse request submission and photo changes requiring HR approval.
 
+## Operations
+
+### Database schema sync (dev → prod)
+
+`npm run db:push` only syncs the **dev** Neon DB. The production database (DigitalOcean) must be migrated separately or new columns / tables will be missing on prod and queries that reference them will fail.
+
+After any change to `shared/schema.ts`:
+
+1. Sync dev: `npm run db:push`
+2. Sync prod: `node scripts/migrate-prod.mjs`
+
+The prod runner refuses to start unless `PROD_DATABASE_URL` is set and different from `DATABASE_URL`, prints the target host and DB, runs a connectivity probe, and requires the operator to type `APPLY` (uppercase) before invoking `drizzle-kit push` against prod. Drizzle's own interactive prompt still surfaces for any destructive change (drop / type change), so the apply step is double-gated.
+
 ## External Dependencies
 
 - **PostgreSQL**: Primary database for all persistent data storage.
