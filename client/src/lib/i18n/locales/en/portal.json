@@ -157,7 +157,7 @@
       "ibanHint": "PDF, JPG, PNG up to {{n}} MB",
       "driversLicense": "Driver's License",
       "driversLicenseHint": "PDF, JPG, PNG up to {{n}} MB",
-      "vaccinationReport": "Vaccination Report",
+      "vaccinationReport": "Vaccination Report (Optional)",
       "vaccinationReportHint": "PDF, JPG, PNG up to {{n}} MB"
     },
     "uploadFailed": "Upload failed",
