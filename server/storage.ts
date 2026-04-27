@@ -910,6 +910,8 @@ export class DatabaseStorage implements IStorage {
           eq(candidates.nationalIdFileUrl, url),
           eq(candidates.ibanFileUrl, url),
           eq(candidates.resumeUrl, url),
+          eq(candidates.driversLicenseFileUrl, url),
+          eq(candidates.vaccinationReportFileUrl, url),
         ),
       );
     return candidate;
