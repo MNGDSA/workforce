@@ -64,6 +64,8 @@ import {
   FileText,
   Hash,
   Copy,
+  Car,
+  Syringe,
 } from "lucide-react";
 import {
   Table,
@@ -2467,8 +2469,32 @@ export default function TalentPage() {
                                     {candidate.fullNameEn.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
                                   </AvatarFallback>
                                 </Avatar>
-                                <div>
+                                <div className="min-w-0">
                                   <p className="font-medium text-white text-sm"><bdi>{candidate.fullNameEn}</bdi></p>
+                                  {(candidate.hasDriversLicense || candidate.hasVaccinationReport) && (
+                                    <div className="flex items-center gap-1 mt-0.5">
+                                      {candidate.hasDriversLicense && (
+                                        <span
+                                          className="inline-flex items-center justify-center h-4 w-4 rounded-sm bg-emerald-500/15 border border-emerald-500/25 text-emerald-300"
+                                          title={t("rowBadge.hasDriversLicense")}
+                                          aria-label={t("rowBadge.hasDriversLicense")}
+                                          data-testid={`icon-drivers-license-${candidate.id}`}
+                                        >
+                                          <Car className="h-2.5 w-2.5" />
+                                        </span>
+                                      )}
+                                      {candidate.hasVaccinationReport && (
+                                        <span
+                                          className="inline-flex items-center justify-center h-4 w-4 rounded-sm bg-emerald-500/15 border border-emerald-500/25 text-emerald-300"
+                                          title={t("rowBadge.hasVaccinationReport")}
+                                          aria-label={t("rowBadge.hasVaccinationReport")}
+                                          data-testid={`icon-vaccination-report-${candidate.id}`}
+                                        >
+                                          <Syringe className="h-2.5 w-2.5" />
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </TableCell>

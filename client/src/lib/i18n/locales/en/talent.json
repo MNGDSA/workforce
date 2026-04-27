@@ -100,7 +100,9 @@
     "formerTitle_other": "Former employee with {{n}} completed seasons",
     "unpaidSettlement": "Unpaid Settlement",
     "unpaidSettlementTitle_one": "{{n}} unpaid settlement",
-    "unpaidSettlementTitle_other": "{{n}} unpaid settlements"
+    "unpaidSettlementTitle_other": "{{n}} unpaid settlements",
+    "hasDriversLicense": "Driver's license on file",
+    "hasVaccinationReport": "Vaccination report on file"
   },
   "rowMenu": {
     "viewProfile": "View Profile",

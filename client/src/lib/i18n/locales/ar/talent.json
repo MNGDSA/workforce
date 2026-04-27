@@ -109,7 +109,9 @@
     "unpaidSettlementTitle_two": "تسويتان غير مدفوعتين",
     "unpaidSettlementTitle_few": "{{n}} تسويات غير مدفوعة",
     "unpaidSettlementTitle_many": "{{n}} تسوية غير مدفوعة",
-    "unpaidSettlementTitle_other": "{{n}} تسوية غير مدفوعة"
+    "unpaidSettlementTitle_other": "{{n}} تسوية غير مدفوعة",
+    "hasDriversLicense": "رخصة قيادة موثّقة",
+    "hasVaccinationReport": "تقرير تطعيم موثّق"
   },
   "rowMenu": {
     "viewProfile": "عرض الملف",
