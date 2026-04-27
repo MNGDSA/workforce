@@ -41,6 +41,12 @@
     "smp": "SMP"
   },
   "formerEmployees": "Former Employees",
+  "documentFilter": {
+    "hasDriversLicense": "Has driver's license",
+    "hasDriversLicenseTitle": "Only show candidates whose driver's license is on file (catering vans, shuttle drivers).",
+    "hasVaccinationReport": "Has vaccination report",
+    "hasVaccinationReportTitle": "Only show candidates whose vaccination report is on file (food handling, healthcare-adjacent roles)."
+  },
   "list": {
     "title": "Candidate List",
     "columns": "Columns",

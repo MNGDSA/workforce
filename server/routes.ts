@@ -55,6 +55,7 @@ import {
   insertQuestionSetSchema,
   insertContractTemplateSchema,
   candidateQuerySchema,
+  type CandidateQuery,
   insertIdCardTemplateSchema,
   insertPrinterPluginSchema,
   insertIdCardPrintLogSchema,
@@ -324,6 +325,35 @@ function redactNationalId(nid: string | null | undefined): string {
   const s = String(nid);
   if (s.length <= 4) return "•".repeat(s.length);
   return "•".repeat(s.length - 4) + s.slice(-4);
+}
+
+// Task #209 — recruiters need to filter candidates by who has uploaded
+// a driver's licence (catering vans / shuttles) or vaccination report
+// (food handling / healthcare-adjacent roles). The corresponding
+// boolean flags live on the candidate row but are NOT part of the
+// shared `candidateQuerySchema` (the `shared/` folder is immutable per
+// project policy), so we model them with a local type extension and
+// merge them onto the parsed query object. Storage's
+// `buildCandidateOtherConditions` reads them through the same type
+// extension. Only accepts the literal string "true" so a stray
+// `?hasDriversLicense=` (empty) URL param is a no-op.
+type DocumentAvailabilityFlags = {
+  hasDriversLicense?: "true";
+  hasVaccinationReport?: "true";
+};
+
+function attachDocumentAvailabilityFlags<T extends Partial<CandidateQuery>>(
+  parsed: T,
+  raw: Request["query"],
+): T & DocumentAvailabilityFlags {
+  const enriched = parsed as T & DocumentAvailabilityFlags;
+  if (raw.hasDriversLicense === "true") {
+    enriched.hasDriversLicense = "true";
+  }
+  if (raw.hasVaccinationReport === "true") {
+    enriched.hasVaccinationReport = "true";
+  }
+  return enriched;
 }
 
 /**
@@ -1928,7 +1958,13 @@ export async function registerRoutes(
   // ─── Candidates ──────────────────────────────────────────────────────────
   app.get("/api/candidates", requirePermission("candidates:read"), async (req: Request, res: Response) => {
     try {
-      const query = candidateQuerySchema.parse(req.query);
+      const parsed = candidateQuerySchema.parse(req.query);
+      // Task #209 — pass-through document-availability toggles. These
+      // are not part of `candidateQuerySchema` (which lives under the
+      // immutable `shared/` folder), so we forward them on the parsed
+      // object via a typed extension and let
+      // `buildCandidateOtherConditions` apply them.
+      const query = attachDocumentAvailabilityFlags(parsed, req.query);
       const result = await storage.getCandidates(query);
       return res.json(result);
     } catch (err) {
@@ -1942,7 +1978,10 @@ export async function registerRoutes(
       // the CSV mirrors what's on screen (including a multi-ID paste
       // in the search box). Falls back to "everything not archived"
       // when no filters are supplied.
-      const query = candidateQuerySchema.partial().parse(req.query);
+      const parsed = candidateQuerySchema.partial().parse(req.query);
+      // Task #209 — keep export in lock-step with the on-screen
+      // filters by mirroring the document-availability toggles.
+      const query = attachDocumentAvailabilityFlags(parsed, req.query);
       const result = await storage.exportCandidates(query);
       return res.json(result);
     } catch (err) {

@@ -41,6 +41,12 @@
     "smp": "مزوّد قوى عاملة"
   },
   "formerEmployees": "موظفون سابقون",
+  "documentFilter": {
+    "hasDriversLicense": "لديه رخصة قيادة",
+    "hasDriversLicenseTitle": "عرض المرشحين الذين رفعوا رخصة القيادة فقط (سائقو شاحنات التموين والنقل).",
+    "hasVaccinationReport": "لديه تقرير تطعيم",
+    "hasVaccinationReportTitle": "عرض المرشحين الذين رفعوا تقرير التطعيم فقط (تداول الأغذية والأدوار القريبة من القطاع الصحي)."
+  },
   "list": {
     "title": "قائمة المرشحين",
     "columns": "الأعمدة",

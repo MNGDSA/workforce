@@ -607,6 +607,25 @@ function buildCandidateOtherConditions(query: Partial<CandidateQuery>): SQL[] {
       sql`EXISTS (SELECT 1 FROM workforce WHERE workforce.candidate_id = candidates.id AND workforce.is_active = false)`
     );
   }
+  // Task #209 — recruiter-facing toggles for events that require a
+  // licensed driver (catering vans, shuttles) or a vaccination report
+  // (food handling, healthcare-adjacent roles). Both flags live on
+  // the candidate row and are flipped when the corresponding document
+  // is uploaded — see uploadDocumentsHandler / DELETE document route.
+  // The two filter fields are not part of the shared
+  // `candidateQuerySchema` (the `shared/` folder is immutable for
+  // this project) so we model them with a local type extension that
+  // narrows the structural cast — no `as any`, no runtime risk.
+  const docFlags = query as Partial<CandidateQuery> & {
+    hasDriversLicense?: "true";
+    hasVaccinationReport?: "true";
+  };
+  if (docFlags.hasDriversLicense === "true") {
+    conditions.push(eq(candidates.hasDriversLicense, true));
+  }
+  if (docFlags.hasVaccinationReport === "true") {
+    conditions.push(eq(candidates.hasVaccinationReport, true));
+  }
   return conditions;
 }
 

@@ -1533,6 +1533,18 @@ export default function TalentPage() {
   const [status, setStatus] = useState("available");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [formerEmployeeFilter, setFormerEmployeeFilter] = useState(false);
+  // Task #209 — recruiter-facing toggles for events that require a
+  // licensed driver or a vaccination report. Hydrated from the URL on
+  // mount and round-tripped back to the query string so a filtered
+  // view is shareable.
+  const [hasDriversLicenseFilter, setHasDriversLicenseFilter] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("hasDriversLicense") === "true";
+  });
+  const [hasVaccinationReportFilter, setHasVaccinationReportFilter] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("hasVaccinationReport") === "true";
+  });
   const [sortBy, setSortBy] = useState<SortField>("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(new Set(DEFAULT_VISIBLE));
@@ -1626,12 +1638,53 @@ export default function TalentPage() {
     ...(status === "archived" ? { archived: "true" } : {}),
     ...(sourceFilter && sourceFilter !== "all" ? { classification: sourceFilter } : {}),
     ...(formerEmployeeFilter ? { formerEmployee: "true" } : {}),
+    ...(hasDriversLicenseFilter ? { hasDriversLicense: "true" } : {}),
+    ...(hasVaccinationReportFilter ? { hasVaccinationReport: "true" } : {}),
   });
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["/api/candidates", page, debouncedSearch, status, sourceFilter, formerEmployeeFilter, sortBy, sortOrder],
+    queryKey: [
+      "/api/candidates",
+      page,
+      debouncedSearch,
+      status,
+      sourceFilter,
+      formerEmployeeFilter,
+      hasDriversLicenseFilter,
+      hasVaccinationReportFilter,
+      sortBy,
+      sortOrder,
+    ],
     queryFn: () => apiRequest("GET", `/api/candidates?${queryParams.toString()}`).then(r => r.json()),
   });
+
+  // Task #209 — keep ?hasDriversLicense / ?hasVaccinationReport in
+  // sync with the toggles so a filtered view of the talent pool is
+  // shareable via URL. We use replaceState (not push) so flipping the
+  // toggle does not pollute the browser history stack, and we
+  // preserve any unrelated query params already present (e.g. legacy
+  // openBulkUpload deep-link params have been stripped on mount, but
+  // future deep-links should not be clobbered).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (hasDriversLicenseFilter) {
+      params.set("hasDriversLicense", "true");
+    } else {
+      params.delete("hasDriversLicense");
+    }
+    if (hasVaccinationReportFilter) {
+      params.set("hasVaccinationReport", "true");
+    } else {
+      params.delete("hasVaccinationReport");
+    }
+    const remaining = params.toString();
+    const nextUrl = window.location.pathname + (remaining ? `?${remaining}` : "");
+    const currentUrl = window.location.pathname + window.location.search;
+    if (nextUrl !== currentUrl) {
+      window.history.replaceState({}, "", nextUrl);
+    }
+  }, [hasDriversLicenseFilter, hasVaccinationReportFilter]);
 
   const searchMeta: CandidateSearchMeta | undefined = data?.searchMeta;
 
@@ -2227,6 +2280,33 @@ export default function TalentPage() {
             >
               <UserCheck className="h-3.5 w-3.5" />
               {t("formerEmployees")}
+            </Button>
+            {/* Task #209 — recruiter toggles for events that require a
+                licensed driver or a vaccination report. Both flags are
+                persisted to the URL so a filtered view is shareable. */}
+            <Button
+              variant={hasDriversLicenseFilter ? "default" : "outline"}
+              size="sm"
+              className={`h-10 gap-1.5 ${hasDriversLicenseFilter ? "bg-sky-600 hover:bg-sky-700 text-white" : "border-border"}`}
+              onClick={() => { setHasDriversLicenseFilter(!hasDriversLicenseFilter); setPage(1); }}
+              title={t("documentFilter.hasDriversLicenseTitle")}
+              aria-pressed={hasDriversLicenseFilter}
+              data-testid="filter-has-drivers-license"
+            >
+              <Car className="h-3.5 w-3.5" />
+              {t("documentFilter.hasDriversLicense")}
+            </Button>
+            <Button
+              variant={hasVaccinationReportFilter ? "default" : "outline"}
+              size="sm"
+              className={`h-10 gap-1.5 ${hasVaccinationReportFilter ? "bg-sky-600 hover:bg-sky-700 text-white" : "border-border"}`}
+              onClick={() => { setHasVaccinationReportFilter(!hasVaccinationReportFilter); setPage(1); }}
+              title={t("documentFilter.hasVaccinationReportTitle")}
+              aria-pressed={hasVaccinationReportFilter}
+              data-testid="filter-has-vaccination-report"
+            >
+              <Syringe className="h-3.5 w-3.5" />
+              {t("documentFilter.hasVaccinationReport")}
             </Button>
           </div>
         </div>
