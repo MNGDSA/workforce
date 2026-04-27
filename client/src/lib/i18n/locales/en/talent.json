@@ -56,6 +56,8 @@
     "emptyHintSearch": "Try a different search term",
     "emptyHintMultiSearch": "None of the pasted identifiers matched the current filters. Try clearing filters or check the missing-IDs panel above.",
     "emptyHintUpload": "Upload your candidate database to get started",
+    "emptyHintFiltered": "No candidates match the selected filters",
+    "showAll": "Show all candidates",
     "showing": "Showing {{from}}–{{to}} of {{total}} candidates"
   },
   "col": {

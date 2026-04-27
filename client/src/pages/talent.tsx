@@ -2428,17 +2428,48 @@ export default function TalentPage() {
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             ) : candidates.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <Users className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                <p className="text-muted-foreground font-medium">{t("list.empty")}</p>
-                <p className="text-muted-foreground/60 text-sm mt-1">
-                  {search
-                    ? (parsedSearch.isMulti
-                        ? t("list.emptyHintMultiSearch")
-                        : t("list.emptyHintSearch"))
-                    : t("list.emptyHintUpload")}
-                </p>
-              </div>
+              (() => {
+                const anyFilterActive =
+                  (status !== "all") ||
+                  (sourceFilter !== "all") ||
+                  formerEmployeeFilter ||
+                  hasDriversLicenseFilter ||
+                  hasVaccinationReportFilter;
+                return (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <Users className="h-12 w-12 text-muted-foreground/30 mb-4" />
+                    <p className="text-muted-foreground font-medium">{t("list.empty")}</p>
+                    <p className="text-muted-foreground/60 text-sm mt-1">
+                      {search
+                        ? (parsedSearch.isMulti
+                            ? t("list.emptyHintMultiSearch")
+                            : t("list.emptyHintSearch"))
+                        : (anyFilterActive
+                            ? t("list.emptyHintFiltered")
+                            : t("list.emptyHintUpload"))}
+                    </p>
+                    {!search && anyFilterActive && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-4"
+                        data-testid="button-show-all-candidates"
+                        onClick={() => {
+                          setStatus("all");
+                          setSourceFilter("all");
+                          setFormerEmployeeFilter(false);
+                          setHasDriversLicenseFilter(false);
+                          setHasVaccinationReportFilter(false);
+                          setPage(1);
+                        }}
+                      >
+                        {t("list.showAll")}
+                      </Button>
+                    )}
+                  </div>
+                );
+              })()
             ) : (
               <div className="overflow-x-auto">
                 <Table>
