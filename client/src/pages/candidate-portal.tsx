@@ -26,6 +26,8 @@ import {
   ImageIcon,
   CreditCard,
   Landmark,
+  Car,
+  Syringe,
   User,
   ChevronDown,
   Save,
@@ -588,7 +590,7 @@ function getApplicationBadge(_deadline: string | undefined, status: string, t: (
 
 // ─── Profile Completion Card ──────────────────────────────────────────────────
 
-type DocKey = "resume" | "nationalId" | "photo" | "iban";
+type DocKey = "resume" | "nationalId" | "photo" | "iban" | "driversLicense" | "vaccinationReport";
 
 const ALL_DOC_ITEMS: {
   key: DocKey;
@@ -599,10 +601,12 @@ const ALL_DOC_ITEMS: {
   smpOnly?: boolean;
   individualOnly?: boolean;
 }[] = [
-  { key: "photo",      i18nKey: "photo",      maxMb: 3, accept: ".jpg,.jpeg,.png",      icon: <ImageIcon className="h-4 w-4" /> },
-  { key: "nationalId", i18nKey: "nationalId", maxMb: 5, accept: ".pdf,.jpg,.jpeg,.png", icon: <CreditCard className="h-4 w-4" /> },
-  { key: "iban",       i18nKey: "iban",       maxMb: 5, accept: ".pdf,.jpg,.jpeg,.png", icon: <Landmark className="h-4 w-4" />, individualOnly: true },
-  { key: "resume",     i18nKey: "resume",     maxMb: 5, accept: ".pdf,.doc,.docx",      icon: <FileText className="h-4 w-4" />, individualOnly: true },
+  { key: "photo",             i18nKey: "photo",             maxMb: 3, accept: ".jpg,.jpeg,.png",      icon: <ImageIcon className="h-4 w-4" /> },
+  { key: "nationalId",        i18nKey: "nationalId",        maxMb: 5, accept: ".pdf,.jpg,.jpeg,.png", icon: <CreditCard className="h-4 w-4" /> },
+  { key: "iban",              i18nKey: "iban",              maxMb: 5, accept: ".pdf,.jpg,.jpeg,.png", icon: <Landmark className="h-4 w-4" />, individualOnly: true },
+  { key: "resume",            i18nKey: "resume",            maxMb: 5, accept: ".pdf,.doc,.docx",      icon: <FileText className="h-4 w-4" />, individualOnly: true },
+  { key: "driversLicense",    i18nKey: "driversLicense",    maxMb: 5, accept: ".pdf,.jpg,.jpeg,.png", icon: <Car className="h-4 w-4" />,        individualOnly: true },
+  { key: "vaccinationReport", i18nKey: "vaccinationReport", maxMb: 5, accept: ".pdf,.jpg,.jpeg,.png", icon: <Syringe className="h-4 w-4" />,    individualOnly: true },
 ];
 
 function ProfileCompletionCard({
@@ -631,17 +635,21 @@ function ProfileCompletionCard({
     nationalId: !!profile?.hasNationalId,
     photo: !!profile?.hasPhoto,
     iban: !!profile?.hasIban,
+    driversLicense: !!profile?.hasDriversLicense,
+    vaccinationReport: !!profile?.hasVaccinationReport,
   };
 
-  const [justUploaded, setJustUploaded] = useState<Record<DocKey, string | null>>({ resume: null, nationalId: null, photo: null, iban: null });
-  const [uploading, setUploading] = useState<Record<DocKey, boolean>>({ resume: false, nationalId: false, photo: false, iban: false });
+  const [justUploaded, setJustUploaded] = useState<Record<DocKey, string | null>>({ resume: null, nationalId: null, photo: null, iban: null, driversLicense: null, vaccinationReport: null });
+  const [uploading, setUploading] = useState<Record<DocKey, boolean>>({ resume: false, nationalId: false, photo: false, iban: false, driversLicense: false, vaccinationReport: false });
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
   const [showCropDialog, setShowCropDialog] = useState(false);
   const inputRefs = {
-    resume:     useRef<HTMLInputElement>(null),
-    nationalId: useRef<HTMLInputElement>(null),
-    photo:      useRef<HTMLInputElement>(null),
-    iban:       useRef<HTMLInputElement>(null),
+    resume:            useRef<HTMLInputElement>(null),
+    nationalId:        useRef<HTMLInputElement>(null),
+    photo:             useRef<HTMLInputElement>(null),
+    iban:              useRef<HTMLInputElement>(null),
+    driversLicense:    useRef<HTMLInputElement>(null),
+    vaccinationReport: useRef<HTMLInputElement>(null),
   };
 
   const docUrlMap: Record<DocKey, string | null> = {
@@ -649,6 +657,8 @@ function ProfileCompletionCard({
     photo: profile?.photoUrl || null,
     nationalId: toProxiedFileUrl(profile?.nationalIdFileUrl),
     iban: toProxiedFileUrl(profile?.ibanFileUrl),
+    driversLicense: toProxiedFileUrl(profile?.driversLicenseFileUrl),
+    vaccinationReport: toProxiedFileUrl(profile?.vaccinationReportFileUrl),
   };
 
   const isDone = (key: DocKey) => dbFlags[key] || !!justUploaded[key];

@@ -42,8 +42,8 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "file.invalidPath":           "Invalid file path",
     "file.noPermission":          "You do not have permission to view this file.",
     "file.noUpload":              "No file uploaded",
-    "file.invalidDocType":        "Invalid docType. Must be photo, nationalId, iban, or resume",
-    "file.invalidDocTypeShort":   "Invalid docType. Must be photo, nationalId, or iban",
+    "file.invalidDocType":        "Invalid docType. Must be photo, nationalId, iban, resume, driversLicense, or vaccinationReport",
+    "file.invalidDocTypeShort":   "Invalid docType. Must be photo, nationalId, iban, driversLicense, or vaccinationReport",
     "file.photoFormat":           "Photo must be a JPG or PNG image",
 
     // Candidates
@@ -352,6 +352,8 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "doc.label.photo"                     : "Personal Photo",
     "doc.label.nationalId"                : "National ID / Iqama",
     "doc.label.iban"                      : "IBAN Certificate",
+    "doc.label.driversLicense"            : "Driver's License",
+    "doc.label.vaccinationReport"         : "Vaccination Report",
     "doc.label.document"                  : "document",
     // Task #120 — server-side IBAN validation
     "iban.missing_prefix"                 : "Invalid IBAN: must start with SA",
@@ -411,8 +413,8 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "file.invalidPath":           "مسار الملف غير صحيح",
     "file.noPermission":          "ليس لديك صلاحية لعرض هذا الملف.",
     "file.noUpload":              "لم يتم رفع أي ملف",
-    "file.invalidDocType":        "نوع المستند غير صحيح. يجب أن يكون photo أو nationalId أو iban أو resume",
-    "file.invalidDocTypeShort":   "نوع المستند غير صحيح. يجب أن يكون photo أو nationalId أو iban",
+    "file.invalidDocType":        "نوع المستند غير صحيح. يجب أن يكون photo أو nationalId أو iban أو resume أو driversLicense أو vaccinationReport",
+    "file.invalidDocTypeShort":   "نوع المستند غير صحيح. يجب أن يكون photo أو nationalId أو iban أو driversLicense أو vaccinationReport",
     "file.photoFormat":           "يجب أن تكون الصورة بصيغة JPG أو PNG",
 
     // Candidates
@@ -721,6 +723,8 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "doc.label.photo"                     : "الصورة الشخصية",
     "doc.label.nationalId"                : "بطاقة الهوية / الإقامة",
     "doc.label.iban"                      : "شهادة الآيبان",
+    "doc.label.driversLicense"            : "رخصة القيادة",
+    "doc.label.vaccinationReport"         : "تقرير التطعيم",
     "doc.label.document"                  : "المستند",
     // Task #120 — server-side IBAN validation
     "iban.missing_prefix"                 : "آيبان غير صالح: يجب أن يبدأ بـ SA",

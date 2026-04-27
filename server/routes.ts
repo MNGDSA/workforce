@@ -716,7 +716,7 @@ export async function registerRoutes(
       const { id, docType } = req.params;
       // Same IDOR fix as the upload endpoint above — admin OR self only.
       if (!(await assertCandidateOwnerOrAdmin(req, res, id))) return;
-      if (!["photo", "nationalId", "iban"].includes(docType)) {
+      if (!["photo", "nationalId", "iban", "driversLicense", "vaccinationReport"].includes(docType)) {
         return res.status(400).json({ message: tr(req, "file.invalidDocTypeShort") });
       }
       const candidate = await storage.getCandidate(id);
@@ -725,6 +725,8 @@ export async function registerRoutes(
         photo: candidate.photoUrl,
         nationalId: candidate.nationalIdFileUrl,
         iban: candidate.ibanFileUrl,
+        driversLicense: candidate.driversLicenseFileUrl,
+        vaccinationReport: candidate.vaccinationReportFileUrl,
       };
       const oldFileUrl = fileUrlMap[docType];
       if (oldFileUrl) {
@@ -734,6 +736,8 @@ export async function registerRoutes(
       if (docType === "photo") { updatePayload.photoUrl = null; updatePayload.hasPhoto = false; }
       if (docType === "nationalId") { updatePayload.nationalIdFileUrl = null; updatePayload.hasNationalId = false; }
       if (docType === "iban") { updatePayload.ibanFileUrl = null; updatePayload.hasIban = false; }
+      if (docType === "driversLicense") { updatePayload.driversLicenseFileUrl = null; updatePayload.hasDriversLicense = false; }
+      if (docType === "vaccinationReport") { updatePayload.vaccinationReportFileUrl = null; updatePayload.hasVaccinationReport = false; }
       const updated = await storage.updateCandidate(id, updatePayload);
       if (!updated) return res.status(404).json({ message: tr(req, "candidate.notFound") });
       const onboardingRecordsDel = await storage.getOnboardingRecords({ candidateId: id });
@@ -758,6 +762,8 @@ export async function registerRoutes(
           const docLabelKey = docType === "photo" ? "doc.label.photo"
             : docType === "nationalId" ? "doc.label.nationalId"
             : docType === "iban" ? "doc.label.iban"
+            : docType === "driversLicense" ? "doc.label.driversLicense"
+            : docType === "vaccinationReport" ? "doc.label.vaccinationReport"
             : "doc.label.document";
           const docLabel = trL(recipientLocale, docLabelKey);
           const smsMsg = trL(recipientLocale, "sms.docRejected", { docLabel });

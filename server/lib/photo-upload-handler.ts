@@ -73,13 +73,14 @@ export function createUploadDocumentsHandler(deps: PhotoUploadDeps): RequestHand
       if (!(await assertCandidateOwnerOrAdmin(req, res, id))) return;
       const docType = req.body.docType as string;
       if (!req.file) return res.status(400).json({ message: tr(req, "file.noUpload") });
-      if (!["photo", "nationalId", "iban", "resume"].includes(docType)) {
+      if (!["photo", "nationalId", "iban", "resume", "driversLicense", "vaccinationReport"].includes(docType)) {
         return res.status(400).json({ message: tr(req, "file.invalidDocType") });
       }
       const localPath = req.file.path;
       // ACL intent: **mixed by docType** — public-read for `photo`, private
-      // for `nationalId` / `iban` / `resume` (Task #202 audit rows 1a + 1b
-      // in KNOWN_ISSUES.md).
+      // for `nationalId` / `iban` / `resume` / `driversLicense` /
+      // `vaccinationReport` (Task #202 audit rows 1a + 1b in
+      // KNOWN_ISSUES.md).
       // Task #202 — per-doc-type ACL is intentional and is the canonical
       // pattern referenced by sibling upload routes:
       //   • `photo` is **public-read** because the candidate photo is rendered
@@ -189,6 +190,8 @@ export function createUploadDocumentsHandler(deps: PhotoUploadDeps): RequestHand
       if (docType === "nationalId") { updatePayload.hasNationalId = true; updatePayload.nationalIdFileUrl = fileUrl; }
       if (docType === "iban") { updatePayload.hasIban = true; updatePayload.ibanFileUrl = fileUrl; }
       if (docType === "resume") { updatePayload.resumeUrl = fileUrl; updatePayload.hasResume = true; }
+      if (docType === "driversLicense") { updatePayload.hasDriversLicense = true; updatePayload.driversLicenseFileUrl = fileUrl; }
+      if (docType === "vaccinationReport") { updatePayload.hasVaccinationReport = true; updatePayload.vaccinationReportFileUrl = fileUrl; }
       const updated = await storage.updateCandidate(id, updatePayload);
       if (!updated) return res.status(404).json({ message: tr(req, "candidate.notFound") });
       const onboardingRecords = await storage.getOnboardingRecords({ candidateId: id });

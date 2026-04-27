@@ -154,7 +154,11 @@
       "resume": "Resume / CV",
       "resumeHint": "PDF, DOC up to {{n}} MB",
       "iban": "IBAN Certificate",
-      "ibanHint": "PDF, JPG, PNG up to {{n}} MB"
+      "ibanHint": "PDF, JPG, PNG up to {{n}} MB",
+      "driversLicense": "Driver's License",
+      "driversLicenseHint": "PDF, JPG, PNG up to {{n}} MB",
+      "vaccinationReport": "Vaccination Report",
+      "vaccinationReportHint": "PDF, JPG, PNG up to {{n}} MB"
     },
     "uploadFailed": "Upload failed",
     "tryAgain": "Please try again.",

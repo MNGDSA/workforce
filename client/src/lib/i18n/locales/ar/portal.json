@@ -154,7 +154,11 @@
       "resume": "السيرة الذاتية",
       "resumeHint": "PDF أو DOC حتى {{n}} ميجابايت",
       "iban": "شهادة الآيبان",
-      "ibanHint": "PDF أو JPG أو PNG حتى {{n}} ميجابايت"
+      "ibanHint": "PDF أو JPG أو PNG حتى {{n}} ميجابايت",
+      "driversLicense": "رخصة القيادة",
+      "driversLicenseHint": "PDF أو JPG أو PNG حتى {{n}} ميجابايت",
+      "vaccinationReport": "تقرير التطعيم",
+      "vaccinationReportHint": "PDF أو JPG أو PNG حتى {{n}} ميجابايت"
     },
     "uploadFailed": "فشل الرفع",
     "tryAgain": "يرجى المحاولة مرة أخرى.",

@@ -238,6 +238,8 @@
     "viewCv": "View CV",
     "viewNationalId": "View ID",
     "viewIban": "View IBAN Certificate",
+    "viewDriversLicense": "View Driver's License",
+    "viewVaccinationReport": "View Vaccination Report",
     "notes": "Notes",
     "save": "Save Changes",
     "cancel": "Cancel",

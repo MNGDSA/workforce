@@ -262,6 +262,8 @@
     "viewCv": "عرض السيرة الذاتية",
     "viewNationalId": "عرض الهوية",
     "viewIban": "عرض شهادة الآيبان",
+    "viewDriversLicense": "عرض رخصة القيادة",
+    "viewVaccinationReport": "عرض تقرير التطعيم",
     "notes": "ملاحظات",
     "save": "حفظ التغييرات",
     "cancel": "إلغاء",

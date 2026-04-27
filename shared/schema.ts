@@ -229,6 +229,8 @@ export const candidates = pgTable(
     hasPhoto: boolean("has_photo").notNull().default(false),
     hasNationalId: boolean("has_national_id").notNull().default(false),
     hasIban: boolean("has_iban").notNull().default(false),
+    hasDriversLicense: boolean("has_drivers_license").notNull().default(false),
+    hasVaccinationReport: boolean("has_vaccination_report").notNull().default(false),
     // Classification & Activity
     classification: candidateClassificationEnum("classification").notNull().default("individual"),
     lastLoginAt: timestamp("last_login_at"),
@@ -237,6 +239,8 @@ export const candidates = pgTable(
     photoUrl: text("photo_url"),
     nationalIdFileUrl: text("national_id_file_url"),
     ibanFileUrl: text("iban_file_url"),
+    driversLicenseFileUrl: text("drivers_license_file_url"),
+    vaccinationReportFileUrl: text("vaccination_report_file_url"),
     notes: text("notes"),
     tags: text("tags").array(),
     metadata: jsonb("metadata"),

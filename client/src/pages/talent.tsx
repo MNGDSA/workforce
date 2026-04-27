@@ -1211,7 +1211,9 @@ function CandidateProfileSheet({
             const cvUrl = (c as any).hasResume ? toProxiedFileUrl((c as any).resumeUrl) : null;
             const idUrl = (c as any).hasNationalId ? toProxiedFileUrl((c as any).nationalIdFileUrl) : null;
             const ibanUrl = (c as any).hasIban ? toProxiedFileUrl((c as any).ibanFileUrl) : null;
-            if (!cvUrl && !idUrl && !ibanUrl) return null;
+            const dlUrl = (c as any).hasDriversLicense ? toProxiedFileUrl((c as any).driversLicenseFileUrl) : null;
+            const vacUrl = (c as any).hasVaccinationReport ? toProxiedFileUrl((c as any).vaccinationReportFileUrl) : null;
+            if (!cvUrl && !idUrl && !ibanUrl && !dlUrl && !vacUrl) return null;
             return (
               <div>
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("profile.documents")}</h4>
@@ -1250,6 +1252,30 @@ function CandidateProfileSheet({
                     >
                       <FileText className="me-2 h-4 w-4" />
                       {t("profile.viewIban")}
+                    </Button>
+                  )}
+                  {dlUrl && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-border"
+                      onClick={() => window.open(dlUrl, "_blank", "noopener,noreferrer")}
+                      data-testid="button-view-drivers-license"
+                    >
+                      <FileText className="me-2 h-4 w-4" />
+                      {t("profile.viewDriversLicense")}
+                    </Button>
+                  )}
+                  {vacUrl && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-border"
+                      onClick={() => window.open(vacUrl, "_blank", "noopener,noreferrer")}
+                      data-testid="button-view-vaccination-report"
+                    >
+                      <FileText className="me-2 h-4 w-4" />
+                      {t("profile.viewVaccinationReport")}
                     </Button>
                   )}
                 </div>
