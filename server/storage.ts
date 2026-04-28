@@ -152,6 +152,26 @@ export type ApplicationCandidateSummary = {
   nationality: string | null;
   gender: "male" | "female" | "other" | "prefer_not_to_say" | null;
   photoUrl: string | null;
+  // Doc-presence flags + lifecycle fields used by the onboarding admit
+  // dialog so it can render eligible candidates (those with shortlisted
+  // applications) without round-tripping to a separately paginated
+  // /api/candidates list. Without these, a tenant with more than 1000
+  // candidates loses access to anyone whose id falls past the paginated
+  // candidates window — even when their application is freshly liked.
+  hasPhoto: boolean | null;
+  hasIban: boolean | null;
+  hasNationalId: boolean | null;
+  classification: "individual" | "smp" | null;
+  status:
+    | "available"
+    | "active"
+    | "inactive"
+    | "blocked"
+    | "hired"
+    | "awaiting_activation"
+    | "pending_profile"
+    | null;
+  archivedAt: Date | null;
 };
 
 export type ApplicationWithCandidate = Application & {
@@ -1472,6 +1492,12 @@ export class DatabaseStorage implements IStorage {
           nationality: candidates.nationality,
           gender: candidates.gender,
           photoUrl: candidates.photoUrl,
+          hasPhoto: candidates.hasPhoto,
+          hasIban: candidates.hasIban,
+          hasNationalId: candidates.hasNationalId,
+          classification: candidates.classification,
+          status: candidates.status,
+          archivedAt: candidates.archivedAt,
         },
       })
       .from(applications)

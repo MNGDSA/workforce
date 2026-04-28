@@ -129,6 +129,24 @@ interface Application {
   candidateId: string;
   status: string;
   jobId?: string | null;
+  // Server includes a joined `candidate` summary when the requester has
+  // applications:read (or super-admin). The admit dialog relies on this
+  // joined data so it stays correct for tenants with more candidates than
+  // /api/candidates returns in a single page.
+  candidate?: {
+    id: string;
+    fullNameEn: string;
+    nationalId: string | null;
+    phone: string | null;
+    email: string | null;
+    photoUrl: string | null;
+    hasPhoto: boolean | null;
+    hasIban: boolean | null;
+    hasNationalId: boolean | null;
+    classification: "individual" | "smp" | null;
+    status: string | null;
+    archivedAt: string | null;
+  } | null;
 }
 
 const STATUS_CONFIG: Record<OnboardingStatus, { label: string; color: string; icon: React.ElementType }> = {
@@ -1530,15 +1548,58 @@ export default function OnboardingPage() {
   // the interviews page. Reversing a shortlist must remove the candidate from
   // this list, so neither plain "interviewed" nor "hired" qualifies on its
   // own — the admin signals readiness to admit by shortlisting.
-  const shortlistedIds = new Set(
-    applications.filter(a => a.status === "shortlisted").map(a => a.candidateId)
-  );
+  //
+  // CRITICAL: derive eligibleCandidates from `applications` (which carries a
+  // joined `candidate` summary), NOT from the paginated /api/candidates list.
+  // PROD has >8000 candidates and the candidates query caps at limit=1000, so
+  // a freshly liked candidate whose row falls past that window would never
+  // appear in the dialog when cross-referenced through `candidates`.
+  // Applications are tenant-scoped and bounded by liked-volume rather than
+  // global candidate count, so they are the correct source of truth here.
   const alreadyOnboarding = new Set(
     records.filter(r => r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated").map(r => r.candidateId)
   );
-  const eligibleCandidates = candidates.filter(c =>
-    shortlistedIds.has(c.id) && !alreadyOnboarding.has(c.id)
-  );
+  type EligibleCandidate = {
+    id: string;
+    fullNameEn: string;
+    nationalId: string | null;
+    phone: string | null;
+    photoUrl: string | null;
+    hasPhoto: boolean | null;
+    hasIban: boolean | null;
+    hasNationalId: boolean | null;
+    classification: "individual" | "smp" | null;
+    // Carry the EXACT shortlisted application/job that made the candidate
+    // eligible so handleAdmit links onboarding to the right job. Without
+    // this, a candidate with both a "shortlisted" and a "hired" application
+    // could be admitted under the hired job's id (wrong contract path).
+    applicationId: string;
+    jobId: string | null;
+  };
+  // First, group shortlisted applications by candidate and pick the most
+  // recent one (applications come back ordered by appliedAt DESC from the
+  // server, so the first hit per candidate is already the latest).
+  const eligibleByCandidate = new Map<string, EligibleCandidate>();
+  for (const a of applications) {
+    if (a.status !== "shortlisted" || !a.candidate || a.candidate.archivedAt) continue;
+    if (alreadyOnboarding.has(a.candidateId)) continue;
+    if (eligibleByCandidate.has(a.candidateId)) continue;
+    const c = a.candidate;
+    eligibleByCandidate.set(a.candidateId, {
+      id: c.id,
+      fullNameEn: c.fullNameEn,
+      nationalId: c.nationalId,
+      phone: c.phone,
+      photoUrl: c.photoUrl,
+      hasPhoto: c.hasPhoto,
+      hasIban: c.hasIban,
+      hasNationalId: c.hasNationalId,
+      classification: c.classification,
+      applicationId: a.id,
+      jobId: a.jobId ?? null,
+    });
+  }
+  const eligibleCandidates: EligibleCandidate[] = Array.from(eligibleByCandidate.values());
   const admitFiltered = eligibleCandidates.filter(c =>
     !admitSearch || c.fullNameEn.toLowerCase().includes(admitSearch.toLowerCase()) || (c.nationalId ?? "").toLowerCase().includes(admitSearch.toLowerCase()) || (c.phone ?? "").toLowerCase().includes(admitSearch.toLowerCase())
   );
@@ -1555,14 +1616,21 @@ export default function OnboardingPage() {
     if (selectedIds.size === 0) return;
     const items = [...selectedIds].map(id => {
       const c = eligibleCandidates.find(x => x.id === id)!;
-      const app = applications.find(a => a.candidateId === id && ["interviewed", "hired", "shortlisted"].includes(a.status));
+      // Use the EXACT shortlisted application/job that put this candidate in
+      // the dialog — `c.applicationId` was captured during eligibility
+      // derivation from the shortlisted row. Falling back to a wider
+      // status-set search risks linking onboarding to the wrong job (e.g.
+      // an older "hired" application from a different posting).
       return {
         candidateId: id,
-        applicationId: app?.id ?? null,
-        jobId: app?.jobId ?? null,
-        hasPhoto: c.hasPhoto,
-        hasIban: c.hasIban,
-        hasNationalId: c.hasNationalId,
+        applicationId: c.applicationId,
+        jobId: c.jobId,
+        // Coerce server-side nullables to strict booleans for the AdmitItem
+        // contract. A missing flag means "not yet uploaded", which the
+        // admit-side prerequisite check treats the same as `false`.
+        hasPhoto: c.hasPhoto ?? false,
+        hasIban: c.hasIban ?? false,
+        hasNationalId: c.hasNationalId ?? false,
       };
     });
     admitMutation.mutate(items);
