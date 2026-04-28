@@ -687,53 +687,26 @@ async function enqueueFinalWarningSms(
  */
 async function eliminateOnboarding(rec: OnboardingRecord): Promise<boolean> {
   try {
-    // Step 1: stamp eliminated_at FIRST (CAS guard) so a concurrent sweep
-    // skips this row. If any later step fails we leave the stamp in
-    // place — the row is dead either way — and emit an alert so an
-    // operator can finish the cleanup manually rather than retrying
-    // automatically and double-flipping application status.
+    // Stamp eliminated_at FIRST (CAS guard) so a concurrent sweep skips this row.
     const [stamped] = await db.update(onboarding)
       .set({ eliminatedAt: new Date(), updatedAt: new Date() })
       .where(and(eq(onboarding.id, rec.id), isNull(onboarding.eliminatedAt)))
       .returning();
-    if (!stamped) return false; // already eliminated by a concurrent sweep
+    if (!stamped) return false;
 
-    // Step 2: route the elimination through the SAME storage path that
-    // the manual "Reset Like" PATCH /api/applications/:id uses. This
-    // guarantees the centralised reverse-sync helper runs identically
-    // for both flows — the architectural invariant the spec calls out.
+    // For application-linked rows, flip the application back to "interviewed"
+    // so the candidate can be re-shortlisted. Then delete the onboarding row
+    // directly — independent of its status (pending/in_progress/ready) — so
+    // the duplicate-check guard in storage.createOnboardingRecord doesn't
+    // block a future re-admission.
     if (rec.applicationId) {
       const app = await storage.getApplication(rec.applicationId);
-      const previousStatus = app?.status ?? null;
       if (app && app.status === "shortlisted") {
         await storage.updateApplication(rec.applicationId, { status: "interviewed" });
       }
-      // Always run the cleanup helper (it no-ops when the transition is
-      // not a reset). The helper deletes any pending onboarding row(s),
-      // including this one, with the same audit signature as a manual
-      // reset.
-      const candidate = await storage.getCandidate(rec.candidateId);
-      const { applyShortlistResetCleanup } = await import("./application-status-cleanup");
-      await applyShortlistResetCleanup({
-        previousStatus,
-        newStatus: "interviewed",
-        applicationId: rec.applicationId,
-        candidateId: rec.candidateId,
-        candidateName: candidate?.fullNameEn ?? null,
-        actor: { id: null, name: "system:onboarding-reminders" },
-        metadata: {
-          source: "onboarding_auto_elimination",
-          reminderCount: rec.reminderCount,
-          onboardingId: rec.id,
-        },
-      });
-    } else {
-      // SMP onboarding has no application linkage — delete directly.
-      await storage.deleteOnboardingRecord(rec.id);
     }
+    await storage.deleteOnboardingRecord(rec.id);
 
-    // Step 3: notify admins via the bell-alert inbox so the action is
-    // visible the next time they open Workforce, not buried in audit.
     try {
       await storage.createAdminAlert(
         "تم استبعاد مرشح تلقائيًا بعد انتهاء مهلة التذكيرات",
