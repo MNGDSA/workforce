@@ -106,6 +106,8 @@ app.use((req, res, next) => {
     await ensureLocaleColumn(log);
     const { ensureSmsOutboxNextAttempt } = await import("./migrations/ensure-sms-outbox-next-attempt");
     await ensureSmsOutboxNextAttempt(log);
+    const { ensureOnboardingReminders } = await import("./migrations/ensure-onboarding-reminders");
+    await ensureOnboardingReminders(log);
   } catch (err) {
     log(`boot migration failed: ${err}`, "boot-migrate");
   }
@@ -320,6 +322,24 @@ app.use((req, res, next) => {
     }
   }
 
+  // Task #214: hourly onboarding reminder sweep — enqueues SMS for
+  // candidates with missing docs and auto-eliminates rows past the
+  // configured deadline. No-op when master switch is off.
+  async function runOnboardingReminderSweepJob() {
+    try {
+      const { runOnboardingReminderSweep } = await import("./onboarding-reminders");
+      const r = await runOnboardingReminderSweep();
+      if (r.remindersEnqueued + r.finalWarningsEnqueued + r.eliminated > 0) {
+        log(
+          `Onboarding reminders: considered=${r.considered} reminders=${r.remindersEnqueued} finals=${r.finalWarningsEnqueued} eliminated=${r.eliminated} quietSkipped=${r.skippedQuietHours}`,
+          "scheduler",
+        );
+      }
+    } catch (err) {
+      log(`Onboarding reminder sweep error: ${err}`, "scheduler");
+    }
+  }
+
   // Run all once at startup, then every 24 hours
   runAutoActivateUpcomingEvents();
   runAutoCloseExpiredEvents();
@@ -328,6 +348,7 @@ app.use((req, res, next) => {
   runSmsOutboxDrain();
   runAwaitingActivationSweep();
   runIncompleteProfileSweep();
+  runOnboardingReminderSweepJob();
   const schedulerTimers = [
     setInterval(runAutoActivateUpcomingEvents, 24 * 60 * 60 * 1000),
     setInterval(runAutoCloseExpiredEvents, 24 * 60 * 60 * 1000),
@@ -336,6 +357,7 @@ app.use((req, res, next) => {
     setInterval(runSmsOutboxDrain, 30 * 1000),
     setInterval(runAwaitingActivationSweep, 24 * 60 * 60 * 1000),
     setInterval(runIncompleteProfileSweep, 10 * 60 * 1000),
+    setInterval(runOnboardingReminderSweepJob, 60 * 60 * 1000),
   ];
 
   // ─── Graceful Shutdown ──────────────────────────────────────────────────────

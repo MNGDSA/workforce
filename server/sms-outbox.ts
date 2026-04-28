@@ -168,6 +168,16 @@ interface OutboxPayload {
   link: string;
   locale: string;
   tokenRowId?: string;
+  // Task #214: onboarding reminder/final-warning rows attach the doc list.
+  onboardingId?: string;
+  missingDocs?: string[];
+}
+
+// Map reminder doc id → i18n label key suffix (server-side keys live
+// under "docs."). Keep in sync with onboarding-reminders.ts.
+function docToLabelKey(d: string): string {
+  if (d === "national_id") return "nationalId";
+  return d;
 }
 
 /** Stamp a transient or permanent failure on the given row inside the
@@ -252,7 +262,22 @@ async function processOneRow(excludeIds: string[]): Promise<{ outcome: "sent" | 
 
     const payload = row.payload as OutboxPayload;
     const locale = payload.locale === "ar" ? "ar" : "en";
-    const message = trL(locale, "sms.smpActivation", { link: payload.link });
+    // Template selection by kind. Activation kinds use the link-only
+    // template; onboarding reminders include a comma-joined doc list
+    // localized by the candidate's locale.
+    let message: string;
+    if (row.kind === "onboarding_reminder" || row.kind === "onboarding_final_warning") {
+      const docIds = Array.isArray(payload.missingDocs) ? payload.missingDocs : [];
+      const docLabels = docIds.map((d) => trL(locale, `docs.${docToLabelKey(d)}`));
+      // Fallback: if any label is missing, use the doc id itself.
+      const docs = docLabels.map((l, i) => l && l !== `docs.${docToLabelKey(docIds[i])}` ? l : docIds[i]).join(", ");
+      const key = row.kind === "onboarding_final_warning"
+        ? "sms.onboardingFinalWarning"
+        : "sms.onboardingReminder";
+      message = trL(locale, key, { docs, link: payload.link });
+    } else {
+      message = trL(locale, "sms.smpActivation", { link: payload.link });
+    }
 
     try {
       const result = await sendSmsViaPlugin(plugin, row.recipientPhone, message);

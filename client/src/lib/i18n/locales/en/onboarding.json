@@ -4,12 +4,14 @@
     "subtitle": "Convert shortlisted candidates into employees after prerequisite verification",
     "tabs": {
       "pipeline": "Onboarding Pipeline",
-      "templates": "Contract Templates"
+      "templates": "Contract Templates",
+      "reminders": "Reminder Settings"
     }
   },
   "tabs": {
     "pipeline": "Onboarding Pipeline",
-    "templates": "Contract Templates"
+    "templates": "Contract Templates",
+    "reminders": "Reminder Settings"
   },
   "status": {
     "pending": "Pending",
@@ -336,6 +338,57 @@
     "eventName": "Event Name",
     "contractDate": "Contract Date",
     "companyName": "Company Name"
+  },
+  "reminders": {
+    "title": "Document Reminder Settings",
+    "subtitle": "Send automatic SMS reminders to candidates whose documents are missing, and auto-eliminate them after the deadline.",
+    "masterSwitch": "Enable reminders",
+    "masterSwitchHint": "When off, no reminders are sent and no candidate is auto-eliminated.",
+    "cadence": "Reminder cadence",
+    "firstAfterHours": "First reminder after (hours)",
+    "repeatEveryHours": "Repeat every (hours)",
+    "maxReminders": "Maximum reminders",
+    "totalDeadlineHours": "Total deadline before elimination (hours)",
+    "finalWarningHours": "Final warning sent before deadline (hours)",
+    "quietHours": "Quiet hours",
+    "quietHoursStart": "Start",
+    "quietHoursEnd": "End",
+    "quietHoursTz": "Timezone",
+    "quietHoursHint": "No reminders are sent inside this window.",
+    "requiredDocs": "Documents required from candidates",
+    "requiredDocsHint": "Choose which documents candidates must upload. The IBAN certificate is automatically skipped for SMP workers.",
+    "docPhoto": "Personal Photo",
+    "docIban": "IBAN Certificate",
+    "docNationalId": "National ID / Iqama",
+    "save": "Save settings",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "saveFailed": "Could not save settings",
+    "row": {
+      "off": "Off",
+      "pending": "Next reminder in {{n}}h",
+      "pendingShort": "Next: {{n}}h",
+      "due": "Reminder due",
+      "paused": "Paused",
+      "warning": "Will be eliminated in {{n}}h",
+      "max_reached": "All reminders sent",
+      "eliminated": "Eliminated",
+      "sentCount": "Sent {{n}}/{{max}}",
+      "missingDocs_one": "{{n}} document missing",
+      "missingDocs_other": "{{n}} documents missing"
+    },
+    "actions": {
+      "sendNow": "Send reminder now",
+      "pause": "Pause reminders",
+      "resume": "Resume reminders",
+      "filterAtRisk": "At risk of elimination within 24 hours"
+    },
+    "toasts": {
+      "sentNow": "Reminder sent",
+      "paused": "Reminders paused",
+      "resumed": "Reminders resumed",
+      "actionFailed": "Action failed"
+    }
   },
   "toasts": {
     "contractGenerated": "Contract generated and ready for signing",

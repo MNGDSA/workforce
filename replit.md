@@ -65,6 +65,7 @@ The system employs a modern, full-stack architecture designed for scalability an
 - **Rekognition Resilience**: Profile photo uploads fail closed with `503` if AWS Rekognition is unreachable and no previously validated photo exists.
 - **Rotation Rescue Telemetry**: Tracks photo upload auto-rotation outcomes for regression detection.
 - **Candidate Document Types**: Supports Driver's License and Vaccination Report, which are individual-only, PII-protected, and not mirrored into SMP onboarding.
+- **Onboarding Document Reminders**: Automated SMS reminders for candidates with missing required documents (photo, IBAN, national ID), with configurable cadence (first-after, repeat-every, max), quiet hours, final-warning window, and auto-elimination after a deadline. Per-row indicators (state-driven bell, missing-doc pip strip, "at risk" red border) and admin actions (send-now, pause, resume) live on the onboarding pipeline. Settings tab `إعدادات الإشعارات` on `/onboarding`. Race-safe (compare-and-swap on `reminder_count` for sweep + manual; transactional elimination).
 
 **Mobile App (Android Native)**:
 - Developed in Kotlin with Jetpack Compose, offering selfie check-in with CameraX, GPS verification, offline-first Room DB, encrypted data storage, auto-sync, and Google Maps geofence zones. Includes `DeviceTrustManager` for emulator and mock GPS detection. Supports excuse request submission and photo changes requiring HR approval.

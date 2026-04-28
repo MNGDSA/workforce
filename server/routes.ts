@@ -3948,6 +3948,87 @@ export async function registerRoutes(
     }
   });
 
+  // ─── Task #214: Onboarding document-upload reminders ─────────────────────
+  // GET  /api/onboarding/reminders/config   — read current config blob
+  // PATCH/api/onboarding/reminders/config   — update config (admin only)
+  // GET  /api/onboarding/reminders/status   — derived per-row status map
+  // POST /api/onboarding/:id/reminders/send-now — manual reminder
+  // POST /api/onboarding/:id/reminders/pause     — pause this row
+  // POST /api/onboarding/:id/reminders/resume    — resume this row
+  app.get("/api/onboarding/reminders/config", requirePermission("onboarding:read"), async (_req: Request, res: Response) => {
+    try {
+      const { getReminderConfig } = await import("./onboarding-reminders");
+      return res.json(await getReminderConfig());
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.patch("/api/onboarding/reminders/config", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
+    try {
+      const { setReminderConfig } = await import("./onboarding-reminders");
+      const cfg = await setReminderConfig(req.body ?? {});
+      await logAudit(req, {
+        action: "onboarding.reminders.config_updated",
+        entityType: "system_setting",
+        entityId: "onboarding_reminder_config",
+        description: `Updated onboarding reminder config (enabled=${cfg.enabled}, first=${cfg.firstAfterHours}h, repeat=${cfg.repeatEveryHours}h, max=${cfg.maxReminders}, deadline=${cfg.totalDeadlineHours}h).`,
+        metadata: cfg as any,
+      });
+      return res.json(cfg);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/onboarding/reminders/status", requirePermission("onboarding:read"), async (_req: Request, res: Response) => {
+    try {
+      const { getReminderStatusMap } = await import("./onboarding-reminders");
+      return res.json(await getReminderStatusMap());
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/onboarding/:id/reminders/send-now", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
+    try {
+      const { sendReminderNow } = await import("./onboarding-reminders");
+      const updated = await sendReminderNow(req.params.id);
+      if (!updated) return res.status(404).json({ message: tr(req, "onboarding.notFound") });
+      await logAudit(req, {
+        action: "onboarding.reminders.send_now",
+        entityType: "onboarding",
+        entityId: req.params.id,
+        description: `Manual onboarding reminder sent (count now ${updated.reminderCount}).`,
+      });
+      return res.json(updated);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/onboarding/:id/reminders/pause", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
+    try {
+      const { pauseReminders } = await import("./onboarding-reminders");
+      const updated = await pauseReminders(req.params.id);
+      if (!updated) return res.status(404).json({ message: tr(req, "onboarding.notFound") });
+      await logAudit(req, {
+        action: "onboarding.reminders.paused",
+        entityType: "onboarding",
+        entityId: req.params.id,
+        description: "Onboarding reminders paused for this candidate.",
+      });
+      return res.json(updated);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.post("/api/onboarding/:id/reminders/resume", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
+    try {
+      const { resumeReminders } = await import("./onboarding-reminders");
+      const updated = await resumeReminders(req.params.id);
+      if (!updated) return res.status(404).json({ message: tr(req, "onboarding.notFound") });
+      await logAudit(req, {
+        action: "onboarding.reminders.resumed",
+        entityType: "onboarding",
+        entityId: req.params.id,
+        description: "Onboarding reminders resumed for this candidate.",
+      });
+      return res.json(updated);
+    } catch (err) { return handleError(res, err); }
+  });
+
   app.post("/api/onboarding/:id/convert", requirePermission("onboarding:convert"), async (req: Request, res: Response) => {
     try {
       const { startDate, eventId, salary, smpCompanyId, employmentType: clientEmploymentType } = req.body as Record<string, string>;

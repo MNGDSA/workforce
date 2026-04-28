@@ -79,7 +79,14 @@ import {
   ChevronDown,
   Upload,
   Image,
+  Bell,
+  BellOff,
+  Send,
+  Pause,
+  Play,
+  AlertTriangle,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 type OnboardingStatus = "pending" | "in_progress" | "ready" | "converted" | "rejected" | "terminated";
 
@@ -104,6 +111,42 @@ interface OnboardingRecord {
   rejectionReason?: string | null;
   convertedAt?: string | null;
   createdAt: string;
+  // Task #214 — reminder state (server-derived, see ReminderRowStatus)
+  lastReminderSentAt?: string | null;
+  reminderCount?: number;
+  remindersPausedAt?: string | null;
+  eliminatedAt?: string | null;
+}
+
+// Task #214 — onboarding document reminders.
+type ReminderDocId = "photo" | "iban" | "national_id";
+type ReminderRowState =
+  | "off" | "pending" | "due" | "paused" | "warning" | "max_reached" | "eliminated";
+
+interface ReminderConfig {
+  enabled: boolean;
+  firstAfterHours: number;
+  repeatEveryHours: number;
+  maxReminders: number;
+  totalDeadlineHours: number;
+  finalWarningHours: number;
+  quietHoursStart: string;
+  quietHoursEnd: string;
+  quietHoursTz: string;
+  requiredDocs: ReminderDocId[];
+}
+
+interface ReminderRowStatus {
+  onboardingId: string;
+  state: ReminderRowState;
+  missingDocs: ReminderDocId[];
+  reminderCount: number;
+  maxReminders: number;
+  lastReminderSentAt: string | null;
+  nextScheduledAt: string | null;
+  eliminationAt: string | null;
+  finalWarningAt: string | null;
+  remindersPaused: boolean;
 }
 
 interface Candidate {
@@ -1304,12 +1347,379 @@ function ProgressBar({ value, total }: { value: number; total: number }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Task #214 — Reminder UI components
+// ─────────────────────────────────────────────────────────────────────────
+
+const DOC_LABEL_KEYS: Record<ReminderDocId, string> = {
+  photo: "reminders.docPhoto",
+  iban: "reminders.docIban",
+  national_id: "reminders.docNationalId",
+};
+const DOC_PIP_ICON: Record<ReminderDocId, React.ElementType> = {
+  photo: Camera,
+  iban: CreditCard,
+  national_id: IdCard,
+};
+
+function hoursUntil(iso: string | null): number | null {
+  if (!iso) return null;
+  const ms = new Date(iso).getTime() - Date.now();
+  if (Number.isNaN(ms)) return null;
+  return Math.max(0, Math.round(ms / (60 * 60 * 1000)));
+}
+
+function ReminderRowIndicator({ status }: { status: ReminderRowStatus }) {
+  const { t } = useTranslation("onboarding");
+  const state = status.state;
+  const palette: Record<ReminderRowState, { wrap: string; icon: React.ElementType; iconCls: string }> = {
+    off:          { wrap: "bg-zinc-800 text-zinc-500",            icon: BellOff, iconCls: "text-zinc-500" },
+    pending:      { wrap: "bg-zinc-800 text-zinc-300",            icon: Bell,    iconCls: "text-zinc-400" },
+    due:          { wrap: "bg-yellow-900/40 text-yellow-300",     icon: Bell,    iconCls: "text-yellow-300" },
+    paused:       { wrap: "bg-zinc-800 text-zinc-400",            icon: Pause,   iconCls: "text-zinc-400" },
+    warning:      { wrap: "bg-red-900/40 text-red-300",           icon: AlertTriangle, iconCls: "text-red-300" },
+    max_reached:  { wrap: "bg-orange-900/40 text-orange-300",     icon: Bell,    iconCls: "text-orange-300" },
+    eliminated:   { wrap: "bg-zinc-900 border border-red-900/60 text-red-400", icon: XCircle, iconCls: "text-red-400" },
+  };
+  const p = palette[state];
+  const Icon = p.icon;
+  let label = "";
+  if (state === "pending") {
+    const h = hoursUntil(status.nextScheduledAt);
+    label = h == null ? t("reminders.row.pending", { n: "—" }) : t("reminders.row.pending", { n: h });
+  } else if (state === "warning") {
+    const h = hoursUntil(status.eliminationAt);
+    label = h == null ? t("reminders.row.warning", { n: "—" }) : t("reminders.row.warning", { n: h });
+  } else {
+    label = t(`reminders.row.${state}`);
+  }
+  const sentLabel = status.maxReminders > 0
+    ? t("reminders.row.sentCount", { n: status.reminderCount, max: status.maxReminders })
+    : "";
+  const missingCount = status.missingDocs.length;
+
+  return (
+    <div className="mt-2 flex items-center gap-2 flex-wrap" data-testid={`reminder-status-${status.onboardingId}`}>
+      <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${p.wrap}`}>
+        <Icon className={`h-3 w-3 ${p.iconCls}`} />
+        <span data-testid={`reminder-state-${status.onboardingId}`}>{label}</span>
+      </div>
+      {sentLabel && (
+        <span className="text-[11px] text-zinc-500" data-testid={`reminder-count-${status.onboardingId}`}>{sentLabel}</span>
+      )}
+      {missingCount > 0 && (
+        <div className="flex items-center gap-1" data-testid={`reminder-missing-${status.onboardingId}`}>
+          {status.missingDocs.map(d => {
+            const PipIcon = DOC_PIP_ICON[d];
+            return (
+              <span
+                key={d}
+                title={t(DOC_LABEL_KEYS[d])}
+                className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-950/50 border border-red-800/60 text-red-300"
+                data-testid={`reminder-missing-pip-${status.onboardingId}-${d}`}
+              >
+                <PipIcon className="h-3 w-3" />
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReminderRowActions({
+  rec,
+  status,
+  pending,
+  onAction,
+}: {
+  rec: OnboardingRecord;
+  status: ReminderRowStatus;
+  pending: boolean;
+  onAction: (action: "send-now" | "pause" | "resume") => void;
+}) {
+  const { t } = useTranslation("onboarding");
+  const isPaused = status.remindersPaused;
+  const canSendNow = status.missingDocs.length > 0 && !isPaused && status.state !== "max_reached";
+
+  return (
+    <>
+      {canSendNow && (
+        <Button
+          data-testid={`button-reminder-send-now-${rec.id}`}
+          size="sm"
+          variant="outline"
+          disabled={pending}
+          onClick={() => onAction("send-now")}
+          className="border-blue-800 text-blue-300 hover:bg-blue-950/40 gap-1"
+          title={t("reminders.actions.sendNow")}
+        >
+          <Send className="h-3.5 w-3.5" />
+          {t("reminders.actions.sendNow")}
+        </Button>
+      )}
+      {isPaused ? (
+        <Button
+          data-testid={`button-reminder-resume-${rec.id}`}
+          size="sm"
+          variant="outline"
+          disabled={pending}
+          onClick={() => onAction("resume")}
+          className="border-emerald-800 text-emerald-300 hover:bg-emerald-950/40 gap-1"
+          title={t("reminders.actions.resume")}
+        >
+          <Play className="h-3.5 w-3.5" />
+          {t("reminders.actions.resume")}
+        </Button>
+      ) : (
+        <Button
+          data-testid={`button-reminder-pause-${rec.id}`}
+          size="sm"
+          variant="outline"
+          disabled={pending}
+          onClick={() => onAction("pause")}
+          className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 gap-1"
+          title={t("reminders.actions.pause")}
+        >
+          <Pause className="h-3.5 w-3.5" />
+          {t("reminders.actions.pause")}
+        </Button>
+      )}
+    </>
+  );
+}
+
+const DEFAULT_REMINDER_CONFIG: ReminderConfig = {
+  enabled: false,
+  firstAfterHours: 24,
+  repeatEveryHours: 24,
+  maxReminders: 3,
+  totalDeadlineHours: 96,
+  finalWarningHours: 24,
+  quietHoursStart: "21:00",
+  quietHoursEnd: "08:00",
+  quietHoursTz: "Asia/Riyadh",
+  requiredDocs: ["photo", "iban", "national_id"],
+};
+
+function ReminderSettingsTab() {
+  const { t } = useTranslation("onboarding");
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [form, setForm] = useState<ReminderConfig | null>(null);
+
+  const { data: cfg, isLoading } = useQuery<ReminderConfig>({
+    queryKey: ["/api/onboarding/reminders/config"],
+    queryFn: () => apiRequest("GET", "/api/onboarding/reminders/config").then(r => r.json()),
+  });
+  useEffect(() => {
+    if (cfg && !form) setForm({ ...DEFAULT_REMINDER_CONFIG, ...cfg });
+  }, [cfg, form]);
+
+  const saveMutation = useMutation({
+    mutationFn: (body: ReminderConfig) =>
+      apiRequest("PATCH", "/api/onboarding/reminders/config", body).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/onboarding/reminders/config"] });
+      qc.invalidateQueries({ queryKey: ["/api/onboarding/reminders/status"] });
+      toast({ title: t("reminders.saved") });
+    },
+    onError: (e: any) => toast({ title: t("reminders.saveFailed"), description: e?.message, variant: "destructive" }),
+  });
+
+  if (isLoading || !form) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+      </div>
+    );
+  }
+
+  const docs: ReminderDocId[] = ["photo", "iban", "national_id"];
+  const toggleDoc = (d: ReminderDocId) => {
+    setForm(f => {
+      if (!f) return f;
+      const has = f.requiredDocs.includes(d);
+      return { ...f, requiredDocs: has ? f.requiredDocs.filter(x => x !== d) : [...f.requiredDocs, d] };
+    });
+  };
+  const setNum = (key: keyof ReminderConfig, val: string) => {
+    const n = Math.max(0, Math.floor(Number(val) || 0));
+    setForm(f => f ? { ...f, [key]: n } as ReminderConfig : f);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-display font-bold text-white">{t("reminders.title")}</h2>
+        <p className="text-zinc-400 text-sm mt-1">{t("reminders.subtitle")}</p>
+      </div>
+
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <Label className="text-white font-medium" htmlFor="reminders-master-switch">{t("reminders.masterSwitch")}</Label>
+          <p className="text-xs text-zinc-500 mt-1">{t("reminders.masterSwitchHint")}</p>
+        </div>
+        <Switch
+          id="reminders-master-switch"
+          data-testid="switch-reminders-enabled"
+          checked={form.enabled}
+          onCheckedChange={(v) => setForm(f => f ? { ...f, enabled: !!v } : f)}
+        />
+      </div>
+
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-4">
+        <h3 className="text-sm font-semibold text-zinc-200">{t("reminders.cadence")}</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <Label className="text-zinc-400 text-xs" htmlFor="cfg-first">{t("reminders.firstAfterHours")}</Label>
+            <Input
+              id="cfg-first"
+              data-testid="input-reminder-first-after"
+              type="number" min={0}
+              value={form.firstAfterHours}
+              onChange={e => setNum("firstAfterHours", e.target.value)}
+              className="mt-1 bg-zinc-950 border-zinc-700 text-white"
+            />
+          </div>
+          <div>
+            <Label className="text-zinc-400 text-xs" htmlFor="cfg-repeat">{t("reminders.repeatEveryHours")}</Label>
+            <Input
+              id="cfg-repeat"
+              data-testid="input-reminder-repeat-every"
+              type="number" min={0}
+              value={form.repeatEveryHours}
+              onChange={e => setNum("repeatEveryHours", e.target.value)}
+              className="mt-1 bg-zinc-950 border-zinc-700 text-white"
+            />
+          </div>
+          <div>
+            <Label className="text-zinc-400 text-xs" htmlFor="cfg-max">{t("reminders.maxReminders")}</Label>
+            <Input
+              id="cfg-max"
+              data-testid="input-reminder-max"
+              type="number" min={0}
+              value={form.maxReminders}
+              onChange={e => setNum("maxReminders", e.target.value)}
+              className="mt-1 bg-zinc-950 border-zinc-700 text-white"
+            />
+          </div>
+          <div>
+            <Label className="text-zinc-400 text-xs" htmlFor="cfg-deadline">{t("reminders.totalDeadlineHours")}</Label>
+            <Input
+              id="cfg-deadline"
+              data-testid="input-reminder-deadline"
+              type="number" min={0}
+              value={form.totalDeadlineHours}
+              onChange={e => setNum("totalDeadlineHours", e.target.value)}
+              className="mt-1 bg-zinc-950 border-zinc-700 text-white"
+            />
+          </div>
+          <div>
+            <Label className="text-zinc-400 text-xs" htmlFor="cfg-final">{t("reminders.finalWarningHours")}</Label>
+            <Input
+              id="cfg-final"
+              data-testid="input-reminder-final-warning"
+              type="number" min={0}
+              value={form.finalWarningHours}
+              onChange={e => setNum("finalWarningHours", e.target.value)}
+              className="mt-1 bg-zinc-950 border-zinc-700 text-white"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-200">{t("reminders.quietHours")}</h3>
+          <p className="text-xs text-zinc-500 mt-1">{t("reminders.quietHoursHint")}</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <Label className="text-zinc-400 text-xs" htmlFor="cfg-qh-start">{t("reminders.quietHoursStart")}</Label>
+            <Input
+              id="cfg-qh-start"
+              data-testid="input-reminder-quiet-start"
+              type="time"
+              value={form.quietHoursStart}
+              onChange={e => setForm(f => f ? { ...f, quietHoursStart: e.target.value } : f)}
+              className="mt-1 bg-zinc-950 border-zinc-700 text-white"
+            />
+          </div>
+          <div>
+            <Label className="text-zinc-400 text-xs" htmlFor="cfg-qh-end">{t("reminders.quietHoursEnd")}</Label>
+            <Input
+              id="cfg-qh-end"
+              data-testid="input-reminder-quiet-end"
+              type="time"
+              value={form.quietHoursEnd}
+              onChange={e => setForm(f => f ? { ...f, quietHoursEnd: e.target.value } : f)}
+              className="mt-1 bg-zinc-950 border-zinc-700 text-white"
+            />
+          </div>
+          <div>
+            <Label className="text-zinc-400 text-xs" htmlFor="cfg-qh-tz">{t("reminders.quietHoursTz")}</Label>
+            <Input
+              id="cfg-qh-tz"
+              data-testid="input-reminder-quiet-tz"
+              value={form.quietHoursTz}
+              onChange={e => setForm(f => f ? { ...f, quietHoursTz: e.target.value } : f)}
+              className="mt-1 bg-zinc-950 border-zinc-700 text-white"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-200">{t("reminders.requiredDocs")}</h3>
+          <p className="text-xs text-zinc-500 mt-1">{t("reminders.requiredDocsHint")}</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {docs.map(d => {
+            const checked = form.requiredDocs.includes(d);
+            const Icon = DOC_PIP_ICON[d];
+            return (
+              <label
+                key={d}
+                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${checked ? "bg-zinc-800 border-zinc-700" : "bg-zinc-950 border-zinc-800"}`}
+              >
+                <Checkbox
+                  data-testid={`checkbox-required-doc-${d}`}
+                  checked={checked}
+                  onCheckedChange={() => toggleDoc(d)}
+                />
+                <Icon className="h-4 w-4 text-zinc-400" />
+                <span className="text-sm text-zinc-200">{t(DOC_LABEL_KEYS[d])}</span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <Button
+          data-testid="button-save-reminder-config"
+          onClick={() => form && saveMutation.mutate(form)}
+          disabled={saveMutation.isPending}
+          className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white gap-2"
+        >
+          {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+          {saveMutation.isPending ? t("reminders.saving") : t("reminders.save")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function OnboardingPage() {
   const { t, i18n } = useTranslation("onboarding");
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("active");
+  const [atRiskOnly, setAtRiskOnly] = useState<boolean>(false);
   const [admitOpen, setAdmitOpen] = useState(false);
   const [checklistRecord, setChecklistRecord] = useState<OnboardingRecord | null>(null);
   const [convertRecord, setConvertRecord] = useState<OnboardingRecord | null>(null);
@@ -1341,6 +1751,18 @@ export default function OnboardingPage() {
     },
     refetchInterval: 15000,
   });
+
+  // Task #214 — reminder status map keyed by onboardingId, server-derived
+  const { data: reminderStatusList = [] } = useQuery<ReminderRowStatus[]>({
+    queryKey: ["/api/onboarding/reminders/status"],
+    queryFn: () => apiRequest("GET", "/api/onboarding/reminders/status").then(r => r.json()),
+    refetchInterval: 30000,
+  });
+  const reminderStatusMap = (() => {
+    const m = new Map<string, ReminderRowStatus>();
+    for (const s of reminderStatusList) m.set(s.onboardingId, s);
+    return m;
+  })();
 
   // Pull every non-archived candidate, NOT just those with a record-level
   // status of "available". The admit-dialog eligibility filter
@@ -1529,9 +1951,26 @@ export default function OnboardingPage() {
     onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message, variant: "destructive" }),
   });
 
+  // Task #214 — reminder action mutations
+  const reminderActionMutation = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: "send-now" | "pause" | "resume" }) =>
+      apiRequest("POST", `/api/onboarding/${id}/reminders/${action}`).then(r => r.json()),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["/api/onboarding/reminders/status"] });
+      qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
+      const key = vars.action === "send-now" ? "sentNow" : vars.action === "pause" ? "paused" : "resumed";
+      toast({ title: t(`reminders.toasts.${key}`) });
+    },
+    onError: (e: any) => toast({ title: t("reminders.toasts.actionFailed"), description: e?.message, variant: "destructive" }),
+  });
+
   const filtered = records.filter(r => {
     if (statusFilter === "active" && (r.status === "rejected" || r.status === "converted" || r.status === "terminated")) return false;
     if (statusFilter !== "all" && statusFilter !== "active" && r.status !== statusFilter) return false;
+    if (atRiskOnly) {
+      const s = reminderStatusMap.get(r.id);
+      if (!s || s.state !== "warning") return false;
+    }
     if (search) {
       const candidate = candidates.find(c => c.id === r.candidateId);
       const q = search.toLowerCase();
@@ -1690,6 +2129,10 @@ export default function OnboardingPage() {
               <FileText className="h-4 w-4" />
               {t("tabs.templates")}
             </TabsTrigger>
+            <TabsTrigger value="reminders" className="data-[state=active]:bg-zinc-800 data-[state=active]:text-white text-zinc-400 gap-2" data-testid="tab-reminders">
+              <Bell className="h-4 w-4" />
+              {t("tabs.reminders")}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="pipeline" className="space-y-6 mt-4">
@@ -1777,6 +2220,17 @@ export default function OnboardingPage() {
               ))}
             </SelectContent>
           </Select>
+          <Button
+            data-testid="button-filter-at-risk"
+            onClick={() => setAtRiskOnly(v => !v)}
+            variant={atRiskOnly ? "default" : "outline"}
+            className={atRiskOnly
+              ? "bg-red-900/40 border-red-700 text-red-200 hover:bg-red-900/60 gap-2"
+              : "border-zinc-700 text-zinc-400 hover:bg-zinc-800 gap-2"}
+          >
+            <AlertTriangle className="h-4 w-4" />
+            {t("reminders.actions.filterAtRisk")}
+          </Button>
         </div>
 
         {/* Records List */}
@@ -1808,11 +2262,13 @@ export default function OnboardingPage() {
               const linkedApp = rec.applicationId ? applications.find(a => a.id === rec.applicationId) : null;
               const isOffered = linkedApp?.status === "offered";
 
+              const reminderStatus = reminderStatusMap.get(rec.id);
+              const isAtRisk = reminderStatus?.state === "warning";
               return (
                 <div
                   key={rec.id}
                   data-testid={`card-onboarding-${rec.id}`}
-                  className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4"
+                  className={`bg-zinc-900 border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4 ${isAtRisk ? "border-red-700/70 ring-1 ring-red-900/40" : "border-zinc-800"}`}
                 >
                   {/* Avatar */}
                   <div className="h-12 w-12 rounded-full bg-zinc-800 flex items-center justify-center shrink-0 text-lg font-bold text-zinc-300">
@@ -1867,10 +2323,23 @@ export default function OnboardingPage() {
                         </div>
                       );
                     })()}
+                    {/* Task #214 — reminder status indicator */}
+                    {reminderStatus && reminderStatus.state !== "off" && !isConverted && !isRejected && (
+                      <ReminderRowIndicator status={reminderStatus} />
+                    )}
                   </div>
 
                   {/* Actions */}
                   <div className="flex gap-2 shrink-0 flex-wrap">
+                    {/* Task #214 — reminder action buttons */}
+                    {reminderStatus && reminderStatus.state !== "off" && reminderStatus.state !== "eliminated" && !isConverted && !isRejected && (
+                      <ReminderRowActions
+                        rec={rec}
+                        status={reminderStatus}
+                        pending={reminderActionMutation.isPending}
+                        onAction={(action) => reminderActionMutation.mutate({ id: rec.id, action })}
+                      />
+                    )}
                     {!isConverted && !isRejected && (
                       <Button
                         data-testid={`button-checklist-${rec.id}`}
@@ -1941,6 +2410,10 @@ export default function OnboardingPage() {
 
           <TabsContent value="templates" className="mt-4">
             <ContractTemplatesTab />
+          </TabsContent>
+
+          <TabsContent value="reminders" className="mt-4">
+            <ReminderSettingsTab />
           </TabsContent>
         </Tabs>
       </div>

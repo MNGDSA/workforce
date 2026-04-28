@@ -42,6 +42,8 @@ export const smsOutboxKindEnum = pgEnum("sms_outbox_kind", [
   "smp_activation",
   "smp_activation_reissue",
   "smp_activation_self_heal",
+  "onboarding_reminder",
+  "onboarding_final_warning",
 ]);
 
 export const genderEnum = pgEnum("gender", ["male", "female", "other", "prefer_not_to_say"]);
@@ -571,6 +573,11 @@ export const onboarding = pgTable(
     rejectionReason: text("rejection_reason"),
     convertedAt: timestamp("converted_at"),
     convertedBy: varchar("converted_by").references(() => users.id),
+    // Task #214 — document-upload reminders
+    lastReminderSentAt: timestamp("last_reminder_sent_at"),
+    reminderCount: integer("reminder_count").notNull().default(0),
+    remindersPausedAt: timestamp("reminders_paused_at"),
+    eliminatedAt: timestamp("eliminated_at"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
   },
