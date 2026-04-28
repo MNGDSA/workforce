@@ -691,26 +691,32 @@ async function eliminateOnboarding(rec: OnboardingRecord): Promise<boolean> {
 
     if (rec.applicationId) {
       const app = await storage.getApplication(rec.applicationId);
-      const previousStatus = app?.status ?? null;
-      let newStatus = previousStatus ?? "interviewed";
-      if (previousStatus === "shortlisted") {
-        await storage.updateApplication(rec.applicationId, { status: "interviewed" });
-        newStatus = "interviewed";
-      }
-      const candidate = await storage.getCandidate(rec.candidateId).catch(() => null);
-      const cleanup = await applyShortlistResetCleanup({
-        previousStatus: "shortlisted",
-        newStatus,
-        applicationId: rec.applicationId,
-        candidateId: rec.candidateId,
-        candidateName: candidate?.fullNameEn ?? null,
-        actor: { id: null, name: "system" },
-        metadata: { reason: "auto_eliminated", reminderCount: rec.reminderCount },
-      });
-      if (!cleanup.removedOnboardingIds.includes(rec.id)) {
-        // Defensive: shared helper only fires when previousStatus === "shortlisted".
-        // If the application wasn't shortlisted, fall back to direct delete so the
-        // duplicate-protection guard in createOnboardingRecord doesn't block re-admit.
+      if (app) {
+        // Always reset the application back to "interviewed" on auto-elimination
+        // (regardless of pre-update status) so the candidate can be
+        // re-evaluated cleanly. This mirrors the manual "Reset Like" intent
+        // applied to the auto-elimination trigger.
+        const previousStatus = app.status;
+        if (previousStatus !== "interviewed") {
+          await storage.updateApplication(rec.applicationId, { status: "interviewed" });
+        }
+        const candidate = await storage.getCandidate(rec.candidateId).catch(() => null);
+        // Pass the REAL previousStatus + force=true so the shared cleanup
+        // helper produces an accurate audit record but still teardowns the
+        // onboarding row even when previousStatus !== "shortlisted".
+        await applyShortlistResetCleanup({
+          previousStatus,
+          newStatus: "interviewed",
+          applicationId: rec.applicationId,
+          candidateId: rec.candidateId,
+          candidateName: candidate?.fullNameEn ?? null,
+          actor: { id: null, name: "system" },
+          metadata: { reason: "auto_eliminated", reminderCount: rec.reminderCount },
+          force: true,
+        });
+      } else {
+        // Application went missing between sweep selection and elimination —
+        // still drop the onboarding row directly.
         await storage.deleteOnboardingRecord(rec.id);
       }
     } else {

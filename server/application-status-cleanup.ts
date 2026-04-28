@@ -28,6 +28,14 @@ export interface ReverseSyncContext {
   actor: { id: string | null; name: string };
   /** Optional extra metadata attached to the audit log. */
   metadata?: Record<string, unknown>;
+  /**
+   * When true, bypass the "previousStatus must be shortlisted" gate.
+   * Used by the auto-elimination path which always wants the cleanup
+   * regardless of the pre-update application status. The manual PATCH
+   * /api/applications/:id route never sets this (preserves manual
+   * reset semantics).
+   */
+  force?: boolean;
 }
 
 export interface ReverseSyncResult {
@@ -42,12 +50,11 @@ export interface ReverseSyncResult {
 export async function applyShortlistResetCleanup(ctx: ReverseSyncContext): Promise<ReverseSyncResult> {
   const result: ReverseSyncResult = { removedOnboardingIds: [] };
 
-  if (
-    ctx.previousStatus !== "shortlisted" ||
-    ctx.newStatus === "shortlisted" ||
-    !ctx.candidateId
-  ) {
-    return result;
+  if (!ctx.candidateId) return result;
+  if (!ctx.force) {
+    if (ctx.previousStatus !== "shortlisted" || ctx.newStatus === "shortlisted") {
+      return result;
+    }
   }
 
   const all = await storage.getOnboardingRecords({
