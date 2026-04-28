@@ -131,6 +131,7 @@ function InterviewDetailSheet({
     onSuccess: (_data, vars) => {
       setLocalStatuses(prev => ({ ...prev, [vars.candidateId]: vars.status }));
       queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] });
       queryClient.invalidateQueries({ queryKey: ["/api/interviews", interviewId] });
       toast({ title: vars.status === "shortlisted" ? t("interviews:toast.shortlisted") : vars.status === "rejected" ? t("interviews:toast.rejected") : t("interviews:toast.updated") });
     },
@@ -422,6 +423,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
     onSuccess: (_data, vars) => {
       setLocalStatuses(prev => ({ ...prev, [vars.candidateId]: vars.status }));
       queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] });
       queryClient.invalidateQueries({ queryKey: ["/api/interviews", interviewId] });
       toast({ title: vars.status === "shortlisted" ? t("interviews:toast.shortlisted") : vars.status === "rejected" ? t("interviews:toast.rejected") : t("interviews:toast.updated") });
     },
@@ -438,6 +440,8 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
       items.forEach(i => { updates[i.candidateId] = "shortlisted"; });
       setLocalStatuses(prev => ({ ...prev, ...updates }));
       clearSelection();
+      queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] });
       queryClient.invalidateQueries({ queryKey: ["/api/interviews", interviewId] });
       toast({ title: t("interviews:toast.bulkShortlisted", { count: result.succeeded, replace: { n: formatNumber(result.succeeded, i18n.language) } }) });
     },

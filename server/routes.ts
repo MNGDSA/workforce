@@ -3529,8 +3529,74 @@ export async function registerRoutes(
         }
       }
 
+      // Snapshot the pre-update status so we can detect the "reset like"
+      // transition (shortlisted → anything else) and tear down any orphan
+      // pending onboarding row the candidate had picked up via the admit
+      // dialog. The admit dialog already filters by app.status==="shortlisted"
+      // for inclusion; without this cleanup, resetting a like leaves the
+      // pending onboarding row in place, which both blocks re-admission
+      // (eligibleCandidates excludes anyone with an active onboarding row)
+      // and confuses the admin's pipeline view.
+      const previousApp = await storage.getApplication(req.params.id);
+      const previousStatus = previousApp?.status ?? null;
+
       const app_ = await storage.updateApplication(req.params.id, data);
       if (!app_) return res.status(404).json({ message: tr(req, "application.notFound") });
+
+      // Reverse-sync: shortlist → reset (or any non-shortlisted status)
+      // sweeps any pending onboarding rows for this candidate. We never
+      // touch in_progress / ready / converted / rejected / terminated rows,
+      // because those represent admin work already done — a careless
+      // un-shortlist must not wipe an onboarding the admin has already
+      // started filling out.
+      //
+      // We deliberately read candidateId from the PRE-update snapshot. If a
+      // single PATCH ever mutates both candidateId and status, the orphan
+      // belongs to the OLD candidate, not the new one.
+      //
+      // RBAC note: this is a system-driven invariant — admins with
+      // applications:update implicitly trigger an onboarding row removal
+      // here. This is intentional per the product rule "always sync both
+      // ways with likes and resets" and is reflected in the audit log.
+      const cleanupCandidateId = previousApp?.candidateId ?? null;
+      if (
+        previousStatus === "shortlisted" &&
+        typeof (data as any).status === "string" &&
+        (data as any).status !== "shortlisted" &&
+        cleanupCandidateId
+      ) {
+        try {
+          const pending = await storage.getOnboardingRecords({
+            candidateId: cleanupCandidateId,
+            status: "pending",
+          });
+          if (pending.length > 0) {
+            const candidate = await storage.getCandidate(cleanupCandidateId);
+            for (const ob of pending) {
+              await storage.deleteOnboardingRecord(ob.id);
+              await logAudit(req, {
+                action: "onboarding.auto_remove_on_reset",
+                entityType: "onboarding",
+                entityId: ob.id,
+                subjectName: candidate?.fullNameEn ?? undefined,
+                description: `Removed pending onboarding for "${candidate?.fullNameEn ?? cleanupCandidateId}" because the application shortlist was reset (${previousStatus} → ${(data as any).status}).`,
+                metadata: {
+                  candidateId: cleanupCandidateId,
+                  applicationId: app_.id,
+                  onboardingId: ob.id,
+                  previousStatus,
+                  newStatus: (data as any).status,
+                },
+              });
+            }
+          }
+        } catch (cleanupErr) {
+          console.error("[applications.patch] Onboarding cleanup failed:", cleanupErr);
+          // Do not fail the PATCH — the status change itself succeeded.
+          // Orphan onboarding rows can be cleaned up manually if this fires.
+        }
+      }
+
       return res.json(app_);
     } catch (err) {
       return handleError(res, err);
