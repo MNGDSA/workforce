@@ -3802,6 +3802,8 @@ export async function registerRoutes(
             lastSentAt: rec.lastReminderSentAt?.toISOString() ?? null,
             nextScheduledAt: status.nextScheduledAt,
             eliminationAt: status.eliminationAt,
+            finalWarningAt: status.finalWarningAt,
+            finalWarningSentAt: status.finalWarningSentAt,
             state: status.state,
             missingDocs: status.missingDocs,
           },
@@ -4023,13 +4025,8 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  // Test SMS — synchronous, bypasses outbox so the admin gets immediate
-  // pass/fail feedback. Renders against the live template so they see
-  // exactly what a real reminder will look like.
-  // Response contract: ALL paths return `{ ok, preview, error? }` so the
-  // settings tab UI can render uniform feedback without inspecting status
-  // codes. Validation errors → 400, no-plugin → 503, plugin failure → 502,
-  // unexpected exception → 500 — every shape includes `ok` and `preview`.
+  // POST /api/onboarding/reminder-test-sms — sync test send.
+  // Response contract on every path: { ok, preview, error? }.
   app.post("/api/onboarding/reminder-test-sms", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
     try {
       const schema = z.object({
@@ -4129,9 +4126,6 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  // Read-only outbox row lookup so the settings activity table can
-  // link straight to the actual SMS record (rendered, claim history,
-  // last error). Authorization is the same as the activity table.
   app.get("/api/sms/outbox/:id", requirePermission("onboarding:read"), async (req: Request, res: Response) => {
     try {
       const { smsOutbox: smsOutboxTable } = await import("@shared/schema");
@@ -4141,9 +4135,6 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  // Live activity table for the settings tab — joins each pending
-  // onboarding row with its candidate name, latest sms_outbox row id,
-  // missing-doc list, and derived schedule.
   app.get("/api/onboarding/reminders/activity", requirePermission("onboarding:read"), async (_req: Request, res: Response) => {
     try {
       const { getReminderConfig, computeRowStatus, missingDocsFor } = await import("./onboarding-reminders");

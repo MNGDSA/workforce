@@ -19,6 +19,7 @@ export async function ensureOnboardingReminders(
     ALTER TABLE onboarding
       ADD COLUMN IF NOT EXISTS last_reminder_sent_at TIMESTAMP,
       ADD COLUMN IF NOT EXISTS reminder_count INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS final_warning_sent_at TIMESTAMP,
       ADD COLUMN IF NOT EXISTS reminders_paused_at TIMESTAMP,
       ADD COLUMN IF NOT EXISTS eliminated_at TIMESTAMP
   `);

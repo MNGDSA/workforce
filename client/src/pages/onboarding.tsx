@@ -146,6 +146,7 @@ interface ReminderRowStatus {
   nextScheduledAt: string | null;
   eliminationAt: string | null;
   finalWarningAt: string | null;
+  finalWarningSentAt: string | null;
   remindersPaused: boolean;
 }
 
@@ -158,6 +159,8 @@ interface OnboardingReminderInline {
   lastSentAt: string | null;
   nextScheduledAt: string | null;
   eliminationAt: string | null;
+  finalWarningAt: string | null;
+  finalWarningSentAt: string | null;
   state: ReminderRowState;
   missingDocs: ReminderDocId[];
 }
@@ -1387,10 +1390,6 @@ function ProgressBar({ value, total }: { value: number; total: number }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Task #214 — Reminder UI components
-// ─────────────────────────────────────────────────────────────────────────
-
 const DOC_LABEL_KEYS: Record<ReminderDocId, string> = {
   photo: "reminders.docPhoto",
   iban: "reminders.docIban",
@@ -1504,14 +1503,6 @@ function ReminderRowIndicator({ status }: { status: ReminderRowStatus }) {
 
   return (
     <div className="mt-2" data-testid={`reminder-status-${status.onboardingId}`}>
-      {/* Optional thin RTL accent stripe for <24h / <6h until elimination */}
-      {within24h && state !== "off" && state !== "eliminated" && (
-        <div
-          className={`h-0.5 mb-1 rounded-full ${within6h ? "bg-red-500" : "bg-orange-500"} ${isAr ? "ml-auto" : "mr-auto"}`}
-          style={{ width: within6h ? "60%" : "40%" }}
-          data-testid={`accent-deadline-${status.onboardingId}`}
-        />
-      )}
       <div className="flex items-center gap-2 flex-wrap">
         {/* Bell glyph */}
         {bellNode && (
@@ -2212,7 +2203,8 @@ export default function OnboardingPage() {
         lastReminderSentAt: inline.lastSentAt,
         nextScheduledAt: inline.nextScheduledAt,
         eliminationAt: inline.eliminationAt,
-        finalWarningAt: null,
+        finalWarningAt: inline.finalWarningAt ?? null,
+        finalWarningSentAt: inline.finalWarningSentAt ?? null,
         remindersPaused: inline.paused,
       });
     }
@@ -2429,7 +2421,9 @@ export default function OnboardingPage() {
     if (statusFilter !== "all" && statusFilter !== "active" && r.status !== statusFilter) return false;
     if (atRiskOnly) {
       const s = reminderStatusMap.get(r.id);
-      if (!s || s.state !== "warning") return false;
+      if (!s || !s.eliminationAt || s.state === "off" || s.state === "eliminated") return false;
+      const msLeft = new Date(s.eliminationAt).getTime() - Date.now();
+      if (msLeft > 24 * 3600_000) return false;
     }
     if (search) {
       const candidate = candidates.find(c => c.id === r.candidateId);
@@ -2723,12 +2717,24 @@ export default function OnboardingPage() {
               const isOffered = linkedApp?.status === "offered";
 
               const reminderStatus = reminderStatusMap.get(rec.id);
-              const isAtRisk = reminderStatus?.state === "warning";
+              const elimMsLeft = reminderStatus?.eliminationAt
+                ? new Date(reminderStatus.eliminationAt).getTime() - Date.now()
+                : null;
+              const within24h = elimMsLeft != null && elimMsLeft >= 0 && elimMsLeft <= 24 * 3600_000
+                && reminderStatus?.state !== "off" && reminderStatus?.state !== "eliminated";
+              const within6h = elimMsLeft != null && elimMsLeft >= 0 && elimMsLeft <= 6 * 3600_000
+                && reminderStatus?.state !== "off" && reminderStatus?.state !== "eliminated";
+              const accentClass = within6h
+                ? "border-r-2 border-r-red-500"
+                : within24h
+                  ? "border-r-2 border-r-orange-500"
+                  : "";
               return (
                 <div
                   key={rec.id}
                   data-testid={`card-onboarding-${rec.id}`}
-                  className={`bg-zinc-900 border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4 ${isAtRisk ? "border-red-700/70 ring-1 ring-red-900/40" : "border-zinc-800"}`}
+                  data-at-risk={within24h ? "true" : undefined}
+                  className={`bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4 ${accentClass}`}
                 >
                   {/* Avatar */}
                   <div className="h-12 w-12 rounded-full bg-zinc-800 flex items-center justify-center shrink-0 text-lg font-bold text-zinc-300">

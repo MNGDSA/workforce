@@ -100,11 +100,10 @@ export async function setReminderConfig(patch: Partial<ReminderConfig>): Promise
     .filter((d): d is ReminderDocId =>
       knownDocs.includes(d as ReminderDocId) && !seen.has(d) && (seen.add(d), true),
     );
-  // Clamp numeric fields so a typo can't push the cadence into pathological ranges.
-  next.firstAfterHours    = clampHours(next.firstAfterHours,    1, 24 * 30);
-  next.repeatEveryHours   = clampHours(next.repeatEveryHours,   1, 24 * 30);
-  next.maxReminders       = clampInt(next.maxReminders,         1, 20);
-  next.totalDeadlineHours = clampHours(next.totalDeadlineHours, 1, 24 * 365);
+  next.firstAfterHours    = clampHours(next.firstAfterHours,    0, 24 * 30);
+  next.repeatEveryHours   = clampHours(next.repeatEveryHours,   0, 24 * 30);
+  next.maxReminders       = clampInt(next.maxReminders,         0, 20);
+  next.totalDeadlineHours = clampHours(next.totalDeadlineHours, 0, 24 * 365);
   next.finalWarningHours  = clampHours(next.finalWarningHours,  0, 24 * 30);
   await storage.setSystemSetting(SETTINGS_KEY, JSON.stringify(next));
   return next;
@@ -222,13 +221,13 @@ export function missingDocsFor(rec: OnboardingRecord, cfg: ReminderConfig): Remi
 // ─── Scheduling math ───────────────────────────────────────────────────────
 
 export type ReminderRowState =
-  | "off"            // master switch off, or no missing docs, or not eligible
-  | "pending"        // master on, missing docs, but no reminder due yet
-  | "due"            // a reminder should fire on the next sweep
-  | "paused"         // admin paused this row
-  | "warning"        // within finalWarningHours of elimination
-  | "max_reached"    // sent all reminders, waiting for deadline
-  | "eliminated";    // deadline passed (transient — sweep will tear it down)
+  | "off"
+  | "pending"
+  | "due"
+  | "paused"
+  | "warning"        // final warning SMS already sent AND <=24h to elimination
+  | "max_reached"
+  | "eliminated";
 
 export interface ReminderRowStatus {
   onboardingId: string;
@@ -237,9 +236,10 @@ export interface ReminderRowStatus {
   reminderCount: number;
   maxReminders: number;
   lastReminderSentAt: string | null;
-  nextScheduledAt: string | null;     // null when state == "off" / "paused" / "max_reached"
-  eliminationAt: string | null;       // null when state == "off"
-  finalWarningAt: string | null;      // null when state == "off"
+  nextScheduledAt: string | null;
+  eliminationAt: string | null;
+  finalWarningAt: string | null;
+  finalWarningSentAt: string | null;
   remindersPaused: boolean;
 }
 
@@ -255,16 +255,17 @@ export function computeRowStatus(
   now: Date,
 ): ReminderRowStatus {
   const missing = missingDocsFor(rec, cfg);
+  const finalWarningSentAt = rec.finalWarningSentAt ? rec.finalWarningSentAt.toISOString() : null;
   const base = {
     onboardingId: rec.id,
     missingDocs: missing,
     reminderCount: rec.reminderCount,
     maxReminders: cfg.maxReminders,
     lastReminderSentAt: rec.lastReminderSentAt ? rec.lastReminderSentAt.toISOString() : null,
+    finalWarningSentAt,
     remindersPaused: rec.remindersPausedAt != null,
   };
 
-  // OFF cases: no reminder math at all.
   if (!cfg.enabled || missing.length === 0 || !isReminderEligibleStatus(rec.status)) {
     return {
       ...base,
@@ -285,12 +286,10 @@ export function computeRowStatus(
     return { ...base, state: "paused", nextScheduledAt: null, eliminationAt, finalWarningAt };
   }
 
-  // Already past deadline — sweep will eliminate on the next tick.
   if (now.getTime() >= eliminationMs) {
     return { ...base, state: "eliminated", nextScheduledAt: null, eliminationAt, finalWarningAt };
   }
 
-  // Compute the next reminder due time.
   let nextMs: number;
   if (rec.reminderCount === 0) {
     nextMs = createdAtMs + cfg.firstAfterHours * 3600_000;
@@ -298,13 +297,14 @@ export function computeRowStatus(
     const last = rec.lastReminderSentAt?.getTime() ?? createdAtMs;
     nextMs = last + cfg.repeatEveryHours * 3600_000;
   }
-  // Clamp the displayed next-scheduled to the deadline so we never
-  // imply a reminder will go out after elimination.
   if (nextMs > eliminationMs) nextMs = eliminationMs;
   const nextScheduledAt = new Date(nextMs).toISOString();
 
-  // Within final-warning window?
-  if (now.getTime() >= finalWarningMs) {
+  // Warning visual = final warning SMS already sent AND <=24h to elimination.
+  // Time-window-only matches do NOT short-circuit here; they are handled
+  // below as due/pending so the sweep can actually send the warning first.
+  const within24hOfElim = eliminationMs - now.getTime() <= 24 * 3600_000;
+  if (rec.finalWarningSentAt != null && within24hOfElim) {
     return { ...base, state: "warning", nextScheduledAt, eliminationAt, finalWarningAt };
   }
 
@@ -436,7 +436,7 @@ export async function runOnboardingReminderSweep(now: Date = new Date()): Promis
   for (const rec of rows) {
     const status = computeRowStatus(rec, cfg, now);
 
-    if (status.state === "off" || status.state === "max_reached") continue;
+    if (status.state === "off") continue;
 
     if (status.state === "eliminated") {
       const ok = await eliminateOnboarding(rec);
@@ -451,13 +451,18 @@ export async function runOnboardingReminderSweep(now: Date = new Date()): Promis
 
     if (rec.remindersPausedAt) continue;
 
-    // Final warning takes priority over a regular reminder when we're
-    // inside the warning window AND we have not yet sent the warning.
-    if (status.state === "warning") {
+    // Final-warning send is gated by the time window + not-yet-sent flag,
+    // independent of the visual state (which only flips to "warning"
+    // after the SMS has actually been enqueued).
+    const eliminationMs = rec.createdAt.getTime() + cfg.totalDeadlineHours * 3600_000;
+    const finalWarningMs = eliminationMs - cfg.finalWarningHours * 3600_000;
+    if (now.getTime() >= finalWarningMs && rec.finalWarningSentAt == null && status.missingDocs.length > 0) {
       const enqueued = await enqueueFinalWarningSms(rec, cfg, status.missingDocs);
       if (enqueued) result.finalWarningsEnqueued++;
       continue;
     }
+
+    if (status.state === "max_reached" || status.state === "warning") continue;
 
     if (status.state === "due") {
       const claimed = await claimAndEnqueueReminder(rec, status.missingDocs, now, cfg);
@@ -657,7 +662,13 @@ async function enqueueFinalWarningSms(
     dedupeKey,
   }).onConflictDoNothing({ target: smsOutbox.dedupeKey }).returning();
 
-  return inserted.length > 0;
+  if (inserted.length > 0) {
+    await db.update(onboarding)
+      .set({ finalWarningSentAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(onboarding.id, rec.id), isNull(onboarding.finalWarningSentAt)));
+    return true;
+  }
+  return false;
 }
 
 /**

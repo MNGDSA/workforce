@@ -576,6 +576,7 @@ export const onboarding = pgTable(
     // Task #214 — document-upload reminders
     lastReminderSentAt: timestamp("last_reminder_sent_at"),
     reminderCount: integer("reminder_count").notNull().default(0),
+    finalWarningSentAt: timestamp("final_warning_sent_at"),
     remindersPausedAt: timestamp("reminders_paused_at"),
     eliminatedAt: timestamp("eliminated_at"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
