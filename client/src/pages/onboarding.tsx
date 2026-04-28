@@ -1340,9 +1340,21 @@ export default function OnboardingPage() {
     refetchOnWindowFocus: true,
   });
 
+  // Applications drive eligibleCandidates (status === "shortlisted" gates the
+  // admit dialog). Mirror the freshness settings of the candidates query so a
+  // shortlist toggled on the interviews page is reflected here even if the
+  // user navigates back via a browser back/forward instead of a fresh route
+  // mount. Without an explicit queryFn this query inherits the global
+  // staleTime: Infinity / refetchOnWindowFocus: false defaults — fine for
+  // most pages, but onboarding is the consumer of the cross-page sync and
+  // can't afford to render a stale snapshot.
   const { data: applications = [] } = useQuery<Application[]>({
     queryKey: ["/api/applications"],
+    queryFn: () => apiRequest("GET", "/api/applications").then(r => r.json()),
     select: (r: any) => Array.isArray(r) ? r : [],
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchInterval: 15000,
   });
 
   // Lightweight jobs lookup so we can surface the job's minimum salary as a
