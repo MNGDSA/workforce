@@ -1441,12 +1441,15 @@ function ReminderRowIndicator({ status }: { status: ReminderRowStatus }) {
 
   // Bell visual states per spec:
   //   off          → null (hidden — render nothing)
-  //   pending      → outline grey
-  //   due          → solid amber
+  //   pending (no sends yet)            → outline grey
+  //   pending/due (1+ sent, more left)  → solid amber  (in-progress reminders)
   //   max_reached  → solid orange + pulse
   //   warning      → solid orange + pulse + red accent
   //   paused       → slashed dim
   //   eliminated   → red X / strike
+  const hasSent = (status.reminderCount ?? 0) > 0;
+  const moreToSend = (status.reminderCount ?? 0) < (status.maxReminders ?? 0);
+  const finalWarningSent = status.finalWarningSentAt != null;
   let bellNode: React.ReactNode = null;
   let bellAriaLabel = "";
   if (state !== "off") {
@@ -1456,10 +1459,18 @@ function ReminderRowIndicator({ status }: { status: ReminderRowStatus }) {
     } else if (state === "eliminated") {
       bellNode = <XCircle className="h-4 w-4 text-red-500" data-testid="icon-bell-eliminated" />;
       bellAriaLabel = t("reminders.row.eliminated");
+    } else if ((state === "pending" || state === "due") && hasSent && moreToSend && !finalWarningSent) {
+      // 1+ reminders sent, more pending → solid amber regardless of "due now" vs scheduled.
+      bellNode = <Bell className="h-4 w-4 text-amber-400 fill-amber-400" data-testid="icon-bell-due" />;
+      bellAriaLabel = state === "due"
+        ? t("reminders.row.due")
+        : t("reminders.row.pending", { n: hoursUntil(status.nextScheduledAt) ?? "—" });
     } else if (state === "pending") {
+      // No reminders sent yet → outline grey.
       bellNode = <Bell className="h-4 w-4 text-zinc-400 stroke-[1.5]" data-testid="icon-bell-pending" />;
       bellAriaLabel = t("reminders.row.pending", { n: hoursUntil(status.nextScheduledAt) ?? "—" });
     } else if (state === "due") {
+      // First reminder due now → solid amber.
       bellNode = <Bell className="h-4 w-4 text-amber-400 fill-amber-400" data-testid="icon-bell-due" />;
       bellAriaLabel = t("reminders.row.due");
     } else if (state === "max_reached" || state === "warning") {

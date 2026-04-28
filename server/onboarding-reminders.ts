@@ -682,13 +682,14 @@ async function enqueueFinalWarningSms(
  * skips the row.
  */
 async function eliminateOnboarding(rec: OnboardingRecord): Promise<boolean> {
-  try {
-    const [stamped] = await db.update(onboarding)
-      .set({ eliminatedAt: new Date(), updatedAt: new Date() })
-      .where(and(eq(onboarding.id, rec.id), isNull(onboarding.eliminatedAt)))
-      .returning();
-    if (!stamped) return false;
+  // Acquire the elimination lease via CAS so a concurrent sweep skips this row.
+  const [stamped] = await db.update(onboarding)
+    .set({ eliminatedAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(onboarding.id, rec.id), isNull(onboarding.eliminatedAt)))
+    .returning();
+  if (!stamped) return false;
 
+  try {
     if (rec.applicationId) {
       const app = await storage.getApplication(rec.applicationId);
       if (app) {
@@ -756,6 +757,17 @@ async function eliminateOnboarding(rec: OnboardingRecord): Promise<boolean> {
     });
     return true;
   } catch (err) {
+    // Revert the eliminated_at lease so a future sweep can retry. The
+    // update is a no-op if the row was already deleted by the cleanup
+    // helper (which means elimination effectively succeeded), so this
+    // is safe in either failure scenario.
+    try {
+      await db.update(onboarding)
+        .set({ eliminatedAt: null, updatedAt: new Date() })
+        .where(eq(onboarding.id, rec.id));
+    } catch (revertErr) {
+      console.error(`[onboarding-reminders] failed to revert eliminated_at for ${rec.id}:`, revertErr);
+    }
     console.error(`[onboarding-reminders] eliminate failed for ${rec.id}:`, err);
     return false;
   }
