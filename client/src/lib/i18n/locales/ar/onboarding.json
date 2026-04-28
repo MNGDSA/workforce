@@ -392,7 +392,7 @@
     "firstAfterHours": "أول تذكير بعد (ساعات)",
     "repeatEveryHours": "التكرار كل (ساعات)",
     "maxReminders": "أقصى عدد تذكيرات",
-    "totalDeadlineHours": "المهلة الإجمالية للاستبعاد (ساعات)",
+    "totalDeadlineDays": "المهلة الإجمالية للاستبعاد (أيام)",
     "finalWarningHours": "تنبيه أخير قبل الاستبعاد (ساعات)",
     "quietHours": "ساعات الصمت",
     "quietHoursStart": "بداية الصمت",

@@ -3872,96 +3872,6 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/onboarding/:id", requirePermission("onboarding:read"), async (req: Request, res: Response) => {
-    try {
-      const record = await storage.getOnboardingRecord(req.params.id);
-      if (!record) return res.status(404).json({ message: tr(req, "onboarding.notFound") });
-      return res.json(record);
-    } catch (err) {
-      return handleError(res, err);
-    }
-  });
-
-  app.post("/api/onboarding", requirePermission("onboarding:create"), async (req: Request, res: Response) => {
-    try {
-      const data = insertOnboardingSchema.parse(req.body);
-      // Prevent duplicate onboarding for same candidate
-      const existing = await storage.getOnboardingRecords({});
-      const dup = existing.find(r => r.candidateId === data.candidateId && r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated");
-      if (dup) return res.status(409).json({ message: tr(req, "onboarding.alreadyExists") });
-      // Server-side: always read the candidate's actual upload status from DB
-      // so stale client caches don't create onboarding records with false flags
-      if (data.candidateId) {
-        const candidate = await storage.getCandidate(data.candidateId);
-        if (candidate) {
-          data.hasPhoto = candidate.hasPhoto ?? false;
-          data.hasIban = candidate.hasIban ?? false;
-          data.hasNationalId = candidate.hasNationalId ?? false;
-          // Derive SMP from onboarding linkage context: applicationId === null = SMP pipeline.
-          // This is authoritative and source-agnostic.
-          const isSmp = !data.applicationId;
-          data.status = computeOnboardingStatus(data as any, isSmp);
-        }
-      }
-      const record = await storage.createOnboardingRecord(data);
-      const candidate = data.candidateId ? await storage.getCandidate(data.candidateId) : null;
-      await logAudit(req, {
-        action: "onboarding.admit",
-        entityType: "onboarding",
-        entityId: record.id,
-        subjectName: candidate?.fullNameEn ?? undefined,
-        description: `Admitted "${candidate?.fullNameEn ?? data.candidateId}" to onboarding`,
-        metadata: { candidateId: data.candidateId },
-      });
-      return res.status(201).json(record);
-    } catch (err) {
-      return handleError(res, err);
-    }
-  });
-
-  app.patch("/api/onboarding/:id", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
-    try {
-      const data = insertOnboardingSchema.partial().parse(req.body);
-      delete data.hasPhoto;
-      delete data.hasIban;
-      delete data.hasNationalId;
-      const isRejection = data.status === "rejected";
-      if (!isRejection) delete data.status;
-      if (data.hasSignedContract !== undefined || isRejection) {
-        const current = await storage.getOnboardingRecord(req.params.id);
-        if (current && current.status !== "converted" && current.status !== "rejected" && current.status !== "terminated") {
-          const merged = { ...current, ...data };
-          if (!isRejection) {
-            // Derive SMP from onboarding record's applicationId (authoritative, source-agnostic)
-            const isSmp = !current.applicationId;
-            data.status = computeOnboardingStatus(merged, isSmp);
-          }
-        }
-      }
-      if (isRejection) {
-        data.rejectedAt = new Date();
-      }
-      const record = await storage.updateOnboardingRecord(req.params.id, data);
-      if (!record) return res.status(404).json({ message: tr(req, "onboarding.notFound") });
-      if (data.status === "rejected" && record.applicationId) {
-        await storage.updateApplication(record.applicationId, { status: "interviewed" });
-      }
-      return res.json(record);
-    } catch (err) {
-      return handleError(res, err);
-    }
-  });
-
-  app.delete("/api/onboarding/:id", requirePermission("onboarding:delete"), async (req: Request, res: Response) => {
-    try {
-      const ok = await storage.deleteOnboardingRecord(req.params.id);
-      if (!ok) return res.status(404).json({ message: tr(req, "onboarding.notFound") });
-      return res.status(204).end();
-    } catch (err) {
-      return handleError(res, err);
-    }
-  });
-
   // ─── Task #214: Onboarding document-upload reminders ─────────────────────
   // GET  /api/onboarding/reminder-settings        — config + 4 templates
   // PUT  /api/onboarding/reminder-settings        — patch config and/or templates
@@ -3987,7 +3897,7 @@ export async function registerRoutes(
         firstAfterHours: z.number().int().min(0).optional(),
         repeatEveryHours: z.number().int().min(0).optional(),
         maxReminders: z.number().int().min(0).optional(),
-        totalDeadlineHours: z.number().int().min(0).optional(),
+        totalDeadlineDays: z.number().int().min(0).optional(),
         finalWarningHours: z.number().int().min(0).optional(),
         quietHoursStart: z.string().optional(),
         quietHoursEnd: z.string().optional(),
@@ -4011,7 +3921,7 @@ export async function registerRoutes(
         action: "onboarding.reminders.settings_updated",
         entityType: "system_setting",
         entityId: "onboarding_reminder_config",
-        description: `Updated onboarding reminder settings (enabled=${config.enabled}, first=${config.firstAfterHours}h, repeat=${config.repeatEveryHours}h, max=${config.maxReminders}, deadline=${config.totalDeadlineHours}h, templatesPatched=${body.templates ? "yes" : "no"}).`,
+        description: `Updated onboarding reminder settings (enabled=${config.enabled}, first=${config.firstAfterHours}h, repeat=${config.repeatEveryHours}h, max=${config.maxReminders}, deadline=${config.totalDeadlineDays}d, templatesPatched=${body.templates ? "yes" : "no"}).`,
         metadata: { config, templatesPatched: body.templates ? Object.keys(body.templates) : [] },
       });
       return res.json({ config, templates });
@@ -4183,6 +4093,97 @@ export async function registerRoutes(
       }));
       return res.json(out);
     } catch (err) { return handleError(res, err); }
+  });
+
+
+  app.get("/api/onboarding/:id", requirePermission("onboarding:read"), async (req: Request, res: Response) => {
+    try {
+      const record = await storage.getOnboardingRecord(req.params.id);
+      if (!record) return res.status(404).json({ message: tr(req, "onboarding.notFound") });
+      return res.json(record);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.post("/api/onboarding", requirePermission("onboarding:create"), async (req: Request, res: Response) => {
+    try {
+      const data = insertOnboardingSchema.parse(req.body);
+      // Prevent duplicate onboarding for same candidate
+      const existing = await storage.getOnboardingRecords({});
+      const dup = existing.find(r => r.candidateId === data.candidateId && r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated");
+      if (dup) return res.status(409).json({ message: tr(req, "onboarding.alreadyExists") });
+      // Server-side: always read the candidate's actual upload status from DB
+      // so stale client caches don't create onboarding records with false flags
+      if (data.candidateId) {
+        const candidate = await storage.getCandidate(data.candidateId);
+        if (candidate) {
+          data.hasPhoto = candidate.hasPhoto ?? false;
+          data.hasIban = candidate.hasIban ?? false;
+          data.hasNationalId = candidate.hasNationalId ?? false;
+          // Derive SMP from onboarding linkage context: applicationId === null = SMP pipeline.
+          // This is authoritative and source-agnostic.
+          const isSmp = !data.applicationId;
+          data.status = computeOnboardingStatus(data as any, isSmp);
+        }
+      }
+      const record = await storage.createOnboardingRecord(data);
+      const candidate = data.candidateId ? await storage.getCandidate(data.candidateId) : null;
+      await logAudit(req, {
+        action: "onboarding.admit",
+        entityType: "onboarding",
+        entityId: record.id,
+        subjectName: candidate?.fullNameEn ?? undefined,
+        description: `Admitted "${candidate?.fullNameEn ?? data.candidateId}" to onboarding`,
+        metadata: { candidateId: data.candidateId },
+      });
+      return res.status(201).json(record);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.patch("/api/onboarding/:id", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
+    try {
+      const data = insertOnboardingSchema.partial().parse(req.body);
+      delete data.hasPhoto;
+      delete data.hasIban;
+      delete data.hasNationalId;
+      const isRejection = data.status === "rejected";
+      if (!isRejection) delete data.status;
+      if (data.hasSignedContract !== undefined || isRejection) {
+        const current = await storage.getOnboardingRecord(req.params.id);
+        if (current && current.status !== "converted" && current.status !== "rejected" && current.status !== "terminated") {
+          const merged = { ...current, ...data };
+          if (!isRejection) {
+            // Derive SMP from onboarding record's applicationId (authoritative, source-agnostic)
+            const isSmp = !current.applicationId;
+            data.status = computeOnboardingStatus(merged, isSmp);
+          }
+        }
+      }
+      if (isRejection) {
+        data.rejectedAt = new Date();
+      }
+      const record = await storage.updateOnboardingRecord(req.params.id, data);
+      if (!record) return res.status(404).json({ message: tr(req, "onboarding.notFound") });
+      if (data.status === "rejected" && record.applicationId) {
+        await storage.updateApplication(record.applicationId, { status: "interviewed" });
+      }
+      return res.json(record);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.delete("/api/onboarding/:id", requirePermission("onboarding:delete"), async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteOnboardingRecord(req.params.id);
+      if (!ok) return res.status(404).json({ message: tr(req, "onboarding.notFound") });
+      return res.status(204).end();
+    } catch (err) {
+      return handleError(res, err);
+    }
   });
 
   app.post("/api/onboarding/:id/convert", requirePermission("onboarding:convert"), async (req: Request, res: Response) => {

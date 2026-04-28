@@ -348,7 +348,7 @@
     "firstAfterHours": "First reminder after (hours)",
     "repeatEveryHours": "Repeat every (hours)",
     "maxReminders": "Maximum reminders",
-    "totalDeadlineHours": "Total deadline before elimination (hours)",
+    "totalDeadlineDays": "Total deadline before elimination (days)",
     "finalWarningHours": "Final warning sent before deadline (hours)",
     "quietHours": "Quiet hours",
     "quietHoursStart": "Start",

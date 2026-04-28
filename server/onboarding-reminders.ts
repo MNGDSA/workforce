@@ -26,6 +26,7 @@ import {
   type Candidate,
 } from "@shared/schema";
 import { storage } from "./storage";
+import { applyShortlistResetCleanup } from "./application-status-cleanup";
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
@@ -43,7 +44,7 @@ export interface ReminderConfig {
   firstAfterHours: number;        // first reminder = createdAt + this
   repeatEveryHours: number;       // subsequent reminders cadence
   maxReminders: number;           // hard cap on how many to send
-  totalDeadlineHours: number;     // overall deadline from createdAt → eliminate
+  totalDeadlineDays: number;      // overall deadline from createdAt → eliminate (days)
   finalWarningHours: number;      // how far before deadline to send last-chance SMS
   quietHoursStart: string;        // "HH:MM" in tz
   quietHoursEnd: string;          // "HH:MM" in tz
@@ -59,7 +60,7 @@ const DEFAULT_CONFIG: ReminderConfig = {
   firstAfterHours: 24,
   repeatEveryHours: 24,
   maxReminders: 3,
-  totalDeadlineHours: 96,
+  totalDeadlineDays: 4,
   finalWarningHours: 24,
   quietHoursStart: "21:00",
   quietHoursEnd: "08:00",
@@ -103,7 +104,7 @@ export async function setReminderConfig(patch: Partial<ReminderConfig>): Promise
   next.firstAfterHours    = clampHours(next.firstAfterHours,    0, 24 * 30);
   next.repeatEveryHours   = clampHours(next.repeatEveryHours,   0, 24 * 30);
   next.maxReminders       = clampInt(next.maxReminders,         0, 20);
-  next.totalDeadlineHours = clampHours(next.totalDeadlineHours, 0, 24 * 365);
+  next.totalDeadlineDays  = clampInt(next.totalDeadlineDays,   0, 365);
   next.finalWarningHours  = clampHours(next.finalWarningHours,  0, 24 * 30);
   await storage.setSystemSetting(SETTINGS_KEY, JSON.stringify(next));
   return next;
@@ -277,7 +278,7 @@ export function computeRowStatus(
   }
 
   const createdAtMs = rec.createdAt.getTime();
-  const eliminationMs = createdAtMs + cfg.totalDeadlineHours * 3600_000;
+  const eliminationMs = createdAtMs + cfg.totalDeadlineDays * 86400_000;
   const finalWarningMs = eliminationMs - cfg.finalWarningHours * 3600_000;
   const eliminationAt = new Date(eliminationMs).toISOString();
   const finalWarningAt = new Date(finalWarningMs).toISOString();
@@ -454,7 +455,7 @@ export async function runOnboardingReminderSweep(now: Date = new Date()): Promis
     // Final-warning send is gated by the time window + not-yet-sent flag,
     // independent of the visual state (which only flips to "warning"
     // after the SMS has actually been enqueued).
-    const eliminationMs = rec.createdAt.getTime() + cfg.totalDeadlineHours * 3600_000;
+    const eliminationMs = rec.createdAt.getTime() + cfg.totalDeadlineDays * 86400_000;
     const finalWarningMs = eliminationMs - cfg.finalWarningHours * 3600_000;
     if (now.getTime() >= finalWarningMs && rec.finalWarningSentAt == null && status.missingDocs.length > 0) {
       const enqueued = await enqueueFinalWarningSms(rec, cfg, status.missingDocs);
@@ -631,7 +632,7 @@ async function resolveSmsContext(
     ?? "https://workforce.tanaqolapp.com";
   const link = `${baseUrl.replace(/\/$/, "")}/candidate/onboarding`;
 
-  const deadlineAt = new Date(rec.createdAt.getTime() + cfg.totalDeadlineHours * 3600_000).toISOString();
+  const deadlineAt = new Date(rec.createdAt.getTime() + cfg.totalDeadlineDays * 86400_000).toISOString();
 
   return { phone, locale, candidateName, link, deadlineAt };
 }
@@ -672,40 +673,50 @@ async function enqueueFinalWarningSms(
 }
 
 /**
- * Tear down an expired onboarding row. Mirrors the manual "Reset Like"
- * path in routes.ts so the existing reverse-sync hook handles
- * downstream cleanup.
+ * Tear down an expired onboarding row. Routes through the same shared
+ * cleanup helper as manual "Reset Like" so the reverse-sync contract is
+ * identical for both paths (admin alerts, audit, orphan teardown for
+ * pending|in_progress|ready statuses).
  *
- * Two cases:
- *   - applicationId set → flip the application back to "interviewed"
- *     (this is what the reverse-sync hook listens for) and let it
- *     drop the orphan onboarding row.
- *   - applicationId null (SMP) → delete the onboarding row directly.
- *
- * In both cases we stamp eliminated_at first so a duplicate sweep
- * (e.g. a manual restart of the scheduler) skips the row.
+ * eliminated_at is stamped first as a CAS guard so a concurrent sweep
+ * skips the row.
  */
 async function eliminateOnboarding(rec: OnboardingRecord): Promise<boolean> {
   try {
-    // Stamp eliminated_at FIRST (CAS guard) so a concurrent sweep skips this row.
     const [stamped] = await db.update(onboarding)
       .set({ eliminatedAt: new Date(), updatedAt: new Date() })
       .where(and(eq(onboarding.id, rec.id), isNull(onboarding.eliminatedAt)))
       .returning();
     if (!stamped) return false;
 
-    // For application-linked rows, flip the application back to "interviewed"
-    // so the candidate can be re-shortlisted. Then delete the onboarding row
-    // directly — independent of its status (pending/in_progress/ready) — so
-    // the duplicate-check guard in storage.createOnboardingRecord doesn't
-    // block a future re-admission.
     if (rec.applicationId) {
       const app = await storage.getApplication(rec.applicationId);
-      if (app && app.status === "shortlisted") {
+      const previousStatus = app?.status ?? null;
+      let newStatus = previousStatus ?? "interviewed";
+      if (previousStatus === "shortlisted") {
         await storage.updateApplication(rec.applicationId, { status: "interviewed" });
+        newStatus = "interviewed";
       }
+      const candidate = await storage.getCandidate(rec.candidateId).catch(() => null);
+      const cleanup = await applyShortlistResetCleanup({
+        previousStatus: "shortlisted",
+        newStatus,
+        applicationId: rec.applicationId,
+        candidateId: rec.candidateId,
+        candidateName: candidate?.fullNameEn ?? null,
+        actor: { id: null, name: "system" },
+        metadata: { reason: "auto_eliminated", reminderCount: rec.reminderCount },
+      });
+      if (!cleanup.removedOnboardingIds.includes(rec.id)) {
+        // Defensive: shared helper only fires when previousStatus === "shortlisted".
+        // If the application wasn't shortlisted, fall back to direct delete so the
+        // duplicate-protection guard in createOnboardingRecord doesn't block re-admit.
+        await storage.deleteOnboardingRecord(rec.id);
+      }
+    } else {
+      // SMP rows have no application — delete directly.
+      await storage.deleteOnboardingRecord(rec.id);
     }
-    await storage.deleteOnboardingRecord(rec.id);
 
     try {
       await storage.createAdminAlert(

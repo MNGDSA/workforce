@@ -128,7 +128,7 @@ interface ReminderConfig {
   firstAfterHours: number;
   repeatEveryHours: number;
   maxReminders: number;
-  totalDeadlineHours: number;
+  totalDeadlineDays: number;
   finalWarningHours: number;
   quietHoursStart: string;
   quietHoursEnd: string;
@@ -1637,7 +1637,7 @@ const DEFAULT_REMINDER_CONFIG: ReminderConfig = {
   firstAfterHours: 24,
   repeatEveryHours: 24,
   maxReminders: 3,
-  totalDeadlineHours: 96,
+  totalDeadlineDays: 4,
   finalWarningHours: 24,
   quietHoursStart: "21:00",
   quietHoursEnd: "08:00",
@@ -1953,13 +1953,13 @@ function ReminderSettingsTab() {
             />
           </div>
           <div>
-            <Label className="text-zinc-400 text-xs" htmlFor="cfg-deadline">{t("reminders.totalDeadlineHours")}</Label>
+            <Label className="text-zinc-400 text-xs" htmlFor="cfg-deadline">{t("reminders.totalDeadlineDays")}</Label>
             <Input
               id="cfg-deadline"
               data-testid="input-reminder-deadline"
               type="number" min={0}
-              value={form.totalDeadlineHours}
-              onChange={e => setNum("totalDeadlineHours", e.target.value)}
+              value={form.totalDeadlineDays}
+              onChange={e => setNum("totalDeadlineDays", e.target.value)}
               className="mt-1 bg-zinc-950 border-zinc-700 text-white"
             />
           </div>

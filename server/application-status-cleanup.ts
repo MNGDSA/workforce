@@ -50,20 +50,22 @@ export async function applyShortlistResetCleanup(ctx: ReverseSyncContext): Promi
     return result;
   }
 
-  const pending = await storage.getOnboardingRecords({
+  const all = await storage.getOnboardingRecords({
     candidateId: ctx.candidateId,
-    status: "pending",
   });
-  if (pending.length === 0) return result;
+  const removable = all.filter(o =>
+    o.status === "pending" || o.status === "in_progress" || o.status === "ready"
+  );
+  if (removable.length === 0) return result;
 
-  for (const ob of pending) {
+  for (const ob of removable) {
     await storage.deleteOnboardingRecord(ob.id);
     result.removedOnboardingIds.push(ob.id);
     await storage.createAuditLog({
       action: "onboarding.auto_remove_on_reset",
       entityType: "onboarding",
       entityId: ob.id,
-      description: `Removed pending onboarding for "${ctx.candidateName ?? ctx.candidateId}" because the application shortlist was reset (${ctx.previousStatus} → ${ctx.newStatus}).`,
+      description: `Removed ${ob.status} onboarding for "${ctx.candidateName ?? ctx.candidateId}" because the application shortlist was reset (${ctx.previousStatus} → ${ctx.newStatus}).`,
       metadata: {
         candidateId: ctx.candidateId,
         applicationId: ctx.applicationId,
