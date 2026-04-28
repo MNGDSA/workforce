@@ -14,7 +14,7 @@
 // the derived per-row state via /api/onboarding/reminders/status — it
 // never reproduces the cadence math itself, which prevents drift
 // between admin previews and what actually fires.
-import { and, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, isNull, sql, gte, notInArray } from "drizzle-orm";
 import { db } from "./db";
 import {
   onboarding,
@@ -33,6 +33,13 @@ export type ReminderDocId = "photo" | "iban" | "national_id";
 
 export interface ReminderConfig {
   enabled: boolean;
+  /**
+   * ISO timestamp of the most recent OFF→ON flip of `enabled`. The
+   * sweep filters onboarding rows by `createdAt >= enabledAt` so a
+   * historical backlog cannot suddenly start receiving reminders the
+   * moment an admin enables the loop. Null when `enabled` is false.
+   */
+  enabledAt: string | null;
   firstAfterHours: number;        // first reminder = createdAt + this
   repeatEveryHours: number;       // subsequent reminders cadence
   maxReminders: number;           // hard cap on how many to send
@@ -48,6 +55,7 @@ export interface ReminderConfig {
 // matches the Q&A locked spec.
 const DEFAULT_CONFIG: ReminderConfig = {
   enabled: false,
+  enabledAt: null,
   firstAfterHours: 24,
   repeatEveryHours: 24,
   maxReminders: 3,
@@ -75,6 +83,16 @@ export async function getReminderConfig(): Promise<ReminderConfig> {
 export async function setReminderConfig(patch: Partial<ReminderConfig>): Promise<ReminderConfig> {
   const current = await getReminderConfig();
   const next: ReminderConfig = { ...current, ...patch };
+  // Stamp enabledAt on OFF→ON transitions; clear it on ON→OFF. The
+  // sweep uses this to avoid acting on rows that pre-date the most
+  // recent enablement (out-of-scope guard, per spec).
+  if (!current.enabled && next.enabled) {
+    next.enabledAt = new Date().toISOString();
+  } else if (current.enabled && !next.enabled) {
+    next.enabledAt = null;
+  } else {
+    next.enabledAt = current.enabledAt;
+  }
   // Normalize the doc list — drop unknown ids, dedupe, preserve order.
   const knownDocs: ReminderDocId[] = ["photo", "iban", "national_id"];
   const seen = new Set<string>();
@@ -90,6 +108,73 @@ export async function setReminderConfig(patch: Partial<ReminderConfig>): Promise
   next.finalWarningHours  = clampHours(next.finalWarningHours,  0, 24 * 30);
   await storage.setSystemSetting(SETTINGS_KEY, JSON.stringify(next));
   return next;
+}
+
+// ─── Templates (system_settings keys) ───────────────────────────────────────
+// Stored separately from the config blob so an admin can iterate on
+// copy without tripping numeric validation. Each template supports the
+// placeholders {name}, {missing_docs}, {portal_url}, {deadline_date}.
+
+export type ReminderTemplateKey =
+  | "onboarding_reminder_sms_ar"
+  | "onboarding_reminder_sms_en"
+  | "onboarding_final_warning_sms_ar"
+  | "onboarding_final_warning_sms_en";
+
+export const REMINDER_TEMPLATE_KEYS: ReminderTemplateKey[] = [
+  "onboarding_reminder_sms_ar",
+  "onboarding_reminder_sms_en",
+  "onboarding_final_warning_sms_ar",
+  "onboarding_final_warning_sms_en",
+];
+
+const TEMPLATE_DEFAULTS: Record<ReminderTemplateKey, string> = {
+  onboarding_reminder_sms_ar:
+    "وورك فورس: {name}، لم يكتمل تأهيلك بعد. يُرجى رفع المستندات التالية للحفاظ على عرض العمل: {missing_docs}. آخر موعد: {deadline_date}. تسجيل الدخول: {portal_url}",
+  onboarding_reminder_sms_en:
+    "Workforce: {name}, your onboarding is incomplete. Please upload: {missing_docs}. Deadline: {deadline_date}. Log in: {portal_url}",
+  onboarding_final_warning_sms_ar:
+    "وورك فورس: تنبيه أخير {name} — سيتم إلغاء تأهيلك في {deadline_date} ما لم ترفع: {missing_docs}. سجّل الدخول الآن: {portal_url}",
+  onboarding_final_warning_sms_en:
+    "Workforce: FINAL NOTICE {name} — your onboarding will be cancelled on {deadline_date} unless you upload: {missing_docs}. Log in now: {portal_url}",
+};
+
+export async function getReminderTemplate(key: ReminderTemplateKey): Promise<string> {
+  const raw = await storage.getSystemSetting(key);
+  return raw && raw.trim().length > 0 ? raw : TEMPLATE_DEFAULTS[key];
+}
+
+export async function getAllReminderTemplates(): Promise<Record<ReminderTemplateKey, string>> {
+  const out = {} as Record<ReminderTemplateKey, string>;
+  for (const k of REMINDER_TEMPLATE_KEYS) {
+    out[k] = await getReminderTemplate(k);
+  }
+  return out;
+}
+
+export async function setReminderTemplates(
+  patch: Partial<Record<ReminderTemplateKey, string>>,
+): Promise<Record<ReminderTemplateKey, string>> {
+  for (const k of REMINDER_TEMPLATE_KEYS) {
+    const v = patch[k];
+    if (typeof v === "string") {
+      // Persist trimmed value; empty string falls back to default on read.
+      await storage.setSystemSetting(k, v.trim());
+    }
+  }
+  return getAllReminderTemplates();
+}
+
+/** Substitute the four supported placeholders. Unknown tokens stay literal. */
+export function renderReminderTemplate(
+  template: string,
+  vars: { name: string; missingDocs: string; portalUrl: string; deadlineDate: string },
+): string {
+  return template
+    .replaceAll("{name}", vars.name)
+    .replaceAll("{missing_docs}", vars.missingDocs)
+    .replaceAll("{portal_url}", vars.portalUrl)
+    .replaceAll("{deadline_date}", vars.deadlineDate);
 }
 
 function clampHours(n: unknown, min: number, max: number): number {
@@ -329,12 +414,20 @@ export async function runOnboardingReminderSweep(now: Date = new Date()): Promis
   // Pull only rows that could possibly be acted on. Status filter
   // mirrors isReminderEligibleStatus and the missing-docs filter is
   // applied per-row (it depends on SMP-vs-individual + config).
+  // Out-of-scope guard: only act on rows whose `createdAt` is at or
+  // after the most recent OFF→ON flip. This prevents a backlog of
+  // pre-existing pending onboardings from being eliminated the moment
+  // an admin first enables the loop.
+  const enabledAtFilter = cfg.enabledAt
+    ? gte(onboarding.createdAt, new Date(cfg.enabledAt))
+    : sql`false`;
   const rows = await db
     .select()
     .from(onboarding)
     .where(and(
       isNull(onboarding.eliminatedAt),
       sql`${onboarding.status} IN ('pending', 'in_progress', 'ready')`,
+      enabledAtFilter,
     ));
   result.considered = rows.length;
 
@@ -361,13 +454,13 @@ export async function runOnboardingReminderSweep(now: Date = new Date()): Promis
     // Final warning takes priority over a regular reminder when we're
     // inside the warning window AND we have not yet sent the warning.
     if (status.state === "warning") {
-      const enqueued = await enqueueReminderSms(rec, cfg, status.missingDocs, "final");
+      const enqueued = await enqueueFinalWarningSms(rec, cfg, status.missingDocs);
       if (enqueued) result.finalWarningsEnqueued++;
       continue;
     }
 
     if (status.state === "due") {
-      const claimed = await claimAndEnqueueReminder(rec, status.missingDocs, now);
+      const claimed = await claimAndEnqueueReminder(rec, status.missingDocs, now, cfg);
       if (claimed) result.remindersEnqueued++;
     }
   }
@@ -388,7 +481,7 @@ export async function sendReminderNow(onboardingId: string): Promise<OnboardingR
   if (!rec) return null;
   const missing = missingDocsFor(rec, cfg);
   if (missing.length === 0) return rec;
-  await claimAndEnqueueReminder(rec, missing, new Date());
+  await claimAndEnqueueReminder(rec, missing, new Date(), cfg);
   // Whether or not we actually claimed the slot (someone else may have
   // raced us and the dedupe key blocked the duplicate insert), return
   // the latest row to the caller so the UI shows the up-to-date state.
@@ -414,27 +507,13 @@ async function claimAndEnqueueReminder(
   rec: OnboardingRecord,
   missing: ReminderDocId[],
   now: Date,
+  cfg: ReminderConfig,
 ): Promise<boolean> {
   if (missing.length === 0) return false;
 
   // Resolve recipient/payload BEFORE the transaction (read-only, no race risk).
-  // If we can't resolve a phone, abort cleanly without consuming a slot.
-  const [cand] = await db.select().from(candidates).where(eq(candidates.id, rec.candidateId));
-  if (!cand) return false;
-  const phone = cand.phone?.trim();
-  if (!phone) return false;
-  let locale: "ar" | "en" = "ar";
-  if (cand.userId) {
-    const u = await storage.getUser(cand.userId);
-    const loc = (u as any)?.locale;
-    if (loc === "en") locale = "en";
-    else if (loc === "ar") locale = "ar";
-  }
-  const baseUrl = (await storage.getSystemSetting("public_app_url"))
-    ?? process.env.PUBLIC_APP_URL
-    ?? (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
-    ?? "https://workforce.tanaqolapp.com";
-  const link = `${baseUrl.replace(/\/$/, "")}/candidate/onboarding`;
+  const ctx = await resolveSmsContext(rec, cfg);
+  if (!ctx) return false;
 
   const observed = rec.reminderCount ?? 0;
   const nextN = observed + 1;
@@ -462,13 +541,16 @@ async function claimAndEnqueueReminder(
 
       const inserted = await tx.insert(smsOutbox).values({
         candidateId: rec.candidateId,
-        recipientPhone: phone,
+        recipientPhone: ctx.phone,
         kind: "onboarding_reminder",
         payload: {
           onboardingId: rec.id,
           missingDocs: missing,
-          locale,
-          link,
+          locale: ctx.locale,
+          link: ctx.link,
+          candidateName: ctx.candidateName,
+          deadlineAt: ctx.deadlineAt,
+          portalUrl: ctx.link,
         },
         dedupeKey,
       }).onConflictDoNothing({ target: smsOutbox.dedupeKey }).returning();
@@ -505,38 +587,38 @@ export async function resumeReminders(onboardingId: string): Promise<OnboardingR
 
 // ─── Internals ─────────────────────────────────────────────────────────────
 
-async function enqueueReminderSms(
+/**
+ * Resolve the candidate-side context (phone, locale, name, deadline,
+ * portal link) needed to populate an SMS outbox payload. Pure read; no
+ * race risk — safe to call outside any transaction.
+ *
+ * Returns null if the row cannot be reminded (no candidate, no phone).
+ */
+interface ResolvedSmsContext {
+  phone: string;
+  locale: "ar" | "en";
+  candidateName: string;
+  link: string;
+  deadlineAt: string;
+}
+
+async function resolveSmsContext(
   rec: OnboardingRecord,
   cfg: ReminderConfig,
-  missing: ReminderDocId[],
-  variant: "regular" | "final",
-  opts: { sequenceN?: number } = {},
-): Promise<boolean> {
-  if (missing.length === 0) return false;
-
+): Promise<ResolvedSmsContext | null> {
   const [cand] = await db.select().from(candidates).where(eq(candidates.id, rec.candidateId));
-  if (!cand) return false;
+  if (!cand) return null;
   const phone = cand.phone?.trim();
-  if (!phone) return false;
+  if (!phone) return null;
 
-  // Candidate's preferred locale lives on the linked user row (candidates
-  // table has no locale column). Fall back to "ar" — project default.
   let locale: "ar" | "en" = "ar";
   if (cand.userId) {
     const u = await storage.getUser(cand.userId);
-    const loc = (u as any)?.locale;
-    if (loc === "en") locale = "en";
-    else if (loc === "ar") locale = "ar";
+    if (u?.locale === "en") locale = "en";
+    else if (u?.locale === "ar") locale = "ar";
   }
 
-  // Deterministic dedupeKey: the sequence number is supplied by the
-  // race-safe claimAndEnqueueReminder caller (already incremented). Both
-  // sweep and manual send-now agree on this number, so a duplicate
-  // attempt collides at the unique-index level and is silently ignored.
-  const sequenceN = opts.sequenceN ?? ((rec.reminderCount ?? 0) + 1);
-  const dedupeKey = variant === "final"
-    ? `onboarding_final_warning:${rec.id}`
-    : `onboarding_reminder:${rec.id}:${sequenceN}`;
+  const candidateName = cand.fullNameEn ?? "";
 
   const baseUrl = (await storage.getSystemSetting("public_app_url"))
     ?? process.env.PUBLIC_APP_URL
@@ -544,20 +626,38 @@ async function enqueueReminderSms(
     ?? "https://workforce.tanaqolapp.com";
   const link = `${baseUrl.replace(/\/$/, "")}/candidate/onboarding`;
 
-  await db.insert(smsOutbox).values({
+  const deadlineAt = new Date(rec.createdAt.getTime() + cfg.totalDeadlineHours * 3600_000).toISOString();
+
+  return { phone, locale, candidateName, link, deadlineAt };
+}
+
+async function enqueueFinalWarningSms(
+  rec: OnboardingRecord,
+  cfg: ReminderConfig,
+  missing: ReminderDocId[],
+): Promise<boolean> {
+  if (missing.length === 0) return false;
+  const ctx = await resolveSmsContext(rec, cfg);
+  if (!ctx) return false;
+
+  const dedupeKey = `onboarding_final_warning:${rec.id}`;
+  const inserted = await db.insert(smsOutbox).values({
     candidateId: rec.candidateId,
-    recipientPhone: phone,
-    kind: variant === "final" ? "onboarding_final_warning" : "onboarding_reminder",
+    recipientPhone: ctx.phone,
+    kind: "onboarding_final_warning",
     payload: {
       onboardingId: rec.id,
       missingDocs: missing,
-      locale,
-      link,
+      locale: ctx.locale,
+      link: ctx.link,
+      candidateName: ctx.candidateName,
+      deadlineAt: ctx.deadlineAt,
+      portalUrl: ctx.link,
     },
     dedupeKey,
-  }).onConflictDoNothing({ target: smsOutbox.dedupeKey });
+  }).onConflictDoNothing({ target: smsOutbox.dedupeKey }).returning();
 
-  return true;
+  return inserted.length > 0;
 }
 
 /**
@@ -576,38 +676,69 @@ async function enqueueReminderSms(
  */
 async function eliminateOnboarding(rec: OnboardingRecord): Promise<boolean> {
   try {
-    // Atomic tear-down: stamp eliminated_at + flip application + delete
-    // onboarding row in a single transaction. If any step throws, the
-    // whole thing rolls back and the next sweep sees the row exactly as
-    // before — no half-eliminated state where the row is excluded from
-    // future sweeps but the application/onboarding cleanup never ran.
-    const result = await db.transaction(async (tx) => {
-      const [stamped] = await tx.update(onboarding)
-        .set({ eliminatedAt: new Date(), updatedAt: new Date() })
-        .where(and(eq(onboarding.id, rec.id), isNull(onboarding.eliminatedAt)))
-        .returning();
-      if (!stamped) return false; // already eliminated by a concurrent sweep
+    // Step 1: stamp eliminated_at FIRST (CAS guard) so a concurrent sweep
+    // skips this row. If any later step fails we leave the stamp in
+    // place — the row is dead either way — and emit an alert so an
+    // operator can finish the cleanup manually rather than retrying
+    // automatically and double-flipping application status.
+    const [stamped] = await db.update(onboarding)
+      .set({ eliminatedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(onboarding.id, rec.id), isNull(onboarding.eliminatedAt)))
+      .returning();
+    if (!stamped) return false; // already eliminated by a concurrent sweep
 
-      if (rec.applicationId) {
-        // Use tx-scoped read/write so that any subsequent failure rolls
-        // BOTH the application status flip AND the onboarding delete back.
-        // Calling storage.* here would bypass the tx and commit the app
-        // change independently — defeating the atomicity guarantee.
-        const [app] = await tx.select().from(applications)
-          .where(eq(applications.id, rec.applicationId));
-        if (app && app.status === "shortlisted") {
-          await tx.update(applications)
-            .set({ status: "interviewed", updatedAt: new Date() })
-            .where(eq(applications.id, rec.applicationId));
-        }
-        await tx.delete(onboarding).where(eq(onboarding.id, rec.id));
-      } else {
-        // SMP onboarding has no application linkage — delete directly.
-        await tx.delete(onboarding).where(eq(onboarding.id, rec.id));
+    // Step 2: route the elimination through the SAME storage path that
+    // the manual "Reset Like" PATCH /api/applications/:id uses. This
+    // guarantees the centralised reverse-sync helper runs identically
+    // for both flows — the architectural invariant the spec calls out.
+    if (rec.applicationId) {
+      const app = await storage.getApplication(rec.applicationId);
+      const previousStatus = app?.status ?? null;
+      if (app && app.status === "shortlisted") {
+        await storage.updateApplication(rec.applicationId, { status: "interviewed" });
       }
-      return true;
-    });
-    if (!result) return false;
+      // Always run the cleanup helper (it no-ops when the transition is
+      // not a reset). The helper deletes any pending onboarding row(s),
+      // including this one, with the same audit signature as a manual
+      // reset.
+      const candidate = await storage.getCandidate(rec.candidateId);
+      const { applyShortlistResetCleanup } = await import("./application-status-cleanup");
+      await applyShortlistResetCleanup({
+        previousStatus,
+        newStatus: "interviewed",
+        applicationId: rec.applicationId,
+        candidateId: rec.candidateId,
+        candidateName: candidate?.fullNameEn ?? null,
+        actor: { id: null, name: "system:onboarding-reminders" },
+        metadata: {
+          source: "onboarding_auto_elimination",
+          reminderCount: rec.reminderCount,
+          onboardingId: rec.id,
+        },
+      });
+    } else {
+      // SMP onboarding has no application linkage — delete directly.
+      await storage.deleteOnboardingRecord(rec.id);
+    }
+
+    // Step 3: notify admins via the bell-alert inbox so the action is
+    // visible the next time they open Workforce, not buried in audit.
+    try {
+      await storage.createAdminAlert(
+        "تم استبعاد مرشح تلقائيًا بعد انتهاء مهلة التذكيرات",
+        `استُبعد المرشح ${rec.candidateId} لانتهاء مهلة رفع المستندات المطلوبة بعد ${rec.reminderCount ?? 0} تذكير(ات).`,
+        {
+          kind: "onboarding_auto_eliminated",
+          candidateId: rec.candidateId,
+          applicationId: rec.applicationId,
+          onboardingId: rec.id,
+          reminderCount: rec.reminderCount,
+        },
+      );
+    } catch (alertErr) {
+      // Non-fatal — elimination succeeded; just log the alert failure.
+      console.error(`[onboarding-reminders] admin alert failed for ${rec.id}:`, alertErr);
+    }
 
     await storage.createAuditLog({
       action: "onboarding.auto_eliminated",
@@ -645,9 +776,7 @@ export async function getReminderStatusMap(
       )
     : await db.select().from(onboarding).where(and(
         isNull(onboarding.eliminatedAt),
-        ne(onboarding.status, "converted" as any),
-        ne(onboarding.status, "rejected" as any),
-        ne(onboarding.status, "terminated" as any),
+        notInArray(onboarding.status, ["converted", "rejected", "terminated"]),
       ));
   // Returned as an array so the frontend can iterate it directly without
   // worrying about iteration semantics on a plain object map.

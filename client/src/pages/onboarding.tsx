@@ -149,6 +149,46 @@ interface ReminderRowStatus {
   remindersPaused: boolean;
 }
 
+// Inline reminder block carried by GET /api/onboarding (per row).
+interface OnboardingReminderInline {
+  enabled: boolean;
+  paused: boolean;
+  count: number;
+  max: number;
+  lastSentAt: string | null;
+  nextScheduledAt: string | null;
+  eliminationAt: string | null;
+  state: ReminderRowState;
+  missingDocs: ReminderDocId[];
+}
+
+type ReminderTemplateKey =
+  | "onboarding_reminder_sms_ar"
+  | "onboarding_reminder_sms_en"
+  | "onboarding_final_warning_sms_ar"
+  | "onboarding_final_warning_sms_en";
+
+type ReminderTemplates = Record<ReminderTemplateKey, string>;
+
+interface ReminderActivityRow {
+  onboardingId: string;
+  candidateId: string;
+  candidateName: string | null;
+  candidatePhone: string | null;
+  missingDocs: ReminderDocId[];
+  reminderCount: number;
+  maxReminders: number;
+  remindersPaused: boolean;
+  lastReminderSentAt: string | null;
+  nextScheduledAt: string | null;
+  eliminationAt: string | null;
+  state: ReminderRowState;
+  latestSmsOutboxId: string | null;
+  latestSmsKind: string | null;
+  latestSmsSentAt: string | null;
+  latestSmsLastError: string | null;
+}
+
 interface Candidate {
   id: string;
   fullNameEn: string;
@@ -1369,61 +1409,172 @@ function hoursUntil(iso: string | null): number | null {
   return Math.max(0, Math.round(ms / (60 * 60 * 1000)));
 }
 
-function ReminderRowIndicator({ status }: { status: ReminderRowStatus }) {
-  const { t } = useTranslation("onboarding");
-  const state = status.state;
-  const palette: Record<ReminderRowState, { wrap: string; icon: React.ElementType; iconCls: string }> = {
-    off:          { wrap: "bg-zinc-800 text-zinc-500",            icon: BellOff, iconCls: "text-zinc-500" },
-    pending:      { wrap: "bg-zinc-800 text-zinc-300",            icon: Bell,    iconCls: "text-zinc-400" },
-    due:          { wrap: "bg-yellow-900/40 text-yellow-300",     icon: Bell,    iconCls: "text-yellow-300" },
-    paused:       { wrap: "bg-zinc-800 text-zinc-400",            icon: Pause,   iconCls: "text-zinc-400" },
-    warning:      { wrap: "bg-red-900/40 text-red-300",           icon: AlertTriangle, iconCls: "text-red-300" },
-    max_reached:  { wrap: "bg-orange-900/40 text-orange-300",     icon: Bell,    iconCls: "text-orange-300" },
-    eliminated:   { wrap: "bg-zinc-900 border border-red-900/60 text-red-400", icon: XCircle, iconCls: "text-red-400" },
-  };
-  const p = palette[state];
-  const Icon = p.icon;
-  let label = "";
-  if (state === "pending") {
-    const h = hoursUntil(status.nextScheduledAt);
-    label = h == null ? t("reminders.row.pending", { n: "—" }) : t("reminders.row.pending", { n: h });
-  } else if (state === "warning") {
-    const h = hoursUntil(status.eliminationAt);
-    label = h == null ? t("reminders.row.warning", { n: "—" }) : t("reminders.row.warning", { n: h });
-  } else {
-    label = t(`reminders.row.${state}`);
+function formatDuration(ms: number, locale: string): string {
+  const abs = Math.max(0, Math.abs(ms));
+  const days = Math.floor(abs / 86400_000);
+  const hours = Math.floor((abs % 86400_000) / 3600_000);
+  const minutes = Math.floor((abs % 3600_000) / 60_000);
+  if (locale === "ar") {
+    if (days > 0) return `${days} يوم${hours > 0 ? ` و${hours} ساعة` : ""}`;
+    if (hours > 0) return `${hours} ساعة${minutes > 0 ? ` و${minutes} دقيقة` : ""}`;
+    return `${minutes} دقيقة`;
   }
-  const sentLabel = status.maxReminders > 0
-    ? t("reminders.row.sentCount", { n: status.reminderCount, max: status.maxReminders })
-    : "";
+  if (days > 0) return `${days}d${hours > 0 ? ` ${hours}h` : ""}`;
+  if (hours > 0) return `${hours}h${minutes > 0 ? ` ${minutes}m` : ""}`;
+  return `${minutes}m`;
+}
+
+function ReminderRowIndicator({ status }: { status: ReminderRowStatus }) {
+  const { t, i18n } = useTranslation("onboarding");
+  const state = status.state;
+  const isAr = i18n.language === "ar";
+
+  const fmtDate = (iso: string | null) => iso
+    ? new Date(iso).toLocaleString(isAr ? "ar-SA" : "en-GB", { dateStyle: "short", timeStyle: "short" })
+    : "—";
+
+  // Time-to-elimination drives the high-urgency RTL accent stripe.
+  const eliminationMsLeft = status.eliminationAt
+    ? Math.max(0, new Date(status.eliminationAt).getTime() - Date.now())
+    : null;
+  const within24h = eliminationMsLeft != null && eliminationMsLeft <= 24 * 3600_000;
+  const within6h  = eliminationMsLeft != null && eliminationMsLeft <= 6  * 3600_000;
+
+  // Bell visual states per spec:
+  //   off          → null (hidden — render nothing)
+  //   pending      → outline grey
+  //   due          → solid amber
+  //   max_reached  → solid orange + pulse
+  //   warning      → solid orange + pulse + red accent
+  //   paused       → slashed dim
+  //   eliminated   → red X / strike
+  let bellNode: React.ReactNode = null;
+  let bellAriaLabel = "";
+  if (state !== "off") {
+    if (state === "paused") {
+      bellNode = <BellOff className="h-4 w-4 text-zinc-500" data-testid="icon-bell-paused" />;
+      bellAriaLabel = t("reminders.row.paused");
+    } else if (state === "eliminated") {
+      bellNode = <XCircle className="h-4 w-4 text-red-500" data-testid="icon-bell-eliminated" />;
+      bellAriaLabel = t("reminders.row.eliminated");
+    } else if (state === "pending") {
+      bellNode = <Bell className="h-4 w-4 text-zinc-400 stroke-[1.5]" data-testid="icon-bell-pending" />;
+      bellAriaLabel = t("reminders.row.pending", { n: hoursUntil(status.nextScheduledAt) ?? "—" });
+    } else if (state === "due") {
+      bellNode = <Bell className="h-4 w-4 text-amber-400 fill-amber-400" data-testid="icon-bell-due" />;
+      bellAriaLabel = t("reminders.row.due");
+    } else if (state === "max_reached" || state === "warning") {
+      bellNode = (
+        <Bell
+          className={`h-4 w-4 text-orange-400 fill-orange-400 animate-pulse ${state === "warning" ? "drop-shadow-[0_0_4px_rgba(248,113,113,0.6)]" : ""}`}
+          data-testid={state === "warning" ? "icon-bell-warning" : "icon-bell-max"}
+        />
+      );
+      bellAriaLabel = state === "warning"
+        ? t("reminders.row.warning", { n: hoursUntil(status.eliminationAt) ?? "—" })
+        : t("reminders.row.max_reached");
+    }
+  }
+
+  const tooltipText = isAr
+    ? `تم إرسال ${status.reminderCount} من ${status.maxReminders} تذكيرات. التذكير القادم: ${fmtDate(status.nextScheduledAt)}. يتبقى ${eliminationMsLeft != null ? formatDuration(eliminationMsLeft, "ar") : "—"} حتى الاستبعاد.`
+    : `Sent ${status.reminderCount} of ${status.maxReminders} reminders. Next reminder: ${fmtDate(status.nextScheduledAt)}. ${eliminationMsLeft != null ? formatDuration(eliminationMsLeft, "en") : "—"} until elimination.`;
+
+  // Pip strip: maxReminders+1 dots. The +1 (rendered as a diamond) is
+  // the final-warning slot; the trailing tick (a red bar) marks the
+  // hard elimination deadline.
+  const pipDots: { kind: "sent" | "future" | "final"; tip: string; testid: string }[] = [];
+  for (let i = 0; i < status.maxReminders; i++) {
+    const isSent = i < status.reminderCount;
+    pipDots.push({
+      kind: isSent ? "sent" : "future",
+      tip: isSent
+        ? `${isAr ? "تم الإرسال" : "Sent"} • ${i === status.reminderCount - 1 && status.lastReminderSentAt ? fmtDate(status.lastReminderSentAt) : "—"}`
+        : `${isAr ? "مجدول" : "Scheduled"} • ${i === status.reminderCount && status.nextScheduledAt ? fmtDate(status.nextScheduledAt) : "—"}`,
+      testid: `pip-${i}`,
+    });
+  }
+  pipDots.push({
+    kind: "final",
+    tip: `${isAr ? "تنبيه أخير" : "Final warning"} • ${fmtDate(status.eliminationAt)}`,
+    testid: "pip-final",
+  });
+
   const missingCount = status.missingDocs.length;
 
   return (
-    <div className="mt-2 flex items-center gap-2 flex-wrap" data-testid={`reminder-status-${status.onboardingId}`}>
-      <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${p.wrap}`}>
-        <Icon className={`h-3 w-3 ${p.iconCls}`} />
-        <span data-testid={`reminder-state-${status.onboardingId}`}>{label}</span>
+    <div className="mt-2" data-testid={`reminder-status-${status.onboardingId}`}>
+      {/* Optional thin RTL accent stripe for <24h / <6h until elimination */}
+      {within24h && state !== "off" && state !== "eliminated" && (
+        <div
+          className={`h-0.5 mb-1 rounded-full ${within6h ? "bg-red-500" : "bg-orange-500"} ${isAr ? "ml-auto" : "mr-auto"}`}
+          style={{ width: within6h ? "60%" : "40%" }}
+          data-testid={`accent-deadline-${status.onboardingId}`}
+        />
+      )}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Bell glyph */}
+        {bellNode && (
+          <span title={tooltipText} aria-label={bellAriaLabel} className="inline-flex items-center" data-testid={`reminder-bell-${status.onboardingId}`}>
+            {bellNode}
+          </span>
+        )}
+        {/* Pip strip */}
+        {state !== "off" && state !== "eliminated" && status.maxReminders > 0 && (
+          <div className="flex items-center gap-0.5" data-testid={`pip-strip-${status.onboardingId}`}>
+            {pipDots.map((p, i) => {
+              const cls =
+                p.kind === "sent"   ? "bg-amber-400"
+              : p.kind === "future" ? "bg-zinc-700"
+                                    : "bg-orange-500 rotate-45";
+              const shape = p.kind === "final" ? "h-2 w-2" : "h-1.5 w-1.5 rounded-full";
+              return (
+                <span
+                  key={i}
+                  title={p.tip}
+                  className={`inline-block ${shape} ${cls}`}
+                  data-testid={`reminder-${p.testid}-${status.onboardingId}`}
+                />
+              );
+            })}
+            {/* Elimination tick */}
+            <span
+              title={`${isAr ? "موعد الاستبعاد" : "Elimination deadline"} • ${fmtDate(status.eliminationAt)}`}
+              className="inline-block h-2.5 w-0.5 bg-red-500 ms-1"
+              data-testid={`reminder-tick-elimination-${status.onboardingId}`}
+            />
+          </div>
+        )}
+        {/* Sent counter */}
+        {state !== "off" && (
+          <span className="text-[11px] text-zinc-500 ltr-numbers" data-testid={`reminder-count-${status.onboardingId}`}>
+            {t("reminders.row.sentCount", { n: status.reminderCount, max: status.maxReminders })}
+          </span>
+        )}
+        {/* Missing-doc pips */}
+        {missingCount > 0 && (
+          <div className="flex items-center gap-1" data-testid={`reminder-missing-${status.onboardingId}`}>
+            {status.missingDocs.map(d => {
+              const PipIcon = DOC_PIP_ICON[d];
+              return (
+                <span
+                  key={d}
+                  title={t(DOC_LABEL_KEYS[d])}
+                  className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-950/50 border border-red-800/60 text-red-300"
+                  data-testid={`reminder-missing-pip-${status.onboardingId}-${d}`}
+                >
+                  <PipIcon className="h-3 w-3" />
+                </span>
+              );
+            })}
+          </div>
+        )}
+        {state === "eliminated" && (
+          <span className="text-[11px] text-red-400" data-testid={`reminder-state-${status.onboardingId}`}>
+            {t("reminders.row.eliminated")}
+          </span>
+        )}
       </div>
-      {sentLabel && (
-        <span className="text-[11px] text-zinc-500" data-testid={`reminder-count-${status.onboardingId}`}>{sentLabel}</span>
-      )}
-      {missingCount > 0 && (
-        <div className="flex items-center gap-1" data-testid={`reminder-missing-${status.onboardingId}`}>
-          {status.missingDocs.map(d => {
-            const PipIcon = DOC_PIP_ICON[d];
-            return (
-              <span
-                key={d}
-                title={t(DOC_LABEL_KEYS[d])}
-                className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-950/50 border border-red-800/60 text-red-300"
-                data-testid={`reminder-missing-pip-${status.onboardingId}-${d}`}
-              >
-                <PipIcon className="h-3 w-3" />
-              </span>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
@@ -1503,29 +1654,234 @@ const DEFAULT_REMINDER_CONFIG: ReminderConfig = {
   requiredDocs: ["photo", "iban", "national_id"],
 };
 
+const DEFAULT_REMINDER_TEMPLATES: ReminderTemplates = {
+  onboarding_reminder_sms_ar: "مرحباً {name}، يرجى إرفاق المستندات الناقصة ({missing_docs}) عبر البوابة: {portal_url}. الموعد النهائي {deadline_date}.",
+  onboarding_reminder_sms_en: "Hi {name}, please upload the missing documents ({missing_docs}) on the portal: {portal_url}. Deadline: {deadline_date}.",
+  onboarding_final_warning_sms_ar: "تنبيه أخير: لديك {deadline_date} لإكمال مستنداتك ({missing_docs}) عبر {portal_url} وإلا سيتم استبعادك تلقائياً.",
+  onboarding_final_warning_sms_en: "Final warning: complete your missing documents ({missing_docs}) at {portal_url} by {deadline_date} or you will be auto-eliminated.",
+};
+
+function relTime(iso: string | null, locale: string, fallback: string): string {
+  if (!iso) return fallback;
+  const ms = new Date(iso).getTime() - Date.now();
+  if (Number.isNaN(ms)) return fallback;
+  const abs = Math.abs(ms);
+  const sign = ms < 0 ? -1 : 1;
+  const units: [Intl.RelativeTimeFormatUnit, number][] = [
+    ["day", 86400_000], ["hour", 3600_000], ["minute", 60_000],
+  ];
+  for (const [unit, divisor] of units) {
+    if (abs >= divisor || unit === "minute") {
+      const v = Math.round(ms / divisor) * 1; // keep sign
+      try {
+        const rtf = new Intl.RelativeTimeFormat(locale === "ar" ? "ar" : "en", { numeric: "auto" });
+        return rtf.format(Math.round(v), unit);
+      } catch { return `${sign * Math.round(abs / divisor)} ${unit}`; }
+    }
+  }
+  return fallback;
+}
+
+function ReminderActivityTable() {
+  const { t, i18n } = useTranslation("onboarding");
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { data: rows = [], isLoading } = useQuery<ReminderActivityRow[]>({
+    queryKey: ["/api/onboarding/reminders/activity"],
+    queryFn: () => apiRequest("GET", "/api/onboarding/reminders/activity").then(r => r.json()),
+    refetchInterval: 15000,
+  });
+  const actMut = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: "send-reminder-now" | "pause-reminders" | "resume-reminders" }) =>
+      apiRequest("POST", `/api/onboarding/${id}/${action}`).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/onboarding/reminders/activity"] });
+      qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
+    },
+    onError: (e: any) => toast({ title: t("reminders.actionFailed"), description: e?.message, variant: "destructive" }),
+  });
+
+  const fmtDateTime = (iso: string | null) => iso
+    ? new Date(iso).toLocaleString(i18n.language === "ar" ? "ar-SA" : "en-GB", { dateStyle: "short", timeStyle: "short" })
+    : "—";
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-200">{t("reminders.activity.title")}</h3>
+          <p className="text-xs text-zinc-500 mt-1">{t("reminders.activity.subtitle")}</p>
+        </div>
+        <span className="text-[11px] text-zinc-500" data-testid="text-activity-count">
+          {t("reminders.activity.rowCount", { n: rows.length })}
+        </span>
+      </div>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-zinc-500" /></div>
+      ) : rows.length === 0 ? (
+        <div className="text-zinc-500 text-sm text-center py-6" data-testid="text-activity-empty">{t("reminders.activity.empty")}</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs" data-testid="table-reminder-activity">
+            <thead className="text-zinc-400 border-b border-zinc-800">
+              <tr>
+                <th className="text-start py-2 px-2 font-medium">{t("reminders.activity.col.candidate")}</th>
+                <th className="text-start py-2 px-2 font-medium">{t("reminders.activity.col.missing")}</th>
+                <th className="text-start py-2 px-2 font-medium">{t("reminders.activity.col.sent")}</th>
+                <th className="text-start py-2 px-2 font-medium">{t("reminders.activity.col.last")}</th>
+                <th className="text-start py-2 px-2 font-medium">{t("reminders.activity.col.next")}</th>
+                <th className="text-start py-2 px-2 font-medium">{t("reminders.activity.col.elimination")}</th>
+                <th className="text-start py-2 px-2 font-medium">{t("reminders.activity.col.outbox")}</th>
+                <th className="text-end py-2 px-2 font-medium">{t("reminders.activity.col.actions")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => {
+                const eliminationRel = relTime(r.eliminationAt, i18n.language, "—");
+                return (
+                  <tr key={r.onboardingId} className="border-b border-zinc-800/60" data-testid={`row-activity-${r.onboardingId}`}>
+                    <td className="py-2 px-2 text-zinc-200">
+                      <div data-testid={`text-activity-name-${r.onboardingId}`}>{r.candidateName ?? "—"}</div>
+                      <div className="text-[11px] text-zinc-500 ltr-numbers">{r.candidatePhone ?? ""}</div>
+                    </td>
+                    <td className="py-2 px-2">
+                      <div className="flex flex-wrap gap-1">
+                        {r.missingDocs.length === 0
+                          ? <span className="text-emerald-400">{t("reminders.activity.allDocs")}</span>
+                          : r.missingDocs.map(d => (
+                            <span key={d} className="px-1.5 py-0.5 rounded bg-red-950/40 text-red-300 border border-red-900/60">
+                              {t(DOC_LABEL_KEYS[d])}
+                            </span>
+                          ))}
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 ltr-numbers" data-testid={`text-activity-sent-${r.onboardingId}`}>
+                      {r.reminderCount}/{r.maxReminders}
+                    </td>
+                    <td className="py-2 px-2 ltr-numbers text-zinc-300" title={r.lastReminderSentAt ?? ""}>
+                      {fmtDateTime(r.lastReminderSentAt)}
+                    </td>
+                    <td className="py-2 px-2 ltr-numbers text-zinc-300" title={r.nextScheduledAt ?? ""}>
+                      {fmtDateTime(r.nextScheduledAt)}
+                    </td>
+                    <td className="py-2 px-2 ltr-numbers" title={r.eliminationAt ?? ""}>
+                      <div className={r.state === "warning" ? "text-red-300" : "text-zinc-300"}>
+                        {fmtDateTime(r.eliminationAt)}
+                      </div>
+                      <div className="text-[11px] text-zinc-500" data-testid={`text-activity-countdown-${r.onboardingId}`}>{eliminationRel}</div>
+                    </td>
+                    <td className="py-2 px-2">
+                      {r.latestSmsOutboxId ? (
+                        <div className="text-zinc-400">
+                          <a
+                            href={`/api/sms/outbox/${r.latestSmsOutboxId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white inline-flex items-center gap-1 underline-offset-2 hover:underline"
+                            title={r.latestSmsOutboxId}
+                            data-testid={`link-activity-outbox-${r.onboardingId}`}
+                          >
+                            {(r.latestSmsKind ?? "sms").replace(/^onboarding_/, "")}
+                          </a>
+                          {r.latestSmsLastError && (
+                            <span className="ml-1 text-red-400" title={r.latestSmsLastError}>!</span>
+                          )}
+                        </div>
+                      ) : <span className="text-zinc-600">—</span>}
+                    </td>
+                    <td className="py-2 px-2 text-end">
+                      <div className="inline-flex gap-1">
+                        <Button
+                          data-testid={`button-activity-send-${r.onboardingId}`}
+                          size="sm" variant="outline" disabled={actMut.isPending || r.remindersPaused || r.missingDocs.length === 0}
+                          onClick={() => actMut.mutate({ id: r.onboardingId, action: "send-reminder-now" })}
+                          className="border-blue-800 text-blue-300 hover:bg-blue-950/40 h-7 px-2"
+                          title={t("reminders.actions.sendNow")}
+                        >
+                          <Send className="h-3 w-3" />
+                        </Button>
+                        {r.remindersPaused ? (
+                          <Button
+                            data-testid={`button-activity-resume-${r.onboardingId}`}
+                            size="sm" variant="outline" disabled={actMut.isPending}
+                            onClick={() => actMut.mutate({ id: r.onboardingId, action: "resume-reminders" })}
+                            className="border-emerald-800 text-emerald-300 hover:bg-emerald-950/40 h-7 px-2"
+                            title={t("reminders.actions.resume")}
+                          >
+                            <Play className="h-3 w-3" />
+                          </Button>
+                        ) : (
+                          <Button
+                            data-testid={`button-activity-pause-${r.onboardingId}`}
+                            size="sm" variant="outline" disabled={actMut.isPending}
+                            onClick={() => actMut.mutate({ id: r.onboardingId, action: "pause-reminders" })}
+                            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 h-7 px-2"
+                            title={t("reminders.actions.pause")}
+                          >
+                            <Pause className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ReminderSettingsTab() {
   const { t } = useTranslation("onboarding");
   const { toast } = useToast();
   const qc = useQueryClient();
   const [form, setForm] = useState<ReminderConfig | null>(null);
+  const [tplForm, setTplForm] = useState<ReminderTemplates | null>(null);
+  const [testPhone, setTestPhone] = useState("");
+  const [testVariant, setTestVariant] = useState<"regular" | "final">("regular");
+  const [testLocale, setTestLocale] = useState<"ar" | "en">("ar");
 
-  const { data: cfg, isLoading } = useQuery<ReminderConfig>({
-    queryKey: ["/api/onboarding/reminders/config"],
-    queryFn: () => apiRequest("GET", "/api/onboarding/reminders/config").then(r => r.json()),
+  const { data: settings, isLoading } = useQuery<{ config: ReminderConfig; templates: ReminderTemplates }>({
+    queryKey: ["/api/onboarding/reminder-settings"],
+    queryFn: () => apiRequest("GET", "/api/onboarding/reminder-settings").then(r => r.json()),
   });
   useEffect(() => {
-    if (cfg && !form) setForm({ ...DEFAULT_REMINDER_CONFIG, ...cfg });
-  }, [cfg, form]);
+    if (settings && !form) setForm({ ...DEFAULT_REMINDER_CONFIG, ...settings.config });
+    if (settings && !tplForm) setTplForm({ ...DEFAULT_REMINDER_TEMPLATES, ...settings.templates });
+  }, [settings, form, tplForm]);
 
   const saveMutation = useMutation({
-    mutationFn: (body: ReminderConfig) =>
-      apiRequest("PATCH", "/api/onboarding/reminders/config", body).then(r => r.json()),
+    mutationFn: (body: { config: ReminderConfig; templates: ReminderTemplates }) =>
+      apiRequest("PUT", "/api/onboarding/reminder-settings", body).then(r => r.json()),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/onboarding/reminders/config"] });
+      qc.invalidateQueries({ queryKey: ["/api/onboarding/reminder-settings"] });
       qc.invalidateQueries({ queryKey: ["/api/onboarding/reminders/status"] });
+      qc.invalidateQueries({ queryKey: ["/api/onboarding/reminders/activity"] });
+      qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       toast({ title: t("reminders.saved") });
     },
     onError: (e: any) => toast({ title: t("reminders.saveFailed"), description: e?.message, variant: "destructive" }),
+  });
+
+  const testSmsMut = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/onboarding/reminder-test-sms", {
+      phone: testPhone.trim(), variant: testVariant, locale: testLocale,
+    }).then(async r => ({ ok: r.ok, body: await r.json() })),
+    onSuccess: (res) => {
+      if (res.ok) {
+        toast({ title: t("reminders.testSms.sent"), description: res.body?.preview ?? "" });
+      } else {
+        toast({
+          title: t("reminders.testSms.failed"),
+          description: res.body?.error ?? res.body?.message ?? t("reminders.testSms.unknown"),
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (e: any) => toast({ title: t("reminders.testSms.failed"), description: e?.message, variant: "destructive" }),
   });
 
   if (isLoading || !form) {
@@ -1698,10 +2054,96 @@ function ReminderSettingsTab() {
         </div>
       </div>
 
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-200">{t("reminders.templates.title")}</h3>
+          <p className="text-xs text-zinc-500 mt-1">{t("reminders.templates.subtitle")}</p>
+          <p className="text-[11px] text-zinc-500 mt-1">{t("reminders.templates.placeholders")}</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {(Object.keys(DEFAULT_REMINDER_TEMPLATES) as ReminderTemplateKey[]).map(k => (
+            <div key={k}>
+              <Label className="text-zinc-400 text-xs" htmlFor={`tpl-${k}`}>{t(`reminders.templates.${k}`)}</Label>
+              <textarea
+                id={`tpl-${k}`}
+                data-testid={`textarea-template-${k}`}
+                value={tplForm?.[k] ?? ""}
+                onChange={e => setTplForm(prev => prev ? { ...prev, [k]: e.target.value } : prev)}
+                rows={4}
+                dir={k.endsWith("_ar") ? "rtl" : "ltr"}
+                className="mt-1 w-full bg-zinc-950 border border-zinc-700 text-white text-sm rounded-md p-2 font-mono"
+              />
+              <div className="text-[11px] text-zinc-600 mt-1 ltr-numbers">
+                {(tplForm?.[k] ?? "").length} / 480
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-200">{t("reminders.testSms.title")}</h3>
+          <p className="text-xs text-zinc-500 mt-1">{t("reminders.testSms.subtitle")}</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="sm:col-span-2">
+            <Label className="text-zinc-400 text-xs" htmlFor="test-sms-phone">{t("reminders.testSms.phone")}</Label>
+            <Input
+              id="test-sms-phone"
+              data-testid="input-test-sms-phone"
+              value={testPhone}
+              onChange={e => setTestPhone(e.target.value)}
+              placeholder="+9665XXXXXXXX"
+              dir="ltr"
+              className="mt-1 bg-zinc-950 border-zinc-700 text-white"
+            />
+          </div>
+          <div>
+            <Label className="text-zinc-400 text-xs">{t("reminders.testSms.variant")}</Label>
+            <select
+              data-testid="select-test-sms-variant"
+              value={testVariant}
+              onChange={e => setTestVariant(e.target.value as "regular" | "final")}
+              className="mt-1 w-full bg-zinc-950 border border-zinc-700 text-white text-sm rounded-md p-2 h-10"
+            >
+              <option value="regular">{t("reminders.testSms.variantRegular")}</option>
+              <option value="final">{t("reminders.testSms.variantFinal")}</option>
+            </select>
+          </div>
+          <div>
+            <Label className="text-zinc-400 text-xs">{t("reminders.testSms.locale")}</Label>
+            <select
+              data-testid="select-test-sms-locale"
+              value={testLocale}
+              onChange={e => setTestLocale(e.target.value as "ar" | "en")}
+              className="mt-1 w-full bg-zinc-950 border border-zinc-700 text-white text-sm rounded-md p-2 h-10"
+            >
+              <option value="ar">العربية</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <Button
+            data-testid="button-send-test-sms"
+            onClick={() => testSmsMut.mutate()}
+            disabled={testSmsMut.isPending || testPhone.trim().length < 5}
+            variant="outline"
+            className="border-blue-800 text-blue-300 hover:bg-blue-950/40 gap-2"
+          >
+            {testSmsMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {t("reminders.testSms.send")}
+          </Button>
+        </div>
+      </div>
+
+      <ReminderActivityTable />
+
       <div className="flex justify-end">
         <Button
           data-testid="button-save-reminder-config"
-          onClick={() => form && saveMutation.mutate(form)}
+          onClick={() => form && tplForm && saveMutation.mutate({ config: form, templates: tplForm })}
           disabled={saveMutation.isPending}
           className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white gap-2"
         >
@@ -1752,15 +2194,28 @@ export default function OnboardingPage() {
     refetchInterval: 15000,
   });
 
-  // Task #214 — reminder status map keyed by onboardingId, server-derived
-  const { data: reminderStatusList = [] } = useQuery<ReminderRowStatus[]>({
-    queryKey: ["/api/onboarding/reminders/status"],
-    queryFn: () => apiRequest("GET", "/api/onboarding/reminders/status").then(r => r.json()),
-    refetchInterval: 30000,
-  });
+  // Task #214 — derive the reminder status map directly from the inline
+  // `reminder` block carried by GET /api/onboarding. The dedicated
+  // /reminders/status endpoint is kept on the server for back-compat
+  // but the pipeline no longer round-trips for it.
   const reminderStatusMap = (() => {
     const m = new Map<string, ReminderRowStatus>();
-    for (const s of reminderStatusList) m.set(s.onboardingId, s);
+    for (const r of records) {
+      const inline = (r as OnboardingRecord & { reminder?: OnboardingReminderInline }).reminder;
+      if (!inline) continue;
+      m.set(r.id, {
+        onboardingId: r.id,
+        state: inline.state,
+        missingDocs: inline.missingDocs,
+        reminderCount: inline.count,
+        maxReminders: inline.max,
+        lastReminderSentAt: inline.lastSentAt,
+        nextScheduledAt: inline.nextScheduledAt,
+        eliminationAt: inline.eliminationAt,
+        finalWarningAt: null,
+        remindersPaused: inline.paused,
+      });
+    }
     return m;
   })();
 
@@ -1953,10 +2408,15 @@ export default function OnboardingPage() {
 
   // Task #214 — reminder action mutations
   const reminderActionMutation = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: "send-now" | "pause" | "resume" }) =>
-      apiRequest("POST", `/api/onboarding/${id}/reminders/${action}`).then(r => r.json()),
+    mutationFn: ({ id, action }: { id: string; action: "send-now" | "pause" | "resume" }) => {
+      const path = action === "send-now" ? "send-reminder-now"
+                 : action === "pause"     ? "pause-reminders"
+                                          : "resume-reminders";
+      return apiRequest("POST", `/api/onboarding/${id}/${path}`).then(r => r.json());
+    },
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding/reminders/status"] });
+      qc.invalidateQueries({ queryKey: ["/api/onboarding/reminders/activity"] });
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       const key = vars.action === "send-now" ? "sentNow" : vars.action === "pause" ? "paused" : "resumed";
       toast({ title: t(`reminders.toasts.${key}`) });

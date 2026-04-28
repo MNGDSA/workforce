@@ -388,6 +388,46 @@
       "paused": "Reminders paused",
       "resumed": "Reminders resumed",
       "actionFailed": "Action failed"
+    },
+    "actionFailed": "Action failed",
+    "templates": {
+      "title": "SMS templates",
+      "subtitle": "Edit the Arabic and English copy for the regular reminder and the final warning.",
+      "placeholders": "Available variables: {name} candidate name, {missing_docs} missing-document list, {portal_url} candidate portal link, {deadline_date} elimination deadline.",
+      "onboarding_reminder_sms_ar": "Regular reminder — Arabic",
+      "onboarding_reminder_sms_en": "Regular reminder — English",
+      "onboarding_final_warning_sms_ar": "Final warning — Arabic",
+      "onboarding_final_warning_sms_en": "Final warning — English"
+    },
+    "testSms": {
+      "title": "Send a test SMS",
+      "subtitle": "Send a one-off message to verify the template wording and that the SMS gateway is wired up.",
+      "phone": "Test recipient phone",
+      "variant": "Message variant",
+      "variantRegular": "Regular reminder",
+      "variantFinal": "Final warning",
+      "locale": "Template language",
+      "send": "Send test SMS",
+      "sent": "Test SMS sent",
+      "failed": "Could not send test SMS",
+      "unknown": "Unknown error"
+    },
+    "activity": {
+      "title": "Reminder activity",
+      "subtitle": "Live list of every candidate with a missing document, with reminder counts and elimination countdown.",
+      "rowCount": "{{n}} rows",
+      "empty": "No active candidates need reminders right now.",
+      "allDocs": "All documents complete",
+      "col": {
+        "candidate": "Candidate",
+        "missing": "Missing docs",
+        "sent": "Sent / max",
+        "last": "Last reminder",
+        "next": "Next reminder",
+        "elimination": "Elimination",
+        "outbox": "Outbox",
+        "actions": "Actions"
+      }
     }
   },
   "toasts": {

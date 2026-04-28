@@ -83,7 +83,7 @@ import {
   auditLogs,
   type InsertPayrollAdjustment,
 } from "@shared/schema";
-import { eq, and, sql, desc, inArray, count } from "drizzle-orm";
+import { eq, and, sql, desc, inArray, count, isNull } from "drizzle-orm";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
 import { logOtpForDev, peekLatestDevOtp, isDevOtpGateOpen } from "./dev-otp-log";
 import { trL, type ServerLocale } from "./i18n";
@@ -3566,30 +3566,19 @@ export async function registerRoutes(
         cleanupCandidateId
       ) {
         try {
-          const pending = await storage.getOnboardingRecords({
+          // Centralised helper — also called by the auto-elimination
+          // path so both flows produce identical audit records and
+          // identical orphan cleanup behaviour.
+          const candidate = await storage.getCandidate(cleanupCandidateId);
+          const { applyShortlistResetCleanup } = await import("./application-status-cleanup");
+          await applyShortlistResetCleanup({
+            previousStatus,
+            newStatus: (data as any).status,
+            applicationId: app_.id,
             candidateId: cleanupCandidateId,
-            status: "pending",
+            candidateName: candidate?.fullNameEn ?? null,
+            actor: { id: req.authUserId ?? null, name: req.authUser?.fullName ?? req.authUser?.username ?? "admin" },
           });
-          if (pending.length > 0) {
-            const candidate = await storage.getCandidate(cleanupCandidateId);
-            for (const ob of pending) {
-              await storage.deleteOnboardingRecord(ob.id);
-              await logAudit(req, {
-                action: "onboarding.auto_remove_on_reset",
-                entityType: "onboarding",
-                entityId: ob.id,
-                subjectName: candidate?.fullNameEn ?? undefined,
-                description: `Removed pending onboarding for "${candidate?.fullNameEn ?? cleanupCandidateId}" because the application shortlist was reset (${previousStatus} → ${(data as any).status}).`,
-                metadata: {
-                  candidateId: cleanupCandidateId,
-                  applicationId: app_.id,
-                  onboardingId: ob.id,
-                  previousStatus,
-                  newStatus: (data as any).status,
-                },
-              });
-            }
-          }
         } catch (cleanupErr) {
           console.error("[applications.patch] Onboarding cleanup failed:", cleanupErr);
           // Do not fail the PATCH — the status change itself succeeded.
@@ -3795,7 +3784,30 @@ export async function registerRoutes(
         }
       }
       const records = await storage.getOnboardingRecords({ status, eventId, candidateId });
-      return res.json(records);
+      // Task #214: enrich each pending row with the derived reminder
+      // schedule so the pipeline can render bell + pip-strip without a
+      // second round-trip to /api/onboarding/reminders/status.
+      const { getReminderConfig, computeRowStatus } = await import("./onboarding-reminders");
+      const cfg = await getReminderConfig();
+      const now = new Date();
+      const enriched = records.map((rec) => {
+        const status = computeRowStatus(rec, cfg, now);
+        return {
+          ...rec,
+          reminder: {
+            enabled: cfg.enabled,
+            paused: rec.remindersPausedAt != null,
+            count: rec.reminderCount ?? 0,
+            max: cfg.maxReminders,
+            lastSentAt: rec.lastReminderSentAt?.toISOString() ?? null,
+            nextScheduledAt: status.nextScheduledAt,
+            eliminationAt: status.eliminationAt,
+            state: status.state,
+            missingDocs: status.missingDocs,
+          },
+        };
+      });
+      return res.json(enriched);
     } catch (err) {
       return handleError(res, err);
     }
@@ -3949,31 +3961,58 @@ export async function registerRoutes(
   });
 
   // ─── Task #214: Onboarding document-upload reminders ─────────────────────
-  // GET  /api/onboarding/reminders/config   — read current config blob
-  // PATCH/api/onboarding/reminders/config   — update config (admin only)
-  // GET  /api/onboarding/reminders/status   — derived per-row status map
-  // POST /api/onboarding/:id/reminders/send-now — manual reminder
-  // POST /api/onboarding/:id/reminders/pause     — pause this row
-  // POST /api/onboarding/:id/reminders/resume    — resume this row
-  app.get("/api/onboarding/reminders/config", requirePermission("onboarding:read"), async (_req: Request, res: Response) => {
+  // GET  /api/onboarding/reminder-settings        — config + 4 templates
+  // PUT  /api/onboarding/reminder-settings        — patch config and/or templates
+  // GET  /api/onboarding/reminders/status         — derived per-row status array (legacy, kept for back-compat)
+  // POST /api/onboarding/reminder-test-sms        — send a one-off SMS to verify the template & gateway
+  // POST /api/onboarding/:id/send-reminder-now    — manual reminder
+  // POST /api/onboarding/:id/pause-reminders      — pause this row
+  // POST /api/onboarding/:id/resume-reminders     — resume this row
+  app.get("/api/onboarding/reminder-settings", requirePermission("onboarding:read"), async (_req: Request, res: Response) => {
     try {
-      const { getReminderConfig } = await import("./onboarding-reminders");
-      return res.json(await getReminderConfig());
+      const { getReminderConfig, getAllReminderTemplates } = await import("./onboarding-reminders");
+      const [config, templates] = await Promise.all([getReminderConfig(), getAllReminderTemplates()]);
+      return res.json({ config, templates });
     } catch (err) { return handleError(res, err); }
   });
 
-  app.patch("/api/onboarding/reminders/config", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
+  app.put("/api/onboarding/reminder-settings", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
     try {
-      const { setReminderConfig } = await import("./onboarding-reminders");
-      const cfg = await setReminderConfig(req.body ?? {});
+      const { setReminderConfig, setReminderTemplates, getAllReminderTemplates, getReminderConfig } = await import("./onboarding-reminders");
+      const reminderDocSchema = z.enum(["photo", "iban", "national_id"]);
+      const configPatchSchema = z.object({
+        enabled: z.boolean().optional(),
+        firstAfterHours: z.number().int().min(0).optional(),
+        repeatEveryHours: z.number().int().min(0).optional(),
+        maxReminders: z.number().int().min(0).optional(),
+        totalDeadlineHours: z.number().int().min(0).optional(),
+        finalWarningHours: z.number().int().min(0).optional(),
+        quietHoursStart: z.string().optional(),
+        quietHoursEnd: z.string().optional(),
+        quietHoursTz: z.string().optional(),
+        requiredDocs: z.array(reminderDocSchema).optional(),
+      }).strict();
+      const templatesPatchSchema = z.object({
+        onboarding_reminder_sms_ar: z.string().optional(),
+        onboarding_reminder_sms_en: z.string().optional(),
+        onboarding_final_warning_sms_ar: z.string().optional(),
+        onboarding_final_warning_sms_en: z.string().optional(),
+      }).strict();
+      const bodySchema = z.object({
+        config: configPatchSchema.optional(),
+        templates: templatesPatchSchema.optional(),
+      }).strict();
+      const body = bodySchema.parse(req.body ?? {});
+      const config = body.config !== undefined ? await setReminderConfig(body.config) : await getReminderConfig();
+      const templates = body.templates !== undefined ? await setReminderTemplates(body.templates) : await getAllReminderTemplates();
       await logAudit(req, {
-        action: "onboarding.reminders.config_updated",
+        action: "onboarding.reminders.settings_updated",
         entityType: "system_setting",
         entityId: "onboarding_reminder_config",
-        description: `Updated onboarding reminder config (enabled=${cfg.enabled}, first=${cfg.firstAfterHours}h, repeat=${cfg.repeatEveryHours}h, max=${cfg.maxReminders}, deadline=${cfg.totalDeadlineHours}h).`,
-        metadata: cfg as any,
+        description: `Updated onboarding reminder settings (enabled=${config.enabled}, first=${config.firstAfterHours}h, repeat=${config.repeatEveryHours}h, max=${config.maxReminders}, deadline=${config.totalDeadlineHours}h, templatesPatched=${body.templates ? "yes" : "no"}).`,
+        metadata: { config, templatesPatched: body.templates ? Object.keys(body.templates) : [] },
       });
-      return res.json(cfg);
+      return res.json({ config, templates });
     } catch (err) { return handleError(res, err); }
   });
 
@@ -3984,7 +4023,68 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/onboarding/:id/reminders/send-now", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
+  // Test SMS — synchronous, bypasses outbox so the admin gets immediate
+  // pass/fail feedback. Renders against the live template so they see
+  // exactly what a real reminder will look like.
+  // Response contract: ALL paths return `{ ok, preview, error? }` so the
+  // settings tab UI can render uniform feedback without inspecting status
+  // codes. Validation errors → 400, no-plugin → 503, plugin failure → 502,
+  // unexpected exception → 500 — every shape includes `ok` and `preview`.
+  app.post("/api/onboarding/reminder-test-sms", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
+    try {
+      const schema = z.object({
+        phone: z.string().trim().min(5),
+        variant: z.enum(["regular", "final"]).default("regular"),
+        locale: z.enum(["ar", "en"]).default("ar"),
+      });
+      const parsed = schema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return res.status(400).json({
+          ok: false,
+          preview: "",
+          error: "validation_failed",
+          details: parsed.error.flatten(),
+        });
+      }
+      const { phone, variant, locale } = parsed.data;
+      const { getReminderTemplate, renderReminderTemplate } = await import("./onboarding-reminders");
+      const tplKey = (variant === "final"
+        ? (locale === "ar" ? "onboarding_final_warning_sms_ar" : "onboarding_final_warning_sms_en")
+        : (locale === "ar" ? "onboarding_reminder_sms_ar"      : "onboarding_reminder_sms_en")) as
+          "onboarding_reminder_sms_ar" | "onboarding_reminder_sms_en"
+          | "onboarding_final_warning_sms_ar" | "onboarding_final_warning_sms_en";
+      const tpl = await getReminderTemplate(tplKey);
+      const portalBase = (await storage.getSystemSetting("public_app_url"))
+        ?? process.env.PUBLIC_APP_URL
+        ?? "https://workforce.tanaqolapp.com";
+      const message = renderReminderTemplate(tpl, {
+        name: locale === "ar" ? "مرشح تجريبي" : "Test Candidate",
+        missingDocs: locale === "ar" ? "صورة شخصية، رقم الآيبان" : "photo, IBAN",
+        portalUrl: `${portalBase.replace(/\/$/, "")}/candidate/onboarding`,
+        deadlineDate: new Date(Date.now() + 24 * 3600_000).toLocaleString(locale === "ar" ? "ar-SA" : "en-GB", {
+          timeZone: "Asia/Riyadh", year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit",
+        }),
+      });
+      const { sendSmsViaPlugin } = await import("./sms-sender");
+      const plugin = await storage.getActiveSmsPlugin();
+      if (!plugin) return res.status(503).json({ ok: false, error: "no_active_sms_plugin", preview: message });
+      const result = await sendSmsViaPlugin(plugin, phone, message);
+      await logAudit(req, {
+        action: "onboarding.reminders.test_sms",
+        entityType: "system_setting",
+        entityId: tplKey,
+        description: `Sent test reminder SMS to ${phone} (variant=${variant}, locale=${locale}, success=${result.success}).`,
+        metadata: { phone, variant, locale, success: result.success, error: result.success ? null : result.error },
+      });
+      if (!result.success) return res.status(502).json({ ok: false, error: result.error, preview: message });
+      return res.json({ ok: true, preview: message });
+    } catch (err) {
+      console.error("[reminder-test-sms] unexpected error", err);
+      return res.status(500).json({ ok: false, preview: "", error: "internal_error" });
+    }
+  });
+
+  app.post("/api/onboarding/:id/send-reminder-now", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
     try {
       const { sendReminderNow } = await import("./onboarding-reminders");
       const updated = await sendReminderNow(req.params.id);
@@ -3999,7 +4099,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/onboarding/:id/reminders/pause", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
+  app.post("/api/onboarding/:id/pause-reminders", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
     try {
       const { pauseReminders } = await import("./onboarding-reminders");
       const updated = await pauseReminders(req.params.id);
@@ -4014,7 +4114,7 @@ export async function registerRoutes(
     } catch (err) { return handleError(res, err); }
   });
 
-  app.post("/api/onboarding/:id/reminders/resume", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
+  app.post("/api/onboarding/:id/resume-reminders", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
     try {
       const { resumeReminders } = await import("./onboarding-reminders");
       const updated = await resumeReminders(req.params.id);
@@ -4026,6 +4126,71 @@ export async function registerRoutes(
         description: "Onboarding reminders resumed for this candidate.",
       });
       return res.json(updated);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // Read-only outbox row lookup so the settings activity table can
+  // link straight to the actual SMS record (rendered, claim history,
+  // last error). Authorization is the same as the activity table.
+  app.get("/api/sms/outbox/:id", requirePermission("onboarding:read"), async (req: Request, res: Response) => {
+    try {
+      const { smsOutbox: smsOutboxTable } = await import("@shared/schema");
+      const [row] = await db.select().from(smsOutboxTable).where(eq(smsOutboxTable.id, req.params.id)).limit(1);
+      if (!row) return res.status(404).json({ message: "not_found" });
+      return res.json(row);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  // Live activity table for the settings tab — joins each pending
+  // onboarding row with its candidate name, latest sms_outbox row id,
+  // missing-doc list, and derived schedule.
+  app.get("/api/onboarding/reminders/activity", requirePermission("onboarding:read"), async (_req: Request, res: Response) => {
+    try {
+      const { getReminderConfig, computeRowStatus, missingDocsFor } = await import("./onboarding-reminders");
+      const { onboarding: onboardingTable, candidates: candidatesTable, smsOutbox: smsOutboxTable } = await import("@shared/schema");
+      const cfg = await getReminderConfig();
+      const now = new Date();
+      // Eligible = pending/in_progress/ready, not eliminated.
+      const rows = await db.select({
+        ob: onboardingTable,
+        cand: candidatesTable,
+      })
+        .from(onboardingTable)
+        .leftJoin(candidatesTable, eq(onboardingTable.candidateId, candidatesTable.id))
+        .where(and(
+          isNull(onboardingTable.eliminatedAt),
+          sql`${onboardingTable.status} IN ('pending', 'in_progress', 'ready')`,
+        ));
+
+      const out = await Promise.all(rows.map(async ({ ob, cand }) => {
+        const status = computeRowStatus(ob, cfg, now);
+        const missing = missingDocsFor(ob, cfg);
+        // Latest outbox row for this onboarding (regular or final).
+        const [latestSms] = await db.select({ id: smsOutboxTable.id, kind: smsOutboxTable.kind, sentAt: smsOutboxTable.sentAt, lastError: smsOutboxTable.lastError })
+          .from(smsOutboxTable)
+          .where(sql`${smsOutboxTable.dedupeKey} LIKE ${'onboarding_reminder:' + ob.id + ':%'} OR ${smsOutboxTable.dedupeKey} = ${'onboarding_final_warning:' + ob.id}`)
+          .orderBy(sql`${smsOutboxTable.createdAt} DESC`)
+          .limit(1);
+        return {
+          onboardingId: ob.id,
+          candidateId: ob.candidateId,
+          candidateName: cand?.fullNameEn ?? null,
+          candidatePhone: cand?.phone ?? null,
+          missingDocs: missing,
+          reminderCount: ob.reminderCount ?? 0,
+          maxReminders: cfg.maxReminders,
+          remindersPaused: ob.remindersPausedAt != null,
+          lastReminderSentAt: ob.lastReminderSentAt?.toISOString() ?? null,
+          nextScheduledAt: status.nextScheduledAt,
+          eliminationAt: status.eliminationAt,
+          state: status.state,
+          latestSmsOutboxId: latestSms?.id ?? null,
+          latestSmsKind: latestSms?.kind ?? null,
+          latestSmsSentAt: latestSms?.sentAt?.toISOString() ?? null,
+          latestSmsLastError: latestSms?.lastError ?? null,
+        };
+      }));
+      return res.json(out);
     } catch (err) { return handleError(res, err); }
   });
 

@@ -168,9 +168,14 @@ interface OutboxPayload {
   link: string;
   locale: string;
   tokenRowId?: string;
-  // Task #214: onboarding reminder/final-warning rows attach the doc list.
+  // Task #214: onboarding reminder/final-warning rows attach the doc
+  // list and the data needed to substitute the configurable template
+  // placeholders ({name}, {missing_docs}, {portal_url}, {deadline_date}).
   onboardingId?: string;
   missingDocs?: string[];
+  candidateName?: string;
+  deadlineAt?: string;          // ISO timestamp of elimination deadline
+  portalUrl?: string;
 }
 
 // Map reminder doc id → i18n label key suffix (server-side keys live
@@ -267,14 +272,38 @@ async function processOneRow(excludeIds: string[]): Promise<{ outcome: "sent" | 
     // localized by the candidate's locale.
     let message: string;
     if (row.kind === "onboarding_reminder" || row.kind === "onboarding_final_warning") {
+      // Reminder/final-warning content lives in `system_settings` so an
+      // admin can edit copy without a redeploy. We render the active
+      // template against the placeholders {name}, {missing_docs},
+      // {portal_url}, {deadline_date} captured on the payload.
       const docIds = Array.isArray(payload.missingDocs) ? payload.missingDocs : [];
       const docLabels = docIds.map((d) => trL(locale, `docs.${docToLabelKey(d)}`));
-      // Fallback: if any label is missing, use the doc id itself.
-      const docs = docLabels.map((l, i) => l && l !== `docs.${docToLabelKey(docIds[i])}` ? l : docIds[i]).join(", ");
-      const key = row.kind === "onboarding_final_warning"
-        ? "sms.onboardingFinalWarning"
-        : "sms.onboardingReminder";
-      message = trL(locale, key, { docs, link: payload.link });
+      const docs = docLabels.map((l, i) =>
+        l && l !== `docs.${docToLabelKey(docIds[i])}` ? l : docIds[i],
+      ).join(", ");
+      const { getReminderTemplate, renderReminderTemplate } = await import("./onboarding-reminders");
+      const tplKey = (row.kind === "onboarding_final_warning"
+        ? (locale === "ar" ? "onboarding_final_warning_sms_ar" : "onboarding_final_warning_sms_en")
+        : (locale === "ar" ? "onboarding_reminder_sms_ar" : "onboarding_reminder_sms_en")) as
+          "onboarding_reminder_sms_ar" | "onboarding_reminder_sms_en"
+          | "onboarding_final_warning_sms_ar" | "onboarding_final_warning_sms_en";
+      const tpl = await getReminderTemplate(tplKey);
+      const deadlineDate = payload.deadlineAt
+        ? new Date(payload.deadlineAt).toLocaleString(locale === "ar" ? "ar-SA" : "en-GB", {
+            timeZone: "Asia/Riyadh",
+            year: "numeric",
+            month: "short",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "";
+      message = renderReminderTemplate(tpl, {
+        name: payload.candidateName ?? "",
+        missingDocs: docs,
+        portalUrl: payload.portalUrl ?? payload.link,
+        deadlineDate,
+      });
     } else {
       message = trL(locale, "sms.smpActivation", { link: payload.link });
     }
