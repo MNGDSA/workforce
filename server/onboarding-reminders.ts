@@ -230,6 +230,13 @@ export type ReminderRowState =
   | "max_reached"
   | "eliminated";
 
+export interface ReminderEvent {
+  /** 1-based reminder index for "regular" kind; null for the final-warning event. */
+  n: number | null;
+  kind: "reminder" | "final_warning";
+  sentAt: string;
+}
+
 export interface ReminderRowStatus {
   onboardingId: string;
   state: ReminderRowState;
@@ -242,6 +249,8 @@ export interface ReminderRowStatus {
   finalWarningAt: string | null;
   finalWarningSentAt: string | null;
   remindersPaused: boolean;
+  /** Per-event timeline so the UI can show per-pip "Sent at …" tooltips. */
+  events: ReminderEvent[];
 }
 
 /**
@@ -254,6 +263,7 @@ export function computeRowStatus(
   rec: OnboardingRecord,
   cfg: ReminderConfig,
   now: Date,
+  events: ReminderEvent[] = [],
 ): ReminderRowStatus {
   const missing = missingDocsFor(rec, cfg);
   const finalWarningSentAt = rec.finalWarningSentAt ? rec.finalWarningSentAt.toISOString() : null;
@@ -265,9 +275,19 @@ export function computeRowStatus(
     lastReminderSentAt: rec.lastReminderSentAt ? rec.lastReminderSentAt.toISOString() : null,
     finalWarningSentAt,
     remindersPaused: rec.remindersPausedAt != null,
+    events,
   };
 
-  if (!cfg.enabled || missing.length === 0 || !isReminderEligibleStatus(rec.status)) {
+  // Pre-enable rows must be invisible: the sweep gates by createdAt >= enabledAt
+  // (so it never sends to old rows), and the UI must mirror that — otherwise
+  // pre-enable rows show bells/at-risk states even though no SMS will ever
+  // fire for them. The same gate applies when the master switch is off,
+  // when there are no missing docs, or when the row's status is no longer
+  // actionable (converted/rejected/terminated).
+  const preEnable = cfg.enabledAt
+    ? rec.createdAt.getTime() < new Date(cfg.enabledAt).getTime()
+    : !cfg.enabled;
+  if (!cfg.enabled || preEnable || missing.length === 0 || !isReminderEligibleStatus(rec.status)) {
     return {
       ...base,
       state: "off",
@@ -791,9 +811,68 @@ export async function getReminderStatusMap(
         isNull(onboarding.eliminatedAt),
         notInArray(onboarding.status, ["converted", "rejected", "terminated"]),
       ));
+  const eventsByRow = await loadReminderEventsForRows(rows.map((r) => r.id));
   // Returned as an array so the frontend can iterate it directly without
   // worrying about iteration semantics on a plain object map.
-  return rows.map((rec) => computeRowStatus(rec, cfg, now));
+  return rows.map((rec) => computeRowStatus(rec, cfg, now, eventsByRow.get(rec.id) ?? []));
+}
+
+/**
+ * Batch-load per-row reminder send events from sms_outbox.
+ *
+ * The reminder enqueuer writes deterministic dedupe keys
+ * `onboarding_reminder:${onboardingId}:${n}` for the regular cadence and
+ * `onboarding_final_warning:${onboardingId}` for the last-chance SMS.
+ * We parse those keys so the UI can show per-pip "Sent at …" tooltips
+ * without round-tripping for each row.
+ */
+export async function loadReminderEventsForRows(
+  onboardingIds: string[],
+): Promise<Map<string, ReminderEvent[]>> {
+  const map = new Map<string, ReminderEvent[]>();
+  if (onboardingIds.length === 0) return map;
+  // dedupe_key LIKE pattern per row, OR'd. The unique index on dedupe_key
+  // keeps each lookup cheap; row count is bounded by maxReminders+1.
+  const patterns = onboardingIds.flatMap((id) => [
+    `onboarding_reminder:${id}:%`,
+    `onboarding_final_warning:${id}`,
+  ]);
+  const rows = await db.select({
+    dedupeKey: smsOutbox.dedupeKey,
+    sentAt: smsOutbox.sentAt,
+  })
+    .from(smsOutbox)
+    .where(and(
+      sql`${smsOutbox.sentAt} IS NOT NULL`,
+      sql`${smsOutbox.dedupeKey} LIKE ANY(${patterns})`,
+    ));
+  for (const r of rows) {
+    if (!r.dedupeKey || !r.sentAt) continue;
+    if (r.dedupeKey.startsWith("onboarding_reminder:")) {
+      const parts = r.dedupeKey.split(":");
+      if (parts.length !== 3) continue;
+      const id = parts[1];
+      const n = Number(parts[2]);
+      if (!id || !Number.isFinite(n)) continue;
+      const list = map.get(id) ?? [];
+      list.push({ n, kind: "reminder", sentAt: r.sentAt.toISOString() });
+      map.set(id, list);
+    } else if (r.dedupeKey.startsWith("onboarding_final_warning:")) {
+      const id = r.dedupeKey.slice("onboarding_final_warning:".length);
+      if (!id) continue;
+      const list = map.get(id) ?? [];
+      list.push({ n: null, kind: "final_warning", sentAt: r.sentAt.toISOString() });
+      map.set(id, list);
+    }
+  }
+  // Sort each row's events: regular reminders by n asc, final warning last.
+  for (const [, list] of map) {
+    list.sort((a, b) => {
+      if (a.kind === b.kind) return (a.n ?? 0) - (b.n ?? 0);
+      return a.kind === "reminder" ? -1 : 1;
+    });
+  }
+  return map;
 }
 
 // Used in tests / manual ops.

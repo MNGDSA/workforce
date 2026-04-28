@@ -136,6 +136,13 @@ interface ReminderConfig {
   requiredDocs: ReminderDocId[];
 }
 
+interface ReminderEvent {
+  /** 1-based reminder index for "regular" kind; null for the final-warning event. */
+  n: number | null;
+  kind: "reminder" | "final_warning";
+  sentAt: string;
+}
+
 interface ReminderRowStatus {
   onboardingId: string;
   state: ReminderRowState;
@@ -148,6 +155,7 @@ interface ReminderRowStatus {
   finalWarningAt: string | null;
   finalWarningSentAt: string | null;
   remindersPaused: boolean;
+  events: ReminderEvent[];
 }
 
 // Inline reminder block carried by GET /api/onboarding (per row).
@@ -163,6 +171,7 @@ interface OnboardingReminderInline {
   finalWarningSentAt: string | null;
   state: ReminderRowState;
   missingDocs: ReminderDocId[];
+  events: ReminderEvent[];
 }
 
 type ReminderTemplateKey =
@@ -1492,21 +1501,36 @@ function ReminderRowIndicator({ status }: { status: ReminderRowStatus }) {
 
   // Pip strip: maxReminders+1 dots. The +1 (rendered as a diamond) is
   // the final-warning slot; the trailing tick (a red bar) marks the
-  // hard elimination deadline.
+  // hard elimination deadline. Per-pip tooltips read each event's actual
+  // sentAt from `events[]` so historical pips don't render "—".
+  const reminderEventByN = new Map<number, ReminderEvent>();
+  let finalWarningEvent: ReminderEvent | null = null;
+  for (const ev of status.events ?? []) {
+    if (ev.kind === "reminder" && ev.n != null) reminderEventByN.set(ev.n, ev);
+    else if (ev.kind === "final_warning") finalWarningEvent = ev;
+  }
   const pipDots: { kind: "sent" | "future" | "final"; tip: string; testid: string }[] = [];
   for (let i = 0; i < status.maxReminders; i++) {
     const isSent = i < status.reminderCount;
+    const oneBased = i + 1;
+    const ev = reminderEventByN.get(oneBased);
     pipDots.push({
       kind: isSent ? "sent" : "future",
       tip: isSent
-        ? `${isAr ? "تم الإرسال" : "Sent"} • ${i === status.reminderCount - 1 && status.lastReminderSentAt ? fmtDate(status.lastReminderSentAt) : "—"}`
+        // Prefer the per-event sentAt; fall back to lastReminderSentAt for
+        // the most-recent pip when no matching event row was loaded yet.
+        ? `${isAr ? "تم الإرسال" : "Sent"} • ${ev?.sentAt
+            ? fmtDate(ev.sentAt)
+            : (i === status.reminderCount - 1 && status.lastReminderSentAt ? fmtDate(status.lastReminderSentAt) : "—")}`
         : `${isAr ? "مجدول" : "Scheduled"} • ${i === status.reminderCount && status.nextScheduledAt ? fmtDate(status.nextScheduledAt) : "—"}`,
       testid: `pip-${i}`,
     });
   }
   pipDots.push({
     kind: "final",
-    tip: `${isAr ? "تنبيه أخير" : "Final warning"} • ${fmtDate(status.eliminationAt)}`,
+    tip: finalWarningEvent
+      ? `${isAr ? "تم إرسال التنبيه الأخير" : "Final warning sent"} • ${fmtDate(finalWarningEvent.sentAt)}`
+      : `${isAr ? "تنبيه أخير" : "Final warning"} • ${fmtDate(status.eliminationAt)}`,
     testid: "pip-final",
   });
 
@@ -2217,10 +2241,33 @@ export default function OnboardingPage() {
         finalWarningAt: inline.finalWarningAt ?? null,
         finalWarningSentAt: inline.finalWarningSentAt ?? null,
         remindersPaused: inline.paused,
+        events: inline.events ?? [],
       });
     }
     return m;
   })();
+
+  // Master switch flag for the whole pipeline (UI-level gate for the
+  // at-risk filter chip). The server stamps every inline reminder block
+  // with the same `enabled`, so reading the first record's flag is fine;
+  // when there are no records yet we hide the chip too.
+  const remindersMasterEnabled = (() => {
+    for (const r of records) {
+      const inline = (r as OnboardingRecord & { reminder?: OnboardingReminderInline }).reminder;
+      if (inline) return inline.enabled === true;
+    }
+    return false;
+  })();
+
+  // If reminders get disabled while the at-risk filter is active, the
+  // chip disappears but the filter would silently keep emptying the list
+  // (state==="off" rows are excluded by atRiskOnly). Reset the toggle so
+  // the filter is a true no-op when the master switch is off.
+  useEffect(() => {
+    if (!remindersMasterEnabled && atRiskOnly) {
+      setAtRiskOnly(false);
+    }
+  }, [remindersMasterEnabled, atRiskOnly]);
 
   // Pull every non-archived candidate, NOT just those with a record-level
   // status of "available". The admit-dialog eligibility filter
@@ -2685,17 +2732,23 @@ export default function OnboardingPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button
-            data-testid="button-filter-at-risk"
-            onClick={() => setAtRiskOnly(v => !v)}
-            variant={atRiskOnly ? "default" : "outline"}
-            className={atRiskOnly
-              ? "bg-red-900/40 border-red-700 text-red-200 hover:bg-red-900/60 gap-2"
-              : "border-zinc-700 text-zinc-400 hover:bg-zinc-800 gap-2"}
-          >
-            <AlertTriangle className="h-4 w-4" />
-            {t("reminders.actions.filterAtRisk")}
-          </Button>
+          {/* At-risk chip is meaningless when the master switch is off:
+              no row will ever flip into a reminder state, so the filter
+              would be a no-op. Hide it entirely until reminders are
+              enabled in the settings tab. */}
+          {remindersMasterEnabled && (
+            <Button
+              data-testid="button-filter-at-risk"
+              onClick={() => setAtRiskOnly(v => !v)}
+              variant={atRiskOnly ? "default" : "outline"}
+              className={atRiskOnly
+                ? "bg-red-900/40 border-red-700 text-red-200 hover:bg-red-900/60 gap-2"
+                : "border-zinc-700 text-zinc-400 hover:bg-zinc-800 gap-2"}
+            >
+              <AlertTriangle className="h-4 w-4" />
+              {t("reminders.actions.filterAtRisk")}
+            </Button>
+          )}
         </div>
 
         {/* Records List */}

@@ -3787,11 +3787,13 @@ export async function registerRoutes(
       // Task #214: enrich each pending row with the derived reminder
       // schedule so the pipeline can render bell + pip-strip without a
       // second round-trip to /api/onboarding/reminders/status.
-      const { getReminderConfig, computeRowStatus } = await import("./onboarding-reminders");
+      const { getReminderConfig, computeRowStatus, loadReminderEventsForRows } = await import("./onboarding-reminders");
       const cfg = await getReminderConfig();
       const now = new Date();
+      const eventsByRow = await loadReminderEventsForRows(records.map((r) => r.id));
       const enriched = records.map((rec) => {
-        const status = computeRowStatus(rec, cfg, now);
+        const events = eventsByRow.get(rec.id) ?? [];
+        const status = computeRowStatus(rec, cfg, now, events);
         return {
           ...rec,
           reminder: {
@@ -3806,6 +3808,7 @@ export async function registerRoutes(
             finalWarningSentAt: status.finalWarningSentAt,
             state: status.state,
             missingDocs: status.missingDocs,
+            events,
           },
         };
       });
