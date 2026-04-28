@@ -1324,9 +1324,17 @@ export default function OnboardingPage() {
     refetchInterval: 15000,
   });
 
+  // Pull every non-archived candidate, NOT just those with a record-level
+  // status of "available". The admit-dialog eligibility filter
+  // (`eligibleCandidates` below) gates by application.status === "shortlisted"
+  // — that is the source of truth for "Like" → "appears in admit dialog".
+  // Filtering by candidates.status here used to silently hide liked
+  // candidates whose record status was "active", "awaiting_activation",
+  // "hired" (from a prior stint), etc. — even though their current
+  // application was shortlisted.
   const { data: candidates = [] } = useQuery<Candidate[]>({
-    queryKey: ["/api/candidates", { limit: 1000, status: "available" }],
-    queryFn: () => apiRequest("GET", "/api/candidates?limit=1000&status=available").then(r => r.json()),
+    queryKey: ["/api/candidates", { limit: 1000 }],
+    queryFn: () => apiRequest("GET", "/api/candidates?limit=1000").then(r => r.json()),
     select: (r: any) => r?.data ?? [],
     staleTime: 0,
     refetchOnWindowFocus: true,
