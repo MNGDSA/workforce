@@ -90,6 +90,24 @@ import { Switch } from "@/components/ui/switch";
 
 type OnboardingStatus = "pending" | "in_progress" | "ready" | "converted" | "rejected" | "terminated";
 
+// Shape returned by GET /api/onboarding/admit-eligible. Mirrors the legacy
+// in-component derivation so the dialog renderer keeps the exact same
+// inputs (name + IDs + readiness pills + applicationId/jobId for the
+// admit POST). One row per candidate; deduplication happens server-side.
+type EligibleCandidate = {
+  id: string;
+  fullNameEn: string;
+  nationalId: string | null;
+  phone: string | null;
+  photoUrl: string | null;
+  hasPhoto: boolean | null;
+  hasIban: boolean | null;
+  hasNationalId: boolean | null;
+  classification: "individual" | "smp" | null;
+  applicationId: string;
+  jobId: string | null;
+};
+
 interface OnboardingRecord {
   id: string;
   candidateId: string;
@@ -2310,21 +2328,33 @@ export default function OnboardingPage() {
     refetchOnWindowFocus: true,
   });
 
-  // Applications drive eligibleCandidates (status === "shortlisted" gates the
-  // admit dialog). Mirror the freshness settings of the candidates query so a
-  // shortlist toggled on the interviews page is reflected here even if the
-  // user navigates back via a browser back/forward instead of a fresh route
-  // mount. Without an explicit queryFn this query inherits the global
-  // staleTime: Infinity / refetchOnWindowFocus: false defaults — fine for
-  // most pages, but onboarding is the consumer of the cross-page sync and
-  // can't afford to render a stale snapshot.
+  // The big /api/applications payload is now used ONLY for the small
+  // auxiliary lookups on the page (getJobMinForRecord and the per-row
+  // "linked job" badge). The "Admit Candidate" dialog has its own tight
+  // endpoint (`/api/onboarding/admit-eligible`) that pre-filters
+  // eligibility in SQL and returns < a few KB even on tenants with
+  // thousands of applications, which is what keeps the dialog opening in
+  // milliseconds. We can therefore drop the 15s polling and the
+  // refetchOnWindowFocus on this list — it changes only when the user
+  // performs an action that already invalidates this key.
   const { data: applications = [] } = useQuery<Application[]>({
     queryKey: ["/api/applications"],
     queryFn: () => apiRequest("GET", "/api/applications").then(r => r.json()),
     select: (r: any) => Array.isArray(r) ? r : [],
+  });
+
+  // Eligibility for the Admit dialog. Pre-filtered server-side so the
+  // dialog can render in milliseconds. `enabled: admitOpen` defers the
+  // round-trip until the user actually opens the dialog, so the
+  // onboarding page itself stays cheap to mount. `staleTime: 0` +
+  // explicit invalidation on shortlist/admit mutations guarantee the
+  // list is always current.
+  const { data: eligibleFromServer = [], isFetching: eligibleFetching } = useQuery<EligibleCandidate[]>({
+    queryKey: ["/api/onboarding/admit-eligible"],
+    queryFn: () => apiRequest("GET", "/api/onboarding/admit-eligible").then(r => r.json()),
+    enabled: admitOpen,
     staleTime: 0,
     refetchOnWindowFocus: true,
-    refetchInterval: 15000,
   });
 
   // Lightweight jobs lookup so we can surface the job's minimum salary as a
@@ -2361,6 +2391,9 @@ export default function OnboardingPage() {
     },
     onSuccess: (_data, items) => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
+      // Once admitted, those candidates now have an active onboarding row
+      // and must drop out of the eligible list immediately.
+      qc.invalidateQueries({ queryKey: ["/api/onboarding/admit-eligible"] });
       setAdmitOpen(false);
       setSelectedIds(new Set());
       setAdmitSearch("");
@@ -2390,6 +2423,10 @@ export default function OnboardingPage() {
     mutationFn: (id: string) => apiRequest("PATCH", `/api/onboarding/${id}`, { status: "rejected", rejectedBy: meUser?.id ?? null }).then(r => r.json()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
+      // Rejecting clears the active onboarding row, so the candidate may
+      // re-enter the eligible list if their application is still
+      // shortlisted — refresh so the dialog reflects that immediately.
+      qc.invalidateQueries({ queryKey: ["/api/onboarding/admit-eligible"] });
       toast({ title: t("toasts.rejected") });
     },
     onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message, variant: "destructive" }),
@@ -2401,6 +2438,7 @@ export default function OnboardingPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
+      qc.invalidateQueries({ queryKey: ["/api/onboarding/admit-eligible"] });
       setConvertRecord(null);
       setConvertForm({ startDate: "", salary: "", eventId: "", smpCompanyId: "" });
       toast({ title: t("toasts.converted"), description: t("toasts.convertedDesc") });
@@ -2414,6 +2452,7 @@ export default function OnboardingPage() {
     onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
+      qc.invalidateQueries({ queryKey: ["/api/onboarding/admit-eligible"] });
       setBulkConvertOpen(false);
       setBulkConvertForm({ startDate: "", salary: "", eventId: "", smpCompanyId: "" });
       const errCount = data.errors?.length ?? 0;
@@ -2457,6 +2496,9 @@ export default function OnboardingPage() {
     mutationFn: (id: string) => apiRequest("DELETE", `/api/onboarding/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
+      // Deleting an active onboarding row makes the candidate eligible
+      // again if their application is still shortlisted.
+      qc.invalidateQueries({ queryKey: ["/api/onboarding/admit-eligible"] });
       toast({ title: t("toasts.recordRemoved") });
     },
     onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message, variant: "destructive" }),
@@ -2520,62 +2562,16 @@ export default function OnboardingPage() {
     return true;
   });
 
-  // Candidates eligible for admission: ONLY those currently shortlisted from
-  // the interviews page. Reversing a shortlist must remove the candidate from
-  // this list, so neither plain "interviewed" nor "hired" qualifies on its
-  // own — the admin signals readiness to admit by shortlisting.
-  //
-  // CRITICAL: derive eligibleCandidates from `applications` (which carries a
-  // joined `candidate` summary), NOT from the paginated /api/candidates list.
-  // PROD has >8000 candidates and the candidates query caps at limit=1000, so
-  // a freshly liked candidate whose row falls past that window would never
-  // appear in the dialog when cross-referenced through `candidates`.
-  // Applications are tenant-scoped and bounded by liked-volume rather than
-  // global candidate count, so they are the correct source of truth here.
-  const alreadyOnboarding = new Set(
-    records.filter(r => r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated").map(r => r.candidateId)
-  );
-  type EligibleCandidate = {
-    id: string;
-    fullNameEn: string;
-    nationalId: string | null;
-    phone: string | null;
-    photoUrl: string | null;
-    hasPhoto: boolean | null;
-    hasIban: boolean | null;
-    hasNationalId: boolean | null;
-    classification: "individual" | "smp" | null;
-    // Carry the EXACT shortlisted application/job that made the candidate
-    // eligible so handleAdmit links onboarding to the right job. Without
-    // this, a candidate with both a "shortlisted" and a "hired" application
-    // could be admitted under the hired job's id (wrong contract path).
-    applicationId: string;
-    jobId: string | null;
-  };
-  // First, group shortlisted applications by candidate and pick the most
-  // recent one (applications come back ordered by appliedAt DESC from the
-  // server, so the first hit per candidate is already the latest).
-  const eligibleByCandidate = new Map<string, EligibleCandidate>();
-  for (const a of applications) {
-    if (a.status !== "shortlisted" || !a.candidate || a.candidate.archivedAt) continue;
-    if (alreadyOnboarding.has(a.candidateId)) continue;
-    if (eligibleByCandidate.has(a.candidateId)) continue;
-    const c = a.candidate;
-    eligibleByCandidate.set(a.candidateId, {
-      id: c.id,
-      fullNameEn: c.fullNameEn,
-      nationalId: c.nationalId,
-      phone: c.phone,
-      photoUrl: c.photoUrl,
-      hasPhoto: c.hasPhoto,
-      hasIban: c.hasIban,
-      hasNationalId: c.hasNationalId,
-      classification: c.classification,
-      applicationId: a.id,
-      jobId: a.jobId ?? null,
-    });
-  }
-  const eligibleCandidates: EligibleCandidate[] = Array.from(eligibleByCandidate.values());
+  // Candidates eligible for admission: ONLY those currently shortlisted
+  // from the interviews page, with no active onboarding row, and not
+  // archived. The eligibility filter now lives in SQL behind
+  // GET /api/onboarding/admit-eligible (`storage.getAdmitEligibleCandidates`)
+  // — the response is already deduped per candidate and carries the
+  // exact (applicationId, jobId) the admit POST should link to. The
+  // dialog opens in milliseconds because the server returns just the
+  // ready-to-render list rather than asking the client to fan out the
+  // full /api/applications payload.
+  const eligibleCandidates: EligibleCandidate[] = eligibleFromServer;
   const admitFiltered = eligibleCandidates.filter(c =>
     !admitSearch || c.fullNameEn.toLowerCase().includes(admitSearch.toLowerCase()) || (c.nationalId ?? "").toLowerCase().includes(admitSearch.toLowerCase()) || (c.phone ?? "").toLowerCase().includes(admitSearch.toLowerCase())
   );

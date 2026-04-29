@@ -373,6 +373,19 @@ export interface IStorage {
 
   // Onboarding
   getOnboardingRecords(filters?: { status?: string; eventId?: string; search?: string; candidateId?: string }): Promise<OnboardingRecord[]>;
+  getAdmitEligibleCandidates(): Promise<{
+    id: string;
+    fullNameEn: string;
+    nationalId: string | null;
+    phone: string | null;
+    photoUrl: string | null;
+    hasPhoto: boolean | null;
+    hasIban: boolean | null;
+    hasNationalId: boolean | null;
+    classification: "individual" | "smp" | null;
+    applicationId: string;
+    jobId: string | null;
+  }[]>;
   getOnboardingRecord(id: string): Promise<OnboardingRecord | undefined>;
   createOnboardingRecord(data: InsertOnboarding): Promise<OnboardingRecord>;
   updateOnboardingRecord(id: string, data: Partial<InsertOnboarding>): Promise<OnboardingRecord | undefined>;
@@ -2597,6 +2610,78 @@ export class DatabaseStorage implements IStorage {
   async getOnboardingRecord(id: string): Promise<OnboardingRecord | undefined> {
     const [rec] = await db.select().from(onboarding).where(eq(onboarding.id, id));
     return rec;
+  }
+
+  // Tight, purpose-built query that powers the "Admit Candidate" dialog on
+  // the onboarding page. Doing the eligibility filter in SQL — instead of
+  // shipping every application+candidate row to the client and letting the
+  // browser fan out the join — is what keeps the dialog opening in
+  // milliseconds even on tenants with thousands of applications.
+  //
+  // Eligibility rules (must match `eligibleCandidates` in onboarding.tsx):
+  //   - the application is currently shortlisted
+  //   - the candidate is not archived
+  //   - the candidate has NO active onboarding row (status NOT IN
+  //     converted/rejected/terminated). An active row already covers them
+  //     and re-admitting would create a duplicate pipeline.
+  //   - dedupe by candidate, picking the most recent shortlisted application
+  //     (the one whose appliedAt is greatest) — that is the application the
+  //     admit flow will link onboarding to.
+  //
+  // Indexes leveraged: applications_status_idx (cuts the working set to
+  // shortlisted), applications_candidate_idx (drives the DISTINCT ON
+  // dedupe), and onboarding_status_idx (the NOT EXISTS sub-select).
+  async getAdmitEligibleCandidates(): Promise<{
+    id: string;
+    fullNameEn: string;
+    nationalId: string | null;
+    phone: string | null;
+    photoUrl: string | null;
+    hasPhoto: boolean | null;
+    hasIban: boolean | null;
+    hasNationalId: boolean | null;
+    classification: "individual" | "smp" | null;
+    applicationId: string;
+    jobId: string | null;
+  }[]> {
+    const result = await db.execute(sql`
+      SELECT DISTINCT ON (a.candidate_id)
+        c.id                AS id,
+        c.full_name_en      AS "fullNameEn",
+        c.national_id       AS "nationalId",
+        c.phone             AS phone,
+        c.photo_url         AS "photoUrl",
+        c.has_photo         AS "hasPhoto",
+        c.has_iban          AS "hasIban",
+        c.has_national_id   AS "hasNationalId",
+        c.classification    AS classification,
+        a.id                AS "applicationId",
+        a.job_id            AS "jobId"
+      FROM ${applications} a
+      INNER JOIN ${candidates} c ON c.id = a.candidate_id
+      WHERE a.status = 'shortlisted'
+        AND c.archived_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM ${onboarding} o
+          WHERE o.candidate_id = a.candidate_id
+            AND o.status NOT IN ('converted', 'rejected', 'terminated')
+        )
+      ORDER BY a.candidate_id, a.applied_at DESC, a.id DESC
+    `);
+    const rows = ((result as any).rows ?? result) as any[];
+    return rows.map(r => ({
+      id: r.id,
+      fullNameEn: r.fullNameEn,
+      nationalId: r.nationalId ?? null,
+      phone: r.phone ?? null,
+      photoUrl: r.photoUrl ?? null,
+      hasPhoto: r.hasPhoto ?? null,
+      hasIban: r.hasIban ?? null,
+      hasNationalId: r.hasNationalId ?? null,
+      classification: r.classification ?? null,
+      applicationId: r.applicationId,
+      jobId: r.jobId ?? null,
+    }));
   }
 
   async createOnboardingRecord(data: InsertOnboarding): Promise<OnboardingRecord> {

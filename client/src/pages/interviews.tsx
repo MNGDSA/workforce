@@ -140,6 +140,9 @@ function InterviewDetailSheet({
       setLocalStatuses(prev => ({ ...prev, [vars.candidateId]: vars.status }));
       queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] });
+      // Toggling shortlist status changes who appears in the Onboarding
+      // page's "Admit Candidate" dialog — refresh that pre-filtered list.
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding/admit-eligible"] });
       queryClient.invalidateQueries({ queryKey: ["/api/interviews", interviewId] });
       toast({ title: vars.status === "shortlisted" ? t("interviews:toast.shortlisted") : vars.status === "rejected" ? t("interviews:toast.rejected") : t("interviews:toast.updated") });
     },
@@ -613,6 +616,9 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
       clearSelection();
       queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] });
+      // Bulk shortlist promotes a batch of candidates straight into the
+      // Onboarding admit dialog — refresh that pre-filtered list too.
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding/admit-eligible"] });
       queryClient.invalidateQueries({ queryKey: ["/api/interviews", interviewId] });
       toast({ title: t("interviews:toast.bulkShortlisted", { count: result.succeeded, replace: { n: formatNumber(result.succeeded, i18n.language) } }) });
     },

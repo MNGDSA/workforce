@@ -3891,6 +3891,25 @@ export async function registerRoutes(
     }
   });
 
+  // Tight, purpose-built endpoint that powers the "Admit Candidate" dialog
+  // on /onboarding. Replaces the old client-side filter that fanned out the
+  // full /api/applications response (every application + joined candidate).
+  // The eligibility rules live in SQL (status='shortlisted' AND not archived
+  // AND no active onboarding row) and the result set is already deduped per
+  // candidate, so the dialog opens in milliseconds even on tenants with
+  // thousands of applications. RBAC mirrors the existing list endpoint:
+  // requires applications:read (the previous data-source's gate).
+  //
+  // Registered BEFORE /api/onboarding/:id to win Express's first-match.
+  app.get("/api/onboarding/admit-eligible", requirePermission("applications:read"), async (_req: Request, res: Response) => {
+    try {
+      const data = await storage.getAdmitEligibleCandidates();
+      return res.json(data);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   app.post("/api/onboarding/bulk-convert", requirePermission("onboarding:bulk_convert"), async (req: Request, res: Response) => {
     try {
       // employmentType can be explicitly provided for the whole batch, or derived
