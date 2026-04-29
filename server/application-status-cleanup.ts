@@ -46,8 +46,20 @@ export interface ReverseSyncResult {
  * Apply the same orphan-onboarding cleanup that the manual "Reset Like"
  * flow performs. Safe to call when the transition is not actually a
  * reset (we no-op in that case).
+ *
+ * Optionally accepts a transaction handle (`tx`). When supplied, the
+ * onboarding deletes and audit-log inserts execute against that tx so
+ * the caller can wrap several writes in a single atomic block. The
+ * pre-flight read of existing onboarding records still goes through
+ * `storage.getOnboardingRecords` (which uses the base `db`); the
+ * cleanup is always invoked under contexts where the candidate's
+ * onboarding rows would not be concurrently mutated, so we accept the
+ * cross-handle read for simplicity.
  */
-export async function applyShortlistResetCleanup(ctx: ReverseSyncContext): Promise<ReverseSyncResult> {
+export async function applyShortlistResetCleanup(
+  ctx: ReverseSyncContext,
+  tx?: any,
+): Promise<ReverseSyncResult> {
   const result: ReverseSyncResult = { removedOnboardingIds: [] };
 
   if (!ctx.candidateId) return result;
@@ -66,7 +78,7 @@ export async function applyShortlistResetCleanup(ctx: ReverseSyncContext): Promi
   if (removable.length === 0) return result;
 
   for (const ob of removable) {
-    await storage.deleteOnboardingRecord(ob.id);
+    await storage.deleteOnboardingRecord(ob.id, tx);
     result.removedOnboardingIds.push(ob.id);
     await storage.createAuditLog({
       action: "onboarding.auto_remove_on_reset",
@@ -83,7 +95,7 @@ export async function applyShortlistResetCleanup(ctx: ReverseSyncContext): Promi
       },
       actorId: ctx.actor.id,
       actorName: ctx.actor.name,
-    });
+    }, tx);
   }
 
   return result;

@@ -390,60 +390,76 @@ describe("Onboarding reminder safety properties (task #215)", () => {
     assert.equal(after!.reminderCount, 0, "reminder_count must not have been mutated");
   });
 
-  it("a failure AFTER the onboarding row is deleted does NOT revert the application status (elimination effectively succeeded)", async () => {
-    // This is the converse of the previous test. If the onboarding row
-    // has already been deleted by the cleanup helper and only a
-    // downstream bookkeeping write (admin alert / audit log) throws, the
-    // catch block must NOT revert the application-status flip — doing so
-    // would leave the candidate at 'shortlisted' with no onboarding row
-    // to recover from, an undetectable partial state. Instead, the
-    // engine treats elimination as effectively succeeded; only the
-    // post-write failure is logged.
+  it("a failure on the final audit-log write rolls everything back atomically (Task #219 — single-transaction semantics)", async () => {
+    // Task #219 makes elimination atomic: the eliminated_at stamp, the
+    // application status flip, the onboarding row delete, and the final
+    // audit log all live inside one Postgres transaction. If any of
+    // them throws — including the LAST write — Postgres rolls the whole
+    // set back, so partial state is impossible by construction.
+    //
+    // This test exercises the "last write throws" edge specifically:
+    // earlier writes (incl. the in-cleanup auto_remove_on_reset audit
+    // log AND the onboarding delete) succeed, but the final
+    // onboarding.auto_eliminated audit log throws. We assert that the
+    // deletion and the status flip are BOTH undone — i.e. the row is
+    // restored and the app is back to its pre-update status — so the
+    // next sweep retries from a clean slate.
+    //
+    // (The old manual-revert design left the deletion intact in this
+    // window because there was no way to un-delete a row outside a
+    // transaction. The atomic design removes that limitation.)
     fixture = await seedFixture({ withApplication: true });
     assert.ok(fixture.applicationId, "fixture must include an application for this test");
 
     const startingAppStatus = await readAppStatus(fixture.applicationId!);
     assert.equal(startingAppStatus, "shortlisted");
 
-    // Mock the FINAL audit-log write (which runs AFTER
-    // `applyShortlistResetCleanup` has already deleted the onboarding
-    // row) to throw. Only the action="onboarding.auto_eliminated" log
-    // happens after deletion; any other audit log calls (e.g. the per-row
-    // log inside `applyShortlistResetCleanup`) must still succeed, or
-    // we'd be back in mode-A territory.
+    // Mock the FINAL audit-log write to throw. Only the
+    // action="onboarding.auto_eliminated" log is the "final" one; the
+    // per-row log inside `applyShortlistResetCleanup`
+    // (action="onboarding.auto_remove_on_reset") must still succeed so
+    // the throw lands AFTER the deletion has been written into the
+    // transaction (but before commit).
     const realCreateAuditLog = storage.createAuditLog.bind(storage);
-    const stub = mock.method(storage, "createAuditLog", async (data: InsertAuditLog) => {
+    const stub = mock.method(storage, "createAuditLog", async (data: InsertAuditLog, tx?: any) => {
       if (data.action === "onboarding.auto_eliminated") {
-        throw new Error("forced-failure-after-deletion");
+        throw new Error("forced-failure-on-final-audit-log");
       }
-      return realCreateAuditLog(data);
+      return realCreateAuditLog(data, tx);
     });
 
     try {
       const before = await readOnboarding(fixture.onboardingId);
       const ok = await __internal.eliminateOnboarding(before!);
-      assert.equal(ok, false, "eliminate must still report failure when the post-delete write throws");
+      assert.equal(ok, false, "eliminate must report failure when the final audit-log write throws");
     } finally {
       stub.mock.restore();
     }
 
-    // 1. The onboarding row IS gone — `applyShortlistResetCleanup`
-    //    deleted it before our forced failure landed.
+    // 1. The onboarding row MUST be restored — the in-tx delete was
+    //    rolled back along with everything else. Without atomicity the
+    //    row would stay deleted and the candidate would be unrecoverable.
     const after = await readOnboarding(fixture.onboardingId);
-    assert.equal(
+    assert.ok(
       after,
-      undefined,
-      "onboarding row should be gone — deletion happened before the forced post-write failure",
+      "onboarding row MUST be restored by the transaction rollback — a deleted row with no audit trail is exactly the partial state Task #219 prevents",
     );
+    assert.equal(
+      after!.eliminatedAt,
+      null,
+      "eliminated_at MUST be NULL after rollback so the next sweep can re-evaluate the row",
+    );
+    assert.equal(after!.status, "in_progress", "onboarding status must be left untouched");
+    assert.equal(after!.reminderCount, 0, "reminder_count must not have been mutated");
 
-    // 2. The application status MUST stay at the post-elimination
-    //    value ("interviewed"). Reverting it here would create the
-    //    exact partial state the rollback logic exists to prevent.
+    // 2. The application status MUST be restored to its pre-update
+    //    value. Postgres rolled the flip back as part of the same
+    //    transaction; no manual revert needed.
     const finalAppStatus = await readAppStatus(fixture.applicationId!);
     assert.equal(
       finalAppStatus,
-      "interviewed",
-      "application status MUST stay at 'interviewed' — elimination effectively succeeded, only a downstream write failed",
+      "shortlisted",
+      "application status MUST be restored to 'shortlisted' — the entire elimination is rolled back atomically",
     );
   });
 });

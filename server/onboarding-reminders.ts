@@ -711,183 +711,128 @@ async function enqueueFinalWarningSms(
  * identical for both paths (admin alerts, audit, orphan teardown for
  * pending|in_progress|ready statuses).
  *
- * eliminated_at is stamped first as a CAS guard so a concurrent sweep
- * skips the row.
+ * Atomicity (Task #219): every state-changing write — the
+ * `eliminated_at` CAS stamp, the application status flip, the
+ * onboarding row delete (via `applyShortlistResetCleanup`), and the
+ * final `onboarding.auto_eliminated` audit log — runs inside a single
+ * `db.transaction(...)` block. Postgres rolls the entire set back
+ * automatically if any step throws, so partial state is impossible by
+ * construction. This replaces the earlier manual revert-in-reverse
+ * pattern, which required every newly added write on the path to ship
+ * with a matching unwind clause to keep the safety property intact.
  *
- * Failure semantics (test #215): the function tracks every state-changing
- * side effect it has performed. If anything throws after we have begun
- * the elimination (e.g. the shared cleanup helper raises mid-flight), the
- * catch block reverts every change in reverse order — eliminated_at is
- * cleared back to NULL AND the application status is restored to its
- * pre-update value AND the onboarding row is left intact — so a future
- * sweep retries from a fully-consistent starting state. Without this, a
- * partial elimination would leave the application stuck at "interviewed"
- * while the onboarding row appeared resumable.
+ * The CAS update on `eliminated_at` still serves as the concurrency
+ * guard against a parallel sweep racing this one — when the predicate
+ * matches zero rows we abort the transaction with `false` instead of
+ * doing further work (and the empty transaction commits as a no-op).
+ *
+ * The admin alert is intentionally enqueued AFTER the transaction
+ * commits: it is a notification side-effect, not part of the
+ * elimination itself, and an alert-table failure must not undo the
+ * candidate's elimination (matches the prior non-fatal try/catch
+ * around it).
  */
 async function eliminateOnboarding(rec: OnboardingRecord): Promise<boolean> {
-  // Acquire the elimination lease via CAS so a concurrent sweep skips this row.
-  const [stamped] = await db.update(onboarding)
-    .set({ eliminatedAt: new Date(), updatedAt: new Date() })
-    .where(and(eq(onboarding.id, rec.id), isNull(onboarding.eliminatedAt)))
-    .returning();
-  if (!stamped) return false;
-
-  // Track which side effects we have performed so the catch block can
-  // unwind them in reverse order on failure. `previousStatus` is typed
-  // off the application select type (the same union the storage layer
-  // expects) so the revert call below stays fully type-checked.
-  let appStatusUpdated: { applicationId: string; previousStatus: Application["status"] } | null = null;
-
+  let eliminated = false;
   try {
-    if (rec.applicationId) {
-      const app = await storage.getApplication(rec.applicationId);
-      if (app) {
-        // Always reset the application back to "interviewed" on auto-elimination
-        // (regardless of pre-update status) so the candidate can be
-        // re-evaluated cleanly. This mirrors the manual "Reset Like" intent
-        // applied to the auto-elimination trigger.
-        const previousStatus = app.status;
-        if (previousStatus !== "interviewed") {
-          await storage.updateApplication(rec.applicationId, { status: "interviewed" });
-          appStatusUpdated = { applicationId: rec.applicationId, previousStatus };
-        }
-        const candidate = await storage.getCandidate(rec.candidateId).catch(() => null);
-        // Pass the REAL previousStatus + force=true so the shared cleanup
-        // helper produces an accurate audit record but still teardowns the
-        // onboarding row even when previousStatus !== "shortlisted".
-        await applyShortlistResetCleanup({
-          previousStatus,
-          newStatus: "interviewed",
-          applicationId: rec.applicationId,
-          candidateId: rec.candidateId,
-          candidateName: candidate?.fullNameEn ?? null,
-          actor: { id: null, name: "system" },
-          metadata: { reason: "auto_eliminated", reminderCount: rec.reminderCount },
-          force: true,
-        });
-      } else {
-        // Application went missing between sweep selection and elimination —
-        // still drop the onboarding row directly.
-        await storage.deleteOnboardingRecord(rec.id);
-      }
-    } else {
-      // SMP rows have no application — delete directly.
-      await storage.deleteOnboardingRecord(rec.id);
-    }
+    eliminated = await db.transaction(async (tx) => {
+      // Acquire the elimination lease via CAS so a concurrent sweep
+      // sees no row to update and exits without progressing further.
+      // Inside the transaction so the lease + downstream writes commit
+      // (or roll back) as one unit.
+      const [stamped] = await tx.update(onboarding)
+        .set({ eliminatedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(onboarding.id, rec.id), isNull(onboarding.eliminatedAt)))
+        .returning();
+      if (!stamped) return false;
 
-    try {
-      await storage.createAdminAlert(
-        "تم استبعاد مرشح تلقائيًا بعد انتهاء مهلة التذكيرات",
-        `استُبعد المرشح ${rec.candidateId} لانتهاء مهلة رفع المستندات المطلوبة بعد ${rec.reminderCount ?? 0} تذكير(ات).`,
-        {
-          kind: "onboarding_auto_eliminated",
+      if (rec.applicationId) {
+        const app = await storage.getApplication(rec.applicationId);
+        if (app) {
+          // Always reset the application back to "interviewed" on
+          // auto-elimination (regardless of pre-update status) so the
+          // candidate can be re-evaluated cleanly. Mirrors the manual
+          // "Reset Like" intent applied to the auto-elimination trigger.
+          const previousStatus: Application["status"] = app.status;
+          if (previousStatus !== "interviewed") {
+            await storage.updateApplication(
+              rec.applicationId,
+              { status: "interviewed" },
+              tx,
+            );
+          }
+          const candidate = await storage.getCandidate(rec.candidateId).catch(() => null);
+          // Pass the REAL previousStatus + force=true so the shared
+          // cleanup helper produces an accurate audit record but still
+          // teardowns the onboarding row even when previousStatus !==
+          // "shortlisted".
+          await applyShortlistResetCleanup({
+            previousStatus,
+            newStatus: "interviewed",
+            applicationId: rec.applicationId,
+            candidateId: rec.candidateId,
+            candidateName: candidate?.fullNameEn ?? null,
+            actor: { id: null, name: "system" },
+            metadata: { reason: "auto_eliminated", reminderCount: rec.reminderCount },
+            force: true,
+          }, tx);
+        } else {
+          // Application went missing between sweep selection and
+          // elimination — still drop the onboarding row directly.
+          await storage.deleteOnboardingRecord(rec.id, tx);
+        }
+      } else {
+        // SMP rows have no application — delete directly.
+        await storage.deleteOnboardingRecord(rec.id, tx);
+      }
+
+      await storage.createAuditLog({
+        action: "onboarding.auto_eliminated",
+        entityType: "onboarding",
+        entityId: rec.id,
+        description: `Onboarding ${rec.id} auto-eliminated after deadline (missing required documents).`,
+        metadata: {
           candidateId: rec.candidateId,
           applicationId: rec.applicationId,
-          onboardingId: rec.id,
           reminderCount: rec.reminderCount,
         },
-      );
-    } catch (alertErr) {
-      // Non-fatal — elimination succeeded; just log the alert failure.
-      console.error(`[onboarding-reminders] admin alert failed for ${rec.id}:`, alertErr);
-    }
+        actorId: null,
+        actorName: "system",
+      }, tx);
 
-    await storage.createAuditLog({
-      action: "onboarding.auto_eliminated",
-      entityType: "onboarding",
-      entityId: rec.id,
-      description: `Onboarding ${rec.id} auto-eliminated after deadline (missing required documents).`,
-      metadata: {
-        candidateId: rec.candidateId,
-        applicationId: rec.applicationId,
-        reminderCount: rec.reminderCount,
-      },
-      actorId: null,
-      actorName: "system",
+      return true;
     });
-    return true;
   } catch (err) {
-    // The catch block must distinguish two very different failure
-    // modes — they require opposite responses:
-    //
-    //   (A) Mid-flight failure BEFORE the onboarding row was deleted
-    //       (e.g. `applyShortlistResetCleanup` failed on the very first
-    //       `storage.deleteOnboardingRecord` call). The candidate has
-    //       NOT been eliminated; the application status flip is now
-    //       orphaned and the eliminated_at lease is now blocking the
-    //       next sweep. We must roll BOTH back.
-    //
-    //   (B) Failure AFTER the onboarding row was successfully deleted
-    //       (e.g. the post-cleanup `storage.createAuditLog` write
-    //       failed, or `applyShortlistResetCleanup`'s own audit log
-    //       write failed AFTER it deleted the row). The candidate has
-    //       BEEN eliminated; reverting the application status here
-    //       would leave a hard-to-detect partial state — application
-    //       at the pre-elimination status with no onboarding row to
-    //       resume from. We must NOT roll back; just log the
-    //       downstream failure and treat elimination as effectively
-    //       succeeded (return false so the sweep counter stays
-    //       conservative — Task #216 telemetry surfaces the issue).
-    //
-    // The discriminator is "does the onboarding row still exist?".
-    // Reading it back is cheap (single PK lookup) and unambiguous.
-    let onboardingStillExists = false;
-    try {
-      const [check] = await db.select({ id: onboarding.id })
-        .from(onboarding)
-        .where(eq(onboarding.id, rec.id));
-      onboardingStillExists = !!check;
-    } catch (probeErr) {
-      console.error(`[onboarding-reminders] post-failure probe of ${rec.id} failed:`, probeErr);
-      // Conservative default: assume the row is gone. Reverting app
-      // status when the onboarding row IS missing is the worse of the
-      // two error modes (silent partial state vs. a stuck eliminated_at
-      // that the next sweep would skip anyway).
-      onboardingStillExists = false;
-    }
-
-    if (onboardingStillExists) {
-      // Mode (A): unwind in reverse order. Each revert is wrapped in
-      // its own try/catch so a failure in one does not stop the others.
-      //
-      //   1. application status — revert first so the candidate is not
-      //      stuck at "interviewed" while the onboarding row appears
-      //      resumable.
-      //   2. eliminated_at — last so a concurrent sweep that reads the
-      //      row sees the application status fix before it considers
-      //      the row eligible again.
-      if (appStatusUpdated) {
-        try {
-          await storage.updateApplication(appStatusUpdated.applicationId, {
-            status: appStatusUpdated.previousStatus,
-          });
-        } catch (revertErr) {
-          console.error(
-            `[onboarding-reminders] failed to revert application status for ${appStatusUpdated.applicationId}:`,
-            revertErr,
-          );
-        }
-      }
-      try {
-        await db.update(onboarding)
-          .set({ eliminatedAt: null, updatedAt: new Date() })
-          .where(eq(onboarding.id, rec.id));
-      } catch (revertErr) {
-        console.error(`[onboarding-reminders] failed to revert eliminated_at for ${rec.id}:`, revertErr);
-      }
-    } else {
-      // Mode (B): elimination effectively succeeded; only a downstream
-      // bookkeeping write (admin alert / audit log / etc.) failed.
-      // DO NOT revert the application status — that would leave a
-      // partial-state window with no onboarding row to recover from.
-      console.error(
-        `[onboarding-reminders] downstream write failed AFTER onboarding ${rec.id} was already deleted; ` +
-          `leaving application status at the post-elimination value to avoid partial state.`,
-      );
-    }
+    // Postgres rolled the whole transaction back already — eliminated_at,
+    // app-status flip, onboarding delete, and audit log are all gone.
+    // Just log; the next sweep will retry from a clean slate.
     console.error(`[onboarding-reminders] eliminate failed for ${rec.id}:`, err);
     return false;
   }
+
+  if (!eliminated) return false;
+
+  // Notification side-effect, after commit. Failure here must not undo
+  // the elimination (matches the prior non-fatal behaviour) — and is
+  // outside the transaction so an alerts-table outage cannot leave a
+  // candidate stuck at "in_progress".
+  try {
+    await storage.createAdminAlert(
+      "تم استبعاد مرشح تلقائيًا بعد انتهاء مهلة التذكيرات",
+      `استُبعد المرشح ${rec.candidateId} لانتهاء مهلة رفع المستندات المطلوبة بعد ${rec.reminderCount ?? 0} تذكير(ات).`,
+      {
+        kind: "onboarding_auto_eliminated",
+        candidateId: rec.candidateId,
+        applicationId: rec.applicationId,
+        onboardingId: rec.id,
+        reminderCount: rec.reminderCount,
+      },
+    );
+  } catch (alertErr) {
+    console.error(`[onboarding-reminders] admin alert failed for ${rec.id}:`, alertErr);
+  }
+
+  return true;
 }
 
 /**

@@ -188,7 +188,7 @@ export interface IStorage {
   }>;
 
   // Audit Logs
-  createAuditLog(data: InsertAuditLog): Promise<AuditLog>;
+  createAuditLog(data: InsertAuditLog, tx?: any): Promise<AuditLog>;
   getAuditLogs(params?: { page?: number; limit?: number; search?: string; entityType?: string; actorId?: string }): Promise<{ data: AuditLog[]; total: number }>;
   getAuditLogsCursor(params: { cursor?: string; limit: number; search?: string; entityType?: string; actorId?: string }): Promise<{ data: AuditLog[]; total: number; nextCursor: string | null }>;
   iterateAuditLogsForExport(params: { search?: string; entityType?: string; actorId?: string; chunkSize?: number; maxRows: number }): AsyncGenerator<AuditLog[], void, unknown>;
@@ -273,7 +273,7 @@ export interface IStorage {
   getApplicantsForJob(params: { jobId: string; page: number; limit: number; search?: string }): Promise<{ data: { candidateId: string; applicationId: string; fullNameEn: string; nationalId: string | null; applicationStatus: string; appliedAt: Date }[]; total: number }>;
   getApplication(id: string): Promise<Application | undefined>;
   createApplication(app: InsertApplication): Promise<Application>;
-  updateApplication(id: string, data: Partial<InsertApplication>): Promise<Application | undefined>;
+  updateApplication(id: string, data: Partial<InsertApplication>, tx?: any): Promise<Application | undefined>;
   getApplicationStats(): Promise<{ total: number; new: number; shortlisted: number; hired: number }>;
 
   // Interviews
@@ -376,7 +376,7 @@ export interface IStorage {
   getOnboardingRecord(id: string): Promise<OnboardingRecord | undefined>;
   createOnboardingRecord(data: InsertOnboarding): Promise<OnboardingRecord>;
   updateOnboardingRecord(id: string, data: Partial<InsertOnboarding>): Promise<OnboardingRecord | undefined>;
-  deleteOnboardingRecord(id: string): Promise<boolean>;
+  deleteOnboardingRecord(id: string, tx?: any): Promise<boolean>;
   convertOnboardingToEmployee(id: string, employmentData: { startDate: string; eventId?: string; salary?: string; employmentType?: "individual" | "smp"; smpCompanyId?: string }, convertedBy?: string): Promise<WorkforceRecord>;
 
   // SMS Plugins
@@ -1625,8 +1625,9 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async updateApplication(id: string, data: Partial<InsertApplication>): Promise<Application | undefined> {
-    const [updated] = await db.update(applications).set({ ...data, updatedAt: new Date() }).where(eq(applications.id, id)).returning();
+  async updateApplication(id: string, data: Partial<InsertApplication>, tx?: any): Promise<Application | undefined> {
+    const exec = tx ?? db;
+    const [updated] = await exec.update(applications).set({ ...data, updatedAt: new Date() }).where(eq(applications.id, id)).returning();
     return updated;
   }
 
@@ -2578,8 +2579,9 @@ export class DatabaseStorage implements IStorage {
     return rec;
   }
 
-  async deleteOnboardingRecord(id: string): Promise<boolean> {
-    const result = await db.delete(onboarding).where(eq(onboarding.id, id)).returning();
+  async deleteOnboardingRecord(id: string, tx?: any): Promise<boolean> {
+    const exec = tx ?? db;
+    const result = await exec.delete(onboarding).where(eq(onboarding.id, id)).returning();
     return result.length > 0;
   }
 
@@ -3695,8 +3697,9 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {
-    const [row] = await db.insert(auditLogs).values(data).returning();
+  async createAuditLog(data: InsertAuditLog, tx?: any): Promise<AuditLog> {
+    const exec = tx ?? db;
+    const [row] = await exec.insert(auditLogs).values(data).returning();
     return row;
   }
 
