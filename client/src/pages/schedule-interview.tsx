@@ -66,7 +66,7 @@ type Applicant = {
 type SelectedCandidate = { fullNameEn: string; nationalId: string | null };
 type Job = { id: string; title: string; status: string };
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 200;
 
 export default function ScheduleInterviewPage() {
   const { t, i18n } = useTranslation(["scheduleInterview"]);
