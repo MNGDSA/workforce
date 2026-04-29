@@ -845,6 +845,13 @@ export async function loadReminderEventsForRows(
   if (onboardingIds.length === 0) return map;
   // dedupe_key LIKE pattern per row, OR'd. The unique index on dedupe_key
   // keeps each lookup cheap; row count is bounded by maxReminders+1.
+  //
+  // IMPORTANT: when binding a JS array as a single parameter, the pg
+  // driver serialises it via JSON and Postgres rejects the query with
+  //   "op ANY/ALL (array) requires array on right side"
+  // We construct an explicit `ARRAY[$1, $2, ...]::text[]` literal so
+  // each pattern binds as its own parameter and the right-hand side is
+  // an unambiguous text array.
   const patterns = onboardingIds.flatMap((id) => [
     `onboarding_reminder:${id}:%`,
     `onboarding_final_warning:${id}`,
@@ -856,7 +863,7 @@ export async function loadReminderEventsForRows(
     .from(smsOutbox)
     .where(and(
       sql`${smsOutbox.sentAt} IS NOT NULL`,
-      sql`${smsOutbox.dedupeKey} LIKE ANY(${patterns})`,
+      sql`${smsOutbox.dedupeKey} LIKE ANY(ARRAY[${sql.join(patterns.map((p) => sql`${p}`), sql`, `)}]::text[])`,
     ));
   for (const r of rows) {
     if (!r.dedupeKey || !r.sentAt) continue;
