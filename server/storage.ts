@@ -1693,6 +1693,11 @@ export class DatabaseStorage implements IStorage {
 
   // ─── Interviews ─────────────────────────────────────────────────────────────
   async getInterviews(params?: { status?: string; candidateId?: string; eventId?: string }): Promise<Interview[]> {
+    // Auto-complete elapsed interviews before any read so the UI never
+    // shows a stale `scheduled` row whose end-time has passed. See
+    // server/interview-auto-complete.ts for the full rationale.
+    const { autoCompleteElapsedInterviews } = await import("./interview-auto-complete");
+    await autoCompleteElapsedInterviews();
     const conditions = [];
     if (params?.status) conditions.push(eq(interviews.status, params.status as any));
     if (params?.eventId) conditions.push(eq(interviews.eventId, params.eventId));
@@ -1714,6 +1719,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[] } | undefined> {
+    // Auto-complete elapsed interviews so the detail panel never opens
+    // a row that is visibly past its end-time but still labeled
+    // "scheduled". See server/interview-auto-complete.ts.
+    const { autoCompleteElapsedInterviews } = await import("./interview-auto-complete");
+    await autoCompleteElapsedInterviews();
     const [interview] = await db.select().from(interviews).where(eq(interviews.id, id));
     if (!interview) return undefined;
     let invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[] = [];
@@ -1769,6 +1779,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getInterviewStats(): Promise<{ total: number; scheduled: number; completed: number; cancelled: number }> {
+    // Auto-complete elapsed interviews so the dashboard tile counts
+    // reflect reality. See server/interview-auto-complete.ts.
+    const { autoCompleteElapsedInterviews } = await import("./interview-auto-complete");
+    await autoCompleteElapsedInterviews();
     const [total] = await db.select({ value: count() }).from(interviews);
     const [scheduledRow] = await db.select({ value: count() }).from(interviews).where(eq(interviews.status, "scheduled"));
     const [completedRow] = await db.select({ value: count() }).from(interviews).where(eq(interviews.status, "completed"));
@@ -2430,6 +2444,12 @@ export class DatabaseStorage implements IStorage {
 
   // ─── Dashboard ──────────────────────────────────────────────────────────────
   async getDashboardStats() {
+    // Auto-complete elapsed interviews so the "scheduled interviews"
+    // dashboard tile only counts truly upcoming work, not historical
+    // rows whose end-time has already passed. See
+    // server/interview-auto-complete.ts.
+    const { autoCompleteElapsedInterviews } = await import("./interview-auto-complete");
+    await autoCompleteElapsedInterviews();
     const [totalCandidates] = await db.select({ value: count() }).from(candidates).where(isNull(candidates.archivedAt));
     const [openPositions] = await db.select({ value: count() }).from(jobPostings).where(and(eq(jobPostings.status, "active"), isNull(jobPostings.archivedAt)));
     const [activeEvents] = await db.select({ value: count() }).from(events).where(and(eq(events.status, "active"), isNull(events.archivedAt)));

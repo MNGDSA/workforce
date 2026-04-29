@@ -342,7 +342,11 @@ app.use((req, res, next) => {
     }
   }
 
-  // Run all once at startup, then every 24 hours
+  // Run all once at startup, then on their respective intervals.
+  // interview-auto-complete is dynamically imported to avoid pulling its
+  // db dependency into the boot critical path before db init finishes.
+  const { runInterviewAutoCompleteSweep } = await import("./interview-auto-complete");
+
   runAutoActivateUpcomingEvents();
   runAutoCloseExpiredEvents();
   runEventDateAlertScheduler();
@@ -351,6 +355,7 @@ app.use((req, res, next) => {
   runAwaitingActivationSweep();
   runIncompleteProfileSweep();
   runOnboardingReminderSweepJob();
+  runInterviewAutoCompleteSweep();
   const schedulerTimers = [
     setInterval(runAutoActivateUpcomingEvents, 24 * 60 * 60 * 1000),
     setInterval(runAutoCloseExpiredEvents, 24 * 60 * 60 * 1000),
@@ -360,6 +365,9 @@ app.use((req, res, next) => {
     setInterval(runAwaitingActivationSweep, 24 * 60 * 60 * 1000),
     setInterval(runIncompleteProfileSweep, 10 * 60 * 1000),
     setInterval(runOnboardingReminderSweepJob, 60 * 60 * 1000),
+    // 60-second cadence keeps the dashboard tile and interview list
+    // aligned with reality even when no one is browsing the UI.
+    setInterval(runInterviewAutoCompleteSweep, 60 * 1000),
   ];
 
   // ─── Graceful Shutdown ──────────────────────────────────────────────────────
