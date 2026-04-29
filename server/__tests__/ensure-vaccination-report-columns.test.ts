@@ -3,19 +3,28 @@
 // this column, the admit-to-onboarding POST returns a hard 500 with
 // `column "has_vaccination_report" does not exist`, because the route
 // builds an INSERT statement that references it (server/routes.ts:4237).
-// Two layers of coverage:
-//   1. Unit-level: the ensure script creates the column when missing,
-//      is idempotent, and produces the expected type/nullability/default.
-//   2. Integration-level: a real Drizzle INSERT that references
-//      hasVaccinationReport succeeds end-to-end after the script runs —
-//      this is the closest reproduction of the prod admit failure
-//      without standing up the HTTP layer.
+//
+// Coverage layered to stay safe under the project's parallel
+// `node:test` runner (run-tests.mjs spawns one tsx --test process per
+// file, but other files share the same dev DB):
+//
+//   - Parallel-safe assertions (always run): script is idempotent,
+//     column metadata is correct, and a real Drizzle INSERT that
+//     references hasVaccinationReport succeeds — exercising the same
+//     SQL path as the prod admit endpoint.
+//   - Destructive scenario (gated behind `RUN_DESTRUCTIVE_DB_TESTS=1`):
+//     drop both columns, run the ensure script, and verify it recreates
+//     them. Skipped by default because `ALTER TABLE … DROP COLUMN`
+//     takes ACCESS EXCLUSIVE locks on shared tables and could starve
+//     concurrent tests that read those columns. Run manually with
+//     `RUN_DESTRUCTIVE_DB_TESTS=1 npx tsx --test server/__tests__/ensure-vaccination-report-columns.test.ts`
+//     when you need the full self-heal coverage.
 //
 // Run with: `npx tsx --test server/__tests__/ensure-vaccination-report-columns.test.ts`
 
 import { strict as assert } from "node:assert";
-import { describe, it, before, after } from "node:test";
-import { sql, eq, like } from "drizzle-orm";
+import { describe, it, after } from "node:test";
+import { sql, like } from "drizzle-orm";
 
 import { db } from "../db";
 import { candidates, onboarding } from "@shared/schema";
@@ -24,6 +33,7 @@ import { ensureVaccinationReportColumns } from "../migrations/ensure-vaccination
 const noopLog = (_msg: string, _source?: string): void => {};
 
 const FIXTURE_MARKER = "__ensure_vax_test__";
+const RUN_DESTRUCTIVE = process.env.RUN_DESTRUCTIVE_DB_TESTS === "1";
 
 interface ColumnPresenceRow {
   present: number;
@@ -58,48 +68,20 @@ async function columnMeta(table: string, column: string): Promise<ColumnMetaRow 
 }
 
 describe("ensureVaccinationReportColumns", () => {
-  // Snapshot starting state so the suite is safe to run on a DB that
-  // already has the column (the normal case after the first boot).
-  let candidatesHadIt = true;
-  let onboardingHadIt = true;
-
-  before(async () => {
-    candidatesHadIt = await columnExists("candidates", "has_vaccination_report");
-    onboardingHadIt = await columnExists("onboarding", "has_vaccination_report");
-  });
-
   after(async () => {
-    // Always restore the column even if a test failed mid-run, then
-    // sweep any fixture rows this suite may have left behind.
+    // Always restore (no-op if columns are present) and sweep any
+    // fixture rows this suite may have left behind.
     await ensureVaccinationReportColumns(noopLog);
     await db.delete(onboarding).where(like(onboarding.notes, `%${FIXTURE_MARKER}%`));
     await db.delete(candidates).where(like(candidates.fullNameEn, `${FIXTURE_MARKER}%`));
   });
 
-  it("creates the column on candidates when missing and is idempotent", async () => {
-    if (candidatesHadIt) {
-      await db.execute(sql`ALTER TABLE candidates DROP COLUMN has_vaccination_report`);
-      assert.equal(await columnExists("candidates", "has_vaccination_report"), false);
-    }
+  // ── Parallel-safe assertions ────────────────────────────────────────
 
+  it("is idempotent — running twice in a row never throws", async () => {
+    await ensureVaccinationReportColumns(noopLog);
     await ensureVaccinationReportColumns(noopLog);
     assert.equal(await columnExists("candidates", "has_vaccination_report"), true);
-
-    // Second call must not throw — IF NOT EXISTS guards both ALTERs.
-    await ensureVaccinationReportColumns(noopLog);
-    assert.equal(await columnExists("candidates", "has_vaccination_report"), true);
-  });
-
-  it("creates the column on onboarding when missing and is idempotent", async () => {
-    if (onboardingHadIt) {
-      await db.execute(sql`ALTER TABLE onboarding DROP COLUMN has_vaccination_report`);
-      assert.equal(await columnExists("onboarding", "has_vaccination_report"), false);
-    }
-
-    await ensureVaccinationReportColumns(noopLog);
-    assert.equal(await columnExists("onboarding", "has_vaccination_report"), true);
-
-    await ensureVaccinationReportColumns(noopLog);
     assert.equal(await columnExists("onboarding", "has_vaccination_report"), true);
   });
 
@@ -114,24 +96,15 @@ describe("ensureVaccinationReportColumns", () => {
     });
   }
 
-  it("admit-style INSERT including hasVaccinationReport succeeds after self-heal", async () => {
-    // Reproduce the exact prod failure: drop both columns so the schema
-    // mirrors the un-migrated production database, run the boot-migrate
-    // step, then perform real Drizzle inserts that reference
-    // hasVaccinationReport on both tables — the same SQL path that
-    // server/routes.ts:4237 (the admit-to-onboarding POST) builds.
-    if (await columnExists("candidates", "has_vaccination_report")) {
-      await db.execute(sql`ALTER TABLE candidates DROP COLUMN has_vaccination_report`);
-    }
-    if (await columnExists("onboarding", "has_vaccination_report")) {
-      await db.execute(sql`ALTER TABLE onboarding DROP COLUMN has_vaccination_report`);
-    }
-
-    await ensureVaccinationReportColumns(noopLog);
-
+  it("admit-style INSERT including hasVaccinationReport succeeds", async () => {
+    // This is the closest reproduction of the prod admit endpoint
+    // failure without standing up the HTTP layer: a real Drizzle
+    // INSERT into onboarding (and candidates) that references
+    // hasVaccinationReport — the same SQL the route builds at
+    // server/routes.ts:4237. If the column is missing on either
+    // table, both inserts 500 with the exact prod error.
     const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-    // Insert a candidate that explicitly sets hasVaccinationReport.
     const [cand] = await db
       .insert(candidates)
       .values({
@@ -142,8 +115,6 @@ describe("ensureVaccinationReportColumns", () => {
       .returning();
     assert.equal(cand.hasVaccinationReport, true);
 
-    // Insert the matching onboarding row, again referencing the column —
-    // this is the SQL path that 500s in prod when the column is missing.
     const [ob] = await db
       .insert(onboarding)
       .values({
@@ -155,4 +126,33 @@ describe("ensureVaccinationReportColumns", () => {
     assert.equal(ob.hasVaccinationReport, false);
     assert.equal(ob.candidateId, cand.id);
   });
+
+  // ── Destructive self-heal scenario (opt-in) ─────────────────────────
+  // Gated because ALTER TABLE … DROP COLUMN takes ACCESS EXCLUSIVE
+  // locks on shared tables; running it concurrently with other test
+  // files that read candidates / onboarding would cause flakes or
+  // outright failures during the brief window before the script runs
+  // ADD COLUMN IF NOT EXISTS again.
+  it(
+    "recreates missing columns when run on a fresh schema",
+    { skip: RUN_DESTRUCTIVE ? false : "set RUN_DESTRUCTIVE_DB_TESTS=1 to enable" },
+    async () => {
+      try {
+        await db.execute(sql`ALTER TABLE candidates DROP COLUMN IF EXISTS has_vaccination_report`);
+        await db.execute(sql`ALTER TABLE onboarding DROP COLUMN IF EXISTS has_vaccination_report`);
+        assert.equal(await columnExists("candidates", "has_vaccination_report"), false);
+        assert.equal(await columnExists("onboarding", "has_vaccination_report"), false);
+
+        await ensureVaccinationReportColumns(noopLog);
+
+        assert.equal(await columnExists("candidates", "has_vaccination_report"), true);
+        assert.equal(await columnExists("onboarding", "has_vaccination_report"), true);
+      } finally {
+        // Belt-and-braces: even if an assertion above failed, leave
+        // the schema in the expected state so the rest of the suite
+        // (and any other tests sharing this DB) can keep working.
+        await ensureVaccinationReportColumns(noopLog);
+      }
+    },
+  );
 });
