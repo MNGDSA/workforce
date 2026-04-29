@@ -82,6 +82,7 @@
     "emptyAllMissing": "None of the pasted entries are on this interview's invitee list — see the panel above to copy or download the list.",
     "noApplication": "No application",
     "tipShortlist": "Shortlist",
+    "tipReject": "Reject",
     "tipReset": "Reset to interviewed"
   },
   "fullpage": {

@@ -26,7 +26,7 @@ import {
 import {
   Search, Filter, MoreHorizontal, Calendar, Clock, Video, Phone, MapPin,
   CheckCircle2, Loader2, Plus, Users, User, StickyNote, ExternalLink,
-  ThumbsUp, RotateCcw, Maximize2, ArrowLeft, X,
+  ThumbsUp, ThumbsDown, RotateCcw, Maximize2, ArrowLeft, X,
   Hash, AlertTriangle, Copy, Download, CheckSquare,
 } from "lucide-react";
 import {
@@ -512,6 +512,17 @@ function InterviewDetailSheet({
                                 >
                                   <ThumbsUp className="h-3.5 w-3.5" />
                                 </Button>
+                                <Button
+                                  data-testid={`button-reject-${c.id}`}
+                                  size="icon"
+                                  variant="ghost"
+                                  title={t("interviews:detail.tipReject")}
+                                  disabled={isRejected}
+                                  onClick={() => statusMutation.mutate({ appId: c.applicationId!, candidateId: c.id, status: "rejected" })}
+                                  className={`h-7 w-7 ${isRejected ? "text-red-500" : "text-muted-foreground hover:text-red-400 hover:bg-red-950/40"}`}
+                                >
+                                  <ThumbsDown className="h-3.5 w-3.5" />
+                                </Button>
                                 {(isShortlisted || isRejected) && (
                                   <Button
                                     data-testid={`button-reset-status-${c.id}`}
@@ -978,6 +989,17 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                                       className={`h-8 w-8 ${isShortlisted ? "text-emerald-500" : "text-muted-foreground hover:text-emerald-400 hover:bg-emerald-950/40"}`}
                                     >
                                       <ThumbsUp className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      data-testid={`fullpage-reject-${c.id}`}
+                                      size="icon"
+                                      variant="ghost"
+                                      title={t("interviews:detail.tipReject")}
+                                      disabled={isRejected}
+                                      onClick={() => statusMutation.mutate({ appId: c.applicationId!, candidateId: c.id, status: "rejected" })}
+                                      className={`h-8 w-8 ${isRejected ? "text-red-500" : "text-muted-foreground hover:text-red-400 hover:bg-red-950/40"}`}
+                                    >
+                                      <ThumbsDown className="h-4 w-4" />
                                     </Button>
                                     {(isShortlisted || isRejected) && (
                                       <Button
