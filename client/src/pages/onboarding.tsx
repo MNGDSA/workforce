@@ -85,6 +85,7 @@ import {
   Pause,
   Play,
   AlertTriangle,
+  Syringe,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -103,6 +104,7 @@ type EligibleCandidate = {
   hasPhoto: boolean | null;
   hasIban: boolean | null;
   hasNationalId: boolean | null;
+  hasVaccinationReport: boolean | null;
   classification: "individual" | "smp" | null;
   applicationId: string;
   jobId: string | null;
@@ -137,7 +139,7 @@ interface OnboardingRecord {
 }
 
 // Task #214 — onboarding document reminders.
-type ReminderDocId = "photo" | "iban" | "national_id";
+type ReminderDocId = "photo" | "iban" | "national_id" | "vaccination_report";
 type ReminderRowState =
   | "off" | "pending" | "due" | "paused" | "warning" | "max_reached" | "eliminated";
 
@@ -227,12 +229,14 @@ interface Candidate {
   hasPhoto: boolean;
   hasIban: boolean;
   hasNationalId: boolean;
+  hasVaccinationReport?: boolean;
   status: string;
   source: string;
   ibanNumber?: string | null;
   ibanFileUrl?: string | null;
   photoUrl?: string | null;
   nationalIdFileUrl?: string | null;
+  vaccinationReportFileUrl?: string | null;
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
 }
@@ -256,6 +260,7 @@ interface Application {
     hasPhoto: boolean | null;
     hasIban: boolean | null;
     hasNationalId: boolean | null;
+    hasVaccinationReport: boolean | null;
     classification: "individual" | "smp" | null;
     status: string | null;
     archivedAt: string | null;
@@ -272,9 +277,10 @@ const STATUS_CONFIG: Record<OnboardingStatus, { label: string; color: string; ic
 };
 
 const ALL_PREREQUISITES = [
-  { key: "hasPhoto",           label: "Personal Photo",       icon: Camera,        hint: "Clear ID-style photo uploaded",  profileKey: "photoUrl" as const,              isFile: true,  smp: true },
-  { key: "hasIban",            label: "IBAN Certificate",     icon: CreditCard,    hint: "Saudi bank IBAN on file",        profileKey: "ibanFileUrl" as const,           isFile: true,  smp: false },
-  { key: "hasNationalId",      label: "National ID / Iqama",  icon: IdCard,        hint: "ID copy submitted & verified",   profileKey: "nationalIdFileUrl" as const,     isFile: true,  smp: true },
+  { key: "hasPhoto",              label: "Personal Photo",       icon: Camera,        hint: "Clear ID-style photo uploaded",     profileKey: "photoUrl" as const,                    isFile: true,  smp: true },
+  { key: "hasIban",               label: "IBAN Certificate",     icon: CreditCard,    hint: "Saudi bank IBAN on file",           profileKey: "ibanFileUrl" as const,                 isFile: true,  smp: false },
+  { key: "hasNationalId",         label: "National ID / Iqama",  icon: IdCard,        hint: "ID copy submitted & verified",      profileKey: "nationalIdFileUrl" as const,           isFile: true,  smp: true },
+  { key: "hasVaccinationReport",  label: "Vaccination Report",   icon: Syringe,       hint: "Workplace immunization on file",    profileKey: "vaccinationReportFileUrl" as const,    isFile: true,  smp: true },
 ] as const;
 
 function getPrerequisites(isSmp: boolean) {
@@ -1446,11 +1452,13 @@ const DOC_LABEL_KEYS: Record<ReminderDocId, string> = {
   photo: "reminders.docPhoto",
   iban: "reminders.docIban",
   national_id: "reminders.docNationalId",
+  vaccination_report: "reminders.docVaccinationReport",
 };
 const DOC_PIP_ICON: Record<ReminderDocId, React.ElementType> = {
   photo: Camera,
   iban: CreditCard,
   national_id: IdCard,
+  vaccination_report: Syringe,
 };
 
 function hoursUntil(iso: string | null): number | null {
@@ -1720,7 +1728,7 @@ const DEFAULT_REMINDER_CONFIG: ReminderConfig = {
   quietHoursStart: "21:00",
   quietHoursEnd: "08:00",
   quietHoursTz: "Asia/Riyadh",
-  requiredDocs: ["photo", "iban", "national_id"],
+  requiredDocs: ["photo", "iban", "national_id", "vaccination_report"],
 };
 
 const DEFAULT_REMINDER_TEMPLATES: ReminderTemplates = {
@@ -1961,7 +1969,7 @@ function ReminderSettingsTab() {
     );
   }
 
-  const docs: ReminderDocId[] = ["photo", "iban", "national_id"];
+  const docs: ReminderDocId[] = ["photo", "iban", "national_id", "vaccination_report"];
   const toggleDoc = (d: ReminderDocId) => {
     setForm(f => {
       if (!f) return f;
@@ -2101,7 +2109,7 @@ function ReminderSettingsTab() {
           <h3 className="text-sm font-semibold text-zinc-200">{t("reminders.requiredDocs")}</h3>
           <p className="text-xs text-zinc-500 mt-1">{t("reminders.requiredDocsHint")}</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {docs.map(d => {
             const checked = form.requiredDocs.includes(d);
             const Icon = DOC_PIP_ICON[d];
@@ -2384,7 +2392,7 @@ export default function OnboardingPage() {
     return adminUsers.find(u => u.id === id)?.fullName ?? t("admin.unknown");
   }, [adminUsers, t]);
 
-  type AdmitItem = { candidateId: string; applicationId: string | null; jobId: string | null; hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean };
+  type AdmitItem = { candidateId: string; applicationId: string | null; jobId: string | null; hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean; hasVaccinationReport: boolean };
   const admitMutation = useMutation({
     mutationFn: async (items: AdmitItem[]) => {
       await Promise.all(items.map(body => apiRequest("POST", "/api/onboarding", body)));
@@ -2514,9 +2522,10 @@ export default function OnboardingPage() {
         photo: t("docs.photo"),
         nationalId: t("docs.nationalId"),
         iban: t("docs.iban"),
+        vaccinationReport: t("docs.vaccinationReport"),
       };
       toast({ title: t("toasts.docRemoved", { label: labelMap[vars.docType] ?? t("docs.document") }), description: t("toasts.docRemovedDesc") });
-      const flagMap: Record<string, string> = { photo: "hasPhoto", nationalId: "hasNationalId", iban: "hasIban" };
+      const flagMap: Record<string, string> = { photo: "hasPhoto", nationalId: "hasNationalId", iban: "hasIban", vaccinationReport: "hasVaccinationReport" };
       const flag = flagMap[vars.docType];
       if (flag) setChecklistRecord(prev => prev ? { ...prev, [flag]: false } : prev);
     },
@@ -2607,6 +2616,7 @@ export default function OnboardingPage() {
         nationalIdFileUrl: string | null;
         ibanFileUrl: string | null;
         ibanNumber: string | null;
+        vaccinationReportFileUrl: string | null;
       } | null;
     }).candidate;
     if (!embedded) return undefined;
@@ -2632,6 +2642,7 @@ export default function OnboardingPage() {
         hasPhoto: c.hasPhoto ?? false,
         hasIban: c.hasIban ?? false,
         hasNationalId: c.hasNationalId ?? false,
+        hasVaccinationReport: c.hasVaccinationReport ?? false,
       };
     });
     admitMutation.mutate(items);
@@ -3095,9 +3106,10 @@ export default function OnboardingPage() {
                       {c.nationalId && <p className="text-xs text-zinc-500 font-mono" dir="ltr">{c.nationalId}</p>}
                     </div>
                     <div className="flex gap-1 shrink-0">
-                      {c.hasPhoto      && <span title={t("docs.photo")}      className="text-emerald-500"><Camera     className="h-3.5 w-3.5" /></span>}
-                      {c.hasIban       && <span title={t("docs.iban")}       className="text-emerald-500"><CreditCard  className="h-3.5 w-3.5" /></span>}
-                      {c.hasNationalId && <span title={t("docs.nationalId")} className="text-emerald-500"><IdCard     className="h-3.5 w-3.5" /></span>}
+                      {c.hasPhoto              && <span title={t("docs.photo")}              className="text-emerald-500"><Camera     className="h-3.5 w-3.5" /></span>}
+                      {c.hasIban               && <span title={t("docs.iban")}               className="text-emerald-500"><CreditCard className="h-3.5 w-3.5" /></span>}
+                      {c.hasNationalId         && <span title={t("docs.nationalId")}         className="text-emerald-500"><IdCard     className="h-3.5 w-3.5" /></span>}
+                      {c.hasVaccinationReport  && <span title={t("docs.vaccinationReport")}  className="text-emerald-500"><Syringe    className="h-3.5 w-3.5" /></span>}
                     </div>
                   </button>
                 );
@@ -3220,7 +3232,7 @@ export default function OnboardingPage() {
                   }
                   const hasProfileData = !!profileValue;
                   const isFilePrereq = p.isFile && p.profileKey;
-                  const docTypeMap: Record<string, string> = { photoUrl: "photo", nationalIdFileUrl: "nationalId", ibanFileUrl: "iban" };
+                  const docTypeMap: Record<string, string> = { photoUrl: "photo", nationalIdFileUrl: "nationalId", ibanFileUrl: "iban", vaccinationReportFileUrl: "vaccinationReport" };
                   const docType = p.profileKey ? docTypeMap[p.profileKey] : null;
                   const isConverted = checklistRecord.status === "converted" || checklistRecord.status === "rejected";
                   return (

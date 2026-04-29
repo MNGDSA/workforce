@@ -559,6 +559,7 @@ export const onboarding = pgTable(
     hasPhoto: boolean("has_photo").notNull().default(false),
     hasIban: boolean("has_iban").notNull().default(false),
     hasNationalId: boolean("has_national_id").notNull().default(false),
+    hasVaccinationReport: boolean("has_vaccination_report").notNull().default(false),
     hasMedicalFitness: boolean("has_medical_fitness").notNull().default(false),
     hasSignedContract: boolean("has_signed_contract").notNull().default(false),
     hasEmergencyContact: boolean("has_emergency_contact").notNull().default(false),

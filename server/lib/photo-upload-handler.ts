@@ -202,6 +202,7 @@ export function createUploadDocumentsHandler(deps: PhotoUploadDeps): RequestHand
         if (docType === "photo") syncPayload.hasPhoto = true;
         if (docType === "nationalId") syncPayload.hasNationalId = true;
         if (docType === "iban") syncPayload.hasIban = true;
+        if (docType === "vaccinationReport") syncPayload.hasVaccinationReport = true;
         if (Object.keys(syncPayload).length > 0) {
           const merged = { ...rec, ...syncPayload };
           syncPayload.status = computeOnboardingStatus(merged, isSmpRec);

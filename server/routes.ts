@@ -435,9 +435,9 @@ function buildVariableSnapshot(candidate: any, template: any, ob: any): Record<s
 // handler call site and existing unit tests) the function falls back
 // to the historical record-flag-only behaviour.
 function computeOnboardingStatus(
-  rec: { hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean; hasSignedContract?: boolean },
+  rec: { hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean; hasVaccinationReport?: boolean; hasSignedContract?: boolean },
   isSmp: boolean,
-  candFiles?: { photoUrl?: string | null; ibanFileUrl?: string | null; ibanNumber?: string | null; nationalIdFileUrl?: string | null } | null,
+  candFiles?: { photoUrl?: string | null; ibanFileUrl?: string | null; ibanNumber?: string | null; nationalIdFileUrl?: string | null; vaccinationReportFileUrl?: string | null } | null,
 ): "pending" | "in_progress" | "ready" {
   const hasPhotoFile = candFiles
     ? !!candFiles.photoUrl
@@ -448,13 +448,20 @@ function computeOnboardingStatus(
   const hasNationalIdFile = candFiles
     ? !!candFiles.nationalIdFileUrl
     : rec.hasNationalId;
+  // Vaccination report — fourth mandatory onboarding document. Applies
+  // to BOTH individual and SMP candidates (workplace health requirement,
+  // not a financial one like IBAN). Source of truth is the candidate's
+  // file URL when provided, falling back to the record's shadow flag.
+  const hasVaccinationReportFile = candFiles
+    ? !!candFiles.vaccinationReportFileUrl
+    : !!rec.hasVaccinationReport;
   if (isSmp) {
-    const allDone = hasPhotoFile && hasNationalIdFile;
-    const anyDone = hasPhotoFile || hasNationalIdFile;
+    const allDone = hasPhotoFile && hasNationalIdFile && hasVaccinationReportFile;
+    const anyDone = hasPhotoFile || hasNationalIdFile || hasVaccinationReportFile;
     return allDone ? "ready" : anyDone ? "in_progress" : "pending";
   }
-  const allDone = hasPhotoFile && hasIbanFile && hasNationalIdFile;
-  const anyDone = hasPhotoFile || hasIbanFile || hasNationalIdFile;
+  const allDone = hasPhotoFile && hasIbanFile && hasNationalIdFile && hasVaccinationReportFile;
+  const anyDone = hasPhotoFile || hasIbanFile || hasNationalIdFile || hasVaccinationReportFile;
   return allDone ? "ready" : anyDone ? "in_progress" : "pending";
 }
 
@@ -827,6 +834,7 @@ export async function registerRoutes(
         if (docType === "photo") syncPayload.hasPhoto = false;
         if (docType === "nationalId") syncPayload.hasNationalId = false;
         if (docType === "iban") syncPayload.hasIban = false;
+        if (docType === "vaccinationReport") syncPayload.hasVaccinationReport = false;
         if (Object.keys(syncPayload).length > 0) {
           const merged = { ...rec, ...syncPayload };
           syncPayload.status = computeOnboardingStatus(merged, isSmpRec);
@@ -3829,7 +3837,7 @@ export async function registerRoutes(
       // 1075054286 / عبدالله العيسي) get silently corrected here so the UI
       // never lies, and we persist the correction so the conversion gate at
       // `convertOnboardingToEmployee` sees the right `status` too.
-      const correctedById = new Map<string, { hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean; status: typeof records[number]["status"] }>();
+      const correctedById = new Map<string, { hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean; hasVaccinationReport: boolean; status: typeof records[number]["status"] }>();
       for (const rec of records) {
         if (rec.status === "converted" || rec.status === "rejected" || rec.status === "terminated") continue;
         const cand = candidateSummaries.get(rec.candidateId) ?? null;
@@ -3838,24 +3846,27 @@ export async function registerRoutes(
         const trueIban = !!cand.ibanFileUrl
           || (typeof cand.ibanNumber === "string" && cand.ibanNumber.startsWith("/uploads/"));
         const trueNid = !!cand.nationalIdFileUrl;
+        const trueVax = !!cand.vaccinationReportFileUrl;
         const isSmpRec = !rec.applicationId;
         const recomputed = computeOnboardingStatus(
-          { hasPhoto: truePhoto, hasIban: trueIban, hasNationalId: trueNid, hasSignedContract: rec.hasSignedContract ?? undefined },
+          { hasPhoto: truePhoto, hasIban: trueIban, hasNationalId: trueNid, hasVaccinationReport: trueVax, hasSignedContract: rec.hasSignedContract ?? undefined },
           isSmpRec,
         );
         const drifted =
           (rec.hasPhoto ?? false) !== truePhoto
           || (rec.hasIban ?? false) !== trueIban
           || (rec.hasNationalId ?? false) !== trueNid
+          || (rec.hasVaccinationReport ?? false) !== trueVax
           || rec.status !== recomputed;
         if (drifted) {
-          correctedById.set(rec.id, { hasPhoto: truePhoto, hasIban: trueIban, hasNationalId: trueNid, status: recomputed });
+          correctedById.set(rec.id, { hasPhoto: truePhoto, hasIban: trueIban, hasNationalId: trueNid, hasVaccinationReport: trueVax, status: recomputed });
           // Persist asynchronously — don't block the GET response. If the
           // write fails, the next GET will simply re-attempt the heal.
           storage.updateOnboardingRecord(rec.id, {
             hasPhoto: truePhoto,
             hasIban: trueIban,
             hasNationalId: trueNid,
+            hasVaccinationReport: trueVax,
             status: recomputed,
           }).catch((e) => console.warn(`[onboarding:auto-heal] failed for record=${rec.id} candidate=${rec.candidateId} nationalId=${cand.nationalId ?? "?"}:`, e));
         }
@@ -4061,7 +4072,7 @@ export async function registerRoutes(
         ?? "https://workforce.tanaqolapp.com";
       const message = renderReminderTemplate(tpl, {
         name: locale === "ar" ? "مرشح تجريبي" : "Test Candidate",
-        missingDocs: locale === "ar" ? "صورة شخصية، رقم الآيبان" : "photo, IBAN",
+        missingDocs: locale === "ar" ? "صورة شخصية، رقم الآيبان، تقرير التطعيم" : "photo, IBAN, vaccination report",
         portalUrl: `${portalBase.replace(/\/$/, "")}/candidate/onboarding`,
         deadlineDate: new Date(Date.now() + 24 * 3600_000).toLocaleString(locale === "ar" ? "ar-SA" : "en-GB", {
           timeZone: "Asia/Riyadh", year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit",
@@ -4223,6 +4234,7 @@ export async function registerRoutes(
           data.hasIban = !!candidate.ibanFileUrl
             || (typeof candidate.ibanNumber === "string" && candidate.ibanNumber.startsWith("/uploads/"));
           data.hasNationalId = !!candidate.nationalIdFileUrl;
+          data.hasVaccinationReport = !!candidate.vaccinationReportFileUrl;
           // Derive SMP from onboarding linkage context: applicationId === null = SMP pipeline.
           // This is authoritative and source-agnostic.
           const isSmp = !data.applicationId;
@@ -4251,6 +4263,7 @@ export async function registerRoutes(
       delete data.hasPhoto;
       delete data.hasIban;
       delete data.hasNationalId;
+      delete data.hasVaccinationReport;
       const isRejection = data.status === "rejected";
       if (!isRejection) delete data.status;
       if (data.hasSignedContract !== undefined || isRejection) {

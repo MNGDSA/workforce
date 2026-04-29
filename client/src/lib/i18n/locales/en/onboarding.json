@@ -129,9 +129,11 @@
     "photo": { "label": "Personal Photo", "hint": "Clear ID-style photo uploaded" },
     "iban": { "label": "IBAN Certificate", "hint": "Saudi bank IBAN on file" },
     "nationalId": { "label": "National ID / Iqama", "hint": "ID copy submitted & verified" },
+    "vaccinationReport": { "label": "Vaccination Report", "hint": "Workplace immunization on file" },
     "hasPhoto": { "label": "Personal Photo", "hint": "Clear ID-style photo uploaded" },
     "hasIban": { "label": "IBAN Certificate", "hint": "Saudi bank IBAN on file" },
-    "hasNationalId": { "label": "National ID / Iqama", "hint": "ID copy submitted & verified" }
+    "hasNationalId": { "label": "National ID / Iqama", "hint": "ID copy submitted & verified" },
+    "hasVaccinationReport": { "label": "Vaccination Report", "hint": "Workplace immunization on file" }
   },
   "common": {
     "cancel": "Cancel",
@@ -141,6 +143,7 @@
     "photo": "Photo",
     "nationalId": "National ID",
     "iban": "IBAN Certificate",
+    "vaccinationReport": "Vaccination Report",
     "document": "Document"
   },
   "record": {
@@ -163,6 +166,7 @@
     "photo": "Photo",
     "nationalId": "National ID",
     "iban": "IBAN Certificate",
+    "vaccinationReport": "Vaccination Report",
     "document": "Document"
   },
   "convert": {
@@ -358,10 +362,11 @@
     "quietHoursTz": "Timezone",
     "quietHoursHint": "No reminders are sent inside this window.",
     "requiredDocs": "Documents required from candidates",
-    "requiredDocsHint": "Choose which documents candidates must upload. The IBAN certificate is automatically skipped for SMP workers.",
+    "requiredDocsHint": "Choose which documents candidates must upload. The IBAN certificate is automatically skipped for SMP workers; the vaccination report is required for everyone.",
     "docPhoto": "Personal Photo",
     "docIban": "IBAN Certificate",
     "docNationalId": "National ID / Iqama",
+    "docVaccinationReport": "Vaccination Report",
     "save": "Save settings",
     "saving": "Saving…",
     "saved": "Saved",

@@ -227,6 +227,7 @@ export interface IStorage {
     nationalIdFileUrl: string | null;
     ibanFileUrl: string | null;
     ibanNumber: string | null;
+    vaccinationReportFileUrl: string | null;
   }>>;
   getCandidateByPhone(phone: string): Promise<Candidate | undefined>;
   getCandidateByNationalId(nationalId: string): Promise<Candidate | undefined>;
@@ -382,6 +383,7 @@ export interface IStorage {
     hasPhoto: boolean | null;
     hasIban: boolean | null;
     hasNationalId: boolean | null;
+    hasVaccinationReport: boolean | null;
     classification: "individual" | "smp" | null;
     applicationId: string;
     jobId: string | null;
@@ -947,6 +949,7 @@ export class DatabaseStorage implements IStorage {
     nationalIdFileUrl: string | null;
     ibanFileUrl: string | null;
     ibanNumber: string | null;
+    vaccinationReportFileUrl: string | null;
   }>> {
     const map = new Map<string, {
       id: string;
@@ -960,6 +963,7 @@ export class DatabaseStorage implements IStorage {
       nationalIdFileUrl: string | null;
       ibanFileUrl: string | null;
       ibanNumber: string | null;
+      vaccinationReportFileUrl: string | null;
     }>();
     if (ids.length === 0) return map;
     const rows = await db
@@ -975,6 +979,7 @@ export class DatabaseStorage implements IStorage {
         nationalIdFileUrl: candidates.nationalIdFileUrl,
         ibanFileUrl: candidates.ibanFileUrl,
         ibanNumber: candidates.ibanNumber,
+        vaccinationReportFileUrl: candidates.vaccinationReportFileUrl,
       })
       .from(candidates)
       .where(inArray(candidates.id, ids));
@@ -2640,23 +2645,25 @@ export class DatabaseStorage implements IStorage {
     hasPhoto: boolean | null;
     hasIban: boolean | null;
     hasNationalId: boolean | null;
+    hasVaccinationReport: boolean | null;
     classification: "individual" | "smp" | null;
     applicationId: string;
     jobId: string | null;
   }[]> {
     const result = await db.execute(sql`
       SELECT DISTINCT ON (a.candidate_id)
-        c.id                AS id,
-        c.full_name_en      AS "fullNameEn",
-        c.national_id       AS "nationalId",
-        c.phone             AS phone,
-        c.photo_url         AS "photoUrl",
-        c.has_photo         AS "hasPhoto",
-        c.has_iban          AS "hasIban",
-        c.has_national_id   AS "hasNationalId",
-        c.classification    AS classification,
-        a.id                AS "applicationId",
-        a.job_id            AS "jobId"
+        c.id                       AS id,
+        c.full_name_en             AS "fullNameEn",
+        c.national_id              AS "nationalId",
+        c.phone                    AS phone,
+        c.photo_url                AS "photoUrl",
+        c.has_photo                AS "hasPhoto",
+        c.has_iban                 AS "hasIban",
+        c.has_national_id          AS "hasNationalId",
+        c.has_vaccination_report   AS "hasVaccinationReport",
+        c.classification           AS classification,
+        a.id                       AS "applicationId",
+        a.job_id                   AS "jobId"
       FROM ${applications} a
       INNER JOIN ${candidates} c ON c.id = a.candidate_id
       WHERE a.status = 'shortlisted'
@@ -2678,6 +2685,7 @@ export class DatabaseStorage implements IStorage {
       hasPhoto: r.hasPhoto ?? null,
       hasIban: r.hasIban ?? null,
       hasNationalId: r.hasNationalId ?? null,
+      hasVaccinationReport: r.hasVaccinationReport ?? null,
       classification: r.classification ?? null,
       applicationId: r.applicationId,
       jobId: r.jobId ?? null,

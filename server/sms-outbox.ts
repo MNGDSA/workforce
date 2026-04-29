@@ -182,6 +182,7 @@ interface OutboxPayload {
 // under "docs."). Keep in sync with onboarding-reminders.ts.
 function docToLabelKey(d: string): string {
   if (d === "national_id") return "nationalId";
+  if (d === "vaccination_report") return "vaccinationReport";
   return d;
 }
 

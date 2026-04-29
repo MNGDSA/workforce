@@ -32,7 +32,7 @@ import { recordReminderRollback } from "./reminder-rollback-telemetry";
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
-export type ReminderDocId = "photo" | "iban" | "national_id";
+export type ReminderDocId = "photo" | "iban" | "national_id" | "vaccination_report";
 
 export interface ReminderConfig {
   enabled: boolean;
@@ -67,7 +67,7 @@ const DEFAULT_CONFIG: ReminderConfig = {
   quietHoursStart: "21:00",
   quietHoursEnd: "08:00",
   quietHoursTz: "Asia/Riyadh",
-  requiredDocs: ["photo", "iban", "national_id"],
+  requiredDocs: ["photo", "iban", "national_id", "vaccination_report"],
 };
 
 const SETTINGS_KEY = "onboarding_reminder_config";
@@ -97,7 +97,7 @@ export async function setReminderConfig(patch: Partial<ReminderConfig>): Promise
     next.enabledAt = current.enabledAt;
   }
   // Normalize the doc list — drop unknown ids, dedupe, preserve order.
-  const knownDocs: ReminderDocId[] = ["photo", "iban", "national_id"];
+  const knownDocs: ReminderDocId[] = ["photo", "iban", "national_id", "vaccination_report"];
   const seen = new Set<string>();
   next.requiredDocs = (Array.isArray(next.requiredDocs) ? next.requiredDocs : [])
     .filter((d): d is ReminderDocId =>
@@ -196,11 +196,13 @@ const DOC_TO_COLUMN: Record<ReminderDocId, keyof OnboardingRecord> = {
   photo: "hasPhoto",
   iban: "hasIban",
   national_id: "hasNationalId",
+  vaccination_report: "hasVaccinationReport",
 };
 
-// SMP candidates have a lighter checklist (photo + national_id only).
-// Mirror the same rule so reminders never ask SMP workers for IBAN.
-const SMP_DOC_WHITELIST: Set<ReminderDocId> = new Set(["photo", "national_id"]);
+// SMP candidates have a lighter checklist (no IBAN — they're paid through
+// the company). Vaccination report applies to everyone (workplace health
+// requirement), so it joins photo + national_id in the SMP whitelist.
+const SMP_DOC_WHITELIST: Set<ReminderDocId> = new Set(["photo", "national_id", "vaccination_report"]);
 
 /** Onboarding row is SMP iff applicationId is null (matches existing convention). */
 export function isSmpOnboarding(rec: OnboardingRecord): boolean {

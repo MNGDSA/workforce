@@ -157,7 +157,7 @@
       "ibanHint": "PDF أو JPG أو PNG حتى {{n}} ميجابايت",
       "driversLicense": "رخصة القيادة",
       "driversLicenseHint": "PDF أو JPG أو PNG حتى {{n}} ميجابايت",
-      "vaccinationReport": "تقرير التطعيم (غير إجباري)",
+      "vaccinationReport": "تقرير التطعيم",
       "vaccinationReportHint": "الحمى الشوكية، الإنفلونزا الموسمية · PDF أو JPG أو PNG حتى {{n}} ميجابايت"
     },
     "uploadFailed": "فشل الرفع",
