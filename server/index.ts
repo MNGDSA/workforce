@@ -108,6 +108,8 @@ app.use((req, res, next) => {
     await ensureSmsOutboxNextAttempt(log);
     const { ensureOnboardingReminders } = await import("./migrations/ensure-onboarding-reminders");
     await ensureOnboardingReminders(log);
+    const { ensureVaccinationReportColumns } = await import("./migrations/ensure-vaccination-report-columns");
+    await ensureVaccinationReportColumns(log);
   } catch (err) {
     log(`boot migration failed: ${err}`, "boot-migrate");
   }
