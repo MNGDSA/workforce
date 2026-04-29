@@ -1,0 +1,43 @@
+{
+  "$comment": [
+    "Pre-existing schema/ensure-script drift baseline for Task #234.",
+    "These tables and columns were added to shared/schema.ts before the",
+    "boot-migrate coverage check existed. They are presumed to have reached",
+    "production via either drizzle-kit push (executed manually or via the",
+    "ensure-critical-tables.ts recovery path) or a one-shot migration script.",
+    "",
+    "DO NOT add new entries here when introducing new schema. The whole point",
+    "of the check is to force you to add a server/migrations/ensure-*.ts file",
+    "instead. Each entry below should ideally be replaced by a real ensure-*",
+    "script over time (tracked in follow-up tasks); shrinking this list is a",
+    "good thing.",
+    "",
+    "Format:",
+    "  newColumns: { '<table_name>': ['<col1>', '<col2>'] }",
+    "  newTables:  ['<table_name>', ...]"
+  ],
+  "newColumns": {
+    "users": [
+      "role_id",
+      "web_tokens_invalidated_at",
+      "mobile_tokens_invalidated_at"
+    ],
+    "candidates": [
+      "has_drivers_license",
+      "classification",
+      "drivers_license_file_url",
+      "vaccination_report_file_url"
+    ],
+    "otp_verifications": [
+      "purpose"
+    ]
+  },
+  "newTables": [
+    "candidate_activation_tokens",
+    "sms_outbox",
+    "roles",
+    "permissions",
+    "role_permissions",
+    "login_rate_limit_buckets"
+  ]
+}

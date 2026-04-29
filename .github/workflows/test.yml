@@ -43,3 +43,22 @@ jobs:
 
       - name: Run TypeScript typecheck
         run: npm run check
+
+  schema-migrations:
+    # Task #234 — fail the build when a column is added to shared/schema.ts
+    # without a matching boot-migrate ensure-script. Production deploys do
+    # not run drizzle-kit push, so missing ensure-scripts crash the API
+    # at runtime with `column "..." does not exist`.
+    name: Schema migration coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify ensure-script coverage
+        run: node scripts/check-schema-migrations.mjs
