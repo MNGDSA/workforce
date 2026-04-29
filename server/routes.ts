@@ -3438,7 +3438,7 @@ export async function registerRoutes(
       const result = await storage.getApplicantsForJob({
         jobId,
         page: Math.max(1, parseInt(page, 10) || 1),
-        limit: Math.min(100, Math.max(1, parseInt(limit, 10) || 20)),
+        limit: Math.min(200, Math.max(1, parseInt(limit, 10) || 20)),
         search,
       });
       return res.json(result);
