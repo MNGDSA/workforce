@@ -158,7 +158,7 @@
       "driversLicense": "Driver's License",
       "driversLicenseHint": "PDF, JPG, PNG up to {{n}} MB",
       "vaccinationReport": "Vaccination Report (Optional)",
-      "vaccinationReportHint": "PDF, JPG, PNG up to {{n}} MB"
+      "vaccinationReportHint": "Meningitis, seasonal flu · PDF, JPG, PNG up to {{n}} MB"
     },
     "uploadFailed": "Upload failed",
     "tryAgain": "Please try again.",

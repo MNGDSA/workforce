@@ -158,7 +158,7 @@
       "driversLicense": "رخصة القيادة",
       "driversLicenseHint": "PDF أو JPG أو PNG حتى {{n}} ميجابايت",
       "vaccinationReport": "تقرير التطعيم (غير إجباري)",
-      "vaccinationReportHint": "PDF أو JPG أو PNG حتى {{n}} ميجابايت"
+      "vaccinationReportHint": "الحمى الشوكية، الإنفلونزا الموسمية · PDF أو JPG أو PNG حتى {{n}} ميجابايت"
     },
     "uploadFailed": "فشل الرفع",
     "tryAgain": "يرجى المحاولة مرة أخرى.",
