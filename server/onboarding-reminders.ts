@@ -22,6 +22,7 @@ import {
   candidates,
   smsOutbox,
   systemSettings,
+  type Application,
   type OnboardingRecord,
   type Candidate,
 } from "@shared/schema";
@@ -712,6 +713,16 @@ async function enqueueFinalWarningSms(
  *
  * eliminated_at is stamped first as a CAS guard so a concurrent sweep
  * skips the row.
+ *
+ * Failure semantics (test #215): the function tracks every state-changing
+ * side effect it has performed. If anything throws after we have begun
+ * the elimination (e.g. the shared cleanup helper raises mid-flight), the
+ * catch block reverts every change in reverse order — eliminated_at is
+ * cleared back to NULL AND the application status is restored to its
+ * pre-update value AND the onboarding row is left intact — so a future
+ * sweep retries from a fully-consistent starting state. Without this, a
+ * partial elimination would leave the application stuck at "interviewed"
+ * while the onboarding row appeared resumable.
  */
 async function eliminateOnboarding(rec: OnboardingRecord): Promise<boolean> {
   // Acquire the elimination lease via CAS so a concurrent sweep skips this row.
@@ -720,6 +731,12 @@ async function eliminateOnboarding(rec: OnboardingRecord): Promise<boolean> {
     .where(and(eq(onboarding.id, rec.id), isNull(onboarding.eliminatedAt)))
     .returning();
   if (!stamped) return false;
+
+  // Track which side effects we have performed so the catch block can
+  // unwind them in reverse order on failure. `previousStatus` is typed
+  // off the application select type (the same union the storage layer
+  // expects) so the revert call below stays fully type-checked.
+  let appStatusUpdated: { applicationId: string; previousStatus: Application["status"] } | null = null;
 
   try {
     if (rec.applicationId) {
@@ -732,6 +749,7 @@ async function eliminateOnboarding(rec: OnboardingRecord): Promise<boolean> {
         const previousStatus = app.status;
         if (previousStatus !== "interviewed") {
           await storage.updateApplication(rec.applicationId, { status: "interviewed" });
+          appStatusUpdated = { applicationId: rec.applicationId, previousStatus };
         }
         const candidate = await storage.getCandidate(rec.candidateId).catch(() => null);
         // Pass the REAL previousStatus + force=true so the shared cleanup
@@ -789,16 +807,83 @@ async function eliminateOnboarding(rec: OnboardingRecord): Promise<boolean> {
     });
     return true;
   } catch (err) {
-    // Revert the eliminated_at lease so a future sweep can retry. The
-    // update is a no-op if the row was already deleted by the cleanup
-    // helper (which means elimination effectively succeeded), so this
-    // is safe in either failure scenario.
+    // The catch block must distinguish two very different failure
+    // modes — they require opposite responses:
+    //
+    //   (A) Mid-flight failure BEFORE the onboarding row was deleted
+    //       (e.g. `applyShortlistResetCleanup` failed on the very first
+    //       `storage.deleteOnboardingRecord` call). The candidate has
+    //       NOT been eliminated; the application status flip is now
+    //       orphaned and the eliminated_at lease is now blocking the
+    //       next sweep. We must roll BOTH back.
+    //
+    //   (B) Failure AFTER the onboarding row was successfully deleted
+    //       (e.g. the post-cleanup `storage.createAuditLog` write
+    //       failed, or `applyShortlistResetCleanup`'s own audit log
+    //       write failed AFTER it deleted the row). The candidate has
+    //       BEEN eliminated; reverting the application status here
+    //       would leave a hard-to-detect partial state — application
+    //       at the pre-elimination status with no onboarding row to
+    //       resume from. We must NOT roll back; just log the
+    //       downstream failure and treat elimination as effectively
+    //       succeeded (return false so the sweep counter stays
+    //       conservative — Task #216 telemetry surfaces the issue).
+    //
+    // The discriminator is "does the onboarding row still exist?".
+    // Reading it back is cheap (single PK lookup) and unambiguous.
+    let onboardingStillExists = false;
     try {
-      await db.update(onboarding)
-        .set({ eliminatedAt: null, updatedAt: new Date() })
+      const [check] = await db.select({ id: onboarding.id })
+        .from(onboarding)
         .where(eq(onboarding.id, rec.id));
-    } catch (revertErr) {
-      console.error(`[onboarding-reminders] failed to revert eliminated_at for ${rec.id}:`, revertErr);
+      onboardingStillExists = !!check;
+    } catch (probeErr) {
+      console.error(`[onboarding-reminders] post-failure probe of ${rec.id} failed:`, probeErr);
+      // Conservative default: assume the row is gone. Reverting app
+      // status when the onboarding row IS missing is the worse of the
+      // two error modes (silent partial state vs. a stuck eliminated_at
+      // that the next sweep would skip anyway).
+      onboardingStillExists = false;
+    }
+
+    if (onboardingStillExists) {
+      // Mode (A): unwind in reverse order. Each revert is wrapped in
+      // its own try/catch so a failure in one does not stop the others.
+      //
+      //   1. application status — revert first so the candidate is not
+      //      stuck at "interviewed" while the onboarding row appears
+      //      resumable.
+      //   2. eliminated_at — last so a concurrent sweep that reads the
+      //      row sees the application status fix before it considers
+      //      the row eligible again.
+      if (appStatusUpdated) {
+        try {
+          await storage.updateApplication(appStatusUpdated.applicationId, {
+            status: appStatusUpdated.previousStatus,
+          });
+        } catch (revertErr) {
+          console.error(
+            `[onboarding-reminders] failed to revert application status for ${appStatusUpdated.applicationId}:`,
+            revertErr,
+          );
+        }
+      }
+      try {
+        await db.update(onboarding)
+          .set({ eliminatedAt: null, updatedAt: new Date() })
+          .where(eq(onboarding.id, rec.id));
+      } catch (revertErr) {
+        console.error(`[onboarding-reminders] failed to revert eliminated_at for ${rec.id}:`, revertErr);
+      }
+    } else {
+      // Mode (B): elimination effectively succeeded; only a downstream
+      // bookkeeping write (admin alert / audit log / etc.) failed.
+      // DO NOT revert the application status — that would leave a
+      // partial-state window with no onboarding row to recover from.
+      console.error(
+        `[onboarding-reminders] downstream write failed AFTER onboarding ${rec.id} was already deleted; ` +
+          `leaving application status at the post-elimination value to avoid partial state.`,
+      );
     }
     console.error(`[onboarding-reminders] eliminate failed for ${rec.id}:`, err);
     return false;
@@ -895,4 +980,18 @@ export async function loadReminderEventsForRows(
 }
 
 // Used in tests / manual ops.
-export const __internal = { DEFAULT_CONFIG, DOC_TO_COLUMN, SMP_DOC_WHITELIST };
+//
+// `claimAndEnqueueReminder` and `eliminateOnboarding` are exposed here
+// (rather than as top-level exports) so the rest of the codebase keeps
+// going through the public surface (`runOnboardingReminderSweep`,
+// `sendReminderNow`) but the safety-property tests in
+// `server/__tests__/onboarding-reminders-safety.test.ts` can drive them
+// directly to exercise concurrency / rollback edges that the hourly
+// sweep would normally hide.
+export const __internal = {
+  DEFAULT_CONFIG,
+  DOC_TO_COLUMN,
+  SMP_DOC_WHITELIST,
+  claimAndEnqueueReminder,
+  eliminateOnboarding,
+};
