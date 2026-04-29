@@ -11,7 +11,7 @@
     "time": "Time",
     "venue": "Venue Name",
     "venuePh": "e.g. Riyadh Main Hall",
-    "duration": "Duration per Candidate",
+    "duration": "Duration",
     "minutes": "{{n}} minutes",
     "hours": "{{n}} hours",
     "fullDay": "Full day (8h)",
@@ -23,6 +23,7 @@
     "smsHelp": "Click a variable chip to insert it at the cursor. The message is sent via SMS to all invited candidates."
   },
   "vars": {
+    "name": "Candidate Name",
     "batch": "Batch / Group Name",
     "date": "Interview Date",
     "time": "Interview Time",

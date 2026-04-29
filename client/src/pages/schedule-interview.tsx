@@ -266,8 +266,13 @@ export default function ScheduleInterviewPage() {
   const watchedLocation  = useWatch({ control: form.control, name: "googleLocation" });
   const watchedNotes     = useWatch({ control: form.control, name: "notes" });
 
+  const firstSelectedName = selected.size > 0
+    ? Array.from(selected.values())[0].fullNameEn
+    : "";
+
   const resolveTemplate = (template: string) =>
     template
+      .replace(/\{\{name\}\}/g, firstSelectedName || "{{name}}")
       .replace(/\{\{batch\}\}/g, watchedGroupName || "{{batch}}")
       .replace(/\{\{date\}\}/g, watchedDate || "{{date}}")
       .replace(/\{\{time\}\}/g, watchedTime || "{{time}}")
@@ -492,6 +497,7 @@ export default function ScheduleInterviewPage() {
 
                         <div className="flex flex-wrap gap-1.5 mb-1">
                           {[
+                            { label: "{{name}}",  titleKey: "name" },
                             { label: "{{batch}}", titleKey: "batch" },
                             { label: "{{date}}",  titleKey: "date" },
                             { label: "{{time}}",  titleKey: "time" },
