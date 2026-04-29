@@ -66,3 +66,9 @@ id = "Ny_mo3Xl5VZmlBAgulDl7"
 uri = "file://exports/sop-remove-replit-branding-before-do-deploy.md"
 type = "text"
 title = "SOP — Remove Replit Branding Before DigitalOcean Deploy"
+
+[[outputs]]
+id = "s7DiDesCrCkBotjBj9LEf"
+uri = "file://.local/tasks/alharamain-navq-deeplink-spec.md"
+type = "text"
+title = "Al Haramain navQ — POI deep-link feature request"

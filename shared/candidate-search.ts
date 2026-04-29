@@ -10,6 +10,8 @@
  * IDs" pill agrees exactly with the back-end's tokenisation.
  */
 
+import { canonicalSaMobileSuffix } from "./phone";
+
 export const MAX_SEARCH_TOKENS = 200;
 
 // Newline, comma, semicolon, tab, or two-or-more whitespace characters
@@ -42,9 +44,14 @@ export function parseSearchTokens(raw: string | undefined | null): ParsedSearch 
     // sometimes wrap copied IDs (e.g. CSV exports quoting numerics).
     const t = piece.trim().replace(/^['"`]+|['"`]+$/g, "").trim();
     if (!t) continue;
-    // Numeric tokens dedupe case-sensitive (digits already canonical);
-    // text tokens dedupe case-insensitively.
-    const dedupeKey = /^\d+$/.test(t) ? t : t.toLowerCase();
+    // Saudi-mobile-shaped tokens dedupe on the canonical 9-digit suffix so
+    // the same number pasted as `0550…`, `+966550…`, and `966550…` collapses
+    // to a single token (Task #227). Other numeric tokens (e.g. national IDs)
+    // keep the digits-canonical / case-sensitive rule; text tokens dedupe
+    // case-insensitively. National IDs start with 1 or 2, so they cannot
+    // accidentally normalize as a phone via this path.
+    const phoneSuffix = canonicalSaMobileSuffix(t);
+    const dedupeKey = phoneSuffix ?? (/^\d+$/.test(t) ? t : t.toLowerCase());
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
     cleaned.push(t);

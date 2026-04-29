@@ -279,7 +279,7 @@ export interface IStorage {
   // Interviews
   getInterviews(params?: { status?: string; candidateId?: string; eventId?: string }): Promise<Interview[]>;
   getInterview(id: string): Promise<Interview | undefined>;
-  getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[] } | undefined>;
+  getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[] } | undefined>;
   createInterview(interview: InsertInterview): Promise<Interview>;
   updateInterview(id: string, data: Partial<InsertInterview>): Promise<Interview | undefined>;
   getInterviewStats(): Promise<{ total: number; scheduled: number; completed: number; cancelled: number }>;
@@ -1695,15 +1695,20 @@ export class DatabaseStorage implements IStorage {
     return interview;
   }
 
-  async getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[] } | undefined> {
+  async getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[] } | undefined> {
     const [interview] = await db.select().from(interviews).where(eq(interviews.id, id));
     if (!interview) return undefined;
-    let invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[] = [];
+    let invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[] = [];
     if (interview.invitedCandidateIds && interview.invitedCandidateIds.length > 0) {
+      // Task #227: project `phone` so the client multi-ID search can match
+      // pasted Saudi mobile numbers against invitees (in addition to
+      // nationalId / candidate UUID). Search remains invitee-scoped — no
+      // global candidates lookup happens here or downstream.
       const candidateRows = await db.select({
         id: candidates.id,
         fullNameEn: candidates.fullNameEn,
         nationalId: candidates.nationalId,
+        phone: candidates.phone,
         photoUrl: candidates.photoUrl,
       })
         .from(candidates)
@@ -1726,6 +1731,7 @@ export class DatabaseStorage implements IStorage {
         const best = candidateApps.sort((a, b) => (statusPriority[b.status] ?? 0) - (statusPriority[a.status] ?? 0))[0];
         return {
           ...c,
+          phone: c.phone ?? null,
           applicationId: best?.id ?? null,
           applicationStatus: best?.status ?? null,
         };

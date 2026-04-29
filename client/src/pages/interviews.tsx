@@ -64,7 +64,9 @@ type InterviewStats = {
 };
 type InterviewDetail = {
   interview: Interview;
-  invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[];
+  // Task #227: `phone` is included so the multi-ID search can match pasted
+  // Saudi mobile numbers against invitees alongside nationalId / candidate UUID.
+  invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[];
 };
 
 function typeIcon(type: string) {

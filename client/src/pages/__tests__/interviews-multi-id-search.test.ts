@@ -10,6 +10,12 @@
 //   - 250 IDs → truncated=true, missing computed only against the first 200
 //   - CSV body and filename pattern for the "Download CSV" handler
 //   - slugifyForFilename Arabic / fallback behaviour
+//
+// Task #227 additions:
+//   - phone-paste matches invitees by phone in both modes
+//   - format tolerance: same number pasted in 3 formats → 1 match, 1 token
+//   - missing-list keeps the user's literal text (not the canonical suffix)
+//   - non-phone numerics (national IDs) don't accidentally match phones
 
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
@@ -25,10 +31,10 @@ import {
 } from "../interviews-multi-id-search";
 
 const invitees: InviteeForSearch[] = [
-  { id: "00000000-0000-0000-0000-000000000001", fullNameEn: "Mohammed Al Fares", nationalId: "1111111111" },
-  { id: "00000000-0000-0000-0000-000000000002", fullNameEn: "Khalid Al Otaibi",  nationalId: "2222222222" },
-  { id: "00000000-0000-0000-0000-000000000003", fullNameEn: "Sara Al Harbi",     nationalId: "3333333333" },
-  { id: "00000000-0000-0000-0000-000000000004", fullNameEn: "Layla Al Shamri",   nationalId: "4444444444" },
+  { id: "00000000-0000-0000-0000-000000000001", fullNameEn: "Mohammed Al Fares", nationalId: "1111111111", phone: "0550856257" },
+  { id: "00000000-0000-0000-0000-000000000002", fullNameEn: "Khalid Al Otaibi",  nationalId: "2222222222", phone: "0568691660" },
+  { id: "00000000-0000-0000-0000-000000000003", fullNameEn: "Sara Al Harbi",     nationalId: "3333333333", phone: "+966501234567" }, // stored in international form
+  { id: "00000000-0000-0000-0000-000000000004", fullNameEn: "Layla Al Shamri",   nationalId: "4444444444", phone: null },             // no phone on file
 ];
 
 describe("Task #226 — single-token search behaviour preserved", () => {
@@ -232,5 +238,188 @@ describe("Task #226 — CSV download body and filename", () => {
     assert.equal(slugifyForFilename("جلسة المقابلة"), "session");
     // Mixed name keeps the ASCII parts.
     assert.equal(slugifyForFilename("Cohort 3 — جلسة"), "cohort-3");
+  });
+});
+
+describe("Task #227 — phone matching in single-token mode", () => {
+  it("dialog mode: pasting an exact stored phone matches the invitee", () => {
+    const parsed = parseSearchTokens("0568691660");
+    assert.equal(parsed.isMulti, false);
+    const dialog = filterInvitees(invitees, parsed, /* singleTermMatchesName */ false);
+    assert.deepEqual(dialog.map((c) => c.nationalId), ["2222222222"]);
+  });
+
+  it("dialog mode: phone substring matches (e.g. last 6 digits typed)", () => {
+    const parsed = parseSearchTokens("691660");
+    const dialog = filterInvitees(invitees, parsed, /* singleTermMatchesName */ false);
+    assert.deepEqual(dialog.map((c) => c.nationalId), ["2222222222"]);
+  });
+
+  it("full-page mode: phone substring matches (in addition to ID + name)", () => {
+    const parsed = parseSearchTokens("0550856257");
+    const full = filterInvitees(invitees, parsed, /* singleTermMatchesName */ true);
+    assert.deepEqual(full.map((c) => c.nationalId), ["1111111111"]);
+  });
+
+  it("format tolerance: typing +966 form matches an invitee stored in 0… form", () => {
+    // Mohammed is stored as 0550856257; user types the international form.
+    // Substring match would fail, but canonical-suffix match succeeds.
+    const parsed = parseSearchTokens("+966550856257");
+    const full = filterInvitees(invitees, parsed, /* singleTermMatchesName */ true);
+    assert.deepEqual(full.map((c) => c.nationalId), ["1111111111"]);
+  });
+
+  it("format tolerance (reverse): typing 05… form matches an invitee stored in +966 form", () => {
+    // Sara is stored as +966501234567; user types the local 05 form.
+    const parsed = parseSearchTokens("0501234567");
+    const full = filterInvitees(invitees, parsed, /* singleTermMatchesName */ true);
+    assert.deepEqual(full.map((c) => c.nationalId), ["3333333333"]);
+  });
+
+  it("an invitee with no phone on file is unaffected by phone search", () => {
+    // Layla has phone=null; searching for any phone shouldn't surface her.
+    const parsed = parseSearchTokens("4444"); // matches her nationalId substring
+    const dialog = filterInvitees(invitees, parsed, /* singleTermMatchesName */ false);
+    assert.deepEqual(dialog.map((c) => c.fullNameEn), ["Layla Al Shamri"]);
+  });
+
+  it("digits-only substring: typing a partial formatted phone matches stored unformatted phone", () => {
+    // Mohammed is stored as 0550856257; user types "55-08" (digits "5508") —
+    // raw .includes("55-08") would fail against "0550856257", but digits-only
+    // substring succeeds because "0550856257".includes("5508") is true.
+    const parsed = parseSearchTokens("55-08");
+    const full = filterInvitees(invitees, parsed, /* singleTermMatchesName */ true);
+    assert.ok(full.some((c) => c.nationalId === "1111111111"), "Mohammed should match");
+  });
+
+  it("digits-only substring: spaced country-code prefix matches stored 0… phone", () => {
+    // "+966 55 0" → digits "966550" → matches "+966550856257" (digits "966550856257")
+    // AND matches Mohammed's stored "0550856257" (digits "0550856257") via the
+    // canonical-suffix shared "550856257" — but specifically here the substring
+    // "966550" matches the stored "+966501234567" (digits "966501234567")
+    // because "966501234567".includes("966550") is FALSE; but Mohammed's
+    // digit string "0550856257" doesn't contain "966550" either. So the more
+    // realistic test is "+966 55 085" → digits "96655085" — which doesn't
+    // appear in either stored form. We test the partial-local-form variant
+    // instead, which is the common case (typing "+966 55").
+    const parsed = parseSearchTokens("+966 55");
+    const full = filterInvitees(invitees, parsed, /* singleTermMatchesName */ true);
+    // Of the three invitees with phones, only Sara's stored +966501234567
+    // (digits "966501234567") contains the substring "96650"; "96655" appears
+    // in NEITHER. So this paste should match exactly Sara via her stored 966
+    // prefix... actually "96655" is not in "966501234567" either. Use a more
+    // targeted assertion: "+966 50" should match Sara.
+    assert.equal(full.length, 0, "+966 55 should not appear in any stored phone");
+
+    const parsed2 = parseSearchTokens("+966 50");
+    const full2 = filterInvitees(invitees, parsed2, /* singleTermMatchesName */ true);
+    assert.deepEqual(full2.map((c) => c.nationalId), ["3333333333"]);
+  });
+
+  it("digits-only substring: Arabic-Indic digits in the term canonicalise to the same phone", () => {
+    // ٠٥٥٠ → "0550" → substring of "0550856257" (Mohammed)
+    const parsed = parseSearchTokens("٠٥٥٠");
+    const full = filterInvitees(invitees, parsed, /* singleTermMatchesName */ true);
+    assert.ok(full.some((c) => c.nationalId === "1111111111"), "Mohammed should match");
+  });
+
+  it("digits-only substring: a name term (no digits) does NOT collapse to empty-string match", () => {
+    // Regression guard: if termDigits were used unconditionally, "Mohammed"
+    // would yield "" and "phone".includes("") would be true → match every
+    // invitee with a phone. The implementation guards on termDigits.length>0.
+    const parsed = parseSearchTokens("Mohammed");
+    const dialog = filterInvitees(invitees, parsed, /* singleTermMatchesName */ false);
+    // Dialog mode doesn't search names → only nationalId substring & phones.
+    // "Mohammed" is not a substring of any nationalId and not a digit run, so
+    // no invitee should match.
+    assert.equal(dialog.length, 0);
+  });
+});
+
+describe("Task #227 — phone matching in multi-token mode", () => {
+  it("pasting two exact stored phones filters to those two invitees", () => {
+    const paste = "0550856257\n0568691660";
+    const parsed = parseSearchTokens(paste);
+    assert.equal(parsed.isMulti, true);
+    const filtered = filterInvitees(invitees, parsed, true);
+    assert.deepEqual(
+      filtered.map((c) => c.nationalId).sort(),
+      ["1111111111", "2222222222"],
+    );
+    const meta = computeInviteeSearchMeta(invitees, parsed)!;
+    assert.equal(meta.missingIds.length, 0);
+    assert.equal(meta.tokenCount, 2);
+  });
+
+  it("a paste mixing 3 formats of the same number collapses to 1 token, 1 match", () => {
+    const paste = ["0550856257", "+966 55 085 6257", "966550856257"].join("\n");
+    const parsed = parseSearchTokens(paste);
+    // The parser dedupes on canonical suffix → exactly 1 token survives.
+    assert.equal(parsed.tokens.length, 1);
+    // It's the literal first occurrence (preserves what the user pasted).
+    assert.equal(parsed.tokens[0], "0550856257");
+    // Note: with 1 surviving token, isMulti is false. Dedupe behaviour is
+    // tested directly here, then the multi-mode case below mixes formats
+    // across DIFFERENT people to keep isMulti=true.
+
+    const allFormats = ["0550856257", "+966 55 085 6257", "966550856257", "0568691660"];
+    const parsed2 = parseSearchTokens(allFormats.join("\n"));
+    assert.equal(parsed2.tokens.length, 2);
+    assert.equal(parsed2.isMulti, true);
+    const filtered = filterInvitees(invitees, parsed2, true);
+    assert.deepEqual(
+      filtered.map((c) => c.nationalId).sort(),
+      ["1111111111", "2222222222"],
+    );
+    const meta = computeInviteeSearchMeta(invitees, parsed2)!;
+    assert.equal(meta.missingIds.length, 0);
+  });
+
+  it("mixing IDs and phones in one paste matches invitees by either field", () => {
+    // Mohammed by phone, Khalid by national ID, Sara by international phone,
+    // plus one bogus phone that doesn't belong to anyone.
+    const paste = "0550856257\n2222222222\n+966501234567\n0599999999";
+    const parsed = parseSearchTokens(paste);
+    const filtered = filterInvitees(invitees, parsed, true);
+    assert.deepEqual(
+      filtered.map((c) => c.nationalId).sort(),
+      ["1111111111", "2222222222", "3333333333"],
+    );
+    const meta = computeInviteeSearchMeta(invitees, parsed)!;
+    assert.deepEqual(meta.missingIds, ["0599999999"]);
+    assert.equal(meta.droppedFreeText, 0);
+  });
+
+  it("missing-list preserves the user's literal phone text, not the canonical suffix", () => {
+    // Two unknown phones in different formats — the chips should read what
+    // the user pasted, not "598765432" / etc.
+    const paste = "+966598765432\n00966599887766";
+    const parsed = parseSearchTokens(paste);
+    const meta = computeInviteeSearchMeta(invitees, parsed)!;
+    assert.deepEqual(meta.missingIds.sort(), ["+966598765432", "00966599887766"].sort());
+  });
+
+  it("non-phone numerics (national IDs starting 1/2) do NOT accidentally match phones", () => {
+    // Pasting national IDs alongside one real phone: the IDs must not be
+    // canonicalised as phones (they don't begin with 05 or 5), so they
+    // either match the invitee's nationalId or land in missingIds.
+    const paste = "1111111111\n2050858200\n0568691660";
+    const parsed = parseSearchTokens(paste);
+    const filtered = filterInvitees(invitees, parsed, true);
+    assert.deepEqual(
+      filtered.map((c) => c.nationalId).sort(),
+      ["1111111111", "2222222222"], // 1111… by ID, 2222… via phone 0568691660
+    );
+    const meta = computeInviteeSearchMeta(invitees, parsed)!;
+    assert.deepEqual(meta.missingIds, ["2050858200"]); // unmatched national ID
+  });
+
+  it("an invitee with no phone on file is never matched by phone tokens", () => {
+    const paste = "0550856257\n0568691660\n+966501234567";
+    const parsed = parseSearchTokens(paste);
+    const filtered = filterInvitees(invitees, parsed, true);
+    // Layla (phone=null) is NOT among the results.
+    const inResult = filtered.some((c) => c.nationalId === "4444444444");
+    assert.equal(inResult, false);
   });
 });

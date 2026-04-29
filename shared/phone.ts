@@ -93,6 +93,28 @@ export const optionalContactPhoneSchema = z
 export const SA_MOBILE_REGEX = /^05\d{8}$/;
 
 /**
+ * Task #227: collapse a Saudi-mobile-shaped input into its canonical 9-digit
+ * suffix (no leading 0, no country code) so identical numbers pasted in
+ * different formats compare equal regardless of whether they came in as
+ * `0XXXXXXXXX`, `+966XXXXXXXXX`, `966XXXXXXXXX`, `00966XXXXXXXXX`, or bare
+ * `5XXXXXXXXX`, with optional internal spaces / hyphens / parens / Arabic
+ * digits. Returns `null` for anything that doesn't normalize to a Saudi
+ * mobile — including national IDs, names, UUIDs, and short numerics — so
+ * callers can use `null` as the "this token is not a phone" signal.
+ *
+ * This is a thin wrapper over `normalizeSaPhone`: that helper already does
+ * the heavy lifting (formatting strip, Arabic-digit conversion, country-code
+ * peel, length / prefix validation) and returns the canonical `05XXXXXXXX`
+ * form. We just drop the leading `0` so we have a stable suffix that doesn't
+ * differ across input variants.
+ */
+export function canonicalSaMobileSuffix(input: unknown): string | null {
+  const normalized = normalizeSaPhone(input);
+  if (!normalized) return null;
+  return normalized.slice(1);
+}
+
+/**
  * Convert a Saudi mobile to E.164 form (`966XXXXXXXXX`, no leading "+", no
  * leading "0"). Required by international SMS gateways (e.g. GoInfinito) which
  * accept local-format syntactically but the SMSC silently drops them.
