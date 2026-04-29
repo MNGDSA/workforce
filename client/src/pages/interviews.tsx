@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useTranslation } from "react-i18next";
@@ -27,6 +27,7 @@ import {
   Search, Filter, MoreHorizontal, Calendar, Clock, Video, Phone, MapPin,
   CheckCircle2, Loader2, Plus, Users, User, StickyNote, ExternalLink,
   ThumbsUp, RotateCcw, Maximize2, ArrowLeft, X,
+  Hash, AlertTriangle, Copy, Download, CheckSquare,
 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -34,6 +35,11 @@ import {
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber } from "@/lib/format";
+import { parseSearchTokens, MAX_SEARCH_TOKENS } from "@shared/candidate-search";
+import {
+  filterInvitees, computeInviteeSearchMeta,
+  buildMissingIdsCsv, buildMissingIdsFilename,
+} from "./interviews-multi-id-search";
 
 type Candidate = { id: string; fullNameEn: string; nationalId?: string; photoUrl?: string | null };
 type Interview = {
@@ -141,6 +147,58 @@ function InterviewDetailSheet({
   const iv = data?.interview;
   const invitedCandidates = data?.invitedCandidates ?? [];
   const scheduled = iv ? formatScheduled(iv.scheduledAt) : null;
+
+  // Multi-ID paste search (Task #226). Mirror the Candidates-page UX: when
+  // more than one identifier is detected, a count pill renders inside the
+  // search input and a "Not in this interview" panel renders above the list.
+  // The dialog's single-token behaviour stays nationalId-substring only.
+  const parsedSearch = useMemo(() => parseSearchTokens(candidateSearch), [candidateSearch]);
+  const searchMeta = useMemo(
+    () => computeInviteeSearchMeta(invitedCandidates, parsedSearch),
+    [invitedCandidates, parsedSearch],
+  );
+
+  // Single-line `<input>` collapses pasted CRLF/LF/tab into nothing, which
+  // would silently swallow an Excel-column-of-IDs paste. Normalise the
+  // separators to commas (which the shared parser splits on) and inject the
+  // cleaned string at the caret. Pastes without those separators fall through.
+  const handleCandidateSearchPaste = useCallback((e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData("text");
+    if (!text || !/[\n\r\t]/.test(text)) return;
+    e.preventDefault();
+    const normalized = text
+      .replace(/\r\n?/g, "\n")
+      .replace(/[\n\t]+/g, ", ")
+      .replace(/\s*,\s*,+\s*/g, ", ");
+    const input = e.currentTarget;
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    setCandidateSearch(input.value.slice(0, start) + normalized + input.value.slice(end));
+  }, []);
+
+  const handleCopyMissingIds = useCallback(async () => {
+    if (!searchMeta || searchMeta.missingIds.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(searchMeta.missingIds.join("\n"));
+      toast({ title: t("interviews:multiSearch.copied", { n: formatNumber(searchMeta.missingIds.length, i18n.language) }) });
+    } catch {
+      toast({ title: t("interviews:multiSearch.copyFailed"), variant: "destructive" });
+    }
+  }, [searchMeta, toast, t, i18n.language]);
+
+  const handleDownloadMissingIds = useCallback(() => {
+    if (!searchMeta || searchMeta.missingIds.length === 0) return;
+    const csv = buildMissingIdsCsv(searchMeta.missingIds);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = buildMissingIdsFilename(iv?.groupName ?? null);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [searchMeta, iv?.groupName]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -280,10 +338,31 @@ function InterviewDetailSheet({
                       placeholder={t("interviews:detail.searchIdPh")}
                       value={candidateSearch}
                       onChange={(e) => setCandidateSearch(e.target.value)}
-                      className="ps-9 h-8 text-xs bg-background border-border"
+                      onPaste={handleCandidateSearchPaste}
+                      className={`ps-9 h-8 text-xs bg-background border-border ${parsedSearch.isMulti ? "pe-44" : ""}`}
+                      spellCheck={false}
+                      autoComplete="off"
                       data-testid="input-search-invited-candidates"
                     />
-                    {candidateSearch && (
+                    {parsedSearch.isMulti && (
+                      <div
+                        className={`pointer-events-none absolute end-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[10px] font-medium whitespace-nowrap ${
+                          parsedSearch.truncated
+                            ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                            : "bg-primary/15 text-primary border border-primary/30"
+                        }`}
+                        title={parsedSearch.truncated
+                          ? t("interviews:multiSearch.pillTruncatedTitle", { n: formatNumber(MAX_SEARCH_TOKENS, i18n.language) })
+                          : undefined}
+                        data-testid="pill-multi-search"
+                      >
+                        <Hash className="h-2.5 w-2.5" />
+                        {parsedSearch.truncated
+                          ? t("interviews:multiSearch.pillTruncated", { n: formatNumber(MAX_SEARCH_TOKENS, i18n.language) })
+                          : t("interviews:multiSearch.pill", { n: formatNumber(parsedSearch.tokens.length, i18n.language) })}
+                      </div>
+                    )}
+                    {candidateSearch && !parsedSearch.isMulti && (
                       <button
                         onClick={() => setCandidateSearch("")}
                         className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
@@ -294,19 +373,98 @@ function InterviewDetailSheet({
                   </div>
                 )}
 
+                {/* Missing-IDs panel — Task #226. Renders above the invitee list when
+                    the paste contained ID-shaped tokens that don't match anyone in
+                    this interview. */}
+                {parsedSearch.isMulti && searchMeta && searchMeta.missingIds.length > 0 && (
+                  <div className="rounded-md bg-amber-500/5 border border-amber-500/30 p-3" data-testid="panel-missing-ids">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <h3 className="text-xs font-semibold text-amber-100">
+                            {t("interviews:multiSearch.missingTitle", { n: formatNumber(searchMeta.missingIds.length, i18n.language) })}
+                          </h3>
+                          <div className="flex gap-1 shrink-0">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-[10px] border-amber-500/40 bg-transparent text-amber-100 hover:bg-amber-500/10 hover:text-amber-50"
+                              onClick={handleCopyMissingIds}
+                              data-testid="button-copy-missing-ids"
+                            >
+                              <Copy className="me-1 h-2.5 w-2.5" />
+                              {t("interviews:multiSearch.copy")}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-[10px] border-amber-500/40 bg-transparent text-amber-100 hover:bg-amber-500/10 hover:text-amber-50"
+                              onClick={handleDownloadMissingIds}
+                              data-testid="button-download-missing-ids"
+                            >
+                              <Download className="me-1 h-2.5 w-2.5" />
+                              {t("interviews:multiSearch.download")}
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-amber-100/70 mt-1">
+                          {t("interviews:multiSearch.missingDesc")}
+                          {searchMeta.droppedFreeText > 0 && (
+                            <> {t("interviews:multiSearch.droppedFreeText", { n: formatNumber(searchMeta.droppedFreeText, i18n.language) })}</>
+                          )}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-1 max-h-24 overflow-y-auto pe-1">
+                          {searchMeta.missingIds.map((id, idx) => (
+                            <span
+                              key={`${id}-${idx}`}
+                              className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono bg-amber-500/10 text-amber-50 border border-amber-500/20 rounded"
+                              dir="ltr"
+                              data-testid={`chip-missing-id-${id}`}
+                            >
+                              {id}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {parsedSearch.isMulti && searchMeta && searchMeta.missingIds.length === 0 && (
+                  <div
+                    className="flex items-center gap-2 text-[11px] px-3 py-1.5 rounded-sm bg-emerald-500/5 border border-emerald-500/30 text-emerald-300"
+                    data-testid="status-all-matched"
+                  >
+                    <CheckSquare className="h-3 w-3" />
+                    <span>
+                      {t("interviews:multiSearch.allMatched", { n: formatNumber(searchMeta.tokenCount, i18n.language) })}
+                      {searchMeta.droppedFreeText > 0 && (
+                        <> · {t("interviews:multiSearch.droppedFreeText", { n: formatNumber(searchMeta.droppedFreeText, i18n.language) })}</>
+                      )}
+                    </span>
+                  </div>
+                )}
+
                 {invitedCandidates.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center rounded-md border border-dashed border-border">
                     <Users className="h-8 w-8 text-muted-foreground/30 mb-2" />
                     <p className="text-sm text-muted-foreground">{t("interviews:detail.noCandidates")}</p>
                   </div>
                 ) : (() => {
-                  const filtered = candidateSearch.trim()
-                    ? invitedCandidates.filter(c => c.nationalId?.includes(candidateSearch.trim()))
-                    : invitedCandidates;
+                  const filtered = filterInvitees(
+                    invitedCandidates,
+                    parsedSearch,
+                    /* singleTermMatchesName */ false,
+                  );
                   return filtered.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-6 text-center rounded-md border border-dashed border-border">
                       <Search className="h-6 w-6 text-muted-foreground/30 mb-2" />
-                      <p className="text-sm text-muted-foreground">{t("interviews:detail.noMatches", { q: candidateSearch })}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {parsedSearch.isMulti && searchMeta && searchMeta.missingIds.length > 0
+                          ? t("interviews:detail.emptyAllMissing")
+                          : t("interviews:detail.noMatches", { q: candidateSearch })}
+                      </p>
                     </div>
                   ) : (
                   <div className="rounded-md border border-border divide-y divide-border overflow-hidden">
@@ -452,12 +610,58 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
   const invitedCandidates = data?.invitedCandidates ?? [];
   const scheduled = iv ? formatScheduled(iv.scheduledAt) : null;
 
-  const filtered = search.trim()
-    ? invitedCandidates.filter(c =>
-        c.nationalId?.includes(search.trim()) ||
-        c.fullNameEn.toLowerCase().includes(search.trim().toLowerCase())
-      )
-    : invitedCandidates;
+  // Multi-ID paste search (Task #226). The full-page invitee list keeps its
+  // single-token name+nationalId substring behaviour; multi-token mode is the
+  // ID-only set lookup mirrored from the Candidates page.
+  const parsedSearch = useMemo(() => parseSearchTokens(search), [search]);
+  const searchMeta = useMemo(
+    () => computeInviteeSearchMeta(invitedCandidates, parsedSearch),
+    [invitedCandidates, parsedSearch],
+  );
+  const filtered = useMemo(
+    () => filterInvitees(invitedCandidates, parsedSearch, /* singleTermMatchesName */ true),
+    [invitedCandidates, parsedSearch],
+  );
+
+  // See dialog handler above for rationale — single-line `<input>` strips
+  // CRLF/LF/tab on paste, so normalise them to commas before insertion.
+  const handleSearchPaste = useCallback((e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData("text");
+    if (!text || !/[\n\r\t]/.test(text)) return;
+    e.preventDefault();
+    const normalized = text
+      .replace(/\r\n?/g, "\n")
+      .replace(/[\n\t]+/g, ", ")
+      .replace(/\s*,\s*,+\s*/g, ", ");
+    const input = e.currentTarget;
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    setSearch(input.value.slice(0, start) + normalized + input.value.slice(end));
+  }, []);
+
+  const handleCopyMissingIds = useCallback(async () => {
+    if (!searchMeta || searchMeta.missingIds.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(searchMeta.missingIds.join("\n"));
+      toast({ title: t("interviews:multiSearch.copied", { n: formatNumber(searchMeta.missingIds.length, i18n.language) }) });
+    } catch {
+      toast({ title: t("interviews:multiSearch.copyFailed"), variant: "destructive" });
+    }
+  }, [searchMeta, toast, t, i18n.language]);
+
+  const handleDownloadMissingIds = useCallback(() => {
+    if (!searchMeta || searchMeta.missingIds.length === 0) return;
+    const csv = buildMissingIdsCsv(searchMeta.missingIds);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = buildMissingIdsFilename(iv?.groupName ?? null);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [searchMeta, iv?.groupName]);
 
   const shortlistedCount = invitedCandidates.filter(c => (localStatuses[c.id] ?? c.applicationStatus) === "shortlisted").length;
   const rejectedCount = invitedCandidates.filter(c => (localStatuses[c.id] ?? c.applicationStatus) === "rejected").length;
@@ -518,10 +722,31 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                 placeholder={t("interviews:fullpage.searchPh")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="ps-10 bg-background border-border"
+                onPaste={handleSearchPaste}
+                className={`ps-10 bg-background border-border ${parsedSearch.isMulti ? "pe-44" : ""}`}
+                spellCheck={false}
+                autoComplete="off"
                 data-testid="input-fullpage-search-candidates"
               />
-              {search && (
+              {parsedSearch.isMulti && (
+                <div
+                  className={`pointer-events-none absolute end-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[11px] font-medium whitespace-nowrap ${
+                    parsedSearch.truncated
+                      ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                      : "bg-primary/15 text-primary border border-primary/30"
+                  }`}
+                  title={parsedSearch.truncated
+                    ? t("interviews:multiSearch.pillTruncatedTitle", { n: formatNumber(MAX_SEARCH_TOKENS, i18n.language) })
+                    : undefined}
+                  data-testid="pill-fullpage-multi-search"
+                >
+                  <Hash className="h-3 w-3" />
+                  {parsedSearch.truncated
+                    ? t("interviews:multiSearch.pillTruncated", { n: formatNumber(MAX_SEARCH_TOKENS, i18n.language) })
+                    : t("interviews:multiSearch.pill", { n: formatNumber(parsedSearch.tokens.length, i18n.language) })}
+                </div>
+              )}
+              {search && !parsedSearch.isMulti && (
                 <button
                   onClick={() => setSearch("")}
                   className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
@@ -530,6 +755,80 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                 </button>
               )}
             </div>
+
+            {/* Missing-IDs panel — Task #226. Shown above the table when the
+                paste contained ID-shaped tokens that aren't on this interview. */}
+            {parsedSearch.isMulti && searchMeta && searchMeta.missingIds.length > 0 && (
+              <Card className="bg-amber-500/5 border-amber-500/30" data-testid="panel-fullpage-missing-ids">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <AlertTriangle className="h-5 w-5 text-amber-400 mt-0.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-semibold text-amber-100">
+                          {t("interviews:multiSearch.missingTitle", { n: formatNumber(searchMeta.missingIds.length, i18n.language) })}
+                        </h3>
+                        <p className="text-xs text-amber-100/70 mt-1">
+                          {t("interviews:multiSearch.missingDesc")}
+                          {searchMeta.droppedFreeText > 0 && (
+                            <> {t("interviews:multiSearch.droppedFreeText", { n: formatNumber(searchMeta.droppedFreeText, i18n.language) })}</>
+                          )}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pe-1">
+                          {searchMeta.missingIds.map((id, idx) => (
+                            <span
+                              key={`${id}-${idx}`}
+                              className="inline-flex items-center px-2 py-0.5 text-xs font-mono bg-amber-500/10 text-amber-50 border border-amber-500/20 rounded"
+                              dir="ltr"
+                              data-testid={`chip-fullpage-missing-id-${id}`}
+                            >
+                              {id}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0 self-end sm:self-start">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 border-amber-500/40 bg-transparent text-amber-100 hover:bg-amber-500/10 hover:text-amber-50"
+                        onClick={handleCopyMissingIds}
+                        data-testid="button-fullpage-copy-missing-ids"
+                      >
+                        <Copy className="me-1.5 h-3 w-3" />
+                        {t("interviews:multiSearch.copy")}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 border-amber-500/40 bg-transparent text-amber-100 hover:bg-amber-500/10 hover:text-amber-50"
+                        onClick={handleDownloadMissingIds}
+                        data-testid="button-fullpage-download-missing-ids"
+                      >
+                        <Download className="me-1.5 h-3 w-3" />
+                        {t("interviews:multiSearch.download")}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {parsedSearch.isMulti && searchMeta && searchMeta.missingIds.length === 0 && (
+              <div
+                className="flex items-center gap-2 text-xs px-3 py-2 rounded-sm bg-emerald-500/5 border border-emerald-500/30 text-emerald-300"
+                data-testid="status-fullpage-all-matched"
+              >
+                <CheckSquare className="h-3.5 w-3.5" />
+                <span>
+                  {t("interviews:multiSearch.allMatched", { n: formatNumber(searchMeta.tokenCount, i18n.language) })}
+                  {searchMeta.droppedFreeText > 0 && (
+                    <> · {t("interviews:multiSearch.droppedFreeText", { n: formatNumber(searchMeta.droppedFreeText, i18n.language) })}</>
+                  )}
+                </span>
+              </div>
+            )}
 
             {selectedIds.size > 0 && (
               <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-sm bg-primary/10 border border-primary/30">
@@ -573,7 +872,9 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
               <div className="flex flex-col items-center justify-center py-12 text-center rounded-md border border-dashed border-border">
                 <Search className="h-8 w-8 text-muted-foreground/30 mb-2" />
                 <p className="text-sm text-muted-foreground">
-                  {search ? t("interviews:fullpage.noMatches", { q: search }) : t("interviews:fullpage.noCandidates")}
+                  {parsedSearch.isMulti && searchMeta && searchMeta.missingIds.length > 0
+                    ? t("interviews:fullpage.emptyAllMissing")
+                    : (search ? t("interviews:fullpage.noMatches", { q: search }) : t("interviews:fullpage.noCandidates"))}
                 </p>
               </div>
             ) : (

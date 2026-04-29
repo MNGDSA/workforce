@@ -76,9 +76,10 @@
     "notes": "Session Notes",
     "invited": "Invited Candidates",
     "fullPage": "Full Page",
-    "searchIdPh": "Search by ID number…",
+    "searchIdPh": "Search by ID — or paste a list of IDs",
     "noCandidates": "No candidates recorded for this session",
     "noMatches": "No candidates matching \"{{q}}\"",
+    "emptyAllMissing": "None of the pasted IDs are invited to this interview — see the panel above to copy or download the list.",
     "noApplication": "No application",
     "tipShortlist": "Shortlist",
     "tipReset": "Reset to interviewed"
@@ -89,13 +90,14 @@
     "candidates": "{{n}} Candidates",
     "shortlistedN": "{{n}} Shortlisted",
     "rejectedN": "{{n}} Rejected",
-    "searchPh": "Search by ID number or name…",
+    "searchPh": "Search by ID or name — or paste a list of IDs",
     "selected": "{{n}} candidate selected",
     "selected_other": "{{n}} candidates selected",
     "clear": "Clear",
     "shortlistN": "Shortlist {{n}}",
     "noMatches": "No candidates matching \"{{q}}\"",
     "noCandidates": "No candidates in this session",
+    "emptyAllMissing": "None of the pasted IDs are invited to this interview — see the panel above to copy or download the list.",
     "showing": "Showing {{n}} of {{total}} candidates",
     "h": {
       "num": "#",
@@ -104,6 +106,19 @@
       "status": "Status",
       "actions": "Actions"
     }
+  },
+  "multiSearch": {
+    "pill": "Searching {{n}} IDs",
+    "pillTruncated": "Only first {{n}} used",
+    "pillTruncatedTitle": "You pasted more than {{n}} identifiers — only the first {{n}} are searched.",
+    "missingTitle": "Not in this interview — {{n}} IDs",
+    "missingDesc": "These IDs are not on the invitee list of this interview.",
+    "droppedFreeText": "{{n}} non-ID entries were treated as free-text and ignored from the missing list.",
+    "allMatched": "All {{n}} pasted IDs are invited to this interview.",
+    "copy": "Copy list",
+    "download": "Download CSV",
+    "copied": "Copied {{n}} missing IDs",
+    "copyFailed": "Could not copy to clipboard"
   },
   "labels": {
     "shortlisted": "Shortlisted",
