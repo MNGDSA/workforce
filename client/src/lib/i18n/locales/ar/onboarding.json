@@ -51,6 +51,7 @@
     "docs": "المستندات {{done}}/{{total}}",
     "signed": "موقّع",
     "awaitingSignature": "بانتظار التوقيع",
+    "awaitingContract": "بانتظار العقد",
     "notGenerated": "لم يُنشأ",
     "na": "غير مطلوب",
     "ready": "جاهز",

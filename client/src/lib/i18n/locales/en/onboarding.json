@@ -51,6 +51,7 @@
     "docs": "Docs {{done}}/{{total}}",
     "signed": "Signed",
     "awaitingSignature": "Awaiting Signature",
+    "awaitingContract": "Awaiting Contract",
     "notGenerated": "Not Generated",
     "na": "N/A",
     "ready": "Ready",
