@@ -11,6 +11,8 @@
 // record, the same orphan-cleanup behaviour, and the same admin alert
 // signalling.
 
+import type { Application, InsertApplication } from "@shared/schema";
+import { db } from "./db";
 import { storage } from "./storage";
 
 export interface ReverseSyncContext {
@@ -99,4 +101,66 @@ export async function applyShortlistResetCleanup(
   }
 
   return result;
+}
+
+/**
+ * Manual-reset entry point used by `PATCH /api/applications/:id`.
+ *
+ * Wraps the application-status update and the shared
+ * `applyShortlistResetCleanup` call in a single `db.transaction(...)` so
+ * the manual "Reset Like" flow gets the same all-or-nothing semantics
+ * Task #219 gave the auto-elimination flow. If the cleanup throws (e.g.
+ * `storage.deleteOnboardingRecord` fails), Postgres rolls the status
+ * flip back too — no more orphan onboarding rows left behind by a
+ * partial reset.
+ *
+ * Returns the updated application, or `undefined` when the application
+ * id does not exist (so callers can map to a 404). Errors are
+ * rethrown unchanged so the caller's error handler can decide how to
+ * surface them — we deliberately do NOT swallow cleanup failures.
+ */
+export async function applyApplicationStatusUpdate(opts: {
+  applicationId: string;
+  data: Partial<InsertApplication>;
+  actor: { id: string | null; name: string };
+}): Promise<Application | undefined> {
+  // Pre-update snapshot. Read OUTSIDE the transaction — it is a plain
+  // SELECT and the snapshot intentionally captures the OLD candidateId
+  // even when the same PATCH mutates both candidateId and status (the
+  // orphan onboarding row belongs to the OLD candidate, not the new
+  // one).
+  const previousApp = await storage.getApplication(opts.applicationId);
+  const previousStatus = previousApp?.status ?? null;
+  const cleanupCandidateId = previousApp?.candidateId ?? null;
+
+  return await db.transaction(async (tx) => {
+    const updated = await storage.updateApplication(opts.applicationId, opts.data, tx);
+    if (!updated) return undefined;
+
+    // Reverse-sync: shortlist → reset (or any non-shortlisted status)
+    // sweeps any pending|in_progress|ready onboarding rows for this
+    // candidate. Identical to the auto-elimination caller modulo the
+    // `force` flag — manual resets keep the original gate so flipping
+    // a non-shortlisted status to another non-shortlisted status never
+    // tears down onboarding work.
+    const newStatus = opts.data.status;
+    if (
+      previousStatus === "shortlisted" &&
+      typeof newStatus === "string" &&
+      newStatus !== "shortlisted" &&
+      cleanupCandidateId
+    ) {
+      const candidate = await storage.getCandidate(cleanupCandidateId);
+      await applyShortlistResetCleanup({
+        previousStatus,
+        newStatus,
+        applicationId: updated.id,
+        candidateId: cleanupCandidateId,
+        candidateName: candidate?.fullNameEn ?? null,
+        actor: opts.actor,
+      }, tx);
+    }
+
+    return updated;
+  });
 }
