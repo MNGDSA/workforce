@@ -143,7 +143,8 @@
     "document": "Document"
   },
   "record": {
-    "candidate": "Candidate"
+    "candidate": "Candidate",
+    "unknown": "Unknown candidate"
   },
   "rejectConfirm": {
     "title": "Reject this candidate?",

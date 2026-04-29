@@ -206,6 +206,28 @@ export interface IStorage {
   // Candidates (70k scale)
   getCandidates(query: CandidateQuery): Promise<{ data: Candidate[]; total: number; page: number; limit: number }>;
   getCandidate(id: string): Promise<Candidate | undefined>;
+  // Batch summary lookup used by the onboarding pipeline to denormalise
+  // candidate display fields onto each row, sidestepping the client's
+  // paginated candidates query. The shape mirrors every candidate field
+  // the onboarding page reads via getCandidateFor — name + IDs for the
+  // card/drawer headers, classification for the SMP branch, archivedAt
+  // for filter logic, and the file URL set for the checklist drawer's
+  // document previews. Without the file URLs the drawer would render
+  // "not submitted" placeholders for every doc on off-page candidates
+  // even though the row itself is marked complete.
+  getCandidateSummariesByIds(ids: string[]): Promise<Map<string, {
+    id: string;
+    fullNameEn: string;
+    nationalId: string | null;
+    phone: string | null;
+    email: string | null;
+    classification: string;
+    archivedAt: Date | null;
+    photoUrl: string | null;
+    nationalIdFileUrl: string | null;
+    ibanFileUrl: string | null;
+    ibanNumber: string | null;
+  }>>;
   getCandidateByPhone(phone: string): Promise<Candidate | undefined>;
   getCandidateByNationalId(nationalId: string): Promise<Candidate | undefined>;
   getCandidateByUserId(userId: string): Promise<Candidate | undefined>;
@@ -898,6 +920,53 @@ export class DatabaseStorage implements IStorage {
     }
 
     return { data, total: Number(total), page, limit, ...(searchMeta ? { searchMeta } : {}) };
+  }
+
+  async getCandidateSummariesByIds(ids: string[]): Promise<Map<string, {
+    id: string;
+    fullNameEn: string;
+    nationalId: string | null;
+    phone: string | null;
+    email: string | null;
+    classification: string;
+    archivedAt: Date | null;
+    photoUrl: string | null;
+    nationalIdFileUrl: string | null;
+    ibanFileUrl: string | null;
+    ibanNumber: string | null;
+  }>> {
+    const map = new Map<string, {
+      id: string;
+      fullNameEn: string;
+      nationalId: string | null;
+      phone: string | null;
+      email: string | null;
+      classification: string;
+      archivedAt: Date | null;
+      photoUrl: string | null;
+      nationalIdFileUrl: string | null;
+      ibanFileUrl: string | null;
+      ibanNumber: string | null;
+    }>();
+    if (ids.length === 0) return map;
+    const rows = await db
+      .select({
+        id: candidates.id,
+        fullNameEn: candidates.fullNameEn,
+        nationalId: candidates.nationalId,
+        phone: candidates.phone,
+        email: candidates.email,
+        classification: candidates.classification,
+        archivedAt: candidates.archivedAt,
+        photoUrl: candidates.photoUrl,
+        nationalIdFileUrl: candidates.nationalIdFileUrl,
+        ibanFileUrl: candidates.ibanFileUrl,
+        ibanNumber: candidates.ibanNumber,
+      })
+      .from(candidates)
+      .where(inArray(candidates.id, ids));
+    for (const r of rows) map.set(r.id, r);
+    return map;
   }
 
   async getCandidate(id: string): Promise<Candidate | undefined> {

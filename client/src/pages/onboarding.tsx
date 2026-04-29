@@ -2560,7 +2560,36 @@ export default function OnboardingPage() {
   const somePageSelected = admitPageCandidates.some(c => selectedIds.has(c.id));
 
   function getCandidateFor(rec: OnboardingRecord) {
-    return candidates.find(c => c.id === rec.candidateId);
+    // Prefer the full Candidate from the paginated /api/candidates list
+    // when it's there (gives us every column that the page might need),
+    // but fall back to the smaller `candidate` summary the server now
+    // embeds on each onboarding row. Without this fallback, tenants with
+    // > 1000 candidates rendered the onboarded ones as "record.unknown"
+    // because the older candidate IDs dropped off the first page of the
+    // candidates list. The summary covers every field the onboarding
+    // page reads via this helper — name, IDs, phone/email, file URLs
+    // for the checklist drawer, classification, archivedAt — so the
+    // unsafe-looking cast is shape-safe for this page's usage. Don't
+    // assume Candidate-completeness elsewhere without re-checking.
+    const fromList = candidates.find(c => c.id === rec.candidateId);
+    if (fromList) return fromList;
+    const embedded = (rec as OnboardingRecord & {
+      candidate?: {
+        id: string;
+        fullNameEn: string;
+        nationalId: string | null;
+        phone: string | null;
+        email: string | null;
+        classification: string;
+        archivedAt: string | null;
+        photoUrl: string | null;
+        nationalIdFileUrl: string | null;
+        ibanFileUrl: string | null;
+        ibanNumber: string | null;
+      } | null;
+    }).candidate;
+    if (!embedded) return undefined;
+    return embedded as unknown as Candidate;
   }
 
   function handleAdmit() {

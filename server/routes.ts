@@ -3812,11 +3812,27 @@ export async function registerRoutes(
       const cfg = await getReminderConfig();
       const now = new Date();
       const eventsByRow = await loadReminderEventsForRows(records.map((r) => r.id));
+      // Hotfix: the pipeline UI was rendering "record.unknown" for any
+      // onboarding row whose candidate fell outside the client's
+      // paginated /api/candidates?limit=1000 lookup (e.g. tenants with
+      // > 1000 candidates, where the older onboarded ones drop off the
+      // first page sorted by createdAt DESC). Denormalise the small
+      // candidate summary the pipeline actually displays — name, IDs,
+      // phone, classification, archived flag — so the client never has
+      // to chase a missing row through a second paginated round-trip.
+      const candidateIds = Array.from(new Set(records.map((r) => r.candidateId).filter((id): id is string => Boolean(id))));
+      // Single source of truth for the summary shape — keep storage,
+      // route, and client (onboarding.tsx getCandidateFor) aligned.
+      const candidateSummaries: Awaited<ReturnType<typeof storage.getCandidateSummariesByIds>> = candidateIds.length > 0
+        ? await storage.getCandidateSummariesByIds(candidateIds)
+        : new Map();
       const enriched = records.map((rec) => {
         const events = eventsByRow.get(rec.id) ?? [];
         const status = computeRowStatus(rec, cfg, now, events);
+        const cand = candidateSummaries.get(rec.candidateId) ?? null;
         return {
           ...rec,
+          candidate: cand,
           reminder: {
             enabled: cfg.enabled,
             paused: rec.remindersPausedAt != null,

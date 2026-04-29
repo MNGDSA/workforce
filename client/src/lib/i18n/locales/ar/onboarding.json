@@ -159,7 +159,8 @@
     "document": "المستند"
   },
   "record": {
-    "candidate": "المرشح"
+    "candidate": "المرشح",
+    "unknown": "مرشح غير معروف"
   },
   "rejectConfirm": {
     "title": "رفض هذا المرشح؟",
