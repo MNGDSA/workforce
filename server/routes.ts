@@ -420,14 +420,41 @@ function buildVariableSnapshot(candidate: any, template: any, ob: any): Record<s
   };
 }
 
-function computeOnboardingStatus(rec: { hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean; hasSignedContract?: boolean }, isSmp: boolean): "pending" | "in_progress" | "ready" {
+// Single source of truth for the onboarding readiness state.
+//
+// When the candidate's actual file URLs are passed in via `candFiles`,
+// document presence is derived from them — NOT from the boolean shadow
+// flags on the onboarding record. The flags can drift, most notably
+// because `applyServerIbanFields` flips `hasIban=true` when the candidate
+// types in their IBAN *number*, even when no IBAN certificate file has
+// been uploaded. That drift caused records like national-ID 1075054286
+// (عبدالله العيسي) to be marked "ready to convert" while the checklist
+// body correctly reported "Not yet submitted by candidate".
+//
+// When `candFiles` is omitted (back-compat for the legacy photo-upload
+// handler call site and existing unit tests) the function falls back
+// to the historical record-flag-only behaviour.
+function computeOnboardingStatus(
+  rec: { hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean; hasSignedContract?: boolean },
+  isSmp: boolean,
+  candFiles?: { photoUrl?: string | null; ibanFileUrl?: string | null; ibanNumber?: string | null; nationalIdFileUrl?: string | null } | null,
+): "pending" | "in_progress" | "ready" {
+  const hasPhotoFile = candFiles
+    ? !!candFiles.photoUrl
+    : rec.hasPhoto;
+  const hasIbanFile = candFiles
+    ? (!!candFiles.ibanFileUrl || (typeof candFiles.ibanNumber === "string" && candFiles.ibanNumber.startsWith("/uploads/")))
+    : rec.hasIban;
+  const hasNationalIdFile = candFiles
+    ? !!candFiles.nationalIdFileUrl
+    : rec.hasNationalId;
   if (isSmp) {
-    const allDone = rec.hasPhoto && rec.hasNationalId;
-    const anyDone = rec.hasPhoto || rec.hasNationalId;
+    const allDone = hasPhotoFile && hasNationalIdFile;
+    const anyDone = hasPhotoFile || hasNationalIdFile;
     return allDone ? "ready" : anyDone ? "in_progress" : "pending";
   }
-  const allDone = rec.hasPhoto && rec.hasIban && rec.hasNationalId;
-  const anyDone = rec.hasPhoto || rec.hasIban || rec.hasNationalId;
+  const allDone = hasPhotoFile && hasIbanFile && hasNationalIdFile;
+  const anyDone = hasPhotoFile || hasIbanFile || hasNationalIdFile;
   return allDone ? "ready" : anyDone ? "in_progress" : "pending";
 }
 
@@ -3793,12 +3820,54 @@ export async function registerRoutes(
       const candidateSummaries: Awaited<ReturnType<typeof storage.getCandidateSummariesByIds>> = candidateIds.length > 0
         ? await storage.getCandidateSummariesByIds(candidateIds)
         : new Map();
+      // Auto-heal pass: derive each record's prerequisite booleans + readiness
+      // status from the candidate's actual file URLs (single source of truth).
+      // The shadow flags on `onboarding_records` can drift, most notably because
+      // `applyServerIbanFields` flips `candidate.hasIban=true` from the IBAN
+      // *number* alone — which then cascades into `onboarding.hasIban=true` at
+      // record-creation time. Existing drifted rows (e.g. national-ID
+      // 1075054286 / عبدالله العيسي) get silently corrected here so the UI
+      // never lies, and we persist the correction so the conversion gate at
+      // `convertOnboardingToEmployee` sees the right `status` too.
+      const correctedById = new Map<string, { hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean; status: typeof records[number]["status"] }>();
+      for (const rec of records) {
+        if (rec.status === "converted" || rec.status === "rejected" || rec.status === "terminated") continue;
+        const cand = candidateSummaries.get(rec.candidateId) ?? null;
+        if (!cand) continue;
+        const truePhoto = !!cand.photoUrl;
+        const trueIban = !!cand.ibanFileUrl
+          || (typeof cand.ibanNumber === "string" && cand.ibanNumber.startsWith("/uploads/"));
+        const trueNid = !!cand.nationalIdFileUrl;
+        const isSmpRec = !rec.applicationId;
+        const recomputed = computeOnboardingStatus(
+          { hasPhoto: truePhoto, hasIban: trueIban, hasNationalId: trueNid, hasSignedContract: rec.hasSignedContract ?? undefined },
+          isSmpRec,
+        );
+        const drifted =
+          (rec.hasPhoto ?? false) !== truePhoto
+          || (rec.hasIban ?? false) !== trueIban
+          || (rec.hasNationalId ?? false) !== trueNid
+          || rec.status !== recomputed;
+        if (drifted) {
+          correctedById.set(rec.id, { hasPhoto: truePhoto, hasIban: trueIban, hasNationalId: trueNid, status: recomputed });
+          // Persist asynchronously — don't block the GET response. If the
+          // write fails, the next GET will simply re-attempt the heal.
+          storage.updateOnboardingRecord(rec.id, {
+            hasPhoto: truePhoto,
+            hasIban: trueIban,
+            hasNationalId: trueNid,
+            status: recomputed,
+          }).catch((e) => console.warn(`[onboarding:auto-heal] failed for record=${rec.id} candidate=${rec.candidateId} nationalId=${cand.nationalId ?? "?"}:`, e));
+        }
+      }
       const enriched = records.map((rec) => {
+        const corrected = correctedById.get(rec.id);
+        const effective = corrected ? { ...rec, ...corrected } : rec;
         const events = eventsByRow.get(rec.id) ?? [];
-        const status = computeRowStatus(rec, cfg, now, events);
+        const status = computeRowStatus(effective, cfg, now, events);
         const cand = candidateSummaries.get(rec.candidateId) ?? null;
         return {
-          ...rec,
+          ...effective,
           candidate: cand,
           reminder: {
             enabled: cfg.enabled,
@@ -4120,18 +4189,25 @@ export async function registerRoutes(
       const existing = await storage.getOnboardingRecords({});
       const dup = existing.find(r => r.candidateId === data.candidateId && r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated");
       if (dup) return res.status(409).json({ message: tr(req, "onboarding.alreadyExists") });
-      // Server-side: always read the candidate's actual upload status from DB
-      // so stale client caches don't create onboarding records with false flags
+      // Server-side: derive each prerequisite flag from the candidate's
+      // actual file URL — not from the candidate's `hasIban`/`hasPhoto`/
+      // `hasNationalId` mirror flags. The mirrors can drift (e.g.
+      // `applyServerIbanFields` flips `candidate.hasIban=true` whenever
+      // the candidate types in their IBAN *number*, even if the IBAN
+      // certificate file has never been uploaded). Reading directly from
+      // the file URLs guarantees a freshly-admitted onboarding record
+      // never shows the IBAN tile as "complete" without an actual upload.
       if (data.candidateId) {
         const candidate = await storage.getCandidate(data.candidateId);
         if (candidate) {
-          data.hasPhoto = candidate.hasPhoto ?? false;
-          data.hasIban = candidate.hasIban ?? false;
-          data.hasNationalId = candidate.hasNationalId ?? false;
+          data.hasPhoto = !!candidate.photoUrl;
+          data.hasIban = !!candidate.ibanFileUrl
+            || (typeof candidate.ibanNumber === "string" && candidate.ibanNumber.startsWith("/uploads/"));
+          data.hasNationalId = !!candidate.nationalIdFileUrl;
           // Derive SMP from onboarding linkage context: applicationId === null = SMP pipeline.
           // This is authoritative and source-agnostic.
           const isSmp = !data.applicationId;
-          data.status = computeOnboardingStatus(data as any, isSmp);
+          data.status = computeOnboardingStatus(data as any, isSmp, candidate);
         }
       }
       const record = await storage.createOnboardingRecord(data);
@@ -4165,7 +4241,11 @@ export async function registerRoutes(
           if (!isRejection) {
             // Derive SMP from onboarding record's applicationId (authoritative, source-agnostic)
             const isSmp = !current.applicationId;
-            data.status = computeOnboardingStatus(merged, isSmp);
+            // Read the candidate's actual file URLs so the readiness gate
+            // can't be tripped by a stale `hasIban` flag (see the comment
+            // on `computeOnboardingStatus`).
+            const cand = current.candidateId ? await storage.getCandidate(current.candidateId) : null;
+            data.status = computeOnboardingStatus(merged, isSmp, cand);
           }
         }
       }
@@ -5961,7 +6041,10 @@ export async function registerRoutes(
           // Derive SMP from onboarding linkage (applicationId === null = SMP pipeline)
           const isSmp = !ob.applicationId;
           const rec = { ...ob, hasSignedContract: true };
-          const newStatus = computeOnboardingStatus(rec, isSmp);
+          // Pass the candidate's actual file URLs so the readiness gate
+          // is keyed off real uploads, not stale shadow flags.
+          const cand = ob.candidateId ? await storage.getCandidate(ob.candidateId) : null;
+          const newStatus = computeOnboardingStatus(rec, isSmp, cand);
           await storage.updateOnboardingRecord(contract.onboardingId, {
             hasSignedContract: true,
             contractSignedAt: new Date(),

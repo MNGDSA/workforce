@@ -263,9 +263,34 @@ function getPrerequisites(isSmp: boolean) {
   return isSmp ? ALL_PREREQUISITES.filter(p => p.smp) : ALL_PREREQUISITES;
 }
 
-function prereqCount(rec: OnboardingRecord, isSmp: boolean) {
-  const keys = getPrerequisites(isSmp).map(p => p.key);
-  return keys.filter(k => rec[k as keyof OnboardingRecord]).length;
+// Single source of truth for whether a prerequisite is satisfied.
+// For *file* prereqs (photo / national-ID / IBAN certificate) we read
+// the candidate's actual file URL — never the boolean shadow flag on
+// the onboarding record. The flags can drift (e.g. server-side
+// `applyServerIbanFields` flips `hasIban=true` from the IBAN *number*
+// alone, even when no certificate file has been uploaded), and the
+// drift was rendering the IBAN tile with a green check + 3/3
+// "ready to convert" while the body said "Not yet submitted".
+// For non-file prereqs the boolean flag is still the source of truth.
+function isPrereqSatisfied(
+  rec: OnboardingRecord,
+  cand: any,
+  p: typeof ALL_PREREQUISITES[number],
+): boolean {
+  if (p.isFile && p.profileKey) {
+    if (cand && (cand as any)[p.profileKey]) return true;
+    // Legacy fallback: some records store the IBAN file URL in the
+    // `ibanNumber` text column when uploaded via older code paths.
+    if (p.profileKey === "ibanFileUrl" && typeof cand?.ibanNumber === "string" && cand.ibanNumber.startsWith("/uploads/")) {
+      return true;
+    }
+    return false;
+  }
+  return !!rec[p.key as keyof OnboardingRecord];
+}
+
+function prereqCount(rec: OnboardingRecord, cand: any, isSmp: boolean) {
+  return getPrerequisites(isSmp).filter(p => isPrereqSatisfied(rec, cand, p)).length;
 }
 
 function prereqTotal(isSmp: boolean) {
@@ -2796,7 +2821,7 @@ export default function OnboardingPage() {
             {filtered.map(rec => {
               const candidate = getCandidateFor(rec);
               const isSmp = (candidate as any)?.classification === "smp";
-              const done = prereqCount(rec, isSmp);
+              const done = prereqCount(rec, candidate, isSmp);
               const total = prereqTotal(isSmp);
               const cfg = STATUS_CONFIG[rec.status];
               const StatusIcon = cfg.icon;
@@ -2858,8 +2883,8 @@ export default function OnboardingPage() {
                     </div>
                     {(() => {
                       const docPrereqs = getPrerequisites(isSmp);
-                      const docsComplete = docPrereqs.every(p => rec[p.key as keyof OnboardingRecord]);
-                      const docsDone = docPrereqs.filter(p => rec[p.key as keyof OnboardingRecord]).length;
+                      const docsComplete = docPrereqs.every(p => isPrereqSatisfied(rec, candidate, p));
+                      const docsDone = docPrereqs.filter(p => isPrereqSatisfied(rec, candidate, p)).length;
                       const phase = isConverted ? 3 : isSmpPipeline ? (docsComplete ? 3 : 1) : contractSigned ? 3 : docsComplete ? 2 : 1;
                       return (
                         <div className="mt-2">
@@ -3160,7 +3185,7 @@ export default function OnboardingPage() {
             const checklistCand = getCandidateFor(checklistRecord);
             const checklistIsSmp = (checklistCand as any)?.classification === "smp";
             const checklistPrereqs = getPrerequisites(checklistIsSmp);
-            const checklistDone = prereqCount(checklistRecord, checklistIsSmp);
+            const checklistDone = prereqCount(checklistRecord, checklistCand, checklistIsSmp);
             const checklistTotal = prereqTotal(checklistIsSmp);
             return (
             <div className="mt-6 space-y-4">
@@ -3188,8 +3213,8 @@ export default function OnboardingPage() {
               {/* Checklist items */}
               <div className="space-y-3">
                 {checklistPrereqs.map(p => {
-                  const checked = checklistRecord[p.key as keyof OnboardingRecord] as boolean;
                   const cand = getCandidateFor(checklistRecord);
+                  const checked = isPrereqSatisfied(checklistRecord, cand, p);
                   let profileValue = p.profileKey && cand ? (cand as any)[p.profileKey] : null;
                   if (!profileValue && p.profileKey === "ibanFileUrl" && cand?.ibanNumber?.startsWith("/uploads/")) {
                     profileValue = cand.ibanNumber;
@@ -3287,7 +3312,7 @@ export default function OnboardingPage() {
                 <ContractPhaseSection
                   onboardingRecord={checklistRecord}
                   candidate={checklistCand}
-                  docsComplete={checklistPrereqs.every(p => checklistRecord[p.key as keyof OnboardingRecord])}
+                  docsComplete={checklistPrereqs.every(p => isPrereqSatisfied(checklistRecord, checklistCand, p))}
                 />
               )}
 
