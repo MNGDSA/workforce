@@ -204,7 +204,13 @@ import { requireAuth, requirePermission, requireOwnership, markPublic, invalidat
 import { checkLoginRateLimit, recordLoginFailure, recordLoginSuccess } from "./login-rate-limit";
 import { checkOtpVerifyIp, recordOtpVerifyFailure, tryReserveOtpRequest, checkActivateIp, recordActivateFailure } from "./otp-throttle";
 import "./otp-maintenance";
-import { verifyOtpHash } from "./otp-hash";
+import { verifyOtpHash, hashOtp } from "./otp-hash";
+
+// Pre-computed hash of a value that is impossible to produce from any
+// 6-digit OTP code; used by the reset-password verify-otp handler to
+// keep verifyOtpHash cost identical on the unknown-account path. Module
+// scope so the HMAC is computed once at boot, not per request.
+const RESET_DUMMY_OTP_HASH = hashOtp("__reset_dummy_no_otp__");
 
 const UPLOADS_DIR = path.resolve("uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -1473,6 +1479,18 @@ export async function registerRoutes(
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
     const generic = { ok: true, expiresAt: expiresAt.toISOString() };
 
+    // Per-IP request throttle BEFORE any DB work or SMS spend. Without this
+    // an attacker can fan out across guessed national IDs and trigger SMS
+    // sends for any that happen to match a real account (each NID is rate-
+    // limited per-phone but NOT per-IP). The 429 response is fine for
+    // enumeration safety: it is identical for any NID input — caller cannot
+    // infer account state from being rate-limited.
+    const ipDecision = await tryReserveOtpRequest(req);
+    if (!ipDecision.allowed) {
+      res.setHeader("Retry-After", String(ipDecision.retryAfterSec));
+      return res.status(429).json({ message: tr(req, "otp.tooManyAttempts") });
+    }
+
     try {
       const { nationalId } = req.body as { nationalId?: string };
       if (!nationalId || typeof nationalId !== "string" || !nationalId.trim()) {
@@ -1580,8 +1598,99 @@ export async function registerRoutes(
     }
   });
 
+  // ─── Reset password: verify the OTP without leaking the phone ──────────
+  // The /request endpoint above intentionally never echoes the phone (or a
+  // masked form of it) — that protects against national-ID enumeration of
+  // registered Saudi mobile numbers. Before this endpoint existed the
+  // frontend tried to call /api/auth/otp/verify with the phone it (wrongly)
+  // expected the request response to carry, so every reset since the April
+  // 2026 enumeration-prevention hardening 400'd with `invalid_sa_mobile`,
+  // which users naturally read as "the system stopped accepting my phone
+  // number". This route resolves nationalId → user.phone server-side, runs
+  // the same throttle / generic-invalid posture as /api/auth/otp/verify,
+  // and returns just `{otpId}` — the only thing the finalize endpoint
+  // needs — so the phone never crosses the wire.
+  app.post("/api/auth/reset-password/verify-otp", markPublic, async (req: Request, res: Response) => {
+    const genericInvalid = () => res.status(400).json({ message: tr(req, "otp.invalid") });
+    try {
+      const ipDecision = await checkOtpVerifyIp(req);
+      if (!ipDecision.allowed) {
+        res.setHeader("Retry-After", String(ipDecision.retryAfterSec));
+        return res.status(429).json({ message: tr(req, "otp.tooManyAttempts") });
+      }
+
+      const parsed = z.object({
+        nationalId: z.string().trim().min(1),
+        code: z.string().regex(/^\d{6}$/),
+      }).safeParse(req.body);
+      if (!parsed.success) {
+        await recordOtpVerifyFailure(req);
+        return genericInvalid();
+      }
+      const { nationalId, code } = parsed.data;
+
+      // Equalize the response-latency oracle that would otherwise leak
+      // account existence: the unknown-NID path used to do ONE query
+      // (getUserByNationalId) while the known-NID path did THREE
+      // (getUserByNationalId + getLatestOtpVerification + verifyOtpHash).
+      // We now run all three unconditionally, using a sentinel phone that
+      // can never match a real Saudi mobile when the user is absent, and
+      // a constant dummy hash so the timing-safe compare always fires.
+      // The branching below is purely about response correctness; the
+      // DB and crypto cost is identical regardless of account state.
+      const user = await storage.getUserByNationalId(nationalId);
+      const phoneKey = user?.phone ?? "__reset_no_match__";
+      const otp = await storage.getLatestOtpVerification(phoneKey);
+      const compareHash = otp?.code ?? RESET_DUMMY_OTP_HASH;
+      const codeMatches = verifyOtpHash(code, compareHash);
+
+      if (!user || !user.phone || !user.isActive) {
+        await recordOtpVerifyFailure(req);
+        console.log(`[Reset/verify-otp] Generic invalid for NID ${redactNationalId(nationalId)} (no eligible account).`);
+        return genericInvalid();
+      }
+
+      if (!otp || otp.purpose !== "password_reset") {
+        await recordOtpVerifyFailure(req);
+        return genericInvalid();
+      }
+      if (otp.verifiedAt || new Date() > otp.expiresAt || otp.attempts >= 5) {
+        await recordOtpVerifyFailure(req);
+        return genericInvalid();
+      }
+      if (!codeMatches) {
+        await storage.incrementOtpAttempts(otp.id);
+        await recordOtpVerifyFailure(req);
+        return genericInvalid();
+      }
+
+      await storage.markOtpVerified(otp.id);
+      console.log(`[Reset/verify-otp] OTP verified for NID ${redactNationalId(nationalId)} → ${redactPhone(user.phone)}.`);
+      return res.json({ otpId: otp.id });
+    } catch (err) {
+      // Throttle accounting must not be skipped on the exceptional path or
+      // an attacker who can reliably trigger the catch (DB blip, malformed
+      // input that bypasses the Zod schema, etc.) gets unbounded probing.
+      try { await recordOtpVerifyFailure(req); } catch { /* swallow — never mask the real error */ }
+      console.error("[Reset/verify-otp] handler error (returning generic invalid):", err);
+      return genericInvalid();
+    }
+  });
+
   // ─── Reset password: finalize (OTP verified, set new password) ──────────
+  // Same enumeration-resistant posture as /verify-otp above: every "the
+  // OTP/session/account is wrong" branch returns the SAME generic-invalid
+  // 400 with the same translated body. The only branches that may emit a
+  // distinguishable message are the ones describing the CALLER'S OWN
+  // INPUT (missing fields, password rules) — those reveal nothing about
+  // any account on the server. Without this, status codes (404 vs 400)
+  // and message strings (auth.noAccount vs otp.invalidSessionShort vs
+  // otp.phoneNotVerifiedShort vs otp.sessionExpiredShort vs
+  // otp.alreadyUsed) form a 5-way oracle telling an attacker whether a
+  // given national ID exists on the system and what state any reset OTP
+  // for it is in. Per the April 2026 enumeration-prevention review.
   app.post("/api/auth/reset-password", markPublic, async (req: Request, res: Response) => {
+    const genericInvalid = () => res.status(400).json({ message: tr(req, "otp.invalid") });
     try {
       const { nationalId, otpId, newPassword } = req.body as {
         nationalId?: string; otpId?: string; newPassword?: string;
@@ -1603,20 +1712,27 @@ export async function registerRoutes(
         });
       }
 
-      const user = await storage.getUserByNationalId(nationalId.trim());
+      // Run BOTH lookups unconditionally before evaluating any branch so
+      // an attacker cannot distinguish "unknown national ID" (1 query) from
+      // "known national ID + bogus otpId" (2 queries) by response timing.
+      // The previous implementation early-returned after the user lookup,
+      // creating a measurable per-NID timing oracle even with a uniform
+      // response body.
+      const [user, otp] = await Promise.all([
+        storage.getUserByNationalId(nationalId.trim()),
+        storage.getOtpVerificationById(otpId),
+      ]);
       if (!user || !user.phone) {
-        return res.status(404).json({ message: tr(req, "auth.noAccount") });
+        return genericInvalid();
       }
-
-      const otp = await storage.getOtpVerificationById(otpId);
       if (!otp || otp.phone !== user.phone || otp.purpose !== "password_reset") {
-        return res.status(400).json({ message: tr(req, "otp.invalidSessionShort") });
+        return genericInvalid();
       }
       if (!otp.verifiedAt) {
-        return res.status(400).json({ message: tr(req, "otp.phoneNotVerifiedShort") });
+        return genericInvalid();
       }
       if (new Date() > new Date(otp.expiresAt.getTime() + 30 * 60 * 1000)) {
-        return res.status(400).json({ message: tr(req, "otp.sessionExpiredShort") });
+        return genericInvalid();
       }
 
       // Atomically consume the OTP BEFORE writing the new password. Closes the
@@ -1632,7 +1748,7 @@ export async function registerRoutes(
         ))
         .returning({ id: otpVerifications.id });
       if (consumed.length === 0) {
-        return res.status(400).json({ message: tr(req, "otp.alreadyUsed") });
+        return genericInvalid();
       }
 
       const hashed = await bcrypt.hash(newPassword, 12);

@@ -78,8 +78,6 @@ export default function AuthPage() {
   type ResetStep = "id" | "otp" | "newpass" | "done";
   const [resetStep, setResetStep] = useState<ResetStep | null>(null);
   const [resetNationalId, setResetNationalId] = useState("");
-  const [resetPhone, setResetPhone] = useState("");
-  const [resetMaskedPhone, setResetMaskedPhone] = useState("");
   const [resetOtpCode, setResetOtpCode] = useState("");
   const [resetOtpId, setResetOtpId] = useState("");
   const [resetNewPassword, setResetNewPassword] = useState("");
@@ -228,8 +226,6 @@ export default function AuthPage() {
       const data = await res.json();
       const expiresAt = new Date(data.expiresAt);
       setResetNationalId(nationalId.trim());
-      setResetPhone(data.phone);
-      setResetMaskedPhone(data.maskedPhone);
       setResetOtpCode("");
       setResetStep("otp");
       startResetCountdown(expiresAt);
@@ -246,7 +242,15 @@ export default function AuthPage() {
     setResetError("");
     setIsLoading(true);
     try {
-      const res = await apiRequest("POST", "/api/auth/otp/verify", { phone: resetPhone, code: resetOtpCode.trim() });
+      // Reset-flow verify lives at its own endpoint that resolves the
+      // phone server-side from `resetNationalId`, so the request endpoint
+      // can keep its phone-free response and we never hold the OTP-target
+      // number in client state. /api/auth/otp/verify is for the registration
+      // flow where the user actively typed the phone in the previous step.
+      const res = await apiRequest("POST", "/api/auth/reset-password/verify-otp", {
+        nationalId: resetNationalId,
+        code: resetOtpCode.trim(),
+      });
       const data = await res.json();
       setResetOtpId(data.otpId);
       if (resetCountdownRef.current) clearInterval(resetCountdownRef.current);
@@ -290,8 +294,6 @@ export default function AuthPage() {
   function closeResetFlow() {
     setResetStep(null);
     setResetNationalId("");
-    setResetPhone("");
-    setResetMaskedPhone("");
     setResetOtpCode("");
     setResetOtpId("");
     setResetNewPassword("");
@@ -374,7 +376,7 @@ export default function AuthPage() {
               {resetStep === "otp" && (
                 <div className="space-y-4">
                   <p className="text-muted-foreground text-sm">
-                    {t("auth:reset.otpStepSubtitle", { phone: resetMaskedPhone })}
+                    {t("auth:reset.otpStepSubtitle")}
                   </p>
                   <div className="relative group">
                     <ShieldCheck className={iconStartClass} />
