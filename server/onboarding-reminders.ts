@@ -27,6 +27,7 @@ import {
 } from "@shared/schema";
 import { storage } from "./storage";
 import { applyShortlistResetCleanup } from "./application-status-cleanup";
+import { recordReminderRollback } from "./reminder-rollback-telemetry";
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
@@ -590,7 +591,18 @@ async function claimAndEnqueueReminder(
       return true;
     });
   } catch (err: any) {
-    if (err?.message === "__rollback_claim_dedupe") return false;
+    if (err?.message === "__rollback_claim_dedupe") {
+      // Task #216 — surface the rollback to operators. The transaction
+      // already rolled back atomically (count bump reverted, no SMS
+      // queued); this call just logs/counts/alerts so a sustained spike
+      // becomes visible instead of being swallowed.
+      void recordReminderRollback({
+        onboardingId: rec.id,
+        nextN,
+        reason: "dedupe_conflict",
+      });
+      return false;
+    }
     throw err;
   }
 }

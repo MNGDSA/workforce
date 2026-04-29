@@ -101,6 +101,11 @@ import {
   recordRotationRescueOutcome,
   getRotationRescueSummary,
 } from "./rotation-rescue-telemetry";
+// Task #216 — rolling counter for the silent rollback path inside the
+// onboarding-reminder engine's `claimAndEnqueueReminder`. A non-zero
+// `lastHour` count is the early signal that the sweep is firing twice
+// or that crash-recovery is replaying the same dedupeKey.
+import { getReminderRollbackSummary } from "./reminder-rollback-telemetry";
 import XLSX from "xlsx";
 
 // Auth token signing/verification is centralized in `./auth-token` so this
@@ -562,6 +567,22 @@ export async function registerRoutes(
   // persistFailed, attempts, successRate, oldestAt, mostRecentAt }.
   app.get("/api/admin/telemetry/rotation-rescue", requirePermission("settings:read"), async (_req: Request, res: Response) => {
     res.json(getRotationRescueSummary());
+  });
+
+  // Task #216 — admin telemetry: how often the onboarding-reminder
+  // engine's sentinel rollback path has fired. The sentinel branch
+  // catches duplicate-send dedupeKey conflicts inside
+  // `claimAndEnqueueReminder` and rolls the count-bump back atomically.
+  // Under normal operation it is unreachable; a non-zero `lastHour`
+  // value is the early signal that the hourly sweep is being triggered
+  // twice in the same minute, that scheduler clock drift is replaying
+  // a window, or that crash-recovery is re-attempting an already-sent
+  // SMS slot. The companion alert (auto-fired when `lastHour` crosses
+  // `alertThresholdPerHour`) appears in the admin bell inbox.
+  // Returned shape: { windowHours, total, lastHour, alertThresholdPerHour,
+  // lastAlertedAt, oldestAt, mostRecentAt }.
+  app.get("/api/admin/telemetry/reminder-rollbacks", requirePermission("settings:read"), async (_req: Request, res: Response) => {
+    res.json(getReminderRollbackSummary());
   });
 
   app.get("/api/ntp-health", requirePermission("system:ntp_check"), async (req: Request, res: Response) => {
