@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
@@ -39,11 +39,21 @@ import {
   ArrowLeft,
   MapPin,
   Clock,
+  Hash,
+  AlertTriangle,
+  Copy,
+  Download,
+  CheckSquare,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation, Trans } from "react-i18next";
 import { formatNumber } from "@/lib/format";
+import {
+  parseSearchTokens,
+  MAX_SEARCH_TOKENS,
+  type CandidateSearchMeta,
+} from "@shared/candidate-search";
 
 type Applicant = {
   candidateId: string;
@@ -112,6 +122,7 @@ export default function ScheduleInterviewPage() {
   const { data: applicantsResult, isLoading: loadingApps } = useQuery<{
     data: Applicant[];
     total: number;
+    searchMeta?: CandidateSearchMeta;
   }>({
     queryKey: ["/api/applications/applicants", selectedJobId, page, debouncedSearch],
     queryFn: () => {
@@ -132,6 +143,61 @@ export default function ScheduleInterviewPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const to = Math.min(page * PAGE_SIZE, total);
+
+  // Task #224 — port the talent page's bulk-paste search to this
+  // applicant picker. `liveParsedSearch` drives the in-input "Searching
+  // N IDs" pill (immediate); `parsedSearch` is debounced and gates the
+  // missing-IDs banner so it agrees with the server response.
+  const parsedSearch = useMemo(() => parseSearchTokens(debouncedSearch), [debouncedSearch]);
+  const liveParsedSearch = useMemo(() => parseSearchTokens(searchInput), [searchInput]);
+  const searchMeta = applicantsResult?.searchMeta;
+
+  // Single-line `<input>` strips newlines on paste, which would
+  // collapse a pasted Excel column of IDs into one continuous string.
+  // Intercept the paste, normalise CRLF/LF/tab to commas (which the
+  // shared parser splits on) and inject the cleaned string at the
+  // caret position. Pastes without those separators fall through.
+  const handleSearchPaste = useCallback((e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData("text");
+    if (!text || !/[\n\r\t]/.test(text)) return;
+    e.preventDefault();
+    const normalized = text
+      .replace(/\r\n?/g, "\n")
+      .replace(/[\n\t]+/g, ", ")
+      .replace(/\s*,\s*,+\s*/g, ", ");
+    const input = e.currentTarget;
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    const next = input.value.slice(0, start) + normalized + input.value.slice(end);
+    setSearchInput(next);
+    setPage(1);
+  }, []);
+
+  const handleCopyMissingIds = useCallback(async () => {
+    if (!searchMeta || searchMeta.missingIds.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(searchMeta.missingIds.join("\n"));
+      toast({
+        title: t("scheduleInterview:multiSearch.copied", { n: formatNumber(searchMeta.missingIds.length, i18n.language) }),
+      });
+    } catch {
+      toast({ title: t("scheduleInterview:multiSearch.copyFailed"), variant: "destructive" });
+    }
+  }, [searchMeta, toast, t, i18n.language]);
+
+  const handleDownloadMissingIds = useCallback(() => {
+    if (!searchMeta || searchMeta.missingIds.length === 0) return;
+    const csv = "id\n" + searchMeta.missingIds.map((id) => `"${id.replace(/"/g, '""')}"`).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `missing_ids_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [searchMeta]);
 
   const handleJobSelect = (jobId: string) => {
     setSelectedJobId(jobId);
@@ -584,30 +650,126 @@ export default function ScheduleInterviewPage() {
                     </div>
 
                     {selectedJobId && (
-                      <div className="flex items-center gap-3">
-                        <div className="relative flex-1">
-                          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            placeholder={t("scheduleInterview:candidates.search")}
-                            className="ps-10 bg-muted/30 border-border"
-                            value={searchInput}
-                            onChange={(e) => setSearchInput(e.target.value)}
-                            data-testid="input-invite-search"
-                          />
+                      <>
+                        <div className="flex items-center gap-3">
+                          <div className="relative flex-1">
+                            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              placeholder={t("scheduleInterview:candidates.search")}
+                              className={`ps-10 bg-muted/30 border-border ${liveParsedSearch.isMulti ? "pe-44" : ""}`}
+                              value={searchInput}
+                              onChange={(e) => setSearchInput(e.target.value)}
+                              onPaste={handleSearchPaste}
+                              spellCheck={false}
+                              autoComplete="off"
+                              data-testid="input-invite-search"
+                            />
+                            {liveParsedSearch.isMulti && (
+                              <div
+                                className={`pointer-events-none absolute end-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[11px] font-medium whitespace-nowrap ${
+                                  liveParsedSearch.truncated
+                                    ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                                    : "bg-primary/15 text-primary border border-primary/30"
+                                }`}
+                                data-testid="badge-search-token-count"
+                                title={liveParsedSearch.truncated
+                                  ? t("scheduleInterview:multiSearch.pillTruncatedTitle", { n: formatNumber(MAX_SEARCH_TOKENS, i18n.language) })
+                                  : undefined}
+                              >
+                                <Hash className="h-3 w-3" />
+                                {liveParsedSearch.truncated
+                                  ? t("scheduleInterview:multiSearch.pillTruncated", { n: formatNumber(MAX_SEARCH_TOKENS, i18n.language) })
+                                  : t("scheduleInterview:multiSearch.pill", { n: formatNumber(liveParsedSearch.tokens.length, i18n.language) })}
+                              </div>
+                            )}
+                          </div>
+                          {applicants.length > 0 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0 border-border text-xs font-semibold"
+                              onClick={allPageSelected ? deselectAllOnPage : selectAllOnPage}
+                              data-testid="button-select-page"
+                            >
+                              {allPageSelected ? t("scheduleInterview:candidates.deselectPage") : t("scheduleInterview:candidates.selectPage")}
+                            </Button>
+                          )}
                         </div>
-                        {applicants.length > 0 && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="shrink-0 border-border text-xs font-semibold"
-                            onClick={allPageSelected ? deselectAllOnPage : selectAllOnPage}
-                            data-testid="button-select-page"
-                          >
-                            {allPageSelected ? t("scheduleInterview:candidates.deselectPage") : t("scheduleInterview:candidates.selectPage")}
-                          </Button>
+
+                        {/* Multi-ID search outcome banners (mirrors talent page #195).
+                            Only render when 2+ identifiers were pasted. */}
+                        {parsedSearch.isMulti && searchMeta && searchMeta.missingIds.length > 0 && (
+                          <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3" data-testid="panel-missing-ids">
+                            <div className="flex items-start justify-between gap-3 flex-col sm:flex-row">
+                              <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                                <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="text-xs font-semibold text-amber-100" data-testid="text-missing-title">
+                                    {t("scheduleInterview:multiSearch.missingTitle", { n: formatNumber(searchMeta.missingIds.length, i18n.language) })}
+                                  </h3>
+                                  <p className="text-[11px] text-amber-100/70 mt-0.5">
+                                    {t("scheduleInterview:multiSearch.missingDesc")}
+                                    {searchMeta.droppedFreeText > 0 && (
+                                      <> {t("scheduleInterview:multiSearch.droppedFreeText", { n: formatNumber(searchMeta.droppedFreeText, i18n.language) })}</>
+                                    )}
+                                  </p>
+                                  <div className="mt-2 flex flex-wrap gap-1 max-h-24 overflow-y-auto pe-1">
+                                    {searchMeta.missingIds.map((id, idx) => (
+                                      <span
+                                        key={`${id}-${idx}`}
+                                        className="inline-flex items-center px-1.5 py-0.5 text-[11px] font-mono bg-amber-500/10 text-amber-50 border border-amber-500/20 rounded"
+                                        dir="ltr"
+                                        data-testid={`missing-id-${idx}`}
+                                      >
+                                        {id}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex gap-2 shrink-0 self-end sm:self-start">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs border-amber-500/40 bg-transparent text-amber-100 hover:bg-amber-500/10 hover:text-amber-50"
+                                  onClick={handleCopyMissingIds}
+                                  data-testid="button-copy-missing-ids"
+                                >
+                                  <Copy className="me-1 h-3 w-3" />
+                                  {t("scheduleInterview:multiSearch.copy")}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs border-amber-500/40 bg-transparent text-amber-100 hover:bg-amber-500/10 hover:text-amber-50"
+                                  onClick={handleDownloadMissingIds}
+                                  data-testid="button-download-missing-ids"
+                                >
+                                  <Download className="me-1 h-3 w-3" />
+                                  {t("scheduleInterview:multiSearch.download")}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
                         )}
-                      </div>
+                        {parsedSearch.isMulti && searchMeta && searchMeta.missingIds.length === 0 && (
+                          <div
+                            className="flex items-center gap-2 text-xs px-3 py-2 rounded-sm bg-emerald-500/5 border border-emerald-500/30 text-emerald-300"
+                            data-testid="status-all-matched"
+                          >
+                            <CheckSquare className="h-3.5 w-3.5" />
+                            <span>
+                              {t("scheduleInterview:multiSearch.allMatched", { n: formatNumber(searchMeta.tokenCount, i18n.language) })}
+                              {searchMeta.droppedFreeText > 0 && (
+                                <> · {t("scheduleInterview:multiSearch.droppedFreeText", { n: formatNumber(searchMeta.droppedFreeText, i18n.language) })}</>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                      </>
                     )}
 
                     <div

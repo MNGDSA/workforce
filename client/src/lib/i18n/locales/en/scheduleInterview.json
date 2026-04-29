@@ -39,13 +39,26 @@
     "clearAll": "Clear all",
     "filterByJob": "Filter by Job",
     "selectJobPh": "Select an active job to browse applicants…",
-    "search": "Search by name or National ID…",
+    "search": "Search by name, ID, or phone — or paste a list of IDs",
     "selectPage": "Select page",
     "deselectPage": "Deselect page",
     "noJobYet": "Select an active job above to browse its applicants",
     "noApplicantsYet": "No applicants for this job yet",
     "noMatches": "No matches — try a different search term",
     "validationError": "Select at least one candidate from the applicant list."
+  },
+  "multiSearch": {
+    "pill": "Searching {{n}} IDs",
+    "pillTruncated": "Only first {{n}} used",
+    "pillTruncatedTitle": "You pasted more than {{n}} identifiers — only the first {{n}} are searched.",
+    "missingTitle": "{{n}} not among this job's applicants",
+    "missingDesc": "These identifiers do not match any applicant for the selected job. Verify them or change the job.",
+    "droppedFreeText": "{{n}} non-ID entries were treated as free-text and ignored from the missing list.",
+    "allMatched": "Found applicants for all {{n}} pasted IDs.",
+    "copy": "Copy",
+    "download": "Download CSV",
+    "copied": "Copied {{n}} missing IDs",
+    "copyFailed": "Could not copy to clipboard"
   },
   "pager": {
     "showing": "Showing <strong>{{from}}–{{to}}</strong> of <strong>{{total}}</strong> applicants",

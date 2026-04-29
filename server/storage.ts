@@ -270,7 +270,7 @@ export interface IStorage {
 
   // Applications
   getApplications(params?: { jobId?: string; candidateId?: string; status?: string; includeCandidate?: boolean }): Promise<ApplicationWithCandidate[]>;
-  getApplicantsForJob(params: { jobId: string; page: number; limit: number; search?: string }): Promise<{ data: { candidateId: string; applicationId: string; fullNameEn: string; nationalId: string | null; applicationStatus: string; appliedAt: Date }[]; total: number }>;
+  getApplicantsForJob(params: { jobId: string; page: number; limit: number; search?: string }): Promise<{ data: { candidateId: string; applicationId: string; fullNameEn: string; nationalId: string | null; applicationStatus: string; appliedAt: Date }[]; total: number; searchMeta?: CandidateSearchMeta }>;
   getApplication(id: string): Promise<Application | undefined>;
   createApplication(app: InsertApplication): Promise<Application>;
   updateApplication(id: string, data: Partial<InsertApplication>, tx?: any): Promise<Application | undefined>;
@@ -1579,19 +1579,33 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getApplicantsForJob(params: { jobId: string; page: number; limit: number; search?: string }): Promise<{ data: { candidateId: string; applicationId: string; fullNameEn: string; nationalId: string | null; applicationStatus: string; appliedAt: Date }[]; total: number }> {
+  async getApplicantsForJob(params: { jobId: string; page: number; limit: number; search?: string }): Promise<{ data: { candidateId: string; applicationId: string; fullNameEn: string; nationalId: string | null; applicationStatus: string; appliedAt: Date }[]; total: number; searchMeta?: CandidateSearchMeta }> {
     const { jobId, page, limit, search } = params;
     const offset = (page - 1) * limit;
+
+    // Task #224 — port the talent page's bulk-paste-IDs search
+    // (#195) to the Schedule Interview applicant picker. HR can
+    // paste an Excel column of national IDs / phones / employee
+    // numbers and get back the matching applicants for the chosen
+    // job, plus a "missing IDs" companion report that is scoped to
+    // THIS job's applicant pool (not the whole candidate database)
+    // so the unmatched panel reflects "didn't apply to this job"
+    // rather than "doesn't exist anywhere".
+    const parsed = parseSearchTokens(search);
+    const searchCondition = buildCandidateSearchCondition(parsed);
+
     const conditions = [eq(applications.jobId, jobId)];
-    if (search?.trim()) {
-      conditions.push(or(
-        ilike(candidates.fullNameEn, `%${search.trim()}%`),
-        ilike(candidates.nationalId, `%${search.trim()}%`),
-      )!);
-    }
+    if (searchCondition) conditions.push(searchCondition);
     const where = and(...conditions);
 
-    const [rows, [{ value: totalCount }]] = await Promise.all([
+    // For the missing-IDs companion query we constrain to candidates
+    // that have an application for this jobId, so unmatched tokens
+    // mean "no applicant for THIS job", which is what the recruiter
+    // is actually looking for on this page.
+    const otherWhere = sql`EXISTS (SELECT 1 FROM ${applications} WHERE ${applications.candidateId} = ${candidates.id} AND ${applications.jobId} = ${jobId})`;
+    const wantsSearchMeta = parsed.isMulti;
+
+    const [rows, [{ value: totalCount }], matchedTokens] = await Promise.all([
       db.select({
         candidateId: candidates.id,
         applicationId: applications.id,
@@ -1610,9 +1624,23 @@ export class DatabaseStorage implements IStorage {
         .from(applications)
         .innerJoin(candidates, eq(applications.candidateId, candidates.id))
         .where(where),
+      wantsSearchMeta ? fetchMatchedSearchTokens(parsed.tokens, otherWhere) : Promise.resolve(new Set<string>()),
     ]);
 
-    return { data: rows, total: Number(totalCount) };
+    let searchMeta: CandidateSearchMeta | undefined;
+    if (wantsSearchMeta) {
+      const unmatched = parsed.tokens.filter(t => !matchedTokens.has(t));
+      const missingIds = unmatched.filter(looksLikeId);
+      const droppedFreeText = unmatched.length - missingIds.length;
+      searchMeta = {
+        tokenCount: parsed.tokens.length,
+        truncated: parsed.truncated,
+        missingIds,
+        droppedFreeText,
+      };
+    }
+
+    return { data: rows, total: Number(totalCount), ...(searchMeta ? { searchMeta } : {}) };
   }
 
   async getApplication(id: string): Promise<Application | undefined> {
