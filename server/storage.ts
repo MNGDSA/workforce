@@ -280,7 +280,7 @@ export interface IStorage {
   // Interviews
   getInterviews(params?: { status?: string; candidateId?: string; eventId?: string }): Promise<Interview[]>;
   getInterview(id: string): Promise<Interview | undefined>;
-  getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[] } | undefined>;
+  getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null; questionSetId: string | null; questionSetAnswers: Record<string, string> | null }[] } | undefined>;
   createInterview(interview: InsertInterview): Promise<Interview>;
   updateInterview(id: string, data: Partial<InsertInterview>): Promise<Interview | undefined>;
   archiveInterview(id: string): Promise<Interview | undefined>;
@@ -1737,7 +1737,7 @@ export class DatabaseStorage implements IStorage {
     return interview;
   }
 
-  async getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[] } | undefined> {
+  async getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null; questionSetId: string | null; questionSetAnswers: Record<string, string> | null }[] } | undefined> {
     // Auto-complete elapsed interviews so the detail panel never opens
     // a row that is visibly past its end-time but still labeled
     // "scheduled". See server/interview-auto-complete.ts.
@@ -1745,7 +1745,7 @@ export class DatabaseStorage implements IStorage {
     await autoCompleteElapsedInterviews();
     const [interview] = await db.select().from(interviews).where(eq(interviews.id, id));
     if (!interview) return undefined;
-    let invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[] = [];
+    let invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null; questionSetId: string | null; questionSetAnswers: Record<string, string> | null }[] = [];
     if (interview.invitedCandidateIds && interview.invitedCandidateIds.length > 0) {
       // Task #227: project `phone` so the client multi-ID search can match
       // pasted Saudi mobile numbers against invitees (in addition to
@@ -1761,26 +1761,66 @@ export class DatabaseStorage implements IStorage {
         .from(candidates)
         .where(inArray(candidates.id, interview.invitedCandidateIds));
 
-      // Look up the best application for each candidate (prefer most-progressed status)
+      // Pick the "best" application per candidate. Selection priority — most
+      // specific first, so the answers / status surfaced in the UI come from
+      // the application that actually relates to this interview:
+      //   1. interview.applicationId (explicit 1:1 binding when present)
+      //   2. application whose job is in the same event as this interview
+      //   3. highest status priority globally (legacy fallback)
+      // The original implementation used #3 alone, which could surface answers
+      // from an unrelated job when a candidate has multiple applications.
       const statusPriority: Record<string, number> = { hired: 6, offered: 5, interviewed: 4, shortlisted: 3, reviewing: 2, new: 1, rejected: 0, withdrawn: 0 };
       const appRows = await db.select({
         id: applications.id,
         candidateId: applications.candidateId,
         status: applications.status,
         jobId: applications.jobId,
+        questionSetAnswers: applications.questionSetAnswers,
       })
         .from(applications)
         .where(inArray(applications.candidateId, interview.invitedCandidateIds));
 
+      // Resolve each application's job → eventId + questionSetId in one shot.
+      // We pull both fields so we can prefer same-event apps before reading
+      // the question set for the chosen one.
+      const jobIds = Array.from(new Set(appRows.map(a => a.jobId).filter((v): v is string => !!v)));
+      const jobRows = jobIds.length > 0
+        ? await db.select({ id: jobPostings.id, eventId: jobPostings.eventId, questionSetId: jobPostings.questionSetId }).from(jobPostings).where(inArray(jobPostings.id, jobIds))
+        : [];
+      const jobMetaMap = new Map(jobRows.map(j => [j.id, { eventId: j.eventId ?? null, questionSetId: j.questionSetId ?? null }]));
+
       invitedCandidates = candidateRows.map(c => {
         const candidateApps = appRows.filter(a => a.candidateId === c.id);
-        // Prefer app linked to same job, else highest priority status
-        const best = candidateApps.sort((a, b) => (statusPriority[b.status] ?? 0) - (statusPriority[a.status] ?? 0))[0];
+        // 1. Exact bound application.
+        const boundApp = interview.applicationId
+          ? candidateApps.find(a => a.id === interview.applicationId)
+          : undefined;
+        // 2. Same-event applications, ordered by status priority.
+        const sameEventApps = interview.eventId
+          ? candidateApps
+              .filter(a => a.jobId && jobMetaMap.get(a.jobId)?.eventId === interview.eventId)
+              .sort((a, b) => (statusPriority[b.status] ?? 0) - (statusPriority[a.status] ?? 0))
+          : [];
+        // 3. Global fallback by status priority.
+        const anyApp = [...candidateApps].sort((a, b) => (statusPriority[b.status] ?? 0) - (statusPriority[a.status] ?? 0))[0];
+        const best = boundApp ?? sameEventApps[0] ?? anyApp;
+
+        // The answers blob on the application is { questionSetId, answers }.
+        // We surface only the inner `answers` map; the questionSetId is read
+        // from the job (authoritative — applications can be edited but the
+        // job's question set is the one currently displayed in admin UIs).
+        const answersBlob = best?.questionSetAnswers as { questionSetId?: string; answers?: Record<string, string> } | null | undefined;
+        const answers = answersBlob && answersBlob.answers && typeof answersBlob.answers === "object"
+          ? answersBlob.answers
+          : null;
+        const questionSetId = best?.jobId ? (jobMetaMap.get(best.jobId)?.questionSetId ?? null) : null;
         return {
           ...c,
           phone: c.phone ?? null,
           applicationId: best?.id ?? null,
           applicationStatus: best?.status ?? null,
+          questionSetId,
+          questionSetAnswers: answers,
         };
       });
     }

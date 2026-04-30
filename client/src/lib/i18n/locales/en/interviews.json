@@ -90,7 +90,11 @@
     "noApplication": "No application",
     "tipShortlist": "Shortlist",
     "tipReject": "Reject",
-    "tipReset": "Reset to interviewed"
+    "tipReset": "Reset to interviewed",
+    "viewAnswers": "View",
+    "hideAnswers": "Hide",
+    "screeningAnswers": "Screening Answers — {{name}}",
+    "noAnswer": "No answer"
   },
   "fullpage": {
     "session": "Session",

@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useCallback, useMemo, Fragment } from "react";
+import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useTranslation } from "react-i18next";
 import DashboardLayout from "@/components/layout";
@@ -27,7 +27,7 @@ import {
   Search, Filter, MoreHorizontal, Calendar, Clock, Video, Phone, MapPin,
   CheckCircle2, Loader2, Plus, Users, User, StickyNote, ExternalLink,
   ThumbsUp, ThumbsDown, RotateCcw, Maximize2, ArrowLeft, X,
-  Hash, AlertTriangle, Copy, Download, CheckSquare,
+  Hash, AlertTriangle, Copy, Download, CheckSquare, ChevronRight,
 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -62,12 +62,27 @@ type InterviewStats = {
   completed: number;
   cancelled: number;
 };
+type InvitedCandidate = {
+  id: string;
+  fullNameEn: string;
+  nationalId: string | null;
+  phone: string | null;
+  photoUrl: string | null;
+  applicationId: string | null;
+  applicationStatus: string | null;
+  // The candidate's job posting question set + the answers they submitted
+  // when applying. Surfaced inline in the invitee row "View Answers" panel
+  // (mirrors the job-posting applicants sheet).
+  questionSetId: string | null;
+  questionSetAnswers: Record<string, string> | null;
+};
 type InterviewDetail = {
   interview: Interview;
   // Task #227: `phone` is included so the multi-ID search can match pasted
   // Saudi mobile numbers against invitees alongside nationalId / candidate UUID.
-  invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[];
+  invitedCandidates: InvitedCandidate[];
 };
+type QuestionSet = { id: string; name: string; questions: { id: string; text: string }[] };
 
 function typeIcon(type: string) {
   if (type === "video") return <Video className="h-4 w-4" />;
@@ -152,6 +167,39 @@ function InterviewDetailSheet({
   const iv = data?.interview;
   const invitedCandidates = data?.invitedCandidates ?? [];
   const scheduled = iv ? formatScheduled(iv.scheduledAt) : null;
+
+  // "View Answers" inline expansion. Mirrors job-posting.tsx ApplicantsSheet:
+  // each invitee row gets a toggle that reveals a panel with their screening
+  // answers. The set holds candidate.ids of currently-expanded rows. Question
+  // sets are fetched lazily via useQueries — one parallel fetch per unique
+  // questionSetId across the invitee list (typically all share one).
+  const [expandedAnswerIds, setExpandedAnswerIds] = useState<Set<string>>(new Set());
+  const toggleExpandedAnswers = useCallback((id: string) => {
+    setExpandedAnswerIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+  const uniqueQuestionSetIds = useMemo(() => Array.from(new Set(
+    invitedCandidates.map(c => c.questionSetId).filter((v): v is string => !!v)
+  )), [invitedCandidates]);
+  const questionSetQueries = useQueries({
+    queries: uniqueQuestionSetIds.map(qsId => ({
+      queryKey: ["/api/question-sets", qsId],
+      queryFn: () => apiRequest("GET", `/api/question-sets/${qsId}`).then(r => r.json() as Promise<QuestionSet>),
+      staleTime: 5 * 60_000,
+      enabled: !!qsId,
+    })),
+  });
+  const questionSetMap = useMemo(() => {
+    const m = new Map<string, QuestionSet>();
+    questionSetQueries.forEach((q, i) => {
+      const id = uniqueQuestionSetIds[i];
+      if (id && q.data) m.set(id, q.data);
+    });
+    return m;
+  }, [questionSetQueries, uniqueQuestionSetIds]);
 
   // Multi-ID paste search (Task #226). Mirror the Candidates-page UX: when
   // more than one identifier is detected, a count pill renders inside the
@@ -478,8 +526,13 @@ function InterviewDetailSheet({
                       const isShortlisted = effectiveStatus === "shortlisted";
                       const isRejected    = effectiveStatus === "rejected";
                       const isPending     = statusMutation.isPending && (statusMutation.variables as { candidateId?: string } | undefined)?.candidateId === c.id;
+                      const answers = c.questionSetAnswers ?? null;
+                      const hasAnswers = !!answers && Object.keys(answers).length > 0;
+                      const isExpanded = expandedAnswerIds.has(c.id);
+                      const qs = c.questionSetId ? questionSetMap.get(c.questionSetId) : undefined;
                       return (
-                        <div key={c.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/10 transition-colors" data-testid={`detail-candidate-${c.id}`}>
+                        <Fragment key={c.id}>
+                        <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/10 transition-colors" data-testid={`detail-candidate-${c.id}`}>
                           <span className="text-[10px] text-muted-foreground/50 font-mono w-5 text-end shrink-0" dir="ltr">{formatNumber(idx + 1, i18n.language)}</span>
                           <Avatar className="h-7 w-7 border border-border shrink-0">
                             {c.photoUrl && <AvatarImage src={c.photoUrl} alt={c.fullNameEn} className="object-cover" />}
@@ -499,7 +552,23 @@ function InterviewDetailSheet({
                             <Badge className="bg-red-900/50 text-red-400 border-0 text-[10px] px-2 shrink-0">{t("interviews:labels.rejected")}</Badge>
                           )}
 
-                          <div className="flex gap-1 shrink-0">
+                          <div className="flex gap-1 shrink-0 items-center">
+                            {hasAnswers && (
+                              <button
+                                type="button"
+                                onClick={() => toggleExpandedAnswers(c.id)}
+                                className={`flex items-center gap-1 text-[10px] font-medium transition-colors px-2 py-1 rounded-sm border ${
+                                  isExpanded
+                                    ? "bg-primary/10 border-primary/40 text-primary"
+                                    : "bg-muted/20 border-border text-muted-foreground hover:border-primary/40 hover:text-primary"
+                                }`}
+                                title={isExpanded ? t("interviews:detail.hideAnswers") : t("interviews:detail.viewAnswers")}
+                                data-testid={`button-view-answers-${c.id}`}
+                              >
+                                <ChevronRight className={`h-3 w-3 transition-transform rtl:rotate-180 ${isExpanded ? "rotate-90 rtl:rotate-90" : ""}`} />
+                                {isExpanded ? t("interviews:detail.hideAnswers") : t("interviews:detail.viewAnswers")}
+                              </button>
+                            )}
                             {isPending ? (
                               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                             ) : c.applicationId ? (
@@ -544,6 +613,40 @@ function InterviewDetailSheet({
                             )}
                           </div>
                         </div>
+                        {isExpanded && hasAnswers && (
+                          <div className="bg-muted/5 px-4 py-3" data-testid={`panel-answers-${c.id}`}>
+                            <div className="border border-border rounded-md p-3 space-y-2 bg-muted/10">
+                              <p className="text-[10px] text-primary font-semibold uppercase tracking-wider">
+                                {t("interviews:detail.screeningAnswers", { name: qs?.name ?? "" })}
+                              </p>
+                              <div className="space-y-2">
+                                {qs?.questions && qs.questions.length > 0 ? (
+                                  qs.questions.map((q, qIdx) => (
+                                    <div key={q.id} className="flex items-start gap-3 text-xs">
+                                      <span className="text-[10px] font-bold text-primary/60 mt-0.5 shrink-0 w-5 text-end" dir="ltr">{formatNumber(qIdx + 1, i18n.language)}.</span>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-muted-foreground" data-testid={`text-question-${c.id}-${q.id}`}><bdi>{q.text}</bdi></p>
+                                        <p className={`font-medium mt-0.5 ${answers![q.id] ? "text-white" : "text-muted-foreground/40 italic"}`} data-testid={`text-answer-${c.id}-${q.id}`}>
+                                          <bdi>{answers![q.id] || t("interviews:detail.noAnswer")}</bdi>
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="space-y-2">
+                                    {Object.entries(answers!).map(([qid, val], qIdx) => (
+                                      <div key={qid} className="flex items-start gap-3 text-xs">
+                                        <span className="text-[10px] font-bold text-primary/60 mt-0.5 shrink-0 w-5 text-end" dir="ltr">{formatNumber(qIdx + 1, i18n.language)}.</span>
+                                        <p className="font-medium text-white flex-1" data-testid={`text-answer-${c.id}-${qid}`}><bdi>{val || t("interviews:detail.noAnswer")}</bdi></p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        </Fragment>
                       );
                     })}
                   </div>
@@ -628,6 +731,36 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
   const iv = data?.interview;
   const invitedCandidates = data?.invitedCandidates ?? [];
   const scheduled = iv ? formatScheduled(iv.scheduledAt) : null;
+
+  // "View Answers" inline expansion (mirrors InterviewDetailSheet). One row
+  // per invitee can be toggled open to reveal a screening-answers panel.
+  const [expandedAnswerIds, setExpandedAnswerIds] = useState<Set<string>>(new Set());
+  const toggleExpandedAnswers = useCallback((id: string) => {
+    setExpandedAnswerIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+  const uniqueQuestionSetIds = useMemo(() => Array.from(new Set(
+    invitedCandidates.map(c => c.questionSetId).filter((v): v is string => !!v)
+  )), [invitedCandidates]);
+  const questionSetQueries = useQueries({
+    queries: uniqueQuestionSetIds.map(qsId => ({
+      queryKey: ["/api/question-sets", qsId],
+      queryFn: () => apiRequest("GET", `/api/question-sets/${qsId}`).then(r => r.json() as Promise<QuestionSet>),
+      staleTime: 5 * 60_000,
+      enabled: !!qsId,
+    })),
+  });
+  const questionSetMap = useMemo(() => {
+    const m = new Map<string, QuestionSet>();
+    questionSetQueries.forEach((q, i) => {
+      const id = uniqueQuestionSetIds[i];
+      if (id && q.data) m.set(id, q.data);
+    });
+    return m;
+  }, [questionSetQueries, uniqueQuestionSetIds]);
 
   // Multi-ID paste search (Task #226). The full-page invitee list keeps its
   // single-token name+nationalId substring behaviour; multi-token mode is the
@@ -933,9 +1066,13 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                         const isPending = statusMutation.isPending && (statusMutation.variables as { candidateId?: string } | undefined)?.candidateId === c.id;
                         const isSelected = selectedIds.has(c.id);
                         const isEligible = !!c.applicationId && !isShortlisted;
+                        const answers = c.questionSetAnswers ?? null;
+                        const hasAnswers = !!answers && Object.keys(answers).length > 0;
+                        const isExpanded = expandedAnswerIds.has(c.id);
+                        const qs = c.questionSetId ? questionSetMap.get(c.questionSetId) : undefined;
                         return (
+                          <Fragment key={c.id}>
                           <TableRow
-                            key={c.id}
                             className={`border-border ${isSelected ? "bg-primary/5" : ""}`}
                             data-testid={`fullpage-candidate-${c.id}`}
                           >
@@ -980,7 +1117,23 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                               )}
                             </TableCell>
                             <TableCell className="text-end">
-                              <div className="flex justify-end gap-1">
+                              <div className="flex justify-end gap-1 items-center">
+                                {hasAnswers && (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleExpandedAnswers(c.id)}
+                                    className={`flex items-center gap-1 text-xs font-medium transition-colors px-2 py-1 rounded-sm border ${
+                                      isExpanded
+                                        ? "bg-primary/10 border-primary/40 text-primary"
+                                        : "bg-muted/20 border-border text-muted-foreground hover:border-primary/40 hover:text-primary"
+                                    }`}
+                                    title={isExpanded ? t("interviews:detail.hideAnswers") : t("interviews:detail.viewAnswers")}
+                                    data-testid={`fullpage-view-answers-${c.id}`}
+                                  >
+                                    <ChevronRight className={`h-3 w-3 transition-transform rtl:rotate-180 ${isExpanded ? "rotate-90 rtl:rotate-90" : ""}`} />
+                                    {isExpanded ? t("interviews:detail.hideAnswers") : t("interviews:detail.viewAnswers")}
+                                  </button>
+                                )}
                                 {isPending ? (
                                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                                 ) : c.applicationId ? (
@@ -1026,6 +1179,42 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                               </div>
                             </TableCell>
                           </TableRow>
+                          {isExpanded && hasAnswers && (
+                            <TableRow className="bg-muted/5 hover:bg-muted/5 border-border" data-testid={`fullpage-panel-answers-${c.id}`}>
+                              <TableCell colSpan={6} className="px-6 pb-4 pt-2">
+                                <div className="border border-border rounded-md p-4 space-y-3 bg-muted/10">
+                                  <p className="text-xs text-primary font-semibold uppercase tracking-wider">
+                                    {t("interviews:detail.screeningAnswers", { name: qs?.name ?? "" })}
+                                  </p>
+                                  <div className="space-y-2">
+                                    {qs?.questions && qs.questions.length > 0 ? (
+                                      qs.questions.map((q, qIdx) => (
+                                        <div key={q.id} className="flex items-start gap-3 text-sm">
+                                          <span className="text-xs font-bold text-primary/60 mt-0.5 shrink-0 w-5 text-end" dir="ltr">{formatNumber(qIdx + 1, i18n.language)}.</span>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-muted-foreground text-xs" data-testid={`fullpage-text-question-${c.id}-${q.id}`}><bdi>{q.text}</bdi></p>
+                                            <p className={`font-medium mt-0.5 ${answers![q.id] ? "text-white" : "text-muted-foreground/40 italic"}`} data-testid={`fullpage-text-answer-${c.id}-${q.id}`}>
+                                              <bdi>{answers![q.id] || t("interviews:detail.noAnswer")}</bdi>
+                                            </p>
+                                          </div>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <div className="space-y-2">
+                                        {Object.entries(answers!).map(([qid, val], qIdx) => (
+                                          <div key={qid} className="flex items-start gap-3 text-sm">
+                                            <span className="text-xs font-bold text-primary/60 mt-0.5 shrink-0 w-5 text-end" dir="ltr">{formatNumber(qIdx + 1, i18n.language)}.</span>
+                                            <p className="font-medium text-white flex-1" data-testid={`fullpage-text-answer-${c.id}-${qid}`}><bdi>{val || t("interviews:detail.noAnswer")}</bdi></p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          </Fragment>
                         );
                       })}
                     </TableBody>

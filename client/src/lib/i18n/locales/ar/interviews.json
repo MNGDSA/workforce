@@ -90,7 +90,11 @@
     "noApplication": "لا يوجد طلب",
     "tipShortlist": "إدراج بالقائمة المختصرة",
     "tipReject": "رفض",
-    "tipReset": "إعادة إلى تمت المقابلة"
+    "tipReset": "إعادة إلى تمت المقابلة",
+    "viewAnswers": "عرض",
+    "hideAnswers": "إخفاء",
+    "screeningAnswers": "إجابات الفرز — {{name}}",
+    "noAnswer": "لا توجد إجابة"
   },
   "fullpage": {
     "session": "جلسة",
