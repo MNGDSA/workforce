@@ -142,6 +142,65 @@ add an `ensure-*.ts` script — that is the entire point. The allowlist is
 intentionally append-once: stale entries (gaps that have since been
 covered) cause the check to fail loudly so the list shrinks over time.
 
+## CI enforcement (Task #237) — index/constraint check
+
+A third sibling check, `scripts/check-schema-indexes.mjs`, runs in the
+same `Schema migration coverage` CI job. The column checks (Tasks #234
+and #236) only inspect `ALTER TABLE ... ADD COLUMN` and `CREATE TABLE`
+statements, so an index-only or constraint-only change could still reach
+production silently — a new `uniqueIndex(...)` an upsert relies on would
+quietly let duplicate rows in if the index is missing in prod.
+
+The check fails the build when:
+
+- A `uniqueIndex("name")` or `index("name")` declaration appears in
+  `shared/schema.ts` whose name is not in the baseline drizzle snapshot
+  (`migrations/meta/0000_snapshot.json`) **and** no
+  `CREATE [UNIQUE] INDEX [CONCURRENTLY] [IF NOT EXISTS] <name>` exists
+  in any `server/migrations/ensure-*.ts` file. Drizzle SQL files in
+  `migrations/*.sql` are intentionally NOT scanned: production deploys
+  do not run `drizzle-kit migrate` / push, so a CREATE INDEX that lives
+  only in a `.sql` file would never reach prod. Only ensure-scripts
+  (which run on every server boot) satisfy coverage.
+- A `uniqueIndex("name")` declaration is "covered" by a non-UNIQUE
+  `CREATE INDEX <name>`. Coverage is tracked unique-vs-non-unique
+  separately so a plain `CREATE INDEX` cannot satisfy a `uniqueIndex`
+  declaration — that mismatch would install a non-unique index in
+  production and silently break any upsert / `ON CONFLICT` path that
+  relies on the uniqueness guarantee.
+- A `check("name", ...)` declaration (or a named
+  `primaryKey({ name: "name", columns: [...] })`) is not in baseline and
+  no `ADD CONSTRAINT [IF NOT EXISTS] <name>` covers it. Because
+  Postgres < 18 has no native `ADD CONSTRAINT IF NOT EXISTS`, contributors
+  typically wrap the `ALTER TABLE` in a `DO $$ ... END $$` guard or
+  `pg_constraint` lookup — either form satisfies the check. **Tradeoff:**
+  the check confirms the constraint name appears in some ensure-script's
+  `ADD CONSTRAINT <name>` statement but does NOT mechanically verify the
+  guard wrapper. The author is responsible for making the statement
+  idempotent (a bare `ALTER TABLE ... ADD CONSTRAINT` would crash on the
+  second boot). Mechanically validating arbitrary PG guard wrappers
+  (`DO $$ ... END $$`, `pg_constraint` SELECTs, savepoint patterns, etc.)
+  was deferred — the variation in valid forms is large and there are no
+  named constraints in the baseline today, so a follow-up can revisit this
+  if/when the first one lands.
+- An unnamed `primaryKey({ columns: [...] })` is added on a table that
+  already exists in baseline. Provide an explicit `name: "..."` so the
+  matching ensure-script can be verified.
+- An `ensure-*.ts` script contains a non-idempotent `CREATE INDEX`
+  (i.e. missing `IF NOT EXISTS`). Boot-migrate scripts run on every
+  startup, so the second boot would crash with `relation "..." already
+  exists`.
+
+Indexes / constraints declared on a brand-new table are treated as
+covered when the table itself has `CREATE TABLE IF NOT EXISTS` coverage,
+because the constraint can be inlined inside the same `CREATE TABLE`.
+
+`scripts/schema-index-allowlist.json` records pre-existing index/
+constraint gaps that predate this check (currently
+`smp_companies_lower_name_idx` and `workforce_event_active_idx`). Same
+contract as the column allowlist: do not grow it; ship a real
+ensure-script instead.
+
 ## What the check does *not* do
 
 - It does not validate column **types** match between `shared/schema.ts`
@@ -152,7 +211,7 @@ covered) cause the check to fail loudly so the list shrinks over time.
   `server/index.ts`.~~ As of Task #236 the wiring check
   (`scripts/check-boot-migrate-wiring.mjs`) does enforce this — the build
   fails if the exported function is not awaited from `server/index.ts`.
-- It does not cover index-only or constraint-only changes. Those are
-  rarer and lower-risk than a missing column, but if you add a unique
-  index that the application relies on, ship it via an ensure-script
-  too.
+- ~~It does not cover index-only or constraint-only changes.~~ As of
+  Task #237 the index/constraint check
+  (`scripts/check-schema-indexes.mjs`) does cover these — see the
+  section above.

@@ -1,0 +1,29 @@
+{
+  "$comment": [
+    "Pre-existing schema-index/constraint drift baseline for Task #237.",
+    "These are uniqueIndex/index/check/named-primaryKey declarations that",
+    "landed in shared/schema.ts BEFORE the index coverage check existed.",
+    "They are presumed to exist in production already (via drizzle-kit push",
+    "during early development, the ensure-critical-tables recovery path,",
+    "or a one-shot script).",
+    "",
+    "DO NOT add new entries here when introducing new indexes or",
+    "constraints. The whole point of the index coverage check is to force",
+    "you to add a real server/migrations/ensure-*.ts file with",
+    "  CREATE [UNIQUE] INDEX IF NOT EXISTS <name> ON <table> (...)",
+    "or",
+    "  ALTER TABLE <table> ADD CONSTRAINT <name> ...",
+    "instead of suppressing the warning here. Stale entries (gaps that",
+    "have since been covered by a real ensure-script) cause the check to",
+    "fail loudly so this list shrinks over time.",
+    "",
+    "Format (kept here as documentation for the check parser):",
+    "  newIndexes:     ['<index_name>', ...]   // global Postgres index names",
+    "  newConstraints: ['<constraint_name>', ...]"
+  ],
+  "newIndexes": [
+    "smp_companies_lower_name_idx",
+    "workforce_event_active_idx"
+  ],
+  "newConstraints": []
+}

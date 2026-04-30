@@ -69,3 +69,12 @@ jobs:
         # wired-but-unregistered ensure-script crashes production the same
         # way a missing one does.
         run: node scripts/check-boot-migrate-wiring.mjs
+
+      - name: Verify schema-index/constraint coverage
+        # Task #237 — fail the build when a uniqueIndex/index/check/named
+        # primaryKey is added to shared/schema.ts without a matching
+        # CREATE [UNIQUE] INDEX IF NOT EXISTS / ADD CONSTRAINT in any
+        # ensure-*.ts script. The column check (Task #234) only covers
+        # ALTER TABLE ADD COLUMN — index-only and constraint-only changes
+        # could otherwise reach prod silently and break upserts/dedupes.
+        run: node scripts/check-schema-indexes.mjs
