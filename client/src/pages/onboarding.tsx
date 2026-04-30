@@ -2411,48 +2411,29 @@ export default function OnboardingPage() {
     duplicateIds: string[];
     failures: { candidateId: string; message: string }[];
   };
-  // Bulk admit hardened against partial failure. Previous version used
-  // `Promise.all` which (a) marked the whole batch as failed when ANY row
-  // failed even though earlier rows had already been written to the DB, and
-  // (b) left the dialog open with the same selection — the user retried,
-  // hit 409 "already exists" on the rows that succeeded the first time, and
-  // panicked. New behaviour:
-  //   - Each admit is awaited via `allSettled`, so one bad row never
-  //     hides the success of the others.
-  //   - 409 (already in onboarding) is treated as a "soft skip": the
-  //     candidate IS in onboarding, which is exactly what the user
-  //     wanted, so we count it toward "no-op success" and remove them
-  //     from selection.
-  //   - Caches are ALWAYS invalidated, so the eligible list and the
-  //     onboarding table reflect reality even on partial failure.
-  //   - Selection is cleared only for rows we know are now in onboarding
-  //     (succeeded + duplicates). True failures stay selected so the user
-  //     can retry just those without re-picking the whole batch.
-  //   - Toast wording differentiates full success / partial / total failure
-  //     so the user always knows the actual state.
+  // Per-row Promise.allSettled: one failure no longer marks the whole batch
+  // failed. 409 ("already in onboarding") is treated as a soft-skip — the
+  // end state matches the user's goal. Caches always invalidate; only
+  // handled rows are removed from selection so retries hit just the
+  // failures.
   const admitMutation = useMutation<AdmitOutcome, unknown, AdmitItem[]>({
     mutationFn: async (items: AdmitItem[]) => {
-      // `apiRequest` throws on any non-2xx (its body is "<status>: <text>"),
-      // so we wrap each call and treat 409 ("already in onboarding") as a
-      // soft-skip rather than a hard failure — the candidate IS in the
-      // pipeline, which is the user's goal.
       const settled = await Promise.allSettled(
         items.map(async (body) => {
           try {
             await apiRequest("POST", "/api/onboarding", body);
             return { kind: "ok" as const, candidateId: body.candidateId };
-          } catch (e: any) {
-            const raw: string = e?.message ?? "";
+          } catch (e: unknown) {
+            // `apiRequest` throws Error("<status>: <text>") on non-2xx.
+            const raw = e instanceof Error ? e.message : String(e ?? "");
             const m = raw.match(/^(\d{3}):\s*(.*)$/);
             const status = m ? Number(m[1]) : 0;
             if (status === 409) return { kind: "duplicate" as const, candidateId: body.candidateId };
-            // Try to surface the server's localized message instead of the
-            // raw "<status>: <body>" wrapper.
             let msg = m?.[2] ?? raw ?? "admit failed";
             try {
               const parsed = JSON.parse(m?.[2] ?? "");
               if (parsed?.message) msg = parsed.message;
-            } catch { /* not JSON, use as-is */ }
+            } catch { /* not JSON */ }
             throw Object.assign(new Error(msg), { candidateId: body.candidateId });
           }
         }),

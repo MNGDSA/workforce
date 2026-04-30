@@ -2868,37 +2868,27 @@ export class DatabaseStorage implements IStorage {
     return rec;
   }
 
-  // Race-safe admit. Two concurrent admits of the same candidate (e.g. two
-  // admins clicking "Confirm" in their own dialogs at the same time) used to
-  // both pass a SELECT-then-INSERT existence check and create duplicate
-  // onboarding rows for one candidate — onboarding then showed the candidate
-  // twice and conversion eventually broke. This method serializes that
-  // window inside a single transaction:
-  //
-  //   BEGIN
-  //     SELECT … FOR UPDATE           -- locks any existing active row
-  //     INSERT … if no active row     -- guaranteed unique within this txn
-  //   COMMIT
-  //
-  // If a row already existed, we return `{ ok: false, reason: "duplicate" }`
-  // along with the conflicting record so the caller can return a precise
-  // 409 to the client (and the bulk-admit UI can mark just that item as
-  // "already admitted" and keep the rest of the batch moving).
-  //
-  // We deliberately lock the candidate's own active row instead of a wider
-  // table-level lock — concurrent admits for *different* candidates run
-  // fully in parallel, so this scales linearly with admit throughput.
+  // Race-safe admit. Without this, two concurrent SELECT-then-INSERT calls
+  // for the same candidate both saw "no active row" and both inserted,
+  // producing duplicate onboarding rows. SELECT … FOR UPDATE alone does
+  // NOT close that gap (Postgres has no predicate / gap lock here), so we
+  // take a transaction-scoped advisory lock keyed on the candidate's id
+  // — concurrent admits for the SAME candidate serialize on the lock; the
+  // loser then sees the row the winner inserted and gets a 409. Admits
+  // for different candidates run fully in parallel.
   async admitCandidateToOnboarding(
     data: InsertOnboarding,
   ): Promise<{ ok: true; record: OnboardingRecord } | { ok: false; reason: "duplicate"; existing: OnboardingRecord }> {
     return await db.transaction(async (tx) => {
       const candId = data.candidateId;
       if (!candId) {
-        // SMP / no-candidate admits cannot collide on candidate_id, so the
-        // race-guard does not apply. Insert and return.
+        // SMP / no-candidate admits cannot collide on candidate_id.
         const [rec] = await tx.insert(onboarding).values(data).returning();
         return { ok: true as const, record: rec };
       }
+      // pg_advisory_xact_lock auto-releases at COMMIT/ROLLBACK. hashtext
+      // -> int4 fits the single-key signature.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${candId}))`);
       const [existing] = await tx
         .select()
         .from(onboarding)
@@ -2906,7 +2896,6 @@ export class DatabaseStorage implements IStorage {
           eq(onboarding.candidateId, candId),
           sql`${onboarding.status} NOT IN ('converted', 'rejected', 'terminated')`,
         ))
-        .for("update")
         .limit(1);
       if (existing) {
         return { ok: false as const, reason: "duplicate" as const, existing };
