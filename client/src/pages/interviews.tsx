@@ -55,6 +55,9 @@ type Interview = {
   invitedCandidateIds?: string[] | null;
   createdByName?: string | null;
   createdAt: string;
+  shortlistedCount?: number;
+  rejectedCount?: number;
+  pendingCount?: number;
 };
 type InterviewStats = {
   total: number;
@@ -1470,9 +1473,9 @@ export default function InterviewsPage() {
                     const candidate = candidateMap[iv.candidateId];
                     const { date, time } = formatScheduled(iv.scheduledAt);
                     const invitedCount = iv.invitedCandidateIds?.length ?? 0;
-                    const shortlistedCount = (iv as any).shortlistedCount ?? 0;
-                    const rejectedCount = (iv as any).rejectedCount ?? 0;
-                    const pendingCount = (iv as any).pendingCount ?? Math.max(invitedCount - shortlistedCount - rejectedCount, 0);
+                    const shortlistedCount = iv.shortlistedCount ?? 0;
+                    const rejectedCount = iv.rejectedCount ?? 0;
+                    const pendingCount = iv.pendingCount ?? Math.max(invitedCount - shortlistedCount - rejectedCount, 0);
                     return (
                       <TableRow
                         key={iv.id}

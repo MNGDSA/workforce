@@ -1717,12 +1717,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getInterviewsWithDecisionCounts(params?: { status?: string; candidateId?: string; eventId?: string }): Promise<(Interview & { shortlistedCount: number; rejectedCount: number; pendingCount: number })[]> {
-    // Decision counts on the interview list mirror the per-row chips that
-    // appear inside the detail drawer (`getInterviewDetail`). For each
-    // invitee we resolve the "best" application by the same priority rule
-    // (bound app > same-event app > highest status priority) so the
-    // shortlisted/rejected count shown next to a row exactly matches the
-    // chips a user sees once they open the detail panel — no drift.
+    // Same per-invitee "best application" priority as `getInterviewDetail`,
+    // so list counts equal the drawer chips byte-for-byte.
     const rows = await this.getInterviews(params);
     if (rows.length === 0) return [];
 
