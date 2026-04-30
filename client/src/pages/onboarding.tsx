@@ -3341,7 +3341,16 @@ export default function OnboardingPage() {
                   if (!profileValue && p.profileKey === "ibanFileUrl" && cand?.ibanNumber?.startsWith("/uploads/")) {
                     profileValue = cand.ibanNumber;
                   }
-                  if (profileValue && p.profileKey && p.profileKey !== "photoUrl") {
+                  // Route every file (including the personal photo) through
+                  // the authenticated /api/files/uploads/... proxy. Loading
+                  // raw S3/presigned URLs directly inside <img> was racy:
+                  // private buckets, CORS, and TTL expiry made the photo
+                  // intermittently fail to render even though opening the
+                  // same URL in a new tab worked. The proxy uses the
+                  // session cookie and streams the bytes server-side, so
+                  // the browser sees a same-origin image that always loads.
+                  // toProxiedFileUrl is a no-op for URLs without /uploads/.
+                  if (profileValue && p.profileKey) {
                     profileValue = toProxiedFileUrl(profileValue) ?? profileValue;
                   }
                   const hasProfileData = !!profileValue;
