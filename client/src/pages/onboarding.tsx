@@ -77,6 +77,8 @@ import {
   Archive,
   ChevronUp,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Upload,
   Image,
   Bell,
@@ -3125,8 +3127,9 @@ export default function OnboardingPage() {
                   variant="outline"
                   disabled={admitPage === 1}
                   onClick={() => setAdmitPage(p => Math.max(1, p - 1))}
-                  className="border-zinc-700 text-zinc-300 h-7 px-2 text-xs"
+                  className="border-zinc-700 text-zinc-300 h-7 px-2 text-xs gap-1"
                 >
+                  <ChevronLeft className="h-3.5 w-3.5 rtl:rotate-180" />
                   {t("admit.prev")}
                 </Button>
                 <span className="text-xs text-zinc-500">
@@ -3138,9 +3141,10 @@ export default function OnboardingPage() {
                   variant="outline"
                   disabled={admitPage === admitTotalPages}
                   onClick={() => setAdmitPage(p => Math.min(admitTotalPages, p + 1))}
-                  className="border-zinc-700 text-zinc-300 h-7 px-2 text-xs"
+                  className="border-zinc-700 text-zinc-300 h-7 px-2 text-xs gap-1"
                 >
                   {t("admit.next")}
+                  <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" />
                 </Button>
               </div>
             )}
