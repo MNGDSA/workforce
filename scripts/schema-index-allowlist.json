@@ -21,9 +21,6 @@
     "  newIndexes:     ['<index_name>', ...]   // global Postgres index names",
     "  newConstraints: ['<constraint_name>', ...]"
   ],
-  "newIndexes": [
-    "smp_companies_lower_name_idx",
-    "workforce_event_active_idx"
-  ],
+  "newIndexes": [],
   "newConstraints": []
 }

@@ -138,6 +138,16 @@ app.use((req, res, next) => {
     await ensureVaccinationReportColumns(log);
     const { ensureInterviewsArchivedAt } = await import("./migrations/ensure-interviews-archived-at");
     await ensureInterviewsArchivedAt(log);
+    // Task #241 — ship the two pre-existing index gaps as real ensure-
+    // scripts so a fresh prod database / recovery rebuild does not
+    // silently miss them. Both are pure CREATE INDEX IF NOT EXISTS so
+    // ordering relative to the column-shape migrations above is
+    // immaterial; they are placed last because they describe indexes,
+    // not table shape.
+    const { ensureSmpCompanyLowerNameIdx } = await import("./migrations/ensure-smp-company-lower-name-idx");
+    await ensureSmpCompanyLowerNameIdx(log);
+    const { ensureWorkforceEventActiveIdx } = await import("./migrations/ensure-workforce-event-active-idx");
+    await ensureWorkforceEventActiveIdx(log);
   } catch (err) {
     log(`boot migration failed: ${err}`, "boot-migrate");
   }
