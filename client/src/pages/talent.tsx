@@ -1546,7 +1546,10 @@ export default function TalentPage() {
     return new URLSearchParams(window.location.search).get("hasVaccinationReport") === "true";
   });
   const [sortBy, setSortBy] = useState<SortField>("createdAt");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  // Default to oldest-first so the very first registrations show on page 1
+  // (per product decision). Users can flip direction by clicking the
+  // "Created" column header.
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(new Set(DEFAULT_VISIBLE));
   const [uploadOpen, setUploadOpen] = useState(false);
 
