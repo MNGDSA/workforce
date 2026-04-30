@@ -100,7 +100,8 @@ app.use((req, res, next) => {
 
   // Boot-time idempotent schema patches. Production deploys do not run
   // drizzle-kit push, so schema additions must self-heal here. Keep these
-  // small and ADD COLUMN IF NOT EXISTS / CREATE TABLE IF NOT EXISTS only.
+  // small and ADD COLUMN IF NOT EXISTS / CREATE TABLE / INDEX IF NOT
+  // EXISTS only.
   //
   // ORDERING MATTERS — later scripts in this block ALTER tables / enum
   // types created earlier. Specifically:
@@ -110,6 +111,8 @@ app.use((req, res, next) => {
   //     and ensureOnboardingReminders.
   //   • ensureCandidateClassificationAndDocs creates the
   //     `candidate_classification` enum and adds candidates.classification.
+  //
+  // @boot-migrate-block — see scripts/check-boot-migrate-wiring.mjs (Task #236).
   try {
     const { ensureRbacTables } = await import("./migrations/ensure-rbac-tables");
     await ensureRbacTables(log);
@@ -140,6 +143,7 @@ app.use((req, res, next) => {
   // Production safety net: verify critical tables exist. If drizzle-kit push
   // failed during build, fail fast with a clear operator message instead of
   // serving 500s for every API request.
+  // @boot-migrate-block — see scripts/check-boot-migrate-wiring.mjs (Task #236).
   try {
     const { ensureCriticalTables } = await import("./migrations/ensure-critical-tables");
     await ensureCriticalTables(log);

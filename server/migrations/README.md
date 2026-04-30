@@ -64,6 +64,71 @@ This catches the recurring class of bug that took down production with
 `column "has_vaccination_report" does not exist` (commit 0930a84) and
 `column "locale" does not exist` before that.
 
+## CI enforcement (Task #236) — wiring check
+
+A sibling check, `scripts/check-boot-migrate-wiring.mjs`, runs in the same
+CI job (`Schema migration coverage`) and fails the build when an
+`ensure-*.ts` file exists but its exported function is not awaited from
+the boot-migrate `try { ... } catch` block in `server/index.ts`. Task #234
+only verifies the ALTER statement exists; without this check, a contributor
+can ship a perfectly written ensure-script and still crash production
+because the `await ensureXxx(log)` line was forgotten.
+
+### How it works
+
+For each `server/migrations/ensure-*.ts` file the check:
+
+1. Parses every `export async function ensureXxx` declaration.
+2. Looks for `await ensureXxx(...)` ONLY inside `try { ... }` blocks
+   immediately following a `// @boot-migrate-block` marker comment in
+   `server/index.ts`. Calls anywhere else in the file (route handlers,
+   helpers, future startup code) do NOT count. Comments and string /
+   template-literal contents are stripped before scanning, so a
+   `"await ensureXxx(log)"` docstring or a commented-out invocation
+   cannot satisfy the check.
+3. Fails the build if no exported function is awaited from any marked
+   block.
+
+### Required: the `// @boot-migrate-block` marker
+
+Every boot-migrate `try` block in `server/index.ts` must be tagged with
+`// @boot-migrate-block` on a line immediately above the `try`. There can
+be more than one — `server/index.ts` currently has two (the schema
+self-heal block and the `ensure-critical-tables` safety net):
+
+```ts
+// Boot-time idempotent schema patches.
+// @boot-migrate-block — see scripts/check-boot-migrate-wiring.mjs (Task #236).
+try {
+  const { ensureFoo } = await import("./migrations/ensure-foo");
+  await ensureFoo(log);
+} catch (err) {
+  log(`boot migration failed: ${err}`, "boot-migrate");
+}
+```
+
+If you add a new boot-migrate block, add the marker too. If a refactor
+removes every marker, the check fails loudly rather than silently letting
+all ensure-scripts pass.
+
+### Opt-out: intentionally one-shot ensure-scripts
+
+If an `ensure-*.ts` file is intentionally a one-shot backfill that should
+NOT run on every boot (similar to `migrate-to-rbac.ts`), add the marker
+`@boot-migrate-optional` somewhere in the file (e.g. in the JSDoc header):
+
+```ts
+/**
+ * One-shot RBAC backfill. Run manually with `tsx`.
+ * @boot-migrate-optional
+ */
+export async function ensureRbacBackfill(log) { /* ... */ }
+```
+
+Prefer renaming such files to a non-`ensure-` prefix when possible — the
+opt-out marker exists for the rare case where the `ensure-` name is
+already established and changing it would break external references.
+
 ### The allowlist
 
 `scripts/schema-migration-allowlist.json` records pre-existing gaps that
@@ -83,10 +148,10 @@ covered) cause the check to fail loudly so the list shrinks over time.
   and the ensure-script. A boolean schema field paired with an
   `ADD COLUMN ... TEXT` migration will pass the check. Reviewers must
   still read the ensure-script.
-- It does not enforce that you registered the new ensure-function in
-  `server/index.ts`. If you forget, the column will still be missing at
-  boot. (A future improvement could parse `server/index.ts` for the
-  import and fail when the file exists but is unwired.)
+- ~~It does not enforce that you registered the new ensure-function in
+  `server/index.ts`.~~ As of Task #236 the wiring check
+  (`scripts/check-boot-migrate-wiring.mjs`) does enforce this — the build
+  fails if the exported function is not awaited from `server/index.ts`.
 - It does not cover index-only or constraint-only changes. Those are
   rarer and lower-risk than a missing column, but if you add a unique
   index that the application relies on, ship it via an ensure-script

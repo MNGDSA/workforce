@@ -62,3 +62,10 @@ jobs:
 
       - name: Verify ensure-script coverage
         run: node scripts/check-schema-migrations.mjs
+
+      - name: Verify boot-migrate wiring
+        # Task #236 — fail the build when an ensure-*.ts script exists but
+        # its exported function is not awaited from server/index.ts. A
+        # wired-but-unregistered ensure-script crashes production the same
+        # way a missing one does.
+        run: node scripts/check-boot-migrate-wiring.mjs
