@@ -532,26 +532,10 @@ function InterviewDetailSheet({
                       const qs = c.questionSetId ? questionSetMap.get(c.questionSetId) : undefined;
                       return (
                         <Fragment key={c.id}>
-                        {/* Row layout: identity (index + avatar + name/id) is one
-                            inner flex group that always stays on a single line and
-                            consumes whatever horizontal space the row affords it.
-                            The outer container is `flex-wrap`, so the status chips
-                            and action group wrap onto a second line on narrow
-                            widths (e.g. when the long Arabic chip
-                            "ضمن القائمة المختصرة" cannot share a line with the
-                            shortlist/reject/reset icon-buttons) instead of being
-                            clipped by the parent's `overflow-hidden`. The action
-                            group keeps `flex-nowrap` internally so its icons never
-                            split mid-group; on a single-line row it pushes to the
-                            end via `ms-auto`. */}
+                        {/* flex-wrap so badges + action group fall to a second
+                            line on narrow widths instead of being clipped by the
+                            parent's overflow-hidden. */}
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 hover:bg-muted/10 transition-colors" data-testid={`detail-candidate-${c.id}`}>
-                          {/* basis-40 (10rem) gives the identity group a non-zero
-                              wrapping basis, so on intermediate widths the
-                              shortlisted badge + action group prefer to wrap to
-                              a second line instead of compressing the name to
-                              an unreadable few characters. min-w-0 still allows
-                              the inner name <p>'s `truncate` to kick in once
-                              the basis is exceeded by a long name. */}
                           <div className="flex items-center gap-3 flex-1 basis-40 min-w-0">
                             <span className="text-[10px] text-muted-foreground/50 font-mono w-7 text-end shrink-0" dir="ltr">{formatNumber(idx + 1, i18n.language)}</span>
                             <Avatar className="h-7 w-7 border border-border shrink-0">
@@ -568,18 +552,18 @@ function InterviewDetailSheet({
 
                           {isShortlisted && (
                             <Badge
-                              className="bg-emerald-900/50 text-emerald-400 border-0 text-[10px] px-2 shrink-0 max-w-[10rem] truncate"
+                              className="bg-emerald-900/50 text-emerald-400 border-0 text-[10px] px-2 shrink-0 max-w-[10rem]"
                               title={t("interviews:labels.shortlisted")}
                             >
-                              {t("interviews:labels.shortlisted")}
+                              <span className="truncate min-w-0">{t("interviews:labels.shortlisted")}</span>
                             </Badge>
                           )}
                           {isRejected && (
                             <Badge
-                              className="bg-red-900/50 text-red-400 border-0 text-[10px] px-2 shrink-0 max-w-[10rem] truncate"
+                              className="bg-red-900/50 text-red-400 border-0 text-[10px] px-2 shrink-0 max-w-[10rem]"
                               title={t("interviews:labels.rejected")}
                             >
-                              {t("interviews:labels.rejected")}
+                              <span className="truncate min-w-0">{t("interviews:labels.rejected")}</span>
                             </Badge>
                           )}
 
