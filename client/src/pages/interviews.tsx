@@ -532,9 +532,6 @@ function InterviewDetailSheet({
                       const qs = c.questionSetId ? questionSetMap.get(c.questionSetId) : undefined;
                       return (
                         <Fragment key={c.id}>
-                        {/* flex-wrap so badges + action group fall to a second
-                            line on narrow widths instead of being clipped by the
-                            parent's overflow-hidden. */}
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 hover:bg-muted/10 transition-colors" data-testid={`detail-candidate-${c.id}`}>
                           <div className="flex items-center gap-3 flex-1 basis-40 min-w-0">
                             <span className="text-[10px] text-muted-foreground/50 font-mono w-7 text-end shrink-0" dir="ltr">{formatNumber(idx + 1, i18n.language)}</span>
