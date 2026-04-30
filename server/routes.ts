@@ -4113,23 +4113,11 @@ export async function registerRoutes(
   app.put("/api/onboarding/reminder-settings", requirePermission("onboarding:update"), async (req: Request, res: Response) => {
     try {
       const { setReminderConfig, setReminderTemplates, getAllReminderTemplates, getReminderConfig } = await import("./onboarding-reminders");
-      // The 4th onboarding doc ("vaccination_report") was added to the
-      // client default `requiredDocs`, the server `DEFAULT_CONFIG`, the
-      // `ReminderDocId` type, and the SMP whitelist — but this PUT
-      // validator was missed. Adding it here keeps every layer in sync
-      // so the moment a config containing "vaccination_report" lands on
-      // PUT (which is now, on every save), validation accepts it.
       const reminderDocSchema = z.enum(["photo", "iban", "national_id", "vaccination_report"]);
       const configPatchSchema = z.object({
         enabled: z.boolean().optional(),
-        // `enabledAt` is server-managed: setReminderConfig stamps it on
-        // OFF→ON transitions and clears it on ON→OFF. The client spreads
-        // the GET response into its form state and round-trips it back
-        // on every save, so the strict() validator below would 400 on
-        // every save (`unrecognized_keys: 'enabledAt'`) without this
-        // explicit accept-and-ignore. Whatever the client sends is
-        // overwritten inside setReminderConfig before persistence — the
-        // client cannot influence enabledAt directly.
+        // Server-managed; accepted so the client can round-trip the GET
+        // response without strict() rejecting it. Stripped before persist.
         enabledAt: z.string().nullable().optional(),
         firstAfterHours: z.number().int().min(0).optional(),
         repeatEveryHours: z.number().int().min(0).optional(),
@@ -4152,15 +4140,9 @@ export async function registerRoutes(
         templates: templatesPatchSchema.optional(),
       }).strict();
       const body = bodySchema.parse(req.body ?? {});
-      // Drop the client-supplied `enabledAt` at the route boundary —
-      // it's accepted by the validator only so the GET-shape round-trip
-      // doesn't 400, but the persisted value is server-managed and
-      // setReminderConfig will overwrite it anyway. Stripping it here
-      // makes the accept-and-ignore contract explicit and decouples the
-      // route from setReminderConfig's internal precedence rules.
       let configPatch: typeof body.config | undefined = body.config;
       if (configPatch !== undefined) {
-        const { enabledAt: _ignoredClientEnabledAt, ...rest } = configPatch;
+        const { enabledAt: _ignored, ...rest } = configPatch;
         configPatch = rest;
       }
       const config = configPatch !== undefined ? await setReminderConfig(configPatch) : await getReminderConfig();
