@@ -230,6 +230,54 @@ extensions) are skipped rather than failing loudly. Add an entry to
 `DRIZZLE_TO_PG_TYPES` if you start using a new helper that needs the
 guard.
 
+## CI enforcement (Task #242) — NOT NULL / DEFAULT mismatch check
+
+The same coverage script also validates that the `NOT NULL` and `DEFAULT`
+clauses on `ADD COLUMN <col>` match the schema's `.notNull()` /
+`.default(...)` chain. The motivating bug is `users.locale` shipped
+without a `DEFAULT 'ar'` in the ensure-script: the schema declared
+`varchar("locale", { length: 8 }).notNull().default("ar")` and inserts
+that didn't supply the column crashed production with
+`null value in column "locale" violates not-null constraint`. The
+type-mismatch check from Task #238 happily accepted the column because
+the SQL type (`VARCHAR(8)`) was correct.
+
+The check fails the build when:
+
+- A schema column is marked `.notNull()` but the ensure-script's
+  `ADD COLUMN` clause omits `NOT NULL` (or vice versa).
+- A schema column has `.default(...)` but the ensure-script omits
+  `DEFAULT` (or vice versa).
+- Both sides declare a default but the values are not loosely
+  compatible. Loose comparison is intentional: `false` ↔ `false`,
+  `'ar'` ↔ `"ar"`, and `now()` ↔ `CURRENT_TIMESTAMP` all reduce to the
+  same canonical form via `normalizeDefault` in
+  [`scripts/schema-type-map.mjs`](../../scripts/schema-type-map.mjs).
+  Drizzle's `sql\`...\`` template wrapper, Postgres `::cast` suffixes,
+  and surrounding quotes are stripped before comparison.
+
+### Suppressing intentional drift
+
+If the mismatch is intentional and documented in the ensure-script,
+list the column under `nullDefaultDrift` in
+`scripts/schema-migration-allowlist.json`:
+
+```json
+"nullDefaultDrift": {
+  "users": ["role_id"]
+}
+```
+
+The canonical case is `users.role_id` (`ensure-user-token-and-role-cols.ts`):
+the schema declares `.notNull()` for the RBAC pointer, but the ensure-script
+intentionally adds the column as nullable so a brand-new boot doesn't crash
+before `seedRbac` populates the row. The one-shot `migrate-to-rbac.ts`
+backfill promotes it to `NOT NULL` afterwards.
+
+Stale `nullDefaultDrift` entries (suppressions for drift that's no longer
+present) fail the build the same way stale `newColumns` / `newTables`
+entries do — the suppression list is forced to shrink over time.
+
 ## What the check does *not* do
 
 - ~~It does not enforce that you registered the new ensure-function in
@@ -243,6 +291,8 @@ guard.
 - ~~It does not validate column **types** match between `shared/schema.ts`
   and the ensure-script.~~ As of Task #238 it does — see the
   type-mismatch section above.
-- It does not check column nullability or `DEFAULT` values. A schema
-  marked `notNull()` with an ensure-script that omits `NOT NULL` will
-  pass the type check.
+- ~~It does not check column nullability or `DEFAULT` values.~~ As of
+  Task #242 it does — see the NOT NULL / DEFAULT section above.
+- It does not validate `REFERENCES`, `CHECK`, `COLLATE`, or `GENERATED`
+  clauses on `ADD COLUMN`. The constraint parser stops at the first
+  unrecognised keyword.

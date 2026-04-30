@@ -15,8 +15,19 @@
     "",
     "Format (kept here as documentation for the check parser):",
     "  newColumns: { '<table_name>': ['<col1>', '<col2>'] }",
-    "  newTables:  ['<table_name>', ...]"
+    "  newTables:  ['<table_name>', ...]",
+    "  nullDefaultDrift: { '<table_name>': ['<col1>', '<col2>'] }",
+    "",
+    "nullDefaultDrift (Task #242) suppresses the NOT NULL / DEFAULT mismatch",
+    "check for a single column. Use this only when the drift between",
+    "shared/schema.ts and the ensure-*.ts script is intentional and",
+    "documented inside the ensure-script (e.g. users.role_id is added as",
+    "nullable on first boot so seedRbac can backfill before the schema's",
+    ".notNull() is enforced). Stale entries fail the build."
   ],
   "newColumns": {},
-  "newTables": []
+  "newTables": [],
+  "nullDefaultDrift": {
+    "users": ["role_id"]
+  }
 }

@@ -206,3 +206,161 @@ export function checkColumnTypeMatch({
   }
   return { ok: true };
 }
+
+// ─── Task #242 — NOT NULL / DEFAULT mismatch detection ─────────────────────
+//
+// Task #238 closed the type-mismatch gap, but a column declared
+// `boolean("active").notNull().default(false)` paired with an ensure-script
+// that omits `NOT NULL DEFAULT false` would still pass the type check and
+// then crash production on the first insert that doesn't supply the column
+// (`null value in column "active" violates not-null constraint`).
+//
+// The two helpers below normalize default expressions so the schema's
+// `.default(<js>)` argument can be compared loosely against the ensure
+// script's `DEFAULT <sql>` expression. Exact byte parity is not required
+// — `false` ↔ `false`, `'ar'` ↔ `"ar"`, and `now()` ↔ `CURRENT_TIMESTAMP`
+// all reduce to the same canonical form.
+
+/**
+ * Strip noise off a default-expression string and return a canonical
+ * lowercase form for loose comparison between the Drizzle schema's
+ * `.default(...)` argument and the ensure-script's `DEFAULT <expr>` clause.
+ *
+ * Equivalences this handles:
+ *   - sql`now()`           → now()
+ *   - CURRENT_TIMESTAMP    → now()
+ *   - "ar"  / 'ar'         → ar       (single-, double-quote stripped)
+ *   - false / FALSE        → false
+ *   - sql`'[]'::jsonb`     → []       (sql template + cast + quotes stripped)
+ *
+ * Returns `null` when the input is empty/null/undefined so callers can
+ * distinguish "absent" from "present-but-empty".
+ *
+ * @param {string|null|undefined} raw
+ * @returns {string|null}
+ */
+export function normalizeDefault(raw) {
+  if (raw === null || raw === undefined) return null;
+  let s = String(raw).trim();
+  if (!s) return null;
+
+  // Strip Drizzle's `sql` template wrapper: `sql\`<expr>\`` → `<expr>`.
+  // The schema-side default for non-trivial expressions is wrapped like
+  //   .default(sql`now()`)   .default(sql`gen_random_uuid()`)
+  //   .default(sql`'[]'::jsonb`)
+  const sqlTemplateMatch = s.match(/^sql\s*`([\s\S]*)`$/);
+  if (sqlTemplateMatch) s = sqlTemplateMatch[1].trim();
+
+  // Strip a single trailing JS template-literal backtick that survives
+  // when the SQL is captured from inside `sql\`...\`` (the captured body
+  // ends just before the `;`, so the backtick lands in the tail).
+  s = s.replace(/`+$/, "").trim();
+
+  // Strip a trailing semicolon (rare, but seen if the SQL has one).
+  s = s.replace(/;+$/, "").trim();
+
+  // Strip a Postgres type-cast suffix: `'[]'::jsonb`, `0::numeric`,
+  // `'ar'::text`, etc. The `\(\d+(,\s*\d+)?\)?` allows for optional
+  // type parameters like `numeric(10,2)`.
+  s = s.replace(/::\s*[a-z_][\w]*(?:\s*\(\s*\d+(?:\s*,\s*\d+)?\s*\))?\s*$/i, "").trim();
+
+  // Strip outer matched quotes (single, double, or backtick) once.
+  if (s.length >= 2) {
+    const f = s[0];
+    const l = s[s.length - 1];
+    if (
+      (f === "'" && l === "'") ||
+      (f === '"' && l === '"') ||
+      (f === "`" && l === "`")
+    ) {
+      s = s.slice(1, -1);
+    }
+  }
+
+  s = s.toLowerCase().trim();
+
+  // Canonicalise the empty-call form: `current_timestamp` and
+  // `current_timestamp()` and `now()` all mean the same thing in PG.
+  if (s === "current_timestamp" || s === "current_timestamp()") s = "now()";
+  if (s === "now") s = "now()";
+
+  return s;
+}
+
+/**
+ * Compare a schema-side default expression to an ensure-script's DEFAULT
+ * clause expression. Returns true when both reduce to the same canonical
+ * form via `normalizeDefault`. Callers that care about presence (one
+ * side has a default, the other does not) should check that separately
+ * before calling this — `defaultsCompatible(null, null)` is `true`.
+ *
+ * @param {string|null|undefined} schemaDefault raw arg from `.default(...)`
+ * @param {string|null|undefined} sqlDefault expression after `DEFAULT`
+ * @returns {boolean}
+ */
+export function defaultsCompatible(schemaDefault, sqlDefault) {
+  return normalizeDefault(schemaDefault) === normalizeDefault(sqlDefault);
+}
+
+/**
+ * Compare nullability and DEFAULT-presence between a Drizzle schema
+ * column declaration and the ensure-script's `ADD COLUMN` clause. Returns
+ * a verdict the coverage check can surface as a single error message.
+ *
+ * Mismatch policy:
+ *   - `notNull` must match exactly (both true or both false). A schema
+ *     marked `.notNull()` paired with an ensure-script that omits NOT NULL
+ *     means inserts that don't supply the column will succeed in dev
+ *     (where `drizzle-kit push` ran) and crash in prod (where the column
+ *     was added by the ensure-script and is still nullable). The reverse
+ *     is also flagged so the two source-of-truth files stay in sync.
+ *   - DEFAULT presence must match (both present or both absent). When
+ *     both sides declare a default, `defaultsCompatible` does loose
+ *     comparison so equivalent-but-different spellings (`'ar'` vs `"ar"`,
+ *     `now()` vs `CURRENT_TIMESTAMP`) are accepted.
+ *
+ * @param {object} args
+ * @param {boolean} args.schemaNotNull true iff the schema column has `.notNull()`
+ * @param {string|null} args.schemaDefault raw arg from `.default(...)`, or null
+ * @param {boolean} args.sqlNotNull true iff the ensure-script wrote NOT NULL
+ * @param {string|null} args.sqlDefault expression after `DEFAULT` in the ensure-script, or null
+ * @returns {{ ok: true } | { ok: false, reason: string }}
+ */
+export function checkNullDefaultMatch({
+  schemaNotNull,
+  schemaDefault,
+  sqlNotNull,
+  sqlDefault,
+}) {
+  if (schemaNotNull !== sqlNotNull) {
+    return {
+      ok: false,
+      reason: schemaNotNull
+        ? `schema declares .notNull() but migration omits NOT NULL`
+        : `schema is nullable but migration declares NOT NULL`,
+    };
+  }
+  const schemaHas =
+    schemaDefault !== null &&
+    schemaDefault !== undefined &&
+    String(schemaDefault).trim() !== "";
+  const sqlHas =
+    sqlDefault !== null &&
+    sqlDefault !== undefined &&
+    String(sqlDefault).trim() !== "";
+  if (schemaHas !== sqlHas) {
+    return {
+      ok: false,
+      reason: schemaHas
+        ? `schema declares .default(${String(schemaDefault).trim()}) but migration omits DEFAULT`
+        : `schema has no default but migration declares DEFAULT ${String(sqlDefault).trim()}`,
+    };
+  }
+  if (schemaHas && sqlHas && !defaultsCompatible(schemaDefault, sqlDefault)) {
+    return {
+      ok: false,
+      reason: `schema default ${String(schemaDefault).trim()} is incompatible with migration DEFAULT ${String(sqlDefault).trim()}`,
+    };
+  }
+  return { ok: true };
+}

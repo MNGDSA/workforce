@@ -525,6 +525,394 @@ export const widgets = pgTable("widgets", {
   }
 });
 
+// ─── Task #242 — NOT NULL / DEFAULT mismatch detection ──────────────────
+//
+// The type-mismatch guard above (#238) only inspects the SQL type token
+// after `ADD COLUMN <col>`. A `boolean("active").notNull().default(false)`
+// schema column paired with `ADD COLUMN ... boolean` (no NOT NULL, no
+// DEFAULT) still passed and then crashed production on the first insert
+// that didn't supply the column. The tests below cover the matching case
+// plus the missing-NOT-NULL, missing-DEFAULT, incompatible-default, and
+// loose-equivalence (`now()` ↔ `CURRENT_TIMESTAMP`, `'ar'` ↔ `"ar"`)
+// branches added in Task #242, plus the `nullDefaultDrift` allowlist.
+
+test("null/default match: schema notNull+default ↔ ensure NOT NULL DEFAULT passes", () => {
+  // Both sides agree on NOT NULL DEFAULT false — the most common shape
+  // for boolean flag columns. This is the happy path: type matches AND
+  // NOT NULL / DEFAULT match.
+  const schemaWithBool = `import { pgTable, text, varchar, boolean } from "drizzle-orm/pg-core";
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  active: boolean("active").notNull().default(false),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaWithBool,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-active.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetActive(log) {
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT false\`);
+        }
+      `,
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 0, r.stderr || r.stdout);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("null/default mismatch: schema .notNull() + ensure-script omits NOT NULL FAILS", () => {
+  // Motivating bug: schema declares boolean("active").notNull() but the
+  // ensure-script writes `boolean` with no NOT NULL. Type check passes
+  // (boolean ↔ BOOLEAN) but the first insert that omits `active` crashes
+  // with `null value in column "active" violates not-null constraint`.
+  const schemaWithBool = `import { pgTable, text, varchar, boolean } from "drizzle-orm/pg-core";
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  active: boolean("active").notNull().default(false),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaWithBool,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-active.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetActive(log) {
+          // BUG: schema is notNull but the migration omits NOT NULL.
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT false\`);
+        }
+      `,
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /NOT NULL.*mismatch.*widgets\.active/i);
+    assert.match(r.stderr, /declares\s+\.notNull\(\)/i);
+    assert.match(r.stderr, /ensure-widget-active\.ts/);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("null/default mismatch: schema .default() + ensure-script omits DEFAULT FAILS", () => {
+  // Reverse motivating bug — present in the original `users.locale`
+  // incident: schema declares `.notNull().default("ar")` but the
+  // ensure-script writes `VARCHAR(8) NOT NULL` with no DEFAULT.
+  // Inserts that omit the column crash with the not-null error.
+  const schemaWithLocale = `import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  locale: varchar("locale", { length: 8 }).notNull().default("ar"),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaWithLocale,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-locale.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetLocale(log) {
+          // BUG: schema has default("ar") but migration omits DEFAULT.
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS locale VARCHAR(8) NOT NULL\`);
+        }
+      `,
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /DEFAULT.*mismatch.*widgets\.locale/i);
+    assert.match(r.stderr, /omits DEFAULT/i);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("null/default mismatch: schema nullable + ensure NOT NULL FAILS", () => {
+  // Reverse drift: schema is nullable but the ensure-script declares
+  // NOT NULL. Production rows that come in without the column would
+  // be fine according to the schema's TS types but rejected by Postgres.
+  const schemaNullable = `import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  note: text("note"),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaNullable,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-note.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetNote(log) {
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS note TEXT NOT NULL DEFAULT ''\`);
+        }
+      `,
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /NOT NULL.*mismatch.*widgets\.note/i);
+    assert.match(r.stderr, /schema is nullable.*declares NOT NULL/i);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("null/default match: loose default equivalence — now() ↔ CURRENT_TIMESTAMP passes", () => {
+  // Drizzle expresses `now()` as `sql\`now()\`` while ensure-scripts often
+  // write the canonical SQL `CURRENT_TIMESTAMP`. Both reduce to `now()`
+  // after `normalizeDefault` so the match is loose.
+  const schemaWithTs = `import { pgTable, text, varchar, timestamp } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  seenAt: timestamp("seen_at").notNull().default(sql\`now()\`),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaWithTs,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-seen-at.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetSeenAt(log) {
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP\`);
+        }
+      `,
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 0, r.stderr || r.stdout);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("null/default match: schema .defaultNow() ↔ ensure DEFAULT now() passes", () => {
+  // `.defaultNow()` is the Drizzle shorthand for `.default(sql\`now()\`)`.
+  // The schema parser treats it as if the author wrote the long form so a
+  // contributor who reaches for the shorthand is still required to ship
+  // a matching `DEFAULT now() / DEFAULT CURRENT_TIMESTAMP` clause in the
+  // ensure-script (otherwise prod inserts that omit the column would
+  // crash on the NOT NULL constraint).
+  const schemaWithDefaultNow = `import { pgTable, text, varchar, timestamp } from "drizzle-orm/pg-core";
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaWithDefaultNow,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-created-at.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetCreatedAt(log) {
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT now()\`);
+        }
+      `,
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 0, r.stderr || r.stdout);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("null/default mismatch: schema .defaultNow() + ensure-script omits DEFAULT FAILS", () => {
+  // Same shape as above, but the ensure-script forgot the DEFAULT clause.
+  // Without `.defaultNow()` recognition the check would silently pass and
+  // the first insert that omits `created_at` would crash production.
+  const schemaWithDefaultNow = `import { pgTable, text, varchar, timestamp } from "drizzle-orm/pg-core";
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaWithDefaultNow,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-created-at.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetCreatedAt(log) {
+          // BUG: schema is .defaultNow() but migration omits DEFAULT.
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL\`);
+        }
+      `,
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /DEFAULT.*mismatch.*widgets\.created_at/i);
+    assert.match(r.stderr, /omits DEFAULT/i);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("null/default match: loose default equivalence — \"ar\" ↔ 'ar' passes", () => {
+  // The Drizzle schema uses double-quoted JS string literals in
+  // `.default("ar")`; the ensure-script uses single-quoted SQL string
+  // literals in `DEFAULT 'ar'`. Stripping the outer quotes makes both
+  // canonicalise to `ar`.
+  const schemaWithLocale = `import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  locale: varchar("locale", { length: 8 }).notNull().default("ar"),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaWithLocale,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-locale.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetLocale(log) {
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS locale VARCHAR(8) NOT NULL DEFAULT 'ar'\`);
+        }
+      `,
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 0, r.stderr || r.stdout);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("null/default mismatch: defaults present on both sides but incompatible FAILS", () => {
+  // Both sides declare a default but the values disagree. `false` and
+  // `true` cannot be reconciled by any normalisation rule, so the loose
+  // comparison still flags them.
+  const schemaWithBool = `import { pgTable, text, varchar, boolean } from "drizzle-orm/pg-core";
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  active: boolean("active").notNull().default(false),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaWithBool,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-active.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetActive(log) {
+          // BUG: schema default is false but migration writes true.
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true\`);
+        }
+      `,
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /mismatch.*widgets\.active/i);
+    assert.match(r.stderr, /incompatible/i);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("null/default: nullDefaultDrift allowlist suppresses intentional drift", () => {
+  // Real-world example: users.role_id is .notNull() in the schema but the
+  // ensure-script intentionally adds it nullable so a fresh boot can
+  // succeed before seedRbac populates the role. The allowlist entry tells
+  // the check to skip the NOT NULL / DEFAULT comparison for this column.
+  const schemaWithNotNull = `import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  ownerId: varchar("owner_id").notNull(),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaWithNotNull,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-owner.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetOwner(log) {
+          // Intentional drift — backfilled by a one-shot script later.
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS owner_id varchar\`);
+        }
+      `,
+    },
+    allowlist: {
+      newColumns: {},
+      newTables: [],
+      nullDefaultDrift: { widgets: ["owner_id"] },
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 0, r.stderr || r.stdout);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("null/default: stale nullDefaultDrift entry (no real mismatch) FAILS", () => {
+  // The allowlist suppresses widgets.note, but the schema and ensure
+  // script actually agree on nullability and defaults — so the entry is
+  // stale and the build fails to force the contributor to prune it.
+  const schemaMatches = `import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  note: text("note"),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaMatches,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-note.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetNote(log) {
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS note text\`);
+        }
+      `,
+    },
+    allowlist: {
+      newColumns: {},
+      newTables: [],
+      nullDefaultDrift: { widgets: ["note"] },
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /stale entries/);
+    assert.match(r.stderr, /nullDefaultDrift\s+widgets\.note/);
+  } finally {
+    fx.cleanup();
+  }
+});
+
 test("fails on stale allowlist entries (gap no longer present)", () => {
   // Allowlist claims widgets.color is a gap, but the schema doesn't have it.
   const fx = makeFixture({

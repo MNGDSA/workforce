@@ -29,7 +29,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkColumnTypeMatch } from "./schema-type-map.mjs";
+import {
+  checkColumnTypeMatch,
+  checkNullDefaultMatch,
+} from "./schema-type-map.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,12 +61,20 @@ const allowlistPath =
 // drizzle-kit push, ensure-critical-tables recovery, or a one-shot script).
 // New schema additions MUST add an ensure-script instead of growing this
 // allowlist — that's the whole point of the check.
-let allowlist = { newColumns: {}, newTables: [] };
+let allowlist = { newColumns: {}, newTables: [], nullDefaultDrift: {} };
 if (fs.existsSync(allowlistPath)) {
   const raw = JSON.parse(fs.readFileSync(allowlistPath, "utf-8"));
   allowlist = {
     newColumns: raw.newColumns ?? {},
     newTables: raw.newTables ?? [],
+    // Task #242 — pre-existing intentional drift in NOT NULL / DEFAULT
+    // declarations. The canonical example is users.role_id, which the
+    // schema marks `.notNull()` but the ensure-script intentionally adds
+    // as nullable so a fresh boot doesn't crash before seedRbac runs
+    // (see ensure-user-token-and-role-cols.ts). New entries should be
+    // rare and documented; the stale-entry check below forces them to be
+    // removed once the drift is resolved.
+    nullDefaultDrift: raw.nullDefaultDrift ?? {},
   };
 }
 const allowedTables = new Set(allowlist.newTables);
@@ -71,6 +82,12 @@ const allowedTables = new Set(allowlist.newTables);
 const allowedColumns = new Map();
 for (const [tbl, cols] of Object.entries(allowlist.newColumns)) {
   allowedColumns.set(tbl, new Set(cols));
+}
+/** @type {Map<string, Set<string>>} — table -> set of columns whose
+ *  NOT NULL / DEFAULT mismatch is an accepted, pre-existing drift. */
+const allowedNullDefaultDrift = new Map();
+for (const [tbl, cols] of Object.entries(allowlist.nullDefaultDrift)) {
+  allowedNullDefaultDrift.set(tbl, new Set(cols));
 }
 
 // ─── 1. Baseline column map from drizzle snapshot ──────────────────────────
@@ -216,7 +233,55 @@ function findPropertyEnd(src, start) {
 }
 
 /**
- * @typedef {{ helper: string, isArray: boolean }} SchemaColumnMeta
+ * Walk forward from the `(` immediately following `.default` and return
+ * the raw text inside the matching `)` (with paren/string awareness so
+ * `.default(sql\`now()\`)` and `.default("a, b")` are captured intact).
+ *
+ * @param {string} propBody
+ * @returns {string|null} text inside the parens (trimmed) or null if no
+ *   `.default(` call appears in `propBody`.
+ */
+function extractDefaultArg(propBody) {
+  const m = propBody.match(/\.default\s*\(/);
+  if (!m) return null;
+  const open = m.index + m[0].length - 1;
+  let depth = 1;
+  let i = open + 1;
+  while (i < propBody.length) {
+    const ch = propBody[i];
+    if (ch === '"' || ch === "'" || ch === "`") {
+      const q = ch;
+      i++;
+      while (i < propBody.length) {
+        if (propBody[i] === "\\") {
+          i += 2;
+          continue;
+        }
+        if (propBody[i] === q) {
+          i++;
+          break;
+        }
+        i++;
+      }
+      continue;
+    }
+    if (ch === "(") depth++;
+    else if (ch === ")") {
+      depth--;
+      if (depth === 0) return propBody.slice(open + 1, i).trim();
+    }
+    i++;
+  }
+  return null;
+}
+
+/**
+ * @typedef {{
+ *   helper: string,
+ *   isArray: boolean,
+ *   notNull: boolean,
+ *   defaultExpr: string|null,
+ * }} SchemaColumnMeta
  */
 
 /** @type {Map<string, Map<string, SchemaColumnMeta>>} */
@@ -253,7 +318,18 @@ while ((m = tableRegex.exec(schemaSrc)) !== null) {
     const propEnd = findPropertyEnd(columnsBlock, pm.index);
     const propBody = columnsBlock.slice(pm.index, propEnd);
     const isArray = /\.array\s*\(/.test(propBody);
-    cols.set(colName, { helper, isArray });
+    // Task #242 — capture .notNull() and .default(...) so the coverage
+    // check in section 5 can compare them against the ensure-script's
+    // NOT NULL / DEFAULT clauses. `.defaultNow()` is the Drizzle
+    // shorthand for `.default(sql\`now()\`)` and is treated identically
+    // so a column that uses the shorthand still requires a DEFAULT
+    // clause in the ensure-script.
+    const notNull = /\.notNull\s*\(/.test(propBody);
+    let defaultExpr = extractDefaultArg(propBody);
+    if (defaultExpr === null && /\.defaultNow\s*\(/.test(propBody)) {
+      defaultExpr = "now()";
+    }
+    cols.set(colName, { helper, isArray, notNull, defaultExpr });
   }
   schemaTables.set(tableName, cols);
   // Continue scanning from after the table block for the next pgTable(...)
@@ -292,21 +368,26 @@ for (const [tbl, cols] of schemaTables) {
 // hold onto it so section 5 can compare it to the Drizzle helper recorded
 // for that column (Task #238).
 /**
- * @typedef {{ sqlType: string, source: string }} ColumnCoverage
+ * @typedef {{
+ *   sqlType: string,
+ *   notNull: boolean,
+ *   defaultExpr: string|null,
+ *   source: string,
+ * }} ColumnCoverage
  */
 /** @type {Map<string, Map<string, ColumnCoverage>>} */
 const coverage = new Map();
 /** @type {Set<string>} */
 const newTableCoverage = new Set();
 
-function recordColumn(tbl, col, sqlType, source) {
+function recordColumn(tbl, col, sqlType, notNull, defaultExpr, source) {
   if (!coverage.has(tbl)) coverage.set(tbl, new Map());
   // First write wins — multiple ensure-scripts touching the same column is
   // unusual, but if it happens the earliest-discovered ALTER decides which
-  // type the check compares against. Either flagged mismatches force the
-  // contributor to align both sites.
+  // type / nullability / default the check compares against. Any flagged
+  // mismatches force the contributor to align both sites.
   const t = coverage.get(tbl);
-  if (!t.has(col)) t.set(col, { sqlType, source });
+  if (!t.has(col)) t.set(col, { sqlType, notNull, defaultExpr, source });
 }
 
 /**
@@ -380,6 +461,118 @@ function extractSqlType(rest) {
   return s.trim();
 }
 
+/**
+ * Task #242 — parse the post-type tail of an `ADD COLUMN <col> <type> ...`
+ * clause for `NOT NULL` and `DEFAULT <expr>`. The DEFAULT expression is
+ * captured with paren / single-quote awareness so:
+ *   - `DEFAULT 'a, b'`              → `'a, b'`
+ *   - `DEFAULT now()`               → `now()`
+ *   - `DEFAULT '[]'::jsonb`         → `'[]'::jsonb`
+ *   - `DEFAULT 0 NOT NULL`          → `0`        (stops at next clause)
+ * A backtick or semicolon at depth 0 also terminates the expression so
+ * the trailing JS template-literal punctuation that survives in the
+ * regex-captured ALTER body (`...DEFAULT 'ar'\`)`) does not pollute the
+ * captured value.
+ *
+ * Other clauses (REFERENCES, PRIMARY KEY, etc.) end the parse — the
+ * coverage check only cares about NOT NULL and DEFAULT.
+ *
+ * @param {string} rest text after the column name in an ADD COLUMN clause
+ * @returns {{ notNull: boolean, defaultExpr: string|null }}
+ */
+function parseColumnConstraints(rest) {
+  const stop =
+    /\s+(?:NOT\s+NULL|NULL\b|DEFAULT\b|REFERENCES\b|PRIMARY\s+KEY|UNIQUE\b|CHECK\b|COLLATE\b|GENERATED\b|ON\s+UPDATE\b)/i;
+  const stopMatch = rest.match(stop);
+  if (!stopMatch) return { notNull: false, defaultExpr: null };
+  const tail = rest.slice(stopMatch.index);
+  let i = 0;
+  let notNull = false;
+  /** @type {string|null} */
+  let defaultExpr = null;
+
+  while (i < tail.length) {
+    while (i < tail.length && /\s/.test(tail[i])) i++;
+    if (i >= tail.length) break;
+    const sub = tail.slice(i);
+
+    let mm;
+    if ((mm = sub.match(/^NOT\s+NULL\b/i))) {
+      notNull = true;
+      i += mm[0].length;
+      continue;
+    }
+    if ((mm = sub.match(/^NULL\b/i))) {
+      // explicit nullable — leave notNull = false
+      i += mm[0].length;
+      continue;
+    }
+    if ((mm = sub.match(/^DEFAULT\b/i))) {
+      i += mm[0].length;
+      while (i < tail.length && /\s/.test(tail[i])) i++;
+      const exprStart = i;
+      let depth = 0;
+      while (i < tail.length) {
+        const ch = tail[i];
+        // SQL string literal — single quote only. Postgres escapes a
+        // single quote by doubling it (`''`).
+        if (ch === "'") {
+          i++;
+          while (i < tail.length) {
+            if (tail[i] === "'" && tail[i + 1] === "'") {
+              i += 2;
+              continue;
+            }
+            if (tail[i] === "'") {
+              i++;
+              break;
+            }
+            i++;
+          }
+          continue;
+        }
+        if (ch === "(" || ch === "[") {
+          depth++;
+          i++;
+          continue;
+        }
+        if (ch === ")" || ch === "]") {
+          if (depth === 0) break;
+          depth--;
+          i++;
+          continue;
+        }
+        // Backtick / semicolon at depth 0 ends the expression — these
+        // are JS template-literal punctuation that survives in the
+        // regex-captured ALTER body, never legitimate SQL default chars.
+        if (depth === 0 && (ch === "`" || ch === ";")) break;
+        if (depth === 0) {
+          // Stop at the next clause keyword preceded by whitespace.
+          const ahead = tail.slice(i);
+          if (
+            /^\s+(?:NOT\s+NULL|NULL\b|REFERENCES\b|PRIMARY\s+KEY|UNIQUE\b|CHECK\b|COLLATE\b|GENERATED\b|ON\s+UPDATE\b)/i.test(
+              ahead,
+            )
+          ) {
+            break;
+          }
+        }
+        i++;
+      }
+      const captured = tail.slice(exprStart, i).trim();
+      defaultExpr = captured.length > 0 ? captured : null;
+      continue;
+    }
+
+    // Unknown clause (REFERENCES, PRIMARY KEY, etc.) — bail out. The
+    // null/default check doesn't care about anything past this point and
+    // walking arbitrary SQL grammar from here is fragile.
+    break;
+  }
+
+  return { notNull, defaultExpr };
+}
+
 /** @type {string[]} */
 const nonIdempotentEnsures = [];
 
@@ -420,7 +613,10 @@ function scanSqlForCoverage(sql, opts) {
       if (!cm) continue;
       const colName = cm[1];
       const sqlType = extractSqlType(cm[2]);
-      recordColumn(tbl, colName, sqlType, source);
+      // Task #242 — capture NOT NULL / DEFAULT alongside the type so the
+      // diff in section 5 can flag a schema/migration mismatch.
+      const { notNull, defaultExpr } = parseColumnConstraints(cm[2]);
+      recordColumn(tbl, colName, sqlType, notNull, defaultExpr, source);
     }
 
     if (requireIdempotent) {
@@ -514,6 +710,8 @@ const staleAllowlistEntries = [];
 const seenAllowedTables = new Set();
 /** @type {Map<string, Set<string>>} */
 const seenAllowedColumns = new Map();
+/** @type {Map<string, Set<string>>} */
+const seenAllowedNullDefaultDrift = new Map();
 
 for (const [tbl, info] of newColumnsByTable) {
   if (info.isNewTable) {
@@ -552,6 +750,45 @@ for (const [tbl, info] of newColumnsByTable) {
             `ADD COLUMN type so it matches the Drizzle helper in shared/schema.ts.`,
         );
       }
+      // Task #242 — NOT NULL / DEFAULT mismatch guard. Always run the
+      // verdict computation so the stale-allowlist check below can tell
+      // a real-but-suppressed mismatch (entry is doing useful work) from
+      // a vacuous suppression (entry is stale and should be pruned).
+      const ndVerdict = checkNullDefaultMatch({
+        schemaNotNull: meta.notNull,
+        schemaDefault: meta.defaultExpr,
+        sqlNotNull: cov.notNull,
+        sqlDefault: cov.defaultExpr,
+      });
+      const driftAllowed = (
+        allowedNullDefaultDrift.get(tbl) ?? new Set()
+      ).has(col);
+      if (ndVerdict.ok === false) {
+        if (driftAllowed) {
+          // Real mismatch, but suppressed — record so the stale-entry
+          // check doesn't flag this allowlist entry. The canonical case
+          // is users.role_id (nullable in production until seedRbac
+          // backfills, then promoted to NOT NULL by migrate-to-rbac).
+          if (!seenAllowedNullDefaultDrift.has(tbl)) {
+            seenAllowedNullDefaultDrift.set(tbl, new Set());
+          }
+          seenAllowedNullDefaultDrift.get(tbl).add(col);
+          allowlistHits.push(`nullDefaultDrift ${tbl}.${col}`);
+        } else {
+          errors.push(
+            `Column NOT NULL / DEFAULT mismatch for "${tbl}.${col}": ` +
+              `${ndVerdict.reason} (ensure-script: ${cov.source}). ` +
+              `Update the ensure-script's ADD COLUMN clause so the NOT NULL / ` +
+              `DEFAULT declaration matches shared/schema.ts. If this drift is ` +
+              `intentional (e.g. nullable in production until a backfill runs), ` +
+              `add "${col}" under "${tbl}" in nullDefaultDrift in ` +
+              `scripts/schema-migration-allowlist.json with a justifying comment.`,
+          );
+        }
+      }
+      // If ndVerdict.ok === true and the column appears in the allowlist,
+      // we intentionally do NOT mark it as seen — the stale-entry pass
+      // below will then flag the suppression as no longer needed.
       continue;
     }
     if (allowedForTable.has(col)) {
@@ -596,6 +833,18 @@ for (const [tbl, cols] of allowedColumns) {
       newInfo.cols.has(col) &&
       !covered.has(col);
     if (!stillUncovered) staleAllowlistEntries.push(`${tbl}.${col}`);
+  }
+}
+// Task #242 — same staleness contract for the nullDefaultDrift allowlist.
+// An entry is stale when the column no longer triggers a NOT NULL / DEFAULT
+// mismatch (the schema changed, the ensure-script changed, the column was
+// removed, or it slid into the baseline snapshot). Failing loudly forces
+// the contributor to prune the suppression once it's no longer needed.
+for (const [tbl, cols] of allowedNullDefaultDrift) {
+  const seen = seenAllowedNullDefaultDrift.get(tbl) ?? new Set();
+  for (const col of cols) {
+    if (seen.has(col)) continue;
+    staleAllowlistEntries.push(`nullDefaultDrift ${tbl}.${col}`);
   }
 }
 
