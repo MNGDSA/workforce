@@ -72,3 +72,9 @@ id = "s7DiDesCrCkBotjBj9LEf"
 uri = "file://.local/tasks/alharamain-navq-deeplink-spec.md"
 type = "text"
 title = "Al Haramain navQ — POI deep-link feature request"
+
+[[outputs]]
+id = "0zvRyHpZzQgaExPYLG4Bb"
+uri = "file://attached_assets/trusted-by-marquee.tsx.txt"
+type = "text"
+title = "TrustedByMarquee component (rename to .tsx)"
