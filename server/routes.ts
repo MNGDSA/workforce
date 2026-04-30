@@ -4217,7 +4217,7 @@ export async function registerRoutes(
         ?? "https://workforce.tanaqolapp.com";
       const message = renderReminderTemplate(tpl, {
         name: locale === "ar" ? "مرشح تجريبي" : "Test Candidate",
-        missingDocs: locale === "ar" ? "صورة شخصية، رقم الآيبان، تقرير التطعيم" : "photo, IBAN, vaccination report",
+        missingDocs: locale === "ar" ? "صورة شخصية، شهادة الآيبان، تقرير التطعيم" : "photo, IBAN certificate, vaccination report",
         portalUrl: `${portalBase.replace(/\/$/, "")}/candidate/onboarding`,
         deadlineDate: new Date(Date.now() + 24 * 3600_000).toLocaleString(locale === "ar" ? "ar-SA" : "en-GB", {
           timeZone: "Asia/Riyadh", year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit",
