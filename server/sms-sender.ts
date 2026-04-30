@@ -93,6 +93,35 @@ export function validatePluginConfig(raw: unknown): { valid: true; config: SmsPl
   return { valid: true, config: raw as SmsPluginConfig };
 }
 
+// ─── Western-digits sanitizer (project rule: no Eastern Arabic-Indic in SMS)
+//
+// Project policy: outbound SMS — Arabic OR English — must only ever contain
+// Western Arabic numerals (0-9). The Eastern Arabic-Indic codepoints
+// U+0660..U+0669 (٠١٢٣٤٥٦٧٨٩) and the Extended Arabic-Indic codepoints  // i18n-numerals: allow
+// U+06F0..U+06F9 (Persian/Urdu) MUST NEVER appear in the message body, even // i18n-numerals: allow
+// if an admin pasted them into a template, even if a candidate name contains
+// digits, even if a future code path forgets the `-u-nu-latn` extension on a
+// date formatter. This is the single send-boundary chokepoint that
+// guarantees the rule for every SMS the system emits — onboarding reminders,
+// final-warnings, OTP, broadcast, ID-card pickup, interview notes, plugin
+// test sends, etc. — because every path goes through `sendSmsViaPlugin`.
+//
+// The mapping is the inverse of the phone normalizer in `shared/phone.ts`,
+// applied to message bodies instead of phone inputs.
+const SMS_DIGIT_REWRITE_RE = /[\u0660-\u0669\u06F0-\u06F9]/g;
+function toWesternDigitsForSms(text: string): string {
+  return text.replace(SMS_DIGIT_REWRITE_RE, (ch) => {
+    const cp = ch.charCodeAt(0);
+    // U+0660 = Arabic-Indic 0; U+06F0 = Extended (Persian) 0.
+    if (cp >= 0x0660 && cp <= 0x0669) return String(cp - 0x0660);
+    return String(cp - 0x06F0);
+  });
+}
+
+// Test-only export so unit tests can exercise the sanitizer in isolation
+// without standing up an SMS plugin.
+export const __test__ = { toWesternDigitsForSms };
+
 /**
  * Returns true if the message contains characters outside the GSM-7 basic
  * character set. Arabic, emoji, and most non-Latin scripts trigger this.
@@ -110,6 +139,15 @@ export async function sendSmsViaPlugin(
   to: string,
   message: string
 ): Promise<SmsSendResult> {
+  // ───────────────────────────────────────────────────────────────────────
+  // Western-digit normalization (project rule). Done BEFORE any other
+  // processing — including dev bypass logging, GSM-7 detection, placeholder
+  // resolution, and the gateway HTTP call — so eastern Arabic-Indic digits
+  // never leak into outbound messages, plugin payloads, OR server logs,
+  // regardless of which caller built the string. See toWesternDigitsForSms
+  // for the policy rationale.
+  message = toWesternDigitsForSms(message);
+
   // ───────────────────────────────────────────────────────────────────────
   // Dev/test bypass — when the SMS gateway is unreachable (carrier or
   // gateway outage), skip the HTTP call entirely and return success so

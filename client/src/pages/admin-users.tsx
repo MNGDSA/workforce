@@ -121,7 +121,8 @@ const EMPTY_FORM: FormState = {
 
 export function AdminUsersContent() {
   const { t, i18n } = useTranslation(["adminUsers", "common"]);
-  const dateLocale = i18n.language === "ar" ? "ar-SA" : "en-GB";
+  // Pin Latin digits + Gregorian calendar — never Arabic-Indic digits.
+  const dateLocale = i18n.language === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB";
   const { toast } = useToast();
   const queryClient = useQueryClient();
 

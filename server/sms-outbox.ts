@@ -289,8 +289,16 @@ async function processOneRow(excludeIds: string[]): Promise<{ outcome: "sent" | 
           "onboarding_reminder_sms_ar" | "onboarding_reminder_sms_en"
           | "onboarding_final_warning_sms_ar" | "onboarding_final_warning_sms_en";
       const tpl = await getReminderTemplate(tplKey);
+      // SMS must always render with Latin digits — never Arabic-Indic.
+      // The plain "ar-SA" locale tag emits Arabic-Indic glyphs, so for
+      // Arabic we pin the Unicode `-u-nu-latn` numbering-system extension
+      // (and the Gregorian calendar to avoid Hijri month/year surprises).
+      // The send-boundary sanitizer in `server/sms-sender.ts` is the
+      // ultimate safety net — see toWesternDigitsForSms — but pinning
+      // the locale here keeps logs and admin previews clean too.
+      const deadlineLocale = locale === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB";
       const deadlineDate = payload.deadlineAt
-        ? new Date(payload.deadlineAt).toLocaleString(locale === "ar" ? "ar-SA" : "en-GB", {
+        ? new Date(payload.deadlineAt).toLocaleString(deadlineLocale, { // i18n-numerals: allow (deadlineLocale pins -u-nu-latn)
             timeZone: "Asia/Riyadh",
             year: "numeric",
             month: "short",

@@ -4219,9 +4219,14 @@ export async function registerRoutes(
         name: locale === "ar" ? "مرشح تجريبي" : "Test Candidate",
         missingDocs: locale === "ar" ? "صورة شخصية، شهادة الآيبان، تقرير التطعيم" : "photo, IBAN certificate, vaccination report",
         portalUrl: `${portalBase.replace(/\/$/, "")}/candidate/onboarding`,
-        deadlineDate: new Date(Date.now() + 24 * 3600_000).toLocaleString(locale === "ar" ? "ar-SA" : "en-GB", {
-          timeZone: "Asia/Riyadh", year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit",
-        }),
+        // Latin digits only — pin `-u-nu-latn` for Arabic so the preview
+        // matches what the live SMS renderer in sms-outbox.ts emits and
+        // never leaks Arabic-Indic digits into outbound copy. The send-
+        // boundary sanitizer in server/sms-sender.ts is the ultimate net.
+        deadlineDate: new Date(Date.now() + 24 * 3600_000).toLocaleString(
+          locale === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB",
+          { timeZone: "Asia/Riyadh", year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" },
+        ),
       });
       const { sendSmsViaPlugin } = await import("./sms-sender");
       const plugin = await storage.getActiveSmsPlugin();

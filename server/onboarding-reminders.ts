@@ -661,15 +661,17 @@ async function resolveSmsContext(
 
   const candidateName = cand.fullNameEn ?? "";
 
-  // SMS uses the short brand domain (workforce.tanaqol.com) for {portal_url}
-  // so reminders stay within fewer SMS segments. The longer
-  // workforce.tanaqolapp.com origin remains the app's canonical URL — the
-  // short host CNAMEs / 301-redirects to it. An explicit override via the
-  // public_app_url system setting or PUBLIC_APP_URL env still wins.
+  // {portal_url} fallback. The canonical production origin is
+  // workforce.tanaqolapp.com — that is the host the candidate-side
+  // onboarding portal actually serves at. An explicit override via
+  // the public_app_url system setting or PUBLIC_APP_URL env still wins.
+  // (Final-mile defence: server/sms-sender.ts strips Arabic-Indic digits
+  // from every outbound message regardless of source — see
+  // toWesternDigitsForSms.)
   const baseUrl = (await storage.getSystemSetting("public_app_url"))
     ?? process.env.PUBLIC_APP_URL
     ?? (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
-    ?? "https://workforce.tanaqol.com";
+    ?? "https://workforce.tanaqolapp.com";
   const link = `${baseUrl.replace(/\/$/, "")}/candidate/onboarding`;
 
   const deadlineAt = new Date(rec.createdAt.getTime() + cfg.totalDeadlineDays * 86400_000).toISOString();

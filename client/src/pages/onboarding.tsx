@@ -1490,8 +1490,9 @@ function ReminderRowIndicator({ status }: { status: ReminderRowStatus }) {
   const state = status.state;
   const isAr = i18n.language === "ar";
 
+  // Latin digits + Gregorian calendar — never Arabic-Indic digits.
   const fmtDate = (iso: string | null) => iso
-    ? new Date(iso).toLocaleString(isAr ? "ar-SA" : "en-GB", { dateStyle: "short", timeStyle: "short" })
+    ? new Date(iso).toLocaleString(isAr ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB", { dateStyle: "short", timeStyle: "short" })
     : "—";
 
   // Time-to-elimination drives the high-urgency RTL accent stripe.
@@ -1780,8 +1781,9 @@ function ReminderActivityTable() {
     onError: (e: any) => toast({ title: t("reminders.actionFailed"), description: e?.message, variant: "destructive" }),
   });
 
+  // Latin digits + Gregorian calendar — never Arabic-Indic digits.
   const fmtDateTime = (iso: string | null) => iso
-    ? new Date(iso).toLocaleString(i18n.language === "ar" ? "ar-SA" : "en-GB", { dateStyle: "short", timeStyle: "short" })
+    ? new Date(iso).toLocaleString(i18n.language === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB", { dateStyle: "short", timeStyle: "short" })
     : "—";
 
   return (

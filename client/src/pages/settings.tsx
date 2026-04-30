@@ -902,8 +902,11 @@ function PhotoRotationTelemetryCard() {
     data && data.successRate != null
       ? `${formatNumber(Math.round(data.successRate * 1000) / 10, lng)}%`
       : "—";
+  // Latin digits + Gregorian calendar — never Arabic-Indic digits.
   const lastEvent = data?.mostRecentAt
-    ? new Date(data.mostRecentAt).toLocaleString(lng)
+    ? new Date(data.mostRecentAt).toLocaleString(
+        lng?.startsWith("ar") ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB",
+      )
     : null;
 
   return (

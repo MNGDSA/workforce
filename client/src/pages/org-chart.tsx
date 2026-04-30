@@ -877,7 +877,8 @@ interface ExportOptions {
 }
 
 function exportOrgChartToPdf({ data, labels, dir, onPopupBlocked }: ExportOptions): void {
-  const generatedAt = new Date().toLocaleString(dir === "rtl" ? "ar-SA" : "en-US");
+  // Latin digits + Gregorian calendar — never Arabic-Indic digits.
+  const generatedAt = new Date().toLocaleString(dir === "rtl" ? "ar-SA-u-ca-gregory-nu-latn" : "en-US");
   const html = buildPrintHtml(data, labels, dir, generatedAt);
   if (!html) return;
 
