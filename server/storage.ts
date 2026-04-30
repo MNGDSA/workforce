@@ -1639,7 +1639,10 @@ export class DatabaseStorage implements IStorage {
         .from(applications)
         .innerJoin(candidates, eq(applications.candidateId, candidates.id))
         .where(where)
-        .orderBy(desc(applications.appliedAt))
+        // Order by application date ascending so the earliest applicants
+        // appear on page 1 — matches the talent page's oldest-first
+        // default. Don't penalise candidates who applied early.
+        .orderBy(asc(applications.appliedAt))
         .limit(limit)
         .offset(offset),
       db.select({ value: count() })
