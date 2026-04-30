@@ -297,6 +297,234 @@ test("rejects non-idempotent ALTER inside an ensure-*.ts file", () => {
   }
 });
 
+// ─── Task #238 — column type mismatch detection ──────────────────────────
+//
+// The coverage check above only confirms that *some* `ADD COLUMN <col>`
+// exists. The tests below exercise the type-mismatch guard added in
+// Task #238 — a `boolean` schema column paired with `ADD COLUMN ... TEXT`
+// must fail loudly so the bug is caught at PR time instead of returning
+// strings to the API at runtime. They cover matching + mismatching
+// boolean, pgEnum, and `.array()` cases plus a parameterised-type case
+// (VARCHAR(8) ↔ varchar) to confirm the parens are stripped.
+
+test("type-match: boolean schema + boolean ensure-script passes", () => {
+  const schemaWithBool = `import { pgTable, text, varchar, boolean } from "drizzle-orm/pg-core";
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  active: boolean("active").notNull().default(false),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaWithBool,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-active.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetActive(log) {
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT false\`);
+        }
+      `,
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 0, r.stderr || r.stdout);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("type-mismatch: boolean schema + TEXT ensure-script FAILS", () => {
+  // Reviewer's stated motivating example: schema declares boolean, the
+  // ensure-script accidentally writes TEXT, the old check happily passed
+  // and production returned strings to the API.
+  const schemaWithBool = `import { pgTable, text, varchar, boolean } from "drizzle-orm/pg-core";
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  active: boolean("active").notNull().default(false),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaWithBool,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-active.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetActive(log) {
+          // BUG: schema is boolean but the migration writes TEXT.
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS active TEXT NOT NULL DEFAULT 'false'\`);
+        }
+      `,
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /type mismatch.*widgets\.active/i);
+    assert.match(r.stderr, /boolean.*text/i);
+    assert.match(r.stderr, /ensure-widget-active\.ts/);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("type-match: pgEnum schema + matching enum SQL type passes", () => {
+  // Drizzle declares the enum like
+  //   export const widgetKindEnum = pgEnum("widget_kind", [...])
+  // and uses it in a column as `widgetKindEnum("kind")`. The ensure
+  // script must spell the underlying SQL type — `widget_kind` — which
+  // the schema-type-map looks up via the parsed enum table.
+  const schemaWithEnum = `import { pgTable, text, varchar, pgEnum } from "drizzle-orm/pg-core";
+export const widgetKindEnum = pgEnum("widget_kind", ["small", "large"]);
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  kind: widgetKindEnum("kind").notNull().default("small"),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaWithEnum,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-kind.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetKind(log) {
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS kind widget_kind NOT NULL DEFAULT 'small'\`);
+        }
+      `,
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 0, r.stderr || r.stdout);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("type-mismatch: pgEnum schema + TEXT ensure-script FAILS", () => {
+  const schemaWithEnum = `import { pgTable, text, varchar, pgEnum } from "drizzle-orm/pg-core";
+export const widgetKindEnum = pgEnum("widget_kind", ["small", "large"]);
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  kind: widgetKindEnum("kind").notNull(),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaWithEnum,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-kind.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetKind(log) {
+          // BUG: schema uses widget_kind enum, ensure writes TEXT.
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL\`);
+        }
+      `,
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /type mismatch.*widgets\.kind/i);
+    assert.match(r.stderr, /widget_kind/);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("type-match: text().array() schema + TEXT[] ensure-script passes", () => {
+  const schemaWithArray = `import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  tags: text("tags").array(),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaWithArray,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-tags.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetTags(log) {
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS tags TEXT[]\`);
+        }
+      `,
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 0, r.stderr || r.stdout);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("type-mismatch: text().array() schema + scalar TEXT ensure-script FAILS", () => {
+  // Drops the array marker — schema returns string[] from Drizzle, but
+  // the column is actually a scalar TEXT in the database. The discrepancy
+  // would cause the ORM to attempt array operations on a string column.
+  const schemaWithArray = `import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  tags: text("tags").array(),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaWithArray,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-tags.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetTags(log) {
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS tags TEXT\`);
+        }
+      `,
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /type mismatch.*widgets\.tags/i);
+    assert.match(r.stderr, /\.array\(\)/);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test("type-match: varchar(8) schema + VARCHAR(8) ensure-script passes (parens stripped)", () => {
+  const schemaWithVar = `import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+export const widgets = pgTable("widgets", {
+  id: varchar("id").primaryKey(),
+  name: text("name").notNull(),
+  locale: varchar("locale", { length: 8 }).notNull().default("ar"),
+});
+`;
+  const fx = makeFixture({
+    schema: schemaWithVar,
+    snapshot: baselineSnapshot,
+    ensure: {
+      "ensure-widget-locale.ts": `
+        import { sql } from "drizzle-orm";
+        export async function ensureWidgetLocale(log) {
+          await db.execute(sql\`ALTER TABLE widgets ADD COLUMN IF NOT EXISTS locale VARCHAR(8) NOT NULL DEFAULT 'ar'\`);
+        }
+      `,
+    },
+  });
+  try {
+    const r = run(fx.env);
+    assert.equal(r.status, 0, r.stderr || r.stdout);
+  } finally {
+    fx.cleanup();
+  }
+});
+
 test("fails on stale allowlist entries (gap no longer present)", () => {
   // Allowlist claims widgets.color is a gap, but the schema doesn't have it.
   const fx = makeFixture({

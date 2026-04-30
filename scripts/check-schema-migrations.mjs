@@ -16,6 +16,10 @@
  *      `server/migrations/ensure-*.ts` file or in `migrations/*.sql`.
  *   2. A new table appears in `shared/schema.ts` that is not in the baseline
  *      and no `CREATE TABLE IF NOT EXISTS` covers it.
+ *   3. (Task #238) A new column IS covered by an ensure-script but the
+ *      SQL type written there disagrees with the Drizzle helper used in
+ *      `shared/schema.ts` (e.g. `boolean("active")` vs `ADD COLUMN ...
+ *      TEXT`). The mapping table lives in `scripts/schema-type-map.mjs`.
  *
  * Run locally:  node scripts/check-schema-migrations.mjs
  * Runs in CI on every PR via `.github/workflows/test.yml`.
@@ -25,6 +29,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkColumnTypeMatch } from "./schema-type-map.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -139,7 +144,82 @@ function findMatchingBrace(src, openIdx) {
   return -1;
 }
 
-/** @type {Map<string, Set<string>>} */
+// 2a. pgEnum variable name -> SQL enum name (Task #238 type check)
+//
+// Drizzle declares enum types like:
+//   export const candidateClassificationEnum = pgEnum("candidate_classification", [...])
+// and consumes them in a column as:
+//   classification: candidateClassificationEnum("classification")
+// The matching ensure script writes:
+//   ADD COLUMN ... candidate_classification NOT NULL DEFAULT 'individual'
+// so the type check needs to know that the JS variable
+// `candidateClassificationEnum` resolves to SQL type
+// `candidate_classification`.
+/** @type {Map<string, string>} */
+const enumMap = new Map();
+const enumRegex = /\b(\w+)\s*=\s*pgEnum\(\s*"([^"]+)"/g;
+let em;
+while ((em = enumRegex.exec(schemaSrc)) !== null) {
+  enumMap.set(em[1], em[2]);
+}
+
+/**
+ * Walk forward from `start` (the first character of a property declaration
+ * inside a pgTable columns block) and return the index of the next
+ * character that ends the property: a comma at the columns-block depth, or
+ * the end of the block. Tracks paren/bracket/brace depth so that the
+ * `text("tags").array()` declaration is captured intact instead of stopping
+ * at the first `)` that closes `text(...)`. Skips string literals so a
+ * comma inside `default("a, b")` does not split the property.
+ *
+ * @param {string} src the columns-block contents (text between the `{` and
+ *   matching `}` of the pgTable's second argument).
+ * @param {number} start index in `src` of the first char of the property
+ *   (e.g. the `t` in `tags: text(...)`).
+ * @returns {number} index of the terminating comma, or src.length.
+ */
+function findPropertyEnd(src, start) {
+  let depth = 0;
+  let i = start;
+  while (i < src.length) {
+    const ch = src[i];
+    if (ch === '"' || ch === "'" || ch === "`") {
+      const q = ch;
+      i++;
+      while (i < src.length) {
+        if (src[i] === "\\") {
+          i += 2;
+          continue;
+        }
+        if (src[i] === q) {
+          i++;
+          break;
+        }
+        i++;
+      }
+      continue;
+    }
+    if (ch === "(" || ch === "[" || ch === "{") depth++;
+    else if (ch === ")" || ch === "]" || ch === "}") {
+      // The terminating `}` of the columns block belongs to the parent
+      // (it's never reached because `columnsBlock` is sliced inside the
+      // braces) but a stray closing bracket at depth 0 still ends the
+      // current property.
+      if (depth === 0) return i;
+      depth--;
+    } else if (ch === "," && depth === 0) {
+      return i;
+    }
+    i++;
+  }
+  return src.length;
+}
+
+/**
+ * @typedef {{ helper: string, isArray: boolean }} SchemaColumnMeta
+ */
+
+/** @type {Map<string, Map<string, SchemaColumnMeta>>} */
 const schemaTables = new Map();
 const tableRegex = /pgTable\(\s*"([^"]+)"\s*,\s*\{/g;
 let m;
@@ -155,16 +235,25 @@ while ((m = tableRegex.exec(schemaSrc)) !== null) {
   }
   const columnsBlock = schemaSrc.slice(openBrace + 1, closeBrace);
 
-  const cols = new Set();
+  /** @type {Map<string, SchemaColumnMeta>} */
+  const cols = new Map();
   // Property declarations have shape:
   //   <propName>: <typeFn>("<db_col_name>", ...)
   // The function name can be any identifier (text, varchar, integer, boolean,
-  // timestamp, decimal, jsonb, or a custom enum like genderEnum).
+  // timestamp, decimal, jsonb, or a custom enum like genderEnum). After the
+  // match we walk forward to the end of the property to detect chained
+  // `.array()` calls, which the type check needs to compare against the
+  // ensure-script's `[]` / ARRAY suffix.
   const propRegex =
     /\b([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*([a-zA-Z_][a-zA-Z0-9_]*)\(\s*"([a-zA-Z_][a-zA-Z0-9_]*)"/g;
   let pm;
   while ((pm = propRegex.exec(columnsBlock)) !== null) {
-    cols.add(pm[3]);
+    const helper = pm[2];
+    const colName = pm[3];
+    const propEnd = findPropertyEnd(columnsBlock, pm.index);
+    const propBody = columnsBlock.slice(pm.index, propEnd);
+    const isArray = /\.array\s*\(/.test(propBody);
+    cols.set(colName, { helper, isArray });
   }
   schemaTables.set(tableName, cols);
   // Continue scanning from after the table block for the next pgTable(...)
@@ -179,30 +268,116 @@ if (schemaTables.size === 0) {
 }
 
 // ─── 3. Compute new columns / tables since baseline ────────────────────────
-/** @type {Map<string, { isNewTable: boolean, cols: Set<string> }>} */
+/** @type {Map<string, { isNewTable: boolean, cols: Map<string, SchemaColumnMeta> }>} */
 const newColumnsByTable = new Map();
 for (const [tbl, cols] of schemaTables) {
   const baselineCols = baseline.get(tbl);
   if (!baselineCols) {
-    newColumnsByTable.set(tbl, { isNewTable: true, cols: new Set(cols) });
+    newColumnsByTable.set(tbl, { isNewTable: true, cols: new Map(cols) });
     continue;
   }
-  const newCols = new Set();
-  for (const c of cols) if (!baselineCols.has(c)) newCols.add(c);
+  /** @type {Map<string, SchemaColumnMeta>} */
+  const newCols = new Map();
+  for (const [c, meta] of cols) if (!baselineCols.has(c)) newCols.set(c, meta);
   if (newCols.size > 0) {
     newColumnsByTable.set(tbl, { isNewTable: false, cols: newCols });
   }
 }
 
 // ─── 4. Scan ensure-*.ts and drizzle .sql files for ADD/CREATE coverage ────
-/** @type {Map<string, Set<string>>} */
+//
+// Each ADD COLUMN is captured with the raw SQL type string that follows
+// the column name (everything up to NOT NULL / DEFAULT / REFERENCES /
+// PRIMARY KEY / UNIQUE / CHECK / COLLATE / GENERATED / next clause). We
+// hold onto it so section 5 can compare it to the Drizzle helper recorded
+// for that column (Task #238).
+/**
+ * @typedef {{ sqlType: string, source: string }} ColumnCoverage
+ */
+/** @type {Map<string, Map<string, ColumnCoverage>>} */
 const coverage = new Map();
 /** @type {Set<string>} */
 const newTableCoverage = new Set();
 
-function recordColumn(tbl, col) {
-  if (!coverage.has(tbl)) coverage.set(tbl, new Set());
-  coverage.get(tbl).add(col);
+function recordColumn(tbl, col, sqlType, source) {
+  if (!coverage.has(tbl)) coverage.set(tbl, new Map());
+  // First write wins — multiple ensure-scripts touching the same column is
+  // unusual, but if it happens the earliest-discovered ALTER decides which
+  // type the check compares against. Either flagged mismatches force the
+  // contributor to align both sites.
+  const t = coverage.get(tbl);
+  if (!t.has(col)) t.set(col, { sqlType, source });
+}
+
+/**
+ * Split a string on `delim` characters that sit at outer (paren / bracket)
+ * depth zero, ignoring delimiters that appear inside SQL string literals.
+ * Used to break an ALTER TABLE body into individual `ADD COLUMN ...`
+ * clauses without splitting `DECIMAL(10, 2)` or `DEFAULT 'a, b'`.
+ *
+ * @param {string} s
+ * @param {string} delim single character
+ * @returns {string[]}
+ */
+function splitTopLevel(s, delim) {
+  const parts = [];
+  let depth = 0;
+  let start = 0;
+  let i = 0;
+  while (i < s.length) {
+    const ch = s[i];
+    if (ch === "'" || ch === '"') {
+      const q = ch;
+      i++;
+      while (i < s.length) {
+        if (s[i] === "\\") {
+          i += 2;
+          continue;
+        }
+        if (s[i] === q) {
+          i++;
+          break;
+        }
+        i++;
+      }
+      continue;
+    }
+    if (ch === "(" || ch === "[") depth++;
+    else if (ch === ")" || ch === "]") depth--;
+    else if (ch === delim && depth === 0) {
+      parts.push(s.slice(start, i));
+      start = i + 1;
+    }
+    i++;
+  }
+  parts.push(s.slice(start));
+  return parts;
+}
+
+/**
+ * Pull the SQL type token off the head of an `ADD COLUMN <col> <rest>`
+ * clause's `<rest>`. Stops at:
+ *   - the first column constraint keyword (NOT NULL, DEFAULT,
+ *     REFERENCES, PRIMARY KEY, UNIQUE, CHECK, COLLATE, GENERATED,
+ *     ON UPDATE) so multi-word types like `TIMESTAMP WITHOUT TIME ZONE`
+ *     survive intact; or
+ *   - the first character outside the SQL type alphabet (word chars,
+ *     whitespace, parens, brackets, commas). This keeps the parser
+ *     robust against trailing JS template-literal punctuation — a SQL
+ *     statement embedded in `` sql`...` `` ends with a backtick (and
+ *     usually `)`), neither of which is part of any SQL type.
+ *
+ * @param {string} rest text after the column name in an ADD COLUMN clause
+ * @returns {string} the SQL type, trimmed (may be empty if rest had no type)
+ */
+function extractSqlType(rest) {
+  const stop =
+    /\s+(?:NOT\s+NULL|NULL\b|DEFAULT\b|REFERENCES\b|PRIMARY\s+KEY|UNIQUE\b|CHECK\b|COLLATE\b|GENERATED\b|ON\s+UPDATE\b)/i;
+  const stopMatch = rest.match(stop);
+  let s = stopMatch ? rest.slice(0, stopMatch.index) : rest;
+  const valid = s.match(/^[\w\s(),\[\]]+/);
+  s = valid ? valid[0] : "";
+  return s.trim();
 }
 
 /** @type {string[]} */
@@ -233,11 +408,20 @@ function scanSqlForCoverage(sql, opts) {
   while ((am = reAlter.exec(cleaned)) !== null) {
     const tbl = am[1];
     const body = am[2];
-    const reAdd = requireIdempotent
-      ? /ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+["`]?([a-zA-Z_][a-zA-Z0-9_]*)["`]?/gi
-      : /ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?["`]?([a-zA-Z_][a-zA-Z0-9_]*)["`]?/gi;
-    let cm;
-    while ((cm = reAdd.exec(body)) !== null) recordColumn(tbl, cm[1]);
+    // An ALTER TABLE body can hold multiple comma-separated clauses
+    // (`ADD COLUMN ... , ADD COLUMN ...`). Split at the top level so we
+    // can capture each column's SQL type separately. `splitTopLevel`
+    // skips commas inside parens (DECIMAL(10, 2)) and string literals.
+    const reAddHead = requireIdempotent
+      ? /^\s*ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+["`]?([a-zA-Z_][a-zA-Z0-9_]*)["`]?\s+([\s\S]*)$/i
+      : /^\s*ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?["`]?([a-zA-Z_][a-zA-Z0-9_]*)["`]?\s+([\s\S]*)$/i;
+    for (const clause of splitTopLevel(body, ",")) {
+      const cm = clause.match(reAddHead);
+      if (!cm) continue;
+      const colName = cm[1];
+      const sqlType = extractSqlType(cm[2]);
+      recordColumn(tbl, colName, sqlType, source);
+    }
 
     if (requireIdempotent) {
       // Surface non-idempotent ALTER ... ADD COLUMN inside ensure scripts
@@ -346,10 +530,30 @@ for (const [tbl, info] of newColumnsByTable) {
     );
     continue;
   }
-  const covered = coverage.get(tbl) ?? new Set();
+  const covered = coverage.get(tbl) ?? new Map();
   const allowedForTable = allowedColumns.get(tbl) ?? new Set();
-  for (const col of info.cols) {
-    if (covered.has(col)) continue;
+  for (const [col, meta] of info.cols) {
+    if (covered.has(col)) {
+      // Task #238 — type-mismatch guard. Helper looked up via the
+      // mapping table in scripts/schema-type-map.mjs; pgEnum columns
+      // resolve via `enumMap`. Unknown helpers (custom column types)
+      // return `unknown` and are skipped rather than failing loudly.
+      const cov = covered.get(col);
+      const verdict = checkColumnTypeMatch({
+        drizzleHelper: meta.helper,
+        schemaIsArray: meta.isArray,
+        sqlType: cov.sqlType,
+        enums: enumMap,
+      });
+      if (verdict.ok === false) {
+        errors.push(
+          `Column type mismatch for "${tbl}.${col}": ${verdict.reason} ` +
+            `(ensure-script: ${cov.source}). Update the ensure-script's ` +
+            `ADD COLUMN type so it matches the Drizzle helper in shared/schema.ts.`,
+        );
+      }
+      continue;
+    }
     if (allowedForTable.has(col)) {
       if (!seenAllowedColumns.has(tbl)) seenAllowedColumns.set(tbl, new Set());
       seenAllowedColumns.get(tbl).add(col);
@@ -383,7 +587,7 @@ for (const tbl of allowedTables) {
 for (const [tbl, cols] of allowedColumns) {
   const seen = seenAllowedColumns.get(tbl) ?? new Set();
   const newInfo = newColumnsByTable.get(tbl);
-  const covered = coverage.get(tbl) ?? new Set();
+  const covered = coverage.get(tbl) ?? new Map();
   for (const col of cols) {
     if (seen.has(col)) continue;
     const stillUncovered =

@@ -201,12 +201,37 @@ constraint gaps that predate this check (currently
 contract as the column allowlist: do not grow it; ship a real
 ensure-script instead.
 
+## CI enforcement (Task #238) — column type-mismatch check
+
+The same coverage script also validates that the SQL type written in the
+ensure-script's `ADD COLUMN <col> <type>` matches the Drizzle helper used
+in `shared/schema.ts`. A boolean schema field paired with
+`ADD COLUMN ... TEXT` no longer slips through — it fails the build with:
+
+```
+Column type mismatch for "widgets.active": schema helper "boolean"
+expects one of [boolean, bool], migration uses "TEXT"
+(ensure-script: ensure-widget-active.ts).
+```
+
+The mapping table lives in [`scripts/schema-type-map.mjs`](../../scripts/schema-type-map.mjs).
+Each Drizzle pg-core helper (`text`, `boolean`, `integer`, `timestamp`,
+`jsonb`, …) is paired with the set of acceptable Postgres SQL type names.
+`pgEnum("foo_kind", [...])` columns resolve to the SQL type `foo_kind`
+automatically — the parser collects every `pgEnum` declaration in
+`shared/schema.ts` at startup. `.array()` on the schema column requires
+the ensure-script to use `[]` or the SQL `ARRAY` keyword, and a mismatch
+in either direction (scalar vs. array) is flagged. Parameterised types
+like `VARCHAR(8)` and `DECIMAL(10, 2)` strip their parameter list before
+the comparison so `varchar` matches `VARCHAR(8)`.
+
+Helpers that aren't in the mapping table (custom column types, niche
+extensions) are skipped rather than failing loudly. Add an entry to
+`DRIZZLE_TO_PG_TYPES` if you start using a new helper that needs the
+guard.
+
 ## What the check does *not* do
 
-- It does not validate column **types** match between `shared/schema.ts`
-  and the ensure-script. A boolean schema field paired with an
-  `ADD COLUMN ... TEXT` migration will pass the check. Reviewers must
-  still read the ensure-script.
 - ~~It does not enforce that you registered the new ensure-function in
   `server/index.ts`.~~ As of Task #236 the wiring check
   (`scripts/check-boot-migrate-wiring.mjs`) does enforce this — the build
@@ -215,3 +240,9 @@ ensure-script instead.
   Task #237 the index/constraint check
   (`scripts/check-schema-indexes.mjs`) does cover these — see the
   section above.
+- ~~It does not validate column **types** match between `shared/schema.ts`
+  and the ensure-script.~~ As of Task #238 it does — see the
+  type-mismatch section above.
+- It does not check column nullability or `DEFAULT` values. A schema
+  marked `notNull()` with an ensure-script that omits `NOT NULL` will
+  pass the type check.
