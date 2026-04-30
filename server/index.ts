@@ -100,8 +100,31 @@ app.use((req, res, next) => {
 
   // Boot-time idempotent schema patches. Production deploys do not run
   // drizzle-kit push, so schema additions must self-heal here. Keep these
-  // small and ADD COLUMN IF NOT EXISTS / CREATE INDEX IF NOT EXISTS only.
+  // small and ADD COLUMN IF NOT EXISTS / CREATE TABLE IF NOT EXISTS only.
+  //
+  // ORDERING MATTERS — later scripts in this block ALTER tables / enum
+  // types created earlier. Specifically:
+  //   • ensureRbacTables creates `roles`, used by users.role_id below.
+  //   • ensureSmsOutboxTable creates the `sms_outbox` table and the
+  //     `sms_outbox_kind` enum, both consumed by ensureSmsOutboxNextAttempt
+  //     and ensureOnboardingReminders.
+  //   • ensureCandidateClassificationAndDocs creates the
+  //     `candidate_classification` enum and adds candidates.classification.
   try {
+    const { ensureRbacTables } = await import("./migrations/ensure-rbac-tables");
+    await ensureRbacTables(log);
+    const { ensureUserTokenAndRoleCols } = await import("./migrations/ensure-user-token-and-role-cols");
+    await ensureUserTokenAndRoleCols(log);
+    const { ensureCandidateClassificationAndDocs } = await import("./migrations/ensure-candidate-classification-and-docs");
+    await ensureCandidateClassificationAndDocs(log);
+    const { ensureCandidateActivationTokens } = await import("./migrations/ensure-candidate-activation-tokens");
+    await ensureCandidateActivationTokens(log);
+    const { ensureSmsOutboxTable } = await import("./migrations/ensure-sms-outbox-table");
+    await ensureSmsOutboxTable(log);
+    const { ensureOtpPurpose } = await import("./migrations/ensure-otp-purpose");
+    await ensureOtpPurpose(log);
+    const { ensureLoginRateLimitBuckets } = await import("./migrations/ensure-login-rate-limit-buckets");
+    await ensureLoginRateLimitBuckets(log);
     const { ensureLocaleColumn } = await import("./migrations/ensure-locale-column");
     await ensureLocaleColumn(log);
     const { ensureSmsOutboxNextAttempt } = await import("./migrations/ensure-sms-outbox-next-attempt");

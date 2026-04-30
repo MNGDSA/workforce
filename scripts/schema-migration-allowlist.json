@@ -1,43 +1,22 @@
 {
   "$comment": [
     "Pre-existing schema/ensure-script drift baseline for Task #234.",
-    "These tables and columns were added to shared/schema.ts before the",
-    "boot-migrate coverage check existed. They are presumed to have reached",
-    "production via either drizzle-kit push (executed manually or via the",
-    "ensure-critical-tables.ts recovery path) or a one-shot migration script.",
+    "This allowlist is intentionally EMPTY. Every entry that used to live",
+    "here was replaced by a real server/migrations/ensure-*.ts script under",
+    "Task #235 — see the boot-migrate block in server/index.ts and the",
+    "ensure-rbac-tables.ts / ensure-user-token-and-role-cols.ts /",
+    "ensure-candidate-classification-and-docs.ts / ensure-candidate-activation-tokens.ts /",
+    "ensure-sms-outbox-table.ts / ensure-otp-purpose.ts /",
+    "ensure-login-rate-limit-buckets.ts files.",
     "",
     "DO NOT add new entries here when introducing new schema. The whole point",
-    "of the check is to force you to add a server/migrations/ensure-*.ts file",
-    "instead. Each entry below should ideally be replaced by a real ensure-*",
-    "script over time (tracked in follow-up tasks); shrinking this list is a",
-    "good thing.",
+    "of the schema-migration coverage check is to force you to add a real",
+    "server/migrations/ensure-*.ts file instead of suppressing the warning.",
     "",
-    "Format:",
+    "Format (kept here as documentation for the check parser):",
     "  newColumns: { '<table_name>': ['<col1>', '<col2>'] }",
     "  newTables:  ['<table_name>', ...]"
   ],
-  "newColumns": {
-    "users": [
-      "role_id",
-      "web_tokens_invalidated_at",
-      "mobile_tokens_invalidated_at"
-    ],
-    "candidates": [
-      "has_drivers_license",
-      "classification",
-      "drivers_license_file_url",
-      "vaccination_report_file_url"
-    ],
-    "otp_verifications": [
-      "purpose"
-    ]
-  },
-  "newTables": [
-    "candidate_activation_tokens",
-    "sms_outbox",
-    "roles",
-    "permissions",
-    "role_permissions",
-    "login_rate_limit_buckets"
-  ]
+  "newColumns": {},
+  "newTables": []
 }
