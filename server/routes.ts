@@ -4370,10 +4370,6 @@ export async function registerRoutes(
   app.post("/api/onboarding", requirePermission("onboarding:create"), async (req: Request, res: Response) => {
     try {
       const data = insertOnboardingSchema.parse(req.body);
-      // Prevent duplicate onboarding for same candidate
-      const existing = await storage.getOnboardingRecords({});
-      const dup = existing.find(r => r.candidateId === data.candidateId && r.status !== "converted" && r.status !== "rejected" && r.status !== "terminated");
-      if (dup) return res.status(409).json({ message: tr(req, "onboarding.alreadyExists") });
       // Server-side: derive each prerequisite flag from the candidate's
       // actual file URL — not from the candidate's `hasIban`/`hasPhoto`/
       // `hasNationalId` mirror flags. The mirrors can drift (e.g.
@@ -4382,8 +4378,9 @@ export async function registerRoutes(
       // certificate file has never been uploaded). Reading directly from
       // the file URLs guarantees a freshly-admitted onboarding record
       // never shows the IBAN tile as "complete" without an actual upload.
+      let candidate: Awaited<ReturnType<typeof storage.getCandidate>> | null = null;
       if (data.candidateId) {
-        const candidate = await storage.getCandidate(data.candidateId);
+        candidate = await storage.getCandidate(data.candidateId);
         if (candidate) {
           data.hasPhoto = !!candidate.photoUrl;
           data.hasIban = !!candidate.ibanFileUrl
@@ -4396,8 +4393,15 @@ export async function registerRoutes(
           data.status = computeOnboardingStatus(data as any, isSmp, candidate);
         }
       }
-      const record = await storage.createOnboardingRecord(data);
-      const candidate = data.candidateId ? await storage.getCandidate(data.candidateId) : null;
+      // Race-safe admit: SELECT … FOR UPDATE + INSERT inside one
+      // transaction (see `admitCandidateToOnboarding` for the rationale).
+      // Two concurrent admits of the same candidate now collapse to one
+      // row + one 409 instead of producing duplicate onboarding entries.
+      const result = await storage.admitCandidateToOnboarding(data);
+      if (!result.ok) {
+        return res.status(409).json({ message: tr(req, "onboarding.alreadyExists"), existingId: result.existing.id });
+      }
+      const record = result.record;
       await logAudit(req, {
         action: "onboarding.admit",
         entityType: "onboarding",

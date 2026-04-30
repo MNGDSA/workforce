@@ -2361,12 +2361,21 @@ export default function OnboardingPage() {
   // onboarding page itself stays cheap to mount. `staleTime: 0` +
   // explicit invalidation on shortlist/admit mutations guarantee the
   // list is always current.
-  const { data: eligibleFromServer = [], isFetching: eligibleFetching } = useQuery<EligibleCandidate[]>({
+  const {
+    data: eligibleFromServer = [],
+    isFetching: eligibleFetching,
+    isError: eligibleError,
+    refetch: refetchEligible,
+  } = useQuery<EligibleCandidate[]>({
     queryKey: ["/api/onboarding/admit-eligible"],
     queryFn: () => apiRequest("GET", "/api/onboarding/admit-eligible").then(r => r.json()),
     enabled: admitOpen,
     staleTime: 0,
     refetchOnWindowFocus: true,
+    // One transient network blip should not lock the user out of admit —
+    // retry a couple of times before showing the error/retry UI.
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 4000),
   });
 
   // Lightweight jobs lookup so we can surface the job's minimum salary as a
@@ -2397,20 +2406,120 @@ export default function OnboardingPage() {
   }, [adminUsers, t]);
 
   type AdmitItem = { candidateId: string; applicationId: string | null; jobId: string | null; hasPhoto: boolean; hasIban: boolean; hasNationalId: boolean; hasVaccinationReport: boolean };
-  const admitMutation = useMutation({
+  type AdmitOutcome = {
+    succeededIds: string[];
+    duplicateIds: string[];
+    failures: { candidateId: string; message: string }[];
+  };
+  // Bulk admit hardened against partial failure. Previous version used
+  // `Promise.all` which (a) marked the whole batch as failed when ANY row
+  // failed even though earlier rows had already been written to the DB, and
+  // (b) left the dialog open with the same selection — the user retried,
+  // hit 409 "already exists" on the rows that succeeded the first time, and
+  // panicked. New behaviour:
+  //   - Each admit is awaited via `allSettled`, so one bad row never
+  //     hides the success of the others.
+  //   - 409 (already in onboarding) is treated as a "soft skip": the
+  //     candidate IS in onboarding, which is exactly what the user
+  //     wanted, so we count it toward "no-op success" and remove them
+  //     from selection.
+  //   - Caches are ALWAYS invalidated, so the eligible list and the
+  //     onboarding table reflect reality even on partial failure.
+  //   - Selection is cleared only for rows we know are now in onboarding
+  //     (succeeded + duplicates). True failures stay selected so the user
+  //     can retry just those without re-picking the whole batch.
+  //   - Toast wording differentiates full success / partial / total failure
+  //     so the user always knows the actual state.
+  const admitMutation = useMutation<AdmitOutcome, unknown, AdmitItem[]>({
     mutationFn: async (items: AdmitItem[]) => {
-      await Promise.all(items.map(body => apiRequest("POST", "/api/onboarding", body)));
+      // `apiRequest` throws on any non-2xx (its body is "<status>: <text>"),
+      // so we wrap each call and treat 409 ("already in onboarding") as a
+      // soft-skip rather than a hard failure — the candidate IS in the
+      // pipeline, which is the user's goal.
+      const settled = await Promise.allSettled(
+        items.map(async (body) => {
+          try {
+            await apiRequest("POST", "/api/onboarding", body);
+            return { kind: "ok" as const, candidateId: body.candidateId };
+          } catch (e: any) {
+            const raw: string = e?.message ?? "";
+            const m = raw.match(/^(\d{3}):\s*(.*)$/);
+            const status = m ? Number(m[1]) : 0;
+            if (status === 409) return { kind: "duplicate" as const, candidateId: body.candidateId };
+            // Try to surface the server's localized message instead of the
+            // raw "<status>: <body>" wrapper.
+            let msg = m?.[2] ?? raw ?? "admit failed";
+            try {
+              const parsed = JSON.parse(m?.[2] ?? "");
+              if (parsed?.message) msg = parsed.message;
+            } catch { /* not JSON, use as-is */ }
+            throw Object.assign(new Error(msg), { candidateId: body.candidateId });
+          }
+        }),
+      );
+      const out: AdmitOutcome = { succeededIds: [], duplicateIds: [], failures: [] };
+      settled.forEach((r, i) => {
+        const candId = items[i].candidateId;
+        if (r.status === "fulfilled") {
+          if (r.value.kind === "ok") out.succeededIds.push(candId);
+          else out.duplicateIds.push(candId);
+        } else {
+          const err = r.reason as { message?: string };
+          out.failures.push({ candidateId: candId, message: err?.message ?? "admit failed" });
+        }
+      });
+      return out;
     },
-    onSuccess: (_data, items) => {
+    // ALWAYS refresh — even on a hard error during the batch, some rows
+    // may have committed; we cannot leave the UI showing stale data.
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding"] });
-      // Once admitted, those candidates now have an active onboarding row
-      // and must drop out of the eligible list immediately.
       qc.invalidateQueries({ queryKey: ["/api/onboarding/admit-eligible"] });
-      setAdmitOpen(false);
-      setSelectedIds(new Set());
-      setAdmitSearch("");
-      setAdmitPage(1);
-      toast({ title: t("toasts.admitted", { n: formatNumber(items.length), count: items.length }) });
+    },
+    onSuccess: (outcome) => {
+      const handledIds = new Set([...outcome.succeededIds, ...outcome.duplicateIds]);
+      // Drop already-handled rows from selection so a retry only attempts
+      // the genuinely-failed ones.
+      setSelectedIds(prev => {
+        const next = new Set<string>();
+        prev.forEach(id => { if (!handledIds.has(id)) next.add(id); });
+        return next;
+      });
+      const succeeded = outcome.succeededIds.length;
+      const dupes = outcome.duplicateIds.length;
+      const failed = outcome.failures.length;
+      const handled = succeeded + dupes;
+      if (failed === 0) {
+        // Full success (incl. soft-skip dupes). Close & reset.
+        setAdmitOpen(false);
+        setAdmitSearch("");
+        setAdmitPage(1);
+        if (succeeded > 0) {
+          toast({ title: t("toasts.admitted", { n: formatNumber(succeeded), count: succeeded }) });
+        } else if (dupes > 0) {
+          // All selected rows were already in onboarding — surface that
+          // explicitly so the user knows nothing actually moved.
+          toast({ title: t("toasts.admitDupesOnly", { n: formatNumber(dupes), count: dupes }) });
+        }
+      } else if (handled > 0) {
+        // Partial success — keep dialog open with the failed selection
+        // intact so the user can inspect / retry.
+        toast({
+          title: t("toasts.admitPartial", { n: formatNumber(handled), count: handled }),
+          description: t("toasts.admitPartialDesc", {
+            failed: formatNumber(failed),
+            count: failed,
+            firstError: outcome.failures[0]?.message ?? "",
+          }),
+        });
+      } else {
+        // Every row failed.
+        toast({
+          title: t("toasts.admitFailed"),
+          description: outcome.failures[0]?.message ?? "",
+          variant: "destructive",
+        });
+      }
     },
     onError: (e: any) => toast({ title: t("toasts.error"), description: e?.message ?? t("toasts.admitFailed"), variant: "destructive" }),
   });
@@ -3076,11 +3185,29 @@ export default function OnboardingPage() {
 
             {/* Candidate list */}
             <div className="space-y-1">
-              {admitFiltered.length === 0 ? (
+              {eligibleError ? (
+                // The eligible-candidates request failed even after retries.
+                // Show a single, calm error row with a retry button so the
+                // user is never stuck on a perpetual spinner.
+                <div className="text-center py-8 space-y-3" data-testid="admit-eligible-error">
+                  <div className="text-zinc-400 text-sm">{t("toasts.admitEligibleLoadFailed")}</div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-zinc-700 text-zinc-300"
+                    onClick={() => refetchEligible()}
+                    data-testid="button-retry-admit-eligible"
+                  >
+                    {eligibleFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("common.retry")}
+                  </Button>
+                </div>
+              ) : admitFiltered.length === 0 ? (
                 <div className="text-center py-8 text-zinc-500 text-sm">
-                  {eligibleCandidates.length === 0
-                    ? t("admit.noEligible")
-                    : t("admit.noMatch")}
+                  {eligibleFetching
+                    ? <Loader2 className="h-4 w-4 animate-spin inline" />
+                    : eligibleCandidates.length === 0
+                      ? t("admit.noEligible")
+                      : t("admit.noMatch")}
                 </div>
               ) : admitPageCandidates.map(c => {
                 const isSelected = selectedIds.has(c.id);

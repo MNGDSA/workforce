@@ -391,7 +391,9 @@ export interface IStorage {
     jobId: string | null;
   }[]>;
   getOnboardingRecord(id: string): Promise<OnboardingRecord | undefined>;
+  getActiveOnboardingByCandidateId(candidateId: string): Promise<OnboardingRecord | undefined>;
   createOnboardingRecord(data: InsertOnboarding): Promise<OnboardingRecord>;
+  admitCandidateToOnboarding(data: InsertOnboarding): Promise<{ ok: true; record: OnboardingRecord } | { ok: false; reason: "duplicate"; existing: OnboardingRecord }>;
   updateOnboardingRecord(id: string, data: Partial<InsertOnboarding>): Promise<OnboardingRecord | undefined>;
   deleteOnboardingRecord(id: string, tx?: any): Promise<boolean>;
   convertOnboardingToEmployee(id: string, employmentData: { startDate: string; eventId?: string; salary?: string; employmentType?: "individual" | "smp"; smpCompanyId?: string }, convertedBy?: string): Promise<WorkforceRecord>;
@@ -2762,6 +2764,30 @@ export class DatabaseStorage implements IStorage {
     return rec;
   }
 
+  // Targeted "is this candidate already in the active onboarding pipeline?"
+  // lookup. Returns the existing active row or undefined. "Active" means a
+  // status that is NOT a terminal state (converted / rejected / terminated)
+  // — those represent finished or abandoned pipelines that may be re-admitted.
+  //
+  // Used by the admit POST in place of `getOnboardingRecords({}).find(...)`,
+  // which previously loaded the entire onboarding table into memory just to
+  // answer this one question. With this method:
+  //   - cost is constant (one indexed row read), not O(N)
+  //   - admit-eligible eligibility check matches the SQL filter in
+  //     `getAdmitEligibleCandidates` exactly, so a candidate that the dialog
+  //     showed as eligible is the same candidate this guard will accept.
+  async getActiveOnboardingByCandidateId(candidateId: string): Promise<OnboardingRecord | undefined> {
+    const [rec] = await db
+      .select()
+      .from(onboarding)
+      .where(and(
+        eq(onboarding.candidateId, candidateId),
+        sql`${onboarding.status} NOT IN ('converted', 'rejected', 'terminated')`,
+      ))
+      .limit(1);
+    return rec;
+  }
+
   // Tight, purpose-built query that powers the "Admit Candidate" dialog on
   // the onboarding page. Doing the eligibility filter in SQL — instead of
   // shipping every application+candidate row to the client and letting the
@@ -2840,6 +2866,54 @@ export class DatabaseStorage implements IStorage {
   async createOnboardingRecord(data: InsertOnboarding): Promise<OnboardingRecord> {
     const [rec] = await db.insert(onboarding).values(data).returning();
     return rec;
+  }
+
+  // Race-safe admit. Two concurrent admits of the same candidate (e.g. two
+  // admins clicking "Confirm" in their own dialogs at the same time) used to
+  // both pass a SELECT-then-INSERT existence check and create duplicate
+  // onboarding rows for one candidate — onboarding then showed the candidate
+  // twice and conversion eventually broke. This method serializes that
+  // window inside a single transaction:
+  //
+  //   BEGIN
+  //     SELECT … FOR UPDATE           -- locks any existing active row
+  //     INSERT … if no active row     -- guaranteed unique within this txn
+  //   COMMIT
+  //
+  // If a row already existed, we return `{ ok: false, reason: "duplicate" }`
+  // along with the conflicting record so the caller can return a precise
+  // 409 to the client (and the bulk-admit UI can mark just that item as
+  // "already admitted" and keep the rest of the batch moving).
+  //
+  // We deliberately lock the candidate's own active row instead of a wider
+  // table-level lock — concurrent admits for *different* candidates run
+  // fully in parallel, so this scales linearly with admit throughput.
+  async admitCandidateToOnboarding(
+    data: InsertOnboarding,
+  ): Promise<{ ok: true; record: OnboardingRecord } | { ok: false; reason: "duplicate"; existing: OnboardingRecord }> {
+    return await db.transaction(async (tx) => {
+      const candId = data.candidateId;
+      if (!candId) {
+        // SMP / no-candidate admits cannot collide on candidate_id, so the
+        // race-guard does not apply. Insert and return.
+        const [rec] = await tx.insert(onboarding).values(data).returning();
+        return { ok: true as const, record: rec };
+      }
+      const [existing] = await tx
+        .select()
+        .from(onboarding)
+        .where(and(
+          eq(onboarding.candidateId, candId),
+          sql`${onboarding.status} NOT IN ('converted', 'rejected', 'terminated')`,
+        ))
+        .for("update")
+        .limit(1);
+      if (existing) {
+        return { ok: false as const, reason: "duplicate" as const, existing };
+      }
+      const [rec] = await tx.insert(onboarding).values(data).returning();
+      return { ok: true as const, record: rec };
+    });
   }
 
   async updateOnboardingRecord(id: string, data: Partial<InsertOnboarding>): Promise<OnboardingRecord | undefined> {
