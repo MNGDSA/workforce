@@ -3812,7 +3812,9 @@ export async function registerRoutes(
             const date = at.toLocaleDateString("en-SA", { day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Riyadh" });
             const time = at.toLocaleTimeString("en-SA", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Riyadh" });
 
-            const resolved = (interview.notes ?? "")
+            // Interview-level placeholders are the same for every recipient
+            // — resolve once, outside the loop.
+            const baseResolved = (interview.notes ?? "")
               .replace(/\{\{batch\}\}/g,    interview.groupName   ?? "")
               .replace(/\{\{date\}\}/g,     date)
               .replace(/\{\{time\}\}/g,     time)
@@ -3822,7 +3824,14 @@ export async function registerRoutes(
             for (const candidateId of interview.invitedCandidateIds ?? []) {
               const candidate = await storage.getCandidate(candidateId);
               if (!candidate?.phone) { console.warn(`[SMS] Candidate ${candidateId} has no phone — skipped`); continue; }
-              const result = await sendSmsViaPlugin(smsPlugin, candidate.phone, resolved);
+              // Per-recipient {{name}} substitution: use the first whitespace-
+              // separated token of the candidate's full name so the SMS reads
+              // "عزيزي/تي محمد،" instead of using their full legal name. If
+              // the candidate has no name on file we fall back to a polite
+              // generic so the literal "{{name}}" never reaches a phone.
+              const firstName = (candidate.fullNameEn ?? "").trim().split(/\s+/)[0] || "";
+              const personalMessage = baseResolved.replace(/\{\{name\}\}/g, firstName);
+              const result = await sendSmsViaPlugin(smsPlugin, candidate.phone, personalMessage);
               if (result.success) {
                 console.log(`[SMS] Interview notification sent to ${candidateId} (${candidate.phone})`);
               } else {

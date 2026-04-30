@@ -266,8 +266,11 @@ export default function ScheduleInterviewPage() {
   const watchedLocation  = useWatch({ control: form.control, name: "googleLocation" });
   const watchedNotes     = useWatch({ control: form.control, name: "notes" });
 
+  // Server uses ONLY the first whitespace-separated token of the candidate's
+  // name when substituting {{name}} (so SMS reads "عزيزي/تي محمد،"). Mirror
+  // that here so the live preview shows what will actually be sent.
   const firstSelectedName = selected.size > 0
-    ? Array.from(selected.values())[0].fullNameEn
+    ? (Array.from(selected.values())[0].fullNameEn ?? "").trim().split(/\s+/)[0]
     : "";
 
   const resolveTemplate = (template: string) =>
