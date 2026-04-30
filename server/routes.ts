@@ -3742,8 +3742,13 @@ export async function registerRoutes(
         if (!own || !candidateId || candidateId !== own.id) {
           return res.status(403).json({ message: tr(req, "auth.noPermission"), required: "interviews:read" });
         }
+        // Decision counts aggregate the whole invitee group's shortlist /
+        // reject status, which is admin-only signal — never expose it to
+        // self-service candidates. They get the plain interview rows.
+        const own_data = await storage.getInterviews({ status, candidateId, eventId });
+        return res.json(own_data);
       }
-      const data = await storage.getInterviews({ status, candidateId, eventId });
+      const data = await storage.getInterviewsWithDecisionCounts({ status, candidateId, eventId });
       return res.json(data);
     } catch (err) {
       return handleError(res, err);

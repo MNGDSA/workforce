@@ -158,7 +158,11 @@ function InterviewDetailSheet({
       // Toggling shortlist status changes who appears in the Onboarding
       // page's "Admit Candidate" dialog — refresh that pre-filtered list.
       queryClient.invalidateQueries({ queryKey: ["/api/onboarding/admit-eligible"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/interviews", interviewId] });
+      // Broad prefix invalidation refreshes both the open detail panel
+      // (`["/api/interviews", id]`) AND the parent list query
+      // (`["/api/interviews", { eventId }]`) so the Decisions column counts
+      // stay in sync with the chips a moment after the user shortlists.
+      queryClient.invalidateQueries({ queryKey: ["/api/interviews"] });
       toast({ title: vars.status === "shortlisted" ? t("interviews:toast.shortlisted") : vars.status === "rejected" ? t("interviews:toast.rejected") : t("interviews:toast.updated") });
     },
     onError: () => toast({ title: t("interviews:toast.updateFail"), variant: "destructive" }),
@@ -713,7 +717,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
       setLocalStatuses(prev => ({ ...prev, [vars.candidateId]: vars.status }));
       queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/interviews", interviewId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/interviews"] });
       toast({ title: vars.status === "shortlisted" ? t("interviews:toast.shortlisted") : vars.status === "rejected" ? t("interviews:toast.rejected") : t("interviews:toast.updated") });
     },
     onError: () => toast({ title: t("interviews:toast.updateFail"), variant: "destructive" }),
@@ -734,7 +738,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
       // Bulk shortlist promotes a batch of candidates straight into the
       // Onboarding admit dialog — refresh that pre-filtered list too.
       queryClient.invalidateQueries({ queryKey: ["/api/onboarding/admit-eligible"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/interviews", interviewId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/interviews"] });
       toast({ title: t("interviews:toast.bulkShortlisted", { count: result.succeeded, replace: { n: formatNumber(result.succeeded, i18n.language) } }) });
     },
     onError: () => toast({ title: t("interviews:toast.bulkFail"), variant: "destructive" }),
@@ -1455,6 +1459,7 @@ export default function InterviewsPage() {
                     <TableHead className="text-muted-foreground">{t("interviews:table.h.scheduled")}</TableHead>
                     <TableHead className="text-muted-foreground hidden md:table-cell">{t("interviews:table.h.venue")}</TableHead>
                     <TableHead className="text-muted-foreground hidden md:table-cell">{t("interviews:table.h.invited")}</TableHead>
+                    <TableHead className="text-muted-foreground hidden md:table-cell">{t("interviews:table.h.decisions")}</TableHead>
                     <TableHead className="text-muted-foreground hidden lg:table-cell">{t("interviews:table.h.created")}</TableHead>
                     <TableHead className="text-muted-foreground">{t("interviews:table.h.status")}</TableHead>
                     <TableHead className="text-end text-muted-foreground">{t("interviews:table.h.actions")}</TableHead>
@@ -1465,6 +1470,9 @@ export default function InterviewsPage() {
                     const candidate = candidateMap[iv.candidateId];
                     const { date, time } = formatScheduled(iv.scheduledAt);
                     const invitedCount = iv.invitedCandidateIds?.length ?? 0;
+                    const shortlistedCount = (iv as any).shortlistedCount ?? 0;
+                    const rejectedCount = (iv as any).rejectedCount ?? 0;
+                    const pendingCount = (iv as any).pendingCount ?? Math.max(invitedCount - shortlistedCount - rejectedCount, 0);
                     return (
                       <TableRow
                         key={iv.id}
@@ -1512,6 +1520,35 @@ export default function InterviewsPage() {
                             <Users className="me-1 h-3 w-3" />
                             <span dir="ltr">{formatNumber(invitedCount, i18n.language)}</span>
                           </Badge>
+                        </TableCell>
+
+                        <TableCell className="hidden md:table-cell">
+                          <div className="flex items-center gap-1.5">
+                            <Badge
+                              variant="outline"
+                              className={`border-0 font-semibold tabular-nums ${shortlistedCount > 0 ? "bg-emerald-900/40 text-emerald-400" : "bg-muted/30 text-muted-foreground/50"}`}
+                              title={t("interviews:table.decisions.shortlistedTip", { n: formatNumber(shortlistedCount, i18n.language) })}
+                              data-testid={`badge-decisions-shortlisted-${iv.id}`}
+                            >
+                              <span dir="ltr">{formatNumber(shortlistedCount, i18n.language)}</span>
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={`border-0 font-semibold tabular-nums ${rejectedCount > 0 ? "bg-red-900/40 text-red-400" : "bg-muted/30 text-muted-foreground/50"}`}
+                              title={t("interviews:table.decisions.rejectedTip", { n: formatNumber(rejectedCount, i18n.language) })}
+                              data-testid={`badge-decisions-rejected-${iv.id}`}
+                            >
+                              <span dir="ltr">{formatNumber(rejectedCount, i18n.language)}</span>
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={`border-0 font-semibold tabular-nums ${pendingCount > 0 ? "bg-muted/50 text-muted-foreground" : "bg-muted/30 text-muted-foreground/50"}`}
+                              title={t("interviews:table.decisions.pendingTip", { n: formatNumber(pendingCount, i18n.language) })}
+                              data-testid={`badge-decisions-pending-${iv.id}`}
+                            >
+                              <span dir="ltr">{formatNumber(pendingCount, i18n.language)}</span>
+                            </Badge>
+                          </div>
                         </TableCell>
 
                         <TableCell className="hidden lg:table-cell">

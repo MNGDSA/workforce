@@ -27,9 +27,15 @@
       "scheduled": "Scheduled",
       "venue": "Venue",
       "invited": "Invited",
+      "decisions": "Decisions",
       "created": "Created",
       "status": "Status",
       "actions": "Actions"
+    },
+    "decisions": {
+      "shortlistedTip": "{{n}} shortlisted",
+      "rejectedTip": "{{n}} rejected",
+      "pendingTip": "{{n}} awaiting decision"
     },
     "unnamed": "Unnamed Session",
     "minSuffix": "{{n}} min",

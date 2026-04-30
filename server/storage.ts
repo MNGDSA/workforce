@@ -279,6 +279,7 @@ export interface IStorage {
 
   // Interviews
   getInterviews(params?: { status?: string; candidateId?: string; eventId?: string }): Promise<Interview[]>;
+  getInterviewsWithDecisionCounts(params?: { status?: string; candidateId?: string; eventId?: string }): Promise<(Interview & { shortlistedCount: number; rejectedCount: number; pendingCount: number })[]>;
   getInterview(id: string): Promise<Interview | undefined>;
   getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null; questionSetId: string | null; questionSetAnswers: Record<string, string> | null }[] } | undefined>;
   createInterview(interview: InsertInterview): Promise<Interview>;
@@ -1713,6 +1714,72 @@ export class DatabaseStorage implements IStorage {
       );
     }
     return db.select().from(interviews).where(and(...conditions)).orderBy(desc(interviews.scheduledAt));
+  }
+
+  async getInterviewsWithDecisionCounts(params?: { status?: string; candidateId?: string; eventId?: string }): Promise<(Interview & { shortlistedCount: number; rejectedCount: number; pendingCount: number })[]> {
+    // Decision counts on the interview list mirror the per-row chips that
+    // appear inside the detail drawer (`getInterviewDetail`). For each
+    // invitee we resolve the "best" application by the same priority rule
+    // (bound app > same-event app > highest status priority) so the
+    // shortlisted/rejected count shown next to a row exactly matches the
+    // chips a user sees once they open the detail panel — no drift.
+    const rows = await this.getInterviews(params);
+    if (rows.length === 0) return [];
+
+    const allInviteeIds = Array.from(new Set(
+      rows.flatMap(r => r.invitedCandidateIds ?? [])
+    ));
+    if (allInviteeIds.length === 0) {
+      return rows.map(r => ({ ...r, shortlistedCount: 0, rejectedCount: 0, pendingCount: 0 }));
+    }
+
+    const appRows = await db.select({
+      id: applications.id,
+      candidateId: applications.candidateId,
+      status: applications.status,
+      jobId: applications.jobId,
+    })
+      .from(applications)
+      .where(inArray(applications.candidateId, allInviteeIds));
+
+    const jobIds = Array.from(new Set(appRows.map(a => a.jobId).filter((v): v is string => !!v)));
+    const jobRows = jobIds.length > 0
+      ? await db.select({ id: jobPostings.id, eventId: jobPostings.eventId }).from(jobPostings).where(inArray(jobPostings.id, jobIds))
+      : [];
+    const jobEventMap = new Map(jobRows.map(j => [j.id, j.eventId ?? null]));
+
+    const appsByCandidate = new Map<string, typeof appRows>();
+    for (const a of appRows) {
+      const list = appsByCandidate.get(a.candidateId) ?? [];
+      list.push(a);
+      appsByCandidate.set(a.candidateId, list);
+    }
+
+    const statusPriority: Record<string, number> = { hired: 6, offered: 5, interviewed: 4, shortlisted: 3, reviewing: 2, new: 1, rejected: 0, withdrawn: 0 };
+
+    return rows.map(iv => {
+      let shortlistedCount = 0;
+      let rejectedCount = 0;
+      let pendingCount = 0;
+      for (const cid of iv.invitedCandidateIds ?? []) {
+        const candidateApps = appsByCandidate.get(cid) ?? [];
+        const boundApp = iv.applicationId
+          ? candidateApps.find(a => a.id === iv.applicationId)
+          : undefined;
+        const sameEventApps = iv.eventId
+          ? candidateApps
+              .filter(a => a.jobId && jobEventMap.get(a.jobId) === iv.eventId)
+              .sort((a, b) => (statusPriority[b.status] ?? 0) - (statusPriority[a.status] ?? 0))
+          : [];
+        const anyApp = [...candidateApps].sort((a, b) => (statusPriority[b.status] ?? 0) - (statusPriority[a.status] ?? 0))[0];
+        const best = boundApp ?? sameEventApps[0] ?? anyApp;
+        const status = best?.status ?? null;
+        if (status === "shortlisted") shortlistedCount++;
+        else if (status === "rejected") rejectedCount++;
+        else pendingCount++;
+      }
+      return { ...iv, shortlistedCount, rejectedCount, pendingCount };
+    });
   }
 
   async archiveInterview(id: string): Promise<Interview | undefined> {

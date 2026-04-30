@@ -27,9 +27,15 @@
       "scheduled": "الموعد",
       "venue": "المكان",
       "invited": "المدعوون",
+      "decisions": "القرارات",
       "created": "تاريخ الإنشاء",
       "status": "الحالة",
       "actions": "الإجراءات"
+    },
+    "decisions": {
+      "shortlistedTip": "{{n}} ضمن القائمة المختصرة",
+      "rejectedTip": "{{n}} مرفوض",
+      "pendingTip": "{{n}} بانتظار القرار"
     },
     "unnamed": "جلسة بدون اسم",
     "minSuffix": "{{n}} دقيقة",
