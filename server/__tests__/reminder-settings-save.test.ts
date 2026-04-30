@@ -155,6 +155,31 @@ describe("reminder-settings PUT validator (task #232)", () => {
     assert.equal(putCap.statusCode(), 400);
   });
 
+  it("accepts the disabled-state GET shape (enabledAt:null) round-tripped on PUT", async () => {
+    // OFF→OFF leaves enabledAt at null; the GET shape the client posts
+    // back has `enabledAt: null` literally. Without the validator fix
+    // this would 400 just like the OFF→ON case.
+    await setReminderConfig({ enabled: true });
+    await setReminderConfig({ enabled: false });
+    const seeded = await getReminderConfig();
+    assert.equal(seeded.enabled, false);
+    assert.equal(seeded.enabledAt, null, "ON→OFF clears enabledAt to null");
+
+    const getReq = makeReq({ method: "GET" });
+    const getCap = makeRes();
+    await handlers.get(getReq, getCap.res);
+    const getBody = getCap.body() as { config: any; templates: any };
+    assert.equal(getBody.config.enabledAt, null);
+    assert.ok(getBody.config.requiredDocs.includes("vaccination_report"),
+      "default requiredDocs include vaccination_report");
+
+    const putReq = makeReq({ body: { config: getBody.config, templates: getBody.templates } });
+    const putCap = makeRes();
+    await handlers.put(putReq, putCap.res);
+    assert.equal(putCap.statusCode(), 200,
+      `PUT must succeed with enabledAt:null shape — got ${putCap.statusCode()}: ${JSON.stringify(putCap.body())}`);
+  });
+
   it("400s on a doc id outside the four-doc whitelist", async () => {
     const putReq = makeReq({ body: { config: { requiredDocs: ["photo", "not_a_real_doc"] } } });
     const putCap = makeRes();
