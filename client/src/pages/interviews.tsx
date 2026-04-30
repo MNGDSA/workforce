@@ -1052,6 +1052,7 @@ export default function InterviewsPage() {
   const [search, setSearch] = useState("");
   const [eventFilter, setEventFilter] = useState("all");
   const [cancelPendingId, setCancelPendingId] = useState<string | null>(null);
+  const [archivePendingId, setArchivePendingId] = useState<string | null>(null);
   const [detailInterview, setDetailInterview] = useState<Interview | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1095,6 +1096,28 @@ export default function InterviewsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/interviews/stats"] });
     },
     onError: () => toast({ title: t("interviews:toast.updateInterviewFail"), variant: "destructive" }),
+  });
+
+  // Archive is a separate verb from Cancel: it only applies to completed
+  // interviews and removes them from the default list + dashboard tiles
+  // without sending any candidate SMS. The server enforces the
+  // status === "completed" guard, so a stale UI cannot bypass it.
+  const archiveInterview = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest("POST", `/api/interviews/${id}/archive`).then((r) => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/interviews"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/interviews/stats"] });
+      toast({
+        title: t("interviews:toast.archivedTitle"),
+        description: t("interviews:toast.archivedDesc"),
+      });
+    },
+    onError: (err: any) =>
+      toast({
+        title: err?.message || t("interviews:toast.updateInterviewFail"),
+        variant: "destructive",
+      }),
   });
 
   const filtered = interviewList.filter((iv) => {
@@ -1337,13 +1360,22 @@ export default function InterviewsPage() {
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
-                                onClick={() => setCancelPendingId(iv.id)}
-                                data-testid={`button-cancel-interview-${iv.id}`}
-                              >
-                                {t("interviews:actions.cancel")}
-                              </DropdownMenuItem>
+                              {iv.status === "completed" ? (
+                                <DropdownMenuItem
+                                  onClick={() => setArchivePendingId(iv.id)}
+                                  data-testid={`button-archive-interview-${iv.id}`}
+                                >
+                                  {t("interviews:actions.archive")}
+                                </DropdownMenuItem>
+                              ) : iv.status !== "cancelled" ? (
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => setCancelPendingId(iv.id)}
+                                  data-testid={`button-cancel-interview-${iv.id}`}
+                                >
+                                  {t("interviews:actions.cancel")}
+                                </DropdownMenuItem>
+                              ) : null}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
@@ -1390,6 +1422,37 @@ export default function InterviewsPage() {
               }}
             >
               {t("interviews:cancelDialog.confirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!archivePendingId} onOpenChange={(v) => { if (!v) setArchivePendingId(null); }}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white font-display">{t("interviews:archiveDialog.title")}</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              {t("interviews:archiveDialog.desc")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="border-border text-muted-foreground hover:text-white"
+              data-testid="button-archive-confirm-dismiss"
+            >
+              {t("interviews:archiveDialog.keep")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              data-testid="button-archive-confirm-proceed"
+              onClick={() => {
+                if (archivePendingId) {
+                  archiveInterview.mutate(archivePendingId);
+                  setArchivePendingId(null);
+                }
+              }}
+            >
+              {t("interviews:archiveDialog.confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

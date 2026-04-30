@@ -283,6 +283,7 @@ export interface IStorage {
   getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null }[] } | undefined>;
   createInterview(interview: InsertInterview): Promise<Interview>;
   updateInterview(id: string, data: Partial<InsertInterview>): Promise<Interview | undefined>;
+  archiveInterview(id: string): Promise<Interview | undefined>;
   getInterviewStats(): Promise<{ total: number; scheduled: number; completed: number; cancelled: number }>;
 
   // Workforce (Employees)
@@ -1698,7 +1699,9 @@ export class DatabaseStorage implements IStorage {
     // server/interview-auto-complete.ts for the full rationale.
     const { autoCompleteElapsedInterviews } = await import("./interview-auto-complete");
     await autoCompleteElapsedInterviews();
-    const conditions = [];
+    // Archived interviews are hidden from the default list. Cancellation is
+    // for not-yet-finished sessions; archive is the post-completion verb.
+    const conditions = [isNull(interviews.archivedAt)];
     if (params?.status) conditions.push(eq(interviews.status, params.status as any));
     if (params?.eventId) conditions.push(eq(interviews.eventId, params.eventId));
     if (params?.candidateId) {
@@ -1709,8 +1712,24 @@ export class DatabaseStorage implements IStorage {
         )!
       );
     }
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
-    return db.select().from(interviews).where(where).orderBy(desc(interviews.scheduledAt));
+    return db.select().from(interviews).where(and(...conditions)).orderBy(desc(interviews.scheduledAt));
+  }
+
+  async archiveInterview(id: string): Promise<Interview | undefined> {
+    // Archive is restricted to completed interviews — anything still active
+    // (scheduled / in_progress / no_show) must be cancelled instead. The
+    // status guard lives in the WHERE so a stale UI cannot archive a
+    // not-yet-finished session, and a double-click on the action is a
+    // harmless no-op (already-archived rows fall through the isNull check).
+    const [updated] = await db.update(interviews)
+      .set({ archivedAt: new Date(), updatedAt: new Date() })
+      .where(and(
+        eq(interviews.id, id),
+        eq(interviews.status, "completed"),
+        isNull(interviews.archivedAt),
+      ))
+      .returning();
+    return updated;
   }
 
   async getInterview(id: string): Promise<Interview | undefined> {
@@ -1783,10 +1802,13 @@ export class DatabaseStorage implements IStorage {
     // reflect reality. See server/interview-auto-complete.ts.
     const { autoCompleteElapsedInterviews } = await import("./interview-auto-complete");
     await autoCompleteElapsedInterviews();
-    const [total] = await db.select({ value: count() }).from(interviews);
-    const [scheduledRow] = await db.select({ value: count() }).from(interviews).where(eq(interviews.status, "scheduled"));
-    const [completedRow] = await db.select({ value: count() }).from(interviews).where(eq(interviews.status, "completed"));
-    const [cancelledRow] = await db.select({ value: count() }).from(interviews).where(eq(interviews.status, "cancelled"));
+    // Archived interviews are excluded from every tile so the dashboard
+    // reflects active (= not-yet-archived) work only.
+    const notArchived = isNull(interviews.archivedAt);
+    const [total] = await db.select({ value: count() }).from(interviews).where(notArchived);
+    const [scheduledRow] = await db.select({ value: count() }).from(interviews).where(and(notArchived, eq(interviews.status, "scheduled")));
+    const [completedRow] = await db.select({ value: count() }).from(interviews).where(and(notArchived, eq(interviews.status, "completed")));
+    const [cancelledRow] = await db.select({ value: count() }).from(interviews).where(and(notArchived, eq(interviews.status, "cancelled")));
 
     return {
       total: Number(total.value),

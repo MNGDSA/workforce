@@ -531,6 +531,11 @@ export const interviews = pgTable(
     createdByName: text("created_by_name"),
     rating: integer("rating"),
     feedback: text("feedback"),
+    // Archive lifecycle: only completed interviews can be archived (the cancel
+    // action is reserved for not-yet-finished sessions). Archived rows are
+    // hidden from the default list and stats but kept for audit. Mirrors the
+    // events / candidates / workforce archive pattern.
+    archivedAt: timestamp("archived_at"),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
   },
@@ -539,6 +544,7 @@ export const interviews = pgTable(
     candidateIdx: index("interviews_candidate_idx").on(t.candidateId),
     scheduledAtIdx: index("interviews_scheduled_at_idx").on(t.scheduledAt),
     statusIdx: index("interviews_status_idx").on(t.status),
+    archivedAtIdx: index("interviews_archived_at_idx").on(t.archivedAt),
   })
 );
 
@@ -914,6 +920,12 @@ export const insertInterviewSchema = createInsertSchema(interviews, {
   id: true,
   createdAt: true,
   updatedAt: true,
+  // archivedAt is a lifecycle field. It must only be settable via the
+  // dedicated archive endpoint (gated by `interviews:archive`); allowing
+  // it through the generic create/update payload would let any caller
+  // with `interviews:update` archive or — worse — un-archive interviews,
+  // bypassing the permission split.
+  archivedAt: true,
 }).extend({
   candidateId: z.string().optional().nullable(),
   applicationId: z.string().optional().nullable(),

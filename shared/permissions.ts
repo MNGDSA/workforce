@@ -69,9 +69,10 @@ export const PERMISSION_CATALOG = [
   { key: "applications:bulk_shortlist", resource: "applications", action: "bulk_shortlist", description: "Bulk shortlist applications from the interviews flow", category: "Jobs & Applications" },
 
   // ─── Interviews ──
-  { key: "interviews:read",   resource: "interviews", action: "read",   description: "List & view interviews", category: "Interviews" },
-  { key: "interviews:create", resource: "interviews", action: "create", description: "Schedule interviews",    category: "Interviews" },
-  { key: "interviews:update", resource: "interviews", action: "update", description: "Edit interviews",        category: "Interviews" },
+  { key: "interviews:read",    resource: "interviews", action: "read",    description: "List & view interviews",       category: "Interviews" },
+  { key: "interviews:create",  resource: "interviews", action: "create",  description: "Schedule interviews",          category: "Interviews" },
+  { key: "interviews:update",  resource: "interviews", action: "update",  description: "Edit interviews",              category: "Interviews" },
+  { key: "interviews:archive", resource: "interviews", action: "archive", description: "Archive completed interviews", category: "Interviews" },
 
   // ─── Attendance (admin) ──
   { key: "attendance:read",      resource: "attendance", action: "read",      description: "View raw attendance records",        category: "Attendance" },

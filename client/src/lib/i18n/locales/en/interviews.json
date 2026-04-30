@@ -53,13 +53,20 @@
     "markInProgress": "Mark In Progress",
     "markCompleted": "Mark Completed",
     "markNoShow": "Mark No-Show",
-    "cancel": "Cancel Interview"
+    "cancel": "Cancel Interview",
+    "archive": "Archive Interview"
   },
   "cancelDialog": {
     "title": "Cancel this interview?",
     "desc": "This will mark the interview as cancelled. Candidates will receive a cancellation SMS and will no longer be expected to attend. This action cannot be undone.",
     "keep": "Keep Interview",
     "confirm": "Yes, Cancel Interview"
+  },
+  "archiveDialog": {
+    "title": "Archive this completed interview?",
+    "desc": "The interview will be hidden from the default list and dashboard stats while its full record is kept for audit. No messages are sent to candidates.",
+    "keep": "Keep in List",
+    "confirm": "Yes, Archive Interview"
   },
   "detail": {
     "title": "Interview & Training Session",
@@ -133,6 +140,8 @@
     "bulkShortlisted": "{{n}} candidate shortlisted",
     "bulkShortlisted_other": "{{n}} candidates shortlisted",
     "bulkFail": "Bulk shortlist failed",
-    "updateInterviewFail": "Update failed"
+    "updateInterviewFail": "Update failed",
+    "archivedTitle": "Interview archived",
+    "archivedDesc": "Hidden from the list and stats."
   }
 }

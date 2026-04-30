@@ -136,6 +136,8 @@ app.use((req, res, next) => {
     await ensureOnboardingReminders(log);
     const { ensureVaccinationReportColumns } = await import("./migrations/ensure-vaccination-report-columns");
     await ensureVaccinationReportColumns(log);
+    const { ensureInterviewsArchivedAt } = await import("./migrations/ensure-interviews-archived-at");
+    await ensureInterviewsArchivedAt(log);
   } catch (err) {
     log(`boot migration failed: ${err}`, "boot-migrate");
   }

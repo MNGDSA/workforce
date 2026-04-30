@@ -3836,6 +3836,27 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/interviews/:id/archive", requirePermission("interviews:archive"), async (req: Request, res: Response) => {
+    try {
+      const archived = await storage.archiveInterview(req.params.id);
+      if (!archived) {
+        // Either the interview doesn't exist, isn't completed, or is already archived.
+        // Distinguish so the UI can show the right toast — but never leak existence
+        // to a caller without read access (read perm was already required for the
+        // list/detail that produced the id).
+        const existing = await storage.getInterview(req.params.id);
+        if (!existing) return res.status(404).json({ message: tr(req, "interview.notFound") });
+        if (existing.status !== "completed") {
+          return res.status(409).json({ message: tr(req, "interview.archiveOnlyCompleted") });
+        }
+        return res.status(409).json({ message: tr(req, "interview.alreadyArchived") });
+      }
+      return res.json(archived);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   app.patch("/api/interviews/:id", requirePermission("interviews:update"), async (req: Request, res: Response) => {
     try {
       const data = insertInterviewSchema.partial().parse(req.body);
