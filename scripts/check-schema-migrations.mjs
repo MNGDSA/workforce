@@ -32,6 +32,7 @@ import { fileURLToPath } from "node:url";
 import {
   checkColumnTypeMatch,
   checkNullDefaultMatch,
+  parseColumnConstraints,
 } from "./schema-type-map.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -461,117 +462,10 @@ function extractSqlType(rest) {
   return s.trim();
 }
 
-/**
- * Task #242 — parse the post-type tail of an `ADD COLUMN <col> <type> ...`
- * clause for `NOT NULL` and `DEFAULT <expr>`. The DEFAULT expression is
- * captured with paren / single-quote awareness so:
- *   - `DEFAULT 'a, b'`              → `'a, b'`
- *   - `DEFAULT now()`               → `now()`
- *   - `DEFAULT '[]'::jsonb`         → `'[]'::jsonb`
- *   - `DEFAULT 0 NOT NULL`          → `0`        (stops at next clause)
- * A backtick or semicolon at depth 0 also terminates the expression so
- * the trailing JS template-literal punctuation that survives in the
- * regex-captured ALTER body (`...DEFAULT 'ar'\`)`) does not pollute the
- * captured value.
- *
- * Other clauses (REFERENCES, PRIMARY KEY, etc.) end the parse — the
- * coverage check only cares about NOT NULL and DEFAULT.
- *
- * @param {string} rest text after the column name in an ADD COLUMN clause
- * @returns {{ notNull: boolean, defaultExpr: string|null }}
- */
-function parseColumnConstraints(rest) {
-  const stop =
-    /\s+(?:NOT\s+NULL|NULL\b|DEFAULT\b|REFERENCES\b|PRIMARY\s+KEY|UNIQUE\b|CHECK\b|COLLATE\b|GENERATED\b|ON\s+UPDATE\b)/i;
-  const stopMatch = rest.match(stop);
-  if (!stopMatch) return { notNull: false, defaultExpr: null };
-  const tail = rest.slice(stopMatch.index);
-  let i = 0;
-  let notNull = false;
-  /** @type {string|null} */
-  let defaultExpr = null;
-
-  while (i < tail.length) {
-    while (i < tail.length && /\s/.test(tail[i])) i++;
-    if (i >= tail.length) break;
-    const sub = tail.slice(i);
-
-    let mm;
-    if ((mm = sub.match(/^NOT\s+NULL\b/i))) {
-      notNull = true;
-      i += mm[0].length;
-      continue;
-    }
-    if ((mm = sub.match(/^NULL\b/i))) {
-      // explicit nullable — leave notNull = false
-      i += mm[0].length;
-      continue;
-    }
-    if ((mm = sub.match(/^DEFAULT\b/i))) {
-      i += mm[0].length;
-      while (i < tail.length && /\s/.test(tail[i])) i++;
-      const exprStart = i;
-      let depth = 0;
-      while (i < tail.length) {
-        const ch = tail[i];
-        // SQL string literal — single quote only. Postgres escapes a
-        // single quote by doubling it (`''`).
-        if (ch === "'") {
-          i++;
-          while (i < tail.length) {
-            if (tail[i] === "'" && tail[i + 1] === "'") {
-              i += 2;
-              continue;
-            }
-            if (tail[i] === "'") {
-              i++;
-              break;
-            }
-            i++;
-          }
-          continue;
-        }
-        if (ch === "(" || ch === "[") {
-          depth++;
-          i++;
-          continue;
-        }
-        if (ch === ")" || ch === "]") {
-          if (depth === 0) break;
-          depth--;
-          i++;
-          continue;
-        }
-        // Backtick / semicolon at depth 0 ends the expression — these
-        // are JS template-literal punctuation that survives in the
-        // regex-captured ALTER body, never legitimate SQL default chars.
-        if (depth === 0 && (ch === "`" || ch === ";")) break;
-        if (depth === 0) {
-          // Stop at the next clause keyword preceded by whitespace.
-          const ahead = tail.slice(i);
-          if (
-            /^\s+(?:NOT\s+NULL|NULL\b|REFERENCES\b|PRIMARY\s+KEY|UNIQUE\b|CHECK\b|COLLATE\b|GENERATED\b|ON\s+UPDATE\b)/i.test(
-              ahead,
-            )
-          ) {
-            break;
-          }
-        }
-        i++;
-      }
-      const captured = tail.slice(exprStart, i).trim();
-      defaultExpr = captured.length > 0 ? captured : null;
-      continue;
-    }
-
-    // Unknown clause (REFERENCES, PRIMARY KEY, etc.) — bail out. The
-    // null/default check doesn't care about anything past this point and
-    // walking arbitrary SQL grammar from here is fragile.
-    break;
-  }
-
-  return { notNull, defaultExpr };
-}
+// `parseColumnConstraints` lives in `scripts/schema-type-map.mjs` so the
+// helper can be unit-tested directly (see
+// `server/__tests__/schema-default-normalizer.test.ts`) without spinning
+// up the full subprocess fixture for each case.
 
 /** @type {string[]} */
 const nonIdempotentEnsures = [];
