@@ -72,12 +72,76 @@ const DEFAULT_CONFIG: ReminderConfig = {
 
 const SETTINGS_KEY = "onboarding_reminder_config";
 
+// Whitelist of known config keys, used to project the persisted blob
+// down to only fields the current schema knows about. Without this, a
+// stale field left over from a previous schema version (e.g. the
+// pre-Days-rename `totalDeadlineHours`) would tunnel out through GET,
+// the client would round-trip it back on save, and the strict() PUT
+// validator would 400 on every save with `unrecognized_keys`. Keeping
+// the projection in one place means schema renames only need to update
+// `ReminderConfig` + `DEFAULT_CONFIG` + this list and the round-trip
+// stays self-cleaning.
+const KNOWN_CONFIG_KEYS: readonly (keyof ReminderConfig)[] = [
+  "enabled",
+  "enabledAt",
+  "firstAfterHours",
+  "repeatEveryHours",
+  "maxReminders",
+  "totalDeadlineDays",
+  "finalWarningHours",
+  "quietHoursStart",
+  "quietHoursEnd",
+  "quietHoursTz",
+  "requiredDocs",
+];
+
+// Per-key shape guards. Each guard accepts the raw persisted value and
+// returns it only if it conforms to the field's runtime type; otherwise
+// the field falls back to DEFAULT_CONFIG. Without these, a corrupted or
+// stale value under a known key (e.g. `enabledAt: 123`, or a
+// `requiredDocs` entry that no longer exists in the enum) would still
+// leak through GET and crash the strict PUT round-trip on the next save.
+// Schema renames or new fields only need to update DEFAULT_CONFIG +
+// KNOWN_CONFIG_KEYS + this map; the round-trip stays self-cleaning.
+const KNOWN_REMINDER_DOCS: ReminderDocId[] = ["photo", "iban", "national_id", "vaccination_report"];
+const isReminderDoc = (v: unknown): v is ReminderDocId =>
+  typeof v === "string" && (KNOWN_REMINDER_DOCS as string[]).includes(v);
+const isFiniteNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const isString = (v: unknown): v is string => typeof v === "string";
+
+const CONFIG_KEY_VALIDATORS: { [K in keyof ReminderConfig]: (v: unknown) => ReminderConfig[K] | undefined } = {
+  enabled: (v) => (typeof v === "boolean" ? v : undefined),
+  enabledAt: (v) => (v === null || isString(v) ? (v as string | null) : undefined),
+  firstAfterHours: (v) => (isFiniteNumber(v) ? v : undefined),
+  repeatEveryHours: (v) => (isFiniteNumber(v) ? v : undefined),
+  maxReminders: (v) => (isFiniteNumber(v) ? v : undefined),
+  totalDeadlineDays: (v) => (isFiniteNumber(v) ? v : undefined),
+  finalWarningHours: (v) => (isFiniteNumber(v) ? v : undefined),
+  quietHoursStart: (v) => (isString(v) ? v : undefined),
+  quietHoursEnd: (v) => (isString(v) ? v : undefined),
+  quietHoursTz: (v) => (isString(v) ? v : undefined),
+  requiredDocs: (v) => (Array.isArray(v) ? (v.filter(isReminderDoc) as ReminderDocId[]) : undefined),
+};
+
+function projectKnownConfig(parsed: unknown): ReminderConfig {
+  const out: ReminderConfig = { ...DEFAULT_CONFIG };
+  if (parsed && typeof parsed === "object") {
+    const src = parsed as Record<string, unknown>;
+    for (const k of KNOWN_CONFIG_KEYS) {
+      if (!(k in src)) continue;
+      const validate = CONFIG_KEY_VALIDATORS[k] as (v: unknown) => unknown;
+      const value = validate(src[k]);
+      if (value !== undefined) (out as any)[k] = value;
+    }
+  }
+  return out;
+}
+
 export async function getReminderConfig(): Promise<ReminderConfig> {
   const raw = await storage.getSystemSetting(SETTINGS_KEY);
   if (!raw) return { ...DEFAULT_CONFIG };
   try {
-    const parsed = JSON.parse(raw);
-    return { ...DEFAULT_CONFIG, ...parsed };
+    return projectKnownConfig(JSON.parse(raw));
   } catch {
     return { ...DEFAULT_CONFIG };
   }
