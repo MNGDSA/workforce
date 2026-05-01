@@ -11,7 +11,8 @@
     "check": "tsc",
     "test": "node scripts/run-tests.mjs",
     "db:push": "drizzle-kit push",
-    "db:test": "node scripts/test-db-connection.cjs"
+    "db:test": "node scripts/test-db-connection.cjs",
+    "db:seed-legal": "node scripts/seed-legal-content.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
