@@ -7,8 +7,18 @@
   "stats": {
     "total": "Total Profiles",
     "available": "Available",
+    "completed": "Completed",
+    "not_activated": "Not Activated",
     "hired": "Hired",
-    "blocked": "Blocked"
+    "blocked": "Blocked",
+    "archived": "Archived",
+    "infoAriaLabel": "About the {{label}} count",
+    "totalDesc": "Every candidate not manually archived. Matches what the table shows when the status filter is set to \"All\".",
+    "completedDesc": "Profile fully filled in and signed in within the last year. Same rule as the Completed badge in the table.",
+    "not_activatedDesc": "Bulk-uploaded SMP workers who haven't signed in yet, still inside the 30-day activation window. Drops out automatically after that.",
+    "hiredDesc": "Currently employed. Never auto-archives — employees use the mobile app, not the candidate portal.",
+    "blockedDesc": "Manually blocked by an admin. Cannot apply or be processed.",
+    "archivedDesc": "Hidden from active listings. Includes manually-archived rows and rows that have aged out (stale logins, never-finished individuals, expired SMP grace window). May exceed Total because manually-archived rows are not counted in Total."
   },
   "search": {
     "ph": "Search by ID, name, phone, email — or paste a list of IDs"

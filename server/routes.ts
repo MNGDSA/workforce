@@ -22,6 +22,7 @@ import { storage, createInboxItem } from "./storage";
 import { db } from "./db";
 import { tr } from "./i18n";
 import { saPhoneSchema, patchSaPhoneSchema, normalizeSaPhone } from "@shared/phone";
+import { DISPLAY_STATUS_SQL } from "@shared/candidate-status";
 // Task #133 — IBAN write-time helpers consolidated. The pure auto-fill
 // wrapper `applyIbanBankResolution` (formerly in
 // `./lib/candidate-iban-resolution`, now deleted) was replaced by the
@@ -5203,7 +5204,23 @@ export async function registerRoutes(
         .where(and(
           eq(workforce.isActive, true),
           sql`${workforce.positionId} IS NOT NULL`,
-          sql`${candidates.status} IN ('active', 'available', 'hired')`,
+          // Task #253 — was `candidates.status IN ('active','available','hired')`,
+          // a stale legacy filter that pre-dates the five-bucket
+          // derived display vocabulary. Switched to the same derived
+          // expression the talent table and KPI tiles share, but
+          // intentionally written as a `NOT IN ('blocked','archived')`
+          // rather than `= 'hired'`. The hire pipeline always flips
+          // `candidates.status` to `'hired'`, so in a clean DB both
+          // forms behave identically. The negative form is the
+          // defensive choice for historical data: if any active
+          // workforce row exists whose candidate row was never
+          // normalised to `'hired'` (legacy migrations, manual SQL,
+          // partial backfills), the strict `= 'hired'` filter would
+          // silently erase that employee from the org chart. The
+          // negative form still hides genuinely bad states (blocked
+          // employees, manually-archived candidate rows) the way the
+          // original filter did.
+          sql.raw(`(${DISPLAY_STATUS_SQL.trim()}) NOT IN ('blocked', 'archived')`),
         ));
 
       const empsByPosition = new Map<string, typeof employeeRows>();
@@ -5226,7 +5243,13 @@ export async function registerRoutes(
         .where(and(
           eq(workforce.isActive, true),
           sql`${workforce.positionId} IS NULL`,
-          sql`${candidates.status} IN ('active', 'available', 'hired')`,
+          // Task #253 — see the matching comment on the assigned
+          // branch above. Same single source of truth, same
+          // defensive `NOT IN ('blocked','archived')` form so an
+          // active workforce row whose candidate status drifted
+          // from `'hired'` still surfaces in the unassigned bucket
+          // instead of being silently lost.
+          sql.raw(`(${DISPLAY_STATUS_SQL.trim()}) NOT IN ('blocked', 'archived')`),
         ));
 
       const result = allDepts.map(dept => {

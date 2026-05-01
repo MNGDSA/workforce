@@ -145,6 +145,44 @@ import { applyServerIbanFields, applyServerIbanHolderNameFields } from "./lib/ib
 // status / archived_at / created_at.
 const DISPLAY_STATUS_EXPR = sql.raw(`(${DISPLAY_STATUS_SQL.trim()})`);
 
+/**
+ * Task #253 — shape returned by `getCandidateStats`.
+ *
+ * The dashboard KPI tiles on the talent page used to read straight off
+ * the raw `candidate_status` enum (`available` / `hired` / `blocked`),
+ * which silently disagreed with the new derived five-bucket badges in
+ * the table below. The counters now share the same single source of
+ * truth as the row badges and the status filter — `DISPLAY_STATUS_SQL`
+ * — so every headline number agrees with what an admin would see if
+ * they clicked the matching filter chip.
+ *
+ *   - total         → all candidates that are NOT manually archived,
+ *                     i.e. exactly what the talent table renders when
+ *                     the status filter is "All".
+ *   - completed     → derived `completed` bucket
+ *   - notActivated  → derived `not_activated` bucket
+ *   - hired         → derived `hired` bucket
+ *   - blocked       → derived `blocked` bucket
+ *   - archived      → derived `archived` bucket — note this includes
+ *                     BOTH manually-archived rows (archived_at NOT
+ *                     NULL) and derive-archived rows (stale logins,
+ *                     never-finished individuals, expired SMP grace
+ *                     window). It will therefore exceed `total - sum
+ *                     of the other four` whenever any rows are
+ *                     manually archived. The dashboard tooltip calls
+ *                     this out to the admin so the apparent
+ *                     "overcount" is not surprising.
+ */
+export type CandidateStats = {
+  total: number;
+  completed: number;
+  notActivated: number;
+  hired: number;
+  blocked: number;
+  archived: number;
+  avgRating: number;
+};
+
 function computeCandidateStatusFromLogin(lastLoginAt: Date | null): "available" | "inactive" {
   if (!lastLoginAt) return "inactive";
   const oneYearAgo = new Date();
@@ -252,7 +290,7 @@ export interface IStorage {
   bulkArchiveCandidates(ids: string[]): Promise<number>;
   bulkUnarchiveCandidates(ids: string[]): Promise<number>;
   exportCandidates(query?: Partial<CandidateQuery>): Promise<{ headers: string[]; rows: any[][]; total: number }>;
-  getCandidateStats(): Promise<{ total: number; active: number; hired: number; blocked: number; avgRating: number }>;
+  getCandidateStats(): Promise<CandidateStats>;
 
   // Events
   getEvents(params?: { includeArchived?: boolean }): Promise<Event[]>;
@@ -1375,26 +1413,58 @@ export class DatabaseStorage implements IStorage {
     return { headers, rows, total: rows.length };
   }
 
-  async getCandidateStats(): Promise<{ total: number; active: number; hired: number; blocked: number; avgRating: number }> {
-    const notArchived = isNull(candidates.archivedAt);
-    const [stats] = await db
+  async getCandidateStats(): Promise<CandidateStats> {
+    // Task #253 — single GROUP BY on the shared DISPLAY_STATUS_SQL
+    // CASE expression so the KPI tiles cannot drift from the row
+    // badges and the status filter chip totals. The CASE already
+    // encodes the manual-archive signal (archived_at IS NOT NULL ⇒
+    // 'archived'), so we don't apply any extra archived filter here:
+    // the per-bucket counts then match `?status=<bucket>` 1-for-1.
+    const buckets = await db
+      .select({
+        bucket: sql<DisplayStatus>`${DISPLAY_STATUS_EXPR}`.as("bucket"),
+        cnt: count(),
+      })
+      .from(candidates)
+      .groupBy(sql`${DISPLAY_STATUS_EXPR}`);
+
+    const byBucket: Record<DisplayStatus, number> = {
+      completed: 0,
+      not_activated: 0,
+      hired: 0,
+      blocked: 0,
+      archived: 0,
+    };
+    for (const r of buckets) {
+      const key = r.bucket as DisplayStatus;
+      if (key in byBucket) byBucket[key] = Number(r.cnt);
+    }
+
+    // `total` and `avgRating` are both reported over the
+    // non-manually-archived population — the same set the talent
+    // table renders when the status filter is "All" — so the headline
+    // tile reads like the table footer's "showing N of N" line.
+    // Per-bucket totals above are NOT restricted, because the
+    // `archived` bucket is meant to mirror the dedicated "Archived"
+    // filter chip (which, by design, surfaces both manually- and
+    // derive-archived rows). Consequently the five buckets can sum to
+    // more than `total`; the dashboard tooltip explains this.
+    const [agg] = await db
       .select({
         total: count(),
         avgRating: sql<number>`coalesce(avg(${candidates.rating}::numeric), 0)`,
       })
       .from(candidates)
-      .where(notArchived);
-
-    const [activeRow] = await db.select({ value: count() }).from(candidates).where(and(eq(candidates.status, "available"), notArchived));
-    const [hiredRow] = await db.select({ value: count() }).from(candidates).where(and(eq(candidates.status, "hired"), notArchived));
-    const [blockedRow] = await db.select({ value: count() }).from(candidates).where(and(eq(candidates.status, "blocked"), notArchived));
+      .where(isNull(candidates.archivedAt));
 
     return {
-      total: Number(stats.total),
-      active: Number(activeRow.value),
-      hired: Number(hiredRow.value),
-      blocked: Number(blockedRow.value),
-      avgRating: Number(Number(stats.avgRating).toFixed(2)),
+      total: Number(agg.total),
+      completed: byBucket.completed,
+      notActivated: byBucket.not_activated,
+      hired: byBucket.hired,
+      blocked: byBucket.blocked,
+      archived: byBucket.archived,
+      avgRating: Number(Number(agg.avgRating).toFixed(2)),
     };
   }
 

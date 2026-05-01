@@ -2010,7 +2010,21 @@ export default function TalentPage() {
     for (const c of candidates) candidateCacheRef.current.set(c.id, c);
   }, [candidates]);
 
-  const stats = statsData as { total: number; active: number; hired: number; blocked: number; avgRating: number } | undefined;
+  // Task #253 — KPI tiles now read the same five-bucket derivation
+  // the row badges and the status filter chips use, so the headline
+  // numbers can never disagree with the table totals an admin sees
+  // when they click a filter chip.
+  const stats = statsData as
+    | {
+        total: number;
+        completed: number;
+        notActivated: number;
+        hired: number;
+        blocked: number;
+        archived: number;
+        avgRating: number;
+      }
+    | undefined;
 
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
@@ -2217,47 +2231,62 @@ export default function TalentPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="bg-card border-border shadow-sm border-s-4 border-s-primary">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("stats.total")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-profiles">
-                {stats ? formatNumber(stats.total) : "—"}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("stats.available")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold font-display text-green-500" data-testid="stat-active">
-                {stats ? formatNumber(stats.active) : "—"}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("stats.hired")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold font-display text-blue-500" data-testid="stat-hired">
-                {stats ? formatNumber(stats.hired) : "—"}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t("stats.blocked")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold font-display text-red-500" data-testid="stat-blocked">
-                {stats ? formatNumber(stats.blocked) : "—"}
-              </div>
-            </CardContent>
-          </Card>
+        {/* Task #253 — KPI tiles for the five derived display buckets
+            (Completed, Not Activated, Hired, Blocked, Archived). Each
+            tile mirrors the corresponding status filter chip's count
+            because both flow through the same DISPLAY_STATUS_SQL CASE
+            on the server. The "Total" tile reports
+            "not manually archived" — the same set the table renders
+            when the status filter is "All" — so the headline matches
+            the table footer's total. The Info tooltips spell out
+            exactly what each bucket counts so the apparent
+            "Archived ≥ Total" case (caused by manually-archived rows
+            being excluded from Total but included in Archived) does
+            not surprise admins. */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {([
+            { key: "total",         label: t("stats.total"),        value: stats?.total,        color: "text-white",       border: "border-s-4 border-s-primary", testId: "stat-total-profiles", desc: t("stats.totalDesc") },
+            { key: "completed",     label: t("stats.completed"),    value: stats?.completed,    color: "text-green-500",   border: "",                            testId: "stat-completed",      desc: t("stats.completedDesc") },
+            { key: "not_activated", label: t("stats.not_activated"),value: stats?.notActivated, color: "text-amber-400",   border: "",                            testId: "stat-not-activated",  desc: t("stats.not_activatedDesc") },
+            { key: "hired",         label: t("stats.hired"),        value: stats?.hired,        color: "text-blue-500",    border: "",                            testId: "stat-hired",          desc: t("stats.hiredDesc") },
+            { key: "blocked",       label: t("stats.blocked"),      value: stats?.blocked,      color: "text-red-500",     border: "",                            testId: "stat-blocked",        desc: t("stats.blockedDesc") },
+            { key: "archived",      label: t("stats.archived"),     value: stats?.archived,     color: "text-slate-400",   border: "",                            testId: "stat-archived",       desc: t("stats.archivedDesc") },
+          ] as const).map((tile) => (
+            <Card key={tile.key} className={`bg-card border-border shadow-sm ${tile.border}`}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider inline-flex items-center gap-1.5">
+                  <span>{tile.label}</span>
+                  <Tooltip delayDuration={150}>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-primary transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
+                        aria-label={t("stats.infoAriaLabel", { label: tile.label })}
+                        data-testid={`button-stat-info-${tile.key}`}
+                      >
+                        <Info className="h-3 w-3" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="bottom"
+                      align="start"
+                      sideOffset={6}
+                      collisionPadding={12}
+                      className="!z-[9999] w-64 max-w-[calc(100vw-1.5rem)] rounded-md border border-border bg-popover px-3 py-2 text-[11px] text-muted-foreground shadow-lg leading-relaxed normal-case"
+                      data-testid={`tooltip-stat-${tile.key}`}
+                    >
+                      {tile.desc}
+                    </TooltipContent>
+                  </Tooltip>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={`text-4xl font-bold font-display ${tile.color}`} data-testid={tile.testId}>
+                  {tile.value != null ? formatNumber(tile.value) : "—"}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         <div className="flex flex-col md:flex-row gap-3 items-start md:items-center bg-card p-4 rounded-sm border border-border">
