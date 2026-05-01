@@ -448,7 +448,7 @@
     "templates": {
       "title": "قوالب الرسائل القصيرة",
       "subtitle": "حرّر القوالب باللغتين العربية والإنجليزية لكل من التذكير العادي والتنبيه الأخير.",
-      "placeholders": "المتغيرات المتاحة: {name} اسم المرشح، {missing_docs} المستندات الناقصة، {portal_url} رابط البوابة، {deadline_date} موعد الاستبعاد.",
+      "placeholders": "المتغيرات المتاحة: {name} اسم المرشح، {missing_docs} المستندات الناقصة، {portal_url} رابط تطبيق وورك فورس، {deadline_date} موعد الاستبعاد.",
       "onboarding_reminder_sms_ar": "تذكير عادي — العربية",
       "onboarding_reminder_sms_en": "تذكير عادي — الإنجليزية",
       "onboarding_final_warning_sms_ar": "تنبيه أخير — العربية",

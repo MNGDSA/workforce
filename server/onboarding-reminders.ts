@@ -661,18 +661,20 @@ async function resolveSmsContext(
 
   const candidateName = cand.fullNameEn ?? "";
 
-  // {portal_url} fallback. The canonical production origin is
-  // workforce.tanaqolapp.com — that is the host the candidate-side
-  // onboarding portal actually serves at. An explicit override via
-  // the public_app_url system setting or PUBLIC_APP_URL env still wins.
+  // {portal_url} = bare workforce app base URL. The client router
+  // (client/src/App.tsx) does not register a `/candidate/onboarding`
+  // path — sending one produced a hard 404 for every candidate who
+  // tapped the SMS link. The app's existing auth/redirect chain at the
+  // root path lands the candidate in the right place after login, so
+  // the bare base URL is the correct destination. The base resolver
+  // (server/lib/portal-url.ts) throws loudly when no source is set —
+  // no hard-coded production hostname masks misconfiguration on a
+  // future deployment that lives at a different host.
   // (Final-mile defence: server/sms-sender.ts strips Arabic-Indic digits
   // from every outbound message regardless of source — see
   // toWesternDigitsForSms.)
-  const baseUrl = (await storage.getSystemSetting("public_app_url"))
-    ?? process.env.PUBLIC_APP_URL
-    ?? (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
-    ?? "https://workforce.tanaqolapp.com";
-  const link = `${baseUrl.replace(/\/$/, "")}/candidate/onboarding`;
+  const { getPortalBaseUrl } = await import("./lib/portal-url");
+  const link = await getPortalBaseUrl();
 
   const deadlineAt = new Date(rec.createdAt.getTime() + cfg.totalDeadlineDays * 86400_000).toISOString();
 

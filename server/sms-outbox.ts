@@ -30,7 +30,6 @@ import { db } from "./db";
 type DbOrTx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 import {
   smsOutbox,
-  systemSettings,
   type SmsOutboxRow,
 } from "@shared/schema";
 import { sendSmsViaPlugin } from "./sms-sender";
@@ -79,14 +78,13 @@ export async function enqueueActivationSms(
   opts: EnqueueActivationOptions,
   tx: DbOrTx = db,
 ): Promise<void> {
-  const baseUrl = (await tx
-    .select()
-    .from(systemSettings)
-    .where(eq(systemSettings.key, "public_app_url")))[0]?.value
-    ?? process.env.PUBLIC_APP_URL
-    ?? (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
-    ?? "https://workforce.tanaqolapp.com";
-  const link = `${baseUrl.replace(/\/$/, "")}/activate?token=${encodeURIComponent(opts.plainToken)}`;
+  // Activation deep link: bare base URL + `/activate?token=...`. The
+  // base resolver lives in server/lib/portal-url.ts and throws loudly
+  // when neither system setting nor PUBLIC_APP_URL nor REPLIT_DEV_DOMAIN
+  // is set — no silent hard-coded host fallback.
+  const { getPortalBaseUrl } = await import("./lib/portal-url");
+  const baseUrl = await getPortalBaseUrl(tx);
+  const link = `${baseUrl}/activate?token=${encodeURIComponent(opts.plainToken)}`;
 
   await tx.insert(smsOutbox).values({
     candidateId: opts.candidateId,

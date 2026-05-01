@@ -3113,10 +3113,14 @@ export async function registerRoutes(
           sent: 0, skipped: 0, failed: ids.length, total: ids.length,
         });
       }
-      const portalBase = (await storage.getSystemSetting("public_app_url"))
-        ?? process.env.PUBLIC_APP_URL
-        ?? "https://workforce.tanaqolapp.com";
-      const portalUrl = `${portalBase.replace(/\/$/, "")}/login`;
+      // {portal_url} = bare workforce base URL (no path suffix). The
+      // client router has no `/login` route — `/auth` is the actual
+      // login page and the app's auth/redirect chain at root handles
+      // it. Resolver (server/lib/portal-url.ts) throws loudly when no
+      // source is configured rather than silently falling back to a
+      // hard-coded production host.
+      const { getPortalBaseUrl } = await import("./lib/portal-url");
+      const portalUrl = await getPortalBaseUrl();
 
       let sent = 0, skipped = 0, failed = 0;
       const skippedReasons: { id: string; reason: string }[] = [];
@@ -4342,13 +4346,16 @@ export async function registerRoutes(
           "onboarding_reminder_sms_ar" | "onboarding_reminder_sms_en"
           | "onboarding_final_warning_sms_ar" | "onboarding_final_warning_sms_en";
       const tpl = await getReminderTemplate(tplKey);
-      const portalBase = (await storage.getSystemSetting("public_app_url"))
-        ?? process.env.PUBLIC_APP_URL
-        ?? "https://workforce.tanaqolapp.com";
+      // {portal_url} = bare workforce base URL — see header comment in
+      // server/lib/portal-url.ts. The previous `/candidate/onboarding`
+      // suffix produced a hard 404 because the client router has no
+      // such route.
+      const { getPortalBaseUrl } = await import("./lib/portal-url");
+      const portalUrl = await getPortalBaseUrl();
       const message = renderReminderTemplate(tpl, {
         name: locale === "ar" ? "مرشح تجريبي" : "Test Candidate",
         missingDocs: locale === "ar" ? "صورة شخصية، شهادة الآيبان، تقرير التطعيم" : "photo, IBAN certificate, vaccination report",
-        portalUrl: `${portalBase.replace(/\/$/, "")}/candidate/onboarding`,
+        portalUrl,
         // Latin digits only — pin `-u-nu-latn` for Arabic so the preview
         // matches what the live SMS renderer in sms-outbox.ts emits and
         // never leaks Arabic-Indic digits into outbound copy. The send-
