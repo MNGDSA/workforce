@@ -10,6 +10,7 @@ import * as inboxAttendanceReview from "./inbox-attendance-review";
 import * as geofenceManagement from "./geofence-management";
 import * as jobPostingImportRemoved from "./job-posting-import-removed";
 import * as jobPostingApplicantsSortable from "./job-posting-applicants-sortable";
+import * as talentFilterBar from "./talent-filter-bar";
 
 export type TestSuite = {
   name: string;
@@ -30,6 +31,7 @@ export const allSuites: TestSuite[] = [
   geofenceManagement,
   jobPostingImportRemoved,
   jobPostingApplicantsSortable,
+  talentFilterBar,
 ];
 
 export {
@@ -45,4 +47,5 @@ export {
   geofenceManagement,
   jobPostingImportRemoved,
   jobPostingApplicantsSortable,
+  talentFilterBar,
 };

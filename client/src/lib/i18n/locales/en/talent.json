@@ -88,7 +88,8 @@
     "activeFilters": "Active filters",
     "clearAll": "Clear all",
     "removeFilter": "Remove {{label}} filter",
-    "ariaStatusGroup": "Filter by candidate status"
+    "ariaStatusGroup": "Filter by candidate status",
+    "searchChipLabel": "Search"
   },
   "list": {
     "title": "Candidate List",

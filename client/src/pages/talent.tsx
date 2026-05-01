@@ -208,13 +208,9 @@ const ARCHIVED_REASON_CHIPS = [
   { reason: "manually_archived", labelKey: "archivedReasonFilter.manually_archived" },
 ] as const satisfies ReadonlyArray<{ reason: ArchivedReason; labelKey: string }>;
 
-// Task #271 — segmented status pill row at the top of the toolbar.
-// Six pills (All + the five derived display statuses), each showing the
-// matching count from the stats query. Order matches the stats card row
-// above so the eye can scan top-to-bottom without re-mapping.
-// `countKey` is the field name on the `stats` object (see `stats` type
-// in the component) — typing it strictly keeps us honest if the stats
-// shape ever changes.
+// Segmented status pill row at the top of the toolbar. Six pills
+// (All + the five derived display statuses); `countKey` is the matching
+// field on the `stats` object so each pill can show its live count.
 const STATUS_PILLS = [
   { value: "all", labelKey: "statusFilter.all", countKey: "total" },
   { value: "completed", labelKey: "statusFilter.completed", countKey: "completed" },
@@ -2609,36 +2605,62 @@ export default function TalentPage() {
           ))}
         </div>
 
-        {/* Task #271 — redesigned filter bar.
-            Three vertical zones inside one card:
-              1. Search row (multi-ID paste preserved verbatim).
-              2. Status segmented pill row + a single "Filters" popover
-                 button that hides the secondary filters (classification,
-                 former-employee, documents) behind one affordance with
-                 a count badge.
-              3. Archive-reason sub-row (only when status==="archived").
-              4. Active-filter chip strip with "Clear all" (only when
-                 any secondary filter is set).
-            All state hooks, URL round-tripping, and data-testids are
-            preserved so external links, e2e tests, and the shareable
-            URL contract still hold. */}
+        {/* Filter bar: search, status pills, Filters popover, archive-reason
+            sub-row, active-filter chips with Clear all. */}
         {(() => {
-          const advancedFilters: Array<{
+          const sourceLabel = (v: typeof sourceFilter) =>
+            v === "individual" ? t("sourceFilter.individual")
+              : v === "smp" ? t("sourceFilter.smp")
+                : t("sourceFilter.all");
+
+          const statusPill = STATUS_PILLS.find((p) => p.value === status);
+          const reasonChip = ARCHIVED_REASON_CHIPS.find((c) => c.reason === archivedReason);
+
+          const trimmedSearch = search.trim();
+          const truncate = (s: string, n: number) => (s.length > n ? s.slice(0, n) + "…" : s);
+
+          type ActiveChip = {
             id: string;
             label: string;
             clear: () => void;
             testId: string;
-          }> = [];
+          };
+          const activeChips: ActiveChip[] = [];
+
+          if (trimmedSearch.length > 0) {
+            activeChips.push({
+              id: "search",
+              label: `${t("filterBar.searchChipLabel")}: ${truncate(trimmedSearch, 40)}`,
+              clear: () => { setSearch(""); setPage(1); },
+              testId: "active-chip-search",
+            });
+          }
+          if (status !== "all" && statusPill) {
+            activeChips.push({
+              id: "status",
+              label: t(statusPill.labelKey),
+              clear: () => { setStatus("all"); setArchivedReason("all"); setPage(1); },
+              testId: "active-chip-status",
+            });
+          }
+          if (status === "archived" && archivedReason !== "all" && reasonChip) {
+            activeChips.push({
+              id: "archivedReason",
+              label: t(reasonChip.labelKey),
+              clear: () => { setArchivedReason("all"); setPage(1); },
+              testId: "active-chip-archived-reason",
+            });
+          }
           if (sourceFilter !== "all") {
-            advancedFilters.push({
+            activeChips.push({
               id: "source",
-              label: t(`sourceFilter.${sourceFilter}` as any),
+              label: sourceLabel(sourceFilter),
               clear: () => { setSourceFilter("all"); setPage(1); },
               testId: "active-chip-source",
             });
           }
           if (formerEmployeeFilter) {
-            advancedFilters.push({
+            activeChips.push({
               id: "former",
               label: t("formerEmployees"),
               clear: () => { setFormerEmployeeFilter(false); setPage(1); },
@@ -2646,7 +2668,7 @@ export default function TalentPage() {
             });
           }
           if (hasDriversLicenseFilter) {
-            advancedFilters.push({
+            activeChips.push({
               id: "dl",
               label: t("documentFilter.hasDriversLicense"),
               clear: () => { setHasDriversLicenseFilter(false); setPage(1); },
@@ -2654,15 +2676,24 @@ export default function TalentPage() {
             });
           }
           if (hasVaccinationReportFilter) {
-            advancedFilters.push({
+            activeChips.push({
               id: "vax",
               label: t("documentFilter.hasVaccinationReport"),
               clear: () => { setHasVaccinationReportFilter(false); setPage(1); },
               testId: "active-chip-vaccination",
             });
           }
-          const advancedCount = advancedFilters.length;
-          const clearAllAdvanced = () => {
+
+          const popoverCount =
+            (sourceFilter !== "all" ? 1 : 0) +
+            (formerEmployeeFilter ? 1 : 0) +
+            (hasDriversLicenseFilter ? 1 : 0) +
+            (hasVaccinationReportFilter ? 1 : 0);
+
+          const clearAllFilters = () => {
+            setSearch("");
+            setStatus("all");
+            setArchivedReason("all");
             setSourceFilter("all");
             setFormerEmployeeFilter(false);
             setHasDriversLicenseFilter(false);
@@ -2675,10 +2706,7 @@ export default function TalentPage() {
           className="flex flex-col gap-3 bg-card p-4 rounded-sm border border-border"
           data-testid="talent-filter-bar"
         >
-          {/* Row 1 — search input. The multi-paste pill, paste handler,
-              token-count badge, and the pe-44 reservation are kept
-              byte-for-byte identical; the surrounding layout changed
-              but everything inside this <div> is the same component. */}
+          {/* Search input with multi-paste pill (Task #195). */}
           <div className="relative w-full">
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
@@ -2713,13 +2741,7 @@ export default function TalentPage() {
             )}
           </div>
 
-          {/* Row 2 — status segmented pill row + single Filters popover.
-              The pills are an explicit `radiogroup` for assistive tech
-              and each pill carries its live count from the stats query
-              so admins can triage without opening the dropdown. The
-              Filters popover sits at the logical end (right in LTR,
-              left in RTL via `ms-auto`) with a count badge so it never
-              hides the fact that secondary filters are active. */}
+          {/* Status pills + Filters popover. */}
           <div className="flex flex-wrap items-center gap-2">
             <div
               role="radiogroup"
@@ -2727,10 +2749,7 @@ export default function TalentPage() {
               className="flex flex-wrap gap-1.5 items-center"
               data-testid="status-pill-group"
             >
-              {/* Hidden Select kept solely so e2e tests and any
-                  external code that targets `select-status-filter`
-                  still find an element with that test id. The visual
-                  control is the pill row below. */}
+              {/* Hidden marker preserves the legacy `select-status-filter` test id. */}
               <span data-testid="select-status-filter" className="hidden" aria-hidden="true">{status}</span>
               {STATUS_PILLS.map(({ value, labelKey, countKey }) => {
                 const active = status === value;
@@ -2750,7 +2769,7 @@ export default function TalentPage() {
                     }
                     data-testid={`status-pill-${value}`}
                   >
-                    <span>{t(labelKey as any)}</span>
+                    <span>{t(labelKey)}</span>
                     <span
                       className={
                         "tabular-nums text-[11px] " +
@@ -2777,16 +2796,17 @@ export default function TalentPage() {
                   >
                     <SlidersHorizontal className="h-4 w-4" />
                     <span>{t("filterBar.filtersButton")}</span>
-                    {advancedCount > 0 && (
+                    {popoverCount > 0 && (
                       <span
                         className="ms-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-sm bg-primary/15 text-primary border border-primary/30 text-[11px] font-semibold tabular-nums"
                         data-testid="badge-advanced-filter-count"
                       >
-                        {formatNumber(advancedCount)}
+                        {formatNumber(popoverCount)}
                       </span>
                     )}
                   </Button>
                 </PopoverTrigger>
+                {/* forceMount keeps inner data-testids queryable while closed. */}
                 <PopoverContent
                   align="end"
                   sideOffset={8}
@@ -2803,10 +2823,6 @@ export default function TalentPage() {
                     </p>
                   </div>
                   <div className="p-4 space-y-4">
-                    {/* Classification — three-way radio rendered as
-                        equal-width segmented buttons. Hidden Select
-                        keeps the legacy `select-source-filter` test id
-                        attached to the DOM. */}
                     <div className="space-y-2">
                       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                         {t("filterBar.classification")}
@@ -2834,14 +2850,13 @@ export default function TalentPage() {
                               }
                               data-testid={`source-pill-${opt}`}
                             >
-                              {t(`sourceFilter.${opt}` as any)}
+                              {sourceLabel(opt)}
                             </button>
                           );
                         })}
                       </div>
                     </div>
 
-                    {/* History — single toggle. */}
                     <div className="space-y-2">
                       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                         {t("filterBar.history")}
@@ -2875,7 +2890,6 @@ export default function TalentPage() {
                       </button>
                     </div>
 
-                    {/* Documents — two toggles. */}
                     <div className="space-y-2">
                       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                         {t("filterBar.documents")}
@@ -2938,11 +2952,11 @@ export default function TalentPage() {
                       </button>
                     </div>
 
-                    {advancedCount > 0 && (
+                    {activeChips.length > 0 && (
                       <div className="pt-2 border-t border-border">
                         <button
                           type="button"
-                          onClick={clearAllAdvanced}
+                          onClick={clearAllFilters}
                           className="text-xs text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5"
                           data-testid="button-clear-all-popover"
                         >
@@ -2957,17 +2971,7 @@ export default function TalentPage() {
             </div>
           </div>
 
-          {/* Row 3 — archive-reason sub-row. Only renders when the
-              parent status is "archived". Same chip behaviour as before
-              (Task #264) but now isolated on its own line so the layout
-              never wraps awkwardly between primary status pills and the
-              sub-bucket chips.
-              The legacy archived-reason `<Select>` is intentionally
-              gone — the chip row is the canonical control and exposes
-              the same data-testid contract (`chip-archived-reason-*`).
-              `select-archived-reason-filter` is preserved as a hidden
-              span so any e2e or external query targeting that id still
-              finds something. */}
+          {/* Archive-reason sub-row (only when status === "archived"). */}
           {status === "archived" && (
             <div className="flex flex-wrap items-center gap-1.5 ps-1">
               <span data-testid="select-archived-reason-filter" className="hidden" aria-hidden="true">{archivedReason}</span>
@@ -3005,11 +3009,9 @@ export default function TalentPage() {
             </div>
           )}
 
-          {/* Row 4 — active advanced-filter chip strip with Clear all.
-              Mirrors what's been set inside the Filters popover so the
-              user can see (and remove) each filter without re-opening
-              it. Hidden when no advanced filter is active. */}
-          {advancedCount > 0 && (
+          {/* Active filter chips — covers search, status, archivedReason,
+              and every popover toggle. Clear all resets every filter. */}
+          {activeChips.length > 0 && (
             <div
               className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-border/60"
               data-testid="active-filters-row"
@@ -3017,7 +3019,7 @@ export default function TalentPage() {
               <span className="text-[11px] uppercase tracking-wide text-muted-foreground me-1">
                 {t("filterBar.activeFilters")}
               </span>
-              {advancedFilters.map((f) => (
+              {activeChips.map((f) => (
                 <span
                   key={f.id}
                   className="inline-flex items-center gap-1 h-7 ps-2.5 pe-1 rounded-sm bg-primary/10 text-primary border border-primary/30 text-xs font-medium"
@@ -3037,7 +3039,7 @@ export default function TalentPage() {
               ))}
               <button
                 type="button"
-                onClick={clearAllAdvanced}
+                onClick={clearAllFilters}
                 className="ms-1 inline-flex items-center gap-1 h-7 px-2 rounded-sm text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                 data-testid="button-clear-all-filters"
               >
