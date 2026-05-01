@@ -18,23 +18,33 @@ type SettingsPublicResponse = {
   termsConditions: LegalDocResponse | null;
 };
 
+// Renders `**bold**` as <strong>, and a literal `\n` as a hard line break.
+// The hard-break behaviour matches what a non-technical operator types in
+// the Settings memo box: pressing Enter once should produce a visible line
+// break on the page, NOT be silently joined with the previous line.
 function renderInline(text: string, keyBase: string): ReactNode[] {
-  const parts: ReactNode[] = [];
-  const re = /\*\*([^*]+)\*\*/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  let i = 0;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) parts.push(text.slice(last, m.index));
-    parts.push(
-      <strong key={`${keyBase}-b-${i++}`} className="font-semibold text-white">
-        {m[1]}
-      </strong>,
-    );
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) parts.push(text.slice(last));
-  return parts;
+  const out: ReactNode[] = [];
+  let runIdx = 0;
+  const lines = text.split("\n");
+  lines.forEach((line, lineIdx) => {
+    if (lineIdx > 0) {
+      out.push(<br key={`${keyBase}-br-${lineIdx}`} />);
+    }
+    const re = /\*\*([^*]+)\*\*/g;
+    let last = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(line)) !== null) {
+      if (m.index > last) out.push(line.slice(last, m.index));
+      out.push(
+        <strong key={`${keyBase}-b-${runIdx++}`} className="font-semibold text-white">
+          {m[1]}
+        </strong>,
+      );
+      last = m.index + m[0].length;
+    }
+    if (last < line.length) out.push(line.slice(last));
+  });
+  return out;
 }
 
 type Block =
@@ -51,9 +61,13 @@ function parseMarkdown(src: string): Block[] {
   let ul: string[] | null = null;
   let ol: string[] | null = null;
 
+  // Joining with "\n" (not " ") preserves single-Enter line breaks the operator
+  // typed in the admin Settings memo box. `renderInline` converts each "\n"
+  // into a <br> so the page mirrors what was typed. A blank line still ends
+  // the paragraph and starts a new <p>, matching standard markdown.
   const flushPara = () => {
     if (para.length) {
-      blocks.push({ kind: "p", text: para.join(" ") });
+      blocks.push({ kind: "p", text: para.join("\n") });
       para = [];
     }
   };
