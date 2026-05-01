@@ -6,30 +6,24 @@
  * spinning up the xlsx writer. The component owns IO (XLSX.writeFile, toasts);
  * everything here is referentially transparent.
  *
- * Schema note: the spec doc lists 10 columns, including a "Full name (Arabic)"
- * column. The `candidates` table only carries `full_name_en`; Arabic display
- * names live on `users.full_name`, which is only populated for candidates
- * linked to a user account (not the bulk-uploaded majority). The contract is
- * preserved by reserving the column with an empty value when no Arabic name
- * is available, so the workbook header / index layout is stable across
- * exports and matches what downstream tooling expects.
+ * Schema note: the workbook is now 7 columns (down from the original 10).
+ * The internal candidate ID (`candidateCode` / UUID), the Arabic display
+ * name, and the question-set name were dropped per recruiter request —
+ * those columns either duplicated information already keyed by the
+ * national ID or surfaced internal identifiers that never made it into
+ * the recruiter's downstream tooling. The remaining columns are the
+ * minimum needed to match a row to a real person and capture the
+ * shortlist/reject decision.
  */
 
 import { slugifyForFilename } from "./interviews-multi-id-search";
 
 export type ExportInvitee = {
   id: string;
-  candidateCode: string | null;
-  /**
-   * Arabic display name. Will be `null` for the typical bulk-uploaded
-   * candidate (no linked user). The export reserves the column either way.
-   */
-  fullName: string | null;
   fullNameEn: string;
   nationalId: string | null;
   phone: string | null;
   applicationStatus: string | null;
-  questionSetId: string | null;
 };
 
 export type ExportDecisionRaw = "shortlisted" | "rejected" | "none";
@@ -53,10 +47,9 @@ export function bucketDecision(effectiveStatus: string | null | undefined): Expo
 }
 
 /**
- * Build the 10-column row for a single invitee. Column order MUST match
- * the headers built in `buildExportHeaders` and the order documented in
- * `.local/tasks/task-255.md`. Returned values are JS primitives so the
- * caller can pass them straight into `XLSX.utils.aoa_to_sheet`.
+ * Build the 7-column row for a single invitee. Column order MUST match the
+ * headers built in `buildExportHeaders`. Returned values are JS primitives so
+ * the caller can pass them straight into `XLSX.utils.aoa_to_sheet`.
  *
  * `localStatuses` mirrors the optimistic state the user sees in the UI;
  * the export must reflect that, not the (possibly stale) server value.
@@ -65,7 +58,6 @@ export function buildExportRow(
   candidate: ExportInvitee,
   index: number,
   localStatuses: Record<string, string>,
-  questionSetNames: Record<string, string | undefined>,
   labels: DecisionLabels,
 ): (string | number)[] {
   const effectiveStatus = localStatuses[candidate.id] ?? candidate.applicationStatus;
@@ -74,54 +66,36 @@ export function buildExportRow(
     raw === "shortlisted" ? labels.liked
       : raw === "rejected" ? labels.disliked
       : labels.none;
-  // Candidate ID column: prefer the human-friendly candidate_code (set by
-  // bulk-upload / onboarding), fall back to the row UUID so the column is
-  // never empty. An all-whitespace code is treated as missing.
-  const candidateIdValue = (candidate.candidateCode && candidate.candidateCode.trim())
-    ? candidate.candidateCode
-    : candidate.id;
-  const qsName = candidate.questionSetId
-    ? (questionSetNames[candidate.questionSetId] ?? "")
-    : "";
   return [
     index + 1,
-    candidateIdValue,
-    candidate.fullName ?? "",
     candidate.fullNameEn ?? "",
     candidate.nationalId ?? "",
     candidate.phone ?? "",
     decisionLabel,
     raw,
     effectiveStatus ?? "",
-    qsName,
   ];
 }
 
 export interface HeaderLabels {
   num: string;
-  candidateId: string;
-  fullNameAr: string;
   fullNameEn: string;
   nationalId: string;
   phone: string;
   decision: string;
   decisionRaw: string;
   applicationStatus: string;
-  questionSet: string;
 }
 
 export function buildExportHeaders(h: HeaderLabels): string[] {
   return [
     h.num,
-    h.candidateId,
-    h.fullNameAr,
     h.fullNameEn,
     h.nationalId,
     h.phone,
     h.decision,
     h.decisionRaw,
     h.applicationStatus,
-    h.questionSet,
   ];
 }
 

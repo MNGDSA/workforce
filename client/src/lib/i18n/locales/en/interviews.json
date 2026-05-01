@@ -129,15 +129,12 @@
     "toastFail": "Export failed — please try again",
     "cols": {
       "num": "#",
-      "candidateId": "Candidate ID",
-      "fullNameAr": "Full name (Arabic)",
       "fullNameEn": "Full name (English)",
       "nationalId": "National / Iqama ID",
       "phone": "Phone",
       "decision": "Decision",
       "decisionRaw": "Decision (raw)",
-      "applicationStatus": "Application status",
-      "questionSet": "Question set"
+      "applicationStatus": "Application status"
     },
     "decisions": {
       "liked": "Liked",

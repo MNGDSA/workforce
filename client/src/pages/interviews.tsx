@@ -875,36 +875,29 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
     try {
       const headers = buildExportHeaders({
         num: t("interviews:export.cols.num"),
-        candidateId: t("interviews:export.cols.candidateId"),
-        fullNameAr: t("interviews:export.cols.fullNameAr"),
         fullNameEn: t("interviews:export.cols.fullNameEn"),
         nationalId: t("interviews:export.cols.nationalId"),
         phone: t("interviews:export.cols.phone"),
         decision: t("interviews:export.cols.decision"),
         decisionRaw: t("interviews:export.cols.decisionRaw"),
         applicationStatus: t("interviews:export.cols.applicationStatus"),
-        questionSet: t("interviews:export.cols.questionSet"),
       });
       const labels = {
         liked: t("interviews:export.decisions.liked"),
         disliked: t("interviews:export.decisions.disliked"),
         none: t("interviews:export.decisions.none"),
       };
-      // Pre-compute the qs-id → name map in the shape buildExportRow expects
-      // so the helper stays free of React-Query types.
-      const qsNames: Record<string, string | undefined> = {};
-      for (const [id, qs] of questionSetMap.entries()) qsNames[id] = qs?.name;
 
       const rows = filtered.map((c, idx) =>
-        buildExportRow(c, idx, localStatuses, qsNames, labels),
+        buildExportRow(c, idx, localStatuses, labels),
       );
 
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
       // Force ID-shaped columns to text so Excel does not strip leading
       // zeros or convert long numerics to scientific notation. Indexes
       // match the order in buildExportHeaders / buildExportRow:
-      //   1 = candidateId (code or UUID), 4 = nationalId, 5 = phone.
-      const TEXT_COL_INDEXES = [1, 4, 5];
+      //   2 = nationalId, 3 = phone.
+      const TEXT_COL_INDEXES = [2, 3];
       for (let r = 1; r <= rows.length; r++) {
         for (const col of TEXT_COL_INDEXES) {
           const addr = XLSX.utils.encode_cell({ r, c: col });
@@ -917,15 +910,12 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
       }
       ws["!cols"] = [
         { wch: 5 },   // #
-        { wch: 22 },  // Candidate ID (code or UUID)
-        { wch: 28 },  // Full name (Arabic)
         { wch: 28 },  // Full name (English)
         { wch: 14 },  // National ID
         { wch: 14 },  // Phone
         { wch: 12 },  // Decision
         { wch: 12 },  // Decision raw
         { wch: 16 },  // Application status
-        { wch: 24 },  // Question set
       ];
 
       const wb = XLSX.utils.book_new();
@@ -942,7 +932,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
     } finally {
       setIsExporting(false);
     }
-  }, [filtered, localStatuses, questionSetMap, iv?.groupName, t, toast]);
+  }, [filtered, localStatuses, iv?.groupName, t, toast]);
 
   const shortlistedCount = invitedCandidates.filter(c => (localStatuses[c.id] ?? c.applicationStatus) === "shortlisted").length;
   const rejectedCount = invitedCandidates.filter(c => (localStatuses[c.id] ?? c.applicationStatus) === "rejected").length;

@@ -1,11 +1,15 @@
 /**
- * Unit tests for the InterviewCandidatesPage Excel export helpers
- * (Task #255 follow-on, satisfying the validation requirement for
- * committed coverage of decision bucketing, candidate-ID fallback,
- * filename derivation, and the 10-column workbook contract).
+ * Unit tests for the InterviewCandidatesPage Excel export helpers.
  *
- * The helpers in `interviews-export.ts` are pure — they do not touch the
- * DOM or the xlsx writer — so we exercise them directly with node:test.
+ * The workbook is now 7 columns (down from the original 10): the internal
+ * candidate ID, the Arabic display name, and the question-set name were
+ * dropped per recruiter request. These tests pin the new contract — column
+ * count, ordering, and the value at every index — so any future
+ * reordering / removal trips a clear failure instead of silently shifting
+ * cells in downstream Excel pipelines.
+ *
+ * The helpers in `interviews-export.ts` are pure (no DOM, no xlsx writer),
+ * so we exercise them directly with node:test.
  */
 
 import { test } from "node:test";
@@ -22,27 +26,21 @@ import {
 const LABELS = { liked: "Liked", disliked: "Disliked", none: "No action" };
 const HEADERS = {
   num: "#",
-  candidateId: "Candidate ID",
-  fullNameAr: "Full name (Arabic)",
   fullNameEn: "Full name (English)",
   nationalId: "National / Iqama ID",
   phone: "Phone",
   decision: "Decision",
   decisionRaw: "Decision (raw)",
   applicationStatus: "Application status",
-  questionSet: "Question set",
 };
 
 function make(overrides: Partial<ExportInvitee> = {}): ExportInvitee {
   return {
     id: "uuid-aaaaaaaa-1111",
-    candidateCode: "C-00042",
-    fullName: "أحمد المحمد",
     fullNameEn: "Ahmed Almohammed",
     nationalId: "1234567890",
     phone: "+966500000000",
     applicationStatus: null,
-    questionSetId: null,
     ...overrides,
   };
 }
@@ -58,64 +56,41 @@ test("bucketDecision maps every input to one of the three buckets", () => {
   assert.equal(bucketDecision(""), "none");
 });
 
-test("buildExportHeaders returns the 10-column contract in the documented order", () => {
+test("buildExportHeaders returns the 7-column contract in the documented order", () => {
   const headers = buildExportHeaders(HEADERS);
-  assert.equal(headers.length, 10);
+  assert.equal(headers.length, 7);
   assert.deepEqual(headers, [
     "#",
-    "Candidate ID",
-    "Full name (Arabic)",
     "Full name (English)",
     "National / Iqama ID",
     "Phone",
     "Decision",
     "Decision (raw)",
     "Application status",
-    "Question set",
   ]);
 });
 
-test("buildExportRow emits exactly 10 cells aligned with the header order", () => {
-  const row = buildExportRow(make(), 0, {}, {}, LABELS);
-  assert.equal(row.length, 10);
+test("buildExportRow emits exactly 7 cells aligned with the header order", () => {
+  const row = buildExportRow(make(), 0, {}, LABELS);
+  assert.equal(row.length, 7);
   assert.equal(row[0], 1, "row index is 1-based");
-  assert.equal(row[2], "أحمد المحمد", "Arabic name in column 3");
-  assert.equal(row[3], "Ahmed Almohammed", "English name in column 4");
-});
-
-test("Arabic name column is reserved as empty string when the source is null", () => {
-  // The candidates table has no Arabic name field today; the column is
-  // preserved in the contract with an empty placeholder so downstream
-  // tooling sees a stable layout.
-  const row = buildExportRow(make({ fullName: null }), 0, {}, {}, LABELS);
-  assert.equal(row.length, 10, "column count never collapses");
-  assert.equal(row[2], "", "Arabic column is empty, never literal null");
-  assert.equal(row[3], "Ahmed Almohammed", "English column still populated");
-});
-
-test("candidate ID prefers candidate_code; falls back to UUID when missing or blank", () => {
-  const withCode = buildExportRow(make({ candidateCode: "C-99999" }), 0, {}, {}, LABELS);
-  assert.equal(withCode[1], "C-99999");
-
-  const noCode = buildExportRow(make({ candidateCode: null }), 0, {}, {}, LABELS);
-  assert.equal(noCode[1], "uuid-aaaaaaaa-1111");
-
-  const blankCode = buildExportRow(make({ candidateCode: "   " }), 0, {}, {}, LABELS);
-  assert.equal(blankCode[1], "uuid-aaaaaaaa-1111", "all-whitespace code falls back");
+  assert.equal(row[1], "Ahmed Almohammed", "English name in column 2");
+  assert.equal(row[2], "1234567890", "National ID in column 3");
+  assert.equal(row[3], "+966500000000", "Phone in column 4");
 });
 
 test("decision label and raw value reflect the optimistic localStatuses overlay", () => {
   const c = make({ id: "x1", applicationStatus: "interviewed" });
   // Local optimistic state ("Liked") wins over the server status ("interviewed").
-  const row = buildExportRow(c, 0, { x1: "shortlisted" }, {}, LABELS);
-  assert.equal(row[6], "Liked", "decision label uses overlay");
-  assert.equal(row[7], "shortlisted", "decision raw uses overlay");
-  assert.equal(row[8], "shortlisted", "application status reflects overlay");
+  const row = buildExportRow(c, 0, { x1: "shortlisted" }, LABELS);
+  assert.equal(row[4], "Liked", "decision label uses overlay");
+  assert.equal(row[5], "shortlisted", "decision raw uses overlay");
+  assert.equal(row[6], "shortlisted", "application status reflects overlay");
 
-  const fallback = buildExportRow(c, 0, {}, {}, LABELS);
-  assert.equal(fallback[6], "No action");
-  assert.equal(fallback[7], "none");
-  assert.equal(fallback[8], "interviewed");
+  const fallback = buildExportRow(c, 0, {}, LABELS);
+  assert.equal(fallback[4], "No action");
+  assert.equal(fallback[5], "none");
+  assert.equal(fallback[6], "interviewed");
 });
 
 test("rejected decisions render as Disliked / rejected", () => {
@@ -123,36 +98,22 @@ test("rejected decisions render as Disliked / rejected", () => {
     make({ applicationStatus: "rejected" }),
     0,
     {},
-    {},
     LABELS,
   );
-  assert.equal(row[6], "Disliked");
-  assert.equal(row[7], "rejected");
-});
-
-test("question set name is resolved from the lookup map; empty when missing", () => {
-  const c = make({ questionSetId: "qs-1" });
-  const named = buildExportRow(c, 0, {}, { "qs-1": "Driver Screening" }, LABELS);
-  assert.equal(named[9], "Driver Screening");
-
-  const missing = buildExportRow(c, 0, {}, {}, LABELS);
-  assert.equal(missing[9], "", "empty string when qs id is unknown");
-
-  const noQs = buildExportRow(make({ questionSetId: null }), 0, {}, {}, LABELS);
-  assert.equal(noQs[9], "");
+  assert.equal(row[4], "Disliked");
+  assert.equal(row[5], "rejected");
 });
 
 test("nullable fields collapse to empty strings, never the literal 'null'", () => {
   const row = buildExportRow(
-    make({ fullName: null, nationalId: null, phone: null }),
+    make({ nationalId: null, phone: null }),
     0,
-    {},
     {},
     LABELS,
   );
-  assert.equal(row[2], "");
-  assert.equal(row[4], "");
-  assert.equal(row[5], "");
+  assert.equal(row.length, 7, "column count never collapses");
+  assert.equal(row[2], "", "National ID column is empty, never literal null");
+  assert.equal(row[3], "", "Phone column is empty, never literal null");
 });
 
 test("buildSheetName sanitizes Excel-illegal characters and respects 31-char limit", () => {

@@ -133,15 +133,12 @@
     "toastFail": "فشل التصدير — حاول مرة أخرى",
     "cols": {
       "num": "#",
-      "candidateId": "مُعرّف المرشح",
-      "fullNameAr": "الاسم الكامل (عربي)",
       "fullNameEn": "الاسم الكامل (إنجليزي)",
       "nationalId": "رقم الهوية / الإقامة",
       "phone": "الجوال",
       "decision": "القرار",
       "decisionRaw": "القرار (خام)",
-      "applicationStatus": "حالة الطلب",
-      "questionSet": "مجموعة الأسئلة"
+      "applicationStatus": "حالة الطلب"
     },
     "decisions": {
       "liked": "مُختار",
