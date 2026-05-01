@@ -417,7 +417,13 @@
       "send": "Send test SMS",
       "sent": "Test SMS sent",
       "failed": "Could not send test SMS",
-      "unknown": "Unknown error"
+      "unknown": "Unknown error",
+      "errors": {
+        "validation_failed": "Invalid request payload. Check the phone number and try again.",
+        "no_active_sms_plugin": "No active SMS gateway. Enable a gateway in SMS settings first.",
+        "portal_url_not_configured": "The public candidate portal URL is not configured. Set the public_app_url system setting or the PUBLIC_APP_URL environment variable.",
+        "internal_error": "Unexpected server error. Check server logs for details."
+      }
     },
     "activity": {
       "title": "Reminder activity",

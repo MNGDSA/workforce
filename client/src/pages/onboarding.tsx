@@ -6,6 +6,7 @@ import { PdfViewer } from "@/components/pdf-viewer";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE } from "@/lib/i18n";
 import { toProxiedFileUrl } from "@/lib/file-url";
 import Layout from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -1947,22 +1948,75 @@ function ReminderSettingsTab() {
     onError: (e: any) => toast({ title: t("reminders.saveFailed"), description: e?.message, variant: "destructive" }),
   });
 
+  // Map server-side error codes to localized toast text. Falls back to the
+  // raw server `message` (now always populated, see server/routes.ts catch
+  // block at /api/onboarding/reminder-test-sms) so unknown codes still
+  // produce something operator-actionable instead of opaque "internal_error".
+  //
+  // Special case: when the code is the generic "internal_error" we append
+  // the server-side `message` (the real Error.message from the unexpected
+  // throw) after the localized hint. The localized copy alone reads
+  // "check server logs for details" — but the message IS that detail and
+  // this surface is admin-only, so leaking the raw error is a feature, not
+  // a leak. Without this, operators have to crack open the deploy logs
+  // to find the real cause.
+  const describeTestSmsError = (body: any): string => {
+    const code = typeof body?.error === "string" ? body.error : null;
+    const serverMsg = typeof body?.message === "string" && body.message.trim()
+      ? body.message.trim()
+      : null;
+    if (code) {
+      const i18nKey = `reminders.testSms.errors.${code}`;
+      const localized = t(i18nKey);
+      const hasLocalized = localized && localized !== i18nKey;
+      if (hasLocalized) {
+        if (code === "internal_error" && serverMsg) return `${localized} — ${serverMsg}`;
+        return localized;
+      }
+    }
+    if (serverMsg) return serverMsg;
+    if (code) return code;
+    return t("reminders.testSms.unknown");
+  };
+
   const testSmsMut = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/onboarding/reminder-test-sms", {
-      phone: testPhone.trim(), variant: testVariant, locale: testLocale,
-    }).then(async r => ({ ok: r.ok, body: await r.json() })),
+    mutationFn: async () => {
+      // We do NOT use apiRequest here because it throws on non-2xx, which
+      // would route the structured `{ ok, error, message, preview }`
+      // payload through onError where we lose the body. Test sends are
+      // expected to fail in many ways (invalid phone, missing plugin,
+      // gateway 4xx) and we always want to surface the localized
+      // body.error / body.message in the toast.
+      const acceptLang = (() => {
+        try {
+          const stored = (typeof window !== "undefined" && window.localStorage)
+            ? window.localStorage.getItem(LOCALE_STORAGE_KEY)
+            : null;
+          return stored || DEFAULT_LOCALE;
+        } catch { return DEFAULT_LOCALE; }
+      })();
+      const r = await fetch("/api/onboarding/reminder-test-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept-Language": acceptLang },
+        credentials: "include",
+        body: JSON.stringify({ phone: testPhone.trim(), variant: testVariant, locale: testLocale }),
+      });
+      let body: any = null;
+      try { body = await r.json(); } catch { /* non-JSON response */ }
+      return { ok: r.ok, status: r.status, body };
+    },
     onSuccess: (res) => {
-      if (res.ok) {
+      if (res.ok && res.body?.ok) {
         toast({ title: t("reminders.testSms.sent"), description: res.body?.preview ?? "" });
       } else {
         toast({
           title: t("reminders.testSms.failed"),
-          description: res.body?.error ?? res.body?.message ?? t("reminders.testSms.unknown"),
+          description: describeTestSmsError(res.body),
           variant: "destructive",
         });
       }
     },
-    onError: (e: any) => toast({ title: t("reminders.testSms.failed"), description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("reminders.testSms.failed"), description: e?.message ?? t("reminders.testSms.unknown"), variant: "destructive" }),
   });
 
   if (isLoading || !form) {

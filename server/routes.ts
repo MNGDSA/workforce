@@ -4350,20 +4350,60 @@ export async function registerRoutes(
       // server/lib/portal-url.ts. The previous `/candidate/onboarding`
       // suffix produced a hard 404 because the client router has no
       // such route.
-      const { getPortalBaseUrl } = await import("./lib/portal-url");
-      const portalUrl = await getPortalBaseUrl();
+      //
+      // For this TEST endpoint specifically we fall back to the request's
+      // own origin when the portal URL isn't configured. This is safe
+      // because (a) the admin sees the URL in their browser when they
+      // initiated this call, and (b) the test SMS goes only to a phone
+      // they explicitly typed in. The background sweeper and the live
+      // send-now endpoints intentionally do NOT have this fallback —
+      // they must fail loud per portal-url.ts contract.
+      const { getPortalBaseUrl, PortalBaseUrlNotConfiguredError } = await import("./lib/portal-url");
+      let portalUrl: string;
+      try {
+        portalUrl = await getPortalBaseUrl();
+      } catch (urlErr) {
+        if (urlErr instanceof PortalBaseUrlNotConfiguredError) {
+          const proto = (req.get("x-forwarded-proto") ?? req.protocol ?? "https").split(",")[0].trim();
+          const host = req.get("host");
+          if (!host) {
+            return res.status(503).json({
+              ok: false,
+              preview: "",
+              error: "portal_url_not_configured",
+              message: urlErr.message,
+            });
+          }
+          portalUrl = `${proto}://${host}`;
+          console.warn(`[reminder-test-sms] portal_url not configured; falling back to request origin ${portalUrl}`);
+        } else {
+          throw urlErr;
+        }
+      }
+      // Latin digits only — pin `-u-nu-latn` for Arabic so the preview
+      // matches what the live SMS renderer in sms-outbox.ts emits and
+      // never leaks Arabic-Indic digits into outbound copy. The send-
+      // boundary sanitizer in server/sms-sender.ts is the ultimate net.
+      // Wrap toLocaleString defensively: an ICU-light Node build would
+      // throw RangeError on the BCP-47 extension, which historically
+      // surfaced to the operator as a useless "internal_error".
+      let deadlineDate: string;
+      try {
+        deadlineDate = new Date(Date.now() + 24 * 3600_000).toLocaleString(
+          locale === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB",
+          { timeZone: "Asia/Riyadh", year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" },
+        );
+      } catch (localeErr) {
+        console.warn("[reminder-test-sms] toLocaleString failed; using en-GB fallback", localeErr);
+        deadlineDate = new Date(Date.now() + 24 * 3600_000).toLocaleString("en-GB", {
+          timeZone: "Asia/Riyadh", year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit",
+        });
+      }
       const message = renderReminderTemplate(tpl, {
         name: locale === "ar" ? "مرشح تجريبي" : "Test Candidate",
         missingDocs: locale === "ar" ? "صورة شخصية، شهادة الآيبان، تقرير التطعيم" : "photo, IBAN certificate, vaccination report",
         portalUrl,
-        // Latin digits only — pin `-u-nu-latn` for Arabic so the preview
-        // matches what the live SMS renderer in sms-outbox.ts emits and
-        // never leaks Arabic-Indic digits into outbound copy. The send-
-        // boundary sanitizer in server/sms-sender.ts is the ultimate net.
-        deadlineDate: new Date(Date.now() + 24 * 3600_000).toLocaleString(
-          locale === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB",
-          { timeZone: "Asia/Riyadh", year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" },
-        ),
+        deadlineDate,
       });
       const { sendSmsViaPlugin } = await import("./sms-sender");
       const plugin = await storage.getActiveSmsPlugin();
@@ -4379,8 +4419,14 @@ export async function registerRoutes(
       if (!result.success) return res.status(502).json({ ok: false, error: result.error, preview: message });
       return res.json({ ok: true, preview: message });
     } catch (err) {
-      console.error("[reminder-test-sms] unexpected error", err);
-      return res.status(500).json({ ok: false, preview: "", error: "internal_error" });
+      // Surface the real error name + message + stack to deployment logs
+      // and return the message in the response so the next prod failure
+      // is self-diagnosing instead of an opaque "internal_error".
+      const name = err instanceof Error ? err.name : "UnknownError";
+      const message = err instanceof Error ? err.message : String(err);
+      const stack = err instanceof Error ? err.stack : undefined;
+      console.error(`[reminder-test-sms] unexpected error (${name}): ${message}`, stack);
+      return res.status(500).json({ ok: false, preview: "", error: "internal_error", message, name });
     }
   });
 
