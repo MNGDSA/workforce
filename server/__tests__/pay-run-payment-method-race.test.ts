@@ -170,6 +170,174 @@ describe("processPayRun ↔ payment-method change row-lock serialization (task #
     await helperPool.end().catch(() => {});
   });
 
+  it("surfaces an OPEN_PAY_RUN_LINES block when a concurrent payment-method PATCH arrives mid-flight after processPayRun has already locked the workforce row (task #280)", async () => {
+    fixture = await seedFixture();
+
+    // Reverse direction of the existing race test: here `processPayRun`
+    // wins the workforce row lock first and the admin's
+    // `updateWorkforcePaymentMethodGuarded` PATCH must observe the
+    // freshly-inserted pending line in its open-lines re-check (returning
+    // `{ ok: false, blocked: true, openLines: [...] }`) instead of
+    // silently completing and desyncing the line snapshot from the
+    // employee profile.
+    //
+    // Making this deterministic without monkey-patching `processPayRun`
+    // requires a "trapdoor": we hold a `FOR UPDATE` lock on the *pay_runs*
+    // row from a helper tx. `processPayRun` will:
+    //   1. acquire the workforce row lock (Task #275)
+    //   2. INSERT the pending pay_run_lines row
+    //   3. block on its trailing `UPDATE pay_runs SET status='processing'`
+    //      because we're holding the row lock on that pay_runs row
+    // While it's blocked at step 3 it is still holding the workforce row
+    // lock and the inserted line is NOT YET committed. We fire the PATCH:
+    //   * With Task #275's per-employee FOR UPDATE in `processPayRun`,
+    //     the PATCH's own `SELECT ... FOR UPDATE` on workforce blocks on
+    //     processPayRun and only runs its open-lines re-check AFTER we
+    //     release the helper lock, processPayRun commits, and the line
+    //     becomes visible. The re-check then sees the line and returns
+    //     `blocked: true`.
+    //   * Without that lock, the PATCH would NOT wait, would run its
+    //     open-lines re-check while the line is still uncommitted, would
+    //     see no open lines, and would return `ok: true` — silently
+    //     baking a stale paymentMethod into the line that processPayRun
+    //     is about to commit. That is precisely the failure mode this
+    //     test exists to catch.
+    const payRunLockClient = await helperPool.connect();
+    let payRunLockReleased = false;
+    try {
+      await payRunLockClient.query("BEGIN");
+      await payRunLockClient.query(
+        "SELECT id FROM pay_runs WHERE id = $1 FOR UPDATE",
+        [fixture.payRunId],
+      );
+
+      // Step 1: kick off processPayRun. It runs its read-only payroll
+      // calculation, opens its tx, locks the workforce row, inserts the
+      // pending line, then stalls on our pay_runs row lock during the
+      // status UPDATE.
+      let processResolved = false;
+      let processError: unknown = null;
+      const processPromise = storage
+        .processPayRun(fixture.payRunId)
+        .then((res) => {
+          processResolved = true;
+          return res;
+        })
+        .catch((err) => {
+          processResolved = true;
+          processError = err;
+          throw err;
+        });
+
+      // Give processPayRun enough time to reach its tx, take the
+      // workforce row lock, perform the INSERT, and start blocking on
+      // our pay_runs lock. If any of those fail to happen, the test
+      // can't observe the race in the right direction.
+      await new Promise((r) => setTimeout(r, 600));
+      assert.equal(
+        processResolved,
+        false,
+        "processPayRun must still be in flight (blocked on the helper pay_runs row lock) before PATCH is fired; if this fails, the helper lock isn't being acquired or processPayRun isn't reaching its trailing UPDATE",
+      );
+      assert.equal(processError, null, "processPayRun must not error while waiting on the helper pay_runs lock");
+
+      // Step 2: fire the payment-method PATCH guard. With Task #275's
+      // per-employee row lock in processPayRun, this MUST block on the
+      // workforce row that processPayRun is still holding.
+      let patchResolved = false;
+      let patchError: unknown = null;
+      const patchPromise = storage
+        .updateWorkforcePaymentMethodGuarded(fixture.workforceId, {
+          paymentMethod: "cash",
+        })
+        .then((res) => {
+          patchResolved = true;
+          return res;
+        })
+        .catch((err) => {
+          patchResolved = true;
+          patchError = err;
+          throw err;
+        });
+
+      // Step 3: confirm the PATCH is blocked on processPayRun's
+      // workforce lock. If it resolves here, the per-employee FOR UPDATE
+      // in processPayRun is missing or out of order — the PATCH ran its
+      // open-lines re-check against an uncommitted line snapshot and
+      // (incorrectly) saw nothing.
+      await new Promise((r) => setTimeout(r, 600));
+      assert.equal(
+        patchResolved,
+        false,
+        "updateWorkforcePaymentMethodGuarded must block on the workforce row lock held by the in-flight processPayRun tx; if this fails, the per-employee FOR UPDATE in processPayRun (Task #275) is missing or out of order, leaving the reverse-direction race open",
+      );
+      assert.equal(patchError, null, "PATCH must not error while waiting on the workforce row lock");
+
+      // Step 4: release the helper lock so processPayRun's UPDATE can
+      // proceed, the tx can commit, and the workforce row lock can drop.
+      await payRunLockClient.query("COMMIT");
+      payRunLockReleased = true;
+
+      // Step 5: processPayRun completes with the one inserted line.
+      const processResult = await processPromise;
+      assert.equal(processResult.linesCreated, 1, "exactly one pay-run line should be created for the seeded employee");
+
+      // Step 6: PATCH unblocks, takes the workforce row lock, runs its
+      // open-lines re-check inside the locked tx, and MUST see the
+      // freshly-committed pending line.
+      const patchResult = await patchPromise;
+      assert.equal(
+        patchResult.ok,
+        false,
+        "PATCH must NOT report ok:true — there is now a pending pay_run_lines row for this employee on a non-completed run; allowing the method flip would desync the line snapshot from the employee profile",
+      );
+      assert.equal(
+        patchResult.ok === false && patchResult.blocked === true,
+        true,
+        "PATCH must surface the open-line block (`blocked: true`) — not 404 or any other shape",
+      );
+      // TypeScript narrowing: at this point the discriminated union
+      // collapses to the blocked variant.
+      if (!(patchResult.ok === false && patchResult.blocked === true)) {
+        throw new Error("unreachable: patchResult should be the blocked variant");
+      }
+      assert.equal(
+        patchResult.openLines.length,
+        1,
+        "exactly one open-line summary should be returned (the one processPayRun just inserted)",
+      );
+      assert.equal(
+        patchResult.openLines[0].payRunId,
+        fixture.payRunId,
+        "the open-line summary must reference the pay run that processPayRun just generated",
+      );
+      assert.equal(
+        patchResult.openLines[0].paymentMethod,
+        "bank_transfer",
+        "the snapshotted line must still carry the pre-PATCH method ('bank_transfer') — proving the PATCH did NOT silently update the workforce row first",
+      );
+
+      // Step 7: workforce.payment_method MUST be unchanged. The guard
+      // refused the update, so the row is still on the original method.
+      const [empAfter] = await db
+        .select({ paymentMethod: workforce.paymentMethod })
+        .from(workforce)
+        .where(eq(workforce.id, fixture.workforceId));
+      assert.equal(
+        empAfter.paymentMethod,
+        "bank_transfer",
+        "workforce.payment_method must NOT have flipped to 'cash' — the guard must have aborted the UPDATE on the open-lines re-check",
+      );
+    } finally {
+      if (!payRunLockReleased) {
+        // Defensive: if we threw before COMMIT, roll the helper tx back
+        // so we don't leak the pay_runs row lock or the helper client.
+        await payRunLockClient.query("ROLLBACK").catch(() => {});
+      }
+      payRunLockClient.release();
+    }
+  });
+
   it("blocks pay-run line generation while a concurrent payment-method change holds the workforce row lock, then snapshots the post-commit method", async () => {
     fixture = await seedFixture();
 
