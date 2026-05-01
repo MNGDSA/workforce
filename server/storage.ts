@@ -291,7 +291,7 @@ export interface IStorage {
   getInterviews(params?: { status?: string; candidateId?: string; eventId?: string }): Promise<Interview[]>;
   getInterviewsWithDecisionCounts(params?: { status?: string; candidateId?: string; eventId?: string }): Promise<(Interview & { shortlistedCount: number; rejectedCount: number; pendingCount: number })[]>;
   getInterview(id: string): Promise<Interview | undefined>;
-  getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null; questionSetId: string | null; questionSetAnswers: Record<string, string> | null }[] } | undefined>;
+  getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; candidateCode: string | null; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null; questionSetId: string | null; questionSetAnswers: Record<string, string> | null }[] } | undefined>;
   createInterview(interview: InsertInterview): Promise<Interview>;
   updateInterview(id: string, data: Partial<InsertInterview>): Promise<Interview | undefined>;
   archiveInterview(id: string): Promise<Interview | undefined>;
@@ -1855,7 +1855,7 @@ export class DatabaseStorage implements IStorage {
     return interview;
   }
 
-  async getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null; questionSetId: string | null; questionSetAnswers: Record<string, string> | null }[] } | undefined> {
+  async getInterviewDetail(id: string): Promise<{ interview: Interview; invitedCandidates: { id: string; candidateCode: string | null; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null; questionSetId: string | null; questionSetAnswers: Record<string, string> | null }[] } | undefined> {
     // Auto-complete elapsed interviews so the detail panel never opens
     // a row that is visibly past its end-time but still labeled
     // "scheduled". See server/interview-auto-complete.ts.
@@ -1863,14 +1863,22 @@ export class DatabaseStorage implements IStorage {
     await autoCompleteElapsedInterviews();
     const [interview] = await db.select().from(interviews).where(eq(interviews.id, id));
     if (!interview) return undefined;
-    let invitedCandidates: { id: string; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null; questionSetId: string | null; questionSetAnswers: Record<string, string> | null }[] = [];
+    let invitedCandidates: { id: string; candidateCode: string | null; fullNameEn: string; nationalId: string | null; phone: string | null; photoUrl: string | null; applicationId: string | null; applicationStatus: string | null; questionSetId: string | null; questionSetAnswers: Record<string, string> | null }[] = [];
     if (interview.invitedCandidateIds && interview.invitedCandidateIds.length > 0) {
       // Task #227: project `phone` so the client multi-ID search can match
       // pasted Saudi mobile numbers against invitees (in addition to
       // nationalId / candidate UUID). Search remains invitee-scoped — no
       // global candidates lookup happens here or downstream.
+      // Task #255: also project `candidateCode` so the Excel export on the
+      // InterviewCandidatesPage can populate the "Candidate ID" column with
+      // the human-friendly code (falling back to the row UUID when missing)
+      // without a separate candidate lookup. NOTE: an Arabic display name is
+      // not surfaced because the `candidates` table only carries
+      // `full_name_en`; Arabic names live on `users.full_name` and are
+      // unavailable for unlinked candidates (the typical bulk-uploaded case).
       const candidateRows = await db.select({
         id: candidates.id,
+        candidateCode: candidates.candidateCode,
         fullNameEn: candidates.fullNameEn,
         nationalId: candidates.nationalId,
         phone: candidates.phone,

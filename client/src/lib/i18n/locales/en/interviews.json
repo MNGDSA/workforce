@@ -126,7 +126,6 @@
   "export": {
     "button": "Export to Excel",
     "toastEmpty": "No candidates to export",
-    "toastDone": "Exported {{n}} rows",
     "toastFail": "Export failed — please try again",
     "cols": {
       "num": "#",

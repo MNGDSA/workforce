@@ -130,7 +130,6 @@
   "export": {
     "button": "تصدير إلى Excel",
     "toastEmpty": "لا يوجد مرشحون للتصدير",
-    "toastDone": "تم تصدير {{n}} صفًا",
     "toastFail": "فشل التصدير — حاول مرة أخرى",
     "cols": {
       "num": "#",

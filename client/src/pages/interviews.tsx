@@ -39,8 +39,10 @@ import { parseSearchTokens, MAX_SEARCH_TOKENS } from "@shared/candidate-search";
 import {
   filterInvitees, computeInviteeSearchMeta,
   buildMissingIdsCsv, buildMissingIdsFilename,
-  slugifyForFilename,
 } from "./interviews-multi-id-search";
+import {
+  buildExportRow, buildExportHeaders, buildSheetName, buildExportFilename,
+} from "./interviews-export";
 import * as XLSX from "xlsx";
 
 type Candidate = { id: string; fullNameEn: string; nationalId?: string; photoUrl?: string | null };
@@ -69,6 +71,10 @@ type InterviewStats = {
 };
 type InvitedCandidate = {
   id: string;
+  // Task #255: `candidateCode` is the human-friendly ID (e.g. "C-00042") that
+  // recruiters paste back into bulk-invite; surfaced in the Excel export's
+  // Candidate ID column with a UUID fallback when missing.
+  candidateCode: string | null;
   fullNameEn: string;
   nationalId: string | null;
   phone: string | null;
@@ -756,6 +762,11 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
   // "View Answers" inline expansion (mirrors InterviewDetailSheet). One row
   // per invitee can be toggled open to reveal a screening-answers panel.
   const [expandedAnswerIds, setExpandedAnswerIds] = useState<Set<string>>(new Set());
+  // Task #255: brief loading state on the Excel export button. The workbook
+  // is built synchronously off in-memory state so this only flips for the
+  // single tick during XLSX.writeFile, but it disables the button to prevent
+  // accidental double-clicks producing duplicate downloads on slow machines.
+  const [isExporting, setIsExporting] = useState(false);
   const toggleExpandedAnswers = useCallback((id: string) => {
     setExpandedAnswerIds(prev => {
       const next = new Set(prev);
@@ -843,98 +854,83 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
   // with what the recruiter sees on screen.
   const handleExportExcel = useCallback(() => {
     if (filtered.length === 0) {
+      // Empty-result is the only status the recruiter cannot infer from the
+      // browser's download bar — every other outcome (success or failure)
+      // is communicated by the file appearing or not. Per task spec we
+      // intentionally avoid toasting on the happy path to keep the UI quiet.
       toast({ title: t("interviews:export.toastEmpty"), variant: "destructive" });
       return;
     }
-    const decisionLabel = (raw: "shortlisted" | "rejected" | "none") =>
-      raw === "shortlisted" ? t("interviews:export.decisions.liked")
-        : raw === "rejected" ? t("interviews:export.decisions.disliked")
-        : t("interviews:export.decisions.none");
+    setIsExporting(true);
+    try {
+      const headers = buildExportHeaders({
+        num: t("interviews:export.cols.num"),
+        candidateId: t("interviews:export.cols.candidateId"),
+        fullName: t("interviews:export.cols.fullName"),
+        nationalId: t("interviews:export.cols.nationalId"),
+        phone: t("interviews:export.cols.phone"),
+        decision: t("interviews:export.cols.decision"),
+        decisionRaw: t("interviews:export.cols.decisionRaw"),
+        applicationStatus: t("interviews:export.cols.applicationStatus"),
+        questionSet: t("interviews:export.cols.questionSet"),
+      });
+      const labels = {
+        liked: t("interviews:export.decisions.liked"),
+        disliked: t("interviews:export.decisions.disliked"),
+        none: t("interviews:export.decisions.none"),
+      };
+      // Pre-compute the qs-id → name map in the shape buildExportRow expects
+      // so the helper stays free of React-Query types.
+      const qsNames: Record<string, string | undefined> = {};
+      for (const [id, qs] of questionSetMap.entries()) qsNames[id] = qs?.name;
 
-    const headers = [
-      t("interviews:export.cols.num"),
-      t("interviews:export.cols.candidateId"),
-      t("interviews:export.cols.fullName"),
-      t("interviews:export.cols.nationalId"),
-      t("interviews:export.cols.phone"),
-      t("interviews:export.cols.decision"),
-      t("interviews:export.cols.decisionRaw"),
-      t("interviews:export.cols.applicationStatus"),
-      t("interviews:export.cols.questionSet"),
-    ];
+      const rows = filtered.map((c, idx) =>
+        buildExportRow(c, idx, localStatuses, qsNames, labels),
+      );
 
-    const rows = filtered.map((c, idx) => {
-      const effectiveStatus = localStatuses[c.id] ?? c.applicationStatus;
-      const decisionRaw: "shortlisted" | "rejected" | "none" =
-        effectiveStatus === "shortlisted" ? "shortlisted"
-          : effectiveStatus === "rejected" ? "rejected"
-          : "none";
-      const qsName = c.questionSetId ? (questionSetMap.get(c.questionSetId)?.name ?? "") : "";
-      return [
-        idx + 1,
-        c.id,
-        c.fullNameEn ?? "",
-        c.nationalId ?? "",
-        c.phone ?? "",
-        decisionLabel(decisionRaw),
-        decisionRaw,
-        effectiveStatus ?? "",
-        qsName,
-      ];
-    });
-
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    // Force ID-shaped columns to text so Excel does not strip leading zeros
-    // or convert long numerics to scientific notation.
-    const TEXT_COL_INDEXES = [1, 3, 4]; // candidateId, nationalId, phone (0-based)
-    for (let r = 1; r <= rows.length; r++) {
-      for (const col of TEXT_COL_INDEXES) {
-        const addr = XLSX.utils.encode_cell({ r, c: col });
-        const cell = ws[addr];
-        if (cell && cell.v != null) {
-          cell.t = "s";
-          cell.v = String(cell.v);
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      // Force ID-shaped columns to text so Excel does not strip leading
+      // zeros or convert long numerics to scientific notation. Indexes
+      // match the order in buildExportHeaders / buildExportRow:
+      //   1 = candidateId (code or UUID), 3 = nationalId, 4 = phone.
+      const TEXT_COL_INDEXES = [1, 3, 4];
+      for (let r = 1; r <= rows.length; r++) {
+        for (const col of TEXT_COL_INDEXES) {
+          const addr = XLSX.utils.encode_cell({ r, c: col });
+          const cell = ws[addr];
+          if (cell && cell.v != null) {
+            cell.t = "s";
+            cell.v = String(cell.v);
+          }
         }
       }
-    }
-    ws["!cols"] = [
-      { wch: 5 },   // #
-      { wch: 38 },  // Candidate ID (UUID)
-      { wch: 28 },  // Full name
-      { wch: 14 },  // National ID
-      { wch: 14 },  // Phone
-      { wch: 12 },  // Decision
-      { wch: 12 },  // Decision raw
-      { wch: 16 },  // Application status
-      { wch: 24 },  // Question set
-    ];
+      ws["!cols"] = [
+        { wch: 5 },   // #
+        { wch: 22 },  // Candidate ID (code or UUID)
+        { wch: 28 },  // Full name
+        { wch: 14 },  // National ID
+        { wch: 14 },  // Phone
+        { wch: 12 },  // Decision
+        { wch: 12 },  // Decision raw
+        { wch: 16 },  // Application status
+        { wch: 24 },  // Question set
+      ];
 
-    const wb = XLSX.utils.book_new();
-    // Excel sheet names are limited to 31 chars and cannot contain : \ / ? * [ ]
-    const rawSheetName = (iv?.groupName ?? "Interview").trim() || "Interview";
-    const sheetName = rawSheetName.replace(/[:\\/?*[\]]/g, "-").slice(0, 31);
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, buildSheetName(iv?.groupName));
 
-    // If the group name is missing or unslugifiable (e.g. all-Arabic, which
-    // strips to empty ASCII), fall back to a clean `interview_<date>.xlsx`
-    // rather than the awkward double-prefixed `interview_interview_<date>`.
-    const slug = slugifyForFilename(iv?.groupName ?? null, "");
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const filename = slug ? `interview_${slug}_${dateStr}.xlsx` : `interview_${dateStr}.xlsx`;
-    try {
-      XLSX.writeFile(wb, filename);
+      // Filename always includes a slug derived from the group name (falls
+      // back to "session" when the name is missing or all-Arabic, matching
+      // buildMissingIdsFilename), so two exports from different interviews
+      // never collide in the recruiter's downloads folder.
+      XLSX.writeFile(wb, buildExportFilename(iv?.groupName));
     } catch (err) {
       console.error("Excel export failed:", err);
       toast({ title: t("interviews:export.toastFail"), variant: "destructive" });
-      return;
+    } finally {
+      setIsExporting(false);
     }
-
-    toast({
-      title: t("interviews:export.toastDone", {
-        n: formatNumber(rows.length, i18n.language),
-      }),
-    });
-  }, [filtered, localStatuses, questionSetMap, iv?.groupName, t, toast, i18n.language]);
+  }, [filtered, localStatuses, questionSetMap, iv?.groupName, t, toast]);
 
   const shortlistedCount = invitedCandidates.filter(c => (localStatuses[c.id] ?? c.applicationStatus) === "shortlisted").length;
   const rejectedCount = invitedCandidates.filter(c => (localStatuses[c.id] ?? c.applicationStatus) === "rejected").length;
@@ -995,9 +991,13 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                 size="sm"
                 className="h-9 gap-1.5 border-border bg-transparent text-foreground hover:bg-accent"
                 onClick={handleExportExcel}
+                disabled={isExporting}
+                aria-busy={isExporting}
                 data-testid="button-export-interview-decisions"
               >
-                <Download className="h-3.5 w-3.5" />
+                {isExporting
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Download className="h-3.5 w-3.5" />}
                 {t("interviews:export.button")}
               </Button>
               <div className="relative flex-1 min-w-[220px] max-w-md">
