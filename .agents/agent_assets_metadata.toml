@@ -90,3 +90,15 @@ id = "cv-BOd-PbMFt1321hWmX-"
 uri = "file://attached_assets/terms_conditions_ar_2026-04-30.md"
 type = "text"
 title = "الشروط والأحكام — العربية (النسخة التي أرسلتَها)"
+
+[[outputs]]
+id = "3R4gXPT68YKGypH-uvu7p"
+uri = "file://attached_assets/terms_conditions_ar_2026-04-30.docx"
+type = "word_document"
+title = "الشروط والأحكام — Word (RTL، خط Cairo)"
+
+[[outputs]]
+id = "CWqJHoAXrjXE2IBUaexUI"
+uri = "file://attached_assets/terms_conditions_en_2026-04-30.docx"
+type = "word_document"
+title = "Terms & Conditions — Word (English mirror)"

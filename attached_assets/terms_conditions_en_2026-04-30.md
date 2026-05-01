@@ -81,7 +81,7 @@ The Platform is provided "as is" and "as available." To the maximum extent permi
 
 ## 14. Limitation of Liability
 
-To the extent permitted by the laws of the Kingdom of Saudi Arabia, the Company shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or for any loss of profits, revenue, data, or reputation arising from your use of the Platform. Our total aggregate liability shall not exceed **[PLEASE COMPLETE FROM ARABIC SOURCE — the Arabic you sent was truncated here at "ولا تتجاوز مسؤوليتنا الإجمالي ..."]**.
+To the extent permitted by the laws of the Kingdom of Saudi Arabia, the Company shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or for any loss of profits, revenue, data, or reputation arising from your use of the Platform. Our total aggregate liability shall not exceed the fees paid by the Employer to the Company during the 12 months preceding the claim, or 1,000 Saudi Riyals, whichever is less, unless prohibited by law.
 
 ## 15. Indemnity
 
