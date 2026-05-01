@@ -998,20 +998,6 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 gap-1.5 border-border bg-transparent text-foreground hover:bg-accent"
-                onClick={handleExportExcel}
-                disabled={isExporting}
-                aria-busy={isExporting}
-                data-testid="button-export-interview-decisions"
-              >
-                {isExporting
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : <Download className="h-3.5 w-3.5" />}
-                {t("interviews:export.button")}
-              </Button>
               <div className="relative flex-1 min-w-[220px] max-w-md">
               <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -1051,6 +1037,23 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                 </button>
               )}
               </div>
+              {/* Export button sits at the row's end side (left in RTL,
+                  right in LTR). Pushed there by `ms-auto` so the search
+                  input keeps its natural width without stretching to fill. */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 border-border bg-transparent text-foreground hover:bg-accent ms-auto"
+                onClick={handleExportExcel}
+                disabled={isExporting}
+                aria-busy={isExporting}
+                data-testid="button-export-interview-decisions"
+              >
+                {isExporting
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Download className="h-3.5 w-3.5" />}
+                {t("interviews:export.button")}
+              </Button>
             </div>
 
             {/* Missing-IDs panel — Task #226. Shown above the table when the
