@@ -75,6 +75,49 @@ behave as designed, and "Clear all" wipes EVERY active filter
     exists in the DOM (queryable via document.querySelector). It may be
     visually hidden, but it must be present so external e2e/code paths
     that target this id keep working.
+
+### Test 8: Multi-line paste — token-count pill + table filtering (REGRESSION)
+This regression case guards the multi-paste search code path that the
+toolbar redesign must NOT break. The same input (handleSearchPaste,
+liveParsedSearch.isMulti, badge-search-token-count, pe-44 reservation)
+must continue to work end-to-end.
+
+45. [Browser] Click data-testid="input-search-candidates" to focus it.
+46. [Browser] Use a real clipboard paste (NOT keyboard typing — must
+    fire the onPaste handler). Paste this exact string (3 phone
+    numbers separated by newline, comma, and space respectively, so all
+    three SEPARATOR_REGEX branches are exercised):
+        0500000001\n0500000002, 0500000003
+47. [Browser] Wait 1 second for the React state to settle.
+48. [Verify] data-testid="badge-search-token-count" is visible.
+49. [Verify] The badge text matches the i18n template "Searching {{n}} IDs"
+    (en) or "البحث عن {{n}} رقمًا" (ar) with n="3" — accept any wording
+    that contains the western digit "3" (no Arabic-Indic numerals,
+    no commas in the count itself).
+50. [Verify] data-testid="active-chip-search" is visible (the multi-line
+    paste populated the search state, so the search chip surfaces).
+51. [Verify] The talent table re-fetched with the new query — assert
+    that the URL contains "search=" with a URL-encoded value containing
+    "0500000001". (Use the page URL or the network log.)
+52. [Verify] At least one of the seeded candidates with phone
+    "0500000001" appears in the table (data-testid starting with
+    "row-candidate-" should resolve to ≥ 1 row), OR an empty-state
+    panel renders with data-testid="text-no-results" — both outcomes
+    are acceptable depending on seed data; what MUST hold is that the
+    page did not crash and the badge shows "3".
+
+### Test 9: Multi-paste truncation pill (only if MAX_SEARCH_TOKENS=200)
+53. [Browser] Clear the search via data-testid="active-chip-search-remove".
+54. [Browser] Click the search input again.
+55. [Browser] Paste a string of 250 newline-separated 10-digit numeric
+    tokens (e.g. "0500000001\\n0500000002\\n…\\n0500000250" — generate
+    unique tokens; deduplication only collapses identical values, so
+    250 distinct tokens will trigger truncation at 200).
+56. [Verify] data-testid="badge-search-token-count" is visible AND its
+    text contains the western digit "200" (the truncated cap), not
+    "250" (the raw paste size).
+57. [Browser] Click data-testid="active-chip-search-remove" to clean up.
+58. [Verify] data-testid="badge-search-token-count" is no longer visible.
 `;
 
 export const technicalDocs = `
