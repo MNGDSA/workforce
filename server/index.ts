@@ -130,6 +130,8 @@ app.use((req, res, next) => {
     await ensureLoginRateLimitBuckets(log);
     const { ensureLocaleColumn } = await import("./migrations/ensure-locale-column");
     await ensureLocaleColumn(log);
+    const { ensureUsersFullNameArColumn } = await import("./migrations/ensure-users-full-name-ar");
+    await ensureUsersFullNameArColumn(log);
     const { ensureSmsOutboxNextAttempt } = await import("./migrations/ensure-sms-outbox-next-attempt");
     await ensureSmsOutboxNextAttempt(log);
     const { ensureOnboardingReminders } = await import("./migrations/ensure-onboarding-reminders");

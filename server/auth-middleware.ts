@@ -25,6 +25,7 @@ import type { PermissionKey } from "@shared/permissions";
 import { SUPER_ADMIN_SLUG } from "@shared/permissions";
 import { verifyAuthToken } from "./auth-token";
 import { MobileErrorCodes } from "./lib/mobile-error-codes";
+import { formatActorName } from "./lib/actor-name";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -140,9 +141,17 @@ export function getAuthKind(req: Request): AuthKind | null {
 function audit(req: Request, kind: "401" | "403", required?: string) {
   setImmediate(async () => {
     try {
+      // For 401s the request never reached an authenticated state, so
+      // authUser is null and the bilingual formatter falls through to
+      // "Unknown" — we override that with "anonymous" since it's a
+      // failed-auth event, not a missing-name event. For 403s the user
+      // IS authenticated (just lacking the permission) so we get their
+      // real bilingual name out of formatActorName.
+      const hasAuth = !!req.authUserId;
+      const actorName = hasAuth ? formatActorName(req.authUser as any) : "anonymous";
       await db.insert(auditLogs).values({
         actorId: req.authUserId ?? null,
-        actorName: req.authUser?.fullName ?? req.authUser?.username ?? "anonymous",
+        actorName,
         action: `auth.${kind}`,
         entityType: "route",
         entityId: req.path,

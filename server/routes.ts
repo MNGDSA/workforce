@@ -170,11 +170,18 @@ async function logAudit(req: Request, params: {
   metadata?: Record<string, any>;
 }) {
   try {
-    const actorId = (req as any).userId ?? null;
+    // CRITICAL: read `authUserId`, not `userId`. The `requireAuth`
+    // middleware sets `req.authUserId`; the legacy `req.userId` field is
+    // never assigned anywhere, so reading it here would silently log
+    // every authenticated action with actor_id=null and actor_name="System".
+    const actorId = req.authUserId ?? null;
     let actorName = "System";
     if (actorId) {
-      const user = await storage.getUser(actorId);
-      if (user) actorName = (user as any).fullName ?? (user as any).username ?? "Unknown";
+      // Prefer the user object the middleware already loaded (avoids a
+      // second DB hit on every audit call) and fall back to a fresh
+      // lookup if the helper is invoked outside an authed request flow.
+      const user = (req.authUser as any) ?? (await storage.getUser(actorId));
+      actorName = formatActorName(user);
     }
     await storage.createAuditLog({ actorId, actorName, ...params });
   } catch (e) {
@@ -203,6 +210,7 @@ function validateProfileCompleteness(candidate: Record<string, any>): string[] {
 import { z } from "zod";
 import bcrypt from "bcrypt";
 import { requireAuth, requirePermission, requireOwnership, markPublic, invalidateRoleCache, getAuthKind } from "./auth-middleware";
+import { formatActorName } from "./lib/actor-name";
 import { checkLoginRateLimit, recordLoginFailure, recordLoginSuccess } from "./login-rate-limit";
 import { checkOtpVerifyIp, recordOtpVerifyFailure, tryReserveOtpRequest, checkActivateIp, recordActivateFailure } from "./otp-throttle";
 import "./otp-maintenance";
@@ -3537,7 +3545,7 @@ export async function registerRoutes(
 
   app.post("/api/events/:id/close", requirePermission("events:close"), async (req: Request, res: Response) => {
     try {
-      const actorId = (req as any).userId ?? undefined;
+      const actorId = req.authUserId ?? undefined;
       const evt = await storage.closeEvent(req.params.id);
       if (!evt) return res.status(404).json({ message: tr(req, "event.notFound") });
       await storage.createAuditLog({
@@ -3561,7 +3569,7 @@ export async function registerRoutes(
 
   app.post("/api/events/:id/reopen", requirePermission("events:reopen"), async (req: Request, res: Response) => {
     try {
-      const actorId = (req as any).userId ?? undefined;
+      const actorId = req.authUserId ?? undefined;
       const { reason } = req.body as { reason?: string };
       const evt = await storage.reopenEvent(req.params.id);
       if (!evt) return res.status(404).json({ message: tr(req, "event.notFound") });
@@ -4270,7 +4278,7 @@ export async function registerRoutes(
           const wf = await storage.convertOnboardingToEmployee(
             id,
             { startDate, eventId, salary, smpCompanyId: resolvedSmpCompanyId, employmentType: resolvedEmploymentType },
-            (req as any).userId,
+            req.authUserId,
           );
           results.push(wf);
         } catch (e: any) {
@@ -4728,7 +4736,7 @@ export async function registerRoutes(
             smpCompanyId: resolvedSmpCompanyId,
             employmentType: resolvedEmploymentType,
           },
-          (req as any).userId,
+          req.authUserId,
         );
       } catch (convErr: any) {
         const msg = convErr?.message || "";
@@ -6194,7 +6202,7 @@ export async function registerRoutes(
         fileName,
         description: description || undefined,
         eventId: eventId || undefined,
-        uploadedBy: (req as any).userId ?? undefined,
+        uploadedBy: req.authUserId ?? undefined,
       });
       return res.status(201).json(doc);
     } catch (err) {
@@ -7505,7 +7513,7 @@ export async function registerRoutes(
 
   app.post("/api/offboarding/:id/start", requirePermission("offboarding:start"), async (req: Request, res: Response) => {
     try {
-      const actorId = (req as any).userId ?? undefined;
+      const actorId = req.authUserId ?? undefined;
       const record = await storage.startOffboarding(req.params.id, actorId);
       if (!record) return res.status(404).json({ message: tr(req, "employee.notFound") });
       await logAudit(req, {
@@ -7521,7 +7529,7 @@ export async function registerRoutes(
 
   app.post("/api/offboarding/:id/complete", requirePermission("offboarding:complete"), async (req: Request, res: Response) => {
     try {
-      const actorId = (req as any).userId ?? undefined;
+      const actorId = req.authUserId ?? undefined;
       const emp = await storage.getWorkforceEmployee(req.params.id);
       const settlement = await storage.getOffboardingSettlement(req.params.id);
       const record = await storage.completeOffboarding(req.params.id, actorId);
@@ -7543,7 +7551,7 @@ export async function registerRoutes(
     try {
       const { ids } = req.body as { ids: string[] };
       if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: tr(req, "common.idsRequired") });
-      const actorId = (req as any).userId ?? undefined;
+      const actorId = req.authUserId ?? undefined;
       let started = 0;
       const errors: { id: string; message: string }[] = [];
       for (const id of ids) {
@@ -7570,7 +7578,7 @@ export async function registerRoutes(
     try {
       const { ids } = req.body as { ids: string[] };
       if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: tr(req, "common.idsRequired") });
-      const actorId = (req as any).userId ?? undefined;
+      const actorId = req.authUserId ?? undefined;
       let completed = 0;
       const errors: { id: string; message: string }[] = [];
       for (const id of ids) {
@@ -7619,7 +7627,7 @@ export async function registerRoutes(
       const { status } = req.body as { status: "returned" | "not_returned" };
       if (!status || !["returned", "not_returned"].includes(status))
         return res.status(400).json({ message: tr(req, "asset.statusInvalid") });
-      const actorId = (req as any).userId ?? undefined;
+      const actorId = req.authUserId ?? undefined;
       const row = await storage.confirmAssetReturn(req.params.id, status, actorId);
       return res.json(row);
     } catch (err) { return handleError(res, err); }
@@ -7627,7 +7635,7 @@ export async function registerRoutes(
 
   app.post("/api/employee-assets/:id/waive-deduction", requirePermission("employee_assets:waive_deduction"), async (req: Request, res: Response) => {
     try {
-      const actorId = (req as any).userId;
+      const actorId = req.authUserId;
       if (!actorId) return res.status(401).json({ message: tr(req, "auth.requiredShort") });
       const existing = await storage.getEmployeeAsset(req.params.id);
       if (!existing) return res.status(404).json({ message: tr(req, "assetAssignment.notFound") });
@@ -7671,7 +7679,7 @@ export async function registerRoutes(
       const { workforceId, status } = req.body as { workforceId: string; status: "returned" | "not_returned" };
       if (!workforceId || !status || !["returned", "not_returned"].includes(status))
         return res.status(400).json({ message: tr(req, "common.workforceIdAndStatusRequired") });
-      const actorId = (req as any).userId ?? undefined;
+      const actorId = req.authUserId ?? undefined;
       const count = await storage.bulkConfirmAssets(workforceId, status, actorId);
       const emp = await storage.getWorkforceEmployee(workforceId);
       await logAudit(req, {
@@ -7881,7 +7889,7 @@ export async function registerRoutes(
 
   app.patch("/api/inbox/:id/resolve", requirePermission("inbox:manage"), async (req: Request, res: Response) => {
     try {
-      const resolvedBy = (req as any).userId ?? "system";
+      const resolvedBy = req.authUserId ?? "system";
       const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() || undefined : undefined;
       const item = await storage.resolveInboxItem(req.params.id, resolvedBy, notes);
       if (!item) return res.status(404).json({ message: tr(req, "inbox.notFoundOrResolved") });
@@ -7892,7 +7900,7 @@ export async function registerRoutes(
 
   app.patch("/api/inbox/:id/dismiss", requirePermission("inbox:manage"), async (req: Request, res: Response) => {
     try {
-      const resolvedBy = (req as any).userId ?? "system";
+      const resolvedBy = req.authUserId ?? "system";
       const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() || undefined : undefined;
       const item = await storage.dismissInboxItem(req.params.id, resolvedBy, notes);
       if (!item) return res.status(404).json({ message: tr(req, "inbox.notFoundOrResolved") });
@@ -7922,7 +7930,7 @@ export async function registerRoutes(
     try {
       const { ids } = inboxBulkSchema.parse(req.body);
       if (await rejectIfProtectedTypes(req, res, ids)) return;
-      const resolvedBy = (req as any).userId ?? "system";
+      const resolvedBy = req.authUserId ?? "system";
       const count = await storage.bulkResolveInboxItems(ids, resolvedBy);
       return res.json({ resolved: count });
     } catch (err) { return handleError(res, err); }
@@ -7932,7 +7940,7 @@ export async function registerRoutes(
     try {
       const { ids } = inboxBulkSchema.parse(req.body);
       if (await rejectIfProtectedTypes(req, res, ids)) return;
-      const resolvedBy = (req as any).userId ?? "system";
+      const resolvedBy = req.authUserId ?? "system";
       const count = await storage.bulkDismissInboxItems(ids, resolvedBy);
       return res.json({ dismissed: count });
     } catch (err) { return handleError(res, err); }
@@ -8997,7 +9005,7 @@ export async function registerRoutes(
   app.post("/api/attendance-mobile/submissions/:id/approve", requirePermission("attendance_mobile:approve"), async (req: Request, res: Response) => {
     try {
       const { notes, reviewedBy: bodyReviewedBy } = req.body ?? {};
-      let reviewedBy = bodyReviewedBy ?? (req as any).userId;
+      let reviewedBy = bodyReviewedBy ?? req.authUserId;
       if (!reviewedBy) {
         const adminUser = await storage.getUserByUsername("admin");
         reviewedBy = adminUser?.id ?? null;
@@ -9021,7 +9029,7 @@ export async function registerRoutes(
   app.post("/api/attendance-mobile/submissions/:id/reject", requirePermission("attendance_mobile:reject"), async (req: Request, res: Response) => {
     try {
       const { notes, reviewedBy: bodyReviewedBy } = req.body ?? {};
-      let reviewedBy = bodyReviewedBy ?? (req as any).userId;
+      let reviewedBy = bodyReviewedBy ?? req.authUserId;
       if (!reviewedBy) {
         const adminUser = await storage.getUserByUsername("admin");
         reviewedBy = adminUser?.id ?? null;
@@ -9069,7 +9077,7 @@ export async function registerRoutes(
   app.post("/api/photo-change-requests/:id/approve", requirePermission("photo_requests:approve"), async (req: Request, res: Response) => {
     try {
       const { notes, reviewedBy: bodyReviewedBy } = req.body ?? {};
-      let reviewedBy = bodyReviewedBy ?? (req as any).userId;
+      let reviewedBy = bodyReviewedBy ?? req.authUserId;
       if (!reviewedBy) {
         const adminUser = await storage.getUserByUsername("admin");
         reviewedBy = adminUser?.id ?? null;
@@ -9120,7 +9128,7 @@ export async function registerRoutes(
   app.post("/api/photo-change-requests/:id/reject", requirePermission("photo_requests:reject"), async (req: Request, res: Response) => {
     try {
       const { notes, reviewedBy: bodyReviewedBy } = req.body ?? {};
-      let reviewedBy = bodyReviewedBy ?? (req as any).userId;
+      let reviewedBy = bodyReviewedBy ?? req.authUserId;
       if (!reviewedBy) {
         const adminUser = await storage.getUserByUsername("admin");
         reviewedBy = adminUser?.id ?? null;

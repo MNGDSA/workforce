@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { users, automationRules, geofenceZones, roles } from "@shared/schema";
 import bcrypt from "bcrypt";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 async function seed() {
   console.log("🌱 Seeding database...");
@@ -13,6 +13,7 @@ async function seed() {
   const SUPER_ADMIN_NATIONAL_ID = "1071793531";
   const SUPER_ADMIN_PHONE = "0581766080";
   const SUPER_ADMIN_FULL_NAME = "Faisal Alamri";
+  const SUPER_ADMIN_FULL_NAME_AR = "فيصل العمري";
   const SUPER_ADMIN_EMAIL = "faisal.alamri@workforce.sa";
   const SUPER_ADMIN_USERNAME = "faisal.alamri";
   const SUPER_ADMIN_PASSWORD = "Workforce@2026!";
@@ -37,6 +38,7 @@ async function seed() {
       password: hashed,
       roleId: superAdminRole.id,
       fullName: SUPER_ADMIN_FULL_NAME,
+      fullNameAr: SUPER_ADMIN_FULL_NAME_AR,
       phone: SUPER_ADMIN_PHONE,
       nationalId: SUPER_ADMIN_NATIONAL_ID,
       isActive: true,
@@ -48,7 +50,35 @@ async function seed() {
       ? (await db.select().from(roles).where(eq(roles.id, existing.roleId)))[0]
       : null;
     if (existingRole?.slug === "super_admin") {
-      console.log(`  → Super Admin ${SUPER_ADMIN_FULL_NAME} already provisioned, skipping.`);
+      // Self-heal: backfill any missing bilingual fields onto the existing
+      // super admin row (e.g. fullNameAr was added after this row was first
+      // inserted). Idempotent: only writes the fields that are still empty
+      // AT THE MOMENT OF UPDATE so we never clobber an admin-edited value
+      // even under a concurrent write race (the WHERE clauses below carry
+      // the no-clobber predicate down into the SQL itself, closing the
+      // read→write TOCTOU window from the in-process check above).
+      const patch: Record<string, unknown> = {};
+      const guards: any[] = [];
+      if (!(existing as any).fullNameAr) {
+        patch.fullNameAr = SUPER_ADMIN_FULL_NAME_AR;
+        guards.push(sql`(${users.fullNameAr} IS NULL OR ${users.fullNameAr} = '')`);
+      }
+      if (!existing.fullName) {
+        patch.fullName = SUPER_ADMIN_FULL_NAME;
+        guards.push(sql`(${users.fullName} IS NULL OR ${users.fullName} = '')`);
+      }
+      if (Object.keys(patch).length > 0) {
+        // and-together: id matches AND every column we're trying to write
+        // is still empty in the DB right now.
+        let whereClause: any = eq(users.id, existing.id);
+        for (const g of guards) whereClause = sql`${whereClause} AND ${g}`;
+        const result = await db.update(users).set(patch).where(whereClause);
+        console.log(
+          `  → Super Admin ${SUPER_ADMIN_FULL_NAME} present; backfilled missing fields: ${Object.keys(patch).join(", ")} (rows affected: ${(result as any).rowCount ?? "?"}).`,
+        );
+      } else {
+        console.log(`  → Super Admin ${SUPER_ADMIN_FULL_NAME} already provisioned, skipping.`);
+      }
     } else {
       // National ID is reserved for Faisal. If a non-super-admin record already
       // holds it (e.g. a candidate self-registered with the same NID), promote
@@ -61,6 +91,7 @@ async function seed() {
           email: SUPER_ADMIN_EMAIL,
           password: hashed,
           fullName: SUPER_ADMIN_FULL_NAME,
+          fullNameAr: SUPER_ADMIN_FULL_NAME_AR,
           phone: SUPER_ADMIN_PHONE,
           isActive: true,
         })

@@ -143,6 +143,12 @@ export const users = pgTable(
     password: text("password").notNull(),
     roleId: varchar("role_id").notNull(),
     fullName: text("full_name"),
+    // Bilingual display name (Arabic). Optional — admins seeded before this
+    // column existed will be NULL until populated. When both names are
+    // present the audit log + UI render them together as
+    // "Faisal Alamri فيصل العمري" so RTL viewers always see the Arabic
+    // form and the bidi <bdi> wrapping handles direction.
+    fullNameAr: text("full_name_ar"),
     phone: text("phone"),
     nationalId: varchar("national_id", { length: 20 }),
     avatarUrl: text("avatar_url"),
