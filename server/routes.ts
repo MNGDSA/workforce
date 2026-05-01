@@ -84,7 +84,7 @@ import {
   auditLogs,
   type InsertPayrollAdjustment,
 } from "@shared/schema";
-import { eq, and, sql, desc, inArray, count, isNull } from "drizzle-orm";
+import { eq, and, sql, desc, asc, inArray, count, isNull } from "drizzle-orm";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
 import { logOtpForDev, peekLatestDevOtp, isDevOtpGateOpen } from "./dev-otp-log";
 import { trL, type ServerLocale } from "./i18n";
@@ -4534,6 +4534,11 @@ export async function registerRoutes(
       const cfg = await getReminderConfig();
       const now = new Date();
       // Eligible = pending/in_progress/ready, not eliminated.
+      // Stable ORDER BY (createdAt ASC, id ASC) keeps each row in the SAME
+      // visual position even after a reminder is sent / row is updated. Without
+      // this, PostgreSQL is free to return updated rows in different physical
+      // order, which makes the row "jump to the bottom" the moment the agent
+      // clicks "send reminder now" or the 15s background poll fires.
       const rows = await db.select({
         ob: onboardingTable,
         cand: candidatesTable,
@@ -4543,7 +4548,8 @@ export async function registerRoutes(
         .where(and(
           isNull(onboardingTable.eliminatedAt),
           sql`${onboardingTable.status} IN ('pending', 'in_progress', 'ready')`,
-        ));
+        ))
+        .orderBy(asc(onboardingTable.createdAt), asc(onboardingTable.id));
 
       const out = await Promise.all(rows.map(async ({ ob, cand }) => {
         const status = computeRowStatus(ob, cfg, now);
