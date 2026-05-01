@@ -26,6 +26,7 @@ function mockTx(value: string | null | undefined): any {
 
 // Snapshot/restore the env vars the helper reads so tests don't bleed.
 const originalEnv = { ...process.env };
+const TRACKED_ENV_KEYS = ["PUBLIC_APP_URL", "REPLIT_DEV_DOMAIN", "NODE_ENV"] as const;
 function setEnv(patch: Record<string, string | undefined>) {
   for (const k of Object.keys(patch)) {
     if (patch[k] === undefined) delete process.env[k];
@@ -33,7 +34,7 @@ function setEnv(patch: Record<string, string | undefined>) {
   }
 }
 function restoreEnv() {
-  for (const k of ["PUBLIC_APP_URL", "REPLIT_DEV_DOMAIN"]) {
+  for (const k of TRACKED_ENV_KEYS) {
     if (originalEnv[k] === undefined) delete process.env[k];
     else process.env[k] = originalEnv[k];
   }
@@ -41,7 +42,10 @@ function restoreEnv() {
 
 describe("getPortalBaseUrl", () => {
   beforeEach(() => {
-    setEnv({ PUBLIC_APP_URL: undefined, REPLIT_DEV_DOMAIN: undefined });
+    // Default each test into a clean slate WITH NODE_ENV=development so the
+    // dev-domain fallback path is exercisable. Production-gating cases
+    // override this explicitly.
+    setEnv({ PUBLIC_APP_URL: undefined, REPLIT_DEV_DOMAIN: undefined, NODE_ENV: "development" });
   });
   afterEach(() => {
     restoreEnv();
@@ -148,6 +152,54 @@ describe("getPortalBaseUrl", () => {
         () => getPortalBaseUrl(mockTx(null)),
         PortalBaseUrlNotConfiguredError,
       );
+    });
+  });
+
+  describe("REPLIT_DEV_DOMAIN is gated to dev/test only", () => {
+    it("ignores REPLIT_DEV_DOMAIN when NODE_ENV=production and throws", async () => {
+      setEnv({ NODE_ENV: "production", REPLIT_DEV_DOMAIN: "agent-sandbox.repl.co" });
+      await assert.rejects(
+        () => getPortalBaseUrl(mockTx(undefined)),
+        (err: any) => {
+          assert.ok(err instanceof PortalBaseUrlNotConfiguredError, `expected typed error in production, got ${err?.constructor?.name}`);
+          return true;
+        },
+      );
+    });
+
+    it("ignores REPLIT_DEV_DOMAIN when NODE_ENV is unset and throws", async () => {
+      // The Replit dev domain is auto-set in every workspace including
+      // anything that runs without an explicit NODE_ENV. The contract
+      // is fail-closed: only an explicit `development` or `test` opts in.
+      setEnv({ NODE_ENV: undefined, REPLIT_DEV_DOMAIN: "agent-sandbox.repl.co" });
+      await assert.rejects(
+        () => getPortalBaseUrl(mockTx(undefined)),
+        PortalBaseUrlNotConfiguredError,
+      );
+    });
+
+    it("uses REPLIT_DEV_DOMAIN when NODE_ENV=development", async () => {
+      setEnv({ NODE_ENV: "development", REPLIT_DEV_DOMAIN: "abc-123.repl.co" });
+      const url = await getPortalBaseUrl(mockTx(undefined));
+      assert.equal(url, "https://abc-123.repl.co");
+    });
+
+    it("uses REPLIT_DEV_DOMAIN when NODE_ENV=test", async () => {
+      setEnv({ NODE_ENV: "test", REPLIT_DEV_DOMAIN: "abc-123.repl.co" });
+      const url = await getPortalBaseUrl(mockTx(undefined));
+      assert.equal(url, "https://abc-123.repl.co");
+    });
+
+    it("PUBLIC_APP_URL still wins in production even when dev-domain is set", async () => {
+      setEnv({ NODE_ENV: "production", PUBLIC_APP_URL: "https://prod.example.com", REPLIT_DEV_DOMAIN: "sandbox.repl.co" });
+      const url = await getPortalBaseUrl(mockTx(undefined));
+      assert.equal(url, "https://prod.example.com");
+    });
+
+    it("system setting still wins in production even when dev-domain is set", async () => {
+      setEnv({ NODE_ENV: "production", REPLIT_DEV_DOMAIN: "sandbox.repl.co" });
+      const url = await getPortalBaseUrl(mockTx("https://from-setting.example.com"));
+      assert.equal(url, "https://from-setting.example.com");
     });
   });
 

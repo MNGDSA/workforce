@@ -51,6 +51,14 @@
 // sweep counters — other workers may still seed onboarding rows of
 // their own that would otherwise add to `result.eliminated` etc.
 
+// Default NODE_ENV to "test" if the runner didn't set it. The shared
+// portal-URL helper (server/lib/portal-url.ts) gates its
+// REPLIT_DEV_DOMAIN fallback to dev/test environments only — without
+// this default, the sweep's SMS-context resolver would throw under
+// `npx tsx --test` because NODE_ENV is unset and PUBLIC_APP_URL isn't
+// configured in the test process.
+process.env.NODE_ENV ??= "test";
+
 import { strict as assert } from "node:assert";
 import { afterEach, before, describe, it, mock } from "node:test";
 import { eq, like, sql } from "drizzle-orm";

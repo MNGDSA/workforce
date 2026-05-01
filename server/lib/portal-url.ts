@@ -5,9 +5,15 @@
  * Resolution order (first non-empty wins):
  *   1. `public_app_url` system setting (admin override, hot-editable)
  *   2. `PUBLIC_APP_URL` environment variable (deploy-time)
- *   3. `REPLIT_DEV_DOMAIN` env (dev only — auto-set in Replit dev)
+ *   3. `REPLIT_DEV_DOMAIN` env — ONLY when `NODE_ENV` is `development`
+ *      or `test`. In production this fallback is intentionally
+ *      ignored: the dev-domain env is auto-set by Replit in any
+ *      workspace, so trusting it in production would silently route
+ *      candidates to the agent's sandbox URL on a misconfigured
+ *      production deploy. Production must explicitly set
+ *      `public_app_url` or `PUBLIC_APP_URL` — period.
  *
- * If none of the three resolve to a non-empty value, this throws
+ * If no source resolves to a non-empty value, this throws
  * `PortalBaseUrlNotConfiguredError`. There is intentionally NO
  * hard-coded production hostname fallback (e.g. tanaqolapp.com): a
  * silent fallback masks misconfiguration on any future deployment that
@@ -65,8 +71,18 @@ export async function getPortalBaseUrl(tx: DbOrTx = db): Promise<string> {
   const fromEnv = nonEmpty(process.env.PUBLIC_APP_URL);
   if (fromEnv) return stripTrailingSlash(fromEnv);
 
-  const devDomain = nonEmpty(process.env.REPLIT_DEV_DOMAIN);
-  if (devDomain) return stripTrailingSlash(`https://${devDomain}`);
+  // REPLIT_DEV_DOMAIN is auto-set by Replit in EVERY workspace —
+  // including production deployments that just happen to also be
+  // running on Replit infra. Trusting it in production would silently
+  // route candidates to a workspace URL when the operator forgot to
+  // set PUBLIC_APP_URL. Gate it behind an explicit dev/test NODE_ENV
+  // check so production fails loudly instead.
+  const env = process.env.NODE_ENV;
+  const inDevOrTest = env === "development" || env === "test";
+  if (inDevOrTest) {
+    const devDomain = nonEmpty(process.env.REPLIT_DEV_DOMAIN);
+    if (devDomain) return stripTrailingSlash(`https://${devDomain}`);
+  }
 
   throw new PortalBaseUrlNotConfiguredError();
 }

@@ -31,6 +31,14 @@
 // tests do not share state and run against the dev DB so the actual
 // Postgres CAS / unique-index semantics are exercised end-to-end.
 
+// Default NODE_ENV to "test" if the runner didn't set it. The shared
+// portal-URL helper (server/lib/portal-url.ts) gates its
+// REPLIT_DEV_DOMAIN fallback to dev/test environments only — without
+// this default, the sweep's SMS-context resolver would throw under
+// `npx tsx --test` because NODE_ENV is unset and PUBLIC_APP_URL isn't
+// configured in the test process.
+process.env.NODE_ENV ??= "test";
+
 import { strict as assert } from "node:assert";
 import { afterEach, before, describe, it, mock } from "node:test";
 import { and, eq, like, sql } from "drizzle-orm";
