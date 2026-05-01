@@ -28,12 +28,14 @@
   },
   "statusFilter": {
     "all": "All Status",
-    "available": "Available",
-    "pending_profile": "Pending Profile",
-    "inactive": "Inactive",
+    "completed": "Completed",
+    "not_activated": "Not Activated",
     "hired": "Hired",
     "blocked": "Blocked",
-    "archived": "Archived"
+    "archived": "Archived",
+    "available": "Available",
+    "pending_profile": "Pending Profile",
+    "inactive": "Inactive"
   },
   "sourceFilter": {
     "all": "All Classifications",
@@ -76,26 +78,26 @@
   "statusDefs": {
     "title": "Status",
     "ariaLabel": "Status definitions",
-    "active": "Active",
-    "activeDesc": "Profile completed, account is live and ready.",
-    "pending_profile": "Pending Profile",
-    "pending_profileDesc": "Self-registered but has not yet finished the profile-setup wizard (city, IBAN, emergency contact). Cannot apply for jobs until completed.",
-    "inactive": "Inactive",
-    "inactiveDesc": "Account created but profile not yet completed (e.g. bulk-uploaded SMP staff who haven't activated via OTP).",
+    "completed": "Completed",
+    "completedDesc": "Profile is fully filled in and the candidate has signed in within the last year.",
+    "not_activated": "Not Activated",
+    "not_activatedDesc": "Bulk-uploaded SMP worker who hasn't signed in yet. Auto-archives after 30 days without activation.",
     "hired": "Hired",
-    "hiredDesc": "Candidate converted to an active employee.",
+    "hiredDesc": "Currently employed. Never auto-archives — employees use the mobile app, not the candidate portal.",
     "blocked": "Blocked",
     "blockedDesc": "Manually blocked by an admin. Cannot apply or be processed.",
-    "dormant": "Dormant",
-    "dormantDesc": "Was active but hasn't logged in for over 1 year."
+    "archived": "Archived",
+    "archivedDesc": "Hidden from active listings. Catches stale profiles (no login in over a year), self-signups who never finished the wizard, SMP workers who never activated within 30 days, and anything an admin has manually archived."
   },
   "statusLabel": {
+    "completed": "completed",
+    "not_activated": "not activated",
+    "hired": "hired",
+    "blocked": "blocked",
+    "archived": "archived",
     "available": "available",
     "active": "active",
-    "inactive": "inactive",
-    "archived": "archived",
-    "blocked": "blocked",
-    "hired": "hired"
+    "inactive": "inactive"
   },
   "classification": {
     "smp": "SMP",

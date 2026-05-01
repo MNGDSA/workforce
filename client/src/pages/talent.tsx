@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
@@ -119,6 +120,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { Candidate } from "@shared/schema";
 import { parseSearchTokens, MAX_SEARCH_TOKENS, type CandidateSearchMeta } from "@shared/candidate-search";
+import { computeDisplayStatus, type DisplayStatus } from "@shared/candidate-status";
 import { useTranslation } from "react-i18next";
 import { formatNumber, formatDate, formatCurrency } from "@/lib/format";
 import { toProxiedFileUrl } from "@/lib/file-url";
@@ -126,15 +128,44 @@ import { toProxiedFileUrl } from "@/lib/file-url";
 type CandidateWithWorkforce = Candidate & { workforceRecordCount: number; workforceSeasonCount: number; completedStints: number; unpaidSettlements: number };
 import { KSA_REGIONS } from "@shared/schema";
 
+// Task #252 — colour map for the five derived display statuses. Legacy
+// raw-enum values are kept on the side so the per-id profile-sheet
+// endpoint (which doesn't yet project `displayStatus`) still renders
+// a sensible badge if it falls back to the raw `status` field. The
+// derivation helper always normalises down to one of the five
+// derived keys, so in practice only those branches are hit.
 const statusStyles: Record<string, string> = {
+  // Derived (canonical)
+  completed: "bg-green-500/10 text-green-500",
+  not_activated: "bg-amber-500/10 text-amber-400",
+  hired: "bg-blue-500/10 text-blue-400",
+  blocked: "bg-red-500/10 text-red-500",
+  archived: "bg-slate-500/10 text-slate-400",
+  // Legacy raw enum (fallback only)
   available: "bg-green-500/10 text-green-500",
   active: "bg-green-500/10 text-green-500",
   pending_profile: "bg-amber-500/10 text-amber-400",
   inactive: "bg-gray-500/10 text-gray-400",
-  archived: "bg-slate-500/10 text-slate-400",
-  blocked: "bg-red-500/10 text-red-500",
-  hired: "bg-blue-500/10 text-blue-400",
 };
+
+/**
+ * Reads the canonical display status off a candidate row. Prefers the
+ * server-projected `displayStatus` (always present on /api/candidates
+ * responses) and falls back to running `computeDisplayStatus` locally
+ * for any row that doesn't carry it (the per-id endpoint, mock data
+ * in tests, etc.). Single chokepoint so badge + filter never drift.
+ */
+function readDisplayStatus(c: any): DisplayStatus {
+  if (c && typeof c.displayStatus === "string") return c.displayStatus as DisplayStatus;
+  return computeDisplayStatus({
+    status: c?.status,
+    archivedAt: c?.archivedAt,
+    profileCompleted: c?.profileCompleted,
+    classification: c?.classification,
+    lastLoginAt: c?.lastLoginAt,
+    createdAt: c?.createdAt,
+  });
+}
 
 type SortField = "createdAt" | "fullNameEn" | "city" | "classification" | "phone" | "email";
 
@@ -264,48 +295,45 @@ function useIdLabel() {
   };
 }
 
+// Task #252 — replaces a hand-rolled `absolute start-1/2 -translate-x-1/2`
+// tooltip block that sat misaligned at higher zoom levels and got
+// clipped when the page had any `overflow:hidden` parent (every
+// table cell does). Radix Tooltip portal-renders into <body> and
+// uses Floating UI under the hood to anchor against the trigger
+// without any clipping. The Tooltip stays open while the cursor is
+// over the content (Radix default behaviour) so the legend remains
+// readable on hover.
 function StatusInfoHeader() {
   const { t } = useTranslation("talent");
-  const [visible, setVisible] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function show() {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    setVisible(true);
-  }
-  function hide() {
-    timerRef.current = setTimeout(() => setVisible(false), 150);
-  }
-
   return (
     <span className="inline-flex items-center gap-1">
       {t("statusDefs.title")}
-      <span className="relative inline-flex items-center">
-        <button
-          type="button"
-          className="text-muted-foreground hover:text-primary transition-colors focus:outline-none"
-          onMouseEnter={show}
-          onMouseLeave={hide}
-          onClick={() => setVisible((v) => !v)}
-          aria-label={t("statusDefs.ariaLabel")}
-        >
-          <Info className="h-2.5 w-2.5" />
-        </button>
-        {visible && (
-          <span
-            className="absolute start-1/2 -translate-x-1/2 top-full mt-1 z-50 w-72 rounded-sm bg-popover border border-border px-3.5 py-3 text-[11px] text-muted-foreground shadow-lg leading-relaxed space-y-1.5"
-            onMouseEnter={show}
-            onMouseLeave={hide}
+      <Tooltip delayDuration={150}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-primary transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
+            aria-label={t("statusDefs.ariaLabel")}
+            data-testid="button-status-info"
           >
-            <span className="block"><span className="font-semibold text-green-400">{t("statusDefs.active")}</span> — {t("statusDefs.activeDesc")}</span>
-            <span className="block"><span className="font-semibold text-gray-400">{t("statusDefs.inactive")}</span> — {t("statusDefs.inactiveDesc")}</span>
-            <span className="block"><span className="font-semibold text-blue-400">{t("statusDefs.hired")}</span> — {t("statusDefs.hiredDesc")}</span>
-            <span className="block"><span className="font-semibold text-red-400">{t("statusDefs.blocked")}</span> — {t("statusDefs.blockedDesc")}</span>
-            <span className="block"><span className="font-semibold text-amber-400">{t("statusDefs.dormant")}</span> — {t("statusDefs.dormantDesc")}</span>
-            <span className="absolute start-1/2 -translate-x-1/2 bottom-full h-0 w-0 border-x-4 border-x-transparent border-b-4 border-b-border" />
-          </span>
-        )}
-      </span>
+            <Info className="h-2.5 w-2.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent
+          side="bottom"
+          align="start"
+          sideOffset={6}
+          collisionPadding={12}
+          className="!z-[9999] w-80 max-w-[calc(100vw-1.5rem)] rounded-md border border-border bg-popover px-3.5 py-3 text-[11px] text-muted-foreground shadow-lg leading-relaxed space-y-2 normal-case"
+          data-testid="tooltip-status-defs"
+        >
+          <span className="block"><span className="font-semibold text-green-400">{t("statusDefs.completed")}</span> — {t("statusDefs.completedDesc")}</span>
+          <span className="block"><span className="font-semibold text-amber-400">{t("statusDefs.not_activated")}</span> — {t("statusDefs.not_activatedDesc")}</span>
+          <span className="block"><span className="font-semibold text-blue-400">{t("statusDefs.hired")}</span> — {t("statusDefs.hiredDesc")}</span>
+          <span className="block"><span className="font-semibold text-red-400">{t("statusDefs.blocked")}</span> — {t("statusDefs.blockedDesc")}</span>
+          <span className="block"><span className="font-semibold text-slate-400">{t("statusDefs.archived")}</span> — {t("statusDefs.archivedDesc")}</span>
+        </TooltipContent>
+      </Tooltip>
     </span>
   );
 }
@@ -752,7 +780,11 @@ function CandidateProfileSheet({
   if (!candidate) return null;
   const c = candidate;
   const initials = c.fullNameEn.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
-  const displaySt = (c as any).archivedAt ? "archived" : c.status;
+  // Task #252 — single source of truth for the badge. Uses the
+  // server-projected `displayStatus` if present (talent list rows)
+  // and falls back to local derivation if the row came from a
+  // per-id endpoint that doesn't yet project the field.
+  const displaySt = readDisplayStatus(c);
   const statusLabelText = t(`statusLabel.${displaySt}` as any, displaySt.replace("_", " "));
 
   const nidValue = editing ? form.nationalId : (c.nationalId ?? "");
@@ -1530,7 +1562,12 @@ export default function TalentPage() {
   const [, navigate] = useLocation();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("available");
+  // Task #252 — initial filter is "all" so the first request matches
+  // the dropdown's default option. Previously this defaulted to the
+  // legacy raw enum value "available" which (after the derivation
+  // refactor) is no longer one of the dropdown options, silently
+  // hiding rows that no longer carry that raw status.
+  const [status, setStatus] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [formerEmployeeFilter, setFormerEmployeeFilter] = useState(false);
   // Task #209 — recruiter-facing toggles for events that require a
@@ -1637,8 +1674,16 @@ export default function TalentPage() {
     sortBy,
     sortOrder,
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
-    ...(status && status !== "all" && status !== "archived" ? { status } : {}),
-    ...(status === "archived" ? { archived: "true" } : {}),
+    // Task #252 — every non-"all" dropdown value is one of the new
+    // derived buckets (completed, not_activated, hired, blocked,
+    // archived). They all flow through the server's
+    // DISPLAY_STATUS_SQL CASE filter via ?status=. The legacy
+    // ?archived=true path is reserved for explicit manual-archive
+    // queries (none of which the talent page issues today) — using
+    // it for the derived "archived" bucket would limit results to
+    // archived_at IS NOT NULL and silently hide derive-archived
+    // rows (e.g. individuals whose profile is incomplete).
+    ...(status && status !== "all" ? { status } : {}),
     ...(sourceFilter && sourceFilter !== "all" ? { classification: sourceFilter } : {}),
     ...(formerEmployeeFilter ? { formerEmployee: "true" } : {}),
     ...(hasDriversLicenseFilter ? { hasDriversLicense: "true" } : {}),
@@ -2255,10 +2300,15 @@ export default function TalentPage() {
                 <Filter className="me-2 h-4 w-4" />
                 <SelectValue placeholder={t("statusFilter.all")} />
               </SelectTrigger>
+              {/* Task #252 — five derived display statuses (plus "All").
+                  These map 1:1 to the five badges shown in the table.
+                  Server translates the value into a WHERE on the
+                  shared `DISPLAY_STATUS_SQL` CASE expression so what
+                  the user picks here matches the badges they see. */}
               <SelectContent>
                 <SelectItem value="all">{t("statusFilter.all")}</SelectItem>
-                <SelectItem value="available">{t("statusFilter.available")}</SelectItem>
-                <SelectItem value="inactive">{t("statusFilter.inactive")}</SelectItem>
+                <SelectItem value="completed">{t("statusFilter.completed")}</SelectItem>
+                <SelectItem value="not_activated">{t("statusFilter.not_activated")}</SelectItem>
                 <SelectItem value="hired">{t("statusFilter.hired")}</SelectItem>
                 <SelectItem value="blocked">{t("statusFilter.blocked")}</SelectItem>
                 <SelectItem value="archived">{t("statusFilter.archived")}</SelectItem>
@@ -2548,7 +2598,7 @@ export default function TalentPage() {
                   </TableHeader>
                   <TableBody>
                     {candidates.map((candidate) => {
-                      const displayStatus = (candidate as any).archivedAt ? "archived" : candidate.status;
+                      const displayStatus = readDisplayStatus(candidate);
                       return (
                         <TableRow
                           key={candidate.id}

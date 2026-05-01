@@ -1850,7 +1850,18 @@ export const candidateQuerySchema = z.object({
   // of up to 200 identifiers; cap raw input at 20k chars to avoid
   // pathological payloads while leaving plenty of headroom.
   search: z.string().max(20000).optional(),
-  status: z.enum(["available", "active", "inactive", "blocked", "hired", "awaiting_activation"]).optional(),
+  // Task #252 — accepts both the legacy raw enum values (kept so
+  // any external/scripted callers don't break) and the new derived
+  // display vocabulary used by the talent page filter dropdown
+  // (`completed`, `not_activated`, `archived`). The server's
+  // `buildCandidateOtherConditions` translates derived values into a
+  // WHERE on the shared CASE expression and routes raw values to the
+  // legacy `eq(candidates.status, …)` clause. `hired` and `blocked`
+  // appear in both vocabularies and resolve identically.
+  status: z.enum([
+    "available", "active", "inactive", "blocked", "hired", "awaiting_activation",
+    "completed", "not_activated", "archived",
+  ]).optional(),
   archived: z.enum(["true"]).optional(),
   city: z.string().optional(),
   nationality: z.enum(["saudi", "non_saudi"]).optional(),

@@ -132,8 +132,18 @@ import {
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte, getTableColumns, type SQL } from "drizzle-orm";
 import { parseSearchTokens, looksLikeId, type CandidateSearchMeta } from "@shared/candidate-search";
+import { DISPLAY_STATUS_SQL, type DisplayStatus } from "@shared/candidate-status";
 import { countFilledForEvent, countFilledForEvents, activeWorkforceFilter } from "./headcount";
 import { applyServerIbanFields, applyServerIbanHolderNameFields } from "./lib/iban";
+
+// Task #252 — drop-in SQL fragment that mirrors `computeDisplayStatus`.
+// We embed via `sql.raw` because the body is a static literal (no
+// user-supplied substrings; the column references are the canonical
+// `candidates.<col>` names from the schema). Using `sql.raw` avoids
+// every Drizzle parameter slot, so the planner sees a plain CASE
+// expression and can use the existing single-column indexes on
+// status / archived_at / created_at.
+const DISPLAY_STATUS_EXPR = sql.raw(`(${DISPLAY_STATUS_SQL.trim()})`);
 
 function computeCandidateStatusFromLogin(lastLoginAt: Date | null): "available" | "inactive" {
   if (!lastLoginAt) return "inactive";
@@ -645,19 +655,52 @@ export interface IStorage {
 // companion query can re-use the same non-search filters without
 // drift.
 
+// Task #252 — the new five-value display vocabulary the talent page
+// uses for the status filter. When the request carries one of these
+// values we translate it into a WHERE on the same SQL CASE expression
+// the result rows are projected through, so pagination + count stay
+// exact. The legacy raw-enum values (available, inactive, etc.) are
+// still accepted to keep any third-party / scripted callers working.
+const DERIVED_STATUS_FILTER = new Set<DisplayStatus>([
+  "completed", "not_activated", "hired", "blocked", "archived",
+]);
+
 function buildCandidateOtherConditions(query: Partial<CandidateQuery>): SQL[] {
   const conditions: SQL[] = [];
   const { status, city, nationality, gender } = query;
-  if (status) conditions.push(eq(candidates.status, status as any));
+  if (status) {
+    if (DERIVED_STATUS_FILTER.has(status as DisplayStatus)) {
+      // Derived filter — apply against the CASE expression, NOT the
+      // raw `candidates.status` enum column. The CASE already
+      // accounts for archived_at, so the unconditional
+      // `IS NULL/IS NOT NULL archived_at` clause below is a no-op
+      // for these queries (it never excludes a derived "archived"
+      // row, because that branch sets archived='archived' iff
+      // archived_at IS NOT NULL).
+      conditions.push(sql`${DISPLAY_STATUS_EXPR} = ${status}`);
+    } else {
+      conditions.push(eq(candidates.status, status as any));
+    }
+  }
   if (city) conditions.push(ilike(candidates.city, `%${city}%`));
   if (nationality) conditions.push(eq(candidates.nationality, nationality as any));
   if (gender) conditions.push(eq(candidates.gender, gender as any));
   if ((query as any).classification) {
     conditions.push(eq(candidates.classification, (query as any).classification));
   }
+  // Task #252 — skip the implicit "exclude archived rows" clause when
+  // the caller is filtering by a derived display status. Those derived
+  // values (especially `archived` and `hired`) already encode the
+  // archived_at signal in their CASE expression: `archived` returns
+  // both manually-archived AND derive-archived rows, while `hired`
+  // already excludes manually-archived rows because the CASE checks
+  // archived_at first. Forcing `archived_at IS NULL` here would
+  // wrongly hide manually-archived rows from the Archived filter.
+  const hasDerivedStatusFilter =
+    typeof status === "string" && DERIVED_STATUS_FILTER.has(status as DisplayStatus);
   if ((query as any).archived === "true") {
     conditions.push(isNotNull(candidates.archivedAt));
-  } else {
+  } else if (!hasDerivedStatusFilter) {
     conditions.push(isNull(candidates.archivedAt));
   }
   if ((query as any).region) {
@@ -912,6 +955,13 @@ export class DatabaseStorage implements IStorage {
           workforceSeasonCount: workforceSeasonsSq.as("workforceSeasonCount"),
           completedStints: completedStintsSq.as("completedStints"),
           unpaidSettlements: unpaidSettlementsSq.as("unpaidSettlements"),
+          // Task #252 — derived display status. Computed in SQL via the
+          // shared CASE expression so the value the front-end reads
+          // matches the WHERE clause exactly. The client also runs
+          // `computeDisplayStatus` defensively for any row that
+          // arrives without this field (e.g. legacy callers, or rows
+          // returned by the profile sheet's per-id endpoint).
+          displayStatus: sql<DisplayStatus>`${DISPLAY_STATUS_EXPR}`.as("displayStatus"),
         })
         .from(candidates)
         .where(where)
