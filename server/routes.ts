@@ -10050,14 +10050,15 @@ export async function registerRoutes(
       // `SELECT ... FOR UPDATE` lock on the workforce row, re-checks
       // open pay-run lines INSIDE the same tx, and only writes if the
       // re-check passes. This serializes concurrent PATCH calls on the
-      // same employee. Residual race: an in-flight `processPayRun` tx
-      // that has read `emp.paymentMethod` but not yet inserted lines
-      // can still snapshot the OLD method while this PATCH commits the
-      // new one. Eliminating that requires `processPayRun` to take a
-      // compatible row lock per employee — tracked separately because
-      // it touches the hot payroll path. The window is narrow in
-      // practice (admin-initiated, runs in seconds, both operations
-      // are infrequent on the same employee).
+      // same employee.
+      // Task #275 — `processPayRun` now acquires the same per-employee
+      // row lock before reading `paymentMethod`, so the residual race
+      // (generator reads OLD method, PATCH commits NEW, generator then
+      // inserts a stale line snapshot) is no longer possible: the two
+      // transactions serialize on the workforce row. If the PATCH wins
+      // the lock first, the generator reads the new method; if the
+      // generator wins, the PATCH's open-lines re-check sees the new
+      // pending line and returns 409.
       // Task #189 — `previousMethod` returned from the helper feeds the
       // audit log so the inline history view gets a structured
       // `from → to` payload without parsing free-text descriptions.

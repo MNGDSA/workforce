@@ -4864,9 +4864,12 @@ export class DatabaseStorage implements IStorage {
 
       // Re-run the open-lines check INSIDE the locked tx. This catches
       // any pay-run line that was committed between the route-level
-      // pre-check and now. The check still races with an in-flight
-      // (uncommitted) processPayRun tx that hasn't yet inserted lines
-      // — see the route comment for the residual window.
+      // pre-check and now. Task #275 closed the previous residual race
+      // with an in-flight `processPayRun` tx by having the generator
+      // acquire the same per-employee row lock before reading
+      // `paymentMethod` — the two paths now serialize on the workforce
+      // row, so once we hold this lock, no concurrent generator can
+      // insert a stale line snapshot for this employee.
       const openLines: OpenPayRunLineSummary[] = await tx
         .select({
           lineId: payRunLines.id,
@@ -5086,59 +5089,99 @@ export class DatabaseStorage implements IStorage {
       return empStart <= payRun.dateTo && empEnd >= payRun.dateFrom;
     });
 
-    const lines: any[] = [];
+    // Calculate payroll outside the tx (read-only, independent of payment
+    // method). The locked re-read inside the tx only needs to refresh
+    // `paymentMethod` so the inserted line snapshot matches whatever the
+    // employee profile holds at commit time.
+    const calcs = new Map<string, Awaited<ReturnType<typeof this.calculatePayroll>>>();
     for (const emp of eligibleEmployees) {
-      const calc = await this.calculatePayroll(emp.id, payRun.dateFrom, payRun.dateTo);
-
-      const lineData: any = {
-        payRunId,
-        workforceId: emp.id,
-        candidateId: emp.candidateId,
-        employeeNumber: emp.employeeNumber,
-        effectiveDateFrom: emp.startDate > payRun.dateFrom ? emp.startDate : payRun.dateFrom,
-        effectiveDateTo: emp.endDate && emp.endDate < payRun.dateTo ? emp.endDate : payRun.dateTo,
-        baseSalary: emp.salary ?? "0",
-        totalScheduledMinutes: calc.totalScheduledMinutes,
-        totalWorkedMinutes: calc.totalWorkedMinutes,
-        daysWorked: calc.daysWorked,
-        excusedDays: calc.excusedDays,
-        absentDays: calc.absentDays,
-        lateMinutes: calc.lateMinutes,
-        adjustedMinutes: calc.adjustedMinutes,
-        effectiveMinutes: calc.effectiveMinutes,
-        perMinuteRate: String(calc.perMinuteRate),
-        grossEarned: String(calc.grossEarned),
-        manualAdditions: [],
-        manualDeductions: [],
-        totalManualAdditions: "0",
-        totalManualDeductions: "0",
-        absentDeduction: String(calc.absentDeduction),
-        lateDeduction: String(calc.lateDeduction),
-        assetDeductions: String(calc.assetDeductions),
-        totalDeductions: String(calc.totalDeductions),
-        netPayable: String(calc.netPayable),
-        paymentMethod: emp.paymentMethod ?? "bank_transfer",
-      };
-
-      if (payRun.mode === "split" && payRun.splitPercentage) {
-        const pct = payRun.splitPercentage / 100;
-        const t1 = Math.round(calc.netPayable * pct * 100) / 100;
-        const t2 = Math.round((calc.netPayable - t1) * 100) / 100;
-        lineData.tranche1Amount = String(t1);
-        lineData.tranche2Amount = String(t2);
-        lineData.tranche1Status = "pending";
-        const offboardingComplete = emp.offboardingStatus === "completed";
-        lineData.tranche2Status = offboardingComplete ? "pending" : "blocked";
-        lineData.tranche2BlockedReason = offboardingComplete ? null : "Offboarding not complete";
-      } else {
-        lineData.tranche1Amount = String(calc.netPayable);
-        lineData.tranche1Status = "pending";
-      }
-
-      lines.push(lineData);
+      calcs.set(emp.id, await this.calculatePayroll(emp.id, payRun.dateFrom, payRun.dateTo));
     }
 
-    return await db.transaction(async (tx) => {
+    return await db.transaction(async (tx): Promise<{ linesCreated: number }> => {
+      // Task #275 — close the last race window with
+      // `updateWorkforcePaymentMethodGuarded`. Acquire `SELECT ... FOR
+      // UPDATE` row locks on every eligible employee BEFORE reading
+      // their `paymentMethod`, so the line snapshot we insert cannot
+      // disagree with a payment-method change that was racing us:
+      //   * If the PATCH tx is in flight, our SELECT waits until it
+      //     commits, then we read the NEW method.
+      //   * If we hold the lock first, the PATCH tx waits, then its
+      //     re-check sees our newly-inserted pending line and returns
+      //     409 instead of silently writing a mismatched method.
+      // `orderBy(workforce.id)` gives a deterministic lock order so
+      // two concurrent `processPayRun` calls with overlapping
+      // employees cannot deadlock.
+      const eligibleIds = eligibleEmployees.map((e) => e.id);
+      const lockedRows = eligibleIds.length > 0
+        ? await tx
+            .select({ id: workforce.id, paymentMethod: workforce.paymentMethod })
+            .from(workforce)
+            .where(inArray(workforce.id, eligibleIds))
+            .orderBy(workforce.id)
+            .for("update")
+        : [];
+      const lockedMethodById = new Map<string, string>();
+      for (const row of lockedRows) {
+        lockedMethodById.set(row.id, row.paymentMethod ?? "bank_transfer");
+      }
+
+      const lines: any[] = [];
+      for (const emp of eligibleEmployees) {
+        const calc = calcs.get(emp.id)!;
+        // Prefer the locked snapshot; fall back to the pre-tx read only
+        // if the row vanished (e.g. hard-deleted between the unlocked
+        // SELECT and the locked one — extremely unlikely but defensive).
+        const paymentMethod = lockedMethodById.get(emp.id) ?? emp.paymentMethod ?? "bank_transfer";
+
+        const lineData: any = {
+          payRunId,
+          workforceId: emp.id,
+          candidateId: emp.candidateId,
+          employeeNumber: emp.employeeNumber,
+          effectiveDateFrom: emp.startDate > payRun.dateFrom ? emp.startDate : payRun.dateFrom,
+          effectiveDateTo: emp.endDate && emp.endDate < payRun.dateTo ? emp.endDate : payRun.dateTo,
+          baseSalary: emp.salary ?? "0",
+          totalScheduledMinutes: calc.totalScheduledMinutes,
+          totalWorkedMinutes: calc.totalWorkedMinutes,
+          daysWorked: calc.daysWorked,
+          excusedDays: calc.excusedDays,
+          absentDays: calc.absentDays,
+          lateMinutes: calc.lateMinutes,
+          adjustedMinutes: calc.adjustedMinutes,
+          effectiveMinutes: calc.effectiveMinutes,
+          perMinuteRate: String(calc.perMinuteRate),
+          grossEarned: String(calc.grossEarned),
+          manualAdditions: [],
+          manualDeductions: [],
+          totalManualAdditions: "0",
+          totalManualDeductions: "0",
+          absentDeduction: String(calc.absentDeduction),
+          lateDeduction: String(calc.lateDeduction),
+          assetDeductions: String(calc.assetDeductions),
+          totalDeductions: String(calc.totalDeductions),
+          netPayable: String(calc.netPayable),
+          paymentMethod,
+        };
+
+        if (payRun.mode === "split" && payRun.splitPercentage) {
+          const pct = payRun.splitPercentage / 100;
+          const t1 = Math.round(calc.netPayable * pct * 100) / 100;
+          const t2 = Math.round((calc.netPayable - t1) * 100) / 100;
+          lineData.tranche1Amount = String(t1);
+          lineData.tranche2Amount = String(t2);
+          lineData.tranche1Status = "pending";
+          const offboardingComplete = emp.offboardingStatus === "completed";
+          lineData.tranche2Status = offboardingComplete ? "pending" : "blocked";
+          lineData.tranche2BlockedReason = offboardingComplete ? null : "Offboarding not complete";
+        } else {
+          lineData.tranche1Amount = String(calc.netPayable);
+          lineData.tranche1Status = "pending";
+        }
+
+        lines.push(lineData);
+      }
+
       if (lines.length > 0) {
         await tx.insert(payRunLines).values(lines);
       }
