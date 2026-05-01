@@ -10038,21 +10038,39 @@ export async function registerRoutes(
       if (paymentMethod === "cash" && !reason) {
         return res.status(400).json({ error: tr(req, "error.cashReasonRequired") });
       }
-      // Task #189 — capture the previous method so the audit log carries a
-      // structured `from → to` payload that the inline history view can
-      // render without parsing free-text descriptions.
-      // Task #192 — fix runtime crash: storage exposes `getWorkforceEmployee`,
-      // not `getWorkforceRecord`. The old call would throw a TypeError on
-      // every payment-method change in production.
-      const previous = await storage.getWorkforceEmployee(req.params.id);
-      const previousMethod = previous?.paymentMethod ?? "bank_transfer";
-      const updated = await storage.updateWorkforceRecord(req.params.id, {
+      // Task #274 — atomic guard + write. The storage helper takes a
+      // `SELECT ... FOR UPDATE` lock on the workforce row, re-checks
+      // open pay-run lines INSIDE the same tx, and only writes if the
+      // re-check passes. This serializes concurrent PATCH calls on the
+      // same employee. Residual race: an in-flight `processPayRun` tx
+      // that has read `emp.paymentMethod` but not yet inserted lines
+      // can still snapshot the OLD method while this PATCH commits the
+      // new one. Eliminating that requires `processPayRun` to take a
+      // compatible row lock per employee — tracked separately because
+      // it touches the hot payroll path. The window is narrow in
+      // practice (admin-initiated, runs in seconds, both operations
+      // are infrequent on the same employee).
+      // Task #189 — `previousMethod` returned from the helper feeds the
+      // audit log so the inline history view gets a structured
+      // `from → to` payload without parsing free-text descriptions.
+      const result = await storage.updateWorkforcePaymentMethodGuarded(req.params.id, {
         paymentMethod,
         paymentMethodReason: paymentMethod === "cash" ? reason : null,
         paymentMethodSetBy: userId,
         paymentMethodSetAt: new Date() as any,
       } as any);
-      if (!updated) return res.status(404).json({ error: tr(req, "error.employeeNotFound") });
+      if (!result.ok && (result as any).blocked) {
+        const blocked = result as Extract<typeof result, { blocked: true }>;
+        return res.status(409).json({
+          error: tr(req, "error.paymentMethodFlipBlocked"),
+          code: "OPEN_PAY_RUN_LINES",
+          openLines: blocked.openLines,
+        });
+      }
+      if (!result.ok) {
+        return res.status(404).json({ error: tr(req, "error.employeeNotFound") });
+      }
+      const { record: updated, previousMethod } = result;
       await logAudit(req, {
         action: "update_payment_method",
         entityType: "workforce",

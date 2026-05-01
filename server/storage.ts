@@ -650,6 +650,47 @@ export interface IStorage {
   getPayRunLines(payRunId: string): Promise<PayRunLine[]>;
   getPayRunLine(id: string): Promise<PayRunLine | undefined>;
   updatePayRunLine(id: string, data: Partial<PayRunLine>): Promise<PayRunLine | undefined>;
+  // Task #274 — used to guard payment-method flips while the employee
+  // still has unpaid lines on a non-completed pay run. We treat a line
+  // as "open" when its parent run is not yet completed AND at least
+  // one tranche is still pending.
+  getOpenPayRunLinesForWorkforce(workforceId: string): Promise<Array<{
+    lineId: string;
+    payRunId: string;
+    payRunName: string;
+    payRunStatus: string;
+    tranche1Status: string | null;
+    tranche2Status: string | null;
+    paymentMethod: string;
+  }>>;
+  // Task #274 — transactional PATCH used by the payment-method route.
+  // Acquires `SELECT ... FOR UPDATE` on the workforce row, re-runs the
+  // open-lines check inside the same tx, and only writes if the lock
+  // confirms no open lines exist. Returns either the updated record or
+  // a `{ blocked: true, openLines }` payload that the route surfaces as
+  // 409. This serializes concurrent PATCH calls on the same employee
+  // and narrows (but does not fully close) the race with concurrent
+  // pay-run generation — the residual window is documented in the
+  // route comment.
+  updateWorkforcePaymentMethodGuarded(
+    workforceId: string,
+    update: Partial<InsertWorkforce>,
+  ): Promise<
+    | { ok: true; record: WorkforceRecord; previousMethod: string }
+    | {
+        ok: false;
+        blocked: true;
+        openLines: Array<{
+          payRunId: string;
+          payRunName: string;
+          payRunStatus: string;
+          tranche1Status: string | null;
+          tranche2Status: string | null;
+          paymentMethod: string;
+        }>;
+      }
+    | { ok: false; blocked: false; notFound: true }
+  >;
 
   // Payroll Calculation Engine
   calculatePayroll(workforceId: string, dateFrom: string, dateTo: string): Promise<{
@@ -4796,6 +4837,107 @@ export class DatabaseStorage implements IStorage {
   async updatePayRunLine(id: string, data: Partial<PayRunLine>): Promise<PayRunLine | undefined> {
     const [row] = await db.update(payRunLines).set(data).where(eq(payRunLines.id, id)).returning();
     return row;
+  }
+
+  // Task #274 — transactional payment-method update with open-lines
+  // re-check. See IStorage interface for the full rationale.
+  async updateWorkforcePaymentMethodGuarded(
+    workforceId: string,
+    update: Partial<InsertWorkforce>,
+  ) {
+    return await db.transaction(async (tx) => {
+      // Lock the workforce row first so concurrent PATCH calls on the
+      // same employee serialize. tx.execute returns the locked row;
+      // we use the typed select after the lock for the actual data.
+      const lockResult = await tx.execute(
+        sql`SELECT id, payment_method FROM workforce WHERE id = ${workforceId} FOR UPDATE`,
+      );
+      const lockRow = (lockResult as any).rows?.[0];
+      if (!lockRow) {
+        return { ok: false as const, blocked: false as const, notFound: true as const };
+      }
+      const previousMethod: string = lockRow.payment_method ?? "bank_transfer";
+
+      // Re-run the open-lines check INSIDE the locked tx. This catches
+      // any pay-run line that was committed between the route-level
+      // pre-check and now. The check still races with an in-flight
+      // (uncommitted) processPayRun tx that hasn't yet inserted lines
+      // — see the route comment for the residual window.
+      const openLines = await tx
+        .select({
+          payRunId: payRuns.id,
+          payRunName: payRuns.name,
+          payRunStatus: payRuns.status,
+          tranche1Status: payRunLines.tranche1Status,
+          tranche2Status: payRunLines.tranche2Status,
+          paymentMethod: payRunLines.paymentMethod,
+        })
+        .from(payRunLines)
+        .innerJoin(payRuns, eq(payRunLines.payRunId, payRuns.id))
+        .where(
+          and(
+            eq(payRunLines.workforceId, workforceId),
+            not(eq(payRuns.status, "completed")),
+            or(
+              eq(payRunLines.tranche1Status, "pending"),
+              eq(payRunLines.tranche2Status, "pending"),
+            ),
+          ),
+        )
+        .orderBy(desc(payRuns.createdAt));
+
+      const newMethod = update.paymentMethod ?? previousMethod;
+      if (newMethod !== previousMethod && openLines.length > 0) {
+        return {
+          ok: false as const,
+          blocked: true as const,
+          openLines,
+        };
+      }
+
+      const [record] = await tx
+        .update(workforce)
+        .set(update)
+        .where(eq(workforce.id, workforceId))
+        .returning();
+      if (!record) {
+        return { ok: false as const, blocked: false as const, notFound: true as const };
+      }
+      return { ok: true as const, record, previousMethod };
+    });
+  }
+
+  // Task #274 — find lines belonging to non-completed pay runs where at
+  // least one tranche is still pending. Used by the payment-method PATCH
+  // route to block mid-cycle method flips that would desync `payRunLines.
+  // paymentMethod` (snapshotted at run generation) from the employee's
+  // new method. tranche2Status is nullable for "full" runs (single
+  // tranche), so the OR guards both modes.
+  async getOpenPayRunLinesForWorkforce(workforceId: string) {
+    const rows = await db
+      .select({
+        lineId: payRunLines.id,
+        payRunId: payRuns.id,
+        payRunName: payRuns.name,
+        payRunStatus: payRuns.status,
+        tranche1Status: payRunLines.tranche1Status,
+        tranche2Status: payRunLines.tranche2Status,
+        paymentMethod: payRunLines.paymentMethod,
+      })
+      .from(payRunLines)
+      .innerJoin(payRuns, eq(payRunLines.payRunId, payRuns.id))
+      .where(
+        and(
+          eq(payRunLines.workforceId, workforceId),
+          not(eq(payRuns.status, "completed")),
+          or(
+            eq(payRunLines.tranche1Status, "pending"),
+            eq(payRunLines.tranche2Status, "pending"),
+          ),
+        ),
+      )
+      .orderBy(desc(payRuns.createdAt));
+    return rows;
   }
 
   // ─── Payroll Calculation Engine ─────────────────────────────────────────────

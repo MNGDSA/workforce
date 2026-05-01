@@ -1987,6 +1987,40 @@ type PaymentMethodHistoryRow = {
   description: string;
 };
 
+// Task #274 — shape of the 409 payload returned by the PATCH route when
+// the employee still has unpaid pay-run lines. Used by PaymentMethodToggle
+// to render an inline list of blocking runs instead of a generic toast.
+type PaymentMethodFlipBlocked = {
+  error: string;
+  code: "OPEN_PAY_RUN_LINES";
+  openLines: Array<{
+    payRunId: string;
+    payRunName: string;
+    payRunStatus: string;
+    tranche1Status: string | null;
+    tranche2Status: string | null;
+    paymentMethod: string;
+  }>;
+};
+
+// apiRequest throws `${status}: ${text}`; pull the JSON body back out
+// when the server returned a structured 409 so the UI can render it
+// inline. Returns null if the message wasn't a structured flip-block.
+function parseFlipBlocked(message: string): PaymentMethodFlipBlocked | null {
+  if (!message.startsWith("409:")) return null;
+  const jsonStart = message.indexOf("{");
+  if (jsonStart === -1) return null;
+  try {
+    const parsed = JSON.parse(message.slice(jsonStart));
+    if (parsed && parsed.code === "OPEN_PAY_RUN_LINES" && Array.isArray(parsed.openLines)) {
+      return parsed as PaymentMethodFlipBlocked;
+    }
+  } catch {
+    // Not JSON — fall through and let the caller show the raw message.
+  }
+  return null;
+}
+
 function PaymentMethodToggle({
   employee,
   onEmployeeRefreshed,
@@ -2009,6 +2043,11 @@ function PaymentMethodToggle({
   // so it can outlive the mutation's own lifecycle (~2s after success).
   const [justSavedAt, setJustSavedAt] = useState<number | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Task #274 — when the server returns 409 with an OPEN_PAY_RUN_LINES
+  // payload we surface it as an inline panel listing each blocking run
+  // instead of a one-line toast. Cleared on dismiss / employee swap /
+  // next successful save.
+  const [flipBlocked, setFlipBlocked] = useState<PaymentMethodFlipBlocked | null>(null);
 
   // Reset transient UI when the parent swaps to a different employee
   // so a half-open confirm panel from employee A doesn't leak into
@@ -2018,6 +2057,7 @@ function PaymentMethodToggle({
     setReason("");
     setJustSavedAt(null);
     setHistoryOpen(false);
+    setFlipBlocked(null);
   }, [employee.id]);
 
   // Auto-clear the green check after 2s. Keying on the timestamp lets
@@ -2042,9 +2082,20 @@ function PaymentMethodToggle({
       toast({ title: t("toast.paymentUpdated") });
       setPendingSwitch(null);
       setReason("");
+      setFlipBlocked(null);
       setJustSavedAt(Date.now());
     },
-    onError: (e: any) => toast({ title: t("toast.error"), description: e.message, variant: "destructive" }),
+    onError: (e: any) => {
+      // Task #274 — surface the structured flip-block payload inline
+      // in the panel instead of a generic destructive toast. Other
+      // errors (400, 5xx) still fall through to the toast path.
+      const blocked = parseFlipBlocked(String(e?.message ?? ""));
+      if (blocked) {
+        setFlipBlocked(blocked);
+        return;
+      }
+      toast({ title: t("toast.error"), description: e.message, variant: "destructive" });
+    },
   });
 
   const { data: history = [], isLoading: historyLoading } = useQuery<PaymentMethodHistoryRow[]>({
@@ -2075,7 +2126,7 @@ function PaymentMethodToggle({
     <div className="space-y-2">
       <div className="flex gap-2 items-center">
         <button
-          onClick={() => { if (current !== "bank_transfer") setPendingSwitch("bank_transfer"); }}
+          onClick={() => { if (current !== "bank_transfer") { setFlipBlocked(null); setPendingSwitch("bank_transfer"); } }}
           disabled={toggleMut.isPending}
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-sm border text-xs font-medium transition-colors ${
             current === "bank_transfer"
@@ -2087,7 +2138,7 @@ function PaymentMethodToggle({
           <Landmark className="h-3.5 w-3.5" /> {t("dialog.payment.bankTransfer")}
         </button>
         <button
-          onClick={() => { if (current !== "cash") setPendingSwitch("cash"); }}
+          onClick={() => { if (current !== "cash") { setFlipBlocked(null); setPendingSwitch("cash"); } }}
           disabled={toggleMut.isPending}
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-sm border text-xs font-medium transition-colors ${
             current === "cash"
@@ -2165,6 +2216,43 @@ function PaymentMethodToggle({
               data-testid="button-cancel-bank"
             >
               {t("dialog.actions.cancel")}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {flipBlocked && (
+        <div
+          className="space-y-2 p-3 bg-red-500/5 border border-red-500/30 rounded-sm"
+          data-testid="panel-payment-flip-blocked"
+        >
+          <div className="flex items-start gap-2 text-red-300 text-[11px]">
+            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <div className="space-y-1">
+              <p className="font-semibold" data-testid="text-flip-blocked-title">
+                {t("dialog.payment.flipBlockedTitle")}
+              </p>
+              <p data-testid="text-flip-blocked-body">
+                {t("dialog.payment.flipBlockedBody", { n: flipBlocked.openLines.length, count: flipBlocked.openLines.length })}
+              </p>
+            </div>
+          </div>
+          <ul className="space-y-1 ps-5 list-disc text-[10px] text-red-200/80">
+            {flipBlocked.openLines.map((line) => (
+              <li key={line.payRunId} data-testid={`row-flip-blocked-${line.payRunId}`}>
+                {t("dialog.payment.flipBlockedRun", { name: line.payRunName, status: line.payRunStatus })}
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-xs text-zinc-400"
+              onClick={() => setFlipBlocked(null)}
+              data-testid="button-dismiss-flip-blocked"
+            >
+              {t("dialog.payment.flipBlockedDismiss")}
             </Button>
           </div>
         </div>
