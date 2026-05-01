@@ -300,6 +300,16 @@ export interface IStorage {
   bulkUnarchiveCandidates(ids: string[]): Promise<number>;
   exportCandidates(query?: Partial<CandidateQuery>): Promise<{ headers: string[]; rows: any[][]; total: number }>;
   getCandidateStats(): Promise<CandidateStats>;
+  // Task #261 — per-reason headcount inside the Archived bucket so
+  // admins can triage at a glance without flipping the reason filter
+  // four times. Returns a count for each ARCHIVED_REASONS value
+  // computed via the same ARCHIVED_REASON_SQL CASE the table rows
+  // are projected through, so the chip totals always agree with what
+  // the admin sees if they pick that reason in the dropdown. Honours
+  // every other active filter (search, classification, document
+  // toggles, etc.) but ignores any incoming `archivedReason` so the
+  // four counts always span the full Archived population.
+  getArchivedReasonCounts(query: Partial<CandidateQuery>): Promise<Record<ArchivedReason, number>>;
 
   // Events
   getEvents(params?: { includeArchived?: boolean }): Promise<Event[]>;
@@ -1492,6 +1502,58 @@ export class DatabaseStorage implements IStorage {
       archived: byBucket.archived,
       avgRating: Number(Number(agg.avgRating).toFixed(2)),
     };
+  }
+
+  async getArchivedReasonCounts(
+    query: Partial<CandidateQuery>,
+  ): Promise<Record<ArchivedReason, number>> {
+    // Task #261 — drive the WHERE off the same `buildCandidateOtherConditions`
+    // the table query uses, so the per-reason chips always count exactly the
+    // rows the admin is looking at. We force `status="archived"` (the chips
+    // only render in that bucket) and strip any incoming `archivedReason`
+    // so the four counts always span the full Archived population — picking
+    // a reason in the dropdown must not cause every chip except the picked
+    // one to drop to zero.
+    const filteredQuery = {
+      ...query,
+      status: "archived",
+      archivedReason: undefined,
+    } as Partial<CandidateQuery>;
+
+    const otherConditions = buildCandidateOtherConditions(filteredQuery);
+    const parsed = parseSearchTokens(query.search);
+    const searchCondition = buildCandidateSearchCondition(parsed);
+    const allConditions = searchCondition
+      ? [...otherConditions, searchCondition]
+      : otherConditions;
+    const where = allConditions.length > 0 ? and(...allConditions) : undefined;
+
+    const rows = await db
+      .select({
+        reason: sql<ArchivedReason | null>`${ARCHIVED_REASON_EXPR}`.as("reason"),
+        cnt: count(),
+      })
+      .from(candidates)
+      .where(where)
+      .groupBy(sql`${ARCHIVED_REASON_EXPR}`);
+
+    // Initialise every key so a bucket with zero matches still appears
+    // in the response — the dropdown renders all four options regardless
+    // of population, and "(0)" is a useful "nothing to triage here" cue
+    // rather than missing data.
+    const result: Record<ArchivedReason, number> = {
+      inactive_one_year: 0,
+      incomplete_profile: 0,
+      missed_activation: 0,
+      manually_archived: 0,
+    };
+    for (const r of rows) {
+      const key = r.reason as ArchivedReason | null;
+      if (key && key in result) {
+        result[key] = Number(r.cnt);
+      }
+    }
+    return result;
   }
 
   // ─── Events ─────────────────────────────────────────────────────────────────

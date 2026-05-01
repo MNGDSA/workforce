@@ -1935,12 +1935,50 @@ export default function TalentPage() {
     queryFn: () => apiRequest("GET", "/api/candidates/stats").then(r => r.json()),
   });
 
+  // Task #261 — per-reason headcount inside the Archived bucket. Reuses
+  // the same filter set as the table query (search, classification,
+  // doc toggles, …) so the chip totals always reflect what the admin
+  // is currently looking at; the server forces status="archived" and
+  // ignores any incoming archivedReason so the four counts always
+  // span the full Archived population. Only fired while the parent
+  // Status filter is "archived" — every other status renders zero
+  // archived rows by definition, so the round-trip would be wasted.
+  const archivedReasonStatsParams = useMemo(() => {
+    const p = new URLSearchParams();
+    if (debouncedSearch) p.set("search", debouncedSearch);
+    if (sourceFilter && sourceFilter !== "all") p.set("classification", sourceFilter);
+    if (formerEmployeeFilter) p.set("formerEmployee", "true");
+    if (hasDriversLicenseFilter) p.set("hasDriversLicense", "true");
+    if (hasVaccinationReportFilter) p.set("hasVaccinationReport", "true");
+    return p.toString();
+  }, [
+    debouncedSearch,
+    sourceFilter,
+    formerEmployeeFilter,
+    hasDriversLicenseFilter,
+    hasVaccinationReportFilter,
+  ]);
+
+  const { data: archivedReasonStats } = useQuery<Record<ArchivedReason, number>>({
+    queryKey: [
+      "/api/candidates/archived-reason-stats",
+      archivedReasonStatsParams,
+    ],
+    queryFn: () =>
+      apiRequest(
+        "GET",
+        `/api/candidates/archived-reason-stats${archivedReasonStatsParams ? `?${archivedReasonStatsParams}` : ""}`,
+      ).then(r => r.json()),
+    enabled: status === "archived",
+  });
+
   const updateStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       apiRequest("PATCH", `/api/candidates/${id}`, { status }).then(r => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates/archived-reason-stats"] });
     },
   });
 
@@ -1949,6 +1987,7 @@ export default function TalentPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates/archived-reason-stats"] });
       toast({ title: t("toast.candidateArchived") });
     },
     onError: () => toast({ title: t("toast.archiveFailed"), variant: "destructive" }),
@@ -1959,6 +1998,7 @@ export default function TalentPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates/archived-reason-stats"] });
       toast({ title: t("toast.candidateRestored") });
     },
     onError: () => toast({ title: t("toast.restoreFailed"), variant: "destructive" }),
@@ -1978,6 +2018,7 @@ export default function TalentPage() {
       setBulkConfirmAction(null);
       queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates/archived-reason-stats"] });
     },
     onError: () => {
       toast({ title: t("toast.bulkActionFailed"), variant: "destructive" });
@@ -2057,6 +2098,7 @@ export default function TalentPage() {
       toast({ title: t("smpToast.reclassified") });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates/archived-reason-stats"] });
     },
     onError: (err: any) => {
       const msg = err?.message?.includes("blocker") || err?.message?.includes("pipeline")
@@ -2139,6 +2181,7 @@ export default function TalentPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates/archived-reason-stats"] });
 
       if (data.mode === "smp" || data.mode === "mixed") {
         const smp = data.smp;
@@ -2582,11 +2625,34 @@ export default function TalentPage() {
                   <SelectValue placeholder={t("archivedReasonFilter.all")} />
                 </SelectTrigger>
                 <SelectContent>
+                  {/* Task #261 — render the per-reason headcount inline
+                      ("Missed activation (240)") so admins can triage at
+                      a glance without flipping the filter four times.
+                      Counts respect the other active filters (search,
+                      classification, doc toggles) so the four numbers
+                      always sum to the table's archived headcount. The
+                      "All" option intentionally has no count: it adds up
+                      the four below it and would just be visual noise.
+                      "—" is shown while the first response is in flight. */}
                   <SelectItem value="all">{t("archivedReasonFilter.all")}</SelectItem>
-                  <SelectItem value="inactive_one_year">{t("archivedReasonFilter.inactive_one_year")}</SelectItem>
-                  <SelectItem value="incomplete_profile">{t("archivedReasonFilter.incomplete_profile")}</SelectItem>
-                  <SelectItem value="missed_activation">{t("archivedReasonFilter.missed_activation")}</SelectItem>
-                  <SelectItem value="manually_archived">{t("archivedReasonFilter.manually_archived")}</SelectItem>
+                  {(["inactive_one_year", "incomplete_profile", "missed_activation", "manually_archived"] as const).map((reason) => {
+                    const cnt = archivedReasonStats?.[reason];
+                    return (
+                      <SelectItem
+                        key={reason}
+                        value={reason}
+                        data-testid={`option-archived-reason-${reason}`}
+                      >
+                        <span>{t(`archivedReasonFilter.${reason}` as any)}</span>
+                        <span
+                          className="ms-2 text-xs text-muted-foreground tabular-nums"
+                          data-testid={`count-archived-reason-${reason}`}
+                        >
+                          ({cnt != null ? formatNumber(cnt) : "—"})
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             )}

@@ -2185,6 +2185,24 @@ export async function registerRoutes(
     }
   });
 
+  // Task #261 — per-reason headcount inside the Archived bucket so admins
+  // can triage at a glance ("we have 240 missed-activation rows worth
+  // re-issuing right now") without flipping the reason filter four times.
+  // Accepts the same query shape as /api/candidates so the chips honour
+  // the active search/classification/document filters; storage forces
+  // status="archived" and ignores any incoming archivedReason so the four
+  // counts always span the full Archived population.
+  app.get("/api/candidates/archived-reason-stats", requirePermission("candidates:read"), async (req: Request, res: Response) => {
+    try {
+      const parsed = candidateQuerySchema.partial().parse(req.query);
+      const query = attachDocumentAvailabilityFlags(parsed, req.query);
+      const counts = await storage.getArchivedReasonCounts(query);
+      return res.json(counts);
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   app.get("/api/candidates/:id/contract-history", requireAuth, async (req: Request, res: Response) => {
     try {
       const isAdmin = req.authIsSuperAdmin || req.authPermissions?.has("candidates:read");
