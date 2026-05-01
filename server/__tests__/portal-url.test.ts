@@ -8,6 +8,7 @@ import { describe, it, beforeEach, afterEach } from "node:test";
 
 import { getPortalBaseUrl, PortalBaseUrlNotConfiguredError } from "../lib/portal-url";
 import { renderReminderTemplate } from "../onboarding-reminders";
+import { trL } from "../i18n";
 import type { db as DbReal } from "../db";
 
 // ── Mock tx ────────────────────────────────────────────────────────────────
@@ -232,6 +233,27 @@ describe("getPortalBaseUrl", () => {
       assert.ok(!rendered.includes("/candidate/onboarding"), `must not append /candidate/onboarding, got: ${rendered}`);
       assert.ok(!rendered.includes("/login"), `must not append /login, got: ${rendered}`);
     });
+
+    // Re-engagement template coverage: the route at
+    // POST /api/candidates/re-engagement-sms calls
+    // `trL(locale, "sms.reengagement", { link: portalUrl })`. Pin
+    // the substitution at the i18n level — same fix surface as the
+    // reminder template, just exercised through trL instead of
+    // renderReminderTemplate.
+    for (const locale of ["en", "ar"] as const) {
+      it(`rendered re-engagement SMS contains bare base URL with no /login or /candidate suffix (${locale})`, async () => {
+        const baseUrl = await getPortalBaseUrl(mockTx("https://workforce.example.com/"));
+        const rendered = trL(locale, "sms.reengagement", { link: baseUrl });
+        assert.ok(rendered.includes(baseUrl), `${locale} rendered must contain bare base URL ${baseUrl}, got: ${rendered}`);
+        assert.ok(!rendered.includes(`${baseUrl}/login`), `${locale} rendered leaked /login: ${rendered}`);
+        assert.ok(!rendered.includes(`${baseUrl}/candidate`), `${locale} rendered leaked /candidate: ${rendered}`);
+        // Exactly one URL occurrence guards against accidental
+        // double-substitution in the template.
+        const pat = new RegExp(baseUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
+        const occurrences = rendered.match(pat)?.length ?? 0;
+        assert.equal(occurrences, 1, `${locale} expected exactly one URL occurrence, got ${occurrences}: ${rendered}`);
+      });
+    }
   });
 
   describe("no hard-coded production hostname", () => {
