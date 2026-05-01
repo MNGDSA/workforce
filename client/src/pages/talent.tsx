@@ -1941,9 +1941,30 @@ export default function TalentPage() {
 
   const searchMeta: CandidateSearchMeta | undefined = data?.searchMeta;
 
+  // Task #265 — both stats queries below run COUNT aggregations that
+  // are expensive on a 70k-row tenant. Two safeguards keep them from
+  // being noisy without changing user-visible behaviour:
+  //   1. `staleTime` — within the window we treat any cached response
+  //      for the same key as fresh, so rapid toggle-spam (e.g. flipping
+  //      a chip on/off, status round-trips) reuses the previous
+  //      aggregation instead of re-firing it. Real data changes still
+  //      invalidate the cache via the mutation handlers below
+  //      (updateStatus / archiveMutation / restoreMutation), so chip
+  //      counts stay correct after any actual write.
+  //   2. `placeholderData: (prev) => prev` — when the query key DOES
+  //      change (filter input, search debounce settling) we hold the
+  //      last counts on screen while the new request resolves, instead
+  //      of flashing chips back to `undefined → 0`.
+  // Search input is already debounced (300 ms via `debouncedSearch`)
+  // so a multi-ID paste fires at most one aggregation per pause; do
+  // not undo this without checking the multi-ID paste flow on a large
+  // tenant.
+  const STATS_STALE_MS = 1_500;
   const { data: statsData } = useQuery({
     queryKey: ["/api/candidates/stats"],
     queryFn: () => apiRequest("GET", "/api/candidates/stats").then(r => r.json()),
+    staleTime: STATS_STALE_MS,
+    placeholderData: (prev) => prev,
   });
 
   // Task #261 — per-reason headcount inside the Archived bucket. Reuses
@@ -1981,6 +2002,10 @@ export default function TalentPage() {
         `/api/candidates/archived-reason-stats${archivedReasonStatsParams ? `?${archivedReasonStatsParams}` : ""}`,
       ).then(r => r.json()),
     enabled: status === "archived",
+    // Task #265 — see the rationale block above the /stats query for
+    // why we both cache and keep-previous on this expensive aggregation.
+    staleTime: STATS_STALE_MS,
+    placeholderData: (prev) => prev,
   });
 
   const updateStatus = useMutation({
