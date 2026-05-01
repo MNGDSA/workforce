@@ -115,6 +115,7 @@ import { signAuthToken, verifyAuthToken } from "./auth-token";
 // Task #85 — canonical mobile error codes + HMAC submission tokens.
 import { MobileErrorCodes, mobileError } from "./lib/mobile-error-codes";
 import { IbanValidationError, IbanHolderNameValidationError, applyServerIbanFields } from "./lib/iban";
+import { mergeWithLegacyFallback, type LocalizedCopy } from "./lib/legal-copy";
 import {
   issueSubmissionToken,
   verifySubmissionToken,
@@ -1855,17 +1856,44 @@ export async function registerRoutes(
   });
 
   // ─── System Settings (public — no auth) ──────────────────────────────────
+  //
+  // Privacy policy and terms & conditions are stored as separate AR / EN
+  // copy in `privacy_policy_ar`, `privacy_policy_en`, `terms_conditions_ar`,
+  // `terms_conditions_en`. The legacy combined keys `privacy_policy` and
+  // `terms_conditions` (where operators historically pasted both languages
+  // joined by `\n---\n`) are read as a fallback when the per-locale key is
+  // empty: each `---`-separated segment is bucketed into AR or EN by the
+  // first 32 non-markdown chars. Operators editing in the new dual-textarea
+  // settings UI will write the new keys directly; legacy data keeps
+  // working without manual migration.
+  //
+  // The UI picks AR or EN based on the user's active i18n locale, so each
+  // language's audience sees only their own copy — never the combined dump.
+  // Splitting + bucketing logic lives in server/lib/legal-copy.ts (tested).
+  const resolveLegalCopy = async (
+    keyAr: "privacy_policy_ar" | "terms_conditions_ar",
+    keyEn: "privacy_policy_en" | "terms_conditions_en",
+    keyLegacy: "privacy_policy" | "terms_conditions",
+  ): Promise<LocalizedCopy> => {
+    const [ar, en, legacy] = await Promise.all([
+      storage.getSystemSetting(keyAr),
+      storage.getSystemSetting(keyEn),
+      storage.getSystemSetting(keyLegacy),
+    ]);
+    return mergeWithLegacyFallback(ar, en, legacy);
+  };
+
   app.get("/api/settings/public", markPublic, async (_req: Request, res: Response) => {
     try {
       const [supportEmail, privacyPolicy, termsConditions] = await Promise.all([
         storage.getSystemSetting("support_email"),
-        storage.getSystemSetting("privacy_policy"),
-        storage.getSystemSetting("terms_conditions"),
+        resolveLegalCopy("privacy_policy_ar", "privacy_policy_en", "privacy_policy"),
+        resolveLegalCopy("terms_conditions_ar", "terms_conditions_en", "terms_conditions"),
       ]);
       return res.json({
         supportEmail: supportEmail ?? null,
-        privacyPolicy: privacyPolicy ?? null,
-        termsConditions: termsConditions ?? null,
+        privacyPolicy,    // { ar: string | null, en: string | null }
+        termsConditions,  // { ar: string | null, en: string | null }
       });
     } catch (err) {
       return handleError(res, err);
@@ -1877,8 +1905,8 @@ export async function registerRoutes(
       const [supportEmail, privacyPolicy, termsConditions, ntpServerUrl, orgTimezone, configVersion,
         attEarlyBuf, attLateBuf, attMinDur, attMaxSubs] = await Promise.all([
         storage.getSystemSetting("support_email"),
-        storage.getSystemSetting("privacy_policy"),
-        storage.getSystemSetting("terms_conditions"),
+        resolveLegalCopy("privacy_policy_ar", "privacy_policy_en", "privacy_policy"),
+        resolveLegalCopy("terms_conditions_ar", "terms_conditions_en", "terms_conditions"),
         storage.getSystemSetting("ntp_server_url"),
         storage.getSystemSetting("organization_timezone"),
         storage.getSystemSetting("config_version"),
@@ -1889,8 +1917,10 @@ export async function registerRoutes(
       ]);
       return res.json({
         support_email: supportEmail ?? "",
-        privacy_policy: privacyPolicy ?? "",
-        terms_conditions: termsConditions ?? "",
+        privacy_policy_ar: privacyPolicy.ar ?? "",
+        privacy_policy_en: privacyPolicy.en ?? "",
+        terms_conditions_ar: termsConditions.ar ?? "",
+        terms_conditions_en: termsConditions.en ?? "",
         ntp_server_url: ntpServerUrl ?? "time.google.com",
         organization_timezone: orgTimezone ?? "Asia/Riyadh",
         config_version: parseInt(configVersion ?? "1", 10),
@@ -1906,7 +1936,12 @@ export async function registerRoutes(
 
   app.patch("/api/settings/system", requirePermission("settings:write"), async (req: Request, res: Response) => {
     try {
-      const { support_email, privacy_policy, terms_conditions, ntp_server_url, organization_timezone } = req.body;
+      const {
+        support_email,
+        privacy_policy_ar, privacy_policy_en,
+        terms_conditions_ar, terms_conditions_en,
+        ntp_server_url, organization_timezone,
+      } = req.body;
       let anyChanged = false;
       if (typeof support_email === "string") {
         const trimmed = support_email.trim();
@@ -1916,12 +1951,20 @@ export async function registerRoutes(
         await storage.setSystemSetting("support_email", trimmed);
         anyChanged = true;
       }
-      if (typeof privacy_policy === "string") {
-        await storage.setSystemSetting("privacy_policy", privacy_policy);
+      if (typeof privacy_policy_ar === "string") {
+        await storage.setSystemSetting("privacy_policy_ar", privacy_policy_ar);
         anyChanged = true;
       }
-      if (typeof terms_conditions === "string") {
-        await storage.setSystemSetting("terms_conditions", terms_conditions);
+      if (typeof privacy_policy_en === "string") {
+        await storage.setSystemSetting("privacy_policy_en", privacy_policy_en);
+        anyChanged = true;
+      }
+      if (typeof terms_conditions_ar === "string") {
+        await storage.setSystemSetting("terms_conditions_ar", terms_conditions_ar);
+        anyChanged = true;
+      }
+      if (typeof terms_conditions_en === "string") {
+        await storage.setSystemSetting("terms_conditions_en", terms_conditions_en);
         anyChanged = true;
       }
       if (typeof ntp_server_url === "string" && ntp_server_url.trim()) {

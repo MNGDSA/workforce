@@ -147,8 +147,16 @@ function NtpHealthIndicator({ serverUrl }: { serverUrl: string }) {
 
 interface SystemSettings {
   support_email: string;
-  privacy_policy: string;
-  terms_conditions: string;
+  // Privacy and terms are stored separately per language so each
+  // language audience sees only their own copy on the legal pages.
+  // Server returns "" when a key isn't set; the read endpoint also
+  // back-fills from the legacy combined `privacy_policy` /
+  // `terms_conditions` fields by detecting AR vs EN in `---`-separated
+  // segments — see comment in server/routes.ts (~line 1860).
+  privacy_policy_ar: string;
+  privacy_policy_en: string;
+  terms_conditions_ar: string;
+  terms_conditions_en: string;
   ntp_server_url: string;
   organization_timezone: string;
   config_version: number;
@@ -198,8 +206,10 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [supportEmail, setSupportEmail] = useState("");
-  const [privacyPolicy, setPrivacyPolicy] = useState("");
-  const [termsConditions, setTermsConditions] = useState("");
+  const [privacyPolicyAr, setPrivacyPolicyAr] = useState("");
+  const [privacyPolicyEn, setPrivacyPolicyEn] = useState("");
+  const [termsConditionsAr, setTermsConditionsAr] = useState("");
+  const [termsConditionsEn, setTermsConditionsEn] = useState("");
   const [ntpServerUrl, setNtpServerUrl] = useState("time.google.com");
   const [customNtpServer, setCustomNtpServer] = useState("");
   const [useCustomNtp, setUseCustomNtp] = useState(false);
@@ -232,8 +242,10 @@ export default function SettingsPage() {
   useEffect(() => {
     if (systemSettings) {
       setSupportEmail(systemSettings.support_email ?? "");
-      setPrivacyPolicy(systemSettings.privacy_policy ?? "");
-      setTermsConditions(systemSettings.terms_conditions ?? "");
+      setPrivacyPolicyAr(systemSettings.privacy_policy_ar ?? "");
+      setPrivacyPolicyEn(systemSettings.privacy_policy_en ?? "");
+      setTermsConditionsAr(systemSettings.terms_conditions_ar ?? "");
+      setTermsConditionsEn(systemSettings.terms_conditions_en ?? "");
       const ntpUrl = systemSettings.ntp_server_url ?? "time.google.com";
       if (ALL_NTP_VALUES.includes(ntpUrl)) {
         setNtpServerUrl(ntpUrl);
@@ -284,8 +296,10 @@ export default function SettingsPage() {
     const effectiveNtpServer = useCustomNtp ? customNtpServer : ntpServerUrl;
     saveSettings.mutate({
       support_email: supportEmail,
-      privacy_policy: privacyPolicy,
-      terms_conditions: termsConditions,
+      privacy_policy_ar: privacyPolicyAr,
+      privacy_policy_en: privacyPolicyEn,
+      terms_conditions_ar: termsConditionsAr,
+      terms_conditions_en: termsConditionsEn,
       ntp_server_url: effectiveNtpServer,
       organization_timezone: organizationTimezone,
       attendance_early_buffer_minutes: String(attEarlyBuffer),
@@ -464,30 +478,64 @@ export default function SettingsPage() {
                 <div>
                   <h3 className="text-base font-medium text-white mb-4">{t("settings:legal.title")}</h3>
                   <p className="text-sm text-muted-foreground mb-4">{t("settings:legal.intro")}</p>
-                  <div className="space-y-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="privacyPolicy" className="text-white">{t("settings:legal.privacy")}</Label>
-                      <textarea
-                        id="privacyPolicy"
-                        rows={8}
-                        placeholder={t("settings:legal.privacyPh")}
-                        value={privacyPolicy}
-                        onChange={(e) => setPrivacyPolicy(e.target.value)}
-                        className="flex w-full rounded-sm border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary resize-y"
-                        data-testid="textarea-privacy-policy"
-                      />
+                  <div className="space-y-8">
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-semibold text-white">{t("settings:legal.privacy")}</h4>
+                      <div className="space-y-2">
+                        <Label htmlFor="privacyPolicyAr" className="text-white">{t("settings:legal.privacyAr")}</Label>
+                        <textarea
+                          id="privacyPolicyAr"
+                          dir="rtl"
+                          rows={8}
+                          placeholder={t("settings:legal.privacyArPh")}
+                          value={privacyPolicyAr}
+                          onChange={(e) => setPrivacyPolicyAr(e.target.value)}
+                          className="flex w-full rounded-sm border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary resize-y"
+                          data-testid="textarea-privacy-policy-ar"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="privacyPolicyEn" className="text-white">{t("settings:legal.privacyEn")}</Label>
+                        <textarea
+                          id="privacyPolicyEn"
+                          dir="ltr"
+                          rows={8}
+                          placeholder={t("settings:legal.privacyEnPh")}
+                          value={privacyPolicyEn}
+                          onChange={(e) => setPrivacyPolicyEn(e.target.value)}
+                          className="flex w-full rounded-sm border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary resize-y"
+                          data-testid="textarea-privacy-policy-en"
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="termsConditions" className="text-white">{t("settings:legal.terms")}</Label>
-                      <textarea
-                        id="termsConditions"
-                        rows={8}
-                        placeholder={t("settings:legal.termsPh")}
-                        value={termsConditions}
-                        onChange={(e) => setTermsConditions(e.target.value)}
-                        className="flex w-full rounded-sm border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary resize-y"
-                        data-testid="textarea-terms-conditions"
-                      />
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-semibold text-white">{t("settings:legal.terms")}</h4>
+                      <div className="space-y-2">
+                        <Label htmlFor="termsConditionsAr" className="text-white">{t("settings:legal.termsAr")}</Label>
+                        <textarea
+                          id="termsConditionsAr"
+                          dir="rtl"
+                          rows={8}
+                          placeholder={t("settings:legal.termsArPh")}
+                          value={termsConditionsAr}
+                          onChange={(e) => setTermsConditionsAr(e.target.value)}
+                          className="flex w-full rounded-sm border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary resize-y"
+                          data-testid="textarea-terms-conditions-ar"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="termsConditionsEn" className="text-white">{t("settings:legal.termsEn")}</Label>
+                        <textarea
+                          id="termsConditionsEn"
+                          dir="ltr"
+                          rows={8}
+                          placeholder={t("settings:legal.termsEnPh")}
+                          value={termsConditionsEn}
+                          onChange={(e) => setTermsConditionsEn(e.target.value)}
+                          className="flex w-full rounded-sm border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary resize-y"
+                          data-testid="textarea-terms-conditions-en"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

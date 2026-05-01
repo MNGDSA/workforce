@@ -59,11 +59,17 @@
   },
   "legal": {
     "title": "Legal Pages",
-    "intro": "Content entered here is published on the login page links.",
+    "intro": "Each document has separate Arabic and English copy. Visitors see only the language matching their interface.",
     "privacy": "Privacy Policy",
-    "privacyPh": "Enter your privacy policy text here...",
+    "privacyAr": "Privacy Policy (Arabic)",
+    "privacyEn": "Privacy Policy (English)",
+    "privacyArPh": "أدخل نص سياسة الخصوصية بالعربية هنا...",
+    "privacyEnPh": "Enter your English privacy policy text here...",
     "terms": "Terms & Conditions",
-    "termsPh": "Enter your terms and conditions text here..."
+    "termsAr": "Terms & Conditions (Arabic)",
+    "termsEn": "Terms & Conditions (English)",
+    "termsArPh": "أدخل نص الشروط والأحكام بالعربية هنا...",
+    "termsEnPh": "Enter your English terms and conditions text here..."
   },
   "attendance": {
     "title": "Attendance Rules",

@@ -7,13 +7,16 @@ import { formatNumber } from "@/lib/format";
 
 type PageType = "privacy" | "terms";
 
-const ARABIC_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
-
-function isArabicBlock(text: string): boolean {
-  const trimmed = text.replace(/^[\s#*\->0-9.()\[\]]+/, "").trimStart();
-  const sample = trimmed.slice(0, 32);
-  return ARABIC_RE.test(sample);
-}
+// Server returns each legal doc as { ar, en } — see /api/settings/public
+// in server/routes.ts. The page picks one based on the user's active i18n
+// locale so each language audience sees only their own copy. The legacy
+// behaviour of stacking AR + EN segments on the same page is gone.
+type LegalDocResponse = { ar: string | null; en: string | null };
+type SettingsPublicResponse = {
+  supportEmail: string | null;
+  privacyPolicy: LegalDocResponse | null;
+  termsConditions: LegalDocResponse | null;
+};
 
 function renderInline(text: string, keyBase: string): ReactNode[] {
   const parts: ReactNode[] = [];
@@ -160,33 +163,32 @@ function renderBlocks(blocks: Block[]): ReactNode {
   });
 }
 
-function renderContent(content: string): ReactNode {
-  const segments = content.split(/\n---\n/);
-  return segments.map((segment, i) => {
-    const dir = isArabicBlock(segment) ? "rtl" : "ltr";
-    const blocks = parseMarkdown(segment);
-    return (
-      <div key={`seg-${i}`} dir={dir} className={i > 0 ? "mt-10 pt-10 border-t border-border/50" : ""}>
-        {renderBlocks(blocks)}
-      </div>
-    );
-  });
+function renderContent(content: string, dir: "rtl" | "ltr"): ReactNode {
+  const blocks = parseMarkdown(content);
+  return (
+    <div dir={dir}>
+      {renderBlocks(blocks)}
+    </div>
+  );
 }
 
 export default function LegalPage({ type }: { type: PageType }) {
-  const { t } = useTranslation(["legal"]);
+  const { t, i18n } = useTranslation(["legal"]);
   const [, setLocation] = useLocation();
-  const [content, setContent] = useState<string | null>(null);
+  const [doc, setDoc] = useState<LegalDocResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   const title = type === "privacy" ? t("legal:privacy") : t("legal:terms");
   const Icon = type === "privacy" ? Shield : FileText;
+  const isArabic = (i18n.language ?? "ar").startsWith("ar");
+  const dir: "rtl" | "ltr" = isArabic ? "rtl" : "ltr";
+  const content = (isArabic ? doc?.ar : doc?.en) ?? "";
 
   useEffect(() => {
     fetch("/api/settings/public", { credentials: "include" })
-      .then(r => r.json())
+      .then(r => r.json() as Promise<SettingsPublicResponse>)
       .then(d => {
-        setContent(type === "privacy" ? d.privacyPolicy : d.termsConditions);
+        setDoc(type === "privacy" ? d.privacyPolicy : d.termsConditions);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -225,7 +227,7 @@ export default function LegalPage({ type }: { type: PageType }) {
           </div>
         ) : content && content.trim() ? (
           <div className="prose prose-invert prose-sm max-w-none" data-testid="text-legal-content">
-            {renderContent(content)}
+            {renderContent(content, dir)}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">
