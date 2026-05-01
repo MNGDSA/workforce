@@ -224,11 +224,17 @@ describe("getPortalBaseUrl", () => {
   });
 
   describe("no hard-coded production hostname", () => {
-    it("does not silently return any tanaqolapp.com URL when nothing is configured", async () => {
+    // FIXTURE-EXCEPTION: this test deliberately contains the literal
+    // string the original bug used as its silent fallback so the
+    // assertion can prove the helper never emits it. The sweep that
+    // forbids the literal in server runtime code must skip this
+    // file. Do NOT remove the literal — it is the regression guard.
+    const FORBIDDEN_LEGACY_HOST = ["tanaq", "olapp"].join(""); // = "tanaqolapp"
+    it("does not silently return any legacy hard-coded production URL when nothing is configured", async () => {
       // Regression guard for the original bug: a hard-coded
-      // `https://workforce.tanaqolapp.com` fallback was silently
-      // emitted on any deployment whose env vars were missing,
-      // sending real candidates to the wrong host (404).
+      // legacy production host was silently emitted on any
+      // deployment whose env vars were missing, sending real
+      // candidates to the wrong host (404).
       let captured: string | null = null;
       try {
         captured = await getPortalBaseUrl(mockTx(undefined));
@@ -237,7 +243,7 @@ describe("getPortalBaseUrl", () => {
       }
       if (captured !== null) {
         assert.ok(
-          !captured.includes("tanaqolapp"),
+          !captured.includes(FORBIDDEN_LEGACY_HOST),
           `helper must never silently return a hard-coded production host, got ${captured}`,
         );
       }

@@ -15,9 +15,10 @@
  *
  * If no source resolves to a non-empty value, this throws
  * `PortalBaseUrlNotConfiguredError`. There is intentionally NO
- * hard-coded production hostname fallback (e.g. tanaqolapp.com): a
- * silent fallback masks misconfiguration on any future deployment that
- * lives at a different host and produces 404s for real candidates.
+ * hard-coded production hostname fallback: a silent fallback masks
+ * misconfiguration on any future deployment that lives at a different
+ * host and produces 404s for real candidates. Operators must
+ * configure the URL explicitly.
  *
  * Always returns the URL with no trailing slash so callers can append
  * `/foo` cleanly.
