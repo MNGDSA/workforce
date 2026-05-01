@@ -78,6 +78,18 @@
     "hasVaccinationReport": "لديه تقرير تطعيم",
     "hasVaccinationReportTitle": "عرض المرشحين الذين رفعوا تقرير التطعيم فقط (تداول الأغذية والأدوار القريبة من القطاع الصحي)."
   },
+  "filterBar": {
+    "filtersButton": "الفلاتر",
+    "filtersHeading": "تنقية النتائج",
+    "filtersSubheading": "أضف فلاتر إضافية فوق فلتر الحالة بالأعلى.",
+    "classification": "التصنيف",
+    "history": "السجل",
+    "documents": "الوثائق",
+    "activeFilters": "الفلاتر المفعّلة",
+    "clearAll": "مسح الكل",
+    "removeFilter": "إزالة فلتر {{label}}",
+    "ariaStatusGroup": "تصفية حسب حالة المرشح"
+  },
   "list": {
     "title": "قائمة المرشحين",
     "columns": "الأعمدة",

@@ -78,6 +78,18 @@
     "hasVaccinationReport": "Has vaccination report",
     "hasVaccinationReportTitle": "Only show candidates whose vaccination report is on file (food handling, healthcare-adjacent roles)."
   },
+  "filterBar": {
+    "filtersButton": "Filters",
+    "filtersHeading": "Refine results",
+    "filtersSubheading": "Stack additional filters on top of the status above.",
+    "classification": "Classification",
+    "history": "History",
+    "documents": "Documents",
+    "activeFilters": "Active filters",
+    "clearAll": "Clear all",
+    "removeFilter": "Remove {{label}} filter",
+    "ariaStatusGroup": "Filter by candidate status"
+  },
   "list": {
     "title": "Candidate List",
     "columns": "Columns",
