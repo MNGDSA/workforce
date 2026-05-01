@@ -83,4 +83,10 @@ title = "TrustedByMarquee component (rename to .tsx)"
 id = "fok_sfKbwBOFQm7_rqp-B"
 uri = "file://attached_assets/terms_conditions_en_2026-04-30.md"
 type = "text"
-title = "Terms & Conditions — English (markdown ready to paste)"
+title = "Terms & Conditions — English (mirror)"
+
+[[outputs]]
+id = "cv-BOd-PbMFt1321hWmX-"
+uri = "file://attached_assets/terms_conditions_ar_2026-04-30.md"
+type = "text"
+title = "الشروط والأحكام — العربية (النسخة التي أرسلتَها)"
