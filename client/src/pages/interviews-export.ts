@@ -6,14 +6,13 @@
  * spinning up the xlsx writer. The component owns IO (XLSX.writeFile, toasts);
  * everything here is referentially transparent.
  *
- * Columns intentionally diverge from the spec doc (`task-255.md`) on one
- * point: the spec listed a "Full name (Arabic)" column sourced from
- * `candidates.fullName`, but that column does not exist on the `candidates`
- * table — only `candidates.fullNameEn`. Arabic display names live on
- * `users.fullName`, which is unset for the bulk-uploaded candidates that
- * make up the bulk of an interview's invitee list. Surfacing an always-empty
- * column would mislead the recruiter, so the workbook keeps a single
- * `Full name` column. See server/storage.ts comment on getInterviewDetail.
+ * Schema note: the spec doc lists 10 columns, including a "Full name (Arabic)"
+ * column. The `candidates` table only carries `full_name_en`; Arabic display
+ * names live on `users.full_name`, which is only populated for candidates
+ * linked to a user account (not the bulk-uploaded majority). The contract is
+ * preserved by reserving the column with an empty value when no Arabic name
+ * is available, so the workbook header / index layout is stable across
+ * exports and matches what downstream tooling expects.
  */
 
 import { slugifyForFilename } from "./interviews-multi-id-search";
@@ -21,6 +20,11 @@ import { slugifyForFilename } from "./interviews-multi-id-search";
 export type ExportInvitee = {
   id: string;
   candidateCode: string | null;
+  /**
+   * Arabic display name. Will be `null` for the typical bulk-uploaded
+   * candidate (no linked user). The export reserves the column either way.
+   */
+  fullName: string | null;
   fullNameEn: string;
   nationalId: string | null;
   phone: string | null;
@@ -49,12 +53,13 @@ export function bucketDecision(effectiveStatus: string | null | undefined): Expo
 }
 
 /**
- * Build the row for a single invitee. Column order MUST match the headers
- * built in `buildExportHeaders`. Returned values are JS primitives so the
+ * Build the 10-column row for a single invitee. Column order MUST match
+ * the headers built in `buildExportHeaders` and the order documented in
+ * `.local/tasks/task-255.md`. Returned values are JS primitives so the
  * caller can pass them straight into `XLSX.utils.aoa_to_sheet`.
  *
- * `localStatuses` mirrors the optimistic state the user sees in the UI; the
- * export must reflect that, not the (possibly stale) server value.
+ * `localStatuses` mirrors the optimistic state the user sees in the UI;
+ * the export must reflect that, not the (possibly stale) server value.
  */
 export function buildExportRow(
   candidate: ExportInvitee,
@@ -81,6 +86,7 @@ export function buildExportRow(
   return [
     index + 1,
     candidateIdValue,
+    candidate.fullName ?? "",
     candidate.fullNameEn ?? "",
     candidate.nationalId ?? "",
     candidate.phone ?? "",
@@ -94,7 +100,8 @@ export function buildExportRow(
 export interface HeaderLabels {
   num: string;
   candidateId: string;
-  fullName: string;
+  fullNameAr: string;
+  fullNameEn: string;
   nationalId: string;
   phone: string;
   decision: string;
@@ -107,7 +114,8 @@ export function buildExportHeaders(h: HeaderLabels): string[] {
   return [
     h.num,
     h.candidateId,
-    h.fullName,
+    h.fullNameAr,
+    h.fullNameEn,
     h.nationalId,
     h.phone,
     h.decision,

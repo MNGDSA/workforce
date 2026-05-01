@@ -130,7 +130,8 @@
     "cols": {
       "num": "#",
       "candidateId": "Candidate ID",
-      "fullName": "Full name",
+      "fullNameAr": "Full name (Arabic)",
+      "fullNameEn": "Full name (English)",
       "nationalId": "National / Iqama ID",
       "phone": "Phone",
       "decision": "Decision",

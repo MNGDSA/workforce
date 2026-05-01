@@ -73,8 +73,14 @@ type InvitedCandidate = {
   id: string;
   // Task #255: `candidateCode` is the human-friendly ID (e.g. "C-00042") that
   // recruiters paste back into bulk-invite; surfaced in the Excel export's
-  // Candidate ID column with a UUID fallback when missing.
+  // Candidate ID column with a UUID fallback when missing. `fullName` is the
+  // Arabic display name placeholder for the export's "Full name (Arabic)"
+  // column — currently always `null` because the candidates table has no
+  // Arabic name field (see server/storage.ts comment on getInterviewDetail).
+  // The column is preserved in the workbook contract so downstream tooling
+  // sees a stable layout.
   candidateCode: string | null;
+  fullName: string | null;
   fullNameEn: string;
   nationalId: string | null;
   phone: string | null;
@@ -866,7 +872,8 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
       const headers = buildExportHeaders({
         num: t("interviews:export.cols.num"),
         candidateId: t("interviews:export.cols.candidateId"),
-        fullName: t("interviews:export.cols.fullName"),
+        fullNameAr: t("interviews:export.cols.fullNameAr"),
+        fullNameEn: t("interviews:export.cols.fullNameEn"),
         nationalId: t("interviews:export.cols.nationalId"),
         phone: t("interviews:export.cols.phone"),
         decision: t("interviews:export.cols.decision"),
@@ -892,8 +899,8 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
       // Force ID-shaped columns to text so Excel does not strip leading
       // zeros or convert long numerics to scientific notation. Indexes
       // match the order in buildExportHeaders / buildExportRow:
-      //   1 = candidateId (code or UUID), 3 = nationalId, 4 = phone.
-      const TEXT_COL_INDEXES = [1, 3, 4];
+      //   1 = candidateId (code or UUID), 4 = nationalId, 5 = phone.
+      const TEXT_COL_INDEXES = [1, 4, 5];
       for (let r = 1; r <= rows.length; r++) {
         for (const col of TEXT_COL_INDEXES) {
           const addr = XLSX.utils.encode_cell({ r, c: col });
@@ -907,7 +914,8 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
       ws["!cols"] = [
         { wch: 5 },   // #
         { wch: 22 },  // Candidate ID (code or UUID)
-        { wch: 28 },  // Full name
+        { wch: 28 },  // Full name (Arabic)
+        { wch: 28 },  // Full name (English)
         { wch: 14 },  // National ID
         { wch: 14 },  // Phone
         { wch: 12 },  // Decision
