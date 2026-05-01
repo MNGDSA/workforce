@@ -174,13 +174,11 @@ export async function sendSmsViaPlugin(
   // for the policy rationale.
   message = toWesternDigitsForSms(message);
 
-  // Test-only capture hook (see __test__.setSendInterceptor). Fires
-  // AFTER digit normalization so tests see the exact bytes the
-  // gateway would receive, but BEFORE dev bypass so the test still
-  // exercises the full message-construction path of the caller.
-  if (__sendInterceptor) {
-    try { __sendInterceptor(to, message); } catch { /* swallow — never break the send path on a test hook */ }
-  }
+  // Test-only capture hook (installation gated to NODE_ENV=test).
+  // Fires after digit normalization so tests assert on the exact
+  // bytes the gateway would receive. Errors propagate — a buggy
+  // interceptor should fail the test loudly, not be swallowed.
+  if (__sendInterceptor) __sendInterceptor(to, message);
 
   // ───────────────────────────────────────────────────────────────────────
   // Dev/test bypass — when the SMS gateway is unreachable (carrier or

@@ -1,33 +1,13 @@
-// Task #263 — endpoint-level integration coverage for the two SMS
-// endpoints whose `{portal_url}` placeholder used to embed a 404
-// path suffix (`/candidate/onboarding` / `/login`):
-//
+// Task #263 — integration coverage for the two SMS endpoints whose
+// `{portal_url}` placeholder used to embed a 404 path suffix:
 //   * POST /api/onboarding/reminder-test-sms
 //   * POST /api/candidates/re-engagement-sms
-//
-// These tests exercise the REAL handlers registered via
-// `registerRoutes(httpServer, app)` — same pattern as
-// `smp-commit-iban-resolution.test.ts` for Task #134. The handlers
-// are located in the live router stack and invoked directly with a
-// pre-authenticated `req` object so we bypass auth middleware
-// (covered by its own tests) without simulating a full login flow.
-//
-// Storage is stubbed at the singleton level so the handlers see a
-// known SMS plugin and a single inactive_one_year candidate. The
-// SMS gateway is intercepted via the `__test__.setSendInterceptor`
-// hook in `server/sms-sender.ts`, which captures every `(to,
-// message)` pair the production code path is about to send. The
-// captured message text is then asserted to (a) contain the bare
-// resolved base URL, and (b) NOT contain the offending suffix.
-//
-// Run with:
-//   npx tsx --test server/__tests__/portal-url-endpoints.test.ts
+// Pattern mirrors smp-commit-iban-resolution.test.ts (Task #134):
+// real registerRoutes, locate handler in router stack, invoke with
+// a pre-authenticated req. SMS payloads are captured via
+// __test__.setSendInterceptor on server/sms-sender.ts.
 
-// Default NODE_ENV to "test" so the portal-url helper's
-// REPLIT_DEV_DOMAIN gate accepts our explicit PUBLIC_APP_URL path
-// and so the SMS sender's dev-bypass is active (no real HTTP call).
 process.env.NODE_ENV ??= "test";
-// Pin a deterministic base URL the assertions can grep for.
 const TEST_BASE_URL = "https://workforce.test.example";
 process.env.PUBLIC_APP_URL = TEST_BASE_URL;
 
@@ -39,24 +19,15 @@ import express, { type Express, type Request, type Response } from "express";
 let reminderTestHandler: (req: Request, res: Response) => Promise<void> | void;
 let reengagementHandler: (req: Request, res: Response) => Promise<void> | void;
 
-// Storage singleton lookup — populated lazily so the import order
-// matches what registerRoutes expects. We type it as a record of
-// async function stubs that the two handlers under test invoke;
-// `unknown` would force every callsite to narrow, and the actual
-// `IStorage` interface defines hundreds of unrelated methods we
-// don't need to replicate just to swap three of them. The `as
-// MutableStorage` cast at the boundary is the deliberate seam.
+// Storage singleton: typed as a record of async stubs so per-test
+// overrides type-check without pulling in the full IStorage shape.
 type StorageMethod = (...args: unknown[]) => Promise<unknown>;
 type MutableStorage = Record<string, StorageMethod>;
 let storageRef: MutableStorage;
 let smsTestHooks: { setSendInterceptor(fn: ((to: string, message: string) => void) | null): void };
 
-// What the stubbed `storage.getCandidate` returns for our test rows.
-// Mutable per-test via `seedCandidate(...)`. The shape mirrors only
-// the candidate fields the handlers and the cohort gate inspect —
-// adding extra fields here is harmless because the handler reads by
-// property access, but we keep the index signature open so future
-// fields can be set per-test without widening this type.
+// What `storage.getCandidate` returns per-test. Open record so new
+// candidate fields can be set without widening this type.
 type SeededCandidate = Record<string, unknown> & {
   id: string;
   userId: string | null;
@@ -109,13 +80,9 @@ before(async () => {
   const httpServer: Server = createServer(app);
   await registerRoutes(httpServer, app);
 
-  // Pull the two handlers out of the Express router stack so we can
-  // invoke them without going through requirePermission. Auth is
-  // covered by auth-middleware tests; the bug under test is in the
-  // handler body's URL-emission code.
-  // Express's router stack is private API — there is no public way
-  // to fetch a handler by route+method. We narrow the access to a
-  // local structural type so the rest of the file stays `any`-free.
+  // Pull handlers from the Express router stack so we can invoke
+  // them without going through requirePermission (covered by its own
+  // tests). Local structural types keep this `any`-free.
   type RouteLayer = {
     route?: {
       path: string;
@@ -167,9 +134,7 @@ interface CapturedRes {
 function makeRes(): CapturedRes {
   let statusCode = 200;
   let body: unknown = undefined;
-  // Subset of express.Response the two handlers actually call.
-  // Keeping the type local + structural avoids importing Express's
-  // huge Response interface just to assert on three methods.
+  // Subset of express.Response the handlers actually call.
   interface MinimalRes {
     status(code: number): MinimalRes;
     json(payload: unknown): MinimalRes;
@@ -265,15 +230,10 @@ describe("POST /api/onboarding/reminder-test-sms — real route, bare {portal_ur
 
 describe("POST /api/candidates/re-engagement-sms — real route, bare {portal_url}", () => {
   it("captured wire message embeds the bare base URL with NO /login suffix (en candidate)", async () => {
-    // Seed a candidate the cohort gate accepts. The gate calls
-    // `computeArchivedReason` (in shared/candidate-status.ts), which
-    // returns "inactive_one_year" iff:
-    //   * archivedAt is null
-    //   * status is not blocked / not hired
-    //   * profileCompleted === true
-    //   * lastLoginAt is either null OR more than 365 days ago
-    // Phone + userId are needed independently so the route's
-    // own pre-checks (account exists, has a number to text) pass.
+    // Seed an inactive_one_year candidate (see computeArchivedReason
+    // in shared/candidate-status.ts): non-archived, non-blocked,
+    // profile complete, last login >365d ago. Phone + userId let the
+    // route's own pre-checks pass.
     const yearAgo = new Date(Date.now() - 400 * 24 * 3600_000);
     seedCandidate({
       id: "cand-en-1",
@@ -352,8 +312,7 @@ describe("POST /api/candidates/re-engagement-sms — real route, bare {portal_ur
   });
 
   it("skips not_inactive_one_year candidates without sending", async () => {
-    // Active candidate (lastSeenAt = now) — cohort gate must reject
-    // the row and the SMS interceptor must NOT fire.
+    // Active candidate — cohort gate rejects, no SMS fires.
     seedCandidate({
       id: "cand-active",
       userId: "user-active",

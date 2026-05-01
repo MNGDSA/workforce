@@ -11,19 +11,9 @@ import { renderReminderTemplate } from "../onboarding-reminders";
 import type { db as DbReal } from "../db";
 
 // ── Mock tx ────────────────────────────────────────────────────────────────
-// `getPortalBaseUrl` only calls `tx.select().from(...).where(...)` and
-// awaits the result. We mock that single chain to control what the
-// system_settings row looks like for each test.
-//
-// Type contract: structurally narrow the mock to the exact subset of
-// the Drizzle select chain `getPortalBaseUrl` invokes. The `unknown`
-// cast at the boundary is used in lieu of `any` so the production
-// `getPortalBaseUrl` signature still type-checks at the callsite
-// while we avoid reproducing Drizzle's full fluent type machinery
-// here. The shape below is enforced by TypeScript inside the test
-// scope; only the final hand-off to `getPortalBaseUrl` needs the
-// `unknown` cast — `any` would silently disable all type checking
-// inside the mock, which is what we are explicitly avoiding.
+// `getPortalBaseUrl` only calls `tx.select().from(...).where(...)`
+// and awaits the rows. Mock that single chain; one boundary cast to
+// `unknown` lets us hand it to the real signature without `any`.
 type SystemSettingsRow = { value: string | null };
 interface PortalUrlTxMock {
   select(...args: unknown[]): {
