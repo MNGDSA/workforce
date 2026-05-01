@@ -1,5 +1,8 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE } from "@/lib/i18n";
+import { throwIfResNotOk } from "@/lib/api-error";
+
+export { ApiError, isApiError, getApiErrorMessage } from "@/lib/api-error";
 
 /**
  * Reads the active locale from localStorage and produces an Accept-Language
@@ -14,13 +17,6 @@ function localeHeader(): Record<string, string> {
     return { "Accept-Language": stored || DEFAULT_LOCALE };
   } catch {
     return { "Accept-Language": DEFAULT_LOCALE };
-  }
-}
-
-async function throwIfResNotOk(res: Response) {
-  if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
   }
 }
 

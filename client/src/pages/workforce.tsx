@@ -102,7 +102,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, isApiError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -2004,20 +2004,20 @@ type PaymentMethodFlipBlocked = {
   }>;
 };
 
-// apiRequest throws `${status}: ${text}`; pull the JSON body back out
-// when the server returned a structured 409 so the UI can render it
-// inline. Returns null if the message wasn't a structured flip-block.
-function parseFlipBlocked(message: string): PaymentMethodFlipBlocked | null {
-  if (!message.startsWith("409:")) return null;
-  const jsonStart = message.indexOf("{");
-  if (jsonStart === -1) return null;
-  try {
-    const parsed = JSON.parse(message.slice(jsonStart));
-    if (parsed && parsed.code === "OPEN_PAY_RUN_LINES" && Array.isArray(parsed.openLines)) {
-      return parsed as PaymentMethodFlipBlocked;
-    }
-  } catch {
-    // Not JSON — fall through and let the caller show the raw message.
+// apiRequest throws a structured `ApiError` (Task #276); read the
+// already-parsed JSON body straight off the error so this panel doesn't
+// depend on the formatted `message` string. Returns null if the error
+// wasn't a structured flip-block.
+function parseFlipBlocked(err: unknown): PaymentMethodFlipBlocked | null {
+  if (!isApiError(err) || err.status !== 409) return null;
+  const body = err.body;
+  if (
+    body &&
+    typeof body === "object" &&
+    (body as { code?: unknown }).code === "OPEN_PAY_RUN_LINES" &&
+    Array.isArray((body as { openLines?: unknown }).openLines)
+  ) {
+    return body as PaymentMethodFlipBlocked;
   }
   return null;
 }
@@ -2090,7 +2090,7 @@ function PaymentMethodToggle({
       // Task #274 — surface the structured flip-block payload inline
       // in the panel instead of a generic destructive toast. Other
       // errors (400, 5xx) still fall through to the toast path.
-      const blocked = parseFlipBlocked(String(e?.message ?? ""));
+      const blocked = parseFlipBlocked(e);
       if (blocked) {
         setFlipBlocked(blocked);
         return;

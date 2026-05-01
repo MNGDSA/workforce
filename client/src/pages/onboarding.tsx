@@ -5,7 +5,7 @@ import { printContract } from "@/lib/print-contract";
 import { PdfViewer } from "@/components/pdf-viewer";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, isApiError, getApiErrorMessage } from "@/lib/queryClient";
 import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE } from "@/lib/i18n";
 import { toProxiedFileUrl } from "@/lib/file-url";
 import Layout from "@/components/layout";
@@ -2478,16 +2478,13 @@ export default function OnboardingPage() {
             await apiRequest("POST", "/api/onboarding", body);
             return { kind: "ok" as const, candidateId: body.candidateId };
           } catch (e: unknown) {
-            // `apiRequest` throws Error("<status>: <text>") on non-2xx.
-            const raw = e instanceof Error ? e.message : String(e ?? "");
-            const m = raw.match(/^(\d{3}):\s*(.*)$/);
-            const status = m ? Number(m[1]) : 0;
-            if (status === 409) return { kind: "duplicate" as const, candidateId: body.candidateId };
-            let msg = m?.[2] ?? raw ?? "admit failed";
-            try {
-              const parsed = JSON.parse(m?.[2] ?? "");
-              if (parsed?.message) msg = parsed.message;
-            } catch { /* not JSON */ }
+            // Task #276 — `apiRequest` now throws a structured `ApiError`,
+            // so we read `status` and `body` directly instead of reparsing
+            // the formatted message string.
+            if (isApiError(e) && e.status === 409) {
+              return { kind: "duplicate" as const, candidateId: body.candidateId };
+            }
+            const msg = getApiErrorMessage(e, "admit failed");
             throw Object.assign(new Error(msg), { candidateId: body.candidateId });
           }
         }),

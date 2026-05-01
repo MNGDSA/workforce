@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "@/component
 import { ArrowRight, Lock, CreditCard, Phone, AlertCircle, Loader2, CheckCircle2, RefreshCw, ShieldCheck } from "lucide-react";
 import meccaBg from "@assets/Destination_Mecca_14_1776015335379.jpg";
 import { useState, useRef, useEffect, useMemo } from "react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getApiErrorMessage } from "@/lib/queryClient";
 import { useTranslation } from "react-i18next";
 import { formatNumber } from "@/lib/format";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
@@ -123,8 +123,7 @@ export default function AuthPage() {
         setLocation("/dashboard");
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t("common:errors.generic");
-      setLoginError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
+      setLoginError(getApiErrorMessage(err, t("common:errors.generic")));
     } finally {
       setIsLoading(false);
     }
@@ -155,8 +154,7 @@ export default function AuthPage() {
       startCountdown(expiresAt);
       setTimeout(() => otpInputRef.current?.focus(), 100);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t("common:errors.generic");
-      setRegisterError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
+      setRegisterError(getApiErrorMessage(err, t("common:errors.generic")));
     } finally {
       setIsLoading(false);
     }
@@ -172,8 +170,7 @@ export default function AuthPage() {
       if (countdownRef.current) clearInterval(countdownRef.current);
       setRegStep("details");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t("common:errors.generic");
-      setRegisterError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
+      setRegisterError(getApiErrorMessage(err, t("common:errors.generic")));
     } finally {
       setIsLoading(false);
     }
@@ -200,8 +197,7 @@ export default function AuthPage() {
       }
       setLocation(returnTo || "/candidate-portal");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t("common:errors.generic");
-      setRegisterError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
+      setRegisterError(getApiErrorMessage(err, t("common:errors.generic")));
     } finally {
       setIsLoading(false);
     }
@@ -231,8 +227,7 @@ export default function AuthPage() {
       startResetCountdown(expiresAt);
       setTimeout(() => resetOtpRef.current?.focus(), 100);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t("common:errors.generic");
-      setResetError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
+      setResetError(getApiErrorMessage(err, t("common:errors.generic")));
     } finally {
       setIsLoading(false);
     }
@@ -256,8 +251,7 @@ export default function AuthPage() {
       if (resetCountdownRef.current) clearInterval(resetCountdownRef.current);
       setResetStep("newpass");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t("common:errors.generic");
-      setResetError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
+      setResetError(getApiErrorMessage(err, t("common:errors.generic")));
     } finally {
       setIsLoading(false);
     }
@@ -284,8 +278,7 @@ export default function AuthPage() {
       });
       setResetStep("done");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t("common:errors.generic");
-      setResetError(msg.replace(/^\d+:\s*/, "").replace(/^.*"message":"/, "").replace(/".*$/, ""));
+      setResetError(getApiErrorMessage(err, t("common:errors.generic")));
     } finally {
       setIsLoading(false);
     }
