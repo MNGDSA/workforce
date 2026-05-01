@@ -11,6 +11,7 @@ import * as geofenceManagement from "./geofence-management";
 import * as jobPostingImportRemoved from "./job-posting-import-removed";
 import * as jobPostingApplicantsSortable from "./job-posting-applicants-sortable";
 import * as talentFilterBar from "./talent-filter-bar";
+import * as paymentMethodFlipBlock from "./payment-method-flip-block";
 
 export type TestSuite = {
   name: string;
@@ -32,6 +33,7 @@ export const allSuites: TestSuite[] = [
   jobPostingImportRemoved,
   jobPostingApplicantsSortable,
   talentFilterBar,
+  paymentMethodFlipBlock,
 ];
 
 export {
@@ -48,4 +50,5 @@ export {
   jobPostingImportRemoved,
   jobPostingApplicantsSortable,
   talentFilterBar,
+  paymentMethodFlipBlock,
 };
