@@ -2193,7 +2193,7 @@ function ReminderSettingsTab() {
         <div>
           <h3 className="text-sm font-semibold text-zinc-200">{t("reminders.templates.title")}</h3>
           <p className="text-xs text-zinc-500 mt-1">{t("reminders.templates.subtitle")}</p>
-          <p className="text-[11px] text-zinc-500 mt-1">{t("reminders.templates.placeholders")}</p>
+          <p className="text-[11px] text-zinc-500 mt-1">{t("reminders.templates.placeholders", { lb: "{", rb: "}" })}</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {(Object.keys(DEFAULT_REMINDER_TEMPLATES) as ReminderTemplateKey[]).map(k => (

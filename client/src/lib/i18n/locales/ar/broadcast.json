@@ -11,7 +11,7 @@
   "compose": {
     "templateTitle": "قالب الرسالة",
     "insertVariable": "إدراج متغيّر",
-    "messagePh": "اكتب رسالتك هنا... استخدم وسوماً مثل {name} للتخصيص.",
+    "messagePh": "اكتب رسالتك هنا... استخدم وسوماً مثل {{lb}}name{{rb}} للتخصيص.",
     "chars": "{{count}} حرفاً",
     "segments_zero": "{{count}} مقطع",
     "segments_one": "مقطع واحد",

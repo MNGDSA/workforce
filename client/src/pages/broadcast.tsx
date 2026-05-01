@@ -348,7 +348,7 @@ export default function BroadcastPage() {
                     ref={textareaRef}
                     value={message}
                     onChange={e => setMessage(e.target.value)}
-                    placeholder={t("broadcast:compose.messagePh")}
+                    placeholder={t("broadcast:compose.messagePh", { lb: "{", rb: "}" })}
                     rows={6}
                     className="bg-muted/30 border-border font-mono text-sm resize-none"
                     data-testid="input-message"

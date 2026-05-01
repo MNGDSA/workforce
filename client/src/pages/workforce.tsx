@@ -1994,6 +1994,7 @@ type PaymentMethodFlipBlocked = {
   error: string;
   code: "OPEN_PAY_RUN_LINES";
   openLines: Array<{
+    lineId: string;
     payRunId: string;
     payRunName: string;
     payRunStatus: string;
@@ -2239,7 +2240,7 @@ function PaymentMethodToggle({
           </div>
           <ul className="space-y-1 ps-5 list-disc text-[10px] text-red-200/80">
             {flipBlocked.openLines.map((line) => (
-              <li key={line.payRunId} data-testid={`row-flip-blocked-${line.payRunId}`}>
+              <li key={line.lineId} data-testid={`row-flip-blocked-${line.lineId}`}>
                 {t("dialog.payment.flipBlockedRun", { name: line.payRunName, status: line.payRunStatus })}
               </li>
             ))}

@@ -400,7 +400,7 @@
     "templates": {
       "title": "SMS templates",
       "subtitle": "Edit the Arabic and English copy for the regular reminder and the final warning.",
-      "placeholders": "Available variables: {name} candidate name, {missing_docs} missing-document list, {portal_url} workforce app link, {deadline_date} elimination deadline.",
+      "placeholders": "Available variables: {{lb}}name{{rb}} candidate name, {{lb}}missing_docs{{rb}} missing-document list, {{lb}}portal_url{{rb}} workforce app link, {{lb}}deadline_date{{rb}} elimination deadline.",
       "onboarding_reminder_sms_ar": "Regular reminder — Arabic",
       "onboarding_reminder_sms_en": "Regular reminder — English",
       "onboarding_final_warning_sms_ar": "Final warning — Arabic",

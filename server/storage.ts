@@ -235,6 +235,24 @@ export type ApplicationWithCandidate = Application & {
   candidate?: ApplicationCandidateSummary | null;
 };
 
+// Task #274 — single shape returned by updateWorkforcePaymentMethodGuarded.
+// The route discriminates on `ok` and (when blocked) on `blocked` to map
+// to 200 / 409 / 404 without unsafe casts.
+export type OpenPayRunLineSummary = {
+  lineId: string;
+  payRunId: string;
+  payRunName: string;
+  payRunStatus: string;
+  tranche1Status: string | null;
+  tranche2Status: string | null;
+  paymentMethod: string;
+};
+
+export type PaymentMethodGuardResult =
+  | { ok: true; record: WorkforceRecord; previousMethod: string }
+  | { ok: false; blocked: true; openLines: OpenPayRunLineSummary[] }
+  | { ok: false; blocked: false; notFound: true };
+
 export interface IStorage {
   // Global Search
   globalSearch(query: string): Promise<{
@@ -675,22 +693,7 @@ export interface IStorage {
   updateWorkforcePaymentMethodGuarded(
     workforceId: string,
     update: Partial<InsertWorkforce>,
-  ): Promise<
-    | { ok: true; record: WorkforceRecord; previousMethod: string }
-    | {
-        ok: false;
-        blocked: true;
-        openLines: Array<{
-          payRunId: string;
-          payRunName: string;
-          payRunStatus: string;
-          tranche1Status: string | null;
-          tranche2Status: string | null;
-          paymentMethod: string;
-        }>;
-      }
-    | { ok: false; blocked: false; notFound: true }
-  >;
+  ): Promise<PaymentMethodGuardResult>;
 
   // Payroll Calculation Engine
   calculatePayroll(workforceId: string, dateFrom: string, dateTo: string): Promise<{
@@ -4844,27 +4847,29 @@ export class DatabaseStorage implements IStorage {
   async updateWorkforcePaymentMethodGuarded(
     workforceId: string,
     update: Partial<InsertWorkforce>,
-  ) {
-    return await db.transaction(async (tx) => {
+  ): Promise<PaymentMethodGuardResult> {
+    return await db.transaction(async (tx): Promise<PaymentMethodGuardResult> => {
       // Lock the workforce row first so concurrent PATCH calls on the
-      // same employee serialize. tx.execute returns the locked row;
-      // we use the typed select after the lock for the actual data.
-      const lockResult = await tx.execute(
-        sql`SELECT id, payment_method FROM workforce WHERE id = ${workforceId} FOR UPDATE`,
-      );
-      const lockRow = (lockResult as any).rows?.[0];
+      // same employee serialize. We use a typed Drizzle select with an
+      // appended `for("update")` lock — no raw SQL or unsafe casts.
+      const [lockRow] = await tx
+        .select({ id: workforce.id, paymentMethod: workforce.paymentMethod })
+        .from(workforce)
+        .where(eq(workforce.id, workforceId))
+        .for("update");
       if (!lockRow) {
-        return { ok: false as const, blocked: false as const, notFound: true as const };
+        return { ok: false, blocked: false, notFound: true };
       }
-      const previousMethod: string = lockRow.payment_method ?? "bank_transfer";
+      const previousMethod: string = lockRow.paymentMethod ?? "bank_transfer";
 
       // Re-run the open-lines check INSIDE the locked tx. This catches
       // any pay-run line that was committed between the route-level
       // pre-check and now. The check still races with an in-flight
       // (uncommitted) processPayRun tx that hasn't yet inserted lines
       // — see the route comment for the residual window.
-      const openLines = await tx
+      const openLines: OpenPayRunLineSummary[] = await tx
         .select({
+          lineId: payRunLines.id,
           payRunId: payRuns.id,
           payRunName: payRuns.name,
           payRunStatus: payRuns.status,
@@ -4888,11 +4893,7 @@ export class DatabaseStorage implements IStorage {
 
       const newMethod = update.paymentMethod ?? previousMethod;
       if (newMethod !== previousMethod && openLines.length > 0) {
-        return {
-          ok: false as const,
-          blocked: true as const,
-          openLines,
-        };
+        return { ok: false, blocked: true, openLines };
       }
 
       const [record] = await tx
@@ -4901,9 +4902,9 @@ export class DatabaseStorage implements IStorage {
         .where(eq(workforce.id, workforceId))
         .returning();
       if (!record) {
-        return { ok: false as const, blocked: false as const, notFound: true as const };
+        return { ok: false, blocked: false, notFound: true };
       }
-      return { ok: true as const, record, previousMethod };
+      return { ok: true, record, previousMethod };
     });
   }
 

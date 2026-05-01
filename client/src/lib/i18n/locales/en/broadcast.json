@@ -11,7 +11,7 @@
   "compose": {
     "templateTitle": "Message Template",
     "insertVariable": "Insert Variable",
-    "messagePh": "Type your message here... Use tags like {name} to personalize.",
+    "messagePh": "Type your message here... Use tags like {{lb}}name{{rb}} to personalize.",
     "chars": "{{count}} chars",
     "segments_one": "{{count}} segment",
     "segments_other": "{{count}} segments",

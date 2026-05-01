@@ -10059,15 +10059,14 @@ export async function registerRoutes(
         paymentMethodSetBy: userId,
         paymentMethodSetAt: new Date() as any,
       } as any);
-      if (!result.ok && (result as any).blocked) {
-        const blocked = result as Extract<typeof result, { blocked: true }>;
-        return res.status(409).json({
-          error: tr(req, "error.paymentMethodFlipBlocked"),
-          code: "OPEN_PAY_RUN_LINES",
-          openLines: blocked.openLines,
-        });
-      }
       if (!result.ok) {
+        if (result.blocked) {
+          return res.status(409).json({
+            error: tr(req, "error.paymentMethodFlipBlocked"),
+            code: "OPEN_PAY_RUN_LINES",
+            openLines: result.openLines,
+          });
+        }
         return res.status(404).json({ error: tr(req, "error.employeeNotFound") });
       }
       const { record: updated, previousMethod } = result;
