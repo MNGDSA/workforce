@@ -47,6 +47,25 @@
     "pending_profile": "ملف غير مكتمل",
     "inactive": "غير مفعّل"
   },
+  "archivedReasonFilter": {
+    "all": "كل أسباب الأرشفة",
+    "inactive_one_year": "خامل > سنة",
+    "incomplete_profile": "ملف غير مكتمل",
+    "missed_activation": "فاتت نافذة التفعيل",
+    "manually_archived": "أرشفة يدوية"
+  },
+  "archivedReason": {
+    "inactive_one_year": "خامل >سنة",
+    "incomplete_profile": "ملف ناقص",
+    "missed_activation": "فاتت التفعيل",
+    "manually_archived": "أرشفة يدوية"
+  },
+  "archivedReasonDesc": {
+    "inactive_one_year": "لديه حساب لكنه لم يسجّل دخولًا منذ أكثر من سنة. أرسل رسالة استعادة للتذكير بالعودة.",
+    "incomplete_profile": "تسجيل ذاتي لم يُكمل خطوات الملف. يجب إكمال التأهيل قبل المعالجة.",
+    "missed_activation": "عامل عمالة شركة لم يُفعّل خلال نافذة 30 يومًا. أعد إرسال رسالة التفعيل لإصدار رابط جديد.",
+    "manually_archived": "أرشفه أحد المسؤولين يدويًا. يمكن استعادته من قائمة الإجراءات عند الحاجة."
+  },
   "sourceFilter": {
     "all": "كل التصنيفات",
     "individual": "فرد",
@@ -140,6 +159,7 @@
     "archive": "أرشفة",
     "restore": "استعادة",
     "resendActivation": "إعادة إرسال رسالة التفعيل",
+    "sendReengagement": "إرسال رسالة استعادة",
     "sendToOnboarding": "إرسال إلى التأهيل",
     "reclassifyToIndividual": "تحويل إلى فردي",
     "reclassifyToSmp": "تحويل إلى عمالة شركة"
@@ -160,7 +180,11 @@
     "onboarded": "تم إرسال {{n}} عامل إلى التأهيل.",
     "reclassified": "تم تغيير تصنيف المرشح.",
     "blockedByPipeline": "محظور: لدى المرشح سجلات نشطة في خط المعالجة.",
-    "noSmpSelected": "اختر مرشحي عمالة الشركات لاستخدام هذا الإجراء."
+    "noSmpSelected": "اختر مرشحي عمالة الشركات لاستخدام هذا الإجراء.",
+    "reengagementSent": "تم إرسال رسالة الاستعادة إلى {{n}} مرشح.",
+    "reengagementSkipped": "تم تخطي {{n}}",
+    "reengagementFailed": "فشل {{n}}",
+    "reissuedSkipped": "تم تخطي {{n}} (مفعّل بالفعل أو محظور أو غير صالح)."
   },
   "bulkConfirm": {
     "titleArchive": "أرشفة {{n}} مرشح؟",

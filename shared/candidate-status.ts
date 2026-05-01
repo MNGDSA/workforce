@@ -47,6 +47,43 @@ export const DISPLAY_STATUSES = [
 export type DisplayStatus = (typeof DISPLAY_STATUSES)[number];
 
 /**
+ * Task #254 — sub-bucket reasons within Archived.
+ *
+ * Today every Archived row shows the same chip, even though admins
+ * are looking at four very different cohorts:
+ *
+ *   - inactive_one_year   — finished profile but no web login >1y
+ *                           (recoverable: send a re-engagement SMS)
+ *   - incomplete_profile  — self-signup who never finished the wizard,
+ *                           or SMP who logged in but never completed
+ *                           profile (recoverable: re-engage)
+ *   - missed_activation   — SMP worker whose 30-day activation window
+ *                           passed without ever logging in
+ *                           (recoverable: re-issue activation SMS)
+ *   - manually_archived   — admin pressed Archive
+ *                           (deliberate; no automatic affordance)
+ *
+ * The reason is computed at read time alongside `displayStatus` and
+ * is `null` for any row whose `displayStatus` is not "archived".
+ * Like `computeDisplayStatus`, this never mutates the candidate row
+ * — the priority order below is fixed and the function is pure.
+ *
+ * Priority MUST match `computeDisplayStatus` rule order so a row
+ * never lands in two different reasons. (1) manually archived wins
+ * over derived reasons; (2) finished-but-stale wins over the
+ * SMP-specific buckets because rule 4/5 in `computeDisplayStatus`
+ * fires before rule 6/7.
+ */
+export const ARCHIVED_REASONS = [
+  "inactive_one_year",
+  "incomplete_profile",
+  "missed_activation",
+  "manually_archived",
+] as const;
+
+export type ArchivedReason = (typeof ARCHIVED_REASONS)[number];
+
+/**
  * Minimal row shape needed to derive a display status. Kept to a
  * structural type (not the full Candidate type) so callers — including
  * tests, the export pipeline, and downstream services — can pass any
@@ -143,6 +180,60 @@ export function computeDisplayStatus(
 }
 
 /**
+ * Task #254 — derive the sub-bucket reason for an Archived row.
+ * Returns `null` if the row is not Archived (i.e. `displayStatus`
+ * resolves to anything other than "archived"). The branch order
+ * is locked to the same priority as `computeDisplayStatus` so the
+ * two helpers never disagree on a single row.
+ */
+export function computeArchivedReason(
+  c: CandidateForStatus,
+  now: Date = new Date(),
+): ArchivedReason | null {
+  // Only Archived rows have a reason. Bail out for every other
+  // bucket so the chip never renders next to a Completed/Hired/
+  // Blocked/Not-Activated badge.
+  if (computeDisplayStatus(c, now) !== "archived") return null;
+
+  // (1) Manual archive wins. An admin pressed Archive — even on a
+  // row that would otherwise have derived as inactive >1y or
+  // missed-activation. Surface that explicitly so admins know not
+  // to "fix" it with a re-engagement SMS.
+  if (toMs(c.archivedAt) !== null) return "manually_archived";
+
+  const nowMs = now.getTime();
+  const lastLoginMs = toMs(c.lastLoginAt);
+  const profileCompleted = c.profileCompleted === true;
+  const isStaleLogin =
+    lastLoginMs !== null && nowMs - lastLoginMs > ONE_YEAR_MS;
+
+  // (2) Finished profile but stale login → inactive >1y. Mirrors
+  // rule 5 of `computeDisplayStatus`. Recoverable via a re-engagement
+  // SMS — they already have a working account.
+  if (profileCompleted && isStaleLogin) return "inactive_one_year";
+
+  // (3) Profile-completed without any recorded login at all is also
+  // bucketed as "stale" — there was no recent activity to recover
+  // them from, so the same re-engagement SMS applies.
+  if (profileCompleted) return "inactive_one_year";
+
+  // (4) SMP worker who never logged in within the 30-day grace
+  // window → missed activation. Recoverable via the existing
+  // activation-token reissue flow.
+  if (
+    c.classification === "smp" &&
+    lastLoginMs === null
+  ) {
+    return "missed_activation";
+  }
+
+  // (5) Anything else with an incomplete profile — self-signup
+  // individual who never finished the wizard, or an SMP worker who
+  // signed in but never completed their profile.
+  return "incomplete_profile";
+}
+
+/**
  * Postgres `CASE` expression that mirrors `computeDisplayStatus`
  * one-for-one. Used by the server's `getCandidates` to project the
  * derived status into each row and to translate the `?status=` filter
@@ -188,5 +279,59 @@ export const DISPLAY_STATUS_SQL = `
          AND candidates.profile_completed = false
       THEN 'archived'
     ELSE 'archived'
+  END
+`;
+
+/**
+ * Task #254 — Postgres CASE expression that mirrors
+ * `computeArchivedReason`. Returns `NULL` for any row whose
+ * derived status is not "archived" so the SQL projection drops
+ * straight onto a nullable text column. Branch order is locked
+ * to the JS twin to keep server projection and client fallback
+ * in agreement.
+ *
+ * Wrapped in `sql.raw` by the caller for the same reason as
+ * DISPLAY_STATUS_SQL — static literal, no parameter slots, the
+ * planner sees it as a plain CASE and can use the existing
+ * single-column indexes.
+ */
+export const ARCHIVED_REASON_SQL = `
+  CASE
+    -- (1) Manual archive wins regardless of the derived status,
+    -- so admins can distinguish "I archived this" from "the system
+    -- archived this" before they decide whether to re-engage.
+    WHEN candidates.archived_at IS NOT NULL THEN 'manually_archived'
+    -- Every derived branch below MUST also exclude rows that the
+    -- DISPLAY_STATUS_SQL would bucket as 'blocked' or 'hired'. The
+    -- TS twin gets this for free (its first line bails out unless
+    -- displayStatus === 'archived'), but the SQL has to repeat the
+    -- exclusions on every branch — without them, a blocked row with
+    -- a stale login would be projected as 'inactive_one_year' here
+    -- while the TS helper would (correctly) return null, breaking
+    -- parity. Each branch's WHEN here mirrors the corresponding
+    -- branch in DISPLAY_STATUS_SQL with the additional blocked/hired
+    -- guard up front.
+    WHEN candidates.status NOT IN ('blocked', 'hired')
+         AND candidates.profile_completed = true
+         AND (
+           candidates.last_login_at IS NULL
+           OR candidates.last_login_at < NOW() - INTERVAL '365 days'
+         )
+      THEN 'inactive_one_year'
+    WHEN candidates.status NOT IN ('blocked', 'hired')
+         AND candidates.classification = 'individual'
+         AND candidates.profile_completed = false
+      THEN 'incomplete_profile'
+    WHEN candidates.status NOT IN ('blocked', 'hired')
+         AND candidates.classification = 'smp'
+         AND candidates.last_login_at IS NULL
+         AND candidates.created_at < NOW() - INTERVAL '30 days'
+      THEN 'missed_activation'
+    WHEN candidates.status NOT IN ('blocked', 'hired')
+         AND candidates.classification = 'smp'
+         AND candidates.last_login_at IS NOT NULL
+         AND candidates.profile_completed = false
+      THEN 'incomplete_profile'
+    ELSE NULL
   END
 `;

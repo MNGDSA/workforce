@@ -120,7 +120,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { Candidate } from "@shared/schema";
 import { parseSearchTokens, MAX_SEARCH_TOKENS, type CandidateSearchMeta } from "@shared/candidate-search";
-import { computeDisplayStatus, type DisplayStatus } from "@shared/candidate-status";
+import {
+  computeDisplayStatus,
+  computeArchivedReason,
+  ARCHIVED_REASONS,
+  type DisplayStatus,
+  type ArchivedReason,
+} from "@shared/candidate-status";
 import { useTranslation } from "react-i18next";
 import { formatNumber, formatDate, formatCurrency } from "@/lib/format";
 import { toProxiedFileUrl } from "@/lib/file-url";
@@ -158,6 +164,29 @@ const statusStyles: Record<string, string> = {
 function readDisplayStatus(c: any): DisplayStatus {
   if (c && typeof c.displayStatus === "string") return c.displayStatus as DisplayStatus;
   return computeDisplayStatus({
+    status: c?.status,
+    archivedAt: c?.archivedAt,
+    profileCompleted: c?.profileCompleted,
+    classification: c?.classification,
+    lastLoginAt: c?.lastLoginAt,
+    createdAt: c?.createdAt,
+  });
+}
+
+// Task #254 — single chokepoint for the Archived sub-bucket reason.
+// Mirrors readDisplayStatus: prefer the server-projected value
+// (always present on /api/candidates rows) and fall back to running
+// `computeArchivedReason` locally for rows from the per-id endpoint
+// or test mocks. Returns `null` for any non-archived row, so callers
+// can render the chip unconditionally (it will simply collapse).
+function readArchivedReason(c: any): ArchivedReason | null {
+  if (c && typeof c.archivedReason === "string") {
+    return c.archivedReason as ArchivedReason;
+  }
+  if (c && c.archivedReason === null) {
+    return null;
+  }
+  return computeArchivedReason({
     status: c?.status,
     archivedAt: c?.archivedAt,
     profileCompleted: c?.profileCompleted,
@@ -693,6 +722,47 @@ function CandidateProfileSheet({
     },
   });
 
+  // Task #254 — quick recovery actions inside the profile sheet for the
+  // two recoverable archived reasons. Mutations are scoped here (rather
+  // than passed in from the parent) so the sheet remains a self-contained
+  // unit; both endpoints accept the same { ids } batch envelope, so we
+  // reuse the row-menu wire format.
+  const sheetReissueMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest("POST", "/api/candidates/activation-tokens/reissue", { ids: [id] }).then(r => r.json()),
+    onSuccess: (data: { reissued?: number; skipped?: number }) => {
+      const n = data.reissued ?? 0;
+      const s = data.skipped ?? 0;
+      toast({
+        title: t("smpToast.reissued", { n: formatNumber(n), count: n }),
+        description: s > 0 ? t("smpToast.reissuedSkipped", { n: formatNumber(s) }) : undefined,
+        variant: n === 0 && s > 0 ? "destructive" : undefined,
+      });
+      qc.invalidateQueries({ queryKey: ["/api/candidates"] });
+    },
+    onError: () => toast({ title: t("toast.bulkActionFailed"), variant: "destructive" }),
+  });
+
+  const sheetReengagementMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest("POST", "/api/candidates/re-engagement-sms", { ids: [id] }).then(r => r.json()),
+    onSuccess: (data: { sent?: number; skipped?: number; failed?: number }) => {
+      const sent = data.sent ?? 0;
+      const skipped = data.skipped ?? 0;
+      const failed = data.failed ?? 0;
+      const descParts: string[] = [];
+      if (skipped > 0) descParts.push(t("smpToast.reengagementSkipped", { n: formatNumber(skipped) }));
+      if (failed > 0)  descParts.push(t("smpToast.reengagementFailed",  { n: formatNumber(failed)  }));
+      toast({
+        title: t("smpToast.reengagementSent", { n: formatNumber(sent), count: sent }),
+        description: descParts.length > 0 ? descParts.join(" · ") : undefined,
+        variant: sent === 0 && (skipped > 0 || failed > 0) ? "destructive" : undefined,
+      });
+      qc.invalidateQueries({ queryKey: ["/api/candidates"] });
+    },
+    onError: () => toast({ title: t("toast.bulkActionFailed"), variant: "destructive" }),
+  });
+
   function matchOption(val: string | null | undefined, options: string[]): string {
     if (!val) return "";
     const exact = options.find(o => o === val);
@@ -786,6 +856,10 @@ function CandidateProfileSheet({
   // per-id endpoint that doesn't yet project the field.
   const displaySt = readDisplayStatus(c);
   const statusLabelText = t(`statusLabel.${displaySt}` as any, displaySt.replace("_", " "));
+  // Task #254 — sub-bucket reason for the Archived badge in the sheet
+  // header. Reads the same projected value as the table row so the
+  // chip text + tooltip + recovery actions stay in lockstep.
+  const sheetArchivedReason = displaySt === "archived" ? readArchivedReason(c) : null;
 
   const nidValue = editing ? form.nationalId : (c.nationalId ?? "");
   const nidLabelText = idLabel(nidValue);
@@ -902,6 +976,32 @@ function CandidateProfileSheet({
                 <div className="text-muted-foreground text-sm flex items-center gap-2 mt-0.5">
                   {c.nationalId && <span dir="ltr">{c.nationalId}</span>}
                   <Badge className={`text-[10px] px-1.5 py-0 ${statusStyles[displaySt] || statusStyles.active}`}>{statusLabelText}</Badge>
+                  {/* Task #254 — Archived sub-bucket chip in the sheet
+                      header, parity with the per-row chip in the table.
+                      The tooltip carries the longer description so admins
+                      can see why the row landed in Archived without
+                      leaving the sheet. */}
+                  {sheetArchivedReason && (
+                    <Tooltip delayDuration={150}>
+                      <TooltipTrigger asChild>
+                        <span
+                          className="inline-flex items-center text-[10px] font-medium text-slate-200 bg-slate-500/15 border border-slate-500/30 px-1.5 py-0 rounded-sm cursor-default"
+                          data-testid={`sheet-chip-archived-reason-${c.id}`}
+                        >
+                          {t(`archivedReason.${sheetArchivedReason}` as any)}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="bottom"
+                        align="start"
+                        sideOffset={6}
+                        collisionPadding={12}
+                        className="!z-[9999] max-w-xs rounded-md border border-border bg-popover px-3 py-2 text-[11px] text-muted-foreground shadow-lg leading-relaxed"
+                      >
+                        {t(`archivedReasonDesc.${sheetArchivedReason}` as any)}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                   {(c as any).classification === "smp" && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/50 text-amber-400">{t("profile.smpBadge")}</Badge>}
                 </div>
               </SheetDescription>
@@ -910,6 +1010,66 @@ function CandidateProfileSheet({
         </SheetHeader>
 
         <div className="px-6 py-5 space-y-6">
+          {/* Task #254 — recovery panel for the two recoverable archived
+              reasons. Sits above the rest of the body so admins triaging
+              an archived row don't have to scroll past the contact /
+              employment sections to find the "do something about this"
+              button. Hidden for any other archived reason and for any
+              non-archived bucket. */}
+          {sheetArchivedReason === "missed_activation" && (
+            <div
+              className="rounded-md border border-border bg-muted/20 p-3 flex items-start gap-3"
+              data-testid={`sheet-recovery-panel-${c.id}`}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-white">
+                  {t("archivedReason.missed_activation")}
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                  {t("archivedReasonDesc.missed_activation")}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 border-border shrink-0"
+                onClick={() => sheetReissueMutation.mutate(c.id)}
+                disabled={sheetReissueMutation.isPending}
+                data-testid={`sheet-resend-activation-${c.id}`}
+              >
+                {sheetReissueMutation.isPending
+                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                  : t("rowMenu.resendActivation")}
+              </Button>
+            </div>
+          )}
+          {sheetArchivedReason === "inactive_one_year" && (
+            <div
+              className="rounded-md border border-border bg-muted/20 p-3 flex items-start gap-3"
+              data-testid={`sheet-recovery-panel-${c.id}`}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-white">
+                  {t("archivedReason.inactive_one_year")}
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                  {t("archivedReasonDesc.inactive_one_year")}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 border-border shrink-0"
+                onClick={() => sheetReengagementMutation.mutate(c.id)}
+                disabled={sheetReengagementMutation.isPending}
+                data-testid={`sheet-send-reengagement-${c.id}`}
+              >
+                {sheetReengagementMutation.isPending
+                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                  : t("rowMenu.sendReengagement")}
+              </Button>
+            </div>
+          )}
           <FormerEmployeeSummary candidateId={c.id} />
 
           <div>
@@ -1568,6 +1728,14 @@ export default function TalentPage() {
   // refactor) is no longer one of the dropdown options, silently
   // hiding rows that no longer carry that raw status.
   const [status, setStatus] = useState("all");
+  // Task #254 — sub-filter for the Archived bucket. Only meaningful when
+  // status==="archived"; we always reset it whenever the parent filter
+  // moves away (see effect below). "all" means "any archived reason".
+  const [archivedReason, setArchivedReason] = useState<ArchivedReason | "all">(() => {
+    if (typeof window === "undefined") return "all";
+    const v = new URLSearchParams(window.location.search).get("archivedReason");
+    return v && (ARCHIVED_REASONS as readonly string[]).includes(v) ? (v as ArchivedReason) : "all";
+  });
   const [sourceFilter, setSourceFilter] = useState("all");
   const [formerEmployeeFilter, setFormerEmployeeFilter] = useState(false);
   // Task #209 — recruiter-facing toggles for events that require a
@@ -1684,6 +1852,12 @@ export default function TalentPage() {
     // archived_at IS NOT NULL and silently hide derive-archived
     // rows (e.g. individuals whose profile is incomplete).
     ...(status && status !== "all" ? { status } : {}),
+    // Task #254 — only forward the sub-bucket reason when the user
+    // has narrowed the parent status to Archived. Server validates
+    // against the closed ARCHIVED_REASONS set, so a stray value is
+    // silently dropped, but we still gate it here to avoid sending
+    // a redundant param when the user is browsing other buckets.
+    ...(status === "archived" && archivedReason !== "all" ? { archivedReason } : {}),
     ...(sourceFilter && sourceFilter !== "all" ? { classification: sourceFilter } : {}),
     ...(formerEmployeeFilter ? { formerEmployee: "true" } : {}),
     ...(hasDriversLicenseFilter ? { hasDriversLicense: "true" } : {}),
@@ -1696,6 +1870,7 @@ export default function TalentPage() {
       page,
       debouncedSearch,
       status,
+      archivedReason,
       sourceFilter,
       formerEmployeeFilter,
       hasDriversLicenseFilter,
@@ -1726,13 +1901,32 @@ export default function TalentPage() {
     } else {
       params.delete("hasVaccinationReport");
     }
+    // Task #254 — round-trip the Archived sub-bucket to the URL so a
+    // filtered view (e.g. "show me everyone in missed_activation") is
+    // shareable. Only emitted while the parent status is "archived";
+    // otherwise the param is stripped to keep the URL clean.
+    if (status === "archived" && archivedReason !== "all") {
+      params.set("archivedReason", archivedReason);
+    } else {
+      params.delete("archivedReason");
+    }
     const remaining = params.toString();
     const nextUrl = window.location.pathname + (remaining ? `?${remaining}` : "");
     const currentUrl = window.location.pathname + window.location.search;
     if (nextUrl !== currentUrl) {
       window.history.replaceState({}, "", nextUrl);
     }
-  }, [hasDriversLicenseFilter, hasVaccinationReportFilter]);
+  }, [hasDriversLicenseFilter, hasVaccinationReportFilter, status, archivedReason]);
+
+  // Task #254 — when the parent Status filter moves away from
+  // Archived, drop any stale sub-bucket pick so the next visit to
+  // Archived starts at "all reasons" rather than carrying the old
+  // chip across an unrelated bucket switch.
+  useEffect(() => {
+    if (status !== "archived" && archivedReason !== "all") {
+      setArchivedReason("all");
+    }
+  }, [status, archivedReason]);
 
   const searchMeta: CandidateSearchMeta | undefined = data?.searchMeta;
 
@@ -1802,6 +1996,32 @@ export default function TalentPage() {
         title,
         description: s > 0 ? `${formatNumber(s)} skipped (already activated, blocked, or invalid).` : undefined,
         variant: n === 0 && s > 0 ? "destructive" : undefined,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
+    },
+    onError: () => toast({ title: t("toast.bulkActionFailed"), variant: "destructive" }),
+  });
+
+  // Task #254 — one-click re-engagement SMS for inactive_one_year rows.
+  // Server endpoint mirrors the reissue shape (POST { ids } → { sent,
+  // skipped, failed }). Toast surfaces the success count + a short
+  // description of skipped/failed counts, matching smpReissueMutation
+  // so the two row-level actions feel symmetrical.
+  const reEngagementSmsMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      apiRequest("POST", "/api/candidates/re-engagement-sms", { ids }).then(r => r.json()),
+    onSuccess: (data: { sent?: number; skipped?: number; failed?: number }) => {
+      const sent = data.sent ?? 0;
+      const skipped = data.skipped ?? 0;
+      const failed = data.failed ?? 0;
+      const title = t("smpToast.reengagementSent", { n: formatNumber(sent), count: sent });
+      const descParts: string[] = [];
+      if (skipped > 0) descParts.push(t("smpToast.reengagementSkipped", { n: formatNumber(skipped) }));
+      if (failed > 0)  descParts.push(t("smpToast.reengagementFailed",  { n: formatNumber(failed)  }));
+      toast({
+        title,
+        description: descParts.length > 0 ? descParts.join(" · ") : undefined,
+        variant: sent === 0 && (skipped > 0 || failed > 0) ? "destructive" : undefined,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
     },
@@ -2343,6 +2563,33 @@ export default function TalentPage() {
                 <SelectItem value="archived">{t("statusFilter.archived")}</SelectItem>
               </SelectContent>
             </Select>
+            {/* Task #254 — Archived sub-bucket dropdown. Only rendered
+                when the parent Status filter is set to Archived so the
+                control bar stays uncluttered for the common case. The
+                value is round-tripped to the URL via the effect above. */}
+            {status === "archived" && (
+              <Select
+                value={archivedReason}
+                onValueChange={(v) => {
+                  setArchivedReason(v as ArchivedReason | "all");
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger
+                  className="h-10 w-44 border-border bg-background"
+                  data-testid="select-archived-reason-filter"
+                >
+                  <SelectValue placeholder={t("archivedReasonFilter.all")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t("archivedReasonFilter.all")}</SelectItem>
+                  <SelectItem value="inactive_one_year">{t("archivedReasonFilter.inactive_one_year")}</SelectItem>
+                  <SelectItem value="incomplete_profile">{t("archivedReasonFilter.incomplete_profile")}</SelectItem>
+                  <SelectItem value="missed_activation">{t("archivedReasonFilter.missed_activation")}</SelectItem>
+                  <SelectItem value="manually_archived">{t("archivedReasonFilter.manually_archived")}</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); }}>
               <SelectTrigger className="h-10 w-40 border-border bg-background" data-testid="select-source-filter">
                 <SelectValue placeholder={t("sourceFilter.all")} />
@@ -2628,6 +2875,13 @@ export default function TalentPage() {
                   <TableBody>
                     {candidates.map((candidate) => {
                       const displayStatus = readDisplayStatus(candidate);
+                      // Task #254 — paired sub-bucket reason for the
+                      // Archived badge (null for any other display
+                      // status). Read once per row so the chip,
+                      // tooltip, and row-menu actions all agree.
+                      const archivedReasonValue = displayStatus === "archived"
+                        ? readArchivedReason(candidate)
+                        : null;
                       return (
                         <TableRow
                           key={candidate.id}
@@ -2717,6 +2971,34 @@ export default function TalentPage() {
                                 >
                                   {t(`statusLabel.${displayStatus}` as any, displayStatus.replace("_", " "))}
                                 </Badge>
+                                {/* Task #254 — sub-bucket reason chip,
+                                    rendered immediately after the
+                                    Archived badge so the admin can
+                                    tell at a glance *why* the row
+                                    landed in Archived. Tooltip carries
+                                    the long-form explanation; the chip
+                                    text itself stays terse. */}
+                                {archivedReasonValue && (
+                                  <Tooltip delayDuration={150}>
+                                    <TooltipTrigger asChild>
+                                      <span
+                                        className="inline-flex items-center text-[10px] font-medium text-slate-200 bg-slate-500/15 border border-slate-500/30 px-1.5 py-0.5 rounded-sm cursor-default"
+                                        data-testid={`chip-archived-reason-${candidate.id}`}
+                                      >
+                                        {t(`archivedReason.${archivedReasonValue}` as any)}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="top"
+                                      align="start"
+                                      sideOffset={6}
+                                      collisionPadding={12}
+                                      className="!z-[9999] max-w-xs rounded-md border border-border bg-popover px-3 py-2 text-[11px] text-muted-foreground shadow-lg leading-relaxed"
+                                    >
+                                      {t(`archivedReasonDesc.${archivedReasonValue}` as any)}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
                                 {candidate.completedStints > 0 && displayStatus !== "hired" && (() => {
                                   const seasons = candidate.workforceSeasonCount || candidate.completedStints;
                                   return (
@@ -2845,6 +3127,41 @@ export default function TalentPage() {
                                     matching NIDs and staples the company. A
                                     button here would let admins shortcut the
                                     company-stapling requirement. */}
+                                {/* Task #254 — recovery actions exposed only
+                                    on Archived rows whose sub-bucket reason
+                                    has a 1-click remedy. The two paths are
+                                    deliberately distinct:
+                                      · missed_activation → reissue activation
+                                        token (works for both SMP and any
+                                        un-activated row with a phone)
+                                      · inactive_one_year → re-engagement SMS
+                                        (no token, just a portal nudge)
+                                    Other reasons (incomplete_profile,
+                                    manually_archived) intentionally have no
+                                    row action — they need admin follow-up,
+                                    not a one-click send. */}
+                                {(archivedReasonValue === "missed_activation"
+                                  || archivedReasonValue === "inactive_one_year") && (
+                                  <DropdownMenuSeparator />
+                                )}
+                                {archivedReasonValue === "missed_activation" && (
+                                  <DropdownMenuItem
+                                    onClick={() => smpReissueMutation.mutate([candidate.id])}
+                                    data-testid={`menu-resend-activation-archived-${candidate.id}`}
+                                  >
+                                    <Send className="me-2 h-4 w-4" />
+                                    {t("rowMenu.resendActivation")}
+                                  </DropdownMenuItem>
+                                )}
+                                {archivedReasonValue === "inactive_one_year" && (
+                                  <DropdownMenuItem
+                                    onClick={() => reEngagementSmsMutation.mutate([candidate.id])}
+                                    data-testid={`menu-send-reengagement-${candidate.id}`}
+                                  >
+                                    <Send className="me-2 h-4 w-4" />
+                                    {t("rowMenu.sendReengagement")}
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   onClick={() => {

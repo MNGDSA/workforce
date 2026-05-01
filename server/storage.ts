@@ -132,7 +132,7 @@ import {
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte, getTableColumns, type SQL } from "drizzle-orm";
 import { parseSearchTokens, looksLikeId, type CandidateSearchMeta } from "@shared/candidate-search";
-import { DISPLAY_STATUS_SQL, type DisplayStatus } from "@shared/candidate-status";
+import { DISPLAY_STATUS_SQL, ARCHIVED_REASON_SQL, ARCHIVED_REASONS, type DisplayStatus, type ArchivedReason } from "@shared/candidate-status";
 import { countFilledForEvent, countFilledForEvents, activeWorkforceFilter } from "./headcount";
 import { applyServerIbanFields, applyServerIbanHolderNameFields } from "./lib/iban";
 
@@ -182,6 +182,15 @@ export type CandidateStats = {
   archived: number;
   avgRating: number;
 };
+
+// Task #254 — sub-bucket reason for Archived rows. Same packaging as
+// DISPLAY_STATUS_EXPR: a single static literal injected via `sql.raw`
+// so the planner can keep using the existing single-column indexes.
+const ARCHIVED_REASON_EXPR = sql.raw(`(${ARCHIVED_REASON_SQL.trim()})`);
+
+// Set used to validate the optional `?archivedReason=` filter on
+// /api/candidates without pulling Zod into the storage layer.
+const ARCHIVED_REASON_SET = new Set<ArchivedReason>(ARCHIVED_REASONS);
 
 function computeCandidateStatusFromLogin(lastLoginAt: Date | null): "available" | "inactive" {
   if (!lastLoginAt) return "inactive";
@@ -744,6 +753,18 @@ function buildCandidateOtherConditions(query: Partial<CandidateQuery>): SQL[] {
   if ((query as any).region) {
     conditions.push(eq(candidates.region, (query as any).region));
   }
+  // Task #254 — narrow the Archived bucket to a single sub-reason.
+  // Forwarded as `?archivedReason=...` from the talent page when the
+  // admin has both the Status filter set to Archived AND a reason
+  // chip selected. The value is validated against the closed set so
+  // a stray query string can never blow up the SQL CASE comparison.
+  // Mirrors the displayStatus path: we apply the filter on the SQL
+  // CASE expression (not a raw column) so the WHERE matches the
+  // server projection one-for-one.
+  const reasonRaw = (query as any).archivedReason;
+  if (typeof reasonRaw === "string" && ARCHIVED_REASON_SET.has(reasonRaw as ArchivedReason)) {
+    conditions.push(sql`${ARCHIVED_REASON_EXPR} = ${reasonRaw}`);
+  }
   if ((query as any).formerEmployee === "true") {
     conditions.push(
       sql`EXISTS (SELECT 1 FROM workforce WHERE workforce.candidate_id = candidates.id AND workforce.is_active = false)`
@@ -1000,6 +1021,11 @@ export class DatabaseStorage implements IStorage {
           // arrives without this field (e.g. legacy callers, or rows
           // returned by the profile sheet's per-id endpoint).
           displayStatus: sql<DisplayStatus>`${DISPLAY_STATUS_EXPR}`.as("displayStatus"),
+          // Task #254 — sub-bucket reason for Archived rows. NULL for
+          // every other displayStatus so the chip only renders next to
+          // an Archived badge. The client also derives this locally
+          // (`computeArchivedReason`) for rows that arrive without it.
+          archivedReason: sql<ArchivedReason | null>`${ARCHIVED_REASON_EXPR}`.as("archivedReason"),
         })
         .from(candidates)
         .where(where)

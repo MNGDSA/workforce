@@ -22,7 +22,7 @@ import { storage, createInboxItem } from "./storage";
 import { db } from "./db";
 import { tr } from "./i18n";
 import { saPhoneSchema, patchSaPhoneSchema, normalizeSaPhone } from "@shared/phone";
-import { DISPLAY_STATUS_SQL } from "@shared/candidate-status";
+import { DISPLAY_STATUS_SQL, computeArchivedReason } from "@shared/candidate-status";
 // Task #133 — IBAN write-time helpers consolidated. The pure auto-fill
 // wrapper `applyIbanBankResolution` (formerly in
 // `./lib/candidate-iban-resolution`, now deleted) was replaced by the
@@ -352,6 +352,15 @@ function redactNationalId(nid: string | null | undefined): string {
 type DocumentAvailabilityFlags = {
   hasDriversLicense?: "true";
   hasVaccinationReport?: "true";
+  // Task #254 — narrow the Archived bucket to a single sub-reason
+  // ("inactive_one_year", "incomplete_profile", "missed_activation",
+  // "manually_archived"). Same rationale as the doc flags above:
+  // not part of the immutable shared `candidateQuerySchema`, so
+  // forwarded via this typed extension. Only honoured when status
+  // is "archived" — for any other status, storage silently ignores
+  // it, since the displayStatus filter already excludes the rows
+  // that could possibly carry a reason.
+  archivedReason?: string;
 };
 
 function attachDocumentAvailabilityFlags<T extends Partial<CandidateQuery>>(
@@ -364,6 +373,11 @@ function attachDocumentAvailabilityFlags<T extends Partial<CandidateQuery>>(
   }
   if (raw.hasVaccinationReport === "true") {
     enriched.hasVaccinationReport = "true";
+  }
+  // Pass-through; storage validates against the closed
+  // ARCHIVED_REASONS set before applying the WHERE clause.
+  if (typeof raw.archivedReason === "string" && raw.archivedReason !== "") {
+    enriched.archivedReason = raw.archivedReason;
   }
   return enriched;
 }
@@ -3051,6 +3065,89 @@ export async function registerRoutes(
         reissued++;
       }
       return res.json({ reissued, skipped, skippedReasons });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  // Task #254 — one-click re-engagement SMS for candidates archived as
+  // "inactive_one_year" (have an account, profile complete, but no
+  // login in >12 months). Distinct from the activation-token reissue
+  // path because these candidates already activated; we just nudge
+  // them back. Sent immediately via sendSmsViaPlugin (no outbox row)
+  // to mirror the contract-ready / id-card-pickup pattern used for
+  // ad-hoc one-shot sends. Uses candidates:smp_manage to match the
+  // sibling reissue endpoint — admins who can reissue activations
+  // are exactly the ones who manage Archived rows.
+  app.post("/api/candidates/re-engagement-sms", requirePermission("candidates:smp_manage"), async (req: Request, res: Response) => {
+    try {
+      const { ids } = req.body as { ids?: string[] };
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: tr(req, "common.idsRequired") });
+      }
+      if (ids.length > 500) {
+        return res.status(400).json({ message: tr(req, "candidate.bulkActionLimit") });
+      }
+      const smsPlugin = await storage.getActiveSmsPlugin();
+      if (!smsPlugin) {
+        return res.status(400).json({
+          message: tr(req, "sms.notConfigured"),
+          sent: 0, skipped: 0, failed: ids.length, total: ids.length,
+        });
+      }
+      const portalBase = (await storage.getSystemSetting("public_app_url"))
+        ?? process.env.PUBLIC_APP_URL
+        ?? "https://workforce.tanaqolapp.com";
+      const portalUrl = `${portalBase.replace(/\/$/, "")}/login`;
+
+      let sent = 0, skipped = 0, failed = 0;
+      const skippedReasons: { id: string; reason: string }[] = [];
+
+      for (const id of ids) {
+        const cand = await storage.getCandidate(id);
+        if (!cand) { skipped++; skippedReasons.push({ id, reason: "not_found" }); continue; }
+        // Re-engagement only makes sense for activated accounts. If the
+        // row never activated, the admin should use Resend Activation
+        // instead (different message, mints a new token).
+        if (!cand.userId) { skipped++; skippedReasons.push({ id, reason: "not_activated" }); continue; }
+        if (!cand.phone) { skipped++; skippedReasons.push({ id, reason: "no_phone" }); continue; }
+        // Cohort check: re-engagement is meant for the inactive_one_year
+        // bucket only. The UI already gates the action behind that chip,
+        // but a direct API caller with the perm could otherwise nudge
+        // any activated row. Recompute via the shared helper so the
+        // server's gate stays in lockstep with the chip on the row.
+        const reason = computeArchivedReason(cand as any);
+        if (reason !== "inactive_one_year") {
+          skipped++;
+          skippedReasons.push({ id, reason: "not_inactive_one_year" });
+          continue;
+        }
+        try {
+          const recipientLocale = await getCandidateLocale(cand);
+          const message = trL(recipientLocale, "sms.reengagement", { link: portalUrl });
+          const result = await sendSmsViaPlugin(smsPlugin, cand.phone, message);
+          if (result.success) {
+            sent++;
+          } else {
+            failed++;
+            skippedReasons.push({ id, reason: result.error ?? "send_failed" });
+          }
+        } catch (e) {
+          failed++;
+          skippedReasons.push({
+            id,
+            reason: (e instanceof Error ? e.message : String(e)).slice(0, 200),
+          });
+        }
+      }
+      await logAudit(req, {
+        action: "candidate.re_engagement_sms",
+        entityType: "candidate",
+        entityId: ids.length === 1 ? ids[0] : "bulk",
+        description: `Sent re-engagement SMS (sent=${sent}, skipped=${skipped}, failed=${failed}).`,
+        metadata: { total: ids.length, sent, skipped, failed },
+      });
+      return res.json({ sent, skipped, failed, total: ids.length, skippedReasons });
     } catch (err) {
       return handleError(res, err);
     }

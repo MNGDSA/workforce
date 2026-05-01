@@ -47,6 +47,25 @@
     "pending_profile": "Pending Profile",
     "inactive": "Inactive"
   },
+  "archivedReasonFilter": {
+    "all": "All Archive Reasons",
+    "inactive_one_year": "Inactive > 1 year",
+    "incomplete_profile": "Incomplete profile",
+    "missed_activation": "Missed activation",
+    "manually_archived": "Manually archived"
+  },
+  "archivedReason": {
+    "inactive_one_year": "inactive >1y",
+    "incomplete_profile": "incomplete profile",
+    "missed_activation": "missed activation",
+    "manually_archived": "manually archived"
+  },
+  "archivedReasonDesc": {
+    "inactive_one_year": "Has an account but hasn't signed in for over a year. Send a re-engagement SMS to nudge them back.",
+    "incomplete_profile": "Self-signup never completed the profile wizard. They need to finish onboarding before they can be processed.",
+    "missed_activation": "SMP worker never activated within the 30-day window. Resend the activation SMS to mint a fresh link.",
+    "manually_archived": "An admin archived this candidate manually. Restore from the row menu if needed."
+  },
   "sourceFilter": {
     "all": "All Classifications",
     "individual": "Individual",
@@ -131,6 +150,7 @@
     "archive": "Archive",
     "restore": "Restore",
     "resendActivation": "Resend Activation SMS",
+    "sendReengagement": "Send Re-engagement SMS",
     "sendToOnboarding": "Send to Onboarding",
     "reclassifyToIndividual": "Reclassify to Individual",
     "reclassifyToSmp": "Reclassify to SMP"
@@ -151,7 +171,11 @@
     "onboarded": "Sent {{n}} worker(s) to onboarding.",
     "reclassified": "Reclassified candidate.",
     "blockedByPipeline": "Blocked: candidate has active pipeline records.",
-    "noSmpSelected": "Select SMP candidates to use this action."
+    "noSmpSelected": "Select SMP candidates to use this action.",
+    "reengagementSent": "Sent re-engagement SMS to {{n}} candidate(s).",
+    "reengagementSkipped": "{{n}} skipped",
+    "reengagementFailed": "{{n}} failed",
+    "reissuedSkipped": "{{n}} skipped (already activated, blocked, or invalid)."
   },
   "bulkConfirm": {
     "titleArchive": "Archive {{n}} candidate(s)?",

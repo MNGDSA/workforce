@@ -16,9 +16,13 @@ import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 import {
   computeDisplayStatus,
+  computeArchivedReason,
   DISPLAY_STATUSES,
+  ARCHIVED_REASONS,
+  ARCHIVED_REASON_SQL,
   type CandidateForStatus,
   type DisplayStatus,
+  type ArchivedReason,
 } from "../candidate-status";
 
 const NOW = new Date("2026-05-01T12:00:00Z");
@@ -425,6 +429,176 @@ describe("TS ↔ SQL parity", () => {
         const ts = computeDisplayStatus(r, anchor);
         const sql = sqlTwin(r, anchor);
         assert.equal(ts, sql, `parity drift at anchor=${anchor.toISOString()} row=${JSON.stringify(r)}`);
+      }
+    }
+  });
+});
+
+// ─── Archived-reason TS ↔ SQL parity ────────────────────────────────
+//
+// Mirrors the TS↔SQL parity suite above for ARCHIVED_REASON_SQL.
+// Especially important: rows whose displayStatus would be 'blocked' or
+// 'hired' (not 'archived') must produce reason = null even when their
+// raw signals look stale. Without the NOT IN ('blocked','hired') guard
+// on every CASE branch the SQL would emit 'inactive_one_year' for
+// those rows while the TS helper returns null, breaking the chip.
+describe("Archived-reason TS ↔ SQL parity", () => {
+  it("SQL produces only literals from the ARCHIVED_REASONS union", () => {
+    const literals = new Set(
+      [...ARCHIVED_REASON_SQL.matchAll(/THEN\s+'([a-z_]+)'/g)].map((m) => m[1]),
+    );
+    for (const s of literals) {
+      assert.ok(
+        (ARCHIVED_REASONS as readonly string[]).includes(s),
+        `SQL produces archived reason '${s}' which is not in ARCHIVED_REASONS`,
+      );
+    }
+    for (const r of ARCHIVED_REASONS) {
+      assert.ok(literals.has(r), `TS reason '${r}' never produced by SQL CASE`);
+    }
+  });
+
+  it("SQL CASE excludes blocked/hired on every derived branch", () => {
+    // Count derived (non-manually_archived) branches and assert each
+    // is gated. Drift here is the exact reviewer-flagged bug: a
+    // future edit dropping the guard would make the SQL emit
+    // 'inactive_one_year' for blocked/hired stale rows while TS
+    // returns null.
+    const derivedBranchCount =
+      (ARCHIVED_REASON_SQL.match(/THEN\s+'(?!manually_archived)[a-z_]+'/g) ?? []).length;
+    const guardedBranchCount =
+      (ARCHIVED_REASON_SQL.match(/status\s+NOT\s+IN\s*\(\s*'blocked'\s*,\s*'hired'\s*\)/g) ?? [])
+        .length;
+    assert.ok(
+      derivedBranchCount > 0,
+      "expected at least one derived archived-reason branch in SQL",
+    );
+    assert.equal(
+      guardedBranchCount,
+      derivedBranchCount,
+      `every derived branch must carry the blocked/hired exclusion (derived=${derivedBranchCount}, guarded=${guardedBranchCount})`,
+    );
+  });
+
+  it("TS and a hand-rolled JS twin of the archived-reason SQL agree on cohort fixtures", () => {
+    const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    function archivedReasonSqlTwin(c: CandidateForStatus, now: Date): ArchivedReason | null {
+      const nowMs = now.getTime();
+      const toMs = (v: any) => {
+        if (v == null) return null;
+        const d = v instanceof Date ? v : new Date(v);
+        const t = d.getTime();
+        return Number.isFinite(t) ? t : null;
+      };
+      const archivedMs = toMs(c.archivedAt);
+      const lastLoginMs = toMs(c.lastLoginAt);
+      const createdMs = toMs(c.createdAt);
+      if (archivedMs !== null) return "manually_archived";
+      const blockedOrHired = c.status === "blocked" || c.status === "hired";
+      if (!blockedOrHired && c.profileCompleted === true && (lastLoginMs === null || lastLoginMs < nowMs - ONE_YEAR_MS)) {
+        return "inactive_one_year";
+      }
+      if (!blockedOrHired && c.classification === "individual" && c.profileCompleted === false) {
+        return "incomplete_profile";
+      }
+      if (!blockedOrHired && c.classification === "smp" && lastLoginMs === null && createdMs !== null && createdMs < nowMs - THIRTY_DAYS_MS) {
+        return "missed_activation";
+      }
+      if (!blockedOrHired && c.classification === "smp" && lastLoginMs !== null && c.profileCompleted === false) {
+        return "incomplete_profile";
+      }
+      return null;
+    }
+
+    const fixtures: Array<{ label: string; row: CandidateForStatus }> = [
+      { label: "blocked + profile complete + stale 2y login (must NOT report inactive_one_year)",
+        row: { status: "blocked", archivedAt: null, profileCompleted: true, classification: "individual",
+               lastLoginAt: new Date(NOW_MS - 2 * 365 * ONE_DAY), createdAt: new Date(NOW_MS - 3 * 365 * ONE_DAY) } },
+      { label: "blocked + profile complete + never logged in (must NOT report inactive_one_year)",
+        row: { status: "blocked", archivedAt: null, profileCompleted: true, classification: "individual",
+               lastLoginAt: null, createdAt: new Date(NOW_MS - 2 * 365 * ONE_DAY) } },
+      { label: "hired + profile complete + stale 2y login (must NOT report inactive_one_year)",
+        row: { status: "hired", archivedAt: null, profileCompleted: true, classification: "individual",
+               lastLoginAt: new Date(NOW_MS - 2 * 365 * ONE_DAY), createdAt: new Date(NOW_MS - 3 * 365 * ONE_DAY) } },
+      { label: "hired + smp + missed activation window (must NOT report missed_activation)",
+        row: { status: "hired", archivedAt: null, profileCompleted: false, classification: "smp",
+               lastLoginAt: null, createdAt: new Date(NOW_MS - 90 * ONE_DAY) } },
+      { label: "blocked + individual + profile incomplete (must NOT report incomplete_profile)",
+        row: { status: "blocked", archivedAt: null, profileCompleted: false, classification: "individual",
+               lastLoginAt: null, createdAt: new Date(NOW_MS - 60 * ONE_DAY) } },
+      { label: "manually archived (always wins, even if blocked)",
+        row: { status: "blocked", archivedAt: new Date(NOW_MS - 1000), profileCompleted: true, classification: "individual",
+               lastLoginAt: new Date(NOW_MS - 2 * 365 * ONE_DAY), createdAt: new Date(NOW_MS - 3 * 365 * ONE_DAY) } },
+      { label: "available + profile complete + stale 2y login → inactive_one_year",
+        row: { status: "available", archivedAt: null, profileCompleted: true, classification: "individual",
+               lastLoginAt: new Date(NOW_MS - 2 * 365 * ONE_DAY), createdAt: new Date(NOW_MS - 3 * 365 * ONE_DAY) } },
+      { label: "available + smp + no login + 60d old → missed_activation",
+        row: { status: "awaiting_activation", archivedAt: null, profileCompleted: false, classification: "smp",
+               lastLoginAt: null, createdAt: new Date(NOW_MS - 60 * ONE_DAY) } },
+      { label: "available + individual + incomplete → incomplete_profile",
+        row: { status: "available", archivedAt: null, profileCompleted: false, classification: "individual",
+               lastLoginAt: null, createdAt: new Date(NOW_MS - 60 * ONE_DAY) } },
+    ];
+    for (const { label, row: r } of fixtures) {
+      assert.equal(
+        computeArchivedReason(r, NOW),
+        archivedReasonSqlTwin(r, NOW),
+        `archived-reason parity drift on: ${label}`,
+      );
+    }
+  });
+
+  it("TS and SQL twin agree on 2000 random rows (archived-reason cohort)", () => {
+    const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    function archivedReasonSqlTwin(c: CandidateForStatus, now: Date): ArchivedReason | null {
+      const nowMs = now.getTime();
+      const toMs = (v: any) => {
+        if (v == null) return null;
+        const d = v instanceof Date ? v : new Date(v);
+        const t = d.getTime();
+        return Number.isFinite(t) ? t : null;
+      };
+      const archivedMs = toMs(c.archivedAt);
+      const lastLoginMs = toMs(c.lastLoginAt);
+      const createdMs = toMs(c.createdAt);
+      if (archivedMs !== null) return "manually_archived";
+      const blockedOrHired = c.status === "blocked" || c.status === "hired";
+      if (!blockedOrHired && c.profileCompleted === true && (lastLoginMs === null || lastLoginMs < nowMs - ONE_YEAR_MS)) {
+        return "inactive_one_year";
+      }
+      if (!blockedOrHired && c.classification === "individual" && c.profileCompleted === false) {
+        return "incomplete_profile";
+      }
+      if (!blockedOrHired && c.classification === "smp" && lastLoginMs === null && createdMs !== null && createdMs < nowMs - THIRTY_DAYS_MS) {
+        return "missed_activation";
+      }
+      if (!blockedOrHired && c.classification === "smp" && lastLoginMs !== null && c.profileCompleted === false) {
+        return "incomplete_profile";
+      }
+      return null;
+    }
+    let seed = 13;
+    const rand = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    const statuses = ["available", "active", "inactive", "blocked", "hired", "awaiting_activation", "pending_profile"];
+    const classifications = ["individual", "smp"];
+    const anchors = [new Date("2024-02-29T12:00:00Z"), new Date("2025-02-28T12:00:00Z"), NOW];
+    for (const anchor of anchors) {
+      for (let i = 0; i < 2000; i++) {
+        const r: CandidateForStatus = {
+          status: statuses[Math.floor(rand() * statuses.length)],
+          classification: classifications[Math.floor(rand() * classifications.length)],
+          profileCompleted: rand() < 0.5,
+          archivedAt: rand() < 0.1 ? new Date(anchor.getTime() - rand() * 5 * ONE_YEAR_MS) : null,
+          lastLoginAt: rand() < 0.7 ? new Date(anchor.getTime() - rand() * 3 * ONE_YEAR_MS) : null,
+          createdAt: new Date(anchor.getTime() - rand() * 5 * ONE_YEAR_MS),
+        };
+        assert.equal(
+          computeArchivedReason(r, anchor),
+          archivedReasonSqlTwin(r, anchor),
+          `archived-reason parity drift at anchor=${anchor.toISOString()} row=${JSON.stringify(r)}`,
+        );
       }
     }
   });
