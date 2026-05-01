@@ -196,6 +196,17 @@ function readArchivedReason(c: any): ArchivedReason | null {
   });
 }
 
+// Task #264 — typed lookup for the per-reason chip row in the talent
+// toolbar. Mapping to literal i18n keys (instead of building them from
+// a template) keeps the `t()` calls strictly typed without an `as any`
+// cast and keeps the chip-render order centralised.
+const ARCHIVED_REASON_CHIPS = [
+  { reason: "inactive_one_year", labelKey: "archivedReasonFilter.inactive_one_year" },
+  { reason: "incomplete_profile", labelKey: "archivedReasonFilter.incomplete_profile" },
+  { reason: "missed_activation", labelKey: "archivedReasonFilter.missed_activation" },
+  { reason: "manually_archived", labelKey: "archivedReasonFilter.manually_archived" },
+] as const satisfies ReadonlyArray<{ reason: ArchivedReason; labelKey: string }>;
+
 type SortField = "createdAt" | "fullNameEn" | "city" | "classification" | "phone" | "email";
 
 type ColumnKey = "id" | "candidate" | "classification" | "status" | "phone" | "email" | "city" | "iban" | "bank" | "emergency";
@@ -2656,6 +2667,46 @@ export default function TalentPage() {
                 </SelectContent>
               </Select>
             )}
+            {/* Task #264 — surface the four per-reason counts as
+                one-tap chips so admins can pick a reason without
+                drilling through the dropdown. Reuses the same
+                `archivedReasonStats` query, so no extra round-trip.
+                Clicking the active chip clears the reason back to
+                "all". */}
+            {status === "archived" && ARCHIVED_REASON_CHIPS.map(({ reason, labelKey }) => {
+              const cnt = archivedReasonStats?.[reason];
+              const active = archivedReason === reason;
+              return (
+                <Button
+                  key={reason}
+                  variant={active ? "default" : "outline"}
+                  size="sm"
+                  className={`h-10 gap-1.5 ${active ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "border-border"}`}
+                  onClick={() => {
+                    // Set status explicitly too — the task brief says
+                    // a chip should set both status="archived" and the
+                    // reason. Today the chips only render when status
+                    // is already archived, so this is a no-op in
+                    // practice, but stating it explicitly future-proofs
+                    // the handler if the chips are ever surfaced
+                    // elsewhere (and matches the spec literally).
+                    setStatus("archived");
+                    setArchivedReason(active ? "all" : reason);
+                    setPage(1);
+                  }}
+                  aria-pressed={active}
+                  data-testid={`chip-archived-reason-${reason}`}
+                >
+                  <span>{t(labelKey)}</span>
+                  <span
+                    className="tabular-nums opacity-80"
+                    data-testid={`chip-count-archived-reason-${reason}`}
+                  >
+                    · {cnt != null ? formatNumber(cnt) : "—"}
+                  </span>
+                </Button>
+              );
+            })}
             <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); }}>
               <SelectTrigger className="h-10 w-40 border-border bg-background" data-testid="select-source-filter">
                 <SelectValue placeholder={t("sourceFilter.all")} />
