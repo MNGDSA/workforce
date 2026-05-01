@@ -24,7 +24,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Search, Filter, MoreHorizontal, Calendar, Clock, Video, Phone, MapPin,
+  Search, MoreHorizontal, Calendar, Clock, Video, Phone, MapPin,
   CheckCircle2, Loader2, Plus, Users, User, StickyNote, ExternalLink,
   ThumbsUp, ThumbsDown, RotateCcw, Maximize2, ArrowLeft, X,
   Hash, AlertTriangle, Copy, Download, CheckSquare, ChevronRight,
@@ -1427,16 +1427,6 @@ export default function InterviewsPage() {
               ))}
             </SelectContent>
           </Select>
-          <div className="flex gap-2 w-full md:w-auto">
-            <Button variant="outline" className="h-12 border-border bg-background flex-1 md:flex-none">
-              <Filter className="me-2 h-4 w-4" />
-              {t("interviews:filters.status")}
-            </Button>
-            <Button variant="outline" className="h-12 border-border bg-background flex-1 md:flex-none">
-              <Calendar className="me-2 h-4 w-4" />
-              {t("interviews:filters.date")}
-            </Button>
-          </div>
         </div>
 
         <Card className="bg-card border-border">

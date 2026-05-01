@@ -16,9 +16,7 @@
   },
   "filters": {
     "searchPh": "Search by group name, type, status, or creator…",
-    "allEvents": "All Events",
-    "status": "Status",
-    "date": "Date"
+    "allEvents": "All Events"
   },
   "table": {
     "title": "Interview & Training Schedule",
