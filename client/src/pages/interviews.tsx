@@ -568,22 +568,24 @@ function InterviewDetailSheet({
                             </div>
                           </div>
 
-                          {isShortlisted && (
-                            <Badge
-                              className="bg-emerald-900/50 text-emerald-400 border-0 text-[10px] px-2 shrink-0 max-w-[10rem]"
-                              title={t("interviews:labels.shortlisted")}
-                            >
-                              <span className="truncate min-w-0">{t("interviews:labels.shortlisted")}</span>
-                            </Badge>
-                          )}
-                          {isRejected && (
-                            <Badge
-                              className="bg-red-900/50 text-red-400 border-0 text-[10px] px-2 shrink-0 max-w-[10rem]"
-                              title={t("interviews:labels.rejected")}
-                            >
-                              <span className="truncate min-w-0">{t("interviews:labels.rejected")}</span>
-                            </Badge>
-                          )}
+                          <div className="w-[10rem] shrink-0 flex items-center" aria-hidden={!isShortlisted && !isRejected}>
+                            {isShortlisted && (
+                              <Badge
+                                className="bg-emerald-900/50 text-emerald-400 border-0 text-[10px] px-2 max-w-full"
+                                title={t("interviews:labels.shortlisted")}
+                              >
+                                <span className="truncate min-w-0">{t("interviews:labels.shortlisted")}</span>
+                              </Badge>
+                            )}
+                            {isRejected && (
+                              <Badge
+                                className="bg-red-900/50 text-red-400 border-0 text-[10px] px-2 max-w-full"
+                                title={t("interviews:labels.rejected")}
+                              >
+                                <span className="truncate min-w-0">{t("interviews:labels.rejected")}</span>
+                              </Badge>
+                            )}
+                          </div>
 
                           <div className="flex flex-nowrap gap-1 shrink-0 items-center ms-auto">
                             {hasAnswers && (
@@ -628,7 +630,7 @@ function InterviewDetailSheet({
                                 >
                                   <ThumbsDown className="h-3.5 w-3.5" />
                                 </Button>
-                                {(isShortlisted || isRejected) && (
+                                {(isShortlisted || isRejected) ? (
                                   <Button
                                     data-testid={`button-reset-status-${c.id}`}
                                     size="icon"
@@ -639,6 +641,8 @@ function InterviewDetailSheet({
                                   >
                                     <RotateCcw className="h-3 w-3" />
                                   </Button>
+                                ) : (
+                                  <span className="h-7 w-7 shrink-0 inline-block" aria-hidden="true" />
                                 )}
                               </>
                             ) : (
