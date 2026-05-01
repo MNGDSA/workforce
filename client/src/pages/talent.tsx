@@ -2529,7 +2529,7 @@ export default function TalentPage() {
             <Button
               variant="outline"
               className="h-9 border-border bg-background"
-              onClick={handleExport}
+              onClick={() => handleExport()}
               disabled={exporting}
               data-testid="button-export"
             >
