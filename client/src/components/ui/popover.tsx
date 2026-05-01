@@ -12,14 +12,7 @@ const PopoverAnchor = PopoverPrimitive.Anchor
 type PopoverContentProps = React.ComponentPropsWithoutRef<
   typeof PopoverPrimitive.Content
 > & {
-  /**
-   * Forwarded to BOTH the Radix Portal and Content so consumers can
-   * keep interactive nodes in the DOM at all times (e.g. for stable
-   * data-testid queries by Playwright). When `forceMount` is true and
-   * the popover is closed, Radix sets `data-state="closed"` on the
-   * Content; pair with CSS like `data-[state=closed]:hidden` to keep
-   * it visually invisible while still query-able.
-   */
+  /** Forwarded to both Portal and Content; pair with `data-[state=closed]:hidden` to keep nodes mounted but invisible when closed. */
   forceMount?: true
 }
 
