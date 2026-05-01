@@ -8,20 +8,41 @@ import { describe, it, beforeEach, afterEach } from "node:test";
 
 import { getPortalBaseUrl, PortalBaseUrlNotConfiguredError } from "../lib/portal-url";
 import { renderReminderTemplate } from "../onboarding-reminders";
+import type { db as DbReal } from "../db";
 
 // ── Mock tx ────────────────────────────────────────────────────────────────
 // `getPortalBaseUrl` only calls `tx.select().from(...).where(...)` and
 // awaits the result. We mock that single chain to control what the
 // system_settings row looks like for each test.
-function mockTx(value: string | null | undefined): any {
-  const rows = value === undefined ? [] : [{ value }];
-  return {
+//
+// Type contract: structurally narrow the mock to the exact subset of
+// the Drizzle select chain `getPortalBaseUrl` invokes. The `unknown`
+// cast at the boundary is used in lieu of `any` so the production
+// `getPortalBaseUrl` signature still type-checks at the callsite
+// while we avoid reproducing Drizzle's full fluent type machinery
+// here. The shape below is enforced by TypeScript inside the test
+// scope; only the final hand-off to `getPortalBaseUrl` needs the
+// `unknown` cast — `any` would silently disable all type checking
+// inside the mock, which is what we are explicitly avoiding.
+type SystemSettingsRow = { value: string | null };
+interface PortalUrlTxMock {
+  select(...args: unknown[]): {
+    from(...args: unknown[]): {
+      where(...args: unknown[]): Promise<SystemSettingsRow[]>;
+    };
+  };
+}
+type PortalUrlTx = typeof DbReal;
+function mockTx(value: string | null | undefined): PortalUrlTx {
+  const rows: SystemSettingsRow[] = value === undefined ? [] : [{ value: value as string | null }];
+  const m: PortalUrlTxMock = {
     select: () => ({
       from: () => ({
         where: async () => rows,
       }),
     }),
   };
+  return m as unknown as PortalUrlTx;
 }
 
 // Snapshot/restore the env vars the helper reads so tests don't bleed.
@@ -130,8 +151,8 @@ describe("getPortalBaseUrl", () => {
     it("throws PortalBaseUrlNotConfiguredError when nothing is set", async () => {
       await assert.rejects(
         () => getPortalBaseUrl(mockTx(undefined)),
-        (err: any) => {
-          assert.ok(err instanceof PortalBaseUrlNotConfiguredError, `expected typed error, got ${err?.constructor?.name}`);
+        (err: unknown) => {
+          assert.ok(err instanceof PortalBaseUrlNotConfiguredError, `expected typed error, got ${(err as { constructor?: { name?: string } } | null)?.constructor?.name}`);
           assert.match(err.message, /not configured/i);
           assert.match(err.message, /public_app_url|PUBLIC_APP_URL/);
           return true;
@@ -160,8 +181,8 @@ describe("getPortalBaseUrl", () => {
       setEnv({ NODE_ENV: "production", REPLIT_DEV_DOMAIN: "agent-sandbox.repl.co" });
       await assert.rejects(
         () => getPortalBaseUrl(mockTx(undefined)),
-        (err: any) => {
-          assert.ok(err instanceof PortalBaseUrlNotConfiguredError, `expected typed error in production, got ${err?.constructor?.name}`);
+        (err: unknown) => {
+          assert.ok(err instanceof PortalBaseUrlNotConfiguredError, `expected typed error in production, got ${(err as { constructor?: { name?: string } } | null)?.constructor?.name}`);
           return true;
         },
       );

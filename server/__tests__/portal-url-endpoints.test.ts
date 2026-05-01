@@ -1,302 +1,379 @@
-import { describe, it, before, after, beforeEach, afterEach } from "node:test";
-import assert from "node:assert/strict";
+// Task #263 — endpoint-level integration coverage for the two SMS
+// endpoints whose `{portal_url}` placeholder used to embed a 404
+// path suffix (`/candidate/onboarding` / `/login`):
+//
+//   * POST /api/onboarding/reminder-test-sms
+//   * POST /api/candidates/re-engagement-sms
+//
+// These tests exercise the REAL handlers registered via
+// `registerRoutes(httpServer, app)` — same pattern as
+// `smp-commit-iban-resolution.test.ts` for Task #134. The handlers
+// are located in the live router stack and invoked directly with a
+// pre-authenticated `req` object so we bypass auth middleware
+// (covered by its own tests) without simulating a full login flow.
+//
+// Storage is stubbed at the singleton level so the handlers see a
+// known SMS plugin and a single inactive_one_year candidate. The
+// SMS gateway is intercepted via the `__test__.setSendInterceptor`
+// hook in `server/sms-sender.ts`, which captures every `(to,
+// message)` pair the production code path is about to send. The
+// captured message text is then asserted to (a) contain the bare
+// resolved base URL, and (b) NOT contain the offending suffix.
+//
+// Run with:
+//   npx tsx --test server/__tests__/portal-url-endpoints.test.ts
+
+// Default NODE_ENV to "test" so the portal-url helper's
+// REPLIT_DEV_DOMAIN gate accepts our explicit PUBLIC_APP_URL path
+// and so the SMS sender's dev-bypass is active (no real HTTP call).
+process.env.NODE_ENV ??= "test";
+// Pin a deterministic base URL the assertions can grep for.
+const TEST_BASE_URL = "https://workforce.test.example";
+process.env.PUBLIC_APP_URL = TEST_BASE_URL;
+
+import { strict as assert } from "node:assert";
+import { describe, it, before, beforeEach, afterEach } from "node:test";
+import { createServer, type Server } from "node:http";
 import express, { type Express, type Request, type Response } from "express";
-import request from "supertest";
-import {
-  getPortalBaseUrl,
-  PortalBaseUrlNotConfiguredError,
-} from "../lib/portal-url";
-import { renderReminderTemplate } from "../onboarding-reminders";
-import { trL } from "../i18n";
 
-/**
- * HTTP-level integration coverage for the two endpoints fixed in
- * Task #263:
- *
- *   - POST /api/onboarding/reminder-test-sms (admin reminder preview)
- *   - POST /api/candidates/re-engagement-sms (bulk re-engagement nudge)
- *
- * Both used to embed `{portal_url}` with a hard-coded path suffix
- * (`/candidate/onboarding` and `/login` respectively) that 404'd on
- * the live client router. The fix routes both through
- * `getPortalBaseUrl()` and emits the bare base URL.
- *
- * These tests mount a minimal Express harness whose handlers replay
- * the production handler's URL-emission code path verbatim:
- *
- *   1. Resolve the workforce base URL via `getPortalBaseUrl(tx?)`.
- *   2. Build the SMS message text using the SAME helpers the real
- *      handlers call: `renderReminderTemplate` for reminder-test-sms
- *      and `trL("sms.reengagement", { link })` for re-engagement.
- *   3. Return the resulting message text in the response.
- *
- * The harness intentionally skips auth, persistence, and the SMS
- * gateway — those are not part of the bug under test. What is
- * asserted is the wire-level guarantee: the link embedded in the
- * SMS body equals the resolved base URL exactly, with NO appended
- * path.
- *
- * A static guard test below greps the production handlers in
- * `server/routes.ts` to ensure they keep calling the helpers used
- * here, so the integration mirror cannot silently drift from the
- * real route.
- */
+let reminderTestHandler: (req: Request, res: Response) => Promise<void> | void;
+let reengagementHandler: (req: Request, res: Response) => Promise<void> | void;
 
-// Snapshot/restore the env vars the helper reads.
-const originalEnv = { ...process.env };
-const TRACKED = ["PUBLIC_APP_URL", "REPLIT_DEV_DOMAIN", "NODE_ENV"] as const;
-function setEnv(patch: Record<string, string | undefined>) {
-  for (const k of Object.keys(patch)) {
-    if (patch[k] === undefined) delete process.env[k];
-    else process.env[k] = patch[k];
-  }
+// Storage singleton lookup — populated lazily so the import order
+// matches what registerRoutes expects. We type it as a record of
+// async function stubs that the two handlers under test invoke;
+// `unknown` would force every callsite to narrow, and the actual
+// `IStorage` interface defines hundreds of unrelated methods we
+// don't need to replicate just to swap three of them. The `as
+// MutableStorage` cast at the boundary is the deliberate seam.
+type StorageMethod = (...args: unknown[]) => Promise<unknown>;
+type MutableStorage = Record<string, StorageMethod>;
+let storageRef: MutableStorage;
+let smsTestHooks: { setSendInterceptor(fn: ((to: string, message: string) => void) | null): void };
+
+// What the stubbed `storage.getCandidate` returns for our test rows.
+// Mutable per-test via `seedCandidate(...)`. The shape mirrors only
+// the candidate fields the handlers and the cohort gate inspect —
+// adding extra fields here is harmless because the handler reads by
+// property access, but we keep the index signature open so future
+// fields can be set per-test without widening this type.
+type SeededCandidate = Record<string, unknown> & {
+  id: string;
+  userId: string | null;
+  phone: string | null;
+  profileCompleted?: boolean;
+  lastLoginAt?: Date | string | null;
+  archivedAt?: Date | string | null;
+};
+let seededCandidate: SeededCandidate | null = null;
+function seedCandidate(c: SeededCandidate | null) { seededCandidate = c; }
+
+// Capture every SMS the handler tries to send.
+const sentMessages: Array<{ to: string; message: string }> = [];
+
+before(async () => {
+  // Pool() in db.ts needs a string but does NOT connect until first
+  // query. Most stubbed methods short-circuit before any DB call.
+  process.env.DATABASE_URL ||= "postgresql://test:test@localhost:5432/test";
+
+  const storageMod = await import("../storage");
+  storageRef = storageMod.storage as unknown as MutableStorage;
+
+  // Active SMS plugin — minimal shape sufficient for sendSmsViaPlugin
+  // to take the dev-bypass path (NODE_ENV=test).
+  storageRef.getActiveSmsPlugin = async () => ({
+    id: "plugin-test",
+    name: "test-gateway",
+    pluginConfig: { url: "https://invalid.test/never-called" },
+    credentials: {},
+    isActive: true,
+  });
+
+  storageRef.getCandidate = async (id: string) => {
+    if (seededCandidate && seededCandidate.id === id) return seededCandidate;
+    return null;
+  };
+
+  // The audit log writer is invoked at the end of each handler. Stub
+  // so a missing DB doesn't surface as a 500.
+  storageRef.createAuditLog = async () => ({ id: "audit-stub" });
+
+  // Hook the SMS sender's test-only interceptor so we can capture
+  // exactly what the handler hands to the gateway.
+  const smsMod = await import("../sms-sender");
+  smsTestHooks = smsMod.__test__;
+
+  const { registerRoutes } = await import("../routes");
+  const app: Express = express();
+  app.use(express.json());
+  const httpServer: Server = createServer(app);
+  await registerRoutes(httpServer, app);
+
+  // Pull the two handlers out of the Express router stack so we can
+  // invoke them without going through requirePermission. Auth is
+  // covered by auth-middleware tests; the bug under test is in the
+  // handler body's URL-emission code.
+  // Express's router stack is private API — there is no public way
+  // to fetch a handler by route+method. We narrow the access to a
+  // local structural type so the rest of the file stays `any`-free.
+  type RouteLayer = {
+    route?: {
+      path: string;
+      methods?: Record<string, boolean>;
+      stack: Array<{ handle: (req: Request, res: Response) => Promise<void> | void }>;
+    };
+  };
+  type AppWithRouter = Express & {
+    router?: { stack: RouteLayer[] };
+    _router?: { stack: RouteLayer[] };
+  };
+  const router = (app as AppWithRouter).router ?? (app as AppWithRouter)._router;
+  const stack: RouteLayer[] = router?.stack ?? [];
+  const findHandler = (method: "post", path: string) => {
+    for (const layer of stack) {
+      const route = layer.route;
+      if (!route || route.path !== path) continue;
+      if (!route.methods?.[method]) continue;
+      const sub = route.stack;
+      return sub[sub.length - 1].handle;
+    }
+    return null;
+  };
+  reminderTestHandler = findHandler("post", "/api/onboarding/reminder-test-sms");
+  reengagementHandler = findHandler("post", "/api/candidates/re-engagement-sms");
+  assert.ok(reminderTestHandler, "could not locate POST /api/onboarding/reminder-test-sms in router stack");
+  assert.ok(reengagementHandler, "could not locate POST /api/candidates/re-engagement-sms in router stack");
+});
+
+beforeEach(() => {
+  sentMessages.length = 0;
+  seededCandidate = null;
+  smsTestHooks.setSendInterceptor((to, message) => {
+    sentMessages.push({ to, message });
+  });
+});
+afterEach(() => {
+  smsTestHooks.setSendInterceptor(null);
+});
+
+// Minimal Express-shaped response double — only the methods the
+// real handlers invoke. Returns accessor closures so each test
+// reads `res.statusCode()` / `res.body()` like supertest.
+interface CapturedRes {
+  res: Response;
+  statusCode(): number;
+  body(): unknown;
 }
-function restoreEnv() {
-  for (const k of TRACKED) {
-    if (originalEnv[k] === undefined) delete process.env[k];
-    else process.env[k] = originalEnv[k];
+function makeRes(): CapturedRes {
+  let statusCode = 200;
+  let body: unknown = undefined;
+  // Subset of express.Response the two handlers actually call.
+  // Keeping the type local + structural avoids importing Express's
+  // huge Response interface just to assert on three methods.
+  interface MinimalRes {
+    status(code: number): MinimalRes;
+    json(payload: unknown): MinimalRes;
+    setHeader(name: string, value: string): MinimalRes;
   }
-}
-
-// In-memory mock of the system_settings tx the helper accepts.
-function mockTx(value: string | null | undefined) {
+  const r: MinimalRes = {
+    status(code: number) { statusCode = code; return r; },
+    json(payload: unknown) { body = payload; return r; },
+    setHeader() { return r; },
+  };
   return {
-    select: () => ({
-      from: () => ({
-        where: async () => (value === undefined ? [] : [{ value }]),
-      }),
-    }),
+    res: r as unknown as Response,
+    statusCode: () => statusCode,
+    body: () => body,
   };
 }
 
-// Stash the system-setting value the test wants the harness to
-// resolve to. The harness handlers pass this into getPortalBaseUrl.
-let nextSettingValue: string | null | undefined = undefined;
-function withSetting(v: string | null | undefined) {
-  nextSettingValue = v;
+// Build a `req` shaped like what requireAuth/requirePermission would
+// have produced if the SUPER-ADMIN passed through. The handlers under
+// test only read these fields and `body`/`headers`.
+function makeAuthedReq(body: unknown): Request {
+  return {
+    authUserId: "test-actor",
+    authIsSuperAdmin: true,
+    authPermissions: new Set([
+      "candidates:smp_manage",
+      "onboarding:update",
+    ]),
+    body,
+    headers: {},
+    cookies: {},
+    query: {},
+    params: {},
+  } as unknown as Request;
 }
 
-function buildHarness(): Express {
-  const app = express();
-  app.use(express.json());
+describe("POST /api/onboarding/reminder-test-sms — real route, bare {portal_url}", () => {
+  it("rendered preview embeds the bare base URL with NO 404 path suffix (en + regular)", async () => {
+    const captured = makeRes();
+    await reminderTestHandler(
+      makeAuthedReq({ phone: "0500000001", variant: "regular", locale: "en" }),
+      captured.res,
+    );
+    // Plugin returns dev-bypass success in test env, so 200.
+    assert.equal(captured.statusCode(), 200, `expected 200, got ${captured.statusCode()} body=${JSON.stringify(captured.body())}`);
+    const body = captured.body() as { ok: boolean; preview: string };
+    assert.equal(body.ok, true);
+    assert.ok(body.preview.includes(TEST_BASE_URL), `preview must contain bare base URL ${TEST_BASE_URL}, got: ${body.preview}`);
+    assert.ok(!body.preview.includes("/candidate/onboarding"), `preview leaked /candidate/onboarding suffix: ${body.preview}`);
+    assert.ok(!body.preview.includes("/login"), `preview leaked /login suffix: ${body.preview}`);
+    // The interceptor must also have been called with the SAME
+    // message the response surfaced — proves the wire payload and
+    // the operator-visible preview agree.
+    assert.equal(sentMessages.length, 1, `expected one captured SMS, got ${sentMessages.length}`);
+    assert.equal(sentMessages[0].message, body.preview, "captured wire message must equal preview");
+  });
 
-  // Mirrors routes.ts: app.post("/api/onboarding/reminder-test-sms", ...)
-  // — specifically the URL-construction and template-render lines
-  // (current location server/routes.ts ~4341-4367).
-  app.post("/api/onboarding/reminder-test-sms", async (req: Request, res: Response) => {
+  it("rendered preview embeds the bare base URL with NO 404 path suffix (ar + final)", async () => {
+    const captured = makeRes();
+    await reminderTestHandler(
+      makeAuthedReq({ phone: "0500000002", variant: "final", locale: "ar" }),
+      captured.res,
+    );
+    assert.equal(captured.statusCode(), 200);
+    const body = captured.body() as { ok: boolean; preview: string };
+    assert.ok(body.preview.includes(TEST_BASE_URL), `preview must contain bare base URL: ${body.preview}`);
+    assert.ok(!body.preview.includes(`${TEST_BASE_URL}/candidate`), `preview leaked /candidate suffix: ${body.preview}`);
+    assert.ok(!body.preview.includes(`${TEST_BASE_URL}/login`), `preview leaked /login suffix: ${body.preview}`);
+    assert.equal(sentMessages.length, 1);
+  });
+
+  it("falls back to the wire-message preview on a 503 when the SMS plugin is unconfigured", async () => {
+    // Temporarily remove the plugin to drive the no-plugin branch
+    // (returns 503 with the constructed preview).
+    const restore = storageRef.getActiveSmsPlugin;
+    storageRef.getActiveSmsPlugin = async () => null;
     try {
-      const variant = (req.body?.variant === "final" ? "final" : "regular") as "regular" | "final";
-      const locale = (req.body?.locale === "en" ? "en" : "ar") as "ar" | "en";
-      // Fixed template text used in tests so we don't depend on DB
-      // state; the real handler fetches the same shape from
-      // getReminderTemplate(). Both templates contain `{portal_url}`,
-      // which is the bug surface under test.
-      const tpl =
-        locale === "ar"
-          ? "مرحباً {name}، الرابط: {portal_url} — الموعد: {deadline_date}"
-          : "Hello {name}, link: {portal_url} — deadline: {deadline_date}";
-      const portalUrl = await getPortalBaseUrl(mockTx(nextSettingValue) as any);
-      const message = renderReminderTemplate(tpl, {
-        name: locale === "ar" ? "مرشح تجريبي" : "Test Candidate",
-        missingDocs: locale === "ar" ? "صورة" : "photo",
-        portalUrl,
-        deadlineDate: "2026-05-02 09:00",
-      });
-      return res.json({ ok: true, preview: message, portalUrl, variant });
-    } catch (err) {
-      if (err instanceof PortalBaseUrlNotConfiguredError) {
-        return res.status(503).json({ ok: false, error: "portal_url_not_configured" });
-      }
-      return res.status(500).json({ ok: false, error: "internal_error" });
-    }
-  });
-
-  // Mirrors routes.ts: app.post("/api/candidates/re-engagement-sms", ...)
-  // — specifically the URL-construction and message-build lines
-  // (current location server/routes.ts ~3122-3149).
-  app.post("/api/candidates/re-engagement-sms", async (req: Request, res: Response) => {
-    try {
-      const ids = Array.isArray(req.body?.ids) ? (req.body.ids as string[]) : [];
-      if (ids.length === 0) {
-        return res.status(400).json({ message: "ids required" });
-      }
-      const locale = (req.body?.locale === "en" ? "en" : "ar") as "ar" | "en";
-      const portalUrl = await getPortalBaseUrl(mockTx(nextSettingValue) as any);
-      const message = trL(locale, "sms.reengagement", { link: portalUrl });
-      // Echo the message that WOULD be sent to the gateway so the
-      // test can inspect it. The real handler hands `message` to
-      // sendSmsViaPlugin; intercepting that gateway is out of scope.
-      return res.json({
-        sent: 0, skipped: 0, failed: 0, total: ids.length,
-        intendedMessage: message,
-        portalUrl,
-      });
-    } catch (err) {
-      if (err instanceof PortalBaseUrlNotConfiguredError) {
-        return res.status(503).json({ error: "portal_url_not_configured" });
-      }
-      return res.status(500).json({ error: "internal_error" });
-    }
-  });
-
-  return app;
-}
-
-describe("portal-url endpoints (HTTP integration)", () => {
-  let app: Express;
-
-  before(() => {
-    app = buildHarness();
-  });
-  beforeEach(() => {
-    setEnv({ PUBLIC_APP_URL: undefined, REPLIT_DEV_DOMAIN: undefined, NODE_ENV: "test" });
-    nextSettingValue = undefined;
-  });
-  afterEach(() => {
-    restoreEnv();
-    nextSettingValue = undefined;
-  });
-
-  describe("POST /api/onboarding/reminder-test-sms", () => {
-    it("emits the bare base URL and NO 404 path suffix (en + regular)", async () => {
-      withSetting("https://workforce.example.com");
-      const res = await request(app)
-        .post("/api/onboarding/reminder-test-sms")
-        .send({ variant: "regular", locale: "en", phone: "+966500000000" });
-      assert.equal(res.status, 200);
-      assert.equal(res.body.ok, true);
-      assert.equal(res.body.portalUrl, "https://workforce.example.com");
-      // Exact bare base URL appears verbatim in the rendered SMS.
-      assert.ok(
-        (res.body.preview as string).includes("https://workforce.example.com"),
-        `preview must contain bare base URL, got: ${res.body.preview}`,
+      const captured = makeRes();
+      await reminderTestHandler(
+        makeAuthedReq({ phone: "0500000003", variant: "regular", locale: "en" }),
+        captured.res,
       );
-      // Critical regression guard: the offending suffix MUST NOT
-      // re-appear in the rendered message body.
-      assert.ok(!(res.body.preview as string).includes("/candidate/onboarding"), `preview leaked /candidate/onboarding suffix: ${res.body.preview}`);
-      assert.ok(!(res.body.preview as string).includes("/login"), `preview leaked /login suffix: ${res.body.preview}`);
-    });
-
-    it("emits the bare base URL and NO 404 path suffix (ar + final)", async () => {
-      withSetting("https://workforce.example.com/");
-      const res = await request(app)
-        .post("/api/onboarding/reminder-test-sms")
-        .send({ variant: "final", locale: "ar", phone: "+966500000000" });
-      assert.equal(res.status, 200);
-      // Trailing slash on the configured value is normalized away by
-      // the helper; downstream rendering must therefore see the bare
-      // base URL exactly once with no double slashes.
-      assert.equal(res.body.portalUrl, "https://workforce.example.com");
-      assert.ok((res.body.preview as string).includes("https://workforce.example.com"));
-      assert.ok(!(res.body.preview as string).includes("workforce.example.com/candidate"));
-      assert.ok(!(res.body.preview as string).includes("workforce.example.com/login"));
-    });
-
-    it("returns 503 when no portal URL source is configured", async () => {
-      // Fully unconfigured + test env without dev-domain.
-      setEnv({ PUBLIC_APP_URL: undefined, REPLIT_DEV_DOMAIN: undefined, NODE_ENV: "production" });
-      withSetting(undefined);
-      const res = await request(app)
-        .post("/api/onboarding/reminder-test-sms")
-        .send({ variant: "regular", locale: "en", phone: "+966500000000" });
-      assert.equal(res.status, 503);
-      assert.equal(res.body.error, "portal_url_not_configured");
-    });
-
-    it("respects PUBLIC_APP_URL env when system setting is empty", async () => {
-      setEnv({ PUBLIC_APP_URL: "https://envvar.example.com", NODE_ENV: "production" });
-      withSetting(undefined);
-      const res = await request(app)
-        .post("/api/onboarding/reminder-test-sms")
-        .send({ variant: "regular", locale: "en" });
-      assert.equal(res.status, 200);
-      assert.equal(res.body.portalUrl, "https://envvar.example.com");
-      assert.ok((res.body.preview as string).includes("https://envvar.example.com"));
-      assert.ok(!(res.body.preview as string).includes("envvar.example.com/"));
-    });
-  });
-
-  describe("POST /api/candidates/re-engagement-sms", () => {
-    it("intended SMS message embeds bare base URL and NO /login suffix (en)", async () => {
-      withSetting("https://workforce.example.com");
-      const res = await request(app)
-        .post("/api/candidates/re-engagement-sms")
-        .send({ ids: ["cand-1"], locale: "en" });
-      assert.equal(res.status, 200);
-      assert.equal(res.body.portalUrl, "https://workforce.example.com");
-      const msg = res.body.intendedMessage as string;
-      assert.ok(msg.includes("https://workforce.example.com"), `message must contain bare base URL: ${msg}`);
-      assert.ok(!msg.includes("/login"), `message leaked /login suffix: ${msg}`);
-      assert.ok(!msg.includes("/candidate"), `message leaked /candidate suffix: ${msg}`);
-      // Exactly one occurrence of the URL — guards against
-      // accidental double-substitution.
-      const occurrences = msg.match(/https:\/\/workforce\.example\.com/g)?.length ?? 0;
-      assert.equal(occurrences, 1, `expected exactly one URL occurrence, got ${occurrences}: ${msg}`);
-    });
-
-    it("intended SMS message embeds bare base URL and NO /login suffix (ar)", async () => {
-      withSetting("https://workforce.example.com");
-      const res = await request(app)
-        .post("/api/candidates/re-engagement-sms")
-        .send({ ids: ["cand-1"], locale: "ar" });
-      assert.equal(res.status, 200);
-      const msg = res.body.intendedMessage as string;
-      assert.ok(msg.includes("https://workforce.example.com"), `ar message must contain bare base URL: ${msg}`);
-      assert.ok(!msg.includes("/login"), `ar message leaked /login suffix: ${msg}`);
-    });
-
-    it("returns 400 when ids is empty (input validation untouched)", async () => {
-      withSetting("https://workforce.example.com");
-      const res = await request(app)
-        .post("/api/candidates/re-engagement-sms")
-        .send({ ids: [], locale: "en" });
-      assert.equal(res.status, 400);
-    });
-
-    it("returns 503 when no portal URL source is configured", async () => {
-      setEnv({ PUBLIC_APP_URL: undefined, REPLIT_DEV_DOMAIN: undefined, NODE_ENV: "production" });
-      withSetting(undefined);
-      const res = await request(app)
-        .post("/api/candidates/re-engagement-sms")
-        .send({ ids: ["cand-1"], locale: "en" });
-      assert.equal(res.status, 503);
-      assert.equal(res.body.error, "portal_url_not_configured");
-    });
-  });
-
-  describe("static drift guard — the production handlers still call getPortalBaseUrl", () => {
-    // If someone reverts or accidentally changes the production
-    // handlers in routes.ts, this test fails loudly so the harness
-    // above can't quietly drift out of sync with the real route.
-    // Locate the actual `app.post(...)` registration, not stray
-    // mentions in header comments / route listings.
-    function findHandlerBlock(src: string, route: string): string {
-      const needle = `app.post("${route}"`;
-      const start = src.indexOf(needle);
-      assert.ok(start > 0, `could not locate handler registration ${needle} in routes.ts`);
-      return src.slice(start, start + 4000);
+      assert.equal(captured.statusCode(), 503);
+      const body = captured.body() as { ok: boolean; preview: string; error: string };
+      assert.equal(body.error, "no_active_sms_plugin");
+      assert.ok(body.preview.includes(TEST_BASE_URL), `503 preview must contain bare base URL: ${body.preview}`);
+      assert.ok(!body.preview.includes("/candidate/onboarding"), `503 preview leaked /candidate/onboarding: ${body.preview}`);
+    } finally {
+      storageRef.getActiveSmsPlugin = restore;
     }
+  });
+});
 
-    it("server/routes.ts re-engagement handler imports + awaits getPortalBaseUrl and uses it as `link`", async () => {
-      const fs = await import("node:fs/promises");
-      const src = await fs.readFile("server/routes.ts", "utf8");
-      const block = findHandlerBlock(src, "/api/candidates/re-engagement-sms");
-      assert.ok(/from\s+["']\.\/lib\/portal-url["']|import\(["']\.\/lib\/portal-url["']\)/.test(block), "re-engagement handler must import from ./lib/portal-url");
-      assert.ok(/await\s+getPortalBaseUrl\s*\(/.test(block), "re-engagement handler must await getPortalBaseUrl()");
-      assert.ok(/sms\.reengagement[\s\S]{0,200}link\s*:\s*portalUrl/.test(block), "re-engagement handler must pass portalUrl as the `link` substitution param");
-      // Hard regression guard: the offending hard-coded path must
-      // NOT be present anywhere in the handler block.
-      assert.ok(!/portalUrl\s*\+\s*["']\/login["']/.test(block), "/login suffix must not be re-appended to portalUrl");
+describe("POST /api/candidates/re-engagement-sms — real route, bare {portal_url}", () => {
+  it("captured wire message embeds the bare base URL with NO /login suffix (en candidate)", async () => {
+    // Seed a candidate the cohort gate accepts. The gate calls
+    // `computeArchivedReason` (in shared/candidate-status.ts), which
+    // returns "inactive_one_year" iff:
+    //   * archivedAt is null
+    //   * status is not blocked / not hired
+    //   * profileCompleted === true
+    //   * lastLoginAt is either null OR more than 365 days ago
+    // Phone + userId are needed independently so the route's
+    // own pre-checks (account exists, has a number to text) pass.
+    const yearAgo = new Date(Date.now() - 400 * 24 * 3600_000);
+    seedCandidate({
+      id: "cand-en-1",
+      userId: "user-en-1",
+      phone: "0500000010",
+      classification: "smp",
+      status: "active",
+      profileCompleted: true,
+      lastLoginAt: yearAgo,
+      archivedAt: null,
+      preferredLocale: "en",
     });
 
-    it("server/routes.ts reminder-test-sms handler imports + awaits getPortalBaseUrl and passes it as portalUrl", async () => {
-      const fs = await import("node:fs/promises");
-      const src = await fs.readFile("server/routes.ts", "utf8");
-      const block = findHandlerBlock(src, "/api/onboarding/reminder-test-sms");
-      assert.ok(/from\s+["']\.\/lib\/portal-url["']|import\(["']\.\/lib\/portal-url["']\)/.test(block), "reminder-test-sms handler must import from ./lib/portal-url");
-      assert.ok(/await\s+getPortalBaseUrl\s*\(/.test(block), "reminder-test-sms handler must await getPortalBaseUrl()");
-      assert.ok(/portalUrl\s*[,}]/.test(block), "reminder-test-sms handler must pass portalUrl into renderReminderTemplate");
-      assert.ok(!/portalUrl\s*\+\s*["']\/candidate\/onboarding["']/.test(block), "/candidate/onboarding suffix must not be re-appended to portalUrl");
+    const captured = makeRes();
+    await reengagementHandler(
+      makeAuthedReq({ ids: ["cand-en-1"] }),
+      captured.res,
+    );
+
+    assert.equal(captured.statusCode(), 200, `expected 200, got ${captured.statusCode()} body=${JSON.stringify(captured.body())}`);
+    const body = captured.body() as { sent: number; skipped: number; failed: number; total: number; skippedReasons: Array<{ id: string; reason: string }> };
+    if (body.sent !== 1) {
+      // Surface why the cohort gate rejected so the test message is actionable.
+      assert.fail(`expected sent=1 — got ${JSON.stringify(body)}`);
+    }
+    assert.equal(sentMessages.length, 1, `expected one captured SMS, got ${sentMessages.length}: ${JSON.stringify(sentMessages)}`);
+    const msg = sentMessages[0].message;
+    assert.ok(msg.includes(TEST_BASE_URL), `wire message must contain bare base URL: ${msg}`);
+    assert.ok(!msg.includes("/login"), `wire message leaked /login suffix: ${msg}`);
+    assert.ok(!msg.includes("/candidate"), `wire message leaked /candidate suffix: ${msg}`);
+    // Exactly one URL occurrence guards against accidental
+    // double-substitution in the i18n template.
+    const occurrences = msg.match(new RegExp(TEST_BASE_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))?.length ?? 0;
+    assert.equal(occurrences, 1, `expected exactly one URL occurrence, got ${occurrences}: ${msg}`);
+  });
+
+  it("captured wire message embeds the bare base URL with NO /login suffix (ar candidate)", async () => {
+    const yearAgo = new Date(Date.now() - 400 * 24 * 3600_000);
+    seedCandidate({
+      id: "cand-ar-1",
+      userId: "user-ar-1",
+      phone: "0500000011",
+      classification: "smp",
+      status: "active",
+      profileCompleted: true,
+      lastLoginAt: yearAgo,
+      archivedAt: null,
+      preferredLocale: "ar",
     });
+
+    const captured = makeRes();
+    await reengagementHandler(
+      makeAuthedReq({ ids: ["cand-ar-1"] }),
+      captured.res,
+    );
+
+    assert.equal(captured.statusCode(), 200, `expected 200, got ${captured.statusCode()} body=${JSON.stringify(captured.body())}`);
+    const body = captured.body() as { sent: number; skippedReasons: Array<{ id: string; reason: string }> };
+    if (body.sent !== 1) {
+      assert.fail(`expected sent=1 — got ${JSON.stringify(body)}`);
+    }
+    assert.equal(sentMessages.length, 1);
+    const msg = sentMessages[0].message;
+    assert.ok(msg.includes(TEST_BASE_URL), `ar wire message must contain bare base URL: ${msg}`);
+    assert.ok(!msg.includes("/login"), `ar wire message leaked /login suffix: ${msg}`);
+  });
+
+  it("returns 400 when ids is empty (input validation untouched)", async () => {
+    const captured = makeRes();
+    await reengagementHandler(
+      makeAuthedReq({ ids: [] }),
+      captured.res,
+    );
+    assert.equal(captured.statusCode(), 400);
+    assert.equal(sentMessages.length, 0);
+  });
+
+  it("skips not_inactive_one_year candidates without sending", async () => {
+    // Active candidate (lastSeenAt = now) — cohort gate must reject
+    // the row and the SMS interceptor must NOT fire.
+    seedCandidate({
+      id: "cand-active",
+      userId: "user-active",
+      phone: "0500000012",
+      classification: "smp",
+      status: "active",
+      profileCompleted: true,
+      lastLoginAt: new Date(),
+      archivedAt: null,
+      preferredLocale: "en",
+    });
+    const captured = makeRes();
+    await reengagementHandler(
+      makeAuthedReq({ ids: ["cand-active"] }),
+      captured.res,
+    );
+    assert.equal(captured.statusCode(), 200);
+    const body = captured.body() as { sent: number; skipped: number };
+    assert.equal(body.sent, 0);
+    assert.equal(body.skipped, 1);
+    assert.equal(sentMessages.length, 0, "active candidate must not receive a re-engagement SMS");
   });
 });

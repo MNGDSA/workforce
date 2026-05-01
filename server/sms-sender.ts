@@ -119,8 +119,34 @@ function toWesternDigitsForSms(text: string): string {
 }
 
 // Test-only export so unit tests can exercise the sanitizer in isolation
-// without standing up an SMS plugin.
-export const __test__ = { toWesternDigitsForSms };
+// without standing up an SMS plugin. Also exposes a one-shot send
+// interceptor: tests can register a function that receives every
+// `(to, message)` pair the gateway is about to be called with, so
+// integration tests covering message-construction can assert on the
+// exact wire payload without standing up an HTTP capture server or
+// monkey-patching the dynamic-import cache. The interceptor is
+// no-op in production because nothing ever registers it there; the
+// holder defaults to `null` and is only mutated through this export.
+let __sendInterceptor: ((to: string, message: string) => void) | null = null;
+export const __test__ = {
+  toWesternDigitsForSms,
+  setSendInterceptor(fn: ((to: string, message: string) => void) | null) {
+    // Hard-gate to NODE_ENV=test so the interceptor cannot be
+    // installed in production even by mistake (e.g. a stray import,
+    // a dependency calling __test__ from a require'd module, or a
+    // leaked vitest setup file). Mathematically guarantees the
+    // production sendSmsViaPlugin path never branches into this hook.
+    if (process.env.NODE_ENV !== "test") {
+      throw new Error(
+        "sms-sender.__test__.setSendInterceptor: refusing to install send interceptor outside NODE_ENV=test " +
+          "(current NODE_ENV=" +
+          (process.env.NODE_ENV ?? "<unset>") +
+          ")",
+      );
+    }
+    __sendInterceptor = fn;
+  },
+};
 
 /**
  * Returns true if the message contains characters outside the GSM-7 basic
@@ -147,6 +173,14 @@ export async function sendSmsViaPlugin(
   // regardless of which caller built the string. See toWesternDigitsForSms
   // for the policy rationale.
   message = toWesternDigitsForSms(message);
+
+  // Test-only capture hook (see __test__.setSendInterceptor). Fires
+  // AFTER digit normalization so tests see the exact bytes the
+  // gateway would receive, but BEFORE dev bypass so the test still
+  // exercises the full message-construction path of the caller.
+  if (__sendInterceptor) {
+    try { __sendInterceptor(to, message); } catch { /* swallow — never break the send path on a test hook */ }
+  }
 
   // ───────────────────────────────────────────────────────────────────────
   // Dev/test bypass — when the SMS gateway is unreachable (carrier or
