@@ -78,3 +78,9 @@ id = "0zvRyHpZzQgaExPYLG4Bb"
 uri = "file://attached_assets/trusted-by-marquee.tsx.txt"
 type = "text"
 title = "TrustedByMarquee component (rename to .tsx)"
+
+[[outputs]]
+id = "fok_sfKbwBOFQm7_rqp-B"
+uri = "file://attached_assets/terms_conditions_en_2026-04-30.md"
+type = "text"
+title = "Terms & Conditions — English (markdown ready to paste)"
