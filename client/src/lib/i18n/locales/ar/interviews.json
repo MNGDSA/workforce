@@ -127,6 +127,28 @@
       "actions": "الإجراءات"
     }
   },
+  "export": {
+    "button": "تصدير إلى Excel",
+    "toastEmpty": "لا يوجد مرشحون للتصدير",
+    "toastDone": "تم تصدير {{n}} صفًا",
+    "toastFail": "فشل التصدير — حاول مرة أخرى",
+    "cols": {
+      "num": "#",
+      "candidateId": "مُعرّف المرشح",
+      "fullName": "الاسم الكامل",
+      "nationalId": "رقم الهوية / الإقامة",
+      "phone": "الجوال",
+      "decision": "القرار",
+      "decisionRaw": "القرار (خام)",
+      "applicationStatus": "حالة الطلب",
+      "questionSet": "مجموعة الأسئلة"
+    },
+    "decisions": {
+      "liked": "مُختار",
+      "disliked": "مرفوض",
+      "none": "بدون قرار"
+    }
+  },
   "multiSearch": {
     "pill": "البحث عن {{n}} مُدخل",
     "pillTruncated": "تم استخدام أول {{n}} فقط",

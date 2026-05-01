@@ -123,6 +123,28 @@
       "actions": "Actions"
     }
   },
+  "export": {
+    "button": "Export to Excel",
+    "toastEmpty": "No candidates to export",
+    "toastDone": "Exported {{n}} rows",
+    "toastFail": "Export failed — please try again",
+    "cols": {
+      "num": "#",
+      "candidateId": "Candidate ID",
+      "fullName": "Full name",
+      "nationalId": "National / Iqama ID",
+      "phone": "Phone",
+      "decision": "Decision",
+      "decisionRaw": "Decision (raw)",
+      "applicationStatus": "Application status",
+      "questionSet": "Question set"
+    },
+    "decisions": {
+      "liked": "Liked",
+      "disliked": "Disliked",
+      "none": "No action"
+    }
+  },
   "multiSearch": {
     "pill": "Searching {{n}} entries",
     "pillTruncated": "Only first {{n}} used",

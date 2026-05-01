@@ -39,7 +39,9 @@ import { parseSearchTokens, MAX_SEARCH_TOKENS } from "@shared/candidate-search";
 import {
   filterInvitees, computeInviteeSearchMeta,
   buildMissingIdsCsv, buildMissingIdsFilename,
+  slugifyForFilename,
 } from "./interviews-multi-id-search";
+import * as XLSX from "xlsx";
 
 type Candidate = { id: string; fullNameEn: string; nationalId?: string; photoUrl?: string | null };
 type Interview = {
@@ -834,6 +836,106 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
     URL.revokeObjectURL(url);
   }, [searchMeta, iv?.groupName]);
 
+  // Task #255 — export the currently visible candidate decisions to .xlsx so
+  // the recruiter can identify "no action" rows (usually no-shows) and copy
+  // their IDs into a new interview's bulk-invite. Built client-side from the
+  // already-loaded list + optimistic localStatuses so the file always agrees
+  // with what the recruiter sees on screen.
+  const handleExportExcel = useCallback(() => {
+    if (filtered.length === 0) {
+      toast({ title: t("interviews:export.toastEmpty"), variant: "destructive" });
+      return;
+    }
+    const decisionLabel = (raw: "shortlisted" | "rejected" | "none") =>
+      raw === "shortlisted" ? t("interviews:export.decisions.liked")
+        : raw === "rejected" ? t("interviews:export.decisions.disliked")
+        : t("interviews:export.decisions.none");
+
+    const headers = [
+      t("interviews:export.cols.num"),
+      t("interviews:export.cols.candidateId"),
+      t("interviews:export.cols.fullName"),
+      t("interviews:export.cols.nationalId"),
+      t("interviews:export.cols.phone"),
+      t("interviews:export.cols.decision"),
+      t("interviews:export.cols.decisionRaw"),
+      t("interviews:export.cols.applicationStatus"),
+      t("interviews:export.cols.questionSet"),
+    ];
+
+    const rows = filtered.map((c, idx) => {
+      const effectiveStatus = localStatuses[c.id] ?? c.applicationStatus;
+      const decisionRaw: "shortlisted" | "rejected" | "none" =
+        effectiveStatus === "shortlisted" ? "shortlisted"
+          : effectiveStatus === "rejected" ? "rejected"
+          : "none";
+      const qsName = c.questionSetId ? (questionSetMap.get(c.questionSetId)?.name ?? "") : "";
+      return [
+        idx + 1,
+        c.id,
+        c.fullNameEn ?? "",
+        c.nationalId ?? "",
+        c.phone ?? "",
+        decisionLabel(decisionRaw),
+        decisionRaw,
+        effectiveStatus ?? "",
+        qsName,
+      ];
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    // Force ID-shaped columns to text so Excel does not strip leading zeros
+    // or convert long numerics to scientific notation.
+    const TEXT_COL_INDEXES = [1, 3, 4]; // candidateId, nationalId, phone (0-based)
+    for (let r = 1; r <= rows.length; r++) {
+      for (const col of TEXT_COL_INDEXES) {
+        const addr = XLSX.utils.encode_cell({ r, c: col });
+        const cell = ws[addr];
+        if (cell && cell.v != null) {
+          cell.t = "s";
+          cell.v = String(cell.v);
+        }
+      }
+    }
+    ws["!cols"] = [
+      { wch: 5 },   // #
+      { wch: 38 },  // Candidate ID (UUID)
+      { wch: 28 },  // Full name
+      { wch: 14 },  // National ID
+      { wch: 14 },  // Phone
+      { wch: 12 },  // Decision
+      { wch: 12 },  // Decision raw
+      { wch: 16 },  // Application status
+      { wch: 24 },  // Question set
+    ];
+
+    const wb = XLSX.utils.book_new();
+    // Excel sheet names are limited to 31 chars and cannot contain : \ / ? * [ ]
+    const rawSheetName = (iv?.groupName ?? "Interview").trim() || "Interview";
+    const sheetName = rawSheetName.replace(/[:\\/?*[\]]/g, "-").slice(0, 31);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+    // If the group name is missing or unslugifiable (e.g. all-Arabic, which
+    // strips to empty ASCII), fall back to a clean `interview_<date>.xlsx`
+    // rather than the awkward double-prefixed `interview_interview_<date>`.
+    const slug = slugifyForFilename(iv?.groupName ?? null, "");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = slug ? `interview_${slug}_${dateStr}.xlsx` : `interview_${dateStr}.xlsx`;
+    try {
+      XLSX.writeFile(wb, filename);
+    } catch (err) {
+      console.error("Excel export failed:", err);
+      toast({ title: t("interviews:export.toastFail"), variant: "destructive" });
+      return;
+    }
+
+    toast({
+      title: t("interviews:export.toastDone", {
+        n: formatNumber(rows.length, i18n.language),
+      }),
+    });
+  }, [filtered, localStatuses, questionSetMap, iv?.groupName, t, toast, i18n.language]);
+
   const shortlistedCount = invitedCandidates.filter(c => (localStatuses[c.id] ?? c.applicationStatus) === "shortlisted").length;
   const rejectedCount = invitedCandidates.filter(c => (localStatuses[c.id] ?? c.applicationStatus) === "rejected").length;
 
@@ -887,7 +989,18 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
               )}
             </div>
 
-            <div className="relative max-w-md">
+            <div className="flex items-center gap-3 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 border-border bg-transparent text-foreground hover:bg-accent"
+                onClick={handleExportExcel}
+                data-testid="button-export-interview-decisions"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {t("interviews:export.button")}
+              </Button>
+              <div className="relative flex-1 min-w-[220px] max-w-md">
               <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder={t("interviews:fullpage.searchPh")}
@@ -925,6 +1038,7 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
                   <X className="h-4 w-4" />
                 </button>
               )}
+              </div>
             </div>
 
             {/* Missing-IDs panel — Task #226. Shown above the table when the
