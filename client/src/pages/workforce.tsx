@@ -1012,39 +1012,54 @@ export function EmployeeDetailContent({
             </div>
           </Card>
 
-          <div className="flex rounded-md overflow-hidden border border-zinc-800 bg-zinc-900/50 mt-2">
+          {/* Task #284 — Polished page-level tabs. Wider buttons, larger
+              touch targets, accent underline on the active tab; keeps
+              the same `tab` state so URL ?tab= sync still works. */}
+          <div className="flex gap-1 border-b border-zinc-800">
             <button
               onClick={() => setTab("details")}
-              className={`flex-1 text-xs font-semibold py-2.5 transition-colors flex items-center justify-center gap-1.5 ${
-                tab === "details" ? "bg-[hsl(155,45%,45%)] text-white" : "text-zinc-400 hover:text-white"
+              className={`relative px-4 py-3 text-sm font-semibold transition-colors flex items-center gap-2 ${
+                tab === "details"
+                  ? "text-white after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-[hsl(155,45%,45%)]"
+                  : "text-zinc-500 hover:text-zinc-200"
               }`}
               data-testid="tab-employee-details"
             >
-              <Eye className="h-3.5 w-3.5" /> {t("dialog.details")}
+              <Eye className="h-4 w-4" /> {t("dialog.details")}
             </button>
             <button
               onClick={() => setTab("history")}
-              className={`flex-1 text-xs font-semibold py-2.5 transition-colors flex items-center justify-center gap-1.5 ${
-                tab === "history" ? "bg-[hsl(155,45%,45%)] text-white" : "text-zinc-400 hover:text-white"
+              className={`relative px-4 py-3 text-sm font-semibold transition-colors flex items-center gap-2 ${
+                tab === "history"
+                  ? "text-white after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-[hsl(155,45%,45%)]"
+                  : "text-zinc-500 hover:text-zinc-200"
               }`}
               data-testid="tab-employee-history"
             >
-              <History className="h-3.5 w-3.5" /> {t("dialog.workHistory")}
+              <History className="h-4 w-4" /> {t("dialog.workHistory")}
             </button>
             <button
               onClick={() => setTab("schedule")}
-              className={`flex-1 text-xs font-semibold py-2.5 transition-colors flex items-center justify-center gap-1.5 ${
-                tab === "schedule" ? "bg-[hsl(155,45%,45%)] text-white" : "text-zinc-400 hover:text-white"
+              className={`relative px-4 py-3 text-sm font-semibold transition-colors flex items-center gap-2 ${
+                tab === "schedule"
+                  ? "text-white after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-[hsl(155,45%,45%)]"
+                  : "text-zinc-500 hover:text-zinc-200"
               }`}
               data-testid="tab-employee-schedule"
             >
-              <Clock className="h-3.5 w-3.5" /> {t("dialog.schedule.tab")}
+              <Clock className="h-4 w-4" /> {t("dialog.schedule.tab")}
             </button>
           </div>
 
           {tab === "details" && (
-            <div className="space-y-4 mt-2">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-5 mt-1">
+              {/* Task #284 — Identity card. Snapshot of the high-traffic
+                  fields (employee#, IDs, contact, position/event/manager,
+                  start date) in a 3-column grid so the page reads like a
+                  real profile rather than a stack of separated rows. */}
+              <Card className="border-zinc-800 bg-zinc-900/40" data-testid="card-identity">
+              <CardContent className="p-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
                 <InfoRow icon={<Hash className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.empNumber")} value={employee.employeeNumber} mono />
                 <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.nationalId")} value={employee.nationalId ?? "—"} mono />
                 <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.phone")} value={employee.phone ?? "—"} />
