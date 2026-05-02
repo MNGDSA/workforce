@@ -1193,9 +1193,13 @@ export function EmployeeDetailContent({
                   </>
                 )}
               </div>
+              </CardContent>
+              </Card>
 
-              <Separator className="bg-zinc-800" />
-
+              {/* Task #284 — Row: Salary | Notes (2-col on lg+) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+              <Card className="border-zinc-800 bg-zinc-900/40" data-testid="card-salary">
+              <CardContent className="p-5">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
@@ -1234,9 +1238,10 @@ export function EmployeeDetailContent({
                   </p>
                 )}
               </div>
-
-              <Separator className="bg-zinc-800" />
-
+              </CardContent>
+              </Card>
+              <Card className="border-zinc-800 bg-zinc-900/40" data-testid="card-notes">
+              <CardContent className="p-5">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("dialog.notes.label")}</Label>
@@ -1271,8 +1276,14 @@ export function EmployeeDetailContent({
                   <p className="text-zinc-300 text-sm">{employee.notes || t("dialog.notes.empty")}</p>
                 )}
               </div>
+              </CardContent>
+              </Card>
+              </div>
 
-              <Separator className="bg-zinc-800" />
+              {/* Task #284 — Row: Personal | Education (2-col on lg+) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+              <Card className="border-zinc-800 bg-zinc-900/40" data-testid="card-personal">
+              <CardContent className="p-5">
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
@@ -1360,8 +1371,10 @@ export function EmployeeDetailContent({
                   </div>
                 )}
               </div>
-
-              <Separator className="bg-zinc-800" />
+              </CardContent>
+              </Card>
+              <Card className="border-zinc-800 bg-zinc-900/40" data-testid="card-education">
+              <CardContent className="p-5">
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
@@ -1440,8 +1453,14 @@ export function EmployeeDetailContent({
                   </>
                 )}
               </div>
+              </CardContent>
+              </Card>
+              </div>
 
-              <Separator className="bg-zinc-800" />
+              {/* Task #284 — Row: Financial | Payment Method (2-col on lg+) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+              <Card className="border-zinc-800 bg-zinc-900/40" data-testid="card-financial">
+              <CardContent className="p-5">
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
@@ -1573,16 +1592,23 @@ export function EmployeeDetailContent({
                   </div>
                 )}
               </div>
-
-              <Separator className="bg-zinc-800" />
+              </CardContent>
+              </Card>
+              <Card className="border-zinc-800 bg-zinc-900/40" data-testid="card-payment">
+              <CardContent className="p-5">
               <div>
                 <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-3">
                   <Banknote className="h-3.5 w-3.5" /> {t("dialog.payment.title")}
                 </Label>
                 <PaymentMethodToggle employee={employee} onEmployeeRefreshed={onEmployeeRefreshed} />
               </div>
+              </CardContent>
+              </Card>
+              </div>
 
-              <Separator className="bg-zinc-800" />
+              {/* Task #284 — Emergency contact (full width) */}
+              <Card className="border-zinc-800 bg-zinc-900/40" data-testid="card-emergency">
+              <CardContent className="p-5">
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
@@ -1621,24 +1647,14 @@ export function EmployeeDetailContent({
                   </div>
                 )}
               </div>
+              </CardContent>
+              </Card>
 
               <>
-                <Separator className="bg-zinc-800" />
-                <div className="flex justify-end gap-2 flex-wrap">
-                  {employee.isActive && (
-                    <Button
-                      variant="outline"
-                      className="gap-1.5"
-                      onClick={() => {
-                        if (employee && onPrintCard) {
-                          onPrintCard(employee);
-                        }
-                      }}
-                      data-testid="button-print-id-card"
-                    >
-                      <Printer className="h-4 w-4" /> {t("dialog.footer.printIdCard")}
-                    </Button>
-                  )}
+                {/* Task #284 — Footer actions. Print ID Card was lifted
+                    into the page hero, so only Terminate / Reinstate /
+                    offboarding-link buttons remain here. */}
+                <div className="flex justify-end gap-2 flex-wrap pt-1">
                   {employee.isActive && !employee.offboardingStatus ? (
                     <Button
                       variant="outline"
