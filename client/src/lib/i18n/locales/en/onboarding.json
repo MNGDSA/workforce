@@ -441,6 +441,20 @@
         "elimination": "Elimination",
         "outbox": "Outbox",
         "actions": "Actions"
+      },
+      "sort": {
+        "toggle": "Sort by {{col}}"
+      },
+      "filter": {
+        "searchPlaceholder": "Search by name or phone…",
+        "stateLabel": "State",
+        "noMatches": "No candidates match the current filter.",
+        "state": {
+          "all": "All",
+          "active": "Active",
+          "paused": "Paused",
+          "warning": "Final warning"
+        }
       }
     }
   },

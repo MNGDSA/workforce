@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { formatNumber, formatDate } from "@/lib/format";
 import { printContract } from "@/lib/print-contract";
@@ -80,6 +80,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronsUpDown,
   Upload,
   Image,
   Bell,
@@ -1763,6 +1764,10 @@ function relTime(iso: string | null, locale: string, fallback: string): string {
   return fallback;
 }
 
+type ReminderActivitySortKey = "candidate" | "sent" | "last" | "next" | "elimination";
+type ReminderActivitySortDir = "asc" | "desc";
+type ReminderActivityStateFilter = "all" | "active" | "paused" | "warning";
+
 function ReminderActivityTable() {
   const { t, i18n } = useTranslation("onboarding");
   const { toast } = useToast();
@@ -1782,43 +1787,158 @@ function ReminderActivityTable() {
     onError: (e: any) => toast({ title: t("reminders.actionFailed"), description: e?.message, variant: "destructive" }),
   });
 
+  // ── Filters & sort ──────────────────────────────────────────────────
+  // Search by candidate name or phone (case-insensitive, substring) +
+  // state filter (all / active / paused / warning). Default sort is by
+  // elimination ascending so the candidates closest to being dropped
+  // surface at the top — that's the most actionable view by default.
+  const [search, setSearch] = useState("");
+  const [stateFilter, setStateFilter] = useState<ReminderActivityStateFilter>("all");
+  const [sortKey, setSortKey] = useState<ReminderActivitySortKey>("elimination");
+  const [sortDir, setSortDir] = useState<ReminderActivitySortDir>("asc");
+
+  function toggleSort(k: ReminderActivitySortKey) {
+    if (sortKey === k) {
+      setSortDir(d => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(k);
+      // Date columns most useful descending first (most-recent / soonest
+      // first); name + count most useful ascending first (A→Z, low→high).
+      setSortDir(k === "last" || k === "next" ? "desc" : "asc");
+    }
+  }
+
+  const visibleRows = useMemo(() => {
+    let out = rows;
+    const q = search.trim().toLowerCase();
+    if (q) {
+      out = out.filter(r =>
+        (r.candidateName ?? "").toLowerCase().includes(q) ||
+        (r.candidatePhone ?? "").toLowerCase().includes(q),
+      );
+    }
+    if (stateFilter === "paused") out = out.filter(r => r.remindersPaused);
+    else if (stateFilter === "active") out = out.filter(r => !r.remindersPaused);
+    else if (stateFilter === "warning") out = out.filter(r => r.state === "warning");
+
+    const ts = (iso: string | null) => (iso ? new Date(iso).getTime() : null);
+    const getKey = (r: ReminderActivityRow): string | number | null => {
+      switch (sortKey) {
+        case "candidate": return (r.candidateName ?? "").toLowerCase();
+        case "sent":      return r.reminderCount ?? 0;
+        case "last":      return ts(r.lastReminderSentAt);
+        case "next":      return ts(r.nextScheduledAt);
+        case "elimination": return ts(r.eliminationAt);
+      }
+    };
+    // Nulls always sink to the bottom regardless of direction so an
+    // empty "Last" cell does not bubble to the top in desc order.
+    return [...out].sort((a, b) => {
+      const av = getKey(a);
+      const bv = getKey(b);
+      const aNull = av === null || av === undefined || av === "";
+      const bNull = bv === null || bv === undefined || bv === "";
+      if (aNull && bNull) return 0;
+      if (aNull) return 1;
+      if (bNull) return -1;
+      if (av! < bv!) return sortDir === "asc" ? -1 : 1;
+      if (av! > bv!) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [rows, search, stateFilter, sortKey, sortDir]);
+
   // Latin digits + Gregorian calendar — never Arabic-Indic digits.
   const fmtDateTime = (iso: string | null) => iso
     ? new Date(iso).toLocaleString(i18n.language === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : "en-GB", { dateStyle: "short", timeStyle: "short" })
     : "—";
 
+  function SortHeader({ k, label, align }: { k: ReminderActivitySortKey; label: string; align?: "start" | "end" }) {
+    const active = sortKey === k;
+    const Icon = active ? (sortDir === "asc" ? ChevronUp : ChevronDown) : ChevronsUpDown;
+    return (
+      <th
+        scope="col"
+        aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+        className={`${align === "end" ? "text-end" : "text-start"} py-2 px-2 font-medium`}
+      >
+        <button
+          type="button"
+          onClick={() => toggleSort(k)}
+          data-testid={`sort-activity-${k}`}
+          className="inline-flex items-center gap-1 hover:text-zinc-200 focus:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500 rounded"
+          aria-label={t("reminders.activity.sort.toggle", { col: label }) as string}
+        >
+          <span>{label}</span>
+          <Icon className={`h-3 w-3 ${active ? "text-zinc-200" : "text-zinc-600"}`} aria-hidden />
+        </button>
+      </th>
+    );
+  }
+
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h3 className="text-sm font-semibold text-zinc-200">{t("reminders.activity.title")}</h3>
           <p className="text-xs text-zinc-500 mt-1">{t("reminders.activity.subtitle")}</p>
         </div>
         <span className="text-[11px] text-zinc-500" data-testid="text-activity-count">
-          {t("reminders.activity.rowCount", { n: rows.length })}
+          {t("reminders.activity.rowCount", { n: visibleRows.length })}
         </span>
       </div>
+
+      {/* Filter bar — search + state dropdown. Shown even on empty result
+          so the user can clear an over-restrictive filter without losing
+          sight of the controls. */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t("reminders.activity.filter.searchPlaceholder") as string}
+          aria-label={t("reminders.activity.filter.searchPlaceholder") as string}
+          data-testid="input-activity-search"
+          className="h-8 w-full sm:w-64 text-xs bg-zinc-950 border-zinc-800"
+        />
+        <Select value={stateFilter} onValueChange={(v) => setStateFilter(v as ReminderActivityStateFilter)}>
+          <SelectTrigger
+            className="h-8 w-40 text-xs bg-zinc-950 border-zinc-800"
+            aria-label={t("reminders.activity.filter.stateLabel") as string}
+            data-testid="select-activity-state"
+          >
+            <SelectValue placeholder={t("reminders.activity.filter.stateLabel") as string} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all" data-testid="option-activity-state-all">{t("reminders.activity.filter.state.all")}</SelectItem>
+            <SelectItem value="active" data-testid="option-activity-state-active">{t("reminders.activity.filter.state.active")}</SelectItem>
+            <SelectItem value="paused" data-testid="option-activity-state-paused">{t("reminders.activity.filter.state.paused")}</SelectItem>
+            <SelectItem value="warning" data-testid="option-activity-state-warning">{t("reminders.activity.filter.state.warning")}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       {isLoading ? (
         <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-zinc-500" /></div>
-      ) : rows.length === 0 ? (
-        <div className="text-zinc-500 text-sm text-center py-6" data-testid="text-activity-empty">{t("reminders.activity.empty")}</div>
+      ) : visibleRows.length === 0 ? (
+        <div className="text-zinc-500 text-sm text-center py-6" data-testid="text-activity-empty">
+          {rows.length === 0 ? t("reminders.activity.empty") : t("reminders.activity.filter.noMatches")}
+        </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs" data-testid="table-reminder-activity">
             <thead className="text-zinc-400 border-b border-zinc-800">
               <tr>
-                <th className="text-start py-2 px-2 font-medium">{t("reminders.activity.col.candidate")}</th>
-                <th className="text-start py-2 px-2 font-medium">{t("reminders.activity.col.missing")}</th>
-                <th className="text-start py-2 px-2 font-medium">{t("reminders.activity.col.sent")}</th>
-                <th className="text-start py-2 px-2 font-medium">{t("reminders.activity.col.last")}</th>
-                <th className="text-start py-2 px-2 font-medium">{t("reminders.activity.col.next")}</th>
-                <th className="text-start py-2 px-2 font-medium">{t("reminders.activity.col.elimination")}</th>
-                <th className="text-start py-2 px-2 font-medium">{t("reminders.activity.col.outbox")}</th>
-                <th className="text-end py-2 px-2 font-medium">{t("reminders.activity.col.actions")}</th>
+                <SortHeader k="candidate" label={t("reminders.activity.col.candidate") as string} />
+                <th scope="col" className="text-start py-2 px-2 font-medium">{t("reminders.activity.col.missing")}</th>
+                <SortHeader k="sent" label={t("reminders.activity.col.sent") as string} />
+                <SortHeader k="last" label={t("reminders.activity.col.last") as string} />
+                <SortHeader k="next" label={t("reminders.activity.col.next") as string} />
+                <SortHeader k="elimination" label={t("reminders.activity.col.elimination") as string} />
+                <th scope="col" className="text-start py-2 px-2 font-medium">{t("reminders.activity.col.outbox")}</th>
+                <th scope="col" className="text-end py-2 px-2 font-medium">{t("reminders.activity.col.actions")}</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => {
+              {visibleRows.map(r => {
                 const eliminationRel = relTime(r.eliminationAt, i18n.language, "—");
                 return (
                   <tr key={r.onboardingId} className="border-b border-zinc-800/60" data-testid={`row-activity-${r.onboardingId}`}>

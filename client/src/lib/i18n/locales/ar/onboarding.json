@@ -489,6 +489,20 @@
         "elimination": "موعد الاستبعاد",
         "outbox": "صندوق الرسائل",
         "actions": "إجراءات"
+      },
+      "sort": {
+        "toggle": "ترتيب حسب {{col}}"
+      },
+      "filter": {
+        "searchPlaceholder": "ابحث بالاسم أو رقم الجوال…",
+        "stateLabel": "الحالة",
+        "noMatches": "لا يوجد مرشحون مطابقون للمرشح الحالي.",
+        "state": {
+          "all": "الكل",
+          "active": "نشط",
+          "paused": "موقوف",
+          "warning": "تنبيه أخير"
+        }
       }
     }
   },
