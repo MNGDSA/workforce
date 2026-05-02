@@ -108,13 +108,11 @@ import { apiRequest, isApiError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import {
-  renderIdCardHTML,
-  sendPrintJob,
-  type IdCardTemplateConfig,
-  type EmployeeCardData,
-  type PrinterPluginConfig,
-} from "@/lib/id-card-renderer";
+// Task #284 — `renderIdCardHTML`, `sendPrintJob`, `IdCardTemplateConfig`,
+// `PrinterPluginConfig` moved into `usePrintIdCards()` hook
+// (`@/lib/workforce-print`). Only `EmployeeCardData` is still needed
+// here for the exported `employeeToCardData` helper.
+import { type EmployeeCardData } from "@/lib/id-card-renderer";
 import { useTranslation } from "react-i18next";
 import { formatNumber, formatDate as formatDateI18n } from "@/lib/format";
 import { usePrintIdCards } from "@/lib/workforce-print";
@@ -3174,95 +3172,6 @@ export default function WorkforcePage() {
           )}
         </DialogContent>
       </Dialog>
-
-      <AlertDialog
-        open={pickupSmsDialog.open}
-        onOpenChange={(open) => {
-          if (!pickupSmsSending) {
-            setPickupSmsDialog((prev) => ({ ...prev, open }));
-          }
-        }}
-      >
-        <AlertDialogContent data-testid="dialog-pickup-sms">
-          <AlertDialogHeader>
-            <AlertDialogTitle>{tt("pickupSms.dialogTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pickupSmsDialog.employeeIds.length === 1
-                ? tt("pickupSms.dialogDescOne")
-                : tt("pickupSms.dialogDescOther", { n: formatNumber(pickupSmsDialog.employeeIds.length) })}
-              <br />
-              <span className="text-xs text-muted-foreground">{tt("pickupSms.dialogHint")}</span>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {pickupSmsStatus && !pickupPluginActive && (
-            <div
-              className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-start gap-2"
-              data-testid="text-pickup-sms-no-plugin"
-            >
-              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-              <span>{tt("pickupSms.noPluginNote")}</span>
-            </div>
-          )}
-          {pickupStatusError && (
-            <div
-              className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-start gap-2"
-              data-testid="text-pickup-sms-status-error"
-            >
-              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-              <span>{tt("pickupSms.statusErrorNote")}</span>
-            </div>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={pickupSmsSending} data-testid="button-pickup-sms-skip">
-              {tt("pickupSms.skip")}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={pickupSmsSending || !pickupPluginActive}
-              data-testid="button-pickup-sms-send"
-              onClick={async (e) => {
-                e.preventDefault();
-                const ids = pickupSmsDialog.employeeIds;
-                setPickupSmsSending(true);
-                try {
-                  const res = await apiRequest("POST", "/api/id-card-pickup-sms/send", { employeeIds: ids });
-                  const json = await res.json();
-                  const sent = Number(json?.sent ?? 0);
-                  const skipped = Number(json?.skipped ?? 0);
-                  const failed = Number(json?.failed ?? 0);
-                  if (sent === 0 && failed > 0) {
-                    toast({
-                      title: tt("pickupSms.sendFailedToast"),
-                      description: tt("pickupSms.sentToastDesc", { skipped: formatNumber(skipped), failed: formatNumber(failed) }),
-                      variant: "destructive",
-                    });
-                  } else {
-                    toast({
-                      title: tt("pickupSms.sentToast", { count: sent, n: formatNumber(sent) }),
-                      description: skipped + failed > 0
-                        ? tt("pickupSms.sentToastDesc", { skipped: formatNumber(skipped), failed: formatNumber(failed) })
-                        : undefined,
-                    });
-                  }
-                  setPickupSmsDialog({ open: false, employeeIds: [] });
-                } catch (err: unknown) {
-                  const message = err instanceof Error ? err.message : "Unknown error";
-                  const isNoPlugin = /plugin|gateway|notConfigured/i.test(message);
-                  toast({
-                    title: isNoPlugin ? tt("pickupSms.noActivePluginToast") : tt("pickupSms.sendFailedToast"),
-                    description: isNoPlugin ? undefined : message,
-                    variant: "destructive",
-                  });
-                } finally {
-                  setPickupSmsSending(false);
-                }
-              }}
-            >
-              {pickupSmsSending ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : null}
-              {tt("pickupSms.send")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Task #281 — Bulk Reassign Manager dialog. Submits POST
           /api/workforce/bulk-assign-manager with the current selection. */}

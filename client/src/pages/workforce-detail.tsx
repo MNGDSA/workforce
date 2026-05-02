@@ -22,8 +22,6 @@ import { usePrintIdCards } from "@/lib/workforce-print";
 
 type TabKey = "details" | "history" | "schedule";
 
-const TAB_KEYS: readonly TabKey[] = ["details", "history", "schedule"] as const;
-
 function isTabKey(v: string | null | undefined): v is TabKey {
   return v === "details" || v === "history" || v === "schedule";
 }
