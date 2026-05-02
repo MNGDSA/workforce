@@ -2522,7 +2522,19 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(managers, eq(workforce.managerId, managers.id))
       .where(eq(workforce.candidateId, candidateId))
       .orderBy(desc(workforce.createdAt));
-    return rows;
+    // Add the bilingual `managerName` display string so the mobile and
+    // web clients can render a single row without each one re-deriving
+    // it. Pattern matches formatActorName in server/lib/actor-name.ts:
+    //   "EN AR" when both, EN only, AR only, or null when no manager.
+    return rows.map((r) => {
+      const en = r.managerNameEn?.trim();
+      const ar = r.managerNameAr?.trim();
+      let managerName: string | null = null;
+      if (en && ar) managerName = `${en} ${ar}`;
+      else if (en) managerName = en;
+      else if (ar) managerName = ar;
+      return { ...r, managerName };
+    });
   }
 
   async getWorkHistory(nationalId: string): Promise<any[]> {
@@ -3316,19 +3328,42 @@ export class DatabaseStorage implements IStorage {
 
       // Task #281 — Welcome SMS plumbing stub. Future iterations will
       // enqueue an entry into sms_outbox with kind=welcome_employee
-      // populated from system_settings keys
-      //   welcome_employee_sms_template_ar
-      //   welcome_employee_sms_template_en
-      // For now we log only — the enum value is reserved (boot migration
-      // ensure-welcome-employee-enum) and the kind column will accept it,
-      // but no message is enqueued to avoid blasting employees with a
-      // template that hasn't been signed off by ops.
+      // populated from the bilingual system_settings keys
+      //   welcome_employee_sms_ar
+      //   welcome_employee_sms_en
+      // (both reserved with sensible defaults by the boot migration
+      // ensure-welcome-employee-enum). For now we log only — the enum
+      // value is reserved and the kind column will accept it, but no
+      // message is enqueued to avoid blasting employees with a template
+      // that hasn't been signed off by ops. The structured payload log
+      // is the contract Task #283 will swap for the real outbox insert.
       try {
         const phone = cand?.phone ?? null;
+        // Look up the manager's bilingual name for the {manager_name}
+        // placeholder. Best-effort: a missing manager just logs null.
+        let managerName: string | null = null;
+        if (workforceRec.managerId) {
+          const [mgr] = await tx
+            .select({ fullNameEn: managers.fullNameEn, fullNameAr: managers.fullNameAr })
+            .from(managers)
+            .where(eq(managers.id, workforceRec.managerId));
+          if (mgr) {
+            const en = mgr.fullNameEn?.trim();
+            const ar = mgr.fullNameAr?.trim();
+            if (en && ar) managerName = `${en} ${ar}`;
+            else if (en) managerName = en;
+            else if (ar) managerName = ar;
+          }
+        }
+        const payload = {
+          employeeNumber,
+          candidateId: rec.candidateId,
+          phone,
+          name: cand?.fullNameEn ?? null,
+          manager_name: managerName,
+        };
         // eslint-disable-next-line no-console -- intentional log-only stub
-        console.log(
-          `[welcome-sms-stub] Task #281: skipping welcome SMS for employee ${employeeNumber} (candidate=${rec.candidateId}, phone=${phone ?? "<none>"}). Sender not yet enabled.`,
-        );
+        console.log(`[welcome-sms-todo] payload=${JSON.stringify(payload)}`);
       } catch {
         // never block conversion on a logging hiccup
       }
