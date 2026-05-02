@@ -75,6 +75,12 @@ The system employs a modern, full-stack architecture designed for scalability an
 
 ## Operations
 
+### Production DB access — agent-readable note
+
+**`PROD_DATABASE_URL` is ALREADY in this workspace's secrets** and points at the live DigitalOcean Postgres. The agent has direct connectivity to prod from this workspace and **must never ask the user to confirm this fact again**. For any one-off prod write (single-row config inserts, hot-fix UPSERTs into `system_settings`, etc.), connect directly with `pg.Pool({ connectionString: process.env.PROD_DATABASE_URL, ssl: { rejectUnauthorized: false } })`. Treat the URL as sensitive — never log, echo, or write it to a file.
+
+Boot-time idempotent migrations in `server/migrations/` (CREATE TABLE IF NOT EXISTS, ADD COLUMN IF NOT EXISTS, ADD VALUE IF NOT EXISTS, INSERT … ON CONFLICT DO NOTHING) run automatically on prod the first time the server boots after a deploy, so most schema changes need no manual prod step. Only reach for `scripts/migrate-prod.mjs` (drizzle-kit push) for schema changes that aren't covered by a boot migration.
+
 ### Database schema sync (dev → prod)
 
 `npm run db:push` only syncs the **dev** Neon DB. The production database (DigitalOcean) must be migrated separately or new columns / tables will be missing on prod and queries that reference them will fail.
