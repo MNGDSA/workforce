@@ -13,6 +13,7 @@ import TalentPage from "@/pages/talent";
 import EventsPage from "@/pages/events";
 import SMPCompaniesPage from "@/pages/smp-companies";
 import WorkforcePage from "@/pages/workforce";
+import WorkforceDetailPage from "@/pages/workforce-detail";
 import NotificationsPage from "@/pages/notifications";
 import CandidatePortal from "@/pages/candidate-portal";
 import InterviewsPage, { InterviewCandidatesPage } from "@/pages/interviews";
@@ -73,6 +74,7 @@ function Router() {
       <Route path="/smp-companies" component={admin(SMPCompaniesPage)} />
       <Route path="/smp-contracts">{() => <Redirect to="/smp-companies" />}</Route>
       <Route path="/workforce" component={admin(WorkforcePage)} />
+      <Route path="/workforce/:id" component={admin(WorkforceDetailPage)} />
       <Route path="/interviews" component={admin(InterviewsPage)} />
       <Route path="/interviews/schedule" component={admin(ScheduleInterviewPage)} />
       <Route path="/interviews/:id/candidates" component={admin(InterviewCandidatesPage)} />

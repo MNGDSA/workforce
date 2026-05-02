@@ -11,7 +11,12 @@
     "printIdCards": "طباعة بطاقات الهوية",
     "printIdCardsWithCount": "طباعة بطاقات الهوية ({{n}})",
     "reassignManager": "إعادة تعيين المدير",
-    "reassignManagerWithCount": "إعادة تعيين المدير ({{n}})"
+    "reassignManagerWithCount": "إعادة تعيين المدير ({{n}})",
+    "back": "رجوع",
+    "backToList": "العودة إلى القوى العاملة",
+    "notFound": "الموظف غير موجود",
+    "notFoundDescription": "ربما تم حذف سجل هذا الموظف أو أن الرابط غير صحيح.",
+    "loadError": "تعذر تحميل بيانات هذا الموظف"
   },
   "stats": {
     "total": "إجمالي الموظفين",

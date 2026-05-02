@@ -117,8 +117,9 @@ import {
 } from "@/lib/id-card-renderer";
 import { useTranslation } from "react-i18next";
 import { formatNumber, formatDate as formatDateI18n } from "@/lib/format";
+import { usePrintIdCards } from "@/lib/workforce-print";
 
-type Employee = {
+export type Employee = {
   id: string;
   employeeNumber: string;
   candidateId: string;
@@ -177,7 +178,7 @@ type Employee = {
   paymentMethodReason?: string | null;
 };
 
-type WorkHistory = {
+export type WorkHistory = {
   id: string;
   employeeNumber: string;
   salary: string | null;
@@ -194,7 +195,7 @@ type WorkHistory = {
 type SortField = "employeeNumber" | "fullNameEn" | "nationalId" | "salary" | "startDate" | "endDate" | "phone";
 type SortDir = "asc" | "desc";
 
-function useStatusBadge() {
+export function useStatusBadge() {
   const { t } = useTranslation("workforce");
   return (isActive: boolean, offboardingStatus?: string | null) => {
     if (offboardingStatus === "in_progress") {
@@ -206,7 +207,7 @@ function useStatusBadge() {
   };
 }
 
-function formatDate(iso: string | null | undefined) {
+export function formatDate(iso: string | null | undefined) {
   if (!iso) return "—";
   return formatDateI18n(iso, "en", { month: "short", day: "numeric", year: "numeric" });
 }
@@ -310,10 +311,10 @@ function SortableHeader({ label, field, sortField, sortDir, onSort }: {
   );
 }
 
-type ScheduleTemplateWithDays = { id: string; name: string; mondayShiftId?: string | null; tuesdayShiftId?: string | null; wednesdayShiftId?: string | null; thursdayShiftId?: string | null; fridayShiftId?: string | null; saturdayShiftId?: string | null; sundayShiftId?: string | null };
-type ShiftBasic = { id: string; name: string; color: string; startTime: string; endTime: string };
+export type ScheduleTemplateWithDays = { id: string; name: string; mondayShiftId?: string | null; tuesdayShiftId?: string | null; wednesdayShiftId?: string | null; thursdayShiftId?: string | null; fridayShiftId?: string | null; saturdayShiftId?: string | null; sundayShiftId?: string | null };
+export type ShiftBasic = { id: string; name: string; color: string; startTime: string; endTime: string };
 
-function ActiveAssignmentCard({
+export function ActiveAssignmentCard({
   activeAssignment,
   scheduleTemplates,
   allShifts,
@@ -365,17 +366,19 @@ function ActiveAssignmentCard({
   );
 }
 
-function EmployeeDetailDialog({
+export function EmployeeDetailContent({
   employee,
-  open,
-  onOpenChange,
+  tab,
+  onTabChange,
+  onClose,
   onUpdated,
   onPrintCard,
   onEmployeeRefreshed,
 }: {
   employee: Employee | null;
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
+  tab: "details" | "history" | "schedule";
+  onTabChange: (t: "details" | "history" | "schedule") => void;
+  onClose?: () => void;
   onUpdated: () => void;
   onPrintCard?: (emp: Employee) => void;
   onEmployeeRefreshed?: (emp: Employee) => void;
@@ -385,7 +388,7 @@ function EmployeeDetailDialog({
   const [, setLocation] = useLocation();
   const { t, i18n } = useTranslation("workforce");
   const statusBadge = useStatusBadge();
-  const [tab, setTab] = useState<"details" | "history" | "schedule">("details");
+  const setTab = onTabChange;
   const [editSalary, setEditSalary] = useState(false);
   const [salaryValue, setSalaryValue] = useState("");
   const [notesValue, setNotesValue] = useState("");
@@ -465,25 +468,25 @@ function EmployeeDetailDialog({
     setEducationForm({});
     setPhotoUploading(false);
     if (photoFileRef.current) photoFileRef.current.value = "";
-  }, [employee?.id, open]);
+  }, [employee?.id]);
 
   const { data: history = [], isLoading: historyLoading } = useQuery<WorkHistory[]>({
     queryKey: ["/api/workforce/history", employee?.nationalId],
     queryFn: () => apiRequest("GET", `/api/workforce/history/${employee!.nationalId}`).then(r => r.json()),
-    enabled: open && !!employee?.nationalId && tab === "history",
+    enabled: !!employee?.nationalId && tab === "history",
   });
 
   const { data: contractHistory = [] } = useQuery<any[]>({
     queryKey: ["/api/candidates/contract-history", employee?.candidateId],
     queryFn: () => apiRequest("GET", `/api/candidates/${employee!.candidateId}/contract-history`).then(r => r.json()),
-    enabled: open && !!employee?.candidateId && tab === "history",
+    enabled: !!employee?.candidateId && tab === "history",
   });
 
   const [viewingAdminContract, setViewingAdminContract] = useState<any | null>(null);
 
   useEffect(() => {
-    if (!open) setViewingAdminContract(null);
-  }, [open]);
+    setViewingAdminContract(null);
+  }, [employee?.id]);
 
   const adminContractMap = useMemo(() => {
     const map = new Map<string, any>();
@@ -512,13 +515,11 @@ function EmployeeDetailDialog({
   const { data: eventsList = [] } = useQuery<{ id: string; name: string }[]>({
     queryKey: ["/api/events"],
     queryFn: () => apiRequest("GET", "/api/events").then(r => r.json()),
-    enabled: open,
   });
 
   const { data: positionsList = [] } = useQuery<{ id: string; title: string; departmentId: string; departmentName?: string | null; isActive: boolean }[]>({
     queryKey: ["/api/positions"],
     queryFn: () => apiRequest("GET", "/api/positions").then(r => r.json()),
-    enabled: open,
   });
 
   // Task #281 — Active managers feed the Reports To picker. The list endpoint
@@ -531,19 +532,18 @@ function EmployeeDetailDialog({
       const body = await r.json();
       return Array.isArray(body) ? body : (body?.data ?? []);
     }),
-    enabled: open,
   });
 
   const { data: scheduleTemplates = [] } = useQuery<ScheduleTemplateWithDays[]>({
     queryKey: ["/api/schedule-templates"],
     queryFn: () => apiRequest("GET", "/api/schedule-templates").then(r => r.json()),
-    enabled: open && tab === "schedule",
+    enabled: tab === "schedule",
   });
 
   const { data: allShifts = [] } = useQuery<ShiftBasic[]>({
     queryKey: ["/api/shifts"],
     queryFn: () => apiRequest("GET", "/api/shifts").then(r => r.json()),
-    enabled: open && tab === "schedule",
+    enabled: tab === "schedule",
   });
 
   const { data: activeAssignment, refetch: refetchAssignment } = useQuery<{
@@ -551,13 +551,13 @@ function EmployeeDetailDialog({
   } | null>({
     queryKey: ["/api/schedule-assignments/employee", employee?.id, "active"],
     queryFn: () => apiRequest("GET", `/api/schedule-assignments/employee/${employee!.id}/active`).then(r => r.json()),
-    enabled: open && !!employee?.id && tab === "schedule",
+    enabled: !!employee?.id && tab === "schedule",
   });
 
   const { data: assignmentHistory = [] } = useQuery<{ id: string; templateId: string; startDate: string; endDate: string | null }[]>({
     queryKey: ["/api/schedule-assignments/employee", employee?.id],
     queryFn: () => apiRequest("GET", `/api/schedule-assignments/employee/${employee!.id}`).then(r => r.json()),
-    enabled: open && !!employee?.id && tab === "schedule",
+    enabled: !!employee?.id && tab === "schedule",
   });
 
   const assignScheduleMutation = useMutation({
@@ -703,7 +703,7 @@ function EmployeeDetailDialog({
       qc.invalidateQueries({ queryKey: ["/api/offboarding/stats"] });
       setTerminateOpen(false);
       setTerminateForm({ endDate: "", reason: "", category: "" });
-      onOpenChange(false);
+      onClose?.();
       onUpdated();
       toast({ title: t("toast.sentToOffboarding") });
     },
@@ -714,7 +714,6 @@ function EmployeeDetailDialog({
     queryKey: ["/api/smp-companies"],
     queryFn: () => apiRequest("GET", "/api/smp-companies").then(r => r.json()),
     select: (data: { id: string; name: string; isActive: boolean }[]) => data.filter(c => c.isActive),
-    enabled: open,
   });
 
   const reinstateMutation = useMutation({
@@ -724,7 +723,7 @@ function EmployeeDetailDialog({
       qc.invalidateQueries({ queryKey: ["/api/workforce"] });
       setReinstateOpen(false);
       setReinstateForm({ startDate: "", eventId: "", salary: "", smpCompanyId: "" });
-      onOpenChange(false);
+      onClose?.();
       onUpdated();
       toast({ title: t("toast.reinstated") });
     },
@@ -738,8 +737,8 @@ function EmployeeDetailDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl bg-zinc-950 border-zinc-800 text-white max-h-[90vh] overflow-y-auto">
+      <div className="bg-zinc-950 text-white">
+        <div className="max-w-5xl mx-auto px-4 md:px-6 py-4 space-y-4">
           {viewingAdminContract && (
             <div data-testid="admin-contract-history-viewer">
               <div className="flex items-center gap-2 mb-4">
@@ -861,12 +860,20 @@ function EmployeeDetailDialog({
           )}
           {!viewingAdminContract && (
           <>
-          <DialogHeader>
-            {/* pe-10 reserves space at the inline-end edge so the inline
-                name-edit Cancel button never sits behind the sheet's
-                top-corner close X (which is top-left in RTL, top-right
-                in LTR). */}
-            <DialogTitle className="font-display text-xl font-bold text-white flex items-center gap-3 pe-10">
+          <div className="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-zinc-950/95 backdrop-blur border-b border-zinc-800 mb-2">
+            <div className="flex items-center gap-3">
+              {onClose && (
+                <button
+                  onClick={onClose}
+                  className="text-zinc-400 hover:text-white transition-colors shrink-0"
+                  data-testid="button-back-to-workforce"
+                  aria-label={t("page.back")}
+                >
+                  {/* RTL: chevron points right (toward where you came from) */}
+                  <ChevronLeft className="h-5 w-5 rtl:rotate-180" />
+                </button>
+              )}
+              <h2 className="font-display text-xl font-bold text-white flex items-center gap-3 flex-1 min-w-0">
               {/* Task #187 — Avatar is now a click-to-preview target.
                   Clicking it opens a lightbox at the natural image
                   size (capped to 80vh / 90vw). The lightbox carries
@@ -974,9 +981,9 @@ function EmployeeDetailDialog({
                   </>
                 )}
               </div>
-            </DialogTitle>
-            <DialogDescription className="sr-only">{t("dialog.infoSheetSr")}</DialogDescription>
-          </DialogHeader>
+              </h2>
+            </div>
+          </div>
 
           <div className="flex rounded-md overflow-hidden border border-zinc-800 bg-zinc-900/50 mt-2">
             <button
@@ -1608,7 +1615,7 @@ function EmployeeDetailDialog({
                         variant="outline"
                         size="sm"
                         className="border-amber-800 text-amber-400 hover:bg-amber-950/30 hover:text-amber-300 gap-1.5"
-                        onClick={() => { onOpenChange(false); setLocation("/offboarding"); }}
+                        onClick={() => setLocation("/offboarding")}
                         data-testid="button-view-offboarding"
                       >
                         <LogOut className="h-4 w-4" /> {t("dialog.footer.viewInOffboarding")}
@@ -1989,8 +1996,8 @@ function EmployeeDetailDialog({
       </Dialog>
           </>
           )}
-        </DialogContent>
-      </Dialog>
+        </div>
+      </div>
 
       {/* Task #189 — Photo preview lightbox.
           Opens when the avatar is clicked (and a photo exists). Click
@@ -2049,7 +2056,7 @@ function EmployeeDetailDialog({
 // before the structured-metadata switch may carry a null `metadata`
 // or omit `from`; the UI tolerates both and falls back to the
 // human-readable `description` when needed.
-type PaymentMethodHistoryRow = {
+export type PaymentMethodHistoryRow = {
   id: string;
   actorName: string | null;
   createdAt: string;
@@ -2060,7 +2067,7 @@ type PaymentMethodHistoryRow = {
 // Task #274 — shape of the 409 payload returned by the PATCH route when
 // the employee still has unpaid pay-run lines. Used by PaymentMethodToggle
 // to render an inline list of blocking runs instead of a generic toast.
-type PaymentMethodFlipBlocked = {
+export type PaymentMethodFlipBlocked = {
   error: string;
   code: "OPEN_PAY_RUN_LINES";
   openLines: Array<{
@@ -2078,7 +2085,7 @@ type PaymentMethodFlipBlocked = {
 // already-parsed JSON body straight off the error so this panel doesn't
 // depend on the formatted `message` string. Returns null if the error
 // wasn't a structured flip-block.
-function parseFlipBlocked(err: unknown): PaymentMethodFlipBlocked | null {
+export function parseFlipBlocked(err: unknown): PaymentMethodFlipBlocked | null {
   if (!isApiError(err) || err.status !== 409) return null;
   const body = err.body;
   if (
@@ -2092,7 +2099,7 @@ function parseFlipBlocked(err: unknown): PaymentMethodFlipBlocked | null {
   return null;
 }
 
-function PaymentMethodToggle({
+export function PaymentMethodToggle({
   employee,
   onEmployeeRefreshed,
 }: {
@@ -2148,7 +2155,7 @@ function PaymentMethodToggle({
       // Push the freshly-saved record back to the parent dialog so the
       // active/inactive button colours and reason line refresh without
       // reopening the profile. Mirrors the pattern profileMutation
-      // already uses elsewhere in EmployeeDetailDialog.
+      // already uses elsewhere in EmployeeDetailContent.
       if (onEmployeeRefreshed) onEmployeeRefreshed(updated);
       toast({ title: t("toast.paymentUpdated") });
       setPendingSwitch(null);
@@ -2398,7 +2405,7 @@ function PaymentMethodToggle({
   );
 }
 
-function InfoRow({ icon, label, value, mono, ltr }: { icon: React.ReactNode; label: string; value: React.ReactNode; mono?: boolean; ltr?: boolean }) {
+export function InfoRow({ icon, label, value, mono, ltr }: { icon: React.ReactNode; label: string; value: React.ReactNode; mono?: boolean; ltr?: boolean }) {
   return (
     <div className="bg-zinc-900/50 rounded-md p-3 border border-zinc-800/50">
       <div className="flex items-center gap-1.5 text-zinc-500 text-[10px] uppercase tracking-wider font-semibold mb-1">
@@ -2414,7 +2421,7 @@ function InfoRow({ icon, label, value, mono, ltr }: { icon: React.ReactNode; lab
   );
 }
 
-function employeeToCardData(emp: Employee): EmployeeCardData {
+export function employeeToCardData(emp: Employee): EmployeeCardData {
   return {
     fullName: emp.fullNameEn ?? "Unknown",
     photoUrl: emp.photoUrl,
@@ -2438,24 +2445,38 @@ export default function WorkforcePage() {
   const statusBadge = useStatusBadge();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "terminated">("active");
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [printingIds, setPrintingIds] = useState<Set<string>>(new Set());
-  const [printProgress, setPrintProgress] = useState<{ total: number; done: number } | null>(null);
-  const [pickupSmsDialog, setPickupSmsDialog] = useState<{ open: boolean; employeeIds: string[] }>({ open: false, employeeIds: [] });
-  const [pickupSmsSending, setPickupSmsSending] = useState(false);
-  const { data: pickupSmsStatus, isError: pickupStatusError } = useQuery<{ active: boolean }>({
-    queryKey: ["/api/id-card-pickup-sms/status"],
-    queryFn: () => apiRequest("GET", "/api/id-card-pickup-sms/status").then(r => r.json()),
-    enabled: pickupSmsDialog.open,
-    staleTime: 0,
-    retry: 1,
-  });
-  // Default to "no plugin" until the status query resolves so Send is never
-  // enabled in a no-plugin tenant during the loading window.
-  const pickupPluginActive = pickupSmsStatus?.active ?? false;
+  // Task #284 — print + pickup-SMS flow lives in a shared hook so the
+  // dedicated /workforce/:id page can trigger the same flow without
+  // duplicating state, network calls, or the confirmation dialog.
+  const { printIdCards, printingIds, printProgress, pickupSmsDialogJsx } = usePrintIdCards();
+
+  // Task #284 — Restore the list's scroll position when returning from
+  // the detail page. The row click stashes window.scrollY into
+  // sessionStorage; we read & clear it on mount so a refresh still
+  // lands at the top.
+  useEffect(() => {
+    try {
+      const y = sessionStorage.getItem("workforce-list-scroll");
+      if (y) {
+        window.scrollTo(0, Number(y));
+        sessionStorage.removeItem("workforce-list-scroll");
+      }
+    } catch {
+      // sessionStorage may be unavailable in private modes; non-fatal.
+    }
+  }, []);
+
+  function goToEmployee(emp: Employee) {
+    try {
+      sessionStorage.setItem("workforce-list-scroll", String(window.scrollY));
+    } catch {
+      // Non-fatal — user simply loses scroll restore.
+    }
+    setLocation(`/workforce/${emp.id}`);
+  }
   const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false);
   const [bulkUpdateFile, setBulkUpdateFile] = useState<File | null>(null);
   const [bulkUpdateLoading, setBulkUpdateLoading] = useState(false);
@@ -2681,101 +2702,9 @@ export default function WorkforcePage() {
     toast({ title: tt("toast.exportedExcel", { count: data.length, n: formatNumber(data.length) }) });
   }
 
-  async function handlePrintIdCards(emps: Employee[]) {
-    if (emps.length === 0) return;
-    const ids = new Set(emps.map((e) => e.id));
-    setPrintingIds(ids);
-    setPrintProgress({ total: emps.length, done: 0 });
-    try {
-      const eventId = emps[0]?.eventId;
-      const templateUrl = eventId
-        ? `/api/id-card-templates/active?eventId=${encodeURIComponent(eventId)}`
-        : "/api/id-card-templates/active";
-      let templateRes: Record<string, unknown> | null = null;
-      try {
-        templateRes = await apiRequest("GET", templateUrl).then((r) => r.json());
-      } catch {
-        templateRes = null;
-      }
-      const lc = (templateRes?.layoutConfig as Record<string, unknown>) ?? {};
-      const templateConfig: IdCardTemplateConfig = templateRes
-        ? {
-            name: templateRes.name as string,
-            logoUrl: templateRes.logoUrl as string | null,
-            backgroundImageUrl: templateRes.backgroundImageUrl as string | null,
-            fields: templateRes.fields as string[],
-            fieldPlacements: (lc.fieldPlacements as IdCardTemplateConfig["fieldPlacements"]) ?? undefined,
-            backgroundColor: templateRes.backgroundColor as string,
-            textColor: templateRes.textColor as string,
-            accentColor: templateRes.accentColor as string,
-            layout: lc.layout as "horizontal" | "vertical" | "compact" | undefined,
-          }
-        : {
-            name: "Default",
-            logoUrl: null,
-            backgroundImageUrl: null,
-            fields: ["fullName", "photo", "employeeNumber", "nationalId", "position"],
-            backgroundColor: "#1a1a2e",
-            textColor: "#ffffff",
-            accentColor: "#16a34a",
-          };
-
-      let activePlugin: PrinterPluginConfig | null = null;
-      try {
-        const plugins: PrinterPluginConfig[] = await apiRequest("GET", "/api/printer-plugins").then(r => r.json());
-        activePlugin = plugins.find(p => p.isActive) ?? null;
-      } catch {
-        activePlugin = null;
-      }
-
-      const cardData = emps.map(employeeToCardData);
-      const results = await sendPrintJob(templateConfig, cardData, activePlugin);
-      setPrintProgress({ total: emps.length, done: emps.length });
-
-      const statuses = results.map((r, i) => ({
-        employeeId: emps[i].id,
-        status: r.status,
-        error: r.error,
-      }));
-
-      try {
-        await apiRequest("POST", "/api/id-card-print-jobs", {
-          employeeIds: emps.map(e => e.id),
-          templateId: templateRes?.id ?? null,
-          printerPluginId: activePlugin?.id ?? null,
-          statuses,
-        });
-      } catch {
-        // Log failure is non-critical
-      }
-
-      const successCount = results.filter(r => r.status === "success").length;
-      const pendingCount = results.filter(r => r.status === "pending").length;
-      const failCount = results.filter(r => r.status === "failed").length;
-
-      if (failCount === results.length) {
-        toast({ title: tt("toast.printFailed"), description: tt("toast.printAllFailed"), variant: "destructive" });
-      } else if (failCount > 0) {
-        toast({ title: tt("toast.printPartial", { done: formatNumber(successCount + pendingCount), total: formatNumber(results.length) }), description: tt("toast.printPartialDesc", { n: formatNumber(failCount) }) });
-      } else {
-        toast({ title: tt("toast.printingCount", { count: emps.length, n: formatNumber(emps.length) }) });
-      }
-
-      qc.invalidateQueries({ queryKey: ["/api/workforce/last-printed-bulk"] });
-
-      // Task #207 — prompt admin to send pickup SMS for eligible (success/pending) employees
-      const eligibleIds = statuses.filter(s => s.status !== "failed").map(s => s.employeeId);
-      if (eligibleIds.length > 0) {
-        setPickupSmsDialog({ open: true, employeeIds: eligibleIds });
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      toast({ title: tt("toast.printFailed"), description: message, variant: "destructive" });
-    } finally {
-      setPrintingIds(new Set());
-      setPrintProgress(null);
-    }
-  }
+  // Task #284 — `printIdCards` + `pickupSmsDialogJsx` come from
+  // `usePrintIdCards()` so the dedicated detail page can trigger the
+  // exact same flow without duplicating ~150 lines.
 
   return (
     <DashboardLayout>
@@ -2824,7 +2753,7 @@ export default function WorkforcePage() {
                 {tt("page.exportCsv")}
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => handlePrintIdCards(selectedIds.size > 0 ? selectedEmployees : sortedEmployees)}
+                onClick={() => printIdCards(selectedIds.size > 0 ? selectedEmployees : sortedEmployees)}
                 className="gap-2"
                 data-testid="menu-print-id-cards"
               >
@@ -2909,7 +2838,7 @@ export default function WorkforcePage() {
               variant="ghost"
               size="sm"
               className="text-xs text-primary hover:text-white gap-1.5"
-              onClick={() => handlePrintIdCards(selectedEmployees)}
+              onClick={() => printIdCards(selectedEmployees)}
               disabled={printingIds.size > 0}
               data-testid="button-bulk-print-id-cards"
             >
@@ -3021,12 +2950,12 @@ export default function WorkforcePage() {
                         </TableCell>
                         <TableCell
                           className="font-mono text-xs text-primary font-semibold"
-                          onClick={() => setSelectedEmployee(emp)}
+                          onClick={() => goToEmployee(emp)}
                           data-testid={`text-empnum-${emp.id}`}
                         >
                           <span dir="ltr">{emp.employeeNumber}</span>
                         </TableCell>
-                        <TableCell className="py-3" onClick={() => setSelectedEmployee(emp)}>
+                        <TableCell className="py-3" onClick={() => goToEmployee(emp)}>
                           <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8 border border-zinc-700">
                               <AvatarImage src={emp.photoUrl ?? undefined} />
@@ -3035,13 +2964,13 @@ export default function WorkforcePage() {
                             <div className="font-medium text-white text-sm"><bdi>{emp.fullNameEn ?? "—"}</bdi></div>
                           </div>
                         </TableCell>
-                        <TableCell className="hidden md:table-cell font-mono text-xs text-zinc-400" onClick={() => setSelectedEmployee(emp)} dir="ltr">
+                        <TableCell className="hidden md:table-cell font-mono text-xs text-zinc-400" onClick={() => goToEmployee(emp)} dir="ltr">
                           {emp.nationalId ?? "—"}
                         </TableCell>
-                        <TableCell className="hidden lg:table-cell text-sm text-zinc-400" onClick={() => setSelectedEmployee(emp)} dir="ltr">
+                        <TableCell className="hidden lg:table-cell text-sm text-zinc-400" onClick={() => goToEmployee(emp)} dir="ltr">
                           {emp.phone ?? "—"}
                         </TableCell>
-                        <TableCell className="hidden xl:table-cell" onClick={() => setSelectedEmployee(emp)}>
+                        <TableCell className="hidden xl:table-cell" onClick={() => goToEmployee(emp)}>
                           {/* Task #187 — Position is the primary line; the
                               dummy free-text job title sub-line was removed
                               along with the dialog InfoRow. */}
@@ -3059,21 +2988,21 @@ export default function WorkforcePage() {
                             {emp.eventName && <div className="text-xs text-primary/70"><bdi>{emp.eventName}</bdi></div>}
                           </div>
                         </TableCell>
-                        <TableCell className="hidden lg:table-cell text-end text-sm text-white font-medium" onClick={() => setSelectedEmployee(emp)}>
+                        <TableCell className="hidden lg:table-cell text-end text-sm text-white font-medium" onClick={() => goToEmployee(emp)}>
                           {emp.salary ? formatNumber(Number(emp.salary)) : "—"}
                         </TableCell>
-                        <TableCell className="hidden xl:table-cell text-xs text-zinc-400" onClick={() => setSelectedEmployee(emp)} data-testid={`text-last-printed-${emp.id}`}>
+                        <TableCell className="hidden xl:table-cell text-xs text-zinc-400" onClick={() => goToEmployee(emp)} data-testid={`text-last-printed-${emp.id}`}>
                           {lastPrintDates[emp.id] ? <span dir="ltr">{formatDate(lastPrintDates[emp.id])}</span> : <span className="text-zinc-600">{tt("columns.never")}</span>}
                         </TableCell>
-                        <TableCell className="hidden md:table-cell text-sm text-zinc-400" onClick={() => setSelectedEmployee(emp)} dir="ltr">
+                        <TableCell className="hidden md:table-cell text-sm text-zinc-400" onClick={() => goToEmployee(emp)} dir="ltr">
                           {formatDate(emp.startDate)}
                         </TableCell>
                         {showTerminated && (
-                          <TableCell className="hidden md:table-cell text-sm text-zinc-400" onClick={() => setSelectedEmployee(emp)} dir="ltr">
+                          <TableCell className="hidden md:table-cell text-sm text-zinc-400" onClick={() => goToEmployee(emp)} dir="ltr">
                             {emp.endDate ? formatDate(emp.endDate) : "—"}
                           </TableCell>
                         )}
-                        <TableCell onClick={() => setSelectedEmployee(emp)}>
+                        <TableCell onClick={() => goToEmployee(emp)}>
                           <Badge variant="outline" className={`text-[10px] font-medium border ${st.className}`} data-testid={`badge-status-${emp.id}`}>
                             {st.label}
                           </Badge>
@@ -3084,7 +3013,7 @@ export default function WorkforcePage() {
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 text-muted-foreground hover:text-primary"
-                              onClick={(e) => { e.stopPropagation(); handlePrintIdCards([emp]); }}
+                              onClick={(e) => { e.stopPropagation(); printIdCards([emp]); }}
                               disabled={printingIds.has(emp.id)}
                               data-testid={`button-print-id-${emp.id}`}
                               title={tt("row.printIdCardTitle")}
@@ -3099,7 +3028,7 @@ export default function WorkforcePage() {
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 text-muted-foreground hover:text-white"
-                              onClick={() => setSelectedEmployee(emp)}
+                              onClick={() => goToEmployee(emp)}
                               data-testid={`button-view-${emp.id}`}
                             >
                               <ChevronRight className="h-4 w-4 rtl:rotate-180" />
@@ -3125,7 +3054,7 @@ export default function WorkforcePage() {
           setSelectedEmployee(null);
         }}
         onPrintCard={(emp) => handlePrintIdCards([emp])}
-        onEmployeeRefreshed={(emp) => setSelectedEmployee(emp)}
+        onEmployeeRefreshed={(emp) => goToEmployee(emp)}
       />
 
       {/* ── Bulk Mass Update Dialog ─────────────────────────────────────────── */}

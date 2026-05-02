@@ -11,7 +11,12 @@
     "printIdCards": "Print ID Cards",
     "printIdCardsWithCount": "Print ID Cards ({{n}})",
     "reassignManager": "Reassign Manager",
-    "reassignManagerWithCount": "Reassign Manager ({{n}})"
+    "reassignManagerWithCount": "Reassign Manager ({{n}})",
+    "back": "Back",
+    "backToList": "Back to Workforce",
+    "notFound": "Employee not found",
+    "notFoundDescription": "This employee record may have been removed or the link is incorrect.",
+    "loadError": "Couldn't load this employee"
   },
   "stats": {
     "total": "Total Employees",
