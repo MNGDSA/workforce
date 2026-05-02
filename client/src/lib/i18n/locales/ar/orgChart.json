@@ -32,5 +32,18 @@
     "legendDepartment": "إدارة",
     "legendPosition": "وظيفة",
     "legendUnassigned": "غير معيّن"
+  },
+  "viewToggle": {
+    "positions": "الوظائف",
+    "people": "الأشخاص"
+  },
+  "peopleView": {
+    "statManagers": "مدراء",
+    "statEmployees": "موظفون",
+    "statUnmanaged": "بدون مدير",
+    "unmanagedNode": "بدون مدير",
+    "unmanagedTitle": "موظفون بدون مدير",
+    "emptyTitle": "لا يوجد مدراء بعد",
+    "emptySubtitle": "أضف مدراء من صفحة الإدارة لرؤية تسلسل التبعية."
   }
 }

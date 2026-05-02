@@ -1,0 +1,85 @@
+{
+  "title": "Management",
+  "subtitle": "People who supervise workers but are not on the workforce themselves.",
+  "addManager": "Add Manager",
+  "importBtn": "Import from Excel",
+  "downloadTemplate": "Download Template",
+  "search": "Search managers…",
+  "filterAll": "All",
+  "filterActive": "Active",
+  "filterInactive": "Inactive",
+  "noManagers": "No managers yet. Add one or import a list to get started.",
+  "noResults": "No managers match your search.",
+  "loading": "Loading…",
+  "columns": {
+    "name": "Name",
+    "title": "Title",
+    "department": "Department",
+    "reportsTo": "Reports To",
+    "phone": "Phone",
+    "email": "Email",
+    "directReports": "Reports",
+    "workersUnder": "Workers",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "form": {
+    "fullNameEn": "Full Name (English)",
+    "fullNameAr": "Full Name (Arabic)",
+    "title": "Job Title",
+    "department": "Department",
+    "position": "Position (optional)",
+    "reportsTo": "Reports To (optional)",
+    "phone": "Phone",
+    "email": "Email",
+    "isActive": "Active",
+    "noDept": "— Unassigned —",
+    "noPosition": "— Unassigned —",
+    "noManager": "— Top of the chain —"
+  },
+  "drawer": {
+    "create": "Add Manager",
+    "edit": "Edit Manager",
+    "save": "Save",
+    "cancel": "Cancel",
+    "deactivate": "Deactivate",
+    "reactivate": "Reactivate",
+    "delete": "Delete"
+  },
+  "import": {
+    "title": "Import Managers",
+    "description": "Upload an .xlsx file using the template. The file is processed in two passes so a manager can reference another manager that appears later in the same sheet.",
+    "templateHint": "Need the format? Download the template first.",
+    "selectFile": "Choose File",
+    "noFile": "No file selected.",
+    "uploadButton": "Upload",
+    "uploading": "Uploading…",
+    "successTitle": "Import complete",
+    "successBody": "{{created}} created · {{updated}} updated · {{skipped}} skipped",
+    "errorTitle": "Import failed",
+    "errorRow": "Row {{row}}: {{message}}",
+    "errors": "Errors"
+  },
+  "actions": {
+    "saved": "Manager saved.",
+    "deactivated": "Manager deactivated.",
+    "reactivated": "Manager reactivated.",
+    "deleted": "Manager deleted.",
+    "hasReportsBlocked": "Cannot deactivate: this manager still has direct reports or workers attached. Reassign them first."
+  },
+  "errors": {
+    "generic": "Something went wrong. Try again."
+  },
+  "reassign": {
+    "title": "Reassign reports first",
+    "description": "{{name}} has {{workers}} direct workers and {{subManagers}} sub-managers. Choose how to handle them before deactivating.",
+    "optionReassign": "Reassign all reports to another manager",
+    "optionOrphan": "Leave reports unassigned (they will appear in the Unmanaged section)",
+    "pickTarget": "Pick a manager…",
+    "confirm": "Deactivate"
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive"
+  }
+}

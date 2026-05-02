@@ -70,11 +70,13 @@ import {
   insertGeofenceZoneSchema,
   insertDepartmentSchema,
   insertPositionSchema,
+  insertManagerSchema,
   photoChangeRequests,
   departments,
   positions,
   workforce,
   candidates,
+  managers,
   payRunLines,
   payrollTransactions,
   attendanceRecords,
@@ -211,6 +213,7 @@ import { z } from "zod";
 import bcrypt from "bcrypt";
 import { requireAuth, requirePermission, requireOwnership, markPublic, invalidateRoleCache, getAuthKind } from "./auth-middleware";
 import { formatActorName } from "./lib/actor-name";
+import { importManagersFromBuffer, buildManagerImportTemplate } from "./lib/managers-import";
 import { checkLoginRateLimit, recordLoginFailure, recordLoginSuccess } from "./login-rate-limit";
 import { checkOtpVerifyIp, recordOtpVerifyFailure, tryReserveOtpRequest, checkActivateIp, recordActivateFailure } from "./otp-throttle";
 import "./otp-maintenance";
@@ -4860,13 +4863,43 @@ export async function registerRoutes(
       if ("employeeNumber" in (req.body ?? {})) {
         return res.status(400).json({ message: tr(req, "employee.numberImmutable") });
       }
-      const allowed = ["salary", "notes", "endDate", "supervisorId", "performanceScore", "isActive", "eventId", "positionId"];
+      // Task #281 — `managerId` (FK → managers.id, nullable) replaces the
+      // never-used legacy `supervisorId`. Setting null clears the assignment.
+      const allowed = ["salary", "notes", "endDate", "managerId", "performanceScore", "isActive", "eventId", "positionId"];
       const body = normalizeBlankFields({ ...req.body }, WORKFORCE_BLANK_FIELDS);
       const data: Record<string, any> = {};
       for (const key of allowed) {
         if (key in body) data[key] = body[key];
       }
+      // Validate the manager target up-front so the user gets a clean
+      // 400 instead of a generic FK violation. Setting null is fine.
+      let assignedManagerName: string | null = null;
+      if ("managerId" in data && data.managerId) {
+        const mgr = await storage.getManager(data.managerId);
+        if (!mgr) return res.status(400).json({ message: tr(req, "manager.notFound") });
+        if (!mgr.isActive) return res.status(400).json({ message: tr(req, "manager.inactive") });
+        assignedManagerName = mgr.fullNameEn;
+      }
       const before = await storage.getWorkforceEmployee(req.params.id);
+      // Task #281 — enforce workforce:assign_manager whenever managerId is
+      // actually being changed. The route is gated by workforce:update so
+      // editors can still touch salary/notes/etc., but reassigning a worker
+      // to a different manager (or clearing it) requires the dedicated
+      // permission. The bulk endpoint already gates on the same key, this
+      // closes the per-row bypass.
+      if (
+        before &&
+        "managerId" in data &&
+        (data.managerId ?? null) !== ((before as any).managerId ?? null) &&
+        !req.authIsSuperAdmin &&
+        !req.authPermissions?.has("workforce:assign_manager")
+      ) {
+        return res.status(403).json({
+          code: "PERMISSION_DENIED",
+          message: tr(req, "auth.noPermission"),
+          required: "workforce:assign_manager",
+        });
+      }
       const record = await storage.updateWorkforceRecord(req.params.id, data);
       if (!record) return res.status(404).json({ message: tr(req, "employee.notFound") });
       // Build a human-readable diff description
@@ -4883,6 +4916,11 @@ export async function registerRoutes(
         if (data.notes !== undefined) changes.push(`notes updated`);
         if (data.endDate !== undefined) changes.push(`end date → ${data.endDate}`);
         if (data.performanceScore !== undefined) changes.push(`performance score → ${data.performanceScore}`);
+        if ("managerId" in data && (data.managerId ?? null) !== ((before as any).managerId ?? null)) {
+          changes.push(data.managerId
+            ? `manager → ${assignedManagerName ?? data.managerId}`
+            : `manager cleared`);
+        }
       }
       const subjectName = before?.fullNameEn ?? (record as any).fullNameEn ?? undefined;
       const empNum = before?.employeeNumber ?? (record as any).employeeNumber ?? undefined;
@@ -4922,6 +4960,27 @@ export async function registerRoutes(
           ...(Object.keys(headcountDiff).length > 0 ? { headcountImpact: headcountDiff } : {}),
         },
       });
+      // Dedicated audit row for manager assignment so the audit log
+      // filter UI ("show me everything that re-orged this person")
+      // surfaces it cleanly. Mirrors the bulk-assign event shape.
+      if (before && "managerId" in data && (data.managerId ?? null) !== ((before as any).managerId ?? null)) {
+        await logAudit(req, {
+          action: "workforce.manager_assigned",
+          entityType: "workforce",
+          entityId: req.params.id,
+          employeeNumber: empNum,
+          subjectName,
+          description: data.managerId
+            ? `Assigned worker to manager ${assignedManagerName ?? data.managerId}`
+            : `Cleared manager assignment for worker`,
+          metadata: {
+            workforceId: req.params.id,
+            managerId: data.managerId ?? null,
+            previousManagerId: (before as any).managerId ?? null,
+            bulk: false,
+          },
+        });
+      }
       return res.json(record);
     } catch (err) {
       return handleError(res, err);
@@ -5407,6 +5466,132 @@ export async function registerRoutes(
   app.get("/api/org-chart", requirePermission("org_chart:read"), async (req: Request, res: Response) => {
     try {
       // Permission already enforced by requirePermission("org_chart:read").
+      // Task #281 — `?view=people` toggles a manager-hierarchy projection that
+      // pivots active workforce rows under their assigned manager (and walks
+      // the manager-of-manager chain via `reports_to_manager_id`). The legacy
+      // `?view=positions` (the default, also returned when no `view` param is
+      // present) preserves the original department→position→employees shape.
+      const view = String(req.query.view ?? "positions");
+      if (view === "people") {
+        // Pull all active managers (we'll prune them server-side into roots
+        // vs nested reports). Cycle prevention is handled at PATCH time, so
+        // a malformed reports_to chain is treated as a missing parent here.
+        const allManagers = await db.select({
+          id: managers.id,
+          fullNameEn: managers.fullNameEn,
+          fullNameAr: managers.fullNameAr,
+          email: managers.email,
+          phone: managers.phone,
+          departmentId: managers.departmentId,
+          departmentName: departments.name,
+          positionId: managers.positionId,
+          positionTitle: positions.title,
+          reportsToManagerId: managers.reportsToManagerId,
+        })
+          .from(managers)
+          .leftJoin(departments, eq(managers.departmentId, departments.id))
+          .leftJoin(positions, eq(managers.positionId, positions.id))
+          .where(eq(managers.isActive, true))
+          .orderBy(managers.fullNameEn);
+
+        // Active employees with a current manager assignment, joined to the
+        // candidate row for display fields (and to positions for the role).
+        const employeeRows = await db.select({
+          id: workforce.id,
+          candidateId: workforce.candidateId,
+          employeeNumber: workforce.employeeNumber,
+          managerId: workforce.managerId,
+          fullNameEn: candidates.fullNameEn,
+          phone: candidates.phone,
+          photoUrl: candidates.photoUrl,
+          positionTitle: positions.title,
+        })
+          .from(workforce)
+          .innerJoin(candidates, eq(workforce.candidateId, candidates.id))
+          .leftJoin(positions, eq(workforce.positionId, positions.id))
+          .where(and(
+            eq(workforce.isActive, true),
+            // Same defensive derived-status filter as the positions view.
+            sql.raw(`(${DISPLAY_STATUS_SQL.trim()}) NOT IN ('blocked', 'archived')`),
+          ));
+
+        const managerById = new Map(allManagers.map(m => [m.id, m] as const));
+        const empsByManager = new Map<string, typeof employeeRows>();
+        const unmanagedEmployees: typeof employeeRows = [];
+        for (const e of employeeRows) {
+          // Task #281 — an employee whose `managerId` references a deleted
+          // or deactivated manager is treated as unmanaged so they remain
+          // visible in the People view (rather than silently vanishing).
+          if (e.managerId && managerById.has(e.managerId)) {
+            if (!empsByManager.has(e.managerId)) empsByManager.set(e.managerId, []);
+            empsByManager.get(e.managerId)!.push(e);
+          } else {
+            unmanagedEmployees.push(e);
+          }
+        }
+
+        const childrenByParent = new Map<string, typeof allManagers>();
+        const rootManagers: typeof allManagers = [];
+        for (const m of allManagers) {
+          // A manager whose `reportsToManagerId` points to a missing/inactive
+          // manager is rendered as a root (defensive against deleted parents).
+          const parentId = m.reportsToManagerId && managerById.has(m.reportsToManagerId)
+            ? m.reportsToManagerId
+            : null;
+          if (parentId) {
+            if (!childrenByParent.has(parentId)) childrenByParent.set(parentId, []);
+            childrenByParent.get(parentId)!.push(m);
+          } else {
+            rootManagers.push(m);
+          }
+        }
+
+        const buildEmployeeNode = (e: typeof employeeRows[number]) => ({
+          id: e.id,
+          candidateId: e.candidateId,
+          employeeNumber: e.employeeNumber,
+          fullNameEn: e.fullNameEn,
+          phone: e.phone,
+          photoUrl: e.photoUrl,
+          positionTitle: e.positionTitle,
+        });
+
+        // Recursive build with cycle guard — if the data ever drifts and a
+        // cycle slips past the PATCH validation, we still terminate cleanly.
+        const visited = new Set<string>();
+        const buildManagerNode = (m: typeof allManagers[number]): any => {
+          if (visited.has(m.id)) return null;
+          visited.add(m.id);
+          const children = (childrenByParent.get(m.id) ?? [])
+            .map(buildManagerNode)
+            .filter(Boolean);
+          const directEmps = (empsByManager.get(m.id) ?? []).map(buildEmployeeNode);
+          return {
+            id: m.id,
+            fullNameEn: m.fullNameEn,
+            fullNameAr: m.fullNameAr,
+            email: m.email,
+            phone: m.phone,
+            departmentId: m.departmentId,
+            departmentName: m.departmentName,
+            positionId: m.positionId,
+            positionTitle: m.positionTitle,
+            directReportManagers: children,
+            directReportEmployees: directEmps,
+            reportCount: children.length + directEmps.length,
+          };
+        };
+
+        const tree = rootManagers.map(buildManagerNode).filter(Boolean);
+        return res.json({
+          view: "people",
+          rootManagers: tree,
+          unmanagedEmployees: unmanagedEmployees.map(buildEmployeeNode),
+          totalManagers: allManagers.length,
+          totalEmployees: employeeRows.length,
+        });
+      }
+
       const allDepts = await db.select().from(departments)
         .where(eq(departments.isActive, true))
         .orderBy(departments.sortOrder, departments.name);
@@ -5625,6 +5810,315 @@ export async function registerRoutes(
       if (!result.success) return res.status(400).json({ message: result.error });
       return res.json(result.position);
     } catch (err) { return handleError(res, err); }
+  });
+
+  // ─── Managers (Task #281 — Jisr-HR directory) ──────────────────────────────
+  // Read covers list + view; write covers create / edit / deactivate /
+  // reactivate / Excel import. The Excel template + import endpoints live
+  // further down with the rest of the import handlers.
+  app.get("/api/managers", requirePermission("managers:read"), async (req: Request, res: Response) => {
+    try {
+      const querySchema = z.object({
+        search: z.string().max(200).optional(),
+        departmentId: z.string().optional(),
+        // Accept "true"/"false"/"all". Default behaviour is "active only" so
+        // the picker dropdowns and lists never accidentally surface
+        // deactivated managers; Settings pages can pass `all`.
+        status: z.enum(["active", "inactive", "all"]).optional().default("active"),
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(200).default(50),
+      });
+      const q = querySchema.parse(req.query);
+      const isActive = q.status === "all" ? undefined : q.status === "active";
+      const result = await storage.getManagers({
+        search: q.search,
+        departmentId: q.departmentId,
+        isActive,
+        page: q.page,
+        limit: q.limit,
+      });
+      return res.json(result);
+    } catch (err) { return handleError(res, err, req); }
+  });
+
+  // NOTE: /template MUST be registered before /:id, otherwise express
+  // matches "template" as the :id param and returns 404.
+  app.get("/api/managers/template", requirePermission("managers:read"), async (_req: Request, res: Response) => {
+    try {
+      const buf = await buildManagerImportTemplate(storage);
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="managers-template.xlsx"`);
+      return res.send(buf);
+    } catch (err) { return handleError(res, err); }
+  });
+
+  app.get("/api/managers/:id", requirePermission("managers:read"), async (req: Request, res: Response) => {
+    try {
+      const m = await storage.getManagerWithCounts(req.params.id);
+      if (!m) return res.status(404).json({ message: tr(req, "manager.notFound") });
+      return res.json(m);
+    } catch (err) { return handleError(res, err, req); }
+  });
+
+  app.post("/api/managers", requirePermission("managers:write"), async (req: Request, res: Response) => {
+    try {
+      const data = insertManagerSchema.parse(req.body);
+      // Cycle pre-check happens on the path the data actually takes.
+      // Create-time we only need to verify the parent exists; a brand-new
+      // row can't form a cycle by itself.
+      if (data.reportsToManagerId) {
+        const parent = await storage.getManager(data.reportsToManagerId);
+        if (!parent) return res.status(400).json({ message: tr(req, "manager.parentNotFound") });
+        if (!parent.isActive) return res.status(400).json({ message: tr(req, "manager.parentInactive") });
+      }
+      const created = await storage.createManager(data);
+      await logAudit(req, {
+        action: "manager.created",
+        entityType: "manager",
+        entityId: created.id,
+        subjectName: created.fullNameEn,
+        description: `Created manager ${created.fullNameEn}${created.fullNameAr ? ` (${created.fullNameAr})` : ""}`,
+        metadata: { managerId: created.id, jisrEmployeeId: created.jisrEmployeeId ?? null },
+      });
+      return res.status(201).json(created);
+    } catch (err) { return handleError(res, err, req); }
+  });
+
+  app.patch("/api/managers/:id", requirePermission("managers:write"), async (req: Request, res: Response) => {
+    try {
+      const data = insertManagerSchema.partial().parse(req.body);
+      const before = await storage.getManager(req.params.id);
+      if (!before) return res.status(404).json({ message: tr(req, "manager.notFound") });
+
+      // Cycle check whenever reportsToManagerId is being changed.
+      if ("reportsToManagerId" in data) {
+        const proposedParent = data.reportsToManagerId ?? null;
+        if (proposedParent === req.params.id) {
+          return res.status(400).json({ message: tr(req, "manager.selfReportsTo") });
+        }
+        if (proposedParent) {
+          const parent = await storage.getManager(proposedParent);
+          if (!parent) return res.status(400).json({ message: tr(req, "manager.parentNotFound") });
+        }
+        const wouldCycle = await storage.managerWouldCreateCycle(req.params.id, proposedParent);
+        if (wouldCycle) {
+          return res.status(400).json({ message: tr(req, "manager.cycleDetected") });
+        }
+      }
+
+      const updated = await storage.updateManager(req.params.id, data);
+      if (!updated) return res.status(404).json({ message: tr(req, "manager.notFound") });
+
+      // Build a human-readable diff for the audit row. Keep it short — the
+      // full payload is already in metadata for forensics.
+      const changes: string[] = [];
+      if (data.fullNameEn !== undefined && data.fullNameEn !== before.fullNameEn) changes.push(`name → ${data.fullNameEn}`);
+      if (data.phone !== undefined && data.phone !== before.phone) changes.push(`phone → ${data.phone}`);
+      if (data.email !== undefined && data.email !== before.email) changes.push(`email → ${data.email ?? "(cleared)"}`);
+      if (data.departmentId !== undefined && data.departmentId !== before.departmentId) changes.push("department changed");
+      if (data.positionId !== undefined && data.positionId !== before.positionId) changes.push("position changed");
+      if ("reportsToManagerId" in data && (data.reportsToManagerId ?? null) !== (before.reportsToManagerId ?? null)) {
+        // Separate audit row for reports-to changes — easier to filter the
+        // log later when the org chart suddenly shifts.
+        await logAudit(req, {
+          action: "manager.reports_to_changed",
+          entityType: "manager",
+          entityId: updated.id,
+          subjectName: updated.fullNameEn,
+          description: `Changed reports-to for ${updated.fullNameEn}: ${before.reportsToManagerId ?? "(none)"} → ${data.reportsToManagerId ?? "(none)"}`,
+          metadata: {
+            managerId: updated.id,
+            from: before.reportsToManagerId,
+            to: data.reportsToManagerId ?? null,
+          },
+        });
+      }
+      if (changes.length > 0) {
+        await logAudit(req, {
+          action: "manager.updated",
+          entityType: "manager",
+          entityId: updated.id,
+          subjectName: updated.fullNameEn,
+          description: `Updated ${updated.fullNameEn}: ${changes.join(", ")}`,
+          metadata: { managerId: updated.id, fields: Object.keys(data) },
+        });
+      }
+      return res.json(updated);
+    } catch (err) { return handleError(res, err, req); }
+  });
+
+  app.delete("/api/managers/:id", requirePermission("managers:write"), async (req: Request, res: Response) => {
+    try {
+      // `?reassignTo=<id>` reassigns reports to that manager.
+      // `?orphan=true` clears the assignment entirely.
+      // Without either, returns 409 HAS_REPORTS so the UI can prompt.
+      const reassignToParam = req.query.reassignTo;
+      const orphanParam = req.query.orphan;
+      const opts: { reassignTo?: string | null; orphan?: boolean } = {};
+      if (typeof reassignToParam === "string" && reassignToParam.length > 0) {
+        opts.reassignTo = reassignToParam;
+      }
+      if (orphanParam === "true") {
+        opts.orphan = true;
+      }
+      const before = await storage.getManager(req.params.id);
+      const result = await storage.deactivateManager(req.params.id, opts);
+      if ("ok" in result && !result.ok) {
+        if (result.code === "NOT_FOUND") return res.status(404).json({ message: tr(req, "manager.notFound") });
+        if (result.code === "HAS_REPORTS") {
+          return res.status(409).json({
+            code: "HAS_REPORTS",
+            message: tr(req, "manager.hasReports"),
+            workerCount: result.workerCount,
+            subManagerCount: result.subManagerCount,
+          });
+        }
+      }
+      if ("ok" in result && result.ok) {
+        await logAudit(req, {
+          action: "manager.deactivated",
+          entityType: "manager",
+          entityId: result.manager.id,
+          subjectName: result.manager.fullNameEn,
+          description: `Deactivated ${result.manager.fullNameEn}${opts.reassignTo ? ` (reports reassigned to ${opts.reassignTo})` : opts.orphan ? " (reports orphaned)" : ""}`,
+          metadata: {
+            managerId: result.manager.id,
+            reassignTo: opts.reassignTo ?? null,
+            orphan: opts.orphan ?? false,
+            previousState: before ? { isActive: before.isActive } : null,
+          },
+        });
+        return res.json(result.manager);
+      }
+      // Unreachable — exhaustive on the discriminated union — but keeps tsc happy.
+      return res.status(500).json({ message: "Unexpected deactivate result" });
+    } catch (err: any) {
+      const msg = String(err?.message ?? "");
+      if (msg === "REASSIGN_TO_SELF") return res.status(400).json({ message: tr(req, "manager.reassignToSelf") });
+      if (msg === "REASSIGN_TARGET_NOT_FOUND") return res.status(400).json({ message: tr(req, "manager.reassignTargetNotFound") });
+      if (msg === "REASSIGN_TARGET_INACTIVE") return res.status(400).json({ message: tr(req, "manager.reassignTargetInactive") });
+      return handleError(res, err, req);
+    }
+  });
+
+  app.post("/api/managers/:id/reactivate", requirePermission("managers:write"), async (req: Request, res: Response) => {
+    try {
+      const updated = await storage.reactivateManager(req.params.id);
+      if (!updated) return res.status(404).json({ message: tr(req, "manager.notFound") });
+      await logAudit(req, {
+        action: "manager.reactivated",
+        entityType: "manager",
+        entityId: updated.id,
+        subjectName: updated.fullNameEn,
+        description: `Reactivated ${updated.fullNameEn}`,
+        metadata: { managerId: updated.id },
+      });
+      return res.json(updated);
+    } catch (err) { return handleError(res, err, req); }
+  });
+
+  // Import flow (full contract documented in server/lib/managers-import.ts):
+  //   • Validation pass — atomic; any structural error aborts before any writes.
+  //   • Pass 1 (base create/update) — aborts on first row error and marks
+  //     remaining rows as skipped. Already-written rows are NOT rolled back
+  //     (storage uses the global pool — true tx-aware storage is future work).
+  //   • Pass 2 (reports-to + cycle check) — base status is preserved; any
+  //     wiring failure is recorded as a per-row reportsToWarning. Isolated
+  //     per row, no skipping.
+  // Response shape:
+  //   • errors[]/errorCount             — pass-1 base-row failures (row didn't land).
+  //   • reportsToWarnings[]/reportsToWarningCount — pass-2 wiring failures
+  //     (row landed; parent edge missing).
+  // Both arrays carry { row, message }; reportsToWarnings also includes
+  // the managerId so the operator can fix the parent edge in the UI
+  // without re-importing the whole batch.
+  // The matching /template GET is registered earlier to avoid collision
+  // with /:id.
+  app.post("/api/managers/import", requirePermission("managers:write"), uploadXlsx.single("file"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: tr(req, "file.noUpload") });
+      const buf = fs.readFileSync(req.file.path);
+      try { fs.unlinkSync(req.file.path); } catch { /* tmp file cleanup is best-effort */ }
+      const summary = await importManagersFromBuffer(buf, storage);
+      // Single audit row per import — per-manager rows would explode the
+      // log on a 500-row sheet. The summary captures what was done.
+      await logAudit(req, {
+        action: "manager.imported",
+        entityType: "manager",
+        description: `Imported managers sheet: ${summary.created} created, ${summary.updated} updated, ${summary.errors} errors`,
+        metadata: {
+          total: summary.total, created: summary.created,
+          updated: summary.updated, errors: summary.errors,
+        },
+      });
+      // Status 200 even when rows had errors — the body carries the
+      // per-row breakdown the UI shows in the result drawer.
+      // `errors[]` covers pass-1 base-row failures (the manager record
+      // did NOT land). `reportsToWarnings[]` covers pass-2 wiring
+      // failures on rows whose base record DID land — operators need
+      // to see them as a separate class so they can fix the parent
+      // edge without re-importing the whole batch.
+      const errorRows = summary.results
+        .filter((r) => r.status === "error")
+        .map((r) => ({
+          row: r.rowNumber,
+          message: r.reason ?? "Unknown error",
+        }));
+      const reportsToWarningRows = summary.results
+        .filter((r) => r.reportsToWarning)
+        .map((r) => ({
+          row: r.rowNumber,
+          managerId: r.managerId,
+          message: r.reportsToWarning!,
+        }));
+      return res.json({
+        total: summary.total,
+        created: summary.created,
+        updated: summary.updated,
+        skipped: summary.skipped,
+        errorCount: summary.errors,
+        errors: errorRows,
+        reportsToWarningCount: summary.reportsToWarnings,
+        reportsToWarnings: reportsToWarningRows,
+        results: summary.results,
+      });
+    } catch (err) { return handleError(res, err, req); }
+  });
+
+  // Bulk assign N workers to a single manager (or null to clear). One
+  // audit row is written per worker that actually changes.
+  app.post("/api/workforce/bulk-assign-manager", requirePermission("workforce:assign_manager"), async (req: Request, res: Response) => {
+    try {
+      const bodySchema = z.object({
+        workforceIds: z.array(z.string().min(1)).min(1).max(5000),
+        managerId: z.string().min(1).nullable(),
+      });
+      const { workforceIds, managerId } = bodySchema.parse(req.body);
+      const { changedIds, managerName } = await storage.bulkAssignWorkforceManager(workforceIds, managerId);
+      // One audit row per affected worker — operators routinely filter the
+      // audit log by entityId when investigating a single hire's history.
+      for (const wfId of changedIds) {
+        await logAudit(req, {
+          action: "workforce.manager_assigned",
+          entityType: "workforce",
+          entityId: wfId,
+          description: managerId
+            ? `Assigned worker to manager ${managerName ?? managerId}`
+            : `Cleared manager assignment for worker`,
+          metadata: { workforceId: wfId, managerId, bulk: true },
+        });
+      }
+      return res.json({
+        requested: workforceIds.length,
+        changed: changedIds.length,
+        managerName,
+      });
+    } catch (err: any) {
+      const msg = String(err?.message ?? "");
+      if (msg === "MANAGER_NOT_FOUND") return res.status(400).json({ message: tr(req, "manager.notFound") });
+      if (msg === "MANAGER_INACTIVE") return res.status(400).json({ message: tr(req, "manager.inactive") });
+      return handleError(res, err, req);
+    }
   });
 
   // ─── Users management (admin) ──────────────────────────────────────────────

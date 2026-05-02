@@ -21,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -93,6 +94,7 @@ import {
   Coins,
   ChevronDown,
   ChevronUp,
+  UserCog,
 } from "lucide-react";
 import {
   Table,
@@ -129,7 +131,9 @@ type Employee = {
   terminationCategory: string | null;
   isActive: boolean;
   offboardingStatus: string | null;
-  supervisorId: string | null;
+  managerId: string | null;
+  managerNameEn?: string | null;
+  managerNameAr?: string | null;
   performanceScore: string | null;
   notes: string | null;
   createdAt: string;
@@ -390,6 +394,10 @@ function EmployeeDetailDialog({
   const [eventValue, setEventValue] = useState("");
   const [editPosition, setEditPosition] = useState(false);
   const [positionValue, setPositionValue] = useState("");
+  // Task #281 — Reports To picker. `__none__` is rendered as "Not assigned"
+  // and translated to a `null` payload on save (mirrors the position picker).
+  const [editManager, setEditManager] = useState(false);
+  const [managerValue, setManagerValue] = useState("");
   const [terminateOpen, setTerminateOpen] = useState(false);
   const [terminateForm, setTerminateForm] = useState({ endDate: "", reason: "", category: "" });
   const [reinstateOpen, setReinstateOpen] = useState(false);
@@ -513,6 +521,19 @@ function EmployeeDetailDialog({
     enabled: open,
   });
 
+  // Task #281 — Active managers feed the Reports To picker. The list endpoint
+  // returns `{ data, total }`; we unwrap to a flat array. We only show active
+  // managers in the picker; an existing inactive assignment still renders by
+  // ID via the read-only label below.
+  const { data: managersList = [] } = useQuery<Array<{ id: string; fullNameEn: string; fullNameAr?: string | null; isActive: boolean }>>({
+    queryKey: ["/api/managers", "picker"],
+    queryFn: () => apiRequest("GET", "/api/managers?status=active&limit=200").then(async r => {
+      const body = await r.json();
+      return Array.isArray(body) ? body : (body?.data ?? []);
+    }),
+    enabled: open,
+  });
+
   const { data: scheduleTemplates = [] } = useQuery<ScheduleTemplateWithDays[]>({
     queryKey: ["/api/schedule-templates"],
     queryFn: () => apiRequest("GET", "/api/schedule-templates").then(r => r.json()),
@@ -575,6 +596,8 @@ function EmployeeDetailDialog({
       setEditSalary(false);
       setEditNotes(false);
       setEditPosition(false);
+      // Task #281 — also collapse Reports To inline editor on success.
+      setEditManager(false);
       onUpdated();
       toast({ title: t("toast.employeeUpdated") });
     },
@@ -1063,6 +1086,53 @@ function EmployeeDetailDialog({
                   ) : (
                     <p className="text-white text-sm" data-testid="text-employee-event">
                       {employee.eventName ? <bdi>{employee.eventName}</bdi> : <span className="text-amber-400 text-xs italic">{t("dialog.event.noneWarning")}</span>}
+                    </p>
+                  )}
+                </div>
+                {/* Task #281 — Reports To inline editor. Mirrors the position
+                    picker pattern: ghost "Change/Assign" button toggles a
+                    Select with "__none__" sentinel that we translate to a
+                    null payload before sending to PATCH /api/workforce/:id. */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500 text-xs flex items-center gap-1"><UserCog className="h-3 w-3" /> {t("dialog.reportsTo.label")}</span>
+                    {employee.isActive && !editManager && (
+                      <Button variant="ghost" size="sm" className="h-5 text-[11px] text-primary px-1" onClick={() => { setEditManager(true); setManagerValue(employee.managerId ?? "__none__"); }} data-testid="button-edit-reports-to">
+                        {employee.managerId ? t("dialog.actions.change") : t("dialog.actions.assign")}
+                      </Button>
+                    )}
+                  </div>
+                  {editManager ? (
+                    <div className="flex gap-2">
+                      <Select value={managerValue} onValueChange={setManagerValue}>
+                        <SelectTrigger data-testid="select-employee-manager" className="bg-zinc-900 border-zinc-700 text-white h-8 text-sm flex-1">
+                          <SelectValue placeholder={t("dialog.reportsTo.selectPlaceholder")} />
+                        </SelectTrigger>
+                        <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
+                          <SelectItem value="__none__" className="text-zinc-400 focus:bg-zinc-800 italic">{t("dialog.reportsTo.notAssigned")}</SelectItem>
+                          {managersList.length === 0 ? (
+                            <div className="px-2 py-1.5 text-xs text-zinc-500 italic">{t("dialog.reportsTo.noManagers")}</div>
+                          ) : (
+                            managersList.map(m => (
+                              <SelectItem key={m.id} value={m.id} className="text-white focus:bg-zinc-800">
+                                <bdi>{i18n.language?.startsWith("ar") ? (m.fullNameAr || m.fullNameEn) : m.fullNameEn}</bdi>
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" className="h-8 bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ managerId: managerValue === "__none__" ? null : managerValue }, { onSuccess: () => setEditManager(false) })} data-testid="button-save-reports-to">
+                        {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("dialog.actions.save")}
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-8 border-zinc-700" onClick={() => setEditManager(false)}>{t("dialog.actions.cancel")}</Button>
+                    </div>
+                  ) : (
+                    <p className="text-white text-sm" data-testid="text-employee-manager">
+                      {employee.managerId ? (
+                        <bdi>{i18n.language?.startsWith("ar") ? (employee.managerNameAr || employee.managerNameEn || employee.managerId) : (employee.managerNameEn || employee.managerNameAr || employee.managerId)}</bdi>
+                      ) : (
+                        <span className="text-zinc-500 text-xs italic">{t("dialog.reportsTo.notAssigned")}</span>
+                      )}
                     </p>
                   )}
                 </div>
@@ -2364,7 +2434,7 @@ export default function WorkforcePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
-  const { t: tt } = useTranslation("workforce");
+  const { t: tt, i18n } = useTranslation("workforce");
   const statusBadge = useStatusBadge();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "terminated">("active");
@@ -2393,6 +2463,37 @@ export default function WorkforcePage() {
     updated: number; skipped: number; total: number;
     errors: { employeeNumber: string; reason: string }[];
   } | null>(null);
+  // Task #281 — Bulk reassign manager dialog. Mirrors the inline picker:
+  // sentinel "__none__" maps to a null payload (clear assignment). The list
+  // page only renders this toolbar when ≥1 row is selected.
+  const [bulkManagerDialog, setBulkManagerDialog] = useState<{ open: boolean; managerValue: string }>({ open: false, managerValue: "__none__" });
+  const { data: bulkManagersList = [] } = useQuery<Array<{ id: string; fullNameEn: string; fullNameAr?: string | null; isActive: boolean }>>({
+    queryKey: ["/api/managers", "bulk-picker"],
+    queryFn: () => apiRequest("GET", "/api/managers?status=active&limit=200").then(async r => {
+      const body = await r.json();
+      return Array.isArray(body) ? body : (body?.data ?? []);
+    }),
+    enabled: bulkManagerDialog.open,
+  });
+  const bulkManagerMutation = useMutation({
+    mutationFn: (payload: { workforceIds: string[]; managerId: string | null }) =>
+      apiRequest("POST", "/api/workforce/bulk-assign-manager", payload).then(r => r.json()),
+    onSuccess: (json: { requested: number; changed: number; managerName: string | null }) => {
+      qc.invalidateQueries({ queryKey: ["/api/workforce"] });
+      const skipped = Math.max(0, (json?.requested ?? 0) - (json?.changed ?? 0));
+      const changed = json?.changed ?? 0;
+      toast({
+        title: skipped > 0
+          ? tt("dialog.bulkReportsTo.successWithSkipped", { updated: formatNumber(changed), skipped: formatNumber(skipped) })
+          : tt("dialog.bulkReportsTo.successWithCount", { count: changed, n: formatNumber(changed) }),
+      });
+      setBulkManagerDialog({ open: false, managerValue: "__none__" });
+      setSelectedIds(new Set());
+    },
+    onError: (err: Error) => {
+      toast({ title: tt("dialog.bulkReportsTo.errorTitle"), description: err.message, variant: "destructive" });
+    },
+  });
 
   const { data: employees = [], isLoading } = useQuery<Employee[]>({
     queryKey: ["/api/workforce", search, statusFilter],
@@ -2822,6 +2923,20 @@ export default function WorkforcePage() {
                 : tt("page.printIdCardsWithCount", { n: formatNumber(selectedIds.size) })}
             </Button>
             <span className="text-zinc-600">|</span>
+            {/* Task #281 — Bulk reassign manager. Permission gating happens
+                server-side; the button is rendered for everyone but a 403 will
+                surface as a toast. */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-primary hover:text-white gap-1.5"
+              onClick={() => setBulkManagerDialog({ open: true, managerValue: "__none__" })}
+              data-testid="button-bulk-reassign-manager"
+            >
+              <UserCog className="h-3.5 w-3.5" />
+              {tt("page.reassignManagerWithCount", { n: formatNumber(selectedIds.size) })}
+            </Button>
+            <span className="text-zinc-600">|</span>
             <Button variant="ghost" size="sm" className="text-xs text-zinc-400 hover:text-white" onClick={() => setSelectedIds(new Set())}>
               {tt("selectionBar.clearSelection")}
             </Button>
@@ -3229,6 +3344,78 @@ export default function WorkforcePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Task #281 — Bulk Reassign Manager dialog. Submits POST
+          /api/workforce/bulk-assign-manager with the current selection. */}
+      <Dialog
+        open={bulkManagerDialog.open}
+        onOpenChange={(open) => {
+          if (!bulkManagerMutation.isPending) {
+            setBulkManagerDialog((prev) => ({ ...prev, open }));
+          }
+        }}
+      >
+        <DialogContent data-testid="dialog-bulk-reassign-manager" className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle>{tt("dialog.bulkReportsTo.title")}</DialogTitle>
+            <DialogDescription>
+              {tt("dialog.bulkReportsTo.description", { n: formatNumber(selectedIds.size) })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Select
+              value={bulkManagerDialog.managerValue}
+              onValueChange={(v) => setBulkManagerDialog((prev) => ({ ...prev, managerValue: v }))}
+            >
+              <SelectTrigger
+                data-testid="select-bulk-manager"
+                className="bg-zinc-900 border-zinc-700 text-white"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
+                <SelectItem value="__none__" className="text-zinc-400 focus:bg-zinc-800 italic">
+                  {tt("dialog.reportsTo.notAssigned")}
+                </SelectItem>
+                {bulkManagersList.length === 0 ? (
+                  <div className="px-2 py-1.5 text-xs text-zinc-500 italic">
+                    {tt("dialog.reportsTo.noManagers")}
+                  </div>
+                ) : (
+                  bulkManagersList.map((m) => (
+                    <SelectItem key={m.id} value={m.id} className="text-white focus:bg-zinc-800">
+                      <bdi>{i18n.language?.startsWith("ar") ? (m.fullNameAr || m.fullNameEn) : m.fullNameEn}</bdi>
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="border-zinc-700"
+              disabled={bulkManagerMutation.isPending}
+              onClick={() => setBulkManagerDialog({ open: false, managerValue: "__none__" })}
+              data-testid="button-bulk-manager-cancel"
+            >
+              {tt("dialog.actions.cancel")}
+            </Button>
+            <Button
+              className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
+              disabled={bulkManagerMutation.isPending || selectedIds.size === 0}
+              onClick={() => bulkManagerMutation.mutate({
+                workforceIds: Array.from(selectedIds),
+                managerId: bulkManagerDialog.managerValue === "__none__" ? null : bulkManagerDialog.managerValue,
+              })}
+              data-testid="button-bulk-manager-apply"
+            >
+              {bulkManagerMutation.isPending ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : null}
+              {tt("dialog.bulkReportsTo.applyButton")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

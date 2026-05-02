@@ -37,6 +37,7 @@ import {
   MapPin,
   Building2,
   Network,
+  UserCog,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -310,14 +311,15 @@ const topNavItems = [
   { href: "/payroll",   icon: Wallet,          labelKey: "payroll" },
 ];
 
-const workforcePaths = ["/workforce", "/org-chart", "/geofences", "/assets", "/offboarding", "/attendance"];
+const workforcePaths = ["/workforce", "/org-chart", "/geofences", "/assets", "/offboarding", "/attendance", "/management"];
 const workforceSubItems = [
-  { href: "/workforce",   icon: Users,   labelKey: "employees" },
-  { href: "/org-chart",   icon: Network, labelKey: "orgChart" },
-  { href: "/attendance",  icon: Clock,   labelKey: "attendance" },
-  { href: "/geofences",   icon: MapPin,  labelKey: "geofences" },
-  { href: "/assets",      icon: Package, labelKey: "assets" },
-  { href: "/offboarding", icon: LogOut,  labelKey: "offboarding" },
+  { href: "/workforce",   icon: Users,    labelKey: "employees" },
+  { href: "/management",  icon: UserCog,  labelKey: "management" },
+  { href: "/org-chart",   icon: Network,  labelKey: "orgChart" },
+  { href: "/attendance",  icon: Clock,    labelKey: "attendance" },
+  { href: "/geofences",   icon: MapPin,   labelKey: "geofences" },
+  { href: "/assets",      icon: Package,  labelKey: "assets" },
+  { href: "/offboarding", icon: LogOut,   labelKey: "offboarding" },
 ];
 
 const settingsPaths = ["/settings", "/automation", "/id-cards", "/departments"];

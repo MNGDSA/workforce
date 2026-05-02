@@ -9,7 +9,9 @@
     "exportExcel": "تصدير إلى Excel",
     "exportCsv": "تصدير إلى CSV",
     "printIdCards": "طباعة بطاقات الهوية",
-    "printIdCardsWithCount": "طباعة بطاقات الهوية ({{n}})"
+    "printIdCardsWithCount": "طباعة بطاقات الهوية ({{n}})",
+    "reassignManager": "إعادة تعيين المدير",
+    "reassignManagerWithCount": "إعادة تعيين المدير ({{n}})"
   },
   "stats": {
     "total": "إجمالي الموظفين",
@@ -146,6 +148,22 @@
     "event": {
       "selectPlaceholder": "اختر فعالية…",
       "noneWarning": "⚠ لا توجد فعالية مُعيَّنة"
+    },
+    "reportsTo": {
+      "label": "المدير المباشر",
+      "selectPlaceholder": "اختر مديرًا…",
+      "notAssigned": "غير معيَّن",
+      "loading": "جارٍ تحميل المديرين…",
+      "noManagers": "لا يوجد مديرون نشطون"
+    },
+    "bulkReportsTo": {
+      "title": "إعادة تعيين المدير",
+      "description": "تعيين المدير المباشر للموظفين المحدَّدين البالغ عددهم {{n}}.",
+      "applyButton": "تطبيق",
+      "successWithCount_one": "تمت إعادة تعيين موظف واحد.",
+      "successWithCount_other": "تمت إعادة تعيين {{count}} موظفين.",
+      "successWithSkipped": "تمت إعادة تعيين {{updated}} موظفين (تم تخطّي {{skipped}}).",
+      "errorTitle": "تعذَّر إعادة التعيين"
     },
     "salary": {
       "label": "الراتب الشهري (ريال)",

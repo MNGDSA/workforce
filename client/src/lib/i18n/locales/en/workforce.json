@@ -9,7 +9,9 @@
     "exportExcel": "Export to Excel",
     "exportCsv": "Export to CSV",
     "printIdCards": "Print ID Cards",
-    "printIdCardsWithCount": "Print ID Cards ({{n}})"
+    "printIdCardsWithCount": "Print ID Cards ({{n}})",
+    "reassignManager": "Reassign Manager",
+    "reassignManagerWithCount": "Reassign Manager ({{n}})"
   },
   "stats": {
     "total": "Total Employees",
@@ -146,6 +148,22 @@
     "event": {
       "selectPlaceholder": "Select event…",
       "noneWarning": "⚠ No event assigned"
+    },
+    "reportsTo": {
+      "label": "Reports To",
+      "selectPlaceholder": "Select manager…",
+      "notAssigned": "Not assigned",
+      "loading": "Loading managers…",
+      "noManagers": "No active managers found"
+    },
+    "bulkReportsTo": {
+      "title": "Reassign Manager",
+      "description": "Set the reports-to manager for the {{n}} selected employees.",
+      "applyButton": "Apply",
+      "successWithCount_one": "Reassigned 1 employee.",
+      "successWithCount_other": "Reassigned {{count}} employees.",
+      "successWithSkipped": "Reassigned {{updated}} employees ({{skipped}} skipped).",
+      "errorTitle": "Failed to reassign"
     },
     "salary": {
       "label": "Monthly Salary (SAR)",

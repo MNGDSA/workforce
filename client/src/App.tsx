@@ -41,6 +41,7 @@ import GeofencesPage from "@/pages/geofences";
 import DepartmentsPage from "@/pages/departments";
 import BroadcastPage from "@/pages/broadcast";
 import OrgChartPage from "@/pages/org-chart";
+import ManagementPage from "@/pages/management";
 import { RequireAdmin, RequireCandidate } from "@/lib/auth-guard";
 
 const admin = (Component: React.ComponentType<any>) => (props: any) => (
@@ -95,6 +96,7 @@ function Router() {
       <Route path="/departments" component={admin(DepartmentsPage)} />
       <Route path="/broadcast" component={admin(BroadcastPage)} />
       <Route path="/org-chart" component={admin(OrgChartPage)} />
+      <Route path="/management" component={admin(ManagementPage)} />
 
       {/* Fallback to 404 */}
       <Route component={NotFound} />

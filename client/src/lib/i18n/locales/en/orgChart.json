@@ -32,5 +32,18 @@
     "legendDepartment": "Department",
     "legendPosition": "Position",
     "legendUnassigned": "Unassigned"
+  },
+  "viewToggle": {
+    "positions": "Positions",
+    "people": "People"
+  },
+  "peopleView": {
+    "statManagers": "Managers",
+    "statEmployees": "Employees",
+    "statUnmanaged": "Unmanaged",
+    "unmanagedNode": "Unmanaged",
+    "unmanagedTitle": "Unmanaged Employees",
+    "emptyTitle": "No managers yet",
+    "emptySubtitle": "Add managers in the Management page to see the Reports To hierarchy."
   }
 }

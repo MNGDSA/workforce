@@ -106,10 +106,13 @@ import {
   type InsertPhotoChangeRequest,
   departments,
   positions,
+  managers,
   type Department,
   type InsertDepartment,
   type Position,
   type InsertPosition,
+  type Manager,
+  type InsertManager,
   smsBroadcasts,
   smsBroadcastRecipients,
   type SmsBroadcast,
@@ -643,6 +646,50 @@ export interface IStorage {
   createPosition(data: InsertPosition): Promise<Position>;
   updatePosition(id: string, data: Partial<InsertPosition>): Promise<Position | undefined>;
   togglePositionActive(id: string): Promise<{ success: boolean; error?: string; position?: Position; affectedEmployees?: { id: string; employeeNumber: string; fullNameEn: string | null }[] }>;
+
+  // Managers (Task #281 — Jisr-HR directory)
+  getManagers(params?: {
+    search?: string;
+    departmentId?: string;
+    isActive?: boolean;
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: (Manager & {
+    departmentName: string | null;
+    positionTitle: string | null;
+    reportsToName: string | null;
+    directWorkerCount: number;
+    directManagerCount: number;
+  })[]; total: number }>;
+  getManager(id: string): Promise<Manager | undefined>;
+  getManagerWithCounts(id: string): Promise<(Manager & {
+    departmentName: string | null;
+    positionTitle: string | null;
+    reportsToName: string | null;
+    directWorkerCount: number;
+    directManagerCount: number;
+  }) | undefined>;
+  // Throws "MANAGER_CYCLE" if reportsToManagerId would create a cycle.
+  createManager(data: InsertManager): Promise<Manager>;
+  updateManager(id: string, data: Partial<InsertManager>): Promise<Manager | undefined>;
+  // Soft-deactivate. Returns { code: "HAS_REPORTS", workerCount, subManagerCount }
+  // when the manager still has reports unless reassignTo or orphan is set.
+  deactivateManager(id: string, opts?: { reassignTo?: string | null; orphan?: boolean }): Promise<
+    | { ok: true; manager: Manager }
+    | { ok: false; code: "HAS_REPORTS"; workerCount: number; subManagerCount: number }
+    | { ok: false; code: "NOT_FOUND" }
+  >;
+  reactivateManager(id: string): Promise<Manager | undefined>;
+  // Bulk-assign N workforce rows to a single managerId (or null to clear).
+  // Returns the IDs that were actually changed (skips no-ops).
+  bulkAssignWorkforceManager(workforceIds: string[], managerId: string | null): Promise<{
+    changedIds: string[];
+    managerName: string | null;
+  }>;
+  // Cycle pre-check used by the route layer before issuing the UPDATE.
+  // Walks reportsToManagerId chain starting from `proposedParentId`; returns
+  // true if `selfId` appears in the chain (i.e. assigning would create a cycle).
+  managerWouldCreateCycle(selfId: string, proposedParentId: string | null): Promise<boolean>;
 
   // SMS Broadcasts
   createSmsBroadcast(data: InsertSmsBroadcast): Promise<SmsBroadcast>;
@@ -2267,7 +2314,7 @@ export class DatabaseStorage implements IStorage {
         terminationCategory: workforce.terminationCategory,
         isActive: workforce.isActive,
         offboardingStatus: workforce.offboardingStatus,
-        supervisorId: workforce.supervisorId,
+        managerId: workforce.managerId,
         performanceScore: workforce.performanceScore,
         notes: workforce.notes,
         createdAt: workforce.createdAt,
@@ -2306,6 +2353,10 @@ export class DatabaseStorage implements IStorage {
         positionTitle: positions.title,
         positionIsActive: positions.isActive,
         departmentName: departments.name,
+        // Task #281 — Reports To: surface manager identity in the list so the
+        // back-office grid can show the column without a per-row fetch.
+        managerNameEn: managers.fullNameEn,
+        managerNameAr: managers.fullNameAr,
       })
       .from(workforce)
       .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
@@ -2314,6 +2365,7 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(smpCompanies, eq(workforce.smpCompanyId, smpCompanies.id))
       .leftJoin(positions, eq(workforce.positionId, positions.id))
       .leftJoin(departments, eq(positions.departmentId, departments.id))
+      .leftJoin(managers, eq(workforce.managerId, managers.id))
       .where(where)
       .orderBy(desc(workforce.createdAt));
     return rows;
@@ -2334,7 +2386,7 @@ export class DatabaseStorage implements IStorage {
         terminationCategory: workforce.terminationCategory,
         isActive: workforce.isActive,
         offboardingStatus: workforce.offboardingStatus,
-        supervisorId: workforce.supervisorId,
+        managerId: workforce.managerId,
         performanceScore: workforce.performanceScore,
         notes: workforce.notes,
         createdAt: workforce.createdAt,
@@ -2373,6 +2425,10 @@ export class DatabaseStorage implements IStorage {
         positionIsActive: positions.isActive,
         paymentMethod: workforce.paymentMethod,
         paymentMethodReason: workforce.paymentMethodReason,
+        // Task #281 — Reports To: surface the assigned manager's identity
+        // for the detail drawer's read-only display.
+        managerNameEn: managers.fullNameEn,
+        managerNameAr: managers.fullNameAr,
       })
       .from(workforce)
       .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
@@ -2380,6 +2436,7 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(jobPostings, eq(workforce.jobId, jobPostings.id))
       .leftJoin(smpCompanies, eq(workforce.smpCompanyId, smpCompanies.id))
       .leftJoin(positions, eq(workforce.positionId, positions.id))
+      .leftJoin(managers, eq(workforce.managerId, managers.id))
       .where(eq(workforce.id, id));
     return row;
   }
@@ -2398,7 +2455,7 @@ export class DatabaseStorage implements IStorage {
         endDate: workforce.endDate,
         terminationReason: workforce.terminationReason,
         isActive: workforce.isActive,
-        supervisorId: workforce.supervisorId,
+        managerId: workforce.managerId,
         performanceScore: workforce.performanceScore,
         notes: workforce.notes,
         createdAt: workforce.createdAt,
@@ -2424,6 +2481,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllWorkforceByCandidateId(candidateId: string): Promise<any[]> {
+    // Task #281 — left-join managers so the mobile "Reports To" row can
+    // render in a single round-trip. NULL when unassigned.
     const rows = await db
       .select({
         id: workforce.id,
@@ -2448,12 +2507,19 @@ export class DatabaseStorage implements IStorage {
         performanceScore: workforce.performanceScore,
         fullNameEn: candidates.fullNameEn,
         photoUrl: candidates.photoUrl,
+        managerId: workforce.managerId,
+        managerNameEn: managers.fullNameEn,
+        managerNameAr: managers.fullNameAr,
+        managerPhone: managers.phone,
+        managerWhatsapp: managers.whatsapp,
+        managerEmail: managers.email,
       })
       .from(workforce)
       .leftJoin(candidates, eq(workforce.candidateId, candidates.id))
       .leftJoin(events, eq(workforce.eventId, events.id))
       .leftJoin(jobPostings, eq(workforce.jobId, jobPostings.id))
       .leftJoin(positions, eq(workforce.positionId, positions.id))
+      .leftJoin(managers, eq(workforce.managerId, managers.id))
       .where(eq(workforce.candidateId, candidateId))
       .orderBy(desc(workforce.createdAt));
     return rows;
@@ -3246,6 +3312,25 @@ export class DatabaseStorage implements IStorage {
           status: "hired",
           updatedAt: new Date(),
         }).where(eq(applications.id, rec.applicationId));
+      }
+
+      // Task #281 — Welcome SMS plumbing stub. Future iterations will
+      // enqueue an entry into sms_outbox with kind=welcome_employee
+      // populated from system_settings keys
+      //   welcome_employee_sms_template_ar
+      //   welcome_employee_sms_template_en
+      // For now we log only — the enum value is reserved (boot migration
+      // ensure-welcome-employee-enum) and the kind column will accept it,
+      // but no message is enqueued to avoid blasting employees with a
+      // template that hasn't been signed off by ops.
+      try {
+        const phone = cand?.phone ?? null;
+        // eslint-disable-next-line no-console -- intentional log-only stub
+        console.log(
+          `[welcome-sms-stub] Task #281: skipping welcome SMS for employee ${employeeNumber} (candidate=${rec.candidateId}, phone=${phone ?? "<none>"}). Sender not yet enabled.`,
+        );
+      } catch {
+        // never block conversion on a logging hiccup
       }
 
       return workforceRec;
@@ -4738,6 +4823,324 @@ export class DatabaseStorage implements IStorage {
 
     const [updated] = await db.update(positions).set({ isActive: !pos.isActive }).where(eq(positions.id, id)).returning();
     return { success: true, position: updated };
+  }
+
+  // ─── Managers (Task #281 — Jisr-HR directory) ───────────────────────────────
+  async getManagers(params: {
+    search?: string;
+    departmentId?: string;
+    isActive?: boolean;
+    page?: number;
+    limit?: number;
+  } = {}): Promise<{ data: (Manager & {
+    departmentName: string | null;
+    positionTitle: string | null;
+    reportsToName: string | null;
+    directWorkerCount: number;
+    directManagerCount: number;
+  })[]; total: number }> {
+    const page = params.page ?? 1;
+    const limit = Math.min(params.limit ?? 50, 200);
+    const offset = (page - 1) * limit;
+
+    // Build the WHERE in raw SQL so it references the `m.` alias used by
+    // the FROM clause. Drizzle's `eq/ilike` operators would emit
+    // `managers."full_name_en"` and Postgres can't bind that to `m`.
+    const conditions: SQL[] = [];
+    if (params.isActive !== undefined) {
+      conditions.push(sql`m.is_active = ${params.isActive}`);
+    }
+    if (params.departmentId) {
+      conditions.push(sql`m.department_id = ${params.departmentId}`);
+    }
+    if (params.search) {
+      const term = `%${params.search.trim()}%`;
+      conditions.push(sql`(
+        m.full_name_en   ILIKE ${term} OR
+        m.full_name_ar   ILIKE ${term} OR
+        m.email          ILIKE ${term} OR
+        m.phone          ILIKE ${term} OR
+        m.jisr_employee_id ILIKE ${term}
+      )`);
+    }
+    const where = conditions.length
+      ? sql.join(conditions, sql` AND `)
+      : undefined;
+
+    // Self-join for the "reports to" name. Direct-report counts use
+    // correlated sub-selects so a single round-trip returns everything
+    // the list page needs (admin Settings rarely has > 200 managers).
+    const rows = await db.execute(sql`
+      SELECT
+        m.id, m.full_name_en, m.full_name_ar, m.email, m.phone, m.whatsapp,
+        m.jisr_employee_id, m.department_id, m.position_id,
+        m.reports_to_manager_id, m.is_active, m.notes,
+        m.created_at, m.updated_at,
+        d.name AS department_name,
+        p.title AS position_title,
+        rm.full_name_en AS reports_to_name,
+        (SELECT count(*)::int FROM workforce w
+          WHERE w.manager_id = m.id AND w.is_active = true) AS direct_worker_count,
+        (SELECT count(*)::int FROM managers sub
+          WHERE sub.reports_to_manager_id = m.id AND sub.is_active = true) AS direct_manager_count
+      FROM managers m
+      LEFT JOIN departments d  ON d.id = m.department_id
+      LEFT JOIN positions   p  ON p.id = m.position_id
+      LEFT JOIN managers    rm ON rm.id = m.reports_to_manager_id
+      ${where ? sql`WHERE ${where}` : sql``}
+      ORDER BY m.full_name_en ASC
+      LIMIT ${limit} OFFSET ${offset}
+    `);
+
+    const totalRes = await db.execute(sql`
+      SELECT count(*)::int AS n FROM managers m ${where ? sql`WHERE ${where}` : sql``}
+    `);
+
+    type Row = {
+      id: string;
+      full_name_en: string;
+      full_name_ar: string | null;
+      email: string | null;
+      phone: string;
+      whatsapp: string | null;
+      jisr_employee_id: string | null;
+      department_id: string | null;
+      position_id: string | null;
+      reports_to_manager_id: string | null;
+      is_active: boolean;
+      notes: string | null;
+      created_at: Date;
+      updated_at: Date;
+      department_name: string | null;
+      position_title: string | null;
+      reports_to_name: string | null;
+      direct_worker_count: number;
+      direct_manager_count: number;
+    };
+    const data = ((rows as unknown as { rows: Row[] }).rows).map((r) => ({
+      id: r.id,
+      fullNameEn: r.full_name_en,
+      fullNameAr: r.full_name_ar,
+      email: r.email,
+      phone: r.phone,
+      whatsapp: r.whatsapp,
+      jisrEmployeeId: r.jisr_employee_id,
+      departmentId: r.department_id,
+      positionId: r.position_id,
+      reportsToManagerId: r.reports_to_manager_id,
+      isActive: r.is_active,
+      notes: r.notes,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      departmentName: r.department_name,
+      positionTitle: r.position_title,
+      reportsToName: r.reports_to_name,
+      directWorkerCount: r.direct_worker_count,
+      directManagerCount: r.direct_manager_count,
+    }));
+    const total = ((totalRes as unknown as { rows: Array<{ n: number }> }).rows[0]?.n) ?? 0;
+    return { data, total };
+  }
+
+  async getManager(id: string): Promise<Manager | undefined> {
+    const [row] = await db.select().from(managers).where(eq(managers.id, id));
+    return row;
+  }
+
+  async getManagerWithCounts(id: string): Promise<(Manager & {
+    departmentName: string | null;
+    positionTitle: string | null;
+    reportsToName: string | null;
+    directWorkerCount: number;
+    directManagerCount: number;
+  }) | undefined> {
+    const single = await db.execute(sql`
+      SELECT
+        m.id, m.full_name_en, m.full_name_ar, m.email, m.phone, m.whatsapp,
+        m.jisr_employee_id, m.department_id, m.position_id,
+        m.reports_to_manager_id, m.is_active, m.notes,
+        m.created_at, m.updated_at,
+        d.name AS department_name,
+        p.title AS position_title,
+        rm.full_name_en AS reports_to_name,
+        (SELECT count(*)::int FROM workforce w
+          WHERE w.manager_id = m.id AND w.is_active = true) AS direct_worker_count,
+        (SELECT count(*)::int FROM managers sub
+          WHERE sub.reports_to_manager_id = m.id AND sub.is_active = true) AS direct_manager_count
+      FROM managers m
+      LEFT JOIN departments d  ON d.id = m.department_id
+      LEFT JOIN positions   p  ON p.id = m.position_id
+      LEFT JOIN managers    rm ON rm.id = m.reports_to_manager_id
+      WHERE m.id = ${id}
+      LIMIT 1
+    `);
+    type Row = {
+      id: string; full_name_en: string; full_name_ar: string | null; email: string | null;
+      phone: string; whatsapp: string | null; jisr_employee_id: string | null;
+      department_id: string | null; position_id: string | null;
+      reports_to_manager_id: string | null; is_active: boolean; notes: string | null;
+      created_at: Date; updated_at: Date; department_name: string | null;
+      position_title: string | null; reports_to_name: string | null;
+      direct_worker_count: number; direct_manager_count: number;
+    };
+    const row = ((single as unknown as { rows: Row[] }).rows)[0];
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      fullNameEn: row.full_name_en,
+      fullNameAr: row.full_name_ar,
+      email: row.email,
+      phone: row.phone,
+      whatsapp: row.whatsapp,
+      jisrEmployeeId: row.jisr_employee_id,
+      departmentId: row.department_id,
+      positionId: row.position_id,
+      reportsToManagerId: row.reports_to_manager_id,
+      isActive: row.is_active,
+      notes: row.notes,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      departmentName: row.department_name,
+      positionTitle: row.position_title,
+      reportsToName: row.reports_to_name,
+      directWorkerCount: row.direct_worker_count,
+      directManagerCount: row.direct_manager_count,
+    };
+  }
+
+  async createManager(data: InsertManager): Promise<Manager> {
+    const [row] = await db.insert(managers).values(data).returning();
+    return row;
+  }
+
+  async updateManager(id: string, data: Partial<InsertManager>): Promise<Manager | undefined> {
+    const [row] = await db
+      .update(managers)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(managers.id, id))
+      .returning();
+    return row;
+  }
+
+  async deactivateManager(id: string, opts: { reassignTo?: string | null; orphan?: boolean } = {}): Promise<
+    | { ok: true; manager: Manager }
+    | { ok: false; code: "HAS_REPORTS"; workerCount: number; subManagerCount: number }
+    | { ok: false; code: "NOT_FOUND" }
+  > {
+    return await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(managers).where(eq(managers.id, id));
+      if (!existing) return { ok: false as const, code: "NOT_FOUND" as const };
+
+      // Count active reports inside the same tx so the check + reassign + flip
+      // observe a consistent snapshot.
+      const [{ workerCount }] = await tx
+        .select({ workerCount: sql<number>`count(*)::int` })
+        .from(workforce)
+        .where(and(eq(workforce.managerId, id), eq(workforce.isActive, true)));
+      const [{ subManagerCount }] = await tx
+        .select({ subManagerCount: sql<number>`count(*)::int` })
+        .from(managers)
+        .where(and(eq(managers.reportsToManagerId, id), eq(managers.isActive, true)));
+
+      const totalReports = (workerCount ?? 0) + (subManagerCount ?? 0);
+      if (totalReports > 0 && !opts.orphan && opts.reassignTo === undefined) {
+        return {
+          ok: false as const,
+          code: "HAS_REPORTS" as const,
+          workerCount: workerCount ?? 0,
+          subManagerCount: subManagerCount ?? 0,
+        };
+      }
+
+      // Reassignment target validation. `null` / `orphan=true` means "leave
+      // them unassigned" — both the worker.manager_id and child.reports_to
+      // get cleared.
+      const targetId = opts.orphan ? null : (opts.reassignTo ?? null);
+      if (targetId) {
+        if (targetId === id) {
+          throw new Error("REASSIGN_TO_SELF");
+        }
+        const [target] = await tx.select().from(managers).where(eq(managers.id, targetId));
+        if (!target) throw new Error("REASSIGN_TARGET_NOT_FOUND");
+        if (!target.isActive) throw new Error("REASSIGN_TARGET_INACTIVE");
+      }
+
+      if ((workerCount ?? 0) > 0) {
+        await tx.update(workforce).set({ managerId: targetId }).where(eq(workforce.managerId, id));
+      }
+      if ((subManagerCount ?? 0) > 0) {
+        await tx
+          .update(managers)
+          .set({ reportsToManagerId: targetId, updatedAt: new Date() })
+          .where(eq(managers.reportsToManagerId, id));
+      }
+
+      const [updated] = await tx
+        .update(managers)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(managers.id, id))
+        .returning();
+      return { ok: true as const, manager: updated };
+    });
+  }
+
+  async reactivateManager(id: string): Promise<Manager | undefined> {
+    const [row] = await db
+      .update(managers)
+      .set({ isActive: true, updatedAt: new Date() })
+      .where(eq(managers.id, id))
+      .returning();
+    return row;
+  }
+
+  async bulkAssignWorkforceManager(workforceIds: string[], managerId: string | null): Promise<{
+    changedIds: string[];
+    managerName: string | null;
+  }> {
+    if (workforceIds.length === 0) return { changedIds: [], managerName: null };
+    return await db.transaction(async (tx) => {
+      // Validate target manager (if any) exists and is active.
+      let managerName: string | null = null;
+      if (managerId) {
+        const [m] = await tx.select().from(managers).where(eq(managers.id, managerId));
+        if (!m) throw new Error("MANAGER_NOT_FOUND");
+        if (!m.isActive) throw new Error("MANAGER_INACTIVE");
+        managerName = m.fullNameEn;
+      }
+      // Skip rows that are already assigned to this manager so the audit
+      // log doesn't get spammed with no-op rows.
+      const before = await tx
+        .select({ id: workforce.id, currentManagerId: workforce.managerId })
+        .from(workforce)
+        .where(inArray(workforce.id, workforceIds));
+      const toUpdate = before
+        .filter((r) => (r.currentManagerId ?? null) !== (managerId ?? null))
+        .map((r) => r.id);
+      if (toUpdate.length === 0) return { changedIds: [], managerName };
+      await tx
+        .update(workforce)
+        .set({ managerId, updatedAt: new Date() })
+        .where(inArray(workforce.id, toUpdate));
+      return { changedIds: toUpdate, managerName };
+    });
+  }
+
+  async managerWouldCreateCycle(selfId: string, proposedParentId: string | null): Promise<boolean> {
+    if (!proposedParentId) return false;
+    if (proposedParentId === selfId) return true;
+    // Walk up to a hard depth cap to defend against pre-existing cycles
+    // that might have slipped past our own checks (defence in depth).
+    const MAX_DEPTH = 50;
+    let cursor: string | null = proposedParentId;
+    for (let i = 0; i < MAX_DEPTH && cursor; i++) {
+      if (cursor === selfId) return true;
+      const [next] = await db
+        .select({ reportsToManagerId: managers.reportsToManagerId })
+        .from(managers)
+        .where(eq(managers.id, cursor));
+      cursor = next?.reportsToManagerId ?? null;
+    }
+    return false;
   }
 
   // ─── SMS Broadcasts ─────────────────────────────────────────────────────────

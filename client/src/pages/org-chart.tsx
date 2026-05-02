@@ -75,6 +75,61 @@ interface OrgChartData {
   totalEmployees: number;
 }
 
+// Task #281 — People (Reports To) view types. The endpoint serialises a
+// manager hierarchy with each manager carrying a `directReportEmployees`
+// array of workforce rows that report into them, and a `directReportManagers`
+// array for the manager-of-manager chain.
+interface PeopleEmployee {
+  id: string;
+  candidateId: string;
+  employeeNumber: string;
+  fullNameEn: string | null;
+  phone: string | null;
+  photoUrl: string | null;
+  positionTitle: string | null;
+}
+
+interface PeopleManager {
+  id: string;
+  fullNameEn: string;
+  fullNameAr: string | null;
+  email: string | null;
+  phone: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  positionId: string | null;
+  positionTitle: string | null;
+  directReportManagers: PeopleManager[];
+  directReportEmployees: PeopleEmployee[];
+  reportCount: number;
+}
+
+interface PeopleChartData {
+  view: "people";
+  rootManagers: PeopleManager[];
+  unmanagedEmployees: PeopleEmployee[];
+  totalManagers: number;
+  totalEmployees: number;
+}
+
+interface ManagerNodeData extends Record<string, unknown> {
+  label: string;
+  managerId: string;
+  departmentName: string | null;
+  positionTitle: string | null;
+  reportCount: number;
+  selected: boolean;
+}
+
+interface UnmanagedNodeData extends Record<string, unknown> {
+  label: string;
+  count: number;
+  selected: boolean;
+}
+
+type ManagerNode = Node<ManagerNodeData, "manager">;
+type UnmanagedNode = Node<UnmanagedNodeData, "unmanaged">;
+
 interface DeptNodeData extends Record<string, unknown> {
   label: string;
   deptId: string;
@@ -320,10 +375,91 @@ function EmployeeDrawer({
   );
 }
 
+// Task #281 — Manager and Unmanaged-employees nodes for the People view.
+// Shape mirrors the existing position/unassigned cards so the look-and-feel
+// stays consistent across both segmented modes.
+function ManagerNodeComponent({ data }: NodeProps<ManagerNode>) {
+  return (
+    <div data-testid={`node-mgr-${data.managerId}`} className="select-none cursor-pointer">
+      <Handle type="target" position={Position.Top} className="!bg-transparent !border-0 !w-0 !h-0" />
+      <Handle type="source" position={Position.Bottom} className="!bg-transparent !border-0 !w-0 !h-0" />
+      <div className={cn(
+        "w-[260px] rounded-sm border transition-all duration-200",
+        data.selected
+          ? "border-[hsl(155,45%,45%)] shadow-[0_0_20px_rgba(52,168,120,0.2)] bg-[hsl(220,15%,13%)]"
+          : data.reportCount === 0
+            ? "border-dashed border-[hsl(220,15%,22%)] bg-[hsl(220,15%,11%)]/80"
+            : "border-[hsl(220,15%,22%)] bg-[hsl(220,15%,12%)] hover:border-[hsl(155,45%,35%)]/60",
+      )}>
+        <div className="px-3.5 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className={cn(
+              "flex-shrink-0 w-7 h-7 rounded-sm flex items-center justify-center",
+              data.reportCount > 0 ? "bg-[hsl(155,45%,45%)]/10" : "bg-[hsl(220,10%,20%)]"
+            )}>
+              <User className={cn("w-3.5 h-3.5", data.reportCount > 0 ? "text-[hsl(155,45%,55%)]" : "text-[hsl(215,15%,40%)]")} />
+            </div>
+            <div className="min-w-0">
+              <p className={cn("text-sm font-semibold truncate leading-tight", data.reportCount > 0 ? "text-white" : "text-[hsl(215,15%,50%)]")}>
+                <bdi>{data.label}</bdi>
+              </p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {data.positionTitle && (
+                  <span className="text-[10px] text-[hsl(215,15%,55%)] truncate"><bdi>{data.positionTitle}</bdi></span>
+                )}
+                {data.departmentName && (
+                  <span className="text-[10px] text-[hsl(215,15%,40%)] truncate"><bdi>{data.departmentName}</bdi></span>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0 ms-2">
+            <span className={cn(
+              "inline-flex items-center justify-center min-w-[26px] h-[22px] px-1.5 rounded-sm text-xs font-bold",
+              data.reportCount > 0
+                ? "bg-[hsl(155,45%,45%)]/15 text-[hsl(155,45%,55%)] border border-[hsl(155,45%,45%)]/20"
+                : "bg-[hsl(220,10%,18%)] text-[hsl(215,15%,40%)] border border-[hsl(220,15%,20%)]"
+            )}>
+              {data.reportCount}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UnmanagedNodeComponent({ data }: NodeProps<UnmanagedNode>) {
+  return (
+    <div data-testid="node-unmanaged" className="select-none cursor-pointer">
+      <div className={cn(
+        "w-[260px] rounded-sm border transition-all",
+        data.selected
+          ? "border-[hsl(40,70%,55%)] shadow-[0_0_20px_rgba(220,170,60,0.2)] bg-[hsl(40,20%,12%)]"
+          : "border-dashed border-[hsl(40,70%,45%)]/40 bg-[hsl(40,20%,10%)] hover:border-[hsl(40,70%,50%)]/60",
+      )}>
+        <div className="px-3.5 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-sm bg-[hsl(40,70%,45%)]/10 flex items-center justify-center">
+              <AlertCircle className="w-3.5 h-3.5 text-[hsl(40,70%,55%)]" />
+            </div>
+            <p className="text-sm font-semibold text-[hsl(40,70%,65%)]">{data.label}</p>
+          </div>
+          <span className="inline-flex items-center justify-center min-w-[26px] h-[22px] px-1.5 rounded-sm text-xs font-bold bg-[hsl(40,70%,45%)]/15 text-[hsl(40,70%,55%)] border border-[hsl(40,70%,45%)]/20">
+            {data.count}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const nodeTypes = {
   department: memo(DepartmentNodeComponent),
   position: memo(PositionNodeComponent),
   unassigned: memo(UnassignedNodeComponent),
+  manager: memo(ManagerNodeComponent),
+  unmanaged: memo(UnmanagedNodeComponent),
 };
 
 function buildLayout(
@@ -420,6 +556,90 @@ function buildLayout(
       type: "unassigned",
       position: { x: 0, y: 0 },
       data: unData,
+    });
+  }
+
+  dagre.layout(g);
+
+  nodes.forEach(node => {
+    const n = g.node(node.id);
+    if (n) {
+      node.position = { x: n.x - (n.width || NODE_WIDTH) / 2, y: n.y - (n.height || POS_NODE_HEIGHT) / 2 };
+    }
+  });
+
+  return { nodes, edges };
+}
+
+// Task #281 — People layout. Walks the manager hierarchy returned by
+// `/api/org-chart?view=people` into a top-down tree and emits dagre nodes
+// for every manager, plus a single "Unmanaged" node holding orphaned
+// employees. Manager-of-manager edges are drawn as smoothstep arrows like
+// position parent→child edges. The edge style is intentionally identical
+// so the two views feel like the same canvas.
+function buildPeopleLayout(
+  data: PeopleChartData,
+  selectedManagerId: string | null,
+  unmanagedLabel: string,
+  preferAr: boolean,
+): { nodes: Node[]; edges: Edge[] } {
+  const nodes: Node[] = [];
+  const edges: Edge[] = [];
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({ rankdir: "TB", nodesep: NODE_GAP_X, ranksep: NODE_GAP_Y, marginx: 40, marginy: 40 });
+  g.setDefaultEdgeLabel(() => ({}));
+
+  const visited = new Set<string>();
+  function addManagerNode(m: PeopleManager, parentNodeId: string | null) {
+    if (visited.has(m.id)) return; // defensive against cycles
+    visited.add(m.id);
+    const nodeId = `mgr-${m.id}`;
+    g.setNode(nodeId, { width: NODE_WIDTH, height: POS_NODE_HEIGHT });
+    if (parentNodeId) g.setEdge(parentNodeId, nodeId);
+
+    const label = preferAr ? (m.fullNameAr || m.fullNameEn) : m.fullNameEn;
+    nodes.push({
+      id: nodeId,
+      type: "manager",
+      position: { x: 0, y: 0 },
+      data: {
+        label,
+        managerId: m.id,
+        departmentName: m.departmentName,
+        positionTitle: m.positionTitle,
+        reportCount: m.reportCount,
+        selected: selectedManagerId === m.id,
+      } satisfies ManagerNodeData,
+    });
+
+    if (parentNodeId) {
+      edges.push({
+        id: `e-${parentNodeId}-${nodeId}`,
+        source: parentNodeId,
+        target: nodeId,
+        type: "smoothstep",
+        style: { stroke: "hsl(155, 45%, 35%)", strokeWidth: 1.5, opacity: 0.5 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: "hsl(155, 45%, 35%)", width: 12, height: 12 },
+      });
+    }
+
+    for (const child of m.directReportManagers) addManagerNode(child, nodeId);
+  }
+
+  for (const root of data.rootManagers) addManagerNode(root, null);
+
+  if (data.unmanagedEmployees.length > 0) {
+    const unId = "unmanaged";
+    g.setNode(unId, { width: NODE_WIDTH, height: POS_NODE_HEIGHT });
+    nodes.push({
+      id: unId,
+      type: "unmanaged",
+      position: { x: 0, y: 0 },
+      data: {
+        label: unmanagedLabel,
+        count: data.unmanagedEmployees.length,
+        selected: selectedManagerId === "__unmanaged__",
+      } satisfies UnmanagedNodeData,
     });
   }
 
@@ -952,16 +1172,40 @@ function exportOrgChartToPdf({ data, labels, dir, onPopupBlocked }: ExportOption
 function OrgChartCanvas() {
   const { t, i18n } = useTranslation(["orgChart"]);
   const lng = i18n.language;
+  const preferAr = (lng || "").toLowerCase().startsWith("ar");
+  // Task #281 — Segmented control toggles between the legacy department→
+  // position→employee tree and the new manager-of-manager Reports To tree.
+  // We hold both queries side-by-side so flipping the view is instant after
+  // the first load (cached for staleTime).
+  const [view, setView] = useState<"positions" | "people">("positions");
   const { data, isLoading, isError } = useQuery<OrgChartData>({
     queryKey: ["/api/org-chart"],
     queryFn: () => apiRequest("GET", "/api/org-chart").then(r => r.json()),
     staleTime: 30_000,
     refetchOnWindowFocus: true,
+    enabled: view === "positions",
+  });
+  const {
+    data: peopleData,
+    isLoading: peopleLoading,
+    isError: peopleError,
+  } = useQuery<PeopleChartData>({
+    queryKey: ["/api/org-chart", "people"],
+    queryFn: () => apiRequest("GET", "/api/org-chart?view=people").then(r => r.json()),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+    enabled: view === "people",
   });
 
   const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set());
   const [expandedPositions, setExpandedPositions] = useState<Set<string>>(new Set());
   const [selectedPosId, setSelectedPosId] = useState<string | null>(null);
+  // Task #281 — selected manager id (or "__unmanaged__" sentinel for the
+  // unmanaged-employees pseudo-node). Stored separately from `selectedPosId`
+  // so each view has its own selection slot. Note: the segmented-control
+  // handlers explicitly clear the *other* side's selection when toggling
+  // (so a stale drawer can't appear under the new view).
+  const [selectedManagerId, setSelectedManagerId] = useState<string | null>(null);
 
   const toggleDept = useCallback((deptId: string) => {
     setExpandedDepts(prev => {
@@ -996,6 +1240,13 @@ function OrgChartCanvas() {
       }
     } else if (node.type === "unassigned") {
       setSelectedPosId(prev => prev === "__unassigned__" ? null : "__unassigned__");
+    } else if (node.type === "manager" && node.id.startsWith("mgr-")) {
+      // Task #281 — clicking a manager card opens the drawer with their
+      // direct-report employees. Repeat clicks toggle.
+      const mgrId = node.id.slice(4);
+      setSelectedManagerId(prev => prev === mgrId ? null : mgrId);
+    } else if (node.type === "unmanaged") {
+      setSelectedManagerId(prev => prev === "__unmanaged__" ? null : "__unmanaged__");
     }
   }, [toggleDept, togglePosition]);
 
@@ -1009,13 +1260,72 @@ function OrgChartCanvas() {
       if (pos) return { position: { title: pos.title, code: pos.code, gradeLevel: pos.gradeLevel }, employees: pos.employees };
     }
     return null;
-  }, [data, selectedPosId]);
+  }, [data, selectedPosId, t]);
+
+  // Task #281 — recursive lookup of a manager node by id within the
+  // people-view tree. Used to resolve drawer contents when a manager card
+  // is clicked.
+  const findManagerById = useCallback((roots: PeopleManager[], id: string): PeopleManager | null => {
+    for (const m of roots) {
+      if (m.id === id) return m;
+      const child = findManagerById(m.directReportManagers, id);
+      if (child) return child;
+    }
+    return null;
+  }, []);
+
+  // Adapt PeopleEmployee[] → OrgEmployee[] so the existing EmployeeDrawer
+  // renders direct reports without a parallel component. National-id is
+  // omitted (people view doesn't ship it down to keep payload small).
+  const adaptPeopleEmployees = useCallback((rows: PeopleEmployee[]): OrgEmployee[] => {
+    return rows.map(e => ({
+      id: e.id,
+      fullName: e.fullNameEn || "",
+      candidateId: e.candidateId,
+      employeeNumber: e.employeeNumber,
+      fullNameEn: e.fullNameEn || "",
+      nationalId: null,
+      phone: e.phone,
+      photoUrl: e.photoUrl,
+    }));
+  }, []);
+
+  const selectedManagerDrawer = useMemo(() => {
+    if (view !== "people" || !peopleData || !selectedManagerId) return null;
+    if (selectedManagerId === "__unmanaged__") {
+      return {
+        position: {
+          title: t("orgChart:peopleView.unmanagedTitle"),
+          code: "N/A",
+          gradeLevel: null,
+        },
+        employees: adaptPeopleEmployees(peopleData.unmanagedEmployees),
+      };
+    }
+    const m = findManagerById(peopleData.rootManagers, selectedManagerId);
+    if (!m) return null;
+    const label = preferAr ? (m.fullNameAr || m.fullNameEn) : m.fullNameEn;
+    return {
+      position: {
+        title: label,
+        code: m.positionTitle ?? (m.departmentName ?? ""),
+        gradeLevel: null,
+      },
+      employees: adaptPeopleEmployees(m.directReportEmployees),
+    };
+  }, [view, peopleData, selectedManagerId, findManagerById, adaptPeopleEmployees, preferAr, t]);
 
   const unassignedLabel = t("orgChart:unassigned");
+  const unmanagedLabel = t("orgChart:peopleView.unmanagedNode");
+
   const { nodes: layoutNodes, edges: layoutEdges } = useMemo(() => {
+    if (view === "people") {
+      if (!peopleData) return { nodes: [], edges: [] };
+      return buildPeopleLayout(peopleData, selectedManagerId, unmanagedLabel, preferAr);
+    }
     if (!data) return { nodes: [], edges: [] };
     return buildLayout(data, expandedDepts, expandedPositions, selectedPosId, unassignedLabel);
-  }, [data, expandedDepts, expandedPositions, selectedPosId, unassignedLabel]);
+  }, [view, data, peopleData, expandedDepts, expandedPositions, selectedPosId, selectedManagerId, unassignedLabel, unmanagedLabel, preferAr]);
 
   const handlePrint = useCallback(() => {
     if (!data || data.departments.length === 0) return;
@@ -1052,8 +1362,16 @@ function OrgChartCanvas() {
   const totalEmployees = data?.totalEmployees ?? 0;
   const totalDepts = data?.departments.length ?? 0;
   const totalPositions = data ? data.departments.reduce((s, d) => s + d.positions.length, 0) : 0;
+  // Task #281 — people-view stat counters used by the right-hand legend
+  // chips when the segmented control is on People.
+  const peopleTotalManagers = peopleData?.totalManagers ?? 0;
+  const peopleTotalEmployees = peopleData?.totalEmployees ?? 0;
+  const peopleUnmanagedCount = peopleData?.unmanagedEmployees.length ?? 0;
 
-  if (isLoading) {
+  const showLoading = view === "positions" ? isLoading : peopleLoading;
+  const showError = view === "positions" ? (isError || !data) : (peopleError || !peopleData);
+
+  if (showLoading) {
     return (
       <div className="h-full w-full flex items-center justify-center bg-[hsl(220,15%,8%)]">
         <div className="flex flex-col items-center gap-3">
@@ -1064,7 +1382,7 @@ function OrgChartCanvas() {
     );
   }
 
-  if (isError || !data) {
+  if (showError) {
     return (
       <div className="h-full w-full flex items-center justify-center bg-[hsl(220,15%,8%)]">
         <div className="flex flex-col items-center gap-3">
@@ -1110,6 +1428,8 @@ function OrgChartCanvas() {
           nodeColor={(node) => {
             if (node.type === "department") return "hsl(155, 45%, 40%)";
             if (node.type === "unassigned") return "hsl(40, 70%, 45%)";
+            if (node.type === "manager") return "hsl(155, 45%, 45%)";
+            if (node.type === "unmanaged") return "hsl(40, 70%, 45%)";
             return "hsl(220, 15%, 30%)";
           }}
           maskColor="rgba(0,0,0,0.7)"
@@ -1127,7 +1447,7 @@ function OrgChartCanvas() {
               <button
                 type="button"
                 onClick={handlePrint}
-                disabled={!data || data.departments.length === 0}
+                disabled={view !== "positions" || !data || data.departments.length === 0}
                 title={t("orgChart:print.aria")}
                 aria-label={t("orgChart:print.aria")}
                 className="inline-flex items-center gap-1.5 px-2 py-1 rounded-sm text-[11px] font-semibold bg-[hsl(155,45%,45%)]/15 text-[hsl(155,45%,55%)] border border-[hsl(155,45%,45%)]/25 hover:bg-[hsl(155,45%,45%)]/25 hover:text-white hover:border-[hsl(155,45%,45%)]/45 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[hsl(155,45%,45%)]/15 disabled:hover:text-[hsl(155,45%,55%)]"
@@ -1137,24 +1457,77 @@ function OrgChartCanvas() {
                 <span>{t("orgChart:print.button")}</span>
               </button>
             </div>
-            <div className="flex items-center gap-4 text-[11px]">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-[hsl(155,45%,45%)]" />
-                <span className="text-[hsl(215,15%,60%)]"><span className="font-bold text-white">{formatNumber(totalDepts, lng)}</span> {t("orgChart:stats.departments")}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-[hsl(190,80%,50%)]" />
-                <span className="text-[hsl(215,15%,60%)]"><span className="font-bold text-white">{formatNumber(totalPositions, lng)}</span> {t("orgChart:stats.positions")}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-white" />
-                <span className="text-[hsl(215,15%,60%)]"><span className="font-bold text-white">{formatNumber(totalEmployees, lng)}</span> {t("orgChart:stats.employees")}</span>
-              </div>
+            {/* Task #281 — segmented control switches between Positions
+                (legacy) and People (manager hierarchy). Built as plain
+                buttons rather than a Radix Tabs to avoid pulling extra
+                imports for two pills. */}
+            <div className="flex items-center gap-1 mb-2 p-0.5 rounded-sm bg-[hsl(220,15%,8%)] border border-[hsl(220,15%,18%)]">
+              <button
+                type="button"
+                onClick={() => { setView("positions"); setSelectedManagerId(null); }}
+                className={cn(
+                  "flex-1 px-2.5 py-1 rounded-sm text-[11px] font-semibold transition-colors",
+                  view === "positions"
+                    ? "bg-[hsl(155,45%,45%)]/20 text-[hsl(155,45%,65%)] border border-[hsl(155,45%,45%)]/30"
+                    : "text-[hsl(215,15%,55%)] hover:text-white border border-transparent",
+                )}
+                data-testid="btn-view-positions"
+              >
+                <Building2 className="w-3 h-3 inline-block me-1 -mt-0.5" />
+                {t("orgChart:viewToggle.positions")}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setView("people"); setSelectedPosId(null); }}
+                className={cn(
+                  "flex-1 px-2.5 py-1 rounded-sm text-[11px] font-semibold transition-colors",
+                  view === "people"
+                    ? "bg-[hsl(155,45%,45%)]/20 text-[hsl(155,45%,65%)] border border-[hsl(155,45%,45%)]/30"
+                    : "text-[hsl(215,15%,55%)] hover:text-white border border-transparent",
+                )}
+                data-testid="btn-view-people"
+              >
+                <User className="w-3 h-3 inline-block me-1 -mt-0.5" />
+                {t("orgChart:viewToggle.people")}
+              </button>
             </div>
+            {view === "positions" ? (
+              <div className="flex items-center gap-4 text-[11px]">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-[hsl(155,45%,45%)]" />
+                  <span className="text-[hsl(215,15%,60%)]"><span className="font-bold text-white">{formatNumber(totalDepts, lng)}</span> {t("orgChart:stats.departments")}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-[hsl(190,80%,50%)]" />
+                  <span className="text-[hsl(215,15%,60%)]"><span className="font-bold text-white">{formatNumber(totalPositions, lng)}</span> {t("orgChart:stats.positions")}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-white" />
+                  <span className="text-[hsl(215,15%,60%)]"><span className="font-bold text-white">{formatNumber(totalEmployees, lng)}</span> {t("orgChart:stats.employees")}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-4 text-[11px]">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-[hsl(155,45%,45%)]" />
+                  <span className="text-[hsl(215,15%,60%)]"><span className="font-bold text-white">{formatNumber(peopleTotalManagers, lng)}</span> {t("orgChart:peopleView.statManagers")}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-white" />
+                  <span className="text-[hsl(215,15%,60%)]"><span className="font-bold text-white">{formatNumber(peopleTotalEmployees, lng)}</span> {t("orgChart:peopleView.statEmployees")}</span>
+                </div>
+                {peopleUnmanagedCount > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-[hsl(40,70%,55%)]" />
+                    <span className="text-[hsl(215,15%,60%)]"><span className="font-bold text-white">{formatNumber(peopleUnmanagedCount, lng)}</span> {t("orgChart:peopleView.statUnmanaged")}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </Panel>
 
-        {data.departments.length === 0 && (
+        {view === "positions" && data && data.departments.length === 0 && (
           <Panel position="top-center" className="!mt-24">
             <div className="bg-[hsl(220,15%,12%)] border border-[hsl(220,15%,20%)] rounded-sm p-8 text-center max-w-sm">
               <Building2 className="w-12 h-12 text-[hsl(215,15%,30%)] mx-auto mb-3" />
@@ -1163,13 +1536,31 @@ function OrgChartCanvas() {
             </div>
           </Panel>
         )}
+
+        {view === "people" && peopleData && peopleData.rootManagers.length === 0 && peopleData.unmanagedEmployees.length === 0 && (
+          <Panel position="top-center" className="!mt-24">
+            <div className="bg-[hsl(220,15%,12%)] border border-[hsl(220,15%,20%)] rounded-sm p-8 text-center max-w-sm">
+              <User className="w-12 h-12 text-[hsl(215,15%,30%)] mx-auto mb-3" />
+              <h3 className="font-display font-bold text-white text-lg mb-1">{t("orgChart:peopleView.emptyTitle")}</h3>
+              <p className="text-sm text-[hsl(215,15%,55%)]">{t("orgChart:peopleView.emptySubtitle")}</p>
+            </div>
+          </Panel>
+        )}
       </ReactFlow>
 
-      {selectedPosition && (
+      {view === "positions" && selectedPosition && (
         <EmployeeDrawer
           position={selectedPosition.position}
           employees={selectedPosition.employees}
           onClose={() => setSelectedPosId(null)}
+        />
+      )}
+
+      {view === "people" && selectedManagerDrawer && (
+        <EmployeeDrawer
+          position={selectedManagerDrawer.position}
+          employees={selectedManagerDrawer.employees}
+          onClose={() => setSelectedManagerId(null)}
         />
       )}
     </div>

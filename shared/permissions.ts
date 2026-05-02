@@ -33,6 +33,16 @@ export const PERMISSION_CATALOG = [
   { key: "workforce:bulk",             resource: "workforce",  action: "bulk",            description: "Bulk updates",                                  category: "Workforce" },
   { key: "workforce:payment_method",   resource: "workforce",  action: "payment_method",  description: "Change payment method on worker",               category: "Workforce" },
   { key: "workforce:history_read",     resource: "workforce",  action: "history_read",    description: "Read cross-candidate employment history",       category: "Workforce" },
+  // Task #281 — assign a worker to a manager (single or bulk)
+  { key: "workforce:assign_manager",   resource: "workforce",  action: "assign_manager",  description: "Assign worker(s) to a reports-to manager",      category: "Workforce" },
+
+  // ─── Management (Jisr-HR managers directory) ──
+  // Task #281 — managers exist so workforce rows can be assigned a "reports
+  // to" manager. They are NOT users (no login) and NOT workforce (no salary,
+  // no clock-in). Read covers list + view; write covers create / edit /
+  // deactivate / Excel import.
+  { key: "managers:read",              resource: "managers",   action: "read",            description: "List & view managers directory",                 category: "Management" },
+  { key: "managers:write",             resource: "managers",   action: "write",           description: "Create, edit, deactivate, or import managers",   category: "Management" },
 
   // ─── Onboarding ──
   { key: "onboarding:read",            resource: "onboarding", action: "read",            description: "List & view onboarding records",                category: "Onboarding" },

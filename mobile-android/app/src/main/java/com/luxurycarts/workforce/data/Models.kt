@@ -36,6 +36,13 @@ data class WorkforceRecord(
     @SerializedName("eventName") val eventName: String? = null,
     @SerializedName("positionTitle") val positionTitle: String? = null,
     @SerializedName("positionId") val positionId: String? = null,
+    // Task #281 — Reports To: manager fields joined server-side; null when unassigned.
+    @SerializedName("managerId") val managerId: String? = null,
+    @SerializedName("managerNameEn") val managerNameEn: String? = null,
+    @SerializedName("managerNameAr") val managerNameAr: String? = null,
+    @SerializedName("managerPhone") val managerPhone: String? = null,
+    @SerializedName("managerWhatsapp") val managerWhatsapp: String? = null,
+    @SerializedName("managerEmail") val managerEmail: String? = null,
 )
 
 data class QualityCheckItem(

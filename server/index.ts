@@ -150,6 +150,19 @@ app.use((req, res, next) => {
     await ensureSmpCompanyLowerNameIdx(log);
     const { ensureWorkforceEventActiveIdx } = await import("./migrations/ensure-workforce-event-active-idx");
     await ensureWorkforceEventActiveIdx(log);
+    // Task #281 — Management module schema. Order matters: managers table
+    // must exist BEFORE workforce.manager_id can FK-reference it. The
+    // legacy supervisor_id column is dropped last, under a NULL-only guard.
+    const { ensureManagersTable } = await import("./migrations/ensure-managers-table");
+    await ensureManagersTable(log);
+    const { ensureWorkforceManagerId } = await import("./migrations/ensure-workforce-manager-id");
+    await ensureWorkforceManagerId(log);
+    const { dropWorkforceSupervisorId } = await import("./migrations/drop-workforce-supervisor-id");
+    await dropWorkforceSupervisorId(log);
+    // Task #281 — reserve the welcome_employee enum value (sender stub
+    // logs only; ALTER TYPE is idempotent thanks to IF NOT EXISTS).
+    const { ensureWelcomeEmployeeEnum } = await import("./migrations/ensure-welcome-employee-enum");
+    await ensureWelcomeEmployeeEnum(log);
   } catch (err) {
     log(`boot migration failed: ${err}`, "boot-migrate");
   }

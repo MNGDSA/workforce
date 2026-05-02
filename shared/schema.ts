@@ -44,6 +44,10 @@ export const smsOutboxKindEnum = pgEnum("sms_outbox_kind", [
   "smp_activation_self_heal",
   "onboarding_reminder",
   "onboarding_final_warning",
+  // Task #281 — reserved for future post-conversion welcome SMS. The
+  // sender remains stubbed (logged only) until template content is
+  // approved by ops.
+  "welcome_employee",
 ]);
 
 export const genderEnum = pgEnum("gender", ["male", "female", "other", "prefer_not_to_say"]);
@@ -623,7 +627,11 @@ export const workforce = pgTable(
     terminationReason: text("termination_reason"),
     terminationCategory: text("termination_category"),
     isActive: boolean("is_active").notNull().default(true),
-    supervisorId: varchar("supervisor_id").references(() => users.id),
+    // Task #281 — manager assignment. References `managers` (Jisr-HR
+    // employees), NOT `users`. The legacy `supervisor_id` column (which
+    // referenced users.id) has been removed via guarded boot migration —
+    // it was never written to anywhere in the codebase.
+    managerId: varchar("manager_id").references((): any => managers.id, { onDelete: "set null" }),
     performanceScore: decimal("performance_score", { precision: 3, scale: 2 }),
     notes: text("notes"),
     offboardingStatus: text("offboarding_status"), // "in_progress" | "completed" | null
@@ -654,6 +662,10 @@ export const workforce = pgTable(
     eventActiveIdx: index("workforce_event_active_idx")
       .on(t.eventId)
       .where(sql`is_active = true AND offboarding_status IS NULL`),
+    // Task #281 — index supports the org-chart People view, the per-manager
+    // direct-reports count, and the bulk-assign toolbar's "show workers
+    // currently under <manager>" preview.
+    managerIdx: index("workforce_manager_idx").on(t.managerId),
   })
 );
 
@@ -1847,6 +1859,59 @@ export const insertPositionSchema = createInsertSchema(positions).omit({
 });
 export type InsertPosition = z.infer<typeof insertPositionSchema>;
 export type Position = typeof positions.$inferSelect;
+
+// ─── Managers (Jisr-HR employees) ────────────────────────────────────────────
+// Task #281 — A lightweight directory of managers. These are NOT users and
+// NOT workforce — they have no login (yet) and don't clock in. They exist
+// so workers (workforce rows) can be assigned a "reports to" manager and so
+// the org chart can render a People view alongside the Position view.
+export const managers = pgTable("managers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fullNameEn: text("full_name_en").notNull(),
+  fullNameAr: text("full_name_ar"),
+  email: text("email"),
+  phone: text("phone").notNull(),
+  whatsapp: text("whatsapp"),
+  jisrEmployeeId: varchar("jisr_employee_id", { length: 40 }),
+  departmentId: varchar("department_id").references(() => departments.id, { onDelete: "restrict" }),
+  positionId: varchar("position_id").references(() => positions.id, { onDelete: "restrict" }),
+  // Self-reference for the manager-of-manager hierarchy. Cycle prevention is
+  // enforced at the API layer (walks the chain on every PATCH).
+  reportsToManagerId: varchar("reports_to_manager_id").references((): any => managers.id, { onDelete: "set null" }),
+  isActive: boolean("is_active").notNull().default(true),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+}, (t) => ({
+  // Partial unique — many app-created managers won't have a Jisr id yet.
+  jisrIdx: uniqueIndex("managers_jisr_employee_id_unique_idx")
+    .on(t.jisrEmployeeId)
+    .where(sql`jisr_employee_id IS NOT NULL`),
+  emailIdx: uniqueIndex("managers_email_unique_idx")
+    .on(t.email)
+    .where(sql`email IS NOT NULL`),
+  deptIdx: index("managers_department_idx").on(t.departmentId),
+  positionIdx: index("managers_position_idx").on(t.positionId),
+  reportsToIdx: index("managers_reports_to_idx").on(t.reportsToManagerId),
+  activeIdx: index("managers_active_idx").on(t.isActive),
+}));
+
+export const insertManagerSchema = createInsertSchema(managers, {
+  fullNameEn: (s) => s.min(1, "Full name (English) is required").max(200),
+  fullNameAr: (s) => s.max(200).optional().nullable(),
+  // Permissive E.164-ish — same shape candidates use.
+  phone: (s) => s.regex(/^\+?[1-9]\d{6,14}$/, "Phone must be a valid international number"),
+  whatsapp: (s) => s.regex(/^\+?[1-9]\d{6,14}$/, "WhatsApp must be a valid international number").optional().nullable(),
+  email: (s) => s.email("Invalid email").optional().nullable(),
+  jisrEmployeeId: (s) => s.max(40).optional().nullable(),
+  notes: (s) => s.max(2000).optional().nullable(),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertManager = z.infer<typeof insertManagerSchema>;
+export type Manager = typeof managers.$inferSelect;
 
 // ─── Query Params Types ─────────────────────────────────────────────────────
 export const candidateQuerySchema = z.object({

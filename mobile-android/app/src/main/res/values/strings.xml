@@ -36,6 +36,8 @@
     <string name="position">Position</string>
     <string name="job_title">Job Title</string>
     <string name="event">Event</string>
+    <string name="reports_to">Reports To</string>
+    <string name="reports_to_unassigned">Unassigned</string>
     <string name="start_date">Start Date</string>
     <string name="status">Status</string>
     <string name="active">Active</string>

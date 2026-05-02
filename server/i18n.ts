@@ -212,6 +212,18 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "position.circularHierarchy":       "Circular parent hierarchy detected",
     "position.notFound":                "Position not found",
 
+    // Managers (Task #281)
+    "manager.notFound":                 "Manager not found",
+    "manager.inactive":                 "Manager is inactive",
+    "manager.parentNotFound":           "Reports-to manager not found",
+    "manager.parentInactive":           "Reports-to manager is inactive",
+    "manager.selfReportsTo":            "A manager cannot report to themselves",
+    "manager.cycleDetected":            "This change would create a reports-to cycle",
+    "manager.hasReports":               "This manager still has direct reports. Reassign them first or choose to leave reports unassigned.",
+    "manager.reassignToSelf":           "Cannot reassign reports to the manager being deactivated",
+    "manager.reassignTargetNotFound":   "Reassignment target manager not found",
+    "manager.reassignTargetInactive":   "Reassignment target manager is inactive",
+
     // Users / Super-admin
     "auth.cannotCreateSuperAdmin":      "Cannot create another Super Admin.",
     "auth.cannotPromoteSuperAdmin":     "Cannot promote a user to Super Admin.",
@@ -592,6 +604,18 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "position.selfParent":              "لا يمكن للوظيفة أن تكون والداً لنفسها",
     "position.circularHierarchy":       "تم اكتشاف تسلسل دائري للوظائف",
     "position.notFound":                "الوظيفة غير موجودة",
+
+    // المدراء (مهمة #281)
+    "manager.notFound":                 "المدير غير موجود",
+    "manager.inactive":                 "المدير غير مفعّل",
+    "manager.parentNotFound":           "المدير المباشر غير موجود",
+    "manager.parentInactive":           "المدير المباشر غير مفعّل",
+    "manager.selfReportsTo":            "لا يمكن للمدير أن يكون مديراً مباشراً لنفسه",
+    "manager.cycleDetected":            "هذا التغيير سيُنشئ حلقة في التبعية الإدارية",
+    "manager.hasReports":               "لهذا المدير تابعون مباشرون. يرجى إعادة تعيينهم أولاً أو اختيار إبقائهم بدون تعيين.",
+    "manager.reassignToSelf":           "لا يمكن إعادة تعيين التابعين إلى المدير الذي يتم إلغاء تفعيله",
+    "manager.reassignTargetNotFound":   "المدير الهدف لإعادة التعيين غير موجود",
+    "manager.reassignTargetInactive":   "المدير الهدف لإعادة التعيين غير مفعّل",
 
     // Users / Super-admin
     "auth.cannotCreateSuperAdmin":      "لا يمكن إنشاء مشرف عام آخر.",

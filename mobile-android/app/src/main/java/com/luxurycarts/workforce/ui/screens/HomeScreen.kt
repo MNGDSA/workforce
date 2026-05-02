@@ -1,13 +1,17 @@
 package com.luxurycarts.workforce.ui.screens
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import java.io.File
+import java.util.Locale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -477,6 +481,52 @@ fun HomeScreen(
                 workforceRecord?.positionTitle?.let { DetailRow(stringResource(R.string.position), it) }
                 workforceRecord?.jobTitle?.let { DetailRow(stringResource(R.string.job_title), it) }
                 workforceRecord?.eventName?.let { DetailRow(stringResource(R.string.event), it) }
+                // Task #281 — Reports To. Pick the localized name; tap calls the manager
+                // (or emails if no phone). Renders "Unassigned" muted when null.
+                run {
+                    val localeAr = Locale.getDefault().language == "ar"
+                    val managerName = workforceRecord?.let {
+                        if (localeAr) it.managerNameAr ?: it.managerNameEn else it.managerNameEn ?: it.managerNameAr
+                    }
+                    val phone = workforceRecord?.managerPhone?.takeIf { it.isNotBlank() }
+                    val whatsapp = workforceRecord?.managerWhatsapp?.takeIf { it.isNotBlank() } ?: phone
+                    val email = workforceRecord?.managerEmail?.takeIf { it.isNotBlank() }
+                    val onTap: (() -> Unit)? = when {
+                        phone != null -> {
+                            {
+                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
+                                runCatching { context.startActivity(intent) }
+                            }
+                        }
+                        email != null -> {
+                            {
+                                val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email"))
+                                runCatching { context.startActivity(intent) }
+                            }
+                        }
+                        else -> null
+                    }
+                    // Long-press on the Reports-To row opens WhatsApp with the
+                    // manager's WhatsApp number (falls back to phone). Spec
+                    // line 160: tap=dial, long-press=WhatsApp.
+                    val onLongPress: (() -> Unit)? = whatsapp?.let { wa ->
+                        {
+                            val normalized = wa.removePrefix("+")
+                            val intent = Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://wa.me/$normalized"),
+                            )
+                            runCatching { context.startActivity(intent) }
+                        }
+                    }
+                    DetailRow(
+                        label = stringResource(R.string.reports_to),
+                        value = managerName ?: stringResource(R.string.reports_to_unassigned),
+                        muted = managerName == null,
+                        onClick = onTap,
+                        onLongClick = onLongPress,
+                    )
+                }
                 workforceRecord?.startDate?.let { DetailRow(stringResource(R.string.start_date), it) }
                 DetailRow(stringResource(R.string.status), if (workforceRecord?.isActive != false) stringResource(R.string.active) else stringResource(R.string.inactive))
             }
@@ -987,15 +1037,35 @@ private fun renderReason(code: String, params: Map<String, Any>, config: Attenda
 }
 
 @Composable
-private fun DetailRow(label: String, value: String) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun DetailRow(
+    label: String,
+    value: String,
+    muted: Boolean = false,
+    onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
+) {
+    val baseModifier = Modifier
+        .fillMaxWidth()
+        .padding(vertical = 4.dp)
+    val rowModifier = when {
+        // Task #281 — Reports To row uses long-press to open WhatsApp;
+        // tap continues to dial. combinedClickable composes both gestures
+        // without breaking the regular tap path used by other rows.
+        onClick != null && onLongClick != null -> baseModifier.combinedClickable(
+            onClick = onClick,
+            onLongClick = onLongClick,
+        )
+        onClick != null -> baseModifier.clickable { onClick() }
+        else -> baseModifier
+    }
+    val valueColor = if (muted) TextMuted else TextSecondary
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
+        modifier = rowModifier,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(label, style = MaterialTheme.typography.bodySmall, color = TextMuted)
-        Text(value, style = MaterialTheme.typography.bodyMedium, color = TextSecondary, fontWeight = FontWeight.SemiBold)
+        Text(value, style = MaterialTheme.typography.bodyMedium, color = valueColor, fontWeight = FontWeight.SemiBold)
     }
 }
 

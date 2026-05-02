@@ -36,6 +36,8 @@
     <string name="position">المنصب</string>
     <string name="job_title">المسمى الوظيفي</string>
     <string name="event">الفعالية</string>
+    <string name="reports_to">المسؤول المباشر</string>
+    <string name="reports_to_unassigned">غير محدد</string>
     <string name="start_date">تاريخ البدء</string>
     <string name="status">الحالة</string>
     <string name="active">نشط</string>
