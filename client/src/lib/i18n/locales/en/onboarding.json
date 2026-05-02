@@ -394,7 +394,8 @@
       "sentNow": "Reminder sent",
       "paused": "Reminders paused",
       "resumed": "Reminders resumed",
-      "actionFailed": "Action failed"
+      "actionFailed": "Action failed",
+      "portalUrlNotConfigured": "Portal URL is not configured. Ask an administrator to set it in System Settings."
     },
     "actionFailed": "Action failed",
     "templates": {

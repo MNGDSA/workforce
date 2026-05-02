@@ -404,6 +404,16 @@ export interface SweepResult {
   finalWarningsEnqueued: number;
   eliminated: number;
   skippedQuietHours: number;
+  /**
+   * Architect hardening item #2 — count of rows that threw inside the
+   * per-row body of the sweep loop. Each row is wrapped in its own
+   * try/catch so a single config error (e.g. a vanished SMS plugin or
+   * an unset portal URL surfaced through the SMS payload-resolution
+   * path) cannot abort the entire batch and starve every other
+   * pending candidate. Failures are also console.error'd with the
+   * onboardingId so operators can correlate.
+   */
+  failed: number;
 }
 
 /**
@@ -433,6 +443,7 @@ export async function runOnboardingReminderSweep(now: Date = new Date()): Promis
     finalWarningsEnqueued: 0,
     eliminated: 0,
     skippedQuietHours: 0,
+    failed: 0,
   };
   if (!cfg.enabled) return result;
 
@@ -459,39 +470,51 @@ export async function runOnboardingReminderSweep(now: Date = new Date()): Promis
   const inQuiet = isInQuietHours(now, cfg);
 
   for (const rec of rows) {
-    const status = computeRowStatus(rec, cfg, now);
+    // Architect hardening item #2 — per-row try/catch isolates failures
+    // (e.g. PortalBaseUrlNotConfiguredError, an SMS plugin that just
+    // vanished, a transient DB conflict on the conditional UPDATE) so
+    // one poison row cannot abort the entire batch. Each failure is
+    // logged with the onboardingId for triage and counted in
+    // `result.failed` for telemetry.
+    try {
+      const status = computeRowStatus(rec, cfg, now);
 
-    if (status.state === "off") continue;
+      if (status.state === "off") continue;
 
-    if (status.state === "eliminated") {
-      const ok = await eliminateOnboarding(rec);
-      if (ok) result.eliminated++;
-      continue;
-    }
+      if (status.state === "eliminated") {
+        const ok = await eliminateOnboarding(rec);
+        if (ok) result.eliminated++;
+        continue;
+      }
 
-    if (inQuiet) {
-      result.skippedQuietHours++;
-      continue;
-    }
+      if (inQuiet) {
+        result.skippedQuietHours++;
+        continue;
+      }
 
-    if (rec.remindersPausedAt) continue;
+      if (rec.remindersPausedAt) continue;
 
-    // Final-warning send is gated by the time window + not-yet-sent flag,
-    // independent of the visual state (which only flips to "warning"
-    // after the SMS has actually been enqueued).
-    const eliminationMs = rec.createdAt.getTime() + cfg.totalDeadlineDays * 86400_000;
-    const finalWarningMs = eliminationMs - cfg.finalWarningHours * 3600_000;
-    if (now.getTime() >= finalWarningMs && rec.finalWarningSentAt == null && status.missingDocs.length > 0) {
-      const enqueued = await enqueueFinalWarningSms(rec, cfg, status.missingDocs);
-      if (enqueued) result.finalWarningsEnqueued++;
-      continue;
-    }
+      // Final-warning send is gated by the time window + not-yet-sent flag,
+      // independent of the visual state (which only flips to "warning"
+      // after the SMS has actually been enqueued).
+      const eliminationMs = rec.createdAt.getTime() + cfg.totalDeadlineDays * 86400_000;
+      const finalWarningMs = eliminationMs - cfg.finalWarningHours * 3600_000;
+      if (now.getTime() >= finalWarningMs && rec.finalWarningSentAt == null && status.missingDocs.length > 0) {
+        const enqueued = await enqueueFinalWarningSms(rec, cfg, status.missingDocs);
+        if (enqueued) result.finalWarningsEnqueued++;
+        continue;
+      }
 
-    if (status.state === "max_reached" || status.state === "warning") continue;
+      if (status.state === "max_reached" || status.state === "warning") continue;
 
-    if (status.state === "due") {
-      const claimed = await claimAndEnqueueReminder(rec, status.missingDocs, now, cfg);
-      if (claimed) result.remindersEnqueued++;
+      if (status.state === "due") {
+        const claimed = await claimAndEnqueueReminder(rec, status.missingDocs, now, cfg);
+        if (claimed) result.remindersEnqueued++;
+      }
+    } catch (err) {
+      result.failed++;
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[onboarding-reminders] sweep failed for row ${rec.id}: ${msg}`);
     }
   }
 

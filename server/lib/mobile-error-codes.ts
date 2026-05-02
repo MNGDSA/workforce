@@ -51,6 +51,14 @@ export const MobileErrorCodes = {
   PHOTO_REQUIRED: "PHOTO_REQUIRED",
   VALIDATION_FAILED: "VALIDATION_FAILED",
   INTERNAL_ERROR: "INTERNAL_ERROR",
+
+  // ── Configuration ─────────────────────────────────────────────────
+  // Surfaced when an action depends on the public portal base URL but
+  // neither system_settings.public_app_url nor the PUBLIC_APP_URL env
+  // is configured. Client maps this to a user-safe localized message
+  // ("Portal URL is not configured. Ask an administrator to set it in
+  //  System Settings.") instead of leaking the raw operator detail.
+  PORTAL_URL_NOT_CONFIGURED: "PORTAL_URL_NOT_CONFIGURED",
 } as const;
 
 export type MobileErrorCode =

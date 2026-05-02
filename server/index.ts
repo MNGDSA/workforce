@@ -191,6 +191,29 @@ app.use((req, res, next) => {
     log(`RBAC seed failed: ${err}`, "rbac-seed");
   }
 
+  // Architect hardening item #1 — boot-time portal-URL probe.
+  // Logs a clear warning when neither system_settings.public_app_url
+  // nor PUBLIC_APP_URL is configured, so operators see the misconfig
+  // immediately at boot instead of when the first onboarding-reminder
+  // SMS attempts to render its portal link. The same probe is surfaced
+  // on /api/health so monitoring picks it up without a code change.
+  try {
+    const { probePortalUrl } = await import("./lib/portal-url-probe");
+    const probe = await probePortalUrl();
+    if (probe.status === "ok") {
+      log(`portal URL probe ok: ${probe.url}`, "portal-url");
+    } else if (probe.status === "not_configured") {
+      log(
+        "portal URL is NOT configured — onboarding reminder SMS sends will fail until an admin sets `public_app_url` in System Settings or PUBLIC_APP_URL is exported in the deploy environment.",
+        "portal-url",
+      );
+    } else {
+      log(`portal URL probe error: ${probe.error}`, "portal-url");
+    }
+  } catch (err) {
+    log(`portal URL probe failed: ${err}`, "portal-url");
+  }
+
   // Top-up the three e2e demo login accounts (super admin / candidate /
   // recruiter) in non-production environments. Idempotent and surgical:
   // never touches transactional tables, so casual test runs no longer have
@@ -385,9 +408,13 @@ app.use((req, res, next) => {
     try {
       const { runOnboardingReminderSweep } = await import("./onboarding-reminders");
       const r = await runOnboardingReminderSweep();
-      if (r.remindersEnqueued + r.finalWarningsEnqueued + r.eliminated > 0) {
+      // Architect hardening item #2 — surface row-level failures in the
+      // hourly summary so an operator sees recurring config errors
+      // even when nothing successfully went out (e.g. portal URL not
+      // configured → every row fails but `remindersEnqueued` is 0).
+      if (r.remindersEnqueued + r.finalWarningsEnqueued + r.eliminated + r.failed > 0) {
         log(
-          `Onboarding reminders: considered=${r.considered} reminders=${r.remindersEnqueued} finals=${r.finalWarningsEnqueued} eliminated=${r.eliminated} quietSkipped=${r.skippedQuietHours}`,
+          `Onboarding reminders: considered=${r.considered} reminders=${r.remindersEnqueued} finals=${r.finalWarningsEnqueued} eliminated=${r.eliminated} quietSkipped=${r.skippedQuietHours} failed=${r.failed}`,
           "scheduler",
         );
       }

@@ -2692,7 +2692,20 @@ export default function OnboardingPage() {
       const key = vars.action === "send-now" ? "sentNow" : vars.action === "pause" ? "paused" : "resumed";
       toast({ title: t(`reminders.toasts.${key}`) });
     },
-    onError: (e: any) => toast({ title: t("reminders.toasts.actionFailed"), description: e?.message, variant: "destructive" }),
+    onError: (e: unknown) => {
+      // Map typed config-error code to a user-safe localized message
+      // instead of leaking the raw operator detail (e.g. the bare
+      // PortalBaseUrlNotConfiguredError text). Other errors keep the
+      // existing fallback so genuine validation messages still surface.
+      let description = getApiErrorMessage(e, t("reminders.toasts.actionFailed"));
+      if (isApiError(e) && e.body && typeof e.body === "object") {
+        const code = (e.body as { code?: unknown }).code;
+        if (code === "PORTAL_URL_NOT_CONFIGURED") {
+          description = t("reminders.toasts.portalUrlNotConfigured");
+        }
+      }
+      toast({ title: t("reminders.toasts.actionFailed"), description, variant: "destructive" });
+    },
   });
 
   const filtered = records.filter(r => {

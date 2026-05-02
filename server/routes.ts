@@ -117,6 +117,7 @@ import { signAuthToken, verifyAuthToken } from "./auth-token";
 // Task #85 — canonical mobile error codes + HMAC submission tokens.
 import { MobileErrorCodes, mobileError } from "./lib/mobile-error-codes";
 import { IbanValidationError, IbanHolderNameValidationError, applyServerIbanFields } from "./lib/iban";
+import { PortalBaseUrlNotConfiguredError } from "./lib/portal-url";
 import { mergeWithLegacyFallback, type LocalizedCopy } from "./lib/legal-copy";
 import {
   issueSubmissionToken,
@@ -289,6 +290,16 @@ import {
 
 function handleError(res: Response, err: unknown, req?: Request) {
   console.error(err);
+  // Configuration error: an action depended on the public portal base
+  // URL but neither system_settings.public_app_url nor PUBLIC_APP_URL
+  // is configured. Surface a typed code so the client can render a
+  // user-safe localized message; keep the raw operator detail in logs.
+  if (err instanceof PortalBaseUrlNotConfiguredError) {
+    return res.status(503).json({
+      code: MobileErrorCodes.PORTAL_URL_NOT_CONFIGURED,
+      message: req ? tr(req, "portal.urlNotConfigured") : err.message,
+    });
+  }
   // Task #120 — IBAN format failures bubble out of the storage layer
   // (last-line-of-defence canonicalisation). Surface them as 400 with
   // the same shape as our other validation responses so the Android
@@ -520,11 +531,20 @@ export async function registerRoutes(
       dbStatus = "error";
       dbError = err?.message || String(err);
     }
+    // Architect hardening item #1 — surface the portal-URL probe on
+    // /api/health so monitoring/operators can see at a glance whether
+    // the public-portal base URL is configured. A `not_configured`
+    // result does NOT degrade overall health (the rest of the app is
+    // fully usable; only candidate-facing SMS sends would fail), but
+    // it is reported alongside the db status for visibility.
+    const { probePortalUrl } = await import("./lib/portal-url-probe");
+    const portalUrlProbe = await probePortalUrl();
     const body = {
       status: dbStatus === "ok" ? "ok" : "degraded",
       db: dbStatus,
       ...(dbError ? { dbError } : {}),
       dbLatencyMs,
+      portalUrl: portalUrlProbe,
       uptimeSec: Math.round((Date.now() - BOOT_TIME) / 1000),
       env: process.env.NODE_ENV || "development",
       timestamp: new Date().toISOString(),
@@ -4496,7 +4516,9 @@ export async function registerRoutes(
         description: `Manual onboarding reminder sent (count now ${updated.reminderCount}).`,
       });
       return res.json(updated);
-    } catch (err) { return handleError(res, err); }
+      // Pass `req` so PortalBaseUrlNotConfiguredError (and any other
+      // typed errors that depend on locale) render localized messages.
+    } catch (err) { return handleError(res, err, req); }
   });
 
   app.post("/api/onboarding/:id/pause-reminders", requirePermission("onboarding:update"), async (req: Request, res: Response) => {

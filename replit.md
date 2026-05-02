@@ -77,7 +77,18 @@ The system employs a modern, full-stack architecture designed for scalability an
 
 ### Production DB access — agent-readable note
 
-**`PROD_DATABASE_URL` is ALREADY in this workspace's secrets** and points at the live DigitalOcean Postgres. The agent has direct connectivity to prod from this workspace and **must never ask the user to confirm this fact again**. For any one-off prod write (single-row config inserts, hot-fix UPSERTs into `system_settings`, etc.), connect directly with `pg.Pool({ connectionString: process.env.PROD_DATABASE_URL, ssl: { rejectUnauthorized: false } })`. Treat the URL as sensitive — never log, echo, or write it to a file.
+**`PROD_DATABASE_URL` is ALREADY in this workspace's secrets** and points at the live DigitalOcean Postgres. The agent has direct connectivity to prod from this workspace and **must never ask the user to confirm this fact again**. Treat the URL as sensitive — never log, echo, or write it to a file.
+
+**TLS for prod connections** — DigitalOcean's managed Postgres uses a private CA. The deployed app already passes the CA bundle to `pg` via the `DATABASE_CA_CERT` build-env variable, which means the live server runs with full certificate verification. One-off agent scripts run from this workspace should follow the same path:
+
+```js
+const ssl = process.env.DATABASE_CA_CERT
+  ? { ca: process.env.DATABASE_CA_CERT, rejectUnauthorized: true }
+  : { rejectUnauthorized: false }; // last-resort fallback only when the CA env is unavailable
+const pool = new Pool({ connectionString: process.env.PROD_DATABASE_URL, ssl });
+```
+
+`rejectUnauthorized: false` (and the heavier `NODE_TLS_REJECT_UNAUTHORIZED=0` shotgun) downgrades MITM protection for the entire Node process and must NOT be normalized into the standard playbook — reach for it only when the CA bundle is genuinely unavailable in that one-off context, and never inside `server/`.
 
 Boot-time idempotent migrations in `server/migrations/` (CREATE TABLE IF NOT EXISTS, ADD COLUMN IF NOT EXISTS, ADD VALUE IF NOT EXISTS, INSERT … ON CONFLICT DO NOTHING) run automatically on prod the first time the server boots after a deploy, so most schema changes need no manual prod step. Only reach for `scripts/migrate-prod.mjs` (drizzle-kit push) for schema changes that aren't covered by a boot migration.
 

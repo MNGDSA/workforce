@@ -377,6 +377,11 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "doc.label.driversLicense"            : "Driver's License",
     "doc.label.vaccinationReport"         : "Vaccination Report",
     "doc.label.document"                  : "document",
+    // Surfaced when an action depends on the public portal base URL but
+    // neither system_settings.public_app_url nor PUBLIC_APP_URL is set.
+    // The raw operator-detail message is intentionally kept server-side
+    // (in logs); the client renders this user-safe localized text.
+    "portal.urlNotConfigured"             : "Portal URL is not configured. Ask an administrator to set it in System Settings.",
     // Task #120 — server-side IBAN validation
     "iban.missing_prefix"                 : "Invalid IBAN: must start with SA",
     "iban.wrong_length"                   : "Invalid IBAN: must be 24 characters (SA + 22 digits)",
@@ -771,6 +776,7 @@ const MESSAGES: Record<ServerLocale, MessageDict> = {
     "doc.label.vaccinationReport"         : "تقرير التطعيم",
     "doc.label.document"                  : "المستند",
     // Task #120 — server-side IBAN validation
+    "portal.urlNotConfigured"             : "لم يتم ضبط رابط البوابة. يُرجى من المسؤول ضبطه في إعدادات النظام.",
     "iban.missing_prefix"                 : "آيبان غير صالح: يجب أن يبدأ بـ SA",
     "iban.wrong_length"                   : "آيبان غير صالح: يجب أن يتكون من 24 حرفًا (SA + 22 رقمًا)",
     "iban.non_digit"                      : "آيبان غير صالح: يجب أن يحتوي على أرقام فقط بعد SA",
