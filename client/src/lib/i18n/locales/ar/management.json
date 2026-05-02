@@ -55,7 +55,7 @@
     "uploadButton": "رفع",
     "uploading": "جاري الرفع…",
     "successTitle": "اكتمل الاستيراد",
-    "successBody": "{{created}} مُنشَأ · {{updated}} مُحدَّث · {{skipped}} تُجوهِل",
+    "successBody": "{{created}} مُنشَأ · {{updated}} مُحدَّث · {{errors}} أخطاء",
     "errorTitle": "فشل الاستيراد",
     "errorRow": "الصف {{row}}: {{message}}",
     "errors": "الأخطاء"

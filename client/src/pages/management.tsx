@@ -765,7 +765,7 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [errors, setErrors] = useState<Array<{ row: number; message: string }>>([]);
+  const [errors, setErrors] = useState<Array<{ row: number; field?: string; message: string }>>([]);
 
   // Reset on close so the next open is fresh.
   useEffect(() => {
@@ -791,10 +791,10 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
         throw new Error(body?.message ?? "Upload failed");
       }
       return res.json() as Promise<{
+        total: number;
         created: number;
         updated: number;
-        skipped: number;
-        errors: Array<{ row: number; message: string }>;
+        errors: Array<{ row: number; field?: string; message: string }>;
       }>;
     },
     onSuccess: (data) => {
@@ -804,7 +804,7 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
         description: t("management:import.successBody", {
           created: data.created,
           updated: data.updated,
-          skipped: data.skipped,
+          errors: data.errors?.length ?? 0,
         }),
       });
       qc.invalidateQueries({ queryKey: ["/api/managers"] });

@@ -6018,20 +6018,15 @@ export async function registerRoutes(
   });
 
   // Import flow (full contract documented in server/lib/managers-import.ts):
-  //   • Validation pass — atomic; any structural error aborts before any writes.
-  //   • Pass 1 (base create/update) — aborts on first row error and marks
-  //     remaining rows as skipped. Already-written rows are NOT rolled back
-  //     (storage uses the global pool — true tx-aware storage is future work).
-  //   • Pass 2 (reports-to + cycle check) — base status is preserved; any
-  //     wiring failure is recorded as a per-row reportsToWarning. Isolated
-  //     per row, no skipping.
+  //   • Validation pass — pure; structural / per-row errors short-circuit
+  //     before any DB write.
+  //   • Lookup pass — resolves department_code / position_code; unknown
+  //     codes short-circuit before any DB write.
+  //   • Write passes — both "create/update base" and "wire reports_to"
+  //     run inside a single db.transaction. ANY row failure rolls back
+  //     the entire batch (all-or-nothing per file, per spec).
   // Response shape:
-  //   • errors[]/errorCount             — pass-1 base-row failures (row didn't land).
-  //   • reportsToWarnings[]/reportsToWarningCount — pass-2 wiring failures
-  //     (row landed; parent edge missing).
-  // Both arrays carry { row, message }; reportsToWarnings also includes
-  // the managerId so the operator can fix the parent edge in the UI
-  // without re-importing the whole batch.
+  //   { total, created, updated, errors: [{ row, field?, message }] }
   // The matching /template GET is registered earlier to avoid collision
   // with /:id.
   app.post("/api/managers/import", requirePermission("managers:write"), uploadXlsx.single("file"), async (req: Request, res: Response) => {
@@ -6043,43 +6038,22 @@ export async function registerRoutes(
       // Single audit row per import — per-manager rows would explode the
       // log on a 500-row sheet. The summary captures what was done.
       await logAudit(req, {
-        action: "manager.imported",
+        action: "manager.imported_from_excel",
         entityType: "manager",
-        description: `Imported managers sheet: ${summary.created} created, ${summary.updated} updated, ${summary.errors} errors`,
+        description: `Imported managers sheet: ${summary.created} created, ${summary.updated} updated, ${summary.errors.length} errors`,
         metadata: {
           total: summary.total, created: summary.created,
-          updated: summary.updated, errors: summary.errors,
+          updated: summary.updated, errorCount: summary.errors.length,
         },
       });
       // Status 200 even when rows had errors — the body carries the
-      // per-row breakdown the UI shows in the result drawer.
-      // `errors[]` covers pass-1 base-row failures (the manager record
-      // did NOT land). `reportsToWarnings[]` covers pass-2 wiring
-      // failures on rows whose base record DID land — operators need
-      // to see them as a separate class so they can fix the parent
-      // edge without re-importing the whole batch.
-      const errorRows = summary.results
-        .filter((r) => r.status === "error")
-        .map((r) => ({
-          row: r.rowNumber,
-          message: r.reason ?? "Unknown error",
-        }));
-      const reportsToWarningRows = summary.results
-        .filter((r) => r.reportsToWarning)
-        .map((r) => ({
-          row: r.rowNumber,
-          managerId: r.managerId,
-          message: r.reportsToWarning!,
-        }));
+      // per-row breakdown the UI shows in the result drawer. On any
+      // write failure created/updated are 0 (transaction rolled back).
       return res.json({
         total: summary.total,
         created: summary.created,
         updated: summary.updated,
-        skipped: summary.skipped,
-        errorCount: summary.errors,
-        errors: errorRows,
-        reportsToWarningCount: summary.reportsToWarnings,
-        reportsToWarnings: reportsToWarningRows,
+        errors: summary.errors,
         results: summary.results,
       });
     } catch (err) { return handleError(res, err, req); }

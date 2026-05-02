@@ -55,7 +55,7 @@
     "uploadButton": "Upload",
     "uploading": "Uploading…",
     "successTitle": "Import complete",
-    "successBody": "{{created}} created · {{updated}} updated · {{skipped}} skipped",
+    "successBody": "{{created}} created · {{updated}} updated · {{errors}} errors",
     "errorTitle": "Import failed",
     "errorRow": "Row {{row}}: {{message}}",
     "errors": "Errors"
