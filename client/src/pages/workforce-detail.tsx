@@ -103,7 +103,7 @@ export default function WorkforceDetailPage() {
     <DashboardLayout>
       {isLoading && (
         <div className="flex items-center justify-center py-24" data-testid="loading-employee">
-          <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       )}
 
@@ -112,11 +112,11 @@ export default function WorkforceDetailPage() {
           <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 text-amber-400">
             <AlertTriangle className="h-6 w-6" />
           </div>
-          <h2 className="text-xl font-display font-bold text-white">{t("page.notFound")}</h2>
+          <h2 className="text-xl font-display font-bold text-foreground">{t("page.notFound")}</h2>
           <p className="text-sm text-muted-foreground">{t("page.notFoundDescription")}</p>
           <Button
             variant="outline"
-            className="border-zinc-700"
+            className="border-border"
             onClick={() => setLocation("/workforce")}
             data-testid="button-back-to-workforce-list"
           >
@@ -131,11 +131,11 @@ export default function WorkforceDetailPage() {
           <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 text-red-400">
             <AlertTriangle className="h-6 w-6" />
           </div>
-          <h2 className="text-xl font-display font-bold text-white">{t("page.loadError")}</h2>
+          <h2 className="text-xl font-display font-bold text-foreground">{t("page.loadError")}</h2>
           <p className="text-sm text-muted-foreground"><bdi>{(error as Error)?.message ?? ""}</bdi></p>
           <Button
             variant="outline"
-            className="border-zinc-700"
+            className="border-border"
             onClick={() => setLocation("/workforce")}
             data-testid="button-back-to-workforce-list"
           >

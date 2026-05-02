@@ -295,7 +295,7 @@ function SortableHeader({ label, field, sortField, sortDir, onSort }: {
   const active = sortField === field;
   return (
     <button
-      className="flex items-center gap-1 hover:text-white transition-colors text-start"
+      className="flex items-center gap-1 hover:text-foreground transition-colors text-start"
       onClick={() => onSort(field)}
       data-testid={`sort-${field}`}
     >
@@ -332,21 +332,21 @@ export function ActiveAssignmentCard({
   const todayShiftId = template ? (template[todayKey] as string | null | undefined) : undefined;
   const todayShift = todayShiftId ? allShifts.find(s => s.id === todayShiftId) : undefined;
   return (
-    <div className="border border-emerald-800/50 bg-emerald-950/10 rounded-lg p-4 space-y-2">
+    <div className="border border-primary/30 bg-primary/5 rounded-sm p-4 space-y-2">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-semibold text-white text-sm"><bdi>{template?.name ?? t("dialog.schedule.unknownTemplate")}</bdi></p>
-          <p className="text-xs text-zinc-400 mt-0.5">{t("dialog.schedule.since", { date: formatDate(activeAssignment.startDate) })}</p>
+          <p className="font-semibold text-foreground text-sm"><bdi>{template?.name ?? t("dialog.schedule.unknownTemplate")}</bdi></p>
+          <p className="text-xs text-muted-foreground mt-0.5">{t("dialog.schedule.since", { date: formatDate(activeAssignment.startDate) })}</p>
           {todayShift ? (
             <div className="flex items-center gap-1.5 mt-1.5">
               <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: todayShift.color }} />
-              <span className="text-xs text-zinc-300">
-                {t("dialog.schedule.todayShift")}: <span className="font-medium text-white"><bdi>{todayShift.name}</bdi></span>
-                <span className="text-zinc-500 ms-1" dir="ltr">({todayShift.startTime}–{todayShift.endTime})</span>
+              <span className="text-xs text-foreground/80">
+                {t("dialog.schedule.todayShift")}: <span className="font-medium text-foreground"><bdi>{todayShift.name}</bdi></span>
+                <span className="text-muted-foreground ms-1" dir="ltr">({todayShift.startTime}–{todayShift.endTime})</span>
               </span>
             </div>
           ) : template ? (
-            <p className="text-xs text-zinc-500 mt-1">{t("dialog.schedule.todayDayOff")}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t("dialog.schedule.todayDayOff")}</p>
           ) : null}
         </div>
         <Button
@@ -735,22 +735,22 @@ export function EmployeeDetailContent({
 
   return (
     <>
-      <div className="bg-zinc-950 text-white">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 space-y-5">
+      <div className="bg-background text-foreground">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-6">
           {viewingAdminContract && (
             <div data-testid="admin-contract-history-viewer">
               <div className="flex items-center gap-2 mb-4">
                 <button
                   onClick={() => setViewingAdminContract(null)}
-                  className="text-zinc-400 hover:text-white transition-colors"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
                   data-testid="button-back-from-contract"
                 >
                   {/* RTL: chevron should point right (toward where you came from) */}
                   <ChevronLeft className="h-5 w-5 rtl:rotate-180" />
                 </button>
                 <div>
-                  <h3 className="text-base font-semibold text-white">{t("dialog.employmentContract")}</h3>
-                  <p className="text-xs text-zinc-500 mt-0.5">
+                  <h3 className="text-base font-semibold text-foreground">{t("dialog.employmentContract")}</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     {viewingAdminContract.jobTitle && <span><bdi>{viewingAdminContract.jobTitle}</bdi></span>}
                     {viewingAdminContract.jobTitle && viewingAdminContract.eventName && " — "}
                     {viewingAdminContract.eventName && <span><bdi>{viewingAdminContract.eventName}</bdi></span>}
@@ -846,7 +846,7 @@ export function EmployeeDetailContent({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="border-zinc-700 gap-1.5"
+                  className="border-border gap-1.5"
                   onClick={() => printContract(t("dialog.employmentContract"))}
                   data-testid="button-print-admin-contract"
                 >
@@ -858,170 +858,169 @@ export function EmployeeDetailContent({
           )}
           {!viewingAdminContract && (
           <>
-          {/* Task #284 — Polished page hero. Replaces the cramped
-              dialog-era sticky header. Layout (LTR / mirrored in RTL):
-              cover gradient band + 96px avatar overlapping the bottom
-              edge, employee name + status pill + employee number on
-              the left, primary actions (Print ID Card) on the right.
-              The avatar still owns the photo-edit affordance via the
-              `photoFileRef` hidden input + `photoMutation` so admins
-              get the same Rekognition pipeline they had in the modal. */}
-          <Card className="overflow-hidden border-zinc-800 bg-zinc-900/40" data-testid="card-employee-hero">
-            <div className="relative h-28 bg-gradient-to-br from-[hsl(155,45%,28%)] via-[hsl(155,45%,18%)] to-zinc-900 border-b border-zinc-800/60">
-              {onClose && (
+          {/* Task #284 — Page header. No gradient, no card wrapper, no
+              overlapping avatar — just the standard page-title pattern
+              the rest of the app uses (dashboard, talent, candidates):
+              optional Back link above; small avatar inline with name +
+              status pill on the start, primary actions on the end; a
+              thin `border-border` divider closes the header off from
+              the content stack below. The avatar still owns the
+              photo-edit affordance via the existing `photoFileRef`
+              hidden input + `photoMutation` so admins get the same
+              Rekognition pipeline they had in the modal. */}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors -mt-1"
+              data-testid="button-back-to-workforce"
+              aria-label={t("page.back")}
+            >
+              <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
+              <span>{t("page.back")}</span>
+            </button>
+          )}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-border">
+            <div className="flex items-center gap-4 min-w-0 flex-1">
+              {/* Avatar w/ hover-edit overlay; click opens lightbox
+                  when a photo exists, otherwise the file picker so
+                  first-time uploads skip the empty preview. */}
+              <div className="relative group shrink-0">
+                <Avatar className="h-16 w-16 border border-border">
+                  <AvatarImage src={employee.photoUrl ?? undefined} />
+                  <AvatarFallback className="bg-muted text-muted-foreground text-lg font-semibold">{initials}</AvatarFallback>
+                </Avatar>
                 <button
-                  onClick={onClose}
-                  className="absolute top-3 start-3 inline-flex items-center gap-1 text-xs text-white/80 hover:text-white bg-black/20 hover:bg-black/40 backdrop-blur rounded-md px-2 py-1 transition-colors"
-                  data-testid="button-back-to-workforce"
-                  aria-label={t("page.back")}
+                  type="button"
+                  className="absolute inset-0 rounded-full bg-background/0 hover:bg-background/70 transition-colors flex items-center justify-center text-foreground opacity-0 group-hover:opacity-100 disabled:cursor-not-allowed"
+                  disabled={photoUploading}
+                  onClick={() => {
+                    if (employee.photoUrl) setPhotoPreviewOpen(true);
+                    else photoFileRef.current?.click();
+                  }}
+                  title={employee.photoUrl ? t("dialog.photo.viewPhoto") : t("dialog.photo.changePhoto")}
+                  aria-label={employee.photoUrl ? t("dialog.photo.viewPhoto") : t("dialog.photo.changePhoto")}
+                  data-testid="button-view-photo"
                 >
-                  <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
-                  <span>{t("page.back")}</span>
+                  {photoUploading
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : <Pencil className="h-4 w-4" />}
                 </button>
-              )}
-            </div>
-            <div className="px-5 md:px-6 pb-5 -mt-12">
-              <div className="flex flex-col md:flex-row md:items-end gap-4 md:gap-5">
-                {/* Avatar w/ hover-edit overlay; click opens lightbox
-                    when a photo exists, otherwise the file picker so
-                    first-time uploads skip the empty preview. */}
-                <div className="relative group shrink-0">
-                  <Avatar className="h-24 w-24 border-4 border-zinc-950 shadow-xl shadow-black/40 ring-1 ring-zinc-800">
-                    <AvatarImage src={employee.photoUrl ?? undefined} />
-                    <AvatarFallback className="bg-zinc-800 text-zinc-200 text-2xl font-bold">{initials}</AvatarFallback>
-                  </Avatar>
-                  <button
-                    type="button"
-                    className="absolute inset-0 rounded-full bg-black/0 hover:bg-black/60 transition-colors flex items-center justify-center text-white opacity-0 group-hover:opacity-100 disabled:cursor-not-allowed"
-                    disabled={photoUploading}
-                    onClick={() => {
-                      if (employee.photoUrl) setPhotoPreviewOpen(true);
-                      else photoFileRef.current?.click();
-                    }}
-                    title={employee.photoUrl ? t("dialog.photo.viewPhoto") : t("dialog.photo.changePhoto")}
-                    aria-label={employee.photoUrl ? t("dialog.photo.viewPhoto") : t("dialog.photo.changePhoto")}
-                    data-testid="button-view-photo"
-                  >
-                    {photoUploading
-                      ? <Loader2 className="h-5 w-5 animate-spin" />
-                      : <Pencil className="h-5 w-5" />}
-                  </button>
-                  <input
-                    ref={photoFileRef}
-                    type="file"
-                    accept="image/jpeg,image/jpg,image/png"
-                    className="hidden"
-                    data-testid="input-photo-file"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      setPhotoUploading(true);
-                      photoMutation.mutate(file);
-                    }}
-                  />
-                </div>
+                <input
+                  ref={photoFileRef}
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png"
+                  className="hidden"
+                  data-testid="input-photo-file"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setPhotoUploading(true);
+                    photoMutation.mutate(file);
+                  }}
+                />
+              </div>
 
-                {/* Name / status / employee number / position subtitle */}
-                <div className="flex-1 min-w-0 md:pb-1">
-                  {editName ? (
-                    <div className="flex items-center gap-2 mt-1">
-                      <Input
-                        autoFocus
-                        value={nameValue}
-                        onChange={(e) => setNameValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && nameValue.trim().length > 0) nameMutation.mutate(nameValue.trim());
-                          if (e.key === "Escape") { setEditName(false); setNameValue(""); }
-                        }}
-                        placeholder={t("dialog.name.placeholder")}
-                        maxLength={120}
-                        className="h-9 bg-zinc-900 border-zinc-700 text-white text-base flex-1 min-w-0"
-                        data-testid="input-edit-name"
-                      />
-                      <Button
-                        size="sm"
-                        className="h-9 bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white shrink-0"
-                        disabled={nameMutation.isPending || nameValue.trim().length === 0}
-                        onClick={() => nameMutation.mutate(nameValue.trim())}
-                        data-testid="button-save-name"
-                      >
-                        {nameMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("dialog.actions.save")}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-9 border-zinc-700 shrink-0"
-                        onClick={() => { setEditName(false); setNameValue(""); }}
-                        data-testid="button-cancel-name"
-                      >
-                        {t("dialog.actions.cancel")}
-                      </Button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h1 className="font-display text-2xl md:text-3xl font-bold text-white truncate leading-tight">
-                          <bdi>{employee.fullNameEn ?? t("dialog.unknownEmployee")}</bdi>
-                        </h1>
-                        <Badge variant="outline" className={`text-[11px] font-mono ${st.className}`}>{st.label}</Badge>
-                        <button
-                          type="button"
-                          className="text-zinc-500 hover:text-white transition-colors p-1 -m-1"
-                          onClick={() => { setNameValue(employee.fullNameEn ?? ""); setEditName(true); }}
-                          title={t("dialog.name.edit")}
-                          aria-label={t("dialog.name.edit")}
-                          data-testid="button-edit-name"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-3 mt-1.5 text-sm">
-                        <span className="text-zinc-400 font-mono" dir="ltr" title={t("dialog.empNumberLocked")} data-testid="text-hero-empnum">
-                          #{employee.employeeNumber}
-                        </span>
-                        {employee.positionTitle && (
-                          <>
-                            <span className="text-zinc-700">•</span>
-                            <span className="text-zinc-300 truncate" data-testid="text-hero-position">
-                              <bdi>{employee.positionTitle}</bdi>
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Primary actions — surfaced from the old footer so
-                    the most-used action (Print ID Card) is reachable
-                    without scrolling past every section first. */}
-                <div className="flex items-center gap-2 md:pb-1 shrink-0">
-                  {employee.isActive && onPrintCard && (
+              {/* Name / status / employee number / position subtitle */}
+              <div className="flex-1 min-w-0">
+                {editName ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      autoFocus
+                      value={nameValue}
+                      onChange={(e) => setNameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && nameValue.trim().length > 0) nameMutation.mutate(nameValue.trim());
+                        if (e.key === "Escape") { setEditName(false); setNameValue(""); }
+                      }}
+                      placeholder={t("dialog.name.placeholder")}
+                      maxLength={120}
+                      className="h-9 text-base flex-1 min-w-0"
+                      data-testid="input-edit-name"
+                    />
                     <Button
-                      variant="outline"
-                      className="border-zinc-700 gap-1.5"
-                      onClick={() => onPrintCard(employee)}
-                      data-testid="button-hero-print-id-card"
+                      size="sm"
+                      className="h-9 shrink-0"
+                      disabled={nameMutation.isPending || nameValue.trim().length === 0}
+                      onClick={() => nameMutation.mutate(nameValue.trim())}
+                      data-testid="button-save-name"
                     >
-                      <Printer className="h-4 w-4" />
-                      <span className="hidden sm:inline">{t("dialog.footer.printIdCard")}</span>
+                      {nameMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("dialog.actions.save")}
                     </Button>
-                  )}
-                </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 shrink-0"
+                      onClick={() => { setEditName(false); setNameValue(""); }}
+                      data-testid="button-cancel-name"
+                    >
+                      {t("dialog.actions.cancel")}
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground tracking-tight truncate leading-tight">
+                        <bdi>{employee.fullNameEn ?? t("dialog.unknownEmployee")}</bdi>
+                      </h1>
+                      <Badge variant="outline" className={`text-[11px] font-mono ${st.className}`}>{st.label}</Badge>
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground transition-colors p-1 -m-1"
+                        onClick={() => { setNameValue(employee.fullNameEn ?? ""); setEditName(true); }}
+                        title={t("dialog.name.edit")}
+                        aria-label={t("dialog.name.edit")}
+                        data-testid="button-edit-name"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                      <span className="font-mono" dir="ltr" title={t("dialog.empNumberLocked")} data-testid="text-hero-empnum">
+                        #{employee.employeeNumber}
+                      </span>
+                      {employee.positionTitle && (
+                        <>
+                          <span className="text-muted-foreground/50">·</span>
+                          <span className="truncate" data-testid="text-hero-position">
+                            <bdi>{employee.positionTitle}</bdi>
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
-          </Card>
 
-          {/* Task #284 — Polished page-level tabs. Wider buttons, larger
-              touch targets, accent underline on the active tab; keeps
-              the same `tab` state so URL ?tab= sync still works. */}
-          <div className="flex gap-1 border-b border-zinc-800">
+            {/* Primary actions — surfaced from the old footer so the
+                most-used action (Print ID Card) is reachable without
+                scrolling past every section first. */}
+            <div className="flex items-center gap-2 shrink-0">
+              {employee.isActive && onPrintCard && (
+                <Button
+                  variant="outline"
+                  className="gap-1.5 h-9"
+                  onClick={() => onPrintCard(employee)}
+                  data-testid="button-hero-print-id-card"
+                >
+                  <Printer className="h-4 w-4" />
+                  <span className="hidden sm:inline">{t("dialog.footer.printIdCard")}</span>
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Task #284 — Page-level tabs. Underline-accent style using
+              theme tokens (border-border / text-foreground / primary)
+              instead of zinc blacks so the strip blends with the rest
+              of the app. Same `tab` state → URL ?tab= sync still works. */}
+          <div className="flex gap-1 border-b border-border -mx-1 px-1">
             <button
               onClick={() => setTab("details")}
               className={`relative px-4 py-3 text-sm font-semibold transition-colors flex items-center gap-2 ${
                 tab === "details"
-                  ? "text-white after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-[hsl(155,45%,45%)]"
-                  : "text-zinc-500 hover:text-zinc-200"
+                  ? "text-foreground after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-primary"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
               data-testid="tab-employee-details"
             >
@@ -1031,8 +1030,8 @@ export function EmployeeDetailContent({
               onClick={() => setTab("history")}
               className={`relative px-4 py-3 text-sm font-semibold transition-colors flex items-center gap-2 ${
                 tab === "history"
-                  ? "text-white after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-[hsl(155,45%,45%)]"
-                  : "text-zinc-500 hover:text-zinc-200"
+                  ? "text-foreground after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-primary"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
               data-testid="tab-employee-history"
             >
@@ -1042,8 +1041,8 @@ export function EmployeeDetailContent({
               onClick={() => setTab("schedule")}
               className={`relative px-4 py-3 text-sm font-semibold transition-colors flex items-center gap-2 ${
                 tab === "schedule"
-                  ? "text-white after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-[hsl(155,45%,45%)]"
-                  : "text-zinc-500 hover:text-zinc-200"
+                  ? "text-foreground after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-primary"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
               data-testid="tab-employee-schedule"
             >
@@ -1057,7 +1056,7 @@ export function EmployeeDetailContent({
                   fields (employee#, IDs, contact, position/event/manager,
                   start date) in a 3-column grid so the page reads like a
                   real profile rather than a stack of separated rows. */}
-              <Card className="border-zinc-800 bg-zinc-900/40" data-testid="card-identity">
+              <Card className="border-border" data-testid="card-identity">
               <CardContent className="p-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
                 <InfoRow icon={<Hash className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.empNumber")} value={employee.employeeNumber} mono />
@@ -1068,7 +1067,7 @@ export function EmployeeDetailContent({
                     sibling) is now the single source of truth. */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-500 text-xs flex items-center gap-1"><Building2 className="h-3 w-3" /> {t("dialog.infoLabels.position")}</span>
+                    <span className="text-muted-foreground text-xs flex items-center gap-1"><Building2 className="h-3 w-3" /> {t("dialog.infoLabels.position")}</span>
                     {employee.isActive && !editPosition && (
                       <Button variant="ghost" size="sm" className="h-5 text-[11px] text-primary px-1" onClick={() => { setEditPosition(true); setPositionValue(employee.positionId ?? ""); }}>
                         {employee.positionId ? t("dialog.actions.change") : t("dialog.actions.assign")}
@@ -1078,37 +1077,37 @@ export function EmployeeDetailContent({
                   {editPosition ? (
                     <div className="flex gap-2">
                       <Select value={positionValue} onValueChange={setPositionValue}>
-                        <SelectTrigger data-testid="select-employee-position" className="bg-zinc-900 border-zinc-700 text-white h-8 text-sm flex-1">
+                        <SelectTrigger data-testid="select-employee-position" className=" h-8 text-sm flex-1">
                           <SelectValue placeholder={t("dialog.position.selectPlaceholder")} />
                         </SelectTrigger>
-                        <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
-                          <SelectItem value="__none__" className="text-zinc-400 focus:bg-zinc-800 italic">{t("dialog.position.notAssigned")}</SelectItem>
+                        <SelectContent className="">
+                          <SelectItem value="__none__" className="text-muted-foreground italic">{t("dialog.position.notAssigned")}</SelectItem>
                           {positionsList.filter(p => p.isActive).map(pos => (
-                            <SelectItem key={pos.id} value={pos.id} className="text-white focus:bg-zinc-800">{pos.title}</SelectItem>
+                            <SelectItem key={pos.id} value={pos.id} className="text-foreground">{pos.title}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      <Button size="sm" className="h-8 bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ positionId: positionValue === "__none__" ? null : positionValue }, { onSuccess: () => setEditPosition(false) })}>
+                      <Button size="sm" className="h-8 bg-primary hover:bg-primary/90 text-primary-foreground" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ positionId: positionValue === "__none__" ? null : positionValue }, { onSuccess: () => setEditPosition(false) })}>
                         {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("dialog.actions.save")}
                       </Button>
-                      <Button size="sm" variant="outline" className="h-8 border-zinc-700" onClick={() => setEditPosition(false)}>{t("dialog.actions.cancel")}</Button>
+                      <Button size="sm" variant="outline" className="h-8 border-border" onClick={() => setEditPosition(false)}>{t("dialog.actions.cancel")}</Button>
                     </div>
                   ) : (
-                    <p className="text-white text-sm" data-testid="text-employee-position">
+                    <p className="text-foreground text-sm" data-testid="text-employee-position">
                       {employee.positionTitle ? (
                         <>
                           <bdi>{employee.positionTitle}</bdi>
                           {employee.positionIsActive === false && <span className="text-amber-400 text-xs ms-1">{t("columns.inactiveSuffix")}</span>}
                         </>
                       ) : (
-                        <span className="text-zinc-500 text-xs italic">{t("dialog.position.notAssigned")}</span>
+                        <span className="text-muted-foreground text-xs italic">{t("dialog.position.notAssigned")}</span>
                       )}
                     </p>
                   )}
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-500 text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> {t("dialog.infoLabels.event")}</span>
+                    <span className="text-muted-foreground text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> {t("dialog.infoLabels.event")}</span>
                     {employee.isActive && !editEvent && (
                       <Button variant="ghost" size="sm" className="h-5 text-[11px] text-primary px-1" onClick={() => { setEditEvent(true); setEventValue(employee.eventId ?? ""); }}>
                         {employee.eventId ? t("dialog.actions.change") : t("dialog.actions.assign")}
@@ -1118,22 +1117,22 @@ export function EmployeeDetailContent({
                   {editEvent ? (
                     <div className="flex gap-2">
                       <Select value={eventValue} onValueChange={setEventValue}>
-                        <SelectTrigger data-testid="select-employee-event" className="bg-zinc-900 border-zinc-700 text-white h-8 text-sm flex-1">
+                        <SelectTrigger data-testid="select-employee-event" className=" h-8 text-sm flex-1">
                           <SelectValue placeholder={t("dialog.event.selectPlaceholder")} />
                         </SelectTrigger>
-                        <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
+                        <SelectContent className="">
                           {eventsList.map(ev => (
-                            <SelectItem key={ev.id} value={ev.id} className="text-white focus:bg-zinc-800"><bdi>{ev.name}</bdi></SelectItem>
+                            <SelectItem key={ev.id} value={ev.id} className="text-foreground"><bdi>{ev.name}</bdi></SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      <Button size="sm" className="h-8 bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white" disabled={updateMutation.isPending || !eventValue} onClick={() => updateMutation.mutate({ eventId: eventValue }, { onSuccess: () => setEditEvent(false) })}>
+                      <Button size="sm" className="h-8 bg-primary hover:bg-primary/90 text-primary-foreground" disabled={updateMutation.isPending || !eventValue} onClick={() => updateMutation.mutate({ eventId: eventValue }, { onSuccess: () => setEditEvent(false) })}>
                         {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("dialog.actions.save")}
                       </Button>
-                      <Button size="sm" variant="outline" className="h-8 border-zinc-700" onClick={() => setEditEvent(false)}>{t("dialog.actions.cancel")}</Button>
+                      <Button size="sm" variant="outline" className="h-8 border-border" onClick={() => setEditEvent(false)}>{t("dialog.actions.cancel")}</Button>
                     </div>
                   ) : (
-                    <p className="text-white text-sm" data-testid="text-employee-event">
+                    <p className="text-foreground text-sm" data-testid="text-employee-event">
                       {employee.eventName ? <bdi>{employee.eventName}</bdi> : <span className="text-amber-400 text-xs italic">{t("dialog.event.noneWarning")}</span>}
                     </p>
                   )}
@@ -1144,7 +1143,7 @@ export function EmployeeDetailContent({
                     null payload before sending to PATCH /api/workforce/:id. */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-500 text-xs flex items-center gap-1"><UserCog className="h-3 w-3" /> {t("dialog.reportsTo.label")}</span>
+                    <span className="text-muted-foreground text-xs flex items-center gap-1"><UserCog className="h-3 w-3" /> {t("dialog.reportsTo.label")}</span>
                     {employee.isActive && !editManager && (
                       <Button variant="ghost" size="sm" className="h-5 text-[11px] text-primary px-1" onClick={() => { setEditManager(true); setManagerValue(employee.managerId ?? "__none__"); }} data-testid="button-edit-reports-to">
                         {employee.managerId ? t("dialog.actions.change") : t("dialog.actions.assign")}
@@ -1154,33 +1153,33 @@ export function EmployeeDetailContent({
                   {editManager ? (
                     <div className="flex gap-2">
                       <Select value={managerValue} onValueChange={setManagerValue}>
-                        <SelectTrigger data-testid="select-employee-manager" className="bg-zinc-900 border-zinc-700 text-white h-8 text-sm flex-1">
+                        <SelectTrigger data-testid="select-employee-manager" className=" h-8 text-sm flex-1">
                           <SelectValue placeholder={t("dialog.reportsTo.selectPlaceholder")} />
                         </SelectTrigger>
-                        <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
-                          <SelectItem value="__none__" className="text-zinc-400 focus:bg-zinc-800 italic">{t("dialog.reportsTo.notAssigned")}</SelectItem>
+                        <SelectContent className="">
+                          <SelectItem value="__none__" className="text-muted-foreground italic">{t("dialog.reportsTo.notAssigned")}</SelectItem>
                           {managersList.length === 0 ? (
-                            <div className="px-2 py-1.5 text-xs text-zinc-500 italic">{t("dialog.reportsTo.noManagers")}</div>
+                            <div className="px-2 py-1.5 text-xs text-muted-foreground italic">{t("dialog.reportsTo.noManagers")}</div>
                           ) : (
                             managersList.map(m => (
-                              <SelectItem key={m.id} value={m.id} className="text-white focus:bg-zinc-800">
+                              <SelectItem key={m.id} value={m.id} className="text-foreground">
                                 <bdi>{i18n.language?.startsWith("ar") ? (m.fullNameAr || m.fullNameEn) : m.fullNameEn}</bdi>
                               </SelectItem>
                             ))
                           )}
                         </SelectContent>
                       </Select>
-                      <Button size="sm" className="h-8 bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ managerId: managerValue === "__none__" ? null : managerValue }, { onSuccess: () => setEditManager(false) })} data-testid="button-save-reports-to">
+                      <Button size="sm" className="h-8 bg-primary hover:bg-primary/90 text-primary-foreground" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ managerId: managerValue === "__none__" ? null : managerValue }, { onSuccess: () => setEditManager(false) })} data-testid="button-save-reports-to">
                         {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("dialog.actions.save")}
                       </Button>
-                      <Button size="sm" variant="outline" className="h-8 border-zinc-700" onClick={() => setEditManager(false)}>{t("dialog.actions.cancel")}</Button>
+                      <Button size="sm" variant="outline" className="h-8 border-border" onClick={() => setEditManager(false)}>{t("dialog.actions.cancel")}</Button>
                     </div>
                   ) : (
-                    <p className="text-white text-sm" data-testid="text-employee-manager">
+                    <p className="text-foreground text-sm" data-testid="text-employee-manager">
                       {employee.managerId ? (
                         <bdi>{i18n.language?.startsWith("ar") ? (employee.managerNameAr || employee.managerNameEn || employee.managerId) : (employee.managerNameEn || employee.managerNameAr || employee.managerId)}</bdi>
                       ) : (
-                        <span className="text-zinc-500 text-xs italic">{t("dialog.reportsTo.notAssigned")}</span>
+                        <span className="text-muted-foreground text-xs italic">{t("dialog.reportsTo.notAssigned")}</span>
                       )}
                     </p>
                   )}
@@ -1198,11 +1197,11 @@ export function EmployeeDetailContent({
 
               {/* Task #284 — Row: Salary | Notes (2-col on lg+) */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-              <Card className="border-zinc-800 bg-zinc-900/40" data-testid="card-salary">
+              <Card className="border-border" data-testid="card-salary">
               <CardContent className="p-5">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wider flex items-center gap-1.5">
                     <DollarSign className="h-3.5 w-3.5" /> {t("dialog.salary.label")}
                   </Label>
                   {employee.isActive && !editSalary && (
@@ -1218,33 +1217,33 @@ export function EmployeeDetailContent({
                       type="number"
                       value={salaryValue}
                       onChange={e => setSalaryValue(e.target.value)}
-                      className="bg-zinc-900 border-zinc-700 text-white flex-1"
+                      className=" flex-1"
                       placeholder={t("dialog.salary.placeholder")}
                       dir="ltr"
                     />
                     <Button
                       size="sm"
-                      className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground"
                       disabled={updateMutation.isPending}
                       onClick={() => updateMutation.mutate({ salary: salaryValue || undefined })}
                     >
                       {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("dialog.actions.save")}
                     </Button>
-                    <Button size="sm" variant="outline" className="border-zinc-700" onClick={() => setEditSalary(false)}>{t("dialog.actions.cancel")}</Button>
+                    <Button size="sm" variant="outline" className="border-border" onClick={() => setEditSalary(false)}>{t("dialog.actions.cancel")}</Button>
                   </div>
                 ) : (
-                  <p className="text-white font-medium text-lg" data-testid="text-employee-salary">
+                  <p className="text-foreground font-medium text-lg" data-testid="text-employee-salary">
                     {employee.salary ? t("dialog.salary.amount", { n: formatNumber(Number(employee.salary)) }) : t("dialog.salary.notSet")}
                   </p>
                 )}
               </div>
               </CardContent>
               </Card>
-              <Card className="border-zinc-800 bg-zinc-900/40" data-testid="card-notes">
+              <Card className="border-border" data-testid="card-notes">
               <CardContent className="p-5">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("dialog.notes.label")}</Label>
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wider">{t("dialog.notes.label")}</Label>
                   {employee.isActive && !editNotes && (
                     <Button variant="ghost" size="sm" className="h-6 text-xs text-primary" onClick={() => { setEditNotes(true); setNotesValue(employee.notes ?? ""); }}>
                       {t("dialog.actions.edit")}
@@ -1257,14 +1256,14 @@ export function EmployeeDetailContent({
                       data-testid="textarea-edit-notes"
                       value={notesValue}
                       onChange={e => setNotesValue(e.target.value)}
-                      className="bg-zinc-900 border-zinc-700 text-white resize-none"
+                      className=" resize-none"
                       rows={3}
                     />
                     <div className="flex gap-2 justify-end">
-                      <Button size="sm" variant="outline" className="border-zinc-700" onClick={() => setEditNotes(false)}>{t("dialog.actions.cancel")}</Button>
+                      <Button size="sm" variant="outline" className="border-border" onClick={() => setEditNotes(false)}>{t("dialog.actions.cancel")}</Button>
                       <Button
                         size="sm"
-                        className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground"
                         disabled={updateMutation.isPending}
                         onClick={() => updateMutation.mutate({ notes: notesValue || undefined })}
                       >
@@ -1273,7 +1272,7 @@ export function EmployeeDetailContent({
                     </div>
                   </div>
                 ) : (
-                  <p className="text-zinc-300 text-sm">{employee.notes || t("dialog.notes.empty")}</p>
+                  <p className="text-foreground/80 text-sm">{employee.notes || t("dialog.notes.empty")}</p>
                 )}
               </div>
               </CardContent>
@@ -1282,15 +1281,15 @@ export function EmployeeDetailContent({
 
               {/* Task #284 — Row: Personal | Education (2-col on lg+) */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-              <Card className="border-zinc-800 bg-zinc-900/40" data-testid="card-personal">
+              <Card className="border-border" data-testid="card-personal">
               <CardContent className="p-5">
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wider flex items-center gap-1.5">
                     <User className="h-3.5 w-3.5" /> {t("dialog.personal.title")}
                   </Label>
                   {!editPersonal ? (
-                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500 hover:text-zinc-300" data-testid="button-edit-personal"
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground" data-testid="button-edit-personal"
                       onClick={() => {
                         setPersonalForm({
                           email: employee.email || "",
@@ -1308,8 +1307,8 @@ export function EmployeeDetailContent({
                     ><Pencil className="h-3 w-3 me-1" /> {t("dialog.actions.edit")}</Button>
                   ) : (
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500" onClick={() => setEditPersonal(false)} data-testid="button-cancel-personal"><X className="h-3 w-3" /></Button>
-                      <Button size="sm" className="h-6 px-2 text-xs bg-emerald-700 hover:bg-emerald-600" data-testid="button-save-personal"
+                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => setEditPersonal(false)} data-testid="button-cancel-personal"><X className="h-3 w-3" /></Button>
+                      <Button size="sm" className="h-6 px-2 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" data-testid="button-save-personal"
                         disabled={profileMutation.isPending}
                         onClick={() => profileMutation.mutate(personalForm)}
                       ><Save className="h-3 w-3 me-1" /> {t("dialog.actions.save")}</Button>
@@ -1318,11 +1317,11 @@ export function EmployeeDetailContent({
                 </div>
                 {editPersonal ? (
                   <div className="grid grid-cols-2 gap-3">
-                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.email")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.email} onChange={e => setPersonalForm(f => ({ ...f, email: e.target.value }))} data-testid="input-personal-email" dir="ltr" /></div>
+                    <div><label className="text-muted-foreground text-xs">{t("dialog.infoLabels.email")}</label><Input className="mt-1 h-8 text-sm " value={personalForm.email} onChange={e => setPersonalForm(f => ({ ...f, email: e.target.value }))} data-testid="input-personal-email" dir="ltr" /></div>
                     <div>
-                      <label className="text-zinc-500 text-xs">{t("dialog.infoLabels.phone")}</label>
+                      <label className="text-muted-foreground text-xs">{t("dialog.infoLabels.phone")}</label>
                       <Input
-                        className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700"
+                        className="mt-1 h-8 text-sm "
                         value={personalForm.phone}
                         onChange={e => setPersonalForm(f => ({ ...f, phone: sanitizeSaMobileInput(e.target.value) }))}
                         onBlur={e => setPersonalForm(f => ({ ...f, phone: normalizeSaMobileOnBlur(e.target.value) }))}
@@ -1338,25 +1337,25 @@ export function EmployeeDetailContent({
                         </p>
                       )}
                     </div>
-                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.dateOfBirth")}</label><Input type="date" className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.dateOfBirth} onChange={e => setPersonalForm(f => ({ ...f, dateOfBirth: e.target.value }))} data-testid="input-personal-dob" /></div>
+                    <div><label className="text-muted-foreground text-xs">{t("dialog.infoLabels.dateOfBirth")}</label><Input type="date" className="mt-1 h-8 text-sm " value={personalForm.dateOfBirth} onChange={e => setPersonalForm(f => ({ ...f, dateOfBirth: e.target.value }))} data-testid="input-personal-dob" /></div>
                     <div>
-                      <label className="text-zinc-500 text-xs">{t("dialog.infoLabels.gender")}</label>
+                      <label className="text-muted-foreground text-xs">{t("dialog.infoLabels.gender")}</label>
                       <Select value={personalForm.gender} onValueChange={v => setPersonalForm(f => ({ ...f, gender: v }))}>
-                        <SelectTrigger className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" data-testid="select-personal-gender"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="mt-1 h-8 text-sm " data-testid="select-personal-gender"><SelectValue /></SelectTrigger>
                         <SelectContent><SelectItem value="male">{t("dialog.gender.male")}</SelectItem><SelectItem value="female">{t("dialog.gender.female")}</SelectItem></SelectContent>
                       </Select>
                     </div>
-                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.nationality")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.nationalityText} onChange={e => setPersonalForm(f => ({ ...f, nationalityText: e.target.value }))} data-testid="input-personal-nationality" /></div>
+                    <div><label className="text-muted-foreground text-xs">{t("dialog.infoLabels.nationality")}</label><Input className="mt-1 h-8 text-sm " value={personalForm.nationalityText} onChange={e => setPersonalForm(f => ({ ...f, nationalityText: e.target.value }))} data-testid="input-personal-nationality" /></div>
                     <div>
-                      <label className="text-zinc-500 text-xs">{t("dialog.infoLabels.maritalStatus")}</label>
+                      <label className="text-muted-foreground text-xs">{t("dialog.infoLabels.maritalStatus")}</label>
                       <Select value={personalForm.maritalStatus} onValueChange={v => setPersonalForm(f => ({ ...f, maritalStatus: v }))}>
-                        <SelectTrigger className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" data-testid="select-personal-marital"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="mt-1 h-8 text-sm " data-testid="select-personal-marital"><SelectValue /></SelectTrigger>
                         <SelectContent><SelectItem value="single">{t("dialog.marital.single")}</SelectItem><SelectItem value="married">{t("dialog.marital.married")}</SelectItem><SelectItem value="divorced">{t("dialog.marital.divorced")}</SelectItem><SelectItem value="widowed">{t("dialog.marital.widowed")}</SelectItem></SelectContent>
                       </Select>
                     </div>
-                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.iqama")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700 font-mono" value={personalForm.iqamaNumber} onChange={e => setPersonalForm(f => ({ ...f, iqamaNumber: e.target.value }))} data-testid="input-personal-iqama" dir="ltr" /></div>
-                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.location")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.city} onChange={e => setPersonalForm(f => ({ ...f, city: e.target.value }))} data-testid="input-personal-city" /></div>
-                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.location")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={personalForm.region} onChange={e => setPersonalForm(f => ({ ...f, region: e.target.value }))} data-testid="input-personal-region" /></div>
+                    <div><label className="text-muted-foreground text-xs">{t("dialog.infoLabels.iqama")}</label><Input className="mt-1 h-8 text-sm  font-mono" value={personalForm.iqamaNumber} onChange={e => setPersonalForm(f => ({ ...f, iqamaNumber: e.target.value }))} data-testid="input-personal-iqama" dir="ltr" /></div>
+                    <div><label className="text-muted-foreground text-xs">{t("dialog.infoLabels.location")}</label><Input className="mt-1 h-8 text-sm " value={personalForm.city} onChange={e => setPersonalForm(f => ({ ...f, city: e.target.value }))} data-testid="input-personal-city" /></div>
+                    <div><label className="text-muted-foreground text-xs">{t("dialog.infoLabels.location")}</label><Input className="mt-1 h-8 text-sm " value={personalForm.region} onChange={e => setPersonalForm(f => ({ ...f, region: e.target.value }))} data-testid="input-personal-region" /></div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-4">
@@ -1373,15 +1372,15 @@ export function EmployeeDetailContent({
               </div>
               </CardContent>
               </Card>
-              <Card className="border-zinc-800 bg-zinc-900/40" data-testid="card-education">
+              <Card className="border-border" data-testid="card-education">
               <CardContent className="p-5">
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wider flex items-center gap-1.5">
                     <GraduationCap className="h-3.5 w-3.5" /> {t("dialog.education.title")}
                   </Label>
                   {!editEducation ? (
-                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500 hover:text-zinc-300" data-testid="button-edit-education"
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground" data-testid="button-edit-education"
                       onClick={() => {
                         setEducationForm({
                           educationLevel: employee.educationLevel || "",
@@ -1393,8 +1392,8 @@ export function EmployeeDetailContent({
                     ><Pencil className="h-3 w-3 me-1" /> {t("dialog.actions.edit")}</Button>
                   ) : (
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500" onClick={() => setEditEducation(false)} data-testid="button-cancel-education"><X className="h-3 w-3" /></Button>
-                      <Button size="sm" className="h-6 px-2 text-xs bg-emerald-700 hover:bg-emerald-600" data-testid="button-save-education"
+                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => setEditEducation(false)} data-testid="button-cancel-education"><X className="h-3 w-3" /></Button>
+                      <Button size="sm" className="h-6 px-2 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" data-testid="button-save-education"
                         disabled={profileMutation.isPending}
                         onClick={() => profileMutation.mutate(educationForm)}
                       ><Save className="h-3 w-3 me-1" /> {t("dialog.actions.save")}</Button>
@@ -1404,9 +1403,9 @@ export function EmployeeDetailContent({
                 {editEducation ? (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-zinc-500 text-xs">{t("dialog.education.level")}</label>
+                      <label className="text-muted-foreground text-xs">{t("dialog.education.level")}</label>
                       <Select value={educationForm.educationLevel} onValueChange={v => setEducationForm(f => ({ ...f, educationLevel: v }))}>
-                        <SelectTrigger className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" data-testid="select-education-level"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="mt-1 h-8 text-sm " data-testid="select-education-level"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="High School">{t("dialog.education.levels.High School")}</SelectItem>
                           <SelectItem value="Diploma">{t("dialog.education.levels.Diploma")}</SelectItem>
@@ -1417,8 +1416,8 @@ export function EmployeeDetailContent({
                         </SelectContent>
                       </Select>
                     </div>
-                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.university")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={educationForm.university} onChange={e => setEducationForm(f => ({ ...f, university: e.target.value }))} data-testid="input-education-university" /></div>
-                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.major")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={educationForm.major} onChange={e => setEducationForm(f => ({ ...f, major: e.target.value }))} data-testid="input-education-major" /></div>
+                    <div><label className="text-muted-foreground text-xs">{t("dialog.infoLabels.university")}</label><Input className="mt-1 h-8 text-sm " value={educationForm.university} onChange={e => setEducationForm(f => ({ ...f, university: e.target.value }))} data-testid="input-education-university" /></div>
+                    <div><label className="text-muted-foreground text-xs">{t("dialog.infoLabels.major")}</label><Input className="mt-1 h-8 text-sm " value={educationForm.major} onChange={e => setEducationForm(f => ({ ...f, major: e.target.value }))} data-testid="input-education-major" /></div>
                   </div>
                 ) : (
                   <>
@@ -1429,26 +1428,26 @@ export function EmployeeDetailContent({
                     </div>
                     {employee.skills && employee.skills.length > 0 && (
                       <div className="mt-3">
-                        <span className="text-zinc-500 text-xs">{t("dialog.infoLabels.skills")}</span>
+                        <span className="text-muted-foreground text-xs">{t("dialog.infoLabels.skills")}</span>
                         <div className="flex flex-wrap gap-1.5 mt-1">
                           {employee.skills.map((s: string, i: number) => (
-                            <span key={i} className="bg-zinc-800 text-zinc-300 text-xs px-2 py-0.5 rounded">{s}</span>
+                            <span key={i} className="bg-secondary text-secondary-foreground text-xs px-2 py-0.5 rounded-sm">{s}</span>
                           ))}
                         </div>
                       </div>
                     )}
                     {employee.languages && employee.languages.length > 0 && (
                       <div className="mt-3">
-                        <span className="text-zinc-500 text-xs">{t("dialog.infoLabels.languages")}</span>
+                        <span className="text-muted-foreground text-xs">{t("dialog.infoLabels.languages")}</span>
                         <div className="flex flex-wrap gap-1.5 mt-1">
                           {employee.languages.map((l: string, i: number) => (
-                            <span key={i} className="bg-zinc-800 text-zinc-300 text-xs px-2 py-0.5 rounded">{l}</span>
+                            <span key={i} className="bg-secondary text-secondary-foreground text-xs px-2 py-0.5 rounded-sm">{l}</span>
                           ))}
                         </div>
                       </div>
                     )}
                     {!employee.educationLevel && !employee.skills?.length && !employee.languages?.length && (
-                      <p className="text-zinc-500 text-sm">{t("dialog.education.empty")}</p>
+                      <p className="text-muted-foreground text-sm">{t("dialog.education.empty")}</p>
                     )}
                   </>
                 )}
@@ -1459,15 +1458,15 @@ export function EmployeeDetailContent({
 
               {/* Task #284 — Row: Financial | Payment Method (2-col on lg+) */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-              <Card className="border-zinc-800 bg-zinc-900/40" data-testid="card-financial">
+              <Card className="border-border" data-testid="card-financial">
               <CardContent className="p-5">
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wider flex items-center gap-1.5">
                     <CreditCard className="h-3.5 w-3.5" /> {t("dialog.financial.title")}
                   </Label>
                   {!editFinancial ? (
-                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500 hover:text-zinc-300" data-testid="button-edit-financial"
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground" data-testid="button-edit-financial"
                       onClick={() => {
                         setFinancialForm({
                           ibanNumber: employee.iban || "",
@@ -1481,8 +1480,8 @@ export function EmployeeDetailContent({
                     ><Pencil className="h-3 w-3 me-1" /> {t("dialog.actions.edit")}</Button>
                   ) : (
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500" onClick={() => setEditFinancial(false)} data-testid="button-cancel-financial"><X className="h-3 w-3" /></Button>
-                      <Button size="sm" className="h-6 px-2 text-xs bg-emerald-700 hover:bg-emerald-600" data-testid="button-save-financial"
+                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => setEditFinancial(false)} data-testid="button-cancel-financial"><X className="h-3 w-3" /></Button>
+                      <Button size="sm" className="h-6 px-2 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" data-testid="button-save-financial"
                         disabled={profileMutation.isPending}
                         onClick={() => {
                           const rawIban = (financialForm.ibanNumber ?? "").replace(/\s+/g, "");
@@ -1537,8 +1536,8 @@ export function EmployeeDetailContent({
                     return (
                       <div className="space-y-3">
                         <div className="space-y-1">
-                          <label className="text-zinc-500 text-xs">{t("dialog.financial.iban")}</label>
-                          <Input className="h-8 text-sm bg-zinc-900 border-zinc-700 font-mono uppercase" dir="ltr" value={financialForm.ibanNumber} onChange={e => {
+                          <label className="text-muted-foreground text-xs">{t("dialog.financial.iban")}</label>
+                          <Input className="h-8 text-sm  font-mono uppercase" dir="ltr" value={financialForm.ibanNumber} onChange={e => {
                             const cleaned = e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 24);
                             const grouped = cleaned.replace(/(.{4})/g, "$1 ").trim();
                             const bank = resolveSaudiBank(cleaned);
@@ -1549,26 +1548,26 @@ export function EmployeeDetailContent({
                               ibanBankCode: bank?.ibanBankCode ?? "",
                             }));
                           }} maxLength={29} placeholder={t("dialog.financial.ibanPlaceholder")} data-testid="input-financial-iban" />
-                          <p className="text-[10px] text-zinc-600">{t("dialog.financial.ibanHint")}</p>
+                          <p className="text-[10px] text-muted-foreground/60">{t("dialog.financial.ibanHint")}</p>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <label className="text-zinc-500 text-xs">{t("dialog.financial.bankName")}</label>
-                            <Input className="h-8 text-sm bg-zinc-900/50 border-zinc-700 text-zinc-400 cursor-not-allowed text-left" dir="ltr" value={detected?.ibanBankName ?? financialForm.ibanBankName ?? ""} readOnly placeholder={t("dialog.financial.bankNamePlaceholder")} data-testid="input-financial-bankName" />
+                            <label className="text-muted-foreground text-xs">{t("dialog.financial.bankName")}</label>
+                            <Input className="h-8 text-sm bg-muted text-muted-foreground cursor-not-allowed text-left" dir="ltr" value={detected?.ibanBankName ?? financialForm.ibanBankName ?? ""} readOnly placeholder={t("dialog.financial.bankNamePlaceholder")} data-testid="input-financial-bankName" />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-zinc-500 text-xs">{t("dialog.financial.bankCode")}</label>
-                            <Input className="h-8 text-sm bg-zinc-900/50 border-zinc-700 font-mono text-zinc-400 cursor-not-allowed text-left" dir="ltr" value={detected?.ibanBankCode ?? financialForm.ibanBankCode ?? ""} readOnly placeholder={t("dialog.financial.bankCodePlaceholder")} data-testid="input-financial-bankCode" />
+                            <label className="text-muted-foreground text-xs">{t("dialog.financial.bankCode")}</label>
+                            <Input className="h-8 text-sm bg-muted font-mono text-muted-foreground cursor-not-allowed text-left" dir="ltr" value={detected?.ibanBankCode ?? financialForm.ibanBankCode ?? ""} readOnly placeholder={t("dialog.financial.bankCodePlaceholder")} data-testid="input-financial-bankCode" />
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <label className="text-zinc-500 text-xs">{t("dialog.financial.accountFirst")}</label>
-                            <Input className="h-8 text-sm bg-zinc-900 border-zinc-700" value={financialForm.ibanAccountFirstName} onChange={e => setFinancialForm(f => ({ ...f, ibanAccountFirstName: e.target.value }))} data-testid="input-financial-firstName" />
+                            <label className="text-muted-foreground text-xs">{t("dialog.financial.accountFirst")}</label>
+                            <Input className="h-8 text-sm " value={financialForm.ibanAccountFirstName} onChange={e => setFinancialForm(f => ({ ...f, ibanAccountFirstName: e.target.value }))} data-testid="input-financial-firstName" />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-zinc-500 text-xs">{t("dialog.financial.accountLast")}</label>
-                            <Input className="h-8 text-sm bg-zinc-900 border-zinc-700" value={financialForm.ibanAccountLastName} onChange={e => setFinancialForm(f => ({ ...f, ibanAccountLastName: e.target.value }))} data-testid="input-financial-lastName" />
+                            <label className="text-muted-foreground text-xs">{t("dialog.financial.accountLast")}</label>
+                            <Input className="h-8 text-sm " value={financialForm.ibanAccountLastName} onChange={e => setFinancialForm(f => ({ ...f, ibanAccountLastName: e.target.value }))} data-testid="input-financial-lastName" />
                           </div>
                         </div>
                       </div>
@@ -1588,16 +1587,16 @@ export function EmployeeDetailContent({
                     {employee.ibanAccountFirstName ? (
                       <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.accountHolder")} value={<bdi>{`${employee.ibanAccountFirstName} ${employee.ibanAccountLastName ?? ""}`.trim()}</bdi>} ltr />
                     ) : null}
-                    {!employee.iban && !employee.ibanBankName && <p className="text-zinc-500 text-sm">{t("dialog.financial.empty")}</p>}
+                    {!employee.iban && !employee.ibanBankName && <p className="text-muted-foreground text-sm">{t("dialog.financial.empty")}</p>}
                   </div>
                 )}
               </div>
               </CardContent>
               </Card>
-              <Card className="border-zinc-800 bg-zinc-900/40" data-testid="card-payment">
+              <Card className="border-border" data-testid="card-payment">
               <CardContent className="p-5">
               <div>
-                <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-3">
+                <Label className="text-muted-foreground text-xs uppercase tracking-wider flex items-center gap-1.5 mb-3">
                   <Banknote className="h-3.5 w-3.5" /> {t("dialog.payment.title")}
                 </Label>
                 <PaymentMethodToggle employee={employee} onEmployeeRefreshed={onEmployeeRefreshed} />
@@ -1607,15 +1606,15 @@ export function EmployeeDetailContent({
               </div>
 
               {/* Task #284 — Emergency contact (full width) */}
-              <Card className="border-zinc-800 bg-zinc-900/40" data-testid="card-emergency">
+              <Card className="border-border" data-testid="card-emergency">
               <CardContent className="p-5">
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <Label className="text-zinc-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wider flex items-center gap-1.5">
                     <ShieldAlert className="h-3.5 w-3.5" /> {t("dialog.emergency.title")}
                   </Label>
                   {!editEmergency ? (
-                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500 hover:text-zinc-300" data-testid="button-edit-emergency"
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground" data-testid="button-edit-emergency"
                       onClick={() => {
                         setEmergencyForm({
                           emergencyContactName: employee.emergencyContactName || "",
@@ -1626,8 +1625,8 @@ export function EmployeeDetailContent({
                     ><Pencil className="h-3 w-3 me-1" /> {t("dialog.actions.edit")}</Button>
                   ) : (
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-500" onClick={() => setEditEmergency(false)} data-testid="button-cancel-emergency"><X className="h-3 w-3" /></Button>
-                      <Button size="sm" className="h-6 px-2 text-xs bg-emerald-700 hover:bg-emerald-600" data-testid="button-save-emergency"
+                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => setEditEmergency(false)} data-testid="button-cancel-emergency"><X className="h-3 w-3" /></Button>
+                      <Button size="sm" className="h-6 px-2 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" data-testid="button-save-emergency"
                         disabled={profileMutation.isPending}
                         onClick={() => profileMutation.mutate(emergencyForm)}
                       ><Save className="h-3 w-3 me-1" /> {t("dialog.actions.save")}</Button>
@@ -1636,14 +1635,14 @@ export function EmployeeDetailContent({
                 </div>
                 {editEmergency ? (
                   <div className="grid grid-cols-2 gap-3">
-                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.contactName")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={emergencyForm.emergencyContactName} onChange={e => setEmergencyForm(f => ({ ...f, emergencyContactName: e.target.value }))} data-testid="input-emergency-name" /></div>
-                    <div><label className="text-zinc-500 text-xs">{t("dialog.infoLabels.contactPhone")}</label><Input className="mt-1 h-8 text-sm bg-zinc-900 border-zinc-700" value={emergencyForm.emergencyContactPhone} onChange={e => setEmergencyForm(f => ({ ...f, emergencyContactPhone: e.target.value }))} data-testid="input-emergency-phone" dir="ltr" /></div>
+                    <div><label className="text-muted-foreground text-xs">{t("dialog.infoLabels.contactName")}</label><Input className="mt-1 h-8 text-sm " value={emergencyForm.emergencyContactName} onChange={e => setEmergencyForm(f => ({ ...f, emergencyContactName: e.target.value }))} data-testid="input-emergency-name" /></div>
+                    <div><label className="text-muted-foreground text-xs">{t("dialog.infoLabels.contactPhone")}</label><Input className="mt-1 h-8 text-sm " value={emergencyForm.emergencyContactPhone} onChange={e => setEmergencyForm(f => ({ ...f, emergencyContactPhone: e.target.value }))} data-testid="input-emergency-phone" dir="ltr" /></div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-4">
                     {employee.emergencyContactName ? <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.contactName")} value={<bdi>{employee.emergencyContactName}</bdi>} /> : null}
                     {employee.emergencyContactPhone ? <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={t("dialog.infoLabels.contactPhone")} value={<span dir="ltr">{employee.emergencyContactPhone}</span>} /> : null}
-                    {!employee.emergencyContactName && !employee.emergencyContactPhone && <p className="text-zinc-500 text-sm col-span-2">{t("dialog.emergency.empty")}</p>}
+                    {!employee.emergencyContactName && !employee.emergencyContactPhone && <p className="text-muted-foreground text-sm col-span-2">{t("dialog.emergency.empty")}</p>}
                   </div>
                 )}
               </div>
@@ -1701,16 +1700,16 @@ export function EmployeeDetailContent({
             <div className="mt-2">
               {historyLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-zinc-500" />
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : history.length === 0 ? (
-                <div className="text-center py-12 text-zinc-500">
+                <div className="text-center py-12 text-muted-foreground">
                   <History className="h-8 w-8 mx-auto mb-2 opacity-30" />
                   <p className="text-sm">{t("dialog.history.empty")}</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
                     {t("dialog.history.records", { n: formatNumber(history.length) })}
                   </p>
                   {history.map((h, idx) => {
@@ -1719,47 +1718,47 @@ export function EmployeeDetailContent({
                     <div
                       key={h.id}
                       className={`border rounded-lg p-4 space-y-2 ${
-                        h.isActive ? "border-emerald-800/50 bg-emerald-950/10" : "border-zinc-800 bg-zinc-900/30"
+                        h.isActive ? "border-emerald-800/50 bg-emerald-950/10" : "border-border bg-muted/20"
                       }`}
                       data-testid={`history-record-${idx}`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <code className="text-xs font-mono text-zinc-400" dir="ltr">{h.employeeNumber}</code>
+                          <code className="text-xs font-mono text-muted-foreground" dir="ltr">{h.employeeNumber}</code>
                           <Badge variant="outline" className={h.isActive ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[10px]" : "bg-red-500/10 text-red-400 border-red-500/30 text-[10px]"}>
                             {h.isActive ? t("status.active") : t("status.terminated")}
                           </Badge>
                         </div>
-                        {h.salary && <span className="text-sm text-zinc-300 font-medium">{t("dialog.salary.amount", { n: formatNumber(Number(h.salary)) })}</span>}
+                        {h.salary && <span className="text-sm text-foreground/80 font-medium">{t("dialog.salary.amount", { n: formatNumber(Number(h.salary)) })}</span>}
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div>
-                          <span className="text-zinc-500 text-xs">{t("dialog.history.event")}</span>
-                          <p className="text-zinc-200"><bdi>{h.eventName ?? "—"}</bdi></p>
+                          <span className="text-muted-foreground text-xs">{t("dialog.history.event")}</span>
+                          <p className="text-foreground"><bdi>{h.eventName ?? "—"}</bdi></p>
                         </div>
                         <div>
-                          <span className="text-zinc-500 text-xs">{t("dialog.history.jobTitle")}</span>
-                          <p className="text-zinc-200"><bdi>{h.jobTitle ?? "—"}</bdi></p>
+                          <span className="text-muted-foreground text-xs">{t("dialog.history.jobTitle")}</span>
+                          <p className="text-foreground"><bdi>{h.jobTitle ?? "—"}</bdi></p>
                         </div>
                         <div>
-                          <span className="text-zinc-500 text-xs">{t("dialog.history.start")}</span>
-                          <p className="text-zinc-200">{formatDate(h.startDate)}</p>
+                          <span className="text-muted-foreground text-xs">{t("dialog.history.start")}</span>
+                          <p className="text-foreground">{formatDate(h.startDate)}</p>
                         </div>
                         <div>
-                          <span className="text-zinc-500 text-xs">{t("dialog.history.end")}</span>
-                          <p className="text-zinc-200">{formatDate(h.endDate)}</p>
+                          <span className="text-muted-foreground text-xs">{t("dialog.history.end")}</span>
+                          <p className="text-foreground">{formatDate(h.endDate)}</p>
                         </div>
                       </div>
                       {linkedContract && (
                         <button
                           onClick={() => setViewingAdminContract(linkedContract)}
-                          className="inline-flex items-center gap-1.5 text-xs text-[hsl(155,45%,45%)] hover:text-[hsl(155,45%,55%)] transition-colors mt-1"
+                          className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors mt-1"
                           data-testid={`button-view-contract-history-${idx}`}
                         >
                           <FileText className="h-3.5 w-3.5" />
                           {t("dialog.history.viewContract")}
                           {linkedContract.signedAt && (
-                            <span className="text-zinc-500 ms-1">
+                            <span className="text-muted-foreground ms-1">
                               {t("dialog.history.signedSuffix", { date: formatDateI18n(linkedContract.signedAt, "en", { day: "numeric", month: "short", year: "numeric" }) })}
                             </span>
                           )}
@@ -1781,12 +1780,12 @@ export function EmployeeDetailContent({
           {tab === "schedule" && (
             <div className="space-y-4 mt-2">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{t("dialog.schedule.current")}</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">{t("dialog.schedule.current")}</p>
                 {employee.isActive && (
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 text-xs border-zinc-700"
+                    className="h-7 text-xs border-border"
                     onClick={() => setAssignScheduleOpen(true)}
                     data-testid="button-assign-schedule-employee"
                   >
@@ -1804,22 +1803,22 @@ export function EmployeeDetailContent({
                   formatDate={formatDate}
                 />
               ) : (
-                <div className="border border-zinc-800 rounded-lg p-4 text-center text-zinc-500 text-sm">
+                <div className="border border-border rounded-lg p-4 text-center text-muted-foreground text-sm">
                   {t("dialog.schedule.noneAssigned")}
                 </div>
               )}
 
               {assignmentHistory.length > 1 && (
                 <>
-                  <Separator className="bg-zinc-800" />
-                  <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{t("dialog.schedule.history")}</p>
+                  <Separator className="bg-secondary" />
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">{t("dialog.schedule.history")}</p>
                   <div className="space-y-2">
                     {assignmentHistory.filter(a => a.endDate != null || a.id !== activeAssignment?.id).map(a => (
-                      <div key={a.id} className="flex items-center justify-between text-xs border border-zinc-800 rounded p-3">
-                        <span className="text-zinc-300">
+                      <div key={a.id} className="flex items-center justify-between text-xs border border-border rounded p-3">
+                        <span className="text-foreground/80">
                           <bdi>{scheduleTemplates.find(tt => tt.id === a.templateId)?.name ?? a.templateId}</bdi>
                         </span>
-                        <span className="text-zinc-500" dir="ltr">
+                        <span className="text-muted-foreground" dir="ltr">
                           {formatDate(a.startDate)} – {a.endDate ? formatDate(a.endDate) : t("dialog.schedule.active")}
                         </span>
                       </div>
@@ -1831,21 +1830,21 @@ export function EmployeeDetailContent({
           )}
 
       <Dialog open={assignScheduleOpen} onOpenChange={setAssignScheduleOpen}>
-        <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-sm">
+        <DialogContent className=" max-w-sm">
           <DialogHeader>
             <DialogTitle>{activeAssignment ? t("assignDialog.titleReassign") : t("assignDialog.titleAssign")}</DialogTitle>
-            <DialogDescription className="text-zinc-400 text-sm">
+            <DialogDescription className="text-muted-foreground text-sm">
               {activeAssignment ? t("assignDialog.descReassign") : t("assignDialog.descAssign")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("assignDialog.template")}</Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">{t("assignDialog.template")}</Label>
               <Select value={scheduleTemplateId} onValueChange={setScheduleTemplateId}>
-                <SelectTrigger data-testid="select-schedule-template" className="bg-zinc-900 border-zinc-700 text-white">
+                <SelectTrigger data-testid="select-schedule-template" className="">
                   <SelectValue placeholder={t("assignDialog.selectTemplate")} />
                 </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-700">
+                <SelectContent className="">
                   {scheduleTemplates.map(tpl => (
                     <SelectItem key={tpl.id} value={tpl.id}><bdi>{tpl.name}</bdi></SelectItem>
                   ))}
@@ -1853,32 +1852,32 @@ export function EmployeeDetailContent({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("assignDialog.startDate")}</Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">{t("assignDialog.startDate")}</Label>
               <Input
                 data-testid="input-schedule-start-date"
                 type="date"
                 value={scheduleStartDate}
                 onChange={e => setScheduleStartDate(e.target.value)}
-                className="bg-zinc-900 border-zinc-700 text-white"
+                className=""
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">{t("assignDialog.endDate")} <span className="text-zinc-600 text-xs font-normal normal-case">{t("assignDialog.optional")}</span></Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">{t("assignDialog.endDate")} <span className="text-muted-foreground/60 text-xs font-normal normal-case">{t("assignDialog.optional")}</span></Label>
               <Input
                 data-testid="input-schedule-end-date"
                 type="date"
                 value={scheduleEndDate}
                 min={scheduleStartDate}
                 onChange={e => setScheduleEndDate(e.target.value)}
-                className="bg-zinc-900 border-zinc-700 text-white"
+                className=""
               />
             </div>
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <Button variant="outline" className="border-zinc-700" onClick={() => setAssignScheduleOpen(false)}>{t("assignDialog.cancel")}</Button>
+            <Button variant="outline" className="border-border" onClick={() => setAssignScheduleOpen(false)}>{t("assignDialog.cancel")}</Button>
             <Button
               data-testid="button-confirm-assign-schedule"
-              className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
               disabled={!scheduleTemplateId || assignScheduleMutation.isPending}
               onClick={() => assignScheduleMutation.mutate()}
             >
@@ -1890,13 +1889,13 @@ export function EmployeeDetailContent({
       </Dialog>
 
       <Dialog open={terminateOpen} onOpenChange={setTerminateOpen}>
-        <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-md">
+        <DialogContent className=" max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display text-lg flex items-center gap-2 text-red-400">
               <UserX className="h-5 w-5" />
               {t("terminate.title")}
             </DialogTitle>
-            <DialogDescription className="text-zinc-400 text-sm">
+            <DialogDescription className="text-muted-foreground text-sm">
               {t("terminate.description", { name: employee.fullNameEn ?? t("dialog.unknownEmployee"), number: employee.employeeNumber })}
             </DialogDescription>
           </DialogHeader>
@@ -1906,21 +1905,21 @@ export function EmployeeDetailContent({
               {t("terminate.warning")}
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-sm">{t("terminate.endDate")} <span className="text-red-400">*</span></Label>
+              <Label className="text-muted-foreground text-sm">{t("terminate.endDate")} <span className="text-red-400">*</span></Label>
               <DatePickerField
                 data-testid="input-terminate-enddate"
                 value={terminateForm.endDate}
                 onChange={v => setTerminateForm(f => ({ ...f, endDate: v }))}
-                className="bg-zinc-900 border-zinc-700 text-white"
+                className=""
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-sm">{t("terminate.category")} <span className="text-red-400">*</span></Label>
+              <Label className="text-muted-foreground text-sm">{t("terminate.category")} <span className="text-red-400">*</span></Label>
               <select
                 data-testid="select-terminate-category"
                 value={terminateForm.category}
                 onChange={e => setTerminateForm(f => ({ ...f, category: e.target.value }))}
-                className="w-full bg-zinc-900 border border-zinc-700 text-white rounded-md px-3 py-2 text-sm"
+                className="w-full bg-background border border-border text-foreground rounded-md px-3 py-2 text-sm"
               >
                 <option value="">{t("terminate.selectCategory")}</option>
                 <option value="end_of_season">{t("terminate.categories.end_of_season")}</option>
@@ -1932,18 +1931,18 @@ export function EmployeeDetailContent({
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-sm">{t("terminate.notes")}</Label>
+              <Label className="text-muted-foreground text-sm">{t("terminate.notes")}</Label>
               <Textarea
                 data-testid="textarea-terminate-reason"
                 value={terminateForm.reason}
                 onChange={e => setTerminateForm(f => ({ ...f, reason: e.target.value }))}
-                className="bg-zinc-900 border-zinc-700 text-white resize-none"
+                className=" resize-none"
                 rows={2}
                 placeholder={t("terminate.notesPlaceholder")}
               />
             </div>
             <div className="flex gap-2 justify-end pt-1">
-              <Button variant="outline" className="border-zinc-700 text-zinc-300" onClick={() => setTerminateOpen(false)}>{t("terminate.cancel")}</Button>
+              <Button variant="outline" className="border-border text-foreground/80" onClick={() => setTerminateOpen(false)}>{t("terminate.cancel")}</Button>
               <Button
                 data-testid="button-confirm-terminate"
                 disabled={!terminateForm.endDate || !terminateForm.category || terminateMutation.isPending}
@@ -1952,7 +1951,7 @@ export function EmployeeDetailContent({
                   terminationReason: terminateForm.reason || undefined,
                   terminationCategory: terminateForm.category || undefined,
                 })}
-                className="bg-red-600 hover:bg-red-700 text-white gap-2"
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground gap-2"
               >
                 {terminateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><UserX className="h-4 w-4" /> {t("terminate.submit")}</>}
               </Button>
@@ -1962,58 +1961,58 @@ export function EmployeeDetailContent({
       </Dialog>
 
       <Dialog open={reinstateOpen} onOpenChange={setReinstateOpen}>
-        <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-md">
+        <DialogContent className=" max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display text-lg flex items-center gap-2 text-emerald-400">
               <CheckCircle2 className="h-5 w-5" />
               {t("reinstate.title")}
             </DialogTitle>
-            <DialogDescription className="text-zinc-400 text-sm">
+            <DialogDescription className="text-muted-foreground text-sm">
               {t("reinstate.description", { name: employee.fullNameEn ?? t("dialog.unknownEmployee"), number: employee.employeeNumber })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-sm">{t("reinstate.startDate")} <span className="text-red-400">*</span></Label>
+              <Label className="text-muted-foreground text-sm">{t("reinstate.startDate")} <span className="text-red-400">*</span></Label>
               <DatePickerField
                 data-testid="input-reinstate-startdate"
                 value={reinstateForm.startDate}
                 onChange={v => setReinstateForm(f => ({ ...f, startDate: v }))}
-                className="bg-zinc-900 border-zinc-700 text-white"
+                className=""
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-sm">{t("reinstate.event")}</Label>
+              <Label className="text-muted-foreground text-sm">{t("reinstate.event")}</Label>
               <Select value={reinstateForm.eventId} onValueChange={v => setReinstateForm(f => ({ ...f, eventId: v }))}>
-                <SelectTrigger data-testid="select-reinstate-event" className="bg-zinc-900 border-zinc-700 text-white">
+                <SelectTrigger data-testid="select-reinstate-event" className="">
                   <SelectValue placeholder={t("reinstate.selectEvent")} />
                 </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
+                <SelectContent className="">
                   {eventsList.map(ev => (
-                    <SelectItem key={ev.id} value={ev.id} className="text-white focus:bg-zinc-800"><bdi>{ev.name}</bdi></SelectItem>
+                    <SelectItem key={ev.id} value={ev.id} className="text-foreground"><bdi>{ev.name}</bdi></SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             {employee.employmentType === "smp" && (
               <div className="space-y-1.5">
-                <Label className="text-zinc-400 text-sm">{t("reinstate.smpCompany")} <span className="text-red-400">*</span></Label>
+                <Label className="text-muted-foreground text-sm">{t("reinstate.smpCompany")} <span className="text-red-400">*</span></Label>
                 <select
                   data-testid="select-reinstate-smp-company"
                   value={reinstateForm.smpCompanyId}
                   onChange={e => setReinstateForm(f => ({ ...f, smpCompanyId: e.target.value }))}
-                  className="w-full h-10 bg-zinc-900 border border-zinc-700 rounded-md px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
+                  className="w-full h-10 bg-background border border-border rounded-md px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
                 >
-                  <option value="" className="bg-zinc-900 text-zinc-400">{t("reinstate.selectSmp")}</option>
+                  <option value="" className="bg-background text-muted-foreground">{t("reinstate.selectSmp")}</option>
                   {smpCompanies.map(c => (
-                    <option key={c.id} value={c.id} className="bg-zinc-900 text-white">{c.name}</option>
+                    <option key={c.id} value={c.id} className="bg-background text-foreground">{c.name}</option>
                   ))}
                 </select>
                 <p className="text-[11px] text-red-400/70">{t("reinstate.smpRequired")}</p>
               </div>
             )}
             <div className="space-y-1.5">
-              <Label className="text-zinc-400 text-sm">{t("reinstate.salary")}</Label>
+              <Label className="text-muted-foreground text-sm">{t("reinstate.salary")}</Label>
               <Input
                 data-testid="input-reinstate-salary"
                 type="number"
@@ -2021,11 +2020,11 @@ export function EmployeeDetailContent({
                 placeholder={t("reinstate.salaryPlaceholder")}
                 value={reinstateForm.salary}
                 onChange={e => setReinstateForm(f => ({ ...f, salary: e.target.value }))}
-                className="bg-zinc-900 border-zinc-700 text-white"
+                className=""
               />
             </div>
             <div className="flex gap-2 justify-end pt-1">
-              <Button variant="outline" className="border-zinc-700 text-zinc-300" onClick={() => setReinstateOpen(false)}>{t("reinstate.cancel")}</Button>
+              <Button variant="outline" className="border-border text-foreground/80" onClick={() => setReinstateOpen(false)}>{t("reinstate.cancel")}</Button>
               <Button
                 data-testid="button-confirm-reinstate"
                 disabled={
@@ -2044,7 +2043,7 @@ export function EmployeeDetailContent({
                     employmentType: employee.employmentType ?? undefined,
                   });
                 }}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
               >
                 {reinstateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="h-4 w-4" /> {t("reinstate.submit")}</>}
               </Button>
@@ -2067,16 +2066,16 @@ export function EmployeeDetailContent({
           background-less so the image itself is the visual focus. */}
       <Dialog open={photoPreviewOpen} onOpenChange={setPhotoPreviewOpen}>
         <DialogContent
-          className="max-w-[90vw] sm:max-w-2xl bg-zinc-950 border-zinc-800 p-4"
+          className="max-w-[90vw] sm:max-w-2xl  p-4"
           data-testid="dialog-photo-preview"
         >
           <DialogHeader>
-            <DialogTitle className="text-white text-base font-display pe-10">
+            <DialogTitle className="text-foreground text-base font-display pe-10">
               {t("dialog.photo.previewTitle")}
             </DialogTitle>
             <DialogDescription className="sr-only">{t("dialog.photo.previewTitle")}</DialogDescription>
           </DialogHeader>
-          <div className="flex items-center justify-center bg-black/40 rounded-md overflow-hidden">
+          <div className="flex items-center justify-center bg-muted/40 rounded-md overflow-hidden">
             {employee.photoUrl ? (
               <img
                 src={employee.photoUrl}
@@ -2085,14 +2084,14 @@ export function EmployeeDetailContent({
                 data-testid="img-photo-preview"
               />
             ) : (
-              <div className="h-40 w-full flex items-center justify-center text-zinc-500 text-sm">—</div>
+              <div className="h-40 w-full flex items-center justify-center text-muted-foreground text-sm">—</div>
             )}
           </div>
           <div className="flex justify-end pt-2">
             <Button
               size="sm"
               variant="outline"
-              className="border-zinc-700 gap-2"
+              className="border-border gap-2"
               disabled={photoUploading}
               onClick={() => photoFileRef.current?.click()}
               data-testid="button-change-photo-from-preview"
@@ -2267,7 +2266,7 @@ export function PaymentMethodToggle({
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-sm border text-xs font-medium transition-colors ${
             current === "bank_transfer"
               ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400"
-              : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-zinc-300"
+              : "border-border bg-background text-muted-foreground hover:text-foreground/80"
           }`}
           data-testid="button-payment-method-bank"
         >
@@ -2279,7 +2278,7 @@ export function PaymentMethodToggle({
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-sm border text-xs font-medium transition-colors ${
             current === "cash"
               ? "border-amber-500/50 bg-amber-500/10 text-amber-400"
-              : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-zinc-300"
+              : "border-border bg-background text-muted-foreground hover:text-foreground/80"
           }`}
           data-testid="button-payment-method-cash"
         >
@@ -2298,12 +2297,12 @@ export function PaymentMethodToggle({
             <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             <p>{t("dialog.payment.cashWpsWarning")}</p>
           </div>
-          <label className="text-zinc-400 text-xs block">{t("dialog.payment.cashReasonLabel")}</label>
+          <label className="text-muted-foreground text-xs block">{t("dialog.payment.cashReasonLabel")}</label>
           <Input
             value={reason}
             onChange={e => setReason(e.target.value)}
             placeholder={t("dialog.payment.cashReasonPlaceholder")}
-            className="h-7 text-xs bg-zinc-900 border-zinc-700"
+            className="h-7 text-xs "
             data-testid="input-cash-reason"
           />
           <div className="flex gap-2">
@@ -2319,7 +2318,7 @@ export function PaymentMethodToggle({
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 text-xs text-zinc-500"
+              className="h-6 text-xs text-muted-foreground"
               onClick={() => { setPendingSwitch(null); setReason(""); }}
               data-testid="button-cancel-cash"
             >
@@ -2347,7 +2346,7 @@ export function PaymentMethodToggle({
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 text-xs text-zinc-500"
+              className="h-6 text-xs text-muted-foreground"
               onClick={() => setPendingSwitch(null)}
               data-testid="button-cancel-bank"
             >
@@ -2384,7 +2383,7 @@ export function PaymentMethodToggle({
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 text-xs text-zinc-400"
+              className="h-6 text-xs text-muted-foreground"
               onClick={() => setFlipBlocked(null)}
               data-testid="button-dismiss-flip-blocked"
             >
@@ -2395,13 +2394,13 @@ export function PaymentMethodToggle({
       )}
 
       {employee.paymentMethodReason && !pendingSwitch && (
-        <p className="text-[10px] text-zinc-500" data-testid="text-payment-reason-line">
+        <p className="text-[10px] text-muted-foreground" data-testid="text-payment-reason-line">
           {t("dialog.payment.reasonLine", { reason: employee.paymentMethodReason })}
         </p>
       )}
 
       {setByName && setAt && !pendingSwitch && (
-        <p className="text-[10px] text-zinc-500" data-testid="text-payment-set-by">
+        <p className="text-[10px] text-muted-foreground" data-testid="text-payment-set-by">
           {t("dialog.payment.setByLine", {
             name: setByName,
             date: formatDateI18n(setAt, i18n.language, {
@@ -2417,15 +2416,15 @@ export function PaymentMethodToggle({
           <button
             type="button"
             onClick={() => setHistoryOpen(o => !o)}
-            className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
             data-testid="button-toggle-payment-history"
           >
             {historyOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             {t("dialog.payment.historyToggle", { n: history.length })}
           </button>
           {historyOpen && (
-            <div className="mt-2 space-y-1.5 border-s border-zinc-800 ps-3" data-testid="list-payment-history">
-              {historyLoading && <p className="text-[10px] text-zinc-600">{t("dialog.payment.historyLoading")}</p>}
+            <div className="mt-2 space-y-1.5 border-s border-border ps-3" data-testid="list-payment-history">
+              {historyLoading && <p className="text-[10px] text-muted-foreground/60">{t("dialog.payment.historyLoading")}</p>}
               {history.map(row => {
                 const fromLabel = methodLabel(row.metadata?.from);
                 const toLabel = methodLabel(row.metadata?.to);
@@ -2433,11 +2432,11 @@ export function PaymentMethodToggle({
                 return (
                   <div
                     key={row.id}
-                    className="text-[10px] text-zinc-500 leading-relaxed"
+                    className="text-[10px] text-muted-foreground leading-relaxed"
                     data-testid={`row-payment-history-${row.id}`}
                   >
-                    <div className="text-zinc-400">
-                      <span className="text-zinc-300">{row.actorName ?? t("dialog.payment.unknownActor")}</span>
+                    <div className="text-muted-foreground">
+                      <span className="text-foreground/80">{row.actorName ?? t("dialog.payment.unknownActor")}</span>
                       <span className="mx-1">·</span>
                       <span dir="ltr">{formatDateI18n(row.createdAt, i18n.language, {
                         day: "numeric", month: "short", year: "numeric",
@@ -2450,7 +2449,7 @@ export function PaymentMethodToggle({
                       ) : (
                         <span>{row.description}</span>
                       )}
-                      {reasonText && <span className="text-zinc-600"> · {reasonText}</span>}
+                      {reasonText && <span className="text-muted-foreground/60"> · {reasonText}</span>}
                     </div>
                   </div>
                 );
@@ -2465,12 +2464,12 @@ export function PaymentMethodToggle({
 
 export function InfoRow({ icon, label, value, mono, ltr }: { icon: React.ReactNode; label: string; value: React.ReactNode; mono?: boolean; ltr?: boolean }) {
   return (
-    <div className="bg-zinc-900/50 rounded-md p-3 border border-zinc-800/50">
-      <div className="flex items-center gap-1.5 text-zinc-500 text-[10px] uppercase tracking-wider font-semibold mb-1">
+    <div className="rounded-sm p-3 border border-border bg-muted/30">
+      <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] uppercase tracking-wider font-semibold mb-1">
         {icon} {label}
       </div>
       <p
-        className={`text-white text-sm font-medium ${mono ? "font-mono" : ""} ${ltr ? "text-left" : ""}`}
+        className={`text-foreground text-sm font-medium ${mono ? "font-mono" : ""} ${ltr ? "text-left" : ""}`}
         {...(ltr ? { dir: "ltr" as const } : {})}
       >
         {value}
@@ -2769,7 +2768,7 @@ export default function WorkforcePage() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white tracking-tight" data-testid="text-page-title">{tt("page.title")}</h1>
+            <h1 className="text-3xl font-display font-bold text-foreground tracking-tight" data-testid="text-page-title">{tt("page.title")}</h1>
             <p className="text-muted-foreground mt-1">{tt("page.subtitle")}</p>
           </div>
           <div className="flex items-center gap-2 self-start sm:self-auto">
@@ -2829,7 +2828,7 @@ export default function WorkforcePage() {
               <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{tt("stats.total")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold font-display text-white" data-testid="stat-total-employees">{formatNumber(stats?.total ?? 0)}</div>
+              <div className="text-4xl font-bold font-display text-foreground" data-testid="stat-total-employees">{formatNumber(stats?.total ?? 0)}</div>
               <p className="text-xs text-muted-foreground mt-1">{tt("stats.totalDesc")}</p>
             </CardContent>
           </Card>
@@ -2891,11 +2890,11 @@ export default function WorkforcePage() {
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-3 bg-primary/10 border border-primary/30 rounded-sm px-4 py-2.5">
             <span className="text-sm font-medium text-primary">{tt("selectionBar.selected", { count: selectedIds.size, n: formatNumber(selectedIds.size) })}</span>
-            <span className="text-zinc-600">|</span>
+            <span className="text-muted-foreground/60">|</span>
             <Button
               variant="ghost"
               size="sm"
-              className="text-xs text-primary hover:text-white gap-1.5"
+              className="text-xs text-primary hover:text-foreground gap-1.5"
               onClick={() => printIdCards(selectedEmployees)}
               disabled={printingIds.size > 0}
               data-testid="button-bulk-print-id-cards"
@@ -2909,22 +2908,22 @@ export default function WorkforcePage() {
                 ? tt("selectionBar.printingProgress", { done: formatNumber(printProgress.done), total: formatNumber(printProgress.total) })
                 : tt("page.printIdCardsWithCount", { n: formatNumber(selectedIds.size) })}
             </Button>
-            <span className="text-zinc-600">|</span>
+            <span className="text-muted-foreground/60">|</span>
             {/* Task #281 — Bulk reassign manager. Permission gating happens
                 server-side; the button is rendered for everyone but a 403 will
                 surface as a toast. */}
             <Button
               variant="ghost"
               size="sm"
-              className="text-xs text-primary hover:text-white gap-1.5"
+              className="text-xs text-primary hover:text-foreground gap-1.5"
               onClick={() => setBulkManagerDialog({ open: true, managerValue: "__none__" })}
               data-testid="button-bulk-reassign-manager"
             >
               <UserCog className="h-3.5 w-3.5" />
               {tt("page.reassignManagerWithCount", { n: formatNumber(selectedIds.size) })}
             </Button>
-            <span className="text-zinc-600">|</span>
-            <Button variant="ghost" size="sm" className="text-xs text-zinc-400 hover:text-white" onClick={() => setSelectedIds(new Set())}>
+            <span className="text-muted-foreground/60">|</span>
+            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setSelectedIds(new Set())}>
               {tt("selectionBar.clearSelection")}
             </Button>
           </div>
@@ -2932,7 +2931,7 @@ export default function WorkforcePage() {
 
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-lg font-display text-white">
+            <CardTitle className="text-lg font-display text-foreground">
               {tt("list.title")}
               <span className="ms-2 text-sm font-normal text-muted-foreground">{tt("list.count", { n: formatNumber(sortedEmployees.length) })}</span>
             </CardTitle>
@@ -3015,17 +3014,17 @@ export default function WorkforcePage() {
                         </TableCell>
                         <TableCell className="py-3" onClick={() => goToEmployee(emp)}>
                           <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8 border border-zinc-700">
+                            <Avatar className="h-8 w-8 border border-border">
                               <AvatarImage src={emp.photoUrl ?? undefined} />
-                              <AvatarFallback className="bg-zinc-800 text-zinc-400 text-xs">{initials}</AvatarFallback>
+                              <AvatarFallback className="bg-muted text-muted-foreground text-xs">{initials}</AvatarFallback>
                             </Avatar>
-                            <div className="font-medium text-white text-sm"><bdi>{emp.fullNameEn ?? "—"}</bdi></div>
+                            <div className="font-medium text-foreground text-sm"><bdi>{emp.fullNameEn ?? "—"}</bdi></div>
                           </div>
                         </TableCell>
-                        <TableCell className="hidden md:table-cell font-mono text-xs text-zinc-400" onClick={() => goToEmployee(emp)} dir="ltr">
+                        <TableCell className="hidden md:table-cell font-mono text-xs text-muted-foreground" onClick={() => goToEmployee(emp)} dir="ltr">
                           {emp.nationalId ?? "—"}
                         </TableCell>
-                        <TableCell className="hidden lg:table-cell text-sm text-zinc-400" onClick={() => goToEmployee(emp)} dir="ltr">
+                        <TableCell className="hidden lg:table-cell text-sm text-muted-foreground" onClick={() => goToEmployee(emp)} dir="ltr">
                           {emp.phone ?? "—"}
                         </TableCell>
                         <TableCell className="hidden xl:table-cell" onClick={() => goToEmployee(emp)}>
@@ -3033,30 +3032,30 @@ export default function WorkforcePage() {
                               dummy free-text job title sub-line was removed
                               along with the dialog InfoRow. */}
                           <div className="space-y-0.5">
-                            <div className="text-sm text-white">
+                            <div className="text-sm text-foreground">
                               {emp.positionTitle ? (
                                 <>
                                   <bdi>{emp.positionTitle}</bdi>
                                   {emp.positionIsActive === false && <span className="text-amber-400 text-xs ms-1">{tt("columns.inactiveSuffix")}</span>}
                                 </>
                               ) : (
-                                <span className="text-zinc-500">—</span>
+                                <span className="text-muted-foreground">—</span>
                               )}
                             </div>
                             {emp.eventName && <div className="text-xs text-primary/70"><bdi>{emp.eventName}</bdi></div>}
                           </div>
                         </TableCell>
-                        <TableCell className="hidden lg:table-cell text-end text-sm text-white font-medium" onClick={() => goToEmployee(emp)}>
+                        <TableCell className="hidden lg:table-cell text-end text-sm text-foreground font-medium" onClick={() => goToEmployee(emp)}>
                           {emp.salary ? formatNumber(Number(emp.salary)) : "—"}
                         </TableCell>
-                        <TableCell className="hidden xl:table-cell text-xs text-zinc-400" onClick={() => goToEmployee(emp)} data-testid={`text-last-printed-${emp.id}`}>
-                          {lastPrintDates[emp.id] ? <span dir="ltr">{formatDate(lastPrintDates[emp.id])}</span> : <span className="text-zinc-600">{tt("columns.never")}</span>}
+                        <TableCell className="hidden xl:table-cell text-xs text-muted-foreground" onClick={() => goToEmployee(emp)} data-testid={`text-last-printed-${emp.id}`}>
+                          {lastPrintDates[emp.id] ? <span dir="ltr">{formatDate(lastPrintDates[emp.id])}</span> : <span className="text-muted-foreground/60">{tt("columns.never")}</span>}
                         </TableCell>
-                        <TableCell className="hidden md:table-cell text-sm text-zinc-400" onClick={() => goToEmployee(emp)} dir="ltr">
+                        <TableCell className="hidden md:table-cell text-sm text-muted-foreground" onClick={() => goToEmployee(emp)} dir="ltr">
                           {formatDate(emp.startDate)}
                         </TableCell>
                         {showTerminated && (
-                          <TableCell className="hidden md:table-cell text-sm text-zinc-400" onClick={() => goToEmployee(emp)} dir="ltr">
+                          <TableCell className="hidden md:table-cell text-sm text-muted-foreground" onClick={() => goToEmployee(emp)} dir="ltr">
                             {emp.endDate ? formatDate(emp.endDate) : "—"}
                           </TableCell>
                         )}
@@ -3085,7 +3084,7 @@ export default function WorkforcePage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-white"
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
                               onClick={() => goToEmployee(emp)}
                               data-testid={`button-view-${emp.id}`}
                             >
@@ -3257,21 +3256,21 @@ export default function WorkforcePage() {
             >
               <SelectTrigger
                 data-testid="select-bulk-manager"
-                className="bg-zinc-900 border-zinc-700 text-white"
+                className=""
               >
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
-                <SelectItem value="__none__" className="text-zinc-400 focus:bg-zinc-800 italic">
+              <SelectContent className="">
+                <SelectItem value="__none__" className="text-muted-foreground italic">
                   {tt("dialog.reportsTo.notAssigned")}
                 </SelectItem>
                 {bulkManagersList.length === 0 ? (
-                  <div className="px-2 py-1.5 text-xs text-zinc-500 italic">
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground italic">
                     {tt("dialog.reportsTo.noManagers")}
                   </div>
                 ) : (
                   bulkManagersList.map((m) => (
-                    <SelectItem key={m.id} value={m.id} className="text-white focus:bg-zinc-800">
+                    <SelectItem key={m.id} value={m.id} className="text-foreground">
                       <bdi>{i18n.language?.startsWith("ar") ? (m.fullNameAr || m.fullNameEn) : m.fullNameEn}</bdi>
                     </SelectItem>
                   ))
@@ -3282,7 +3281,7 @@ export default function WorkforcePage() {
           <DialogFooter>
             <Button
               variant="outline"
-              className="border-zinc-700"
+              className="border-border"
               disabled={bulkManagerMutation.isPending}
               onClick={() => setBulkManagerDialog({ open: false, managerValue: "__none__" })}
               data-testid="button-bulk-manager-cancel"
@@ -3290,7 +3289,7 @@ export default function WorkforcePage() {
               {tt("dialog.actions.cancel")}
             </Button>
             <Button
-              className="bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
               disabled={bulkManagerMutation.isPending || selectedIds.size === 0}
               onClick={() => bulkManagerMutation.mutate({
                 workforceIds: Array.from(selectedIds),

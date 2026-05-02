@@ -61,48 +61,17 @@ The system employs a modern, full-stack architecture designed for scalability an
 - **Excuse Request System**: Employee portal for submitting absence excuses, with admin review via inbox.
 - **Bulk Asset Assignment**: Admin functionality to assign assets to multiple employees.
 - **Photo Change Control**: Subsequent photo changes require HR approval via an inbox review process.
-- **Org Chart**: Interactive, read-only organizational chart with two views: **Positions** (legacy department→position→employee tree) and **People** (manager-of-manager Reports To tree, with an "Unmanaged" pseudo-node grouping employees that have no `managerId`). The view toggle is a segmented control in the top-left panel; print-to-PDF is only available for the Positions view.
-- **Management Module**: Standalone `managers` directory (separate from `users`) holds non-system managers with email/phone/department/position/`reportsToManagerId`. Workforce rows reference managers via `workforce.manager_id` (replacing the dropped `supervisor_id`). The `/management` page provides CRUD, deactivation (with reassign-or-orphan dialog when the manager has direct reports — server returns 409 `HAS_REPORTS` and the client retries with `?reassignTo=<id>` or `?orphan=true`), Excel import (template at `GET /api/managers/template`, registered before `/:id` to avoid Express path shadowing), and bulk reassignment. RBAC: `managers:read|write|assign` for the directory; reassigning a worker (single or bulk) requires `workforce:assign_manager` — the per-row guard on `PATCH /api/workforce/:id` mirrors the bulk endpoint so the dedicated permission cannot be bypassed via the general workforce update. Excel import contract (full docs in `server/lib/managers-import.ts`): canonical snake_case headers (`full_name_en`, `full_name_ar`, `email`, `phone`, `whatsapp`, `jisr_employee_id`, `department_code`, `position_code`, `reports_to_jisr_id`, `notes`); department / position resolved by `code` (case-insensitive); validation + lookup passes short-circuit before any write; both write passes (base create/update + reports-to wiring) run inside a single `db.transaction`, so any row failure (including self-reports-to and cycle attempts) rolls the whole batch back — strict all-or-nothing per file. The route response is `{ total, created, updated, errors: [{ row, field?, message }], results }`. Audit row uses action `manager.imported_from_excel`. The Workforce page exposes a Reports To picker on each employee detail drawer and a "Reassign Manager" bulk action. The Org Chart People view includes employees whose `managerId` points to a missing/inactive manager in the "Unmanaged" group so they are never silently dropped. The mobile app surfaces "Reports To" in the employee profile via the joined `/api/workforce/all-by-candidate/:id` endpoint, with tap-to-call and long-press-to-WhatsApp on the row.
-- **Workforce Profile Page (Task #284)**: The legacy `EmployeeDetailDialog` modal was lifted onto a dedicated route `/workforce/:id` (component `client/src/pages/workforce-detail.tsx` rendering the shared `EmployeeDetailContent` exported from `client/src/pages/workforce.tsx`; print-card helpers extracted to `client/src/lib/workforce-print.tsx`). The page chrome was then redesigned: a hero card with overlapping 96px avatar over a gradient cover (name + status pill + employee# + position subtitle, with the Print ID Card action lifted into the hero toolbar), underline-accent page tabs, and the Details body restructured into a Card-grouped 2-column grid — Identity (full, 3-col InfoRow) → Salary | Notes → Personal | Education → Financial | Payment Method → Emergency (full) → footer actions (Terminate / Reinstate / view-offboarding only; Print ID was lifted to the hero). Page max-width is `max-w-7xl`. All original per-section edit/save mutations and translation keys are preserved verbatim.
-- **Welcome SMS Plumbing (stub)**: The `sms_outbox_kind` enum reserves `welcome_employee` (boot migration `ensureWelcomeEmployeeEnum`). The `convertOnboardingToEmployee` storage method logs a `[welcome-sms-stub]` line on every conversion but does NOT enqueue a message — the templated keys `welcome_employee_sms_template_ar` / `_en` exist only as documentation in the storage comment. Future work flips the stub to a real `sms_outbox` insert once ops sign off on the template.
-- **Rekognition Resilience**: Profile photo uploads fail closed with `503` if AWS Rekognition is unreachable and no previously validated photo exists.
-- **Rotation Rescue Telemetry**: Tracks photo upload auto-rotation outcomes for regression detection.
-- **Candidate Document Types**: Supports Driver's License and Vaccination Report, which are individual-only, PII-protected, and not mirrored into SMP onboarding.
-- **Onboarding Document Reminders**: Automated SMS reminders for candidates with missing required documents (photo, IBAN, national ID), with configurable cadence (first-after, repeat-every, max), quiet hours, final-warning window, and auto-elimination after a deadline. Per-row indicators (state-driven bell, missing-doc pip strip, "at risk" red border) and admin actions (send-now, pause, resume) live on the onboarding pipeline. Settings tab `إعدادات الإشعارات` on `/onboarding`. Race-safe (compare-and-swap on `reminder_count` for sweep + manual; transactional elimination).
-- **Audit Log Actor Attribution**: Every audited mutation captures the real authenticated user via `req.authUserId` (set by `requireAuth`), and `actor_name` is rendered as a bilingual `"EN AR"` string by `formatActorName(user)` (server/lib/actor-name.ts) using `users.full_name` + `users.full_name_ar`. The legacy `(req as any).userId` field was never assigned anywhere and silently nulled the actor — a static regression test (`server/__tests__/audit-actor-id-no-regression.test.ts`) now fails the build if any callsite reads it again.
+- **Org Chart**: Interactive, read-only organizational chart with two views: **Positions** (legacy department→position→employee tree) and **People** (manager-of-manager Reports To tree, with an "Unmanaged" pseudo-node grouping employees that have no `managerId`). Print-to-PDF is only available for the Positions view.
+- **Management Module**: Provides CRUD, deactivation (with reassign-or-orphan dialog), Excel import, and bulk reassignment for non-system managers. RBAC is implemented for directory access and workforce assignment.
+- **Workforce Profile Page**: Dedicated route `/workforce/:id` with redesigned chrome: hero card, underline-accent page tabs, and Card-grouped 2-column grid for details.
+- **Welcome SMS Plumbing (stub)**: The `sms_outbox_kind` enum reserves `welcome_employee`. A stub is in place for future SMS messaging.
+- **Rekognition Resilience**: Profile photo uploads fail closed (`503`) if AWS Rekognition is unreachable and no previously validated photo exists.
+- **Candidate Document Types**: Supports Driver's License and Vaccination Report, which are individual-only and PII-protected.
+- **Onboarding Document Reminders**: Automated SMS reminders for candidates with missing required documents, with configurable cadence and quiet hours.
+- **Audit Log Actor Attribution**: Every audited mutation captures the real authenticated user via `req.authUserId` and `actor_name` is rendered as a bilingual string.
 
 **Mobile App (Android Native)**:
 - Developed in Kotlin with Jetpack Compose, offering selfie check-in with CameraX, GPS verification, offline-first Room DB, encrypted data storage, auto-sync, and Google Maps geofence zones. Includes `DeviceTrustManager` for emulator and mock GPS detection. Supports excuse request submission and photo changes requiring HR approval.
-
-## Operations
-
-### Production DB access — agent-readable note
-
-**`PROD_DATABASE_URL` is ALREADY in this workspace's secrets** and points at the live DigitalOcean Postgres. The agent has direct connectivity to prod from this workspace and **must never ask the user to confirm this fact again**. Treat the URL as sensitive — never log, echo, or write it to a file.
-
-**TLS for prod connections** — DigitalOcean's managed Postgres uses a private CA. The deployed app already passes the CA bundle to `pg` via the `DATABASE_CA_CERT` build-env variable, which means the live server runs with full certificate verification. One-off agent scripts run from this workspace should follow the same path:
-
-```js
-const ssl = process.env.DATABASE_CA_CERT
-  ? { ca: process.env.DATABASE_CA_CERT, rejectUnauthorized: true }
-  : { rejectUnauthorized: false }; // last-resort fallback only when the CA env is unavailable
-const pool = new Pool({ connectionString: process.env.PROD_DATABASE_URL, ssl });
-```
-
-`rejectUnauthorized: false` (and the heavier `NODE_TLS_REJECT_UNAUTHORIZED=0` shotgun) downgrades MITM protection for the entire Node process and must NOT be normalized into the standard playbook — reach for it only when the CA bundle is genuinely unavailable in that one-off context, and never inside `server/`.
-
-Boot-time idempotent migrations in `server/migrations/` (CREATE TABLE IF NOT EXISTS, ADD COLUMN IF NOT EXISTS, ADD VALUE IF NOT EXISTS, INSERT … ON CONFLICT DO NOTHING) run automatically on prod the first time the server boots after a deploy, so most schema changes need no manual prod step. Only reach for `scripts/migrate-prod.mjs` (drizzle-kit push) for schema changes that aren't covered by a boot migration.
-
-### Database schema sync (dev → prod)
-
-`npm run db:push` only syncs the **dev** Neon DB. The production database (DigitalOcean) must be migrated separately or new columns / tables will be missing on prod and queries that reference them will fail.
-
-After any change to `shared/schema.ts`:
-
-1. Sync dev: `npm run db:push`
-2. Sync prod: `node scripts/migrate-prod.mjs`
-
-The prod runner refuses to start unless `PROD_DATABASE_URL` is set and different from `DATABASE_URL`, prints the target host and DB, runs a connectivity probe, and requires the operator to type `APPLY` (uppercase) before invoking `drizzle-kit push` against prod. Drizzle's own interactive prompt still surfaces for any destructive change (drop / type change), so the apply step is double-gated.
 
 ## External Dependencies
 
