@@ -736,7 +736,7 @@ export function EmployeeDetailContent({
   return (
     <>
       <div className="bg-zinc-950 text-white">
-        <div className="max-w-5xl mx-auto px-4 md:px-6 py-4 space-y-4">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 space-y-5">
           {viewingAdminContract && (
             <div data-testid="admin-contract-history-viewer">
               <div className="flex items-center gap-2 mb-4">
@@ -858,130 +858,159 @@ export function EmployeeDetailContent({
           )}
           {!viewingAdminContract && (
           <>
-          <div className="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-zinc-950/95 backdrop-blur border-b border-zinc-800 mb-2">
-            <div className="flex items-center gap-3">
+          {/* Task #284 — Polished page hero. Replaces the cramped
+              dialog-era sticky header. Layout (LTR / mirrored in RTL):
+              cover gradient band + 96px avatar overlapping the bottom
+              edge, employee name + status pill + employee number on
+              the left, primary actions (Print ID Card) on the right.
+              The avatar still owns the photo-edit affordance via the
+              `photoFileRef` hidden input + `photoMutation` so admins
+              get the same Rekognition pipeline they had in the modal. */}
+          <Card className="overflow-hidden border-zinc-800 bg-zinc-900/40" data-testid="card-employee-hero">
+            <div className="relative h-28 bg-gradient-to-br from-[hsl(155,45%,28%)] via-[hsl(155,45%,18%)] to-zinc-900 border-b border-zinc-800/60">
               {onClose && (
                 <button
                   onClick={onClose}
-                  className="text-zinc-400 hover:text-white transition-colors shrink-0"
+                  className="absolute top-3 start-3 inline-flex items-center gap-1 text-xs text-white/80 hover:text-white bg-black/20 hover:bg-black/40 backdrop-blur rounded-md px-2 py-1 transition-colors"
                   data-testid="button-back-to-workforce"
                   aria-label={t("page.back")}
                 >
-                  {/* RTL: chevron points right (toward where you came from) */}
-                  <ChevronLeft className="h-5 w-5 rtl:rotate-180" />
+                  <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
+                  <span>{t("page.back")}</span>
                 </button>
               )}
-              <h2 className="font-display text-xl font-bold text-white flex items-center gap-3 flex-1 min-w-0">
-              {/* Task #187 — Avatar is now a click-to-preview target.
-                  Clicking it opens a lightbox at the natural image
-                  size (capped to 80vh / 90vw). The lightbox carries
-                  the "Change Photo" action so the edit affordance is
-                  preserved. If there is no photo yet, the click falls
-                  through to the file picker so admins can upload the
-                  first one without an empty preview step.
-                  The hidden file input is gated by `workforce:update`
-                  on the server; only image/jpeg + image/png are
-                  accepted. We disable the trigger while a request is
-                  in-flight so admins don't queue duplicate uploads. */}
-              <div className="relative group shrink-0">
-                <Avatar className="h-10 w-10 border border-zinc-700">
-                  <AvatarImage src={employee.photoUrl ?? undefined} />
-                  <AvatarFallback className="bg-zinc-800 text-zinc-300 text-sm font-bold">{initials}</AvatarFallback>
-                </Avatar>
-                <button
-                  type="button"
-                  className="absolute inset-0 rounded-full bg-black/0 hover:bg-black/60 transition-colors flex items-center justify-center text-white opacity-0 group-hover:opacity-100 disabled:cursor-not-allowed"
-                  disabled={photoUploading}
-                  onClick={() => {
-                    if (employee.photoUrl) setPhotoPreviewOpen(true);
-                    else photoFileRef.current?.click();
-                  }}
-                  title={employee.photoUrl ? t("dialog.photo.viewPhoto") : t("dialog.photo.changePhoto")}
-                  aria-label={employee.photoUrl ? t("dialog.photo.viewPhoto") : t("dialog.photo.changePhoto")}
-                  data-testid="button-view-photo"
-                >
-                  {photoUploading
-                    ? <Loader2 className="h-4 w-4 animate-spin" />
-                    : <Pencil className="h-3.5 w-3.5" />}
-                </button>
-                <input
-                  ref={photoFileRef}
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png"
-                  className="hidden"
-                  data-testid="input-photo-file"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    setPhotoUploading(true);
-                    photoMutation.mutate(file);
-                  }}
-                />
-              </div>
-              <div className="flex-1 min-w-0">
-                {editName ? (
-                  <div className="flex items-center gap-2">
-                    {/* Inline name editor — pressing Enter saves, Escape
-                        cancels. Constrained to 120 chars to align with
-                        the database column + Excel export width. */}
-                    <Input
-                      autoFocus
-                      value={nameValue}
-                      onChange={(e) => setNameValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && nameValue.trim().length > 0) nameMutation.mutate(nameValue.trim());
-                        if (e.key === "Escape") { setEditName(false); setNameValue(""); }
-                      }}
-                      placeholder={t("dialog.name.placeholder")}
-                      maxLength={120}
-                      className="h-8 bg-zinc-900 border-zinc-700 text-white text-sm flex-1 min-w-0"
-                      data-testid="input-edit-name"
-                    />
-                    <Button
-                      size="sm"
-                      className="h-8 bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white shrink-0"
-                      disabled={nameMutation.isPending || nameValue.trim().length === 0}
-                      onClick={() => nameMutation.mutate(nameValue.trim())}
-                      data-testid="button-save-name"
-                    >
-                      {nameMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("dialog.actions.save")}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 border-zinc-700 shrink-0"
-                      onClick={() => { setEditName(false); setNameValue(""); }}
-                      data-testid="button-cancel-name"
-                    >
-                      {t("dialog.actions.cancel")}
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <bdi className="truncate">{employee.fullNameEn ?? t("dialog.unknownEmployee")}</bdi>
-                      <Badge variant="outline" className={`text-[10px] font-mono ${st.className}`}>{st.label}</Badge>
-                      <button
-                        type="button"
-                        className="text-zinc-500 hover:text-white transition-colors p-1 -m-1"
-                        onClick={() => { setNameValue(employee.fullNameEn ?? ""); setEditName(true); }}
-                        title={t("dialog.name.edit")}
-                        aria-label={t("dialog.name.edit")}
-                        data-testid="button-edit-name"
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </button>
-                    </div>
-                    {/* Task #187 — Employee number is locked. We surface
-                        a tooltip on the badge so an admin who clicks
-                        expecting an editor sees *why* it can't change. */}
-                    <div className="text-xs text-zinc-500 font-mono font-normal" dir="ltr" title={t("dialog.empNumberLocked")}>{employee.employeeNumber}</div>
-                  </>
-                )}
-              </div>
-              </h2>
             </div>
-          </div>
+            <div className="px-5 md:px-6 pb-5 -mt-12">
+              <div className="flex flex-col md:flex-row md:items-end gap-4 md:gap-5">
+                {/* Avatar w/ hover-edit overlay; click opens lightbox
+                    when a photo exists, otherwise the file picker so
+                    first-time uploads skip the empty preview. */}
+                <div className="relative group shrink-0">
+                  <Avatar className="h-24 w-24 border-4 border-zinc-950 shadow-xl shadow-black/40 ring-1 ring-zinc-800">
+                    <AvatarImage src={employee.photoUrl ?? undefined} />
+                    <AvatarFallback className="bg-zinc-800 text-zinc-200 text-2xl font-bold">{initials}</AvatarFallback>
+                  </Avatar>
+                  <button
+                    type="button"
+                    className="absolute inset-0 rounded-full bg-black/0 hover:bg-black/60 transition-colors flex items-center justify-center text-white opacity-0 group-hover:opacity-100 disabled:cursor-not-allowed"
+                    disabled={photoUploading}
+                    onClick={() => {
+                      if (employee.photoUrl) setPhotoPreviewOpen(true);
+                      else photoFileRef.current?.click();
+                    }}
+                    title={employee.photoUrl ? t("dialog.photo.viewPhoto") : t("dialog.photo.changePhoto")}
+                    aria-label={employee.photoUrl ? t("dialog.photo.viewPhoto") : t("dialog.photo.changePhoto")}
+                    data-testid="button-view-photo"
+                  >
+                    {photoUploading
+                      ? <Loader2 className="h-5 w-5 animate-spin" />
+                      : <Pencil className="h-5 w-5" />}
+                  </button>
+                  <input
+                    ref={photoFileRef}
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png"
+                    className="hidden"
+                    data-testid="input-photo-file"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setPhotoUploading(true);
+                      photoMutation.mutate(file);
+                    }}
+                  />
+                </div>
+
+                {/* Name / status / employee number / position subtitle */}
+                <div className="flex-1 min-w-0 md:pb-1">
+                  {editName ? (
+                    <div className="flex items-center gap-2 mt-1">
+                      <Input
+                        autoFocus
+                        value={nameValue}
+                        onChange={(e) => setNameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && nameValue.trim().length > 0) nameMutation.mutate(nameValue.trim());
+                          if (e.key === "Escape") { setEditName(false); setNameValue(""); }
+                        }}
+                        placeholder={t("dialog.name.placeholder")}
+                        maxLength={120}
+                        className="h-9 bg-zinc-900 border-zinc-700 text-white text-base flex-1 min-w-0"
+                        data-testid="input-edit-name"
+                      />
+                      <Button
+                        size="sm"
+                        className="h-9 bg-[hsl(155,45%,45%)] hover:bg-[hsl(155,45%,38%)] text-white shrink-0"
+                        disabled={nameMutation.isPending || nameValue.trim().length === 0}
+                        onClick={() => nameMutation.mutate(nameValue.trim())}
+                        data-testid="button-save-name"
+                      >
+                        {nameMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t("dialog.actions.save")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 border-zinc-700 shrink-0"
+                        onClick={() => { setEditName(false); setNameValue(""); }}
+                        data-testid="button-cancel-name"
+                      >
+                        {t("dialog.actions.cancel")}
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h1 className="font-display text-2xl md:text-3xl font-bold text-white truncate leading-tight">
+                          <bdi>{employee.fullNameEn ?? t("dialog.unknownEmployee")}</bdi>
+                        </h1>
+                        <Badge variant="outline" className={`text-[11px] font-mono ${st.className}`}>{st.label}</Badge>
+                        <button
+                          type="button"
+                          className="text-zinc-500 hover:text-white transition-colors p-1 -m-1"
+                          onClick={() => { setNameValue(employee.fullNameEn ?? ""); setEditName(true); }}
+                          title={t("dialog.name.edit")}
+                          aria-label={t("dialog.name.edit")}
+                          data-testid="button-edit-name"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1.5 text-sm">
+                        <span className="text-zinc-400 font-mono" dir="ltr" title={t("dialog.empNumberLocked")} data-testid="text-hero-empnum">
+                          #{employee.employeeNumber}
+                        </span>
+                        {employee.positionTitle && (
+                          <>
+                            <span className="text-zinc-700">•</span>
+                            <span className="text-zinc-300 truncate" data-testid="text-hero-position">
+                              <bdi>{employee.positionTitle}</bdi>
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Primary actions — surfaced from the old footer so
+                    the most-used action (Print ID Card) is reachable
+                    without scrolling past every section first. */}
+                <div className="flex items-center gap-2 md:pb-1 shrink-0">
+                  {employee.isActive && onPrintCard && (
+                    <Button
+                      variant="outline"
+                      className="border-zinc-700 gap-1.5"
+                      onClick={() => onPrintCard(employee)}
+                      data-testid="button-hero-print-id-card"
+                    >
+                      <Printer className="h-4 w-4" />
+                      <span className="hidden sm:inline">{t("dialog.footer.printIdCard")}</span>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
 
           <div className="flex rounded-md overflow-hidden border border-zinc-800 bg-zinc-900/50 mt-2">
             <button
