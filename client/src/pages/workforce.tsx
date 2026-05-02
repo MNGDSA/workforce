@@ -3045,17 +3045,7 @@ export default function WorkforcePage() {
         </Card>
       </div>
 
-      <EmployeeDetailDialog
-        employee={selectedEmployee}
-        open={!!selectedEmployee}
-        onOpenChange={(o) => !o && setSelectedEmployee(null)}
-        onUpdated={() => {
-          qc.invalidateQueries({ queryKey: ["/api/workforce"] });
-          setSelectedEmployee(null);
-        }}
-        onPrintCard={(emp) => handlePrintIdCards([emp])}
-        onEmployeeRefreshed={(emp) => goToEmployee(emp)}
-      />
+      {pickupSmsDialogJsx}
 
       {/* ── Bulk Mass Update Dialog ─────────────────────────────────────────── */}
       <Dialog open={bulkUpdateOpen} onOpenChange={o => { if (!o) { setBulkUpdateOpen(false); setBulkUpdateResult(null); setBulkUpdateFile(null); } }}>
