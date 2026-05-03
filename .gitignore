@@ -6,3 +6,6 @@ vite.config.ts.*
 *.tar.gz
 uploads/
 env.production.txt
+
+# Database snapshots — never commit
+backups/
