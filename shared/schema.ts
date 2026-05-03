@@ -91,6 +91,18 @@ export const interviewStatusEnum = pgEnum("interview_status", [
   "no_show",
 ]);
 
+// Task #287 — per-candidate verdict on a group/individual interview.
+// `pending` is the implicit default for an invitee with no verdict row yet
+// AND the value written when a previously-decided verdict is reset. Mapping
+// to applications.status: liked→shortlisted, rejected→rejected,
+// pending→interviewed. The application status remains the source of truth
+// for admit-eligibility — the verdict row carries the *who/when/why*.
+export const interviewVerdictEnum = pgEnum("interview_verdict", [
+  "liked",
+  "rejected",
+  "pending",
+]);
+
 export const eventStatusEnum = pgEnum("event_status", [
   "upcoming",
   "active",
@@ -558,6 +570,52 @@ export const interviews = pgTable(
   })
 );
 
+// ─── Interview Verdicts (Task #287) ─────────────────────────────────────────
+// Per-candidate decision row for a single interview. Group interviews can
+// carry up to 200 invitees today and the legacy `interviews.rating` /
+// `interviews.feedback` columns store one shared value across the whole
+// session. This table gives each invitee its own verdict / rating /
+// feedback / decided-by / decided-at, which is what makes "what did each
+// reviewer think of candidate X" answerable from data alone.
+//
+// Composite unique on (interview_id, candidate_id) so the upsert path on
+// PATCH /api/interviews/:interviewId/verdicts/:candidateId can atomically
+// either insert or update without racing against itself.
+export const interviewVerdicts = pgTable(
+  "interview_verdicts",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    interviewId: varchar("interview_id")
+      .notNull()
+      .references(() => interviews.id, { onDelete: "cascade" }),
+    candidateId: varchar("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    // Application snapshot at the time the verdict was set. Persisted so
+    // the audit story survives even if the application is later deleted
+    // (e.g. cascade from candidate purge). Nullable because future bulk
+    // imports of historical verdicts may not have a linked application.
+    applicationId: varchar("application_id")
+      .references(() => applications.id, { onDelete: "set null" }),
+    verdict: interviewVerdictEnum("verdict").notNull().default("pending"),
+    rating: integer("rating"), // 1..5 enforced in zod, nullable for "no rating yet"
+    feedback: text("feedback"),
+    decidedBy: varchar("decided_by").references(() => users.id, { onDelete: "set null" }),
+    decidedByName: varchar("decided_by_name", { length: 255 }),
+    decidedAt: timestamp("decided_at").notNull().default(sql`now()`),
+    createdAt: timestamp("created_at").notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  },
+  (t) => ({
+    interviewCandidateIdx: uniqueIndex("interview_verdicts_interview_candidate_idx").on(
+      t.interviewId,
+      t.candidateId,
+    ),
+    interviewIdx: index("interview_verdicts_interview_idx").on(t.interviewId),
+    candidateIdx: index("interview_verdicts_candidate_idx").on(t.candidateId),
+  })
+);
+
 // ─── Onboarding ─────────────────────────────────────────────────────────────
 export const onboarding = pgTable(
   "onboarding",
@@ -950,6 +1008,24 @@ export const insertInterviewSchema = createInsertSchema(interviews, {
   invitedCandidateIds: z.array(z.string()).optional().nullable(),
   createdByName: z.string().optional().nullable(),
 });
+
+// Task #287 — payload for upserting a single per-candidate verdict.
+// Rating must be 1..5 when present (drizzle-zod accepts any int, we pin the
+// bound here so the route handler can stay thin). decidedBy / decidedByName
+// are server-derived from the auth context — never trust them off the wire.
+export const insertInterviewVerdictSchema = createInsertSchema(interviewVerdicts, {
+  rating: z.number().int().min(1).max(5).nullable().optional(),
+  feedback: z.string().max(2000).nullable().optional(),
+}).omit({
+  id: true,
+  decidedBy: true,
+  decidedByName: true,
+  decidedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertInterviewVerdict = z.infer<typeof insertInterviewVerdictSchema>;
+export type InterviewVerdict = typeof interviewVerdicts.$inferSelect;
 
 export const insertOnboardingSchema = createInsertSchema(onboarding).omit({
   id: true,

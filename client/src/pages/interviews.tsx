@@ -165,20 +165,37 @@ function InterviewDetailSheet({
     staleTime: 30_000,
   });
 
+  // Task #287 — verdict-aware mutation. Replaces the previous
+  // statusMutation that PATCHed /api/applications directly: the new
+  // endpoint flips applications.status server-side AND writes a verdict
+  // row carrying decided-by + decided-at provenance. The
+  // status→verdict mapping is the inverse of the server's:
+  // shortlisted→liked, rejected→rejected, interviewed (reset)→pending.
   const statusMutation = useMutation({
-    mutationFn: ({ appId, status }: { appId: string; candidateId: string; status: string }) =>
-      apiRequest("PATCH", `/api/applications/${appId}`, { status }).then((r) => r.json()),
+    mutationFn: ({ appId, candidateId, status }: { appId: string; candidateId: string; status: string; interviewId?: string }) => {
+      const verdict = status === "shortlisted" ? "liked" : status === "rejected" ? "rejected" : "pending";
+      const ivId = interviewId;
+      if (!ivId) {
+        return apiRequest("PATCH", `/api/applications/${appId}`, { status }).then((r) => r.json());
+      }
+      return apiRequest("PATCH", `/api/interviews/${ivId}/verdicts/${candidateId}`, {
+        verdict,
+        applicationId: appId,
+      }).then((r) => r.json());
+    },
     onSuccess: (_data, vars) => {
       setLocalStatuses(prev => ({ ...prev, [vars.candidateId]: vars.status }));
       queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] });
-      // Toggling shortlist status changes who appears in the Onboarding
-      // page's "Admit Candidate" dialog — refresh that pre-filtered list.
+      // INVARIANT: every PATCH to /api/applications that can change status
+      // MUST invalidate "/api/onboarding/admit-eligible" — see #285.
       queryClient.invalidateQueries({ queryKey: ["/api/onboarding/admit-eligible"] });
       // Broad prefix invalidation refreshes both the open detail panel
       // (`["/api/interviews", id]`) AND the parent list query
       // (`["/api/interviews", { eventId }]`) so the Decisions column counts
       // stay in sync with the chips a moment after the user shortlists.
+      // Also catches the new verdicts list key
+      // (`["/api/interviews", id, "verdicts"]`).
       queryClient.invalidateQueries({ queryKey: ["/api/interviews"] });
       toast({ title: vars.status === "shortlisted" ? t("interviews:toast.shortlisted") : vars.status === "rejected" ? t("interviews:toast.rejected") : t("interviews:toast.updated") });
     },
@@ -731,19 +748,26 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
     staleTime: 30_000,
   });
 
+  // Task #287 — same verdict-aware mutation as the one in
+  // InterviewDetailSheet (~line 168). Routes through the new
+  // /api/interviews/:id/verdicts/:candidateId endpoint when an
+  // interviewId is in scope so each click also writes a verdict row.
   const statusMutation = useMutation({
-    mutationFn: ({ appId, status }: { appId: string; candidateId: string; status: string }) =>
-      apiRequest("PATCH", `/api/applications/${appId}`, { status }).then((r) => r.json()),
+    mutationFn: ({ appId, candidateId, status }: { appId: string; candidateId: string; status: string }) => {
+      const verdict = status === "shortlisted" ? "liked" : status === "rejected" ? "rejected" : "pending";
+      const ivId = interviewId;
+      if (!ivId) {
+        return apiRequest("PATCH", `/api/applications/${appId}`, { status }).then((r) => r.json());
+      }
+      return apiRequest("PATCH", `/api/interviews/${ivId}/verdicts/${candidateId}`, {
+        verdict,
+        applicationId: appId,
+      }).then((r) => r.json());
+    },
     onSuccess: (_data, vars) => {
       setLocalStatuses(prev => ({ ...prev, [vars.candidateId]: vars.status }));
       queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] });
-      // INVARIANT: every PATCH to /api/applications that can change status
-      // MUST invalidate "/api/onboarding/admit-eligible" — otherwise the
-      // Onboarding > Admit Candidate dialog serves a stale, pre-flip list
-      // and the user thinks the candidate they just liked "never appeared".
-      // The sibling statusMutation in InterviewDetailSheet (~line 168) does
-      // this; this one was the brittle drift that caused the prod report.
       queryClient.invalidateQueries({ queryKey: ["/api/onboarding/admit-eligible"] });
       queryClient.invalidateQueries({ queryKey: ["/api/interviews"] });
       toast({ title: vars.status === "shortlisted" ? t("interviews:toast.shortlisted") : vars.status === "rejected" ? t("interviews:toast.rejected") : t("interviews:toast.updated") });
@@ -753,8 +777,11 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
 
   const bulkShortlistMutation = useMutation({
     mutationFn: (items: { appId: string; candidateId: string }[]) =>
+      // Task #287 — pass interviewId so the server writes verdict rows
+      // alongside the status flips in a single transaction per row.
       apiRequest("POST", "/api/applications/bulk-shortlist", {
-        updates: items.map(i => ({ id: i.appId, status: "shortlisted" })),
+        interviewId,
+        updates: items.map(i => ({ id: i.appId, candidateId: i.candidateId, status: "shortlisted" })),
       }).then(r => r.json()),
     onSuccess: (result, items) => {
       const updates: Record<string, string> = {};

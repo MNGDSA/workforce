@@ -12,6 +12,8 @@
 // signalling.
 
 import type { Application, InsertApplication } from "@shared/schema";
+import { applications } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { storage } from "./storage";
 
@@ -86,9 +88,19 @@ export async function applySystemApplicationStatusFlip(
   },
   tx?: any,
 ): Promise<Application | undefined> {
-  const previous = await storage.getApplication(opts.applicationId);
+  // Read inside the same tx (or fall back to db when none) so the
+  // no-op-detection and `previousStatus` audit field cannot diverge from
+  // the row this call is about to update. Pre-fix the helper read on the
+  // global pool while writes ran in tx — TOCTOU window flagged by architect
+  // review on #287.
+  const conn = tx ?? db;
+  const [previous] = await conn
+    .select()
+    .from(applications)
+    .where(eq(applications.id, opts.applicationId))
+    .limit(1);
   if (!previous) return undefined;
-  if (previous.status === opts.newStatus) return previous;
+  if (previous.status === opts.newStatus) return previous as Application;
   const updated = await storage.updateApplication(
     opts.applicationId,
     { status: opts.newStatus as Application["status"] },

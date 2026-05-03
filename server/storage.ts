@@ -132,6 +132,9 @@ import {
   type PayrollAdjustment,
   type InsertPayrollAdjustment,
   type PayrollTransaction,
+  interviewVerdicts,
+  type InsertInterviewVerdict,
+  type InterviewVerdict,
 } from "@shared/schema";
 import { eq, and, or, not, ilike, desc, asc, count, sql, inArray, lt, isNull, isNotNull, gte, getTableColumns, type SQL } from "drizzle-orm";
 import { parseSearchTokens, looksLikeId, type CandidateSearchMeta } from "@shared/candidate-search";
@@ -374,6 +377,23 @@ export interface IStorage {
   updateInterview(id: string, data: Partial<InsertInterview>): Promise<Interview | undefined>;
   archiveInterview(id: string): Promise<Interview | undefined>;
   getInterviewStats(): Promise<{ total: number; scheduled: number; completed: number; cancelled: number }>;
+
+  // Task #287 — per-candidate interview verdicts.
+  // listVerdictsForInterview returns every verdict row for an interview so
+  // the inline UI can render the chip + rating + feedback for each invitee.
+  // upsertInterviewVerdict is the single write entry point — the route
+  // handler wraps it together with applySystemApplicationStatusFlip in one
+  // transaction so the verdict row and the application.status flip commit
+  // (or roll back) atomically.
+  listVerdictsForInterview(interviewId: string): Promise<InterviewVerdict[]>;
+  getInterviewVerdict(interviewId: string, candidateId: string): Promise<InterviewVerdict | undefined>;
+  upsertInterviewVerdict(
+    data: InsertInterviewVerdict & {
+      decidedBy: string | null;
+      decidedByName: string | null;
+    },
+    tx?: any,
+  ): Promise<InterviewVerdict>;
 
   // Workforce (Employees)
   getWorkforce(params?: { eventId?: string; isActive?: boolean; search?: string }): Promise<any[]>;
@@ -2210,6 +2230,69 @@ export class DatabaseStorage implements IStorage {
   async updateInterview(id: string, data: Partial<InsertInterview>): Promise<Interview | undefined> {
     const [updated] = await db.update(interviews).set({ ...data, updatedAt: new Date() }).where(eq(interviews.id, id)).returning();
     return updated;
+  }
+
+  // ─── Interview Verdicts (Task #287) ─────────────────────────────────────
+  async listVerdictsForInterview(interviewId: string): Promise<InterviewVerdict[]> {
+    return await db
+      .select()
+      .from(interviewVerdicts)
+      .where(eq(interviewVerdicts.interviewId, interviewId))
+      .orderBy(desc(interviewVerdicts.decidedAt));
+  }
+
+  async getInterviewVerdict(
+    interviewId: string,
+    candidateId: string,
+  ): Promise<InterviewVerdict | undefined> {
+    const [row] = await db
+      .select()
+      .from(interviewVerdicts)
+      .where(
+        and(
+          eq(interviewVerdicts.interviewId, interviewId),
+          eq(interviewVerdicts.candidateId, candidateId),
+        ),
+      )
+      .limit(1);
+    return row;
+  }
+
+  async upsertInterviewVerdict(
+    data: InsertInterviewVerdict & {
+      decidedBy: string | null;
+      decidedByName: string | null;
+    },
+    tx?: any,
+  ): Promise<InterviewVerdict> {
+    // ON CONFLICT DO UPDATE so the route can call this once whether the
+    // invitee is being decided for the first time or having an existing
+    // verdict revised. The composite unique on (interview_id, candidate_id)
+    // is what guarantees the conflict path resolves to exactly one row.
+    const conn = tx ?? db;
+    const now = new Date();
+    const [row] = await conn
+      .insert(interviewVerdicts)
+      .values({
+        ...data,
+        decidedAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [interviewVerdicts.interviewId, interviewVerdicts.candidateId],
+        set: {
+          verdict: data.verdict,
+          rating: data.rating ?? null,
+          feedback: data.feedback ?? null,
+          applicationId: data.applicationId ?? null,
+          decidedBy: data.decidedBy,
+          decidedByName: data.decidedByName,
+          decidedAt: now,
+          updatedAt: now,
+        },
+      })
+      .returning();
+    return row;
   }
 
   async getInterviewStats(): Promise<{ total: number; scheduled: number; completed: number; cancelled: number }> {

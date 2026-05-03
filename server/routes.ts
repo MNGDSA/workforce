@@ -85,6 +85,7 @@ import {
   users,
   auditLogs,
   type InsertPayrollAdjustment,
+  insertInterviewVerdictSchema,
 } from "@shared/schema";
 import { eq, and, sql, desc, asc, inArray, count, isNull } from "drizzle-orm";
 import { validatePluginConfig, sendSmsViaPlugin } from "./sms-sender";
@@ -4117,6 +4118,146 @@ export async function registerRoutes(
     }
   });
 
+  // ─── Per-candidate interview verdicts (Task #287) ────────────────────────
+  // Verdict rows are the source of truth for *who decided what for whom in
+  // which interview, with what rating and feedback*. The application's
+  // `status` column remains the source of truth for *eligibility* — the
+  // PATCH below keeps the two in lockstep inside one transaction so admit-
+  // eligibility queries stay correct without ever reading from this table.
+  app.get(
+    "/api/interviews/:interviewId/verdicts",
+    requirePermission("interviews:read"),
+    async (req: Request, res: Response) => {
+      try {
+        const rows = await storage.listVerdictsForInterview(req.params.interviewId);
+        return res.json(rows);
+      } catch (err) {
+        return handleError(res, err);
+      }
+    },
+  );
+
+  app.patch(
+    "/api/interviews/:interviewId/verdicts/:candidateId",
+    requirePermission("interviews:update"),
+    async (req: Request, res: Response) => {
+      try {
+        const { interviewId, candidateId } = req.params;
+        // Body intentionally narrow: verdict is required, rating + feedback
+        // optional, applicationId required so we can flip status atomically.
+        // Server-derived fields (decidedBy / decidedByName / decidedAt) are
+        // omitted by `insertInterviewVerdictSchema` and filled below.
+        const body = z.object({
+          verdict: z.enum(["liked", "rejected", "pending"]),
+          rating: z.number().int().min(1).max(5).nullable().optional(),
+          feedback: z.string().max(2000).nullable().optional(),
+          applicationId: z.string().min(1),
+        }).parse(req.body);
+
+        // Defence in depth: confirm the interview exists, the candidate is
+        // an invitee (or the single-candidate target), and the application
+        // belongs to the same candidate. Without these checks a caller with
+        // `interviews:update` could otherwise flip arbitrary applications
+        // by spoofing applicationId in the body.
+        const interview = await storage.getInterview(interviewId);
+        if (!interview) return res.status(404).json({ message: tr(req, "interview.notFound") });
+        const allowedCandidateIds = new Set<string>([
+          ...(interview.invitedCandidateIds ?? []),
+          ...(interview.candidateId ? [interview.candidateId] : []),
+        ]);
+        if (!allowedCandidateIds.has(candidateId)) {
+          return res.status(400).json({ message: tr(req, "interview.candidateNotInvited") });
+        }
+        const application = await storage.getApplication(body.applicationId);
+        if (!application) return res.status(404).json({ message: tr(req, "application.notFound") });
+        if (application.candidateId !== candidateId) {
+          return res.status(400).json({ message: tr(req, "application.candidateMismatch") });
+        }
+        // Architect review on #287: without this binding a caller with
+        // `interviews:update` could PATCH an arbitrary application owned by
+        // any invitee — including applications for entirely unrelated jobs
+        // the caller does not have `applications:update` for. Constrain to
+        //   single-candidate interview → must be `interview.applicationId`
+        //   group interview         → must share `interview.eventId`
+        const isSingleCandidateInterview = !!interview.applicationId;
+        if (isSingleCandidateInterview) {
+          if (application.id !== interview.applicationId) {
+            return res.status(400).json({ message: tr(req, "application.notInInterviewScope") });
+          }
+        } else {
+          if (!interview.eventId || application.eventId !== interview.eventId) {
+            return res.status(400).json({ message: tr(req, "application.notInInterviewScope") });
+          }
+        }
+
+        // Verdict → application.status mapping. `pending` resets back to
+        // "interviewed" so the candidate exits both shortlisted and
+        // rejected lists without disappearing from the interview roster.
+        const targetStatus =
+          body.verdict === "liked" ? "shortlisted" :
+          body.verdict === "rejected" ? "rejected" :
+          "interviewed";
+
+        const actor = {
+          id: req.authUserId ?? null,
+          name: req.authUser?.fullName ?? req.authUser?.username ?? "admin",
+        };
+
+        const { applySystemApplicationStatusFlip } = await import("./application-status-cleanup");
+
+        // Single transaction: status flip + verdict upsert + verdict audit.
+        // The status flip itself writes the `application.status_change`
+        // audit row inside the same tx via the audit-aware helper.
+        const verdict = await db.transaction(async (tx) => {
+          await applySystemApplicationStatusFlip({
+            applicationId: body.applicationId,
+            newStatus: targetStatus,
+            actor,
+            reason: "interview_verdict",
+            metadata: {
+              interviewId,
+              verdict: body.verdict,
+              rating: body.rating ?? null,
+            },
+          }, tx);
+
+          const upserted = await storage.upsertInterviewVerdict({
+            interviewId,
+            candidateId,
+            applicationId: body.applicationId,
+            verdict: body.verdict,
+            rating: body.rating ?? null,
+            feedback: body.feedback ?? null,
+            decidedBy: actor.id,
+            decidedByName: actor.name,
+          }, tx);
+
+          await storage.createAuditLog({
+            action: "interview.verdict_set",
+            entityType: "interview",
+            entityId: interviewId,
+            description: `Verdict ${body.verdict} set for candidate ${candidateId} on interview ${interviewId}`,
+            metadata: {
+              candidateId,
+              applicationId: body.applicationId,
+              verdict: body.verdict,
+              rating: body.rating ?? null,
+              feedback: body.feedback ?? null,
+            },
+            actorId: actor.id,
+            actorName: actor.name,
+          }, tx);
+
+          return upserted;
+        });
+
+        return res.json(verdict);
+      } catch (err) {
+        return handleError(res, err);
+      }
+    },
+  );
+
   // ─── Bulk shortlist applications (interviews flow only) ───────────────────
   // Dedicated, scope-limited endpoint: the only legitimate caller is the
   // interviews page bulk-shortlist action. The previous generic bulk-status
@@ -4124,11 +4265,19 @@ export async function registerRoutes(
   // there is no longer a path for arbitrary status changes via spreadsheet.
   app.post("/api/applications/bulk-shortlist", requirePermission("applications:bulk_shortlist"), async (req: Request, res: Response) => {
     try {
-      const { updates } = z.object({
+      // Architect review on #287: bulk-shortlist now optionally accepts
+      // `interviewId` + per-row `candidateId`. When present, each successful
+      // flip ALSO upserts a verdict row (verdict=liked) so the "every
+      // shortlist creates verdict provenance" invariant is not broken when
+      // the interviews page bulk-likes a selection. The interviewId path
+      // re-uses the same scope checks as the per-candidate verdict PATCH.
+      const { updates, interviewId } = z.object({
         updates: z.array(z.object({
           id: z.string(),
           status: z.literal("shortlisted"),
+          candidateId: z.string().optional(),
         })).min(1),
+        interviewId: z.string().optional(),
       }).parse(req.body);
 
       const { applySystemApplicationStatusFlip } = await import("./application-status-cleanup");
@@ -4136,20 +4285,87 @@ export async function registerRoutes(
         id: req.authUserId ?? null,
         name: req.authUser?.fullName ?? req.authUser?.username ?? "admin",
       };
+
+      // Pre-load the interview once (when scoped) so each row check is cheap.
+      const interview = interviewId ? await storage.getInterview(interviewId) : null;
+      if (interviewId && !interview) {
+        return res.status(404).json({ message: tr(req, "interview.notFound") });
+      }
+      const allowedCandidateIds = interview
+        ? new Set<string>([
+            ...(interview.invitedCandidateIds ?? []),
+            ...(interview.candidateId ? [interview.candidateId] : []),
+          ])
+        : null;
+      const isSingleCandidateInterview = !!interview?.applicationId;
+
       const results: { id: string; success: boolean; error?: string }[] = [];
       for (const u of updates) {
         try {
+          // Per-row scope enforcement when bulk is interview-scoped.
+          if (interview) {
+            const app = await storage.getApplication(u.id);
+            if (!app) { results.push({ id: u.id, success: false, error: tr(req, "application.notFound") }); continue; }
+            if (u.candidateId && app.candidateId !== u.candidateId) {
+              results.push({ id: u.id, success: false, error: tr(req, "application.candidateMismatch") }); continue;
+            }
+            if (!allowedCandidateIds!.has(app.candidateId)) {
+              results.push({ id: u.id, success: false, error: tr(req, "application.notInInterviewScope") }); continue;
+            }
+            if (isSingleCandidateInterview) {
+              if (app.id !== interview.applicationId) {
+                results.push({ id: u.id, success: false, error: tr(req, "application.notInInterviewScope") }); continue;
+              }
+            } else if (!interview.eventId || app.eventId !== interview.eventId) {
+              results.push({ id: u.id, success: false, error: tr(req, "application.notInInterviewScope") }); continue;
+            }
+          }
+
           // Goes through applySystemApplicationStatusFlip so each successful
           // shortlist writes one `application.status_change` audit row. The
           // helper no-ops silently when an application is already shortlisted
           // (so a retried bulk submission does not produce dup audit rows).
-          const updated = await applySystemApplicationStatusFlip({
-            applicationId: u.id,
-            newStatus: u.status,
-            actor,
-            reason: "bulk_shortlist",
+          // When interviewId is present the verdict upsert + verdict audit
+          // ride in the same db transaction — same atomic story as the
+          // per-row PATCH /api/interviews/:id/verdicts/:cid path.
+          const ok = await db.transaction(async (tx) => {
+            const updated = await applySystemApplicationStatusFlip({
+              applicationId: u.id,
+              newStatus: u.status,
+              actor,
+              reason: interview ? "interview_verdict_bulk" : "bulk_shortlist",
+              metadata: interview ? { interviewId } : undefined,
+            }, tx);
+            if (!updated) return false;
+            if (interview) {
+              await storage.upsertInterviewVerdict({
+                interviewId: interview.id,
+                candidateId: updated.candidateId,
+                applicationId: updated.id,
+                verdict: "liked",
+                rating: null,
+                feedback: null,
+                decidedBy: actor.id,
+                decidedByName: actor.name,
+              }, tx);
+              await storage.createAuditLog({
+                action: "interview.verdict_set",
+                entityType: "interview",
+                entityId: interview.id,
+                description: `Verdict liked set for candidate ${updated.candidateId} on interview ${interview.id} (bulk)`,
+                metadata: {
+                  candidateId: updated.candidateId,
+                  applicationId: updated.id,
+                  verdict: "liked",
+                  bulk: true,
+                },
+                actorId: actor.id,
+                actorName: actor.name,
+              }, tx);
+            }
+            return true;
           });
-          results.push({ id: u.id, success: !!updated });
+          results.push({ id: u.id, success: ok });
         } catch {
           results.push({ id: u.id, success: false, error: tr(req, "error.updateFailed") });
         }
