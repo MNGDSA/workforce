@@ -27,7 +27,7 @@ import {
   type Candidate,
 } from "@shared/schema";
 import { storage } from "./storage";
-import { applyShortlistResetCleanup } from "./application-status-cleanup";
+import { applyShortlistResetCleanup, applySystemApplicationStatusFlip } from "./application-status-cleanup";
 import { recordReminderRollback } from "./reminder-rollback-telemetry";
 
 // ─── Config ────────────────────────────────────────────────────────────────
@@ -789,11 +789,18 @@ async function eliminateOnboarding(rec: OnboardingRecord): Promise<boolean> {
           // "Reset Like" intent applied to the auto-elimination trigger.
           const previousStatus: Application["status"] = app.status;
           if (previousStatus !== "interviewed") {
-            await storage.updateApplication(
-              rec.applicationId,
-              { status: "interviewed" },
-              tx,
-            );
+            // Goes through applySystemApplicationStatusFlip so the
+            // auto-elimination flow writes its own `application.status_change`
+            // audit row alongside the existing `onboarding.auto_eliminated`
+            // row. The helper no-ops if status already matches, so the
+            // outer guard here is now redundant but kept for readability.
+            await applySystemApplicationStatusFlip({
+              applicationId: rec.applicationId,
+              newStatus: "interviewed",
+              actor: { id: null, name: "system" },
+              reason: "auto_eliminated",
+              metadata: { onboardingId: rec.id, reminderCount: rec.reminderCount },
+            }, tx);
           }
           const candidate = await storage.getCandidate(rec.candidateId).catch(() => null);
           // Pass the REAL previousStatus + force=true so the shared

@@ -738,6 +738,13 @@ export function InterviewCandidatesPage({ params }: { params: { id: string } }) 
       setLocalStatuses(prev => ({ ...prev, [vars.candidateId]: vars.status }));
       queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] });
+      // INVARIANT: every PATCH to /api/applications that can change status
+      // MUST invalidate "/api/onboarding/admit-eligible" — otherwise the
+      // Onboarding > Admit Candidate dialog serves a stale, pre-flip list
+      // and the user thinks the candidate they just liked "never appeared".
+      // The sibling statusMutation in InterviewDetailSheet (~line 168) does
+      // this; this one was the brittle drift that caused the prod report.
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding/admit-eligible"] });
       queryClient.invalidateQueries({ queryKey: ["/api/interviews"] });
       toast({ title: vars.status === "shortlisted" ? t("interviews:toast.shortlisted") : vars.status === "rejected" ? t("interviews:toast.rejected") : t("interviews:toast.updated") });
     },

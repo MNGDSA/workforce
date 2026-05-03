@@ -4096,7 +4096,17 @@ export async function registerRoutes(
         const app_ = await storage.getApplications({ });
         const linked = app_.find((a) => a.id === interview.applicationId);
         if (linked && !["hired", "rejected"].includes(linked.status)) {
-          await storage.updateApplication(interview.applicationId, { status: "interviewed" });
+          const { applySystemApplicationStatusFlip } = await import("./application-status-cleanup");
+          await applySystemApplicationStatusFlip({
+            applicationId: interview.applicationId,
+            newStatus: "interviewed",
+            actor: {
+              id: req.authUserId ?? null,
+              name: req.authUser?.fullName ?? req.authUser?.username ?? "admin",
+            },
+            reason: "interview_completed",
+            metadata: { interviewId: interview.id },
+          });
           console.log(`[cascade] Interview ${interview.id} completed → application ${interview.applicationId} → interviewed`);
         }
       }
@@ -4121,10 +4131,24 @@ export async function registerRoutes(
         })).min(1),
       }).parse(req.body);
 
+      const { applySystemApplicationStatusFlip } = await import("./application-status-cleanup");
+      const actor = {
+        id: req.authUserId ?? null,
+        name: req.authUser?.fullName ?? req.authUser?.username ?? "admin",
+      };
       const results: { id: string; success: boolean; error?: string }[] = [];
       for (const u of updates) {
         try {
-          const updated = await storage.updateApplication(u.id, { status: u.status });
+          // Goes through applySystemApplicationStatusFlip so each successful
+          // shortlist writes one `application.status_change` audit row. The
+          // helper no-ops silently when an application is already shortlisted
+          // (so a retried bulk submission does not produce dup audit rows).
+          const updated = await applySystemApplicationStatusFlip({
+            applicationId: u.id,
+            newStatus: u.status,
+            actor,
+            reason: "bulk_shortlist",
+          });
           results.push({ id: u.id, success: !!updated });
         } catch {
           results.push({ id: u.id, success: false, error: tr(req, "error.updateFailed") });
@@ -4706,7 +4730,17 @@ export async function registerRoutes(
       const record = await storage.updateOnboardingRecord(req.params.id, data);
       if (!record) return res.status(404).json({ message: tr(req, "onboarding.notFound") });
       if (data.status === "rejected" && record.applicationId) {
-        await storage.updateApplication(record.applicationId, { status: "interviewed" });
+        const { applySystemApplicationStatusFlip } = await import("./application-status-cleanup");
+        await applySystemApplicationStatusFlip({
+          applicationId: record.applicationId,
+          newStatus: "interviewed",
+          actor: {
+            id: req.authUserId ?? null,
+            name: req.authUser?.fullName ?? req.authUser?.username ?? "admin",
+          },
+          reason: "onboarding_rejected",
+          metadata: { onboardingId: record.id },
+        });
       }
       return res.json(record);
     } catch (err) {
@@ -6994,7 +7028,17 @@ export async function registerRoutes(
           if (ob.applicationId) {
             const linkedApp = await storage.getApplication(ob.applicationId);
             if (linkedApp && !["offered", "hired", "rejected"].includes(linkedApp.status)) {
-              await storage.updateApplication(ob.applicationId, { status: "offered" });
+              const { applySystemApplicationStatusFlip } = await import("./application-status-cleanup");
+              await applySystemApplicationStatusFlip({
+                applicationId: ob.applicationId,
+                newStatus: "offered",
+                actor: {
+                  id: req.authUserId ?? null,
+                  name: req.authUser?.fullName ?? req.authUser?.username ?? "admin",
+                },
+                reason: "contract_signed",
+                metadata: { contractId: contract.id, onboardingId: ob.id },
+              });
               console.log(`[cascade] Contract ${contract.id} signed → application ${ob.applicationId} → offered`);
             }
           }

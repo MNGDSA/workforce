@@ -241,7 +241,19 @@ export default function JobPostingDetailPage() {
   const updateStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       apiRequest("PATCH", `/api/applications/${id}`, { status }).then((r) => r.json()),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/applications", params.id] }),
+    onSuccess: () => {
+      // The per-job applications query keeps this page's table fresh.
+      queryClient.invalidateQueries({ queryKey: ["/api/applications", params.id] });
+      // The unkeyed list is consumed elsewhere (Onboarding page), keep it
+      // in sync too so a candidate liked here shows up there immediately.
+      queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
+      // INVARIANT: every PATCH to /api/applications that can change status
+      // MUST invalidate "/api/onboarding/admit-eligible" — otherwise the
+      // Onboarding > Admit Candidate dialog serves a stale, pre-flip list
+      // and the user thinks the candidate they just liked "never appeared".
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding/admit-eligible"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] });
+    },
     onError: () => toast({ title: t("jobPosting:detail.updateFailed"), variant: "destructive" }),
   });
 

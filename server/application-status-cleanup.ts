@@ -15,6 +15,98 @@ import type { Application, InsertApplication } from "@shared/schema";
 import { db } from "./db";
 import { storage } from "./storage";
 
+// ─── Shared forward-audit writer ────────────────────────────────────────────
+//
+// Every change to `applications.status` — manual PATCH, bulk shortlist,
+// system cascade (interview-completed, contract-signed, onboarding-rejected),
+// and the reminder auto-elimination sweep — MUST go through one of the two
+// helpers in this file so a single `application.status_change` audit row is
+// written. Without this, the audit log only carries reverse-sync noise and
+// "what happened to candidate X" can't be answered from data alone (which is
+// the brittle gap that triggered the prod incident on candidate 1122128216).
+//
+// The audit row is intentionally distinct from the existing
+// `onboarding.auto_remove_on_reset` row written by `applyShortlistResetCleanup`
+// — that one is about onboarding teardown; this one is about the application
+// transition. Both fire when a reset cascades through both layers.
+async function writeApplicationStatusAudit(opts: {
+  previousStatus: string | null;
+  newStatus: string;
+  applicationId: string;
+  candidateId: string | null;
+  actor: { id: string | null; name: string };
+  reason: string;
+  metadata?: Record<string, unknown>;
+}, tx?: any): Promise<void> {
+  await storage.createAuditLog({
+    action: "application.status_change",
+    entityType: "application",
+    entityId: opts.applicationId,
+    description: `Application ${opts.previousStatus ?? "(none)"} → ${opts.newStatus} (${opts.reason})`,
+    metadata: {
+      previousStatus: opts.previousStatus,
+      newStatus: opts.newStatus,
+      candidateId: opts.candidateId,
+      reason: opts.reason,
+      ...(opts.metadata ?? {}),
+    },
+    actorId: opts.actor.id,
+    actorName: opts.actor.name,
+  }, tx);
+}
+
+/**
+ * System / cascade entry point — used by every server caller that needs to
+ * flip `applications.status` outside the manual PATCH /api/applications/:id
+ * route. Wraps the read-update-audit triplet so all the silent direct
+ * `storage.updateApplication(id, { status })` calls now produce an
+ * `application.status_change` audit row.
+ *
+ * Safe to call when the new status equals the current one: no-ops without
+ * writing audit (so the bulk-shortlist endpoint can be called idempotently
+ * by retries without producing duplicate "shortlisted → shortlisted" rows).
+ *
+ * Returns the updated `Application`, or `undefined` if the application id
+ * did not exist (callers can map to a 404 or just ignore — every existing
+ * caller already tolerates `undefined`).
+ *
+ * Does NOT trigger reverse-sync. Manual resets must keep going through
+ * `applyApplicationStatusUpdate` because that path is also responsible for
+ * tearing down orphan onboarding rows. Cascade callers either don't reset
+ * (forward-only flips like contract-signed → offered) or have their own
+ * cleanup (the reminder sweep already calls `applyShortlistResetCleanup`).
+ */
+export async function applySystemApplicationStatusFlip(
+  opts: {
+    applicationId: string;
+    newStatus: string;
+    actor: { id: string | null; name: string };
+    reason: string;
+    metadata?: Record<string, unknown>;
+  },
+  tx?: any,
+): Promise<Application | undefined> {
+  const previous = await storage.getApplication(opts.applicationId);
+  if (!previous) return undefined;
+  if (previous.status === opts.newStatus) return previous;
+  const updated = await storage.updateApplication(
+    opts.applicationId,
+    { status: opts.newStatus as Application["status"] },
+    tx,
+  );
+  if (!updated) return undefined;
+  await writeApplicationStatusAudit({
+    previousStatus: previous.status,
+    newStatus: opts.newStatus,
+    applicationId: opts.applicationId,
+    candidateId: previous.candidateId,
+    actor: opts.actor,
+    reason: opts.reason,
+    metadata: opts.metadata,
+  }, tx);
+  return updated;
+}
+
 export interface ReverseSyncContext {
   /** Pre-update application status (must be the value BEFORE the storage update). */
   previousStatus: string | null;
@@ -137,13 +229,31 @@ export async function applyApplicationStatusUpdate(opts: {
     const updated = await storage.updateApplication(opts.applicationId, opts.data, tx);
     if (!updated) return undefined;
 
+    const newStatus = opts.data.status;
+    const statusChanged =
+      typeof newStatus === "string" && newStatus !== previousStatus;
+
+    // Forward audit: write `application.status_change` whenever the manual
+    // PATCH actually changed the status. Pre-task #286 this row was missing
+    // and only the reverse-sync `onboarding.auto_remove_on_reset` was
+    // recorded, which made "who shortlisted candidate X" unanswerable.
+    if (statusChanged && typeof newStatus === "string") {
+      await writeApplicationStatusAudit({
+        previousStatus,
+        newStatus,
+        applicationId: updated.id,
+        candidateId: cleanupCandidateId,
+        actor: opts.actor,
+        reason: "manual",
+      }, tx);
+    }
+
     // Reverse-sync: shortlist → reset (or any non-shortlisted status)
     // sweeps any pending|in_progress|ready onboarding rows for this
     // candidate. Identical to the auto-elimination caller modulo the
     // `force` flag — manual resets keep the original gate so flipping
     // a non-shortlisted status to another non-shortlisted status never
     // tears down onboarding work.
-    const newStatus = opts.data.status;
     if (
       previousStatus === "shortlisted" &&
       typeof newStatus === "string" &&
